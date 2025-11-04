@@ -262,7 +262,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
                 }`}
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1" onClick={() => onViewDetails(task)} className="cursor-pointer">
+                  <div className="flex-1 cursor-pointer" onClick={() => onViewDetails(task)}>
                     <div className="flex items-center gap-2 mb-2">
                       <h4 className={`font-medium flex-1 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>{task.title}</h4>
                       <Button
