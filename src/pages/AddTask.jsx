@@ -23,8 +23,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-// New import: scheduleReminder for push notifications
-import { scheduleReminder } from "@/utils/notifications";
+// Fixed import: scheduleReminder from reminderScheduler
+import { scheduleReminder } from "../components/utils/reminderScheduler";
 
 export default function AddTask() {
   const navigate = useNavigate();
