@@ -1,0 +1,39 @@
+// functions/cancelScheduled.js
+// Cancels scheduled OneSignal notifications by ID (array of strings).
+export const handler = async (req) => {
+  try {
+    const { ids } = await req.json();
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return json({ success: false, error: 'Provide ids: string[]' }, 400);
+    }
+
+    const appId = Deno.env.get('ONESIGNAL_APP_ID');
+    const key = Deno.env.get('ONESIGNAL_REST_API_KEY');
+    if (!appId || !key) {
+      return json({ success: false, error: 'ONESIGNAL_APP_ID / ONESIGNAL_REST_API_KEY missing' }, 500);
+    }
+
+    const results = [];
+    for (const id of ids) {
+      const url = `https://onesignal.com/api/v1/notifications/${encodeURIComponent(id)}?app_id=${encodeURIComponent(appId)}`;
+      const resp = await fetch(url, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Basic ${key}` }
+      });
+      const body = await resp.json().catch(() => ({}));
+      results.push({ id, ok: resp.ok, status: resp.status, body });
+    }
+
+    const okCount = results.filter(r => r.ok).length;
+    return json({ success: okCount === results.length, results }, okCount ? 200 : 400);
+  } catch (e) {
+    return json({ success: false, error: String(e?.message || e) }, 500);
+  }
+};
+
+function json(obj, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
