@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -140,7 +141,9 @@ export default function Layout({ children, currentPageName }) {
       setAuthCheckComplete(true);
     } catch (error) {
       console.error("Error checking user status:", error);
+      // User not authenticated - Base44 will handle the redirect automatically
       setAuthCheckComplete(true);
+      setUser(null);
     }
   }, [location.pathname, navigate]);
 
@@ -749,65 +752,64 @@ export default function Layout({ children, currentPageName }) {
                 )}
               </Button>
 
-              {user ? (
-                <>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={`w-full flex items-center justify-center gap-2 rounded-xl ${
-                          isSeasonalTheme()
-                            ? 'bg-white/60 hover:bg-white/80 text-gray-800 border-white/40'
-                            : theme === 'dark'
-                              ? 'border-gray-700 hover:bg-gray-800 text-gray-300 bg-transparent'
-                              : ''
-                        }`}
-                      >
-                        <Settings className="w-4 h-4" />
-                        <span>Settings</span>
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className={`w-56 ${
-                      isSeasonalTheme()
-                        ? 'bg-white/95 backdrop-blur-md border-white/40 text-gray-800'
-                        : theme === 'dark'
-                          ? 'bg-[#1a1a1b] border-gray-800 text-gray-300'
-                          : ''
-                    }`}>
-                      <DropdownMenuItem onClick={() => navigate(createPageUrl("Profile"))}>
-                        <UserIcon className="w-4 h-4 mr-2" />
-                        My Profile
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate(createPageUrl("MyAccount"))}>
-                        <UserIcon className="w-4 h-4 mr-2" />
-                        My Account
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate(createPageUrl("NotificationSettings"))}>
-                        <Bell className="w-4 h-4 mr-2" />
-                        Notifications
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={() => navigate(createPageUrl("PrivacyPolicy"))}>
-                        <Settings className="w-4 h-4 mr-2" />
-                        Privacy Policy
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate(createPageUrl("TermsAndConditions"))}>
-                        <Settings className="w-4 h-4 mr-2" />
-                        Terms & Conditions
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate(createPageUrl("ReportBug"))}>
-                        <Bug className="w-4 h-4 mr-2" />
-                        Report a Bug
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onClick={handleLogout} className="text-red-600">
-                        <LogOut className="w-4 h-4 mr-2" />
-                        Log Out
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </>
-              ) : (
+              {user && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={`w-full flex items-center justify-center gap-2 rounded-xl ${
+                        isSeasonalTheme()
+                          ? 'bg-white/60 hover:bg-white/80 text-gray-800 border-white/40'
+                          : theme === 'dark'
+                            ? 'border-gray-700 hover:bg-gray-800 text-gray-300 bg-transparent'
+                            : ''
+                      }`}
+                    >
+                      <Settings className="w-4 h-4" />
+                      <span>Settings</span>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className={`w-56 ${
+                    isSeasonalTheme()
+                      ? 'bg-white/95 backdrop-blur-md border-white/40 text-gray-800'
+                      : theme === 'dark'
+                        ? 'bg-[#1a1a1b] border-gray-800 text-gray-300'
+                        : ''
+                  }`}>
+                    <DropdownMenuItem onClick={() => navigate(createPageUrl("Profile"))}>
+                      <UserIcon className="w-4 h-4 mr-2" />
+                      My Profile
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate(createPageUrl("MyAccount"))}>
+                      <UserIcon className="w-4 h-4 mr-2" />
+                      My Account
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate(createPageUrl("NotificationSettings"))}>
+                      <Bell className="w-4 h-4 mr-2" />
+                      Notifications
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate(createPageUrl("PrivacyPolicy"))}>
+                      <Settings className="w-4 h-4 mr-2" />
+                      Privacy Policy
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate(createPageUrl("TermsAndConditions"))}>
+                      <Settings className="w-4 h-4 mr-2" />
+                      Terms & Conditions
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate(createPageUrl("ReportBug"))}>
+                      <Bug className="w-4 h-4 mr-2" />
+                      Report a Bug
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+                      <LogOut className="w-4 h-4 mr-2" />
+                      Log Out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+              {!user && (
                 <Button
                   onClick={handleLogin}
                   className={`w-full flex items-center justify-center gap-2 rounded-xl ${
