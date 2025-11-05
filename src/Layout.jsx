@@ -118,14 +118,6 @@ export default function Layout({ children, currentPageName }) {
 
       const currentUser = await User.me();
       
-      // If no user found, redirect to login immediately
-      if (!currentUser || !currentUser.email) {
-        console.log("[AUTH] No user found, redirecting to login immediately");
-        const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
-        User.loginWithRedirect(callbackUrl);
-        return; // Don't set authCheckComplete - keep loading screen
-      }
-
       if (!currentUser.trial_start_date) {
         const today = new Date().toISOString().split('T')[0];
         try {
@@ -156,16 +148,10 @@ export default function Layout({ children, currentPageName }) {
     } catch (error) {
       console.error("Error checking user status:", error);
       
-      // If 401, redirect to login immediately
-      if (error.response?.status === 401) {
-        console.log("[AUTH] 401 error, redirecting to login immediately");
-        const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
-        User.loginWithRedirect(callbackUrl);
-        // Don't set authCheckComplete - keep loading screen showing
-      } else {
-        // For other errors, allow retry
-        setAuthCheckComplete(true);
-      }
+      // Redirect to Base44 login immediately, don't show any intermediate screens
+      const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
+      console.log("[AUTH] Redirecting to Base44 login with callback:", callbackUrl);
+      window.location.href = `https://app.base44.com/apps/${window.location.hostname}/login?redirect_uri=${encodeURIComponent(callbackUrl)}`;
     }
   }, [location.pathname, navigate]);
 
@@ -416,35 +402,11 @@ export default function Layout({ children, currentPageName }) {
     );
   }
 
-  // CRITICAL FIX: If auth is complete but no user, show login screen
-  // With the new logic in checkUserStatusAndTrial, this block should ideally not be reached
-  // as it will redirect immediately on no user/401. However, keeping it as a fallback.
+  // If somehow we get here without a user, redirect immediately
   if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-green-50 to-emerald-50">
-        <div className="max-w-md w-full p-8">
-          <div className="text-center mb-8">
-            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-green-600 to-green-700 flex items-center justify-center font-bold text-white text-3xl mx-auto mb-6">
-              A
-            </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to ADHDone</h1>
-            <p className="text-gray-600">Your ADHD-friendly task companion</p>
-          </div>
-          
-          <Button
-            onClick={handleLogin}
-            className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-lg rounded-xl"
-          >
-            <LogIn className="w-5 h-5 mr-2" />
-            Sign In / Sign Up
-          </Button>
-          
-          <p className="text-center text-sm text-gray-500 mt-4">
-            New to ADHDone? Create your account to get started
-          </p>
-        </div>
-      </div>
-    );
+    const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
+    window.location.href = `https://app.base44.com/apps/${window.location.hostname}/login?redirect_uri=${encodeURIComponent(callbackUrl)}`;
+    return null;
   }
 
   return (
