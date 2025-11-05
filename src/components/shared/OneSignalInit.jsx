@@ -1,37 +1,58 @@
 import { useEffect } from 'react';
 
+// Helper function to detect if running in Capacitor mobile app
+function isRunningInCapacitor() {
+    return window.parent !== window && window.parent.Capacitor !== undefined;
+}
+
 export default function OneSignalInit({ user }) {
   useEffect(() => {
-    // --- This is the correct, simple logic ---
-    const syncOneSignal = async () => {      // Get our custom plugin from the global Capacitor object
-      const NotifyBridge = window.Capacitor?.Plugins?.Notify;
+    const syncOneSignal = async () => {
+      const userEmail = user?.email;
 
-      if (!NotifyBridge) {
-        console.error('[OneSignal] Custom NotifyBridge plugin not found. Cannot sync user.');
-        return;
-      }
-
-      if (user && user.email) {
-        // --- Handle User Login ---
-        console.log('[OneSignal] User logged in. Calling custom NotifyBridge.login()...');
-        try {
-          await NotifyBridge.login({ externalId: user.email });
-          console.log('[OneSignal] Successfully called custom login for:', user.email);
-
-          // Now we can call our test reminder
-          await NotifyBridge.sendTestReminder({ email: user.email });
-
-        } catch (e) {
-          console.error('[OneSignal] Custom login failed:', e);
+      if (isRunningInCapacitor()) {
+        // Running in mobile app - send to native wrapper
+        console.log('[OneSignal] Running in Capacitor mobile app');
+        
+        if (userEmail) {
+          // User logged in - set external user ID via postMessage
+          console.log('[OneSignal] Setting external user ID via postMessage:', userEmail);
+          window.parent.postMessage({
+            type: 'setOneSignalExternalUserId',
+            externalUserId: userEmail
+          }, '*');
+        } else {
+          // User logged out
+          console.log('[OneSignal] User logged out in mobile app');
+          window.parent.postMessage({
+            type: 'oneSignalLogout'
+          }, '*');
         }
       } else {
-        // --- Handle User Logout ---
-        console.log('[OneSignal] User logged out. Calling custom NotifyBridge.logout()...');
-        try {
-          await NotifyBridge.logout();
-          console.log('[OneSignal] Successfully called custom logout.');
-        } catch (e) {
-          console.error('[OneSignal] Custom logout failed:', e);
+        // Running in web browser - use web SDK
+        console.log('[OneSignal] Running in web browser');
+        
+        if (userEmail) {
+          // Initialize OneSignal web SDK
+          window.OneSignal = window.OneSignal || [];
+          window.OneSignal.push(function() {
+            window.OneSignal.init({
+              appId: "dc1933bc-e49e-4d8a-aa4a-2c9ca749ff37",
+              allowLocalhostAsSecureOrigin: true
+            });
+            
+            // Set external user ID
+            window.OneSignal.setExternalUserId(userEmail);
+            console.log('[OneSignal] Web SDK initialized with external user ID:', userEmail);
+          });
+        } else {
+          // User logged out - remove external user ID
+          if (window.OneSignal) {
+            window.OneSignal.push(function() {
+              window.OneSignal.removeExternalUserId();
+              console.log('[OneSignal] Removed external user ID from web SDK');
+            });
+          }
         }
       }
     };
