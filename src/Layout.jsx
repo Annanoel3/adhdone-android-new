@@ -117,6 +117,15 @@ export default function Layout({ children, currentPageName }) {
       sessionStorage.removeItem('auth_fail_count');
 
       const currentUser = await User.me();
+      
+      // CRITICAL FIX: If no user found (public app), redirect to login
+      if (!currentUser || !currentUser.email) {
+        console.log("[AUTH] No user found, redirecting to login");
+        setUser(null);
+        const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
+        User.loginWithRedirect(callbackUrl);
+        return; // Don't set authCheckComplete - keep loading screen showing
+      }
 
       if (!currentUser.trial_start_date) {
         const today = new Date().toISOString().split('T')[0];
@@ -148,14 +157,13 @@ export default function Layout({ children, currentPageName }) {
     } catch (error) {
       console.error("Error checking user status:", error);
       
-      // CRITICAL: If 401, redirect to login and NEVER show the app
+      // If 401, redirect to login and NEVER show the app
       if (error.response?.status === 401) {
+        console.log("[AUTH] 401 error, redirecting to login");
         setUser(null);
-        // Keep authCheckComplete as FALSE - never show the app
-        // Redirect to login
         const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
         User.loginWithRedirect(callbackUrl);
-        // Don't set authCheckComplete to true - keep loading screen showing
+        // Don't set authCheckComplete - keep loading screen showing
       } else {
         // For other errors, allow retry
         setAuthCheckComplete(true);
