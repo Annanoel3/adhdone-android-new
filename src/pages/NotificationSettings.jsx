@@ -1,18 +1,9 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Bell, Volume2, Play } from "lucide-react";
+import { Bell } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 
 export default function NotificationSettings() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
@@ -26,47 +17,7 @@ export default function NotificationSettings() {
     trial_warnings: true,
     daily_summary: true
   });
-  const [selectedSound, setSelectedSound] = useState('calming_melody');
   const specialMode = localStorage.getItem('special_mode') || 'normal';
-
-  const soundOptions = {
-    joyful_melody: {
-      name: "Joyful Melody",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/Joyful%20Melody.wav"
-    },
-    piano_melody: {
-      name: "Piano Melody",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/Piano%20Melody.mp3"
-    },
-    short_notification: {
-      name: "Short Notification",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/Short%20Notification.wav"
-    },
-    short_piano: {
-      name: "Short Piano Notification",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/Short%20Piano%20Notification.mp3"
-    },
-    jr_station: {
-      name: "JR Station Notification",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Station%20Notification.mp3"
-    },
-    jr_station_3: {
-      name: "JR Station Notification 3",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Station%20Notification%203.mp3"
-    },
-    jr_osaka_loop: {
-      name: "JR Osaka Loop",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Osaka%20Loop%204.mp3"
-    },
-    jr_morning_tranquility: {
-      name: "JR Morning Tranquility",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Morning%20Tranquility.mp3"
-    },
-    jr_flower_shop: {
-      name: "JR Flower Shop",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Flower%20Shop.mp3"
-    }
-  };
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -85,8 +36,6 @@ export default function NotificationSettings() {
       const currentUser = await base44.auth.me();
       setUser(currentUser);
       setSettings(currentUser.notification_settings || settings);
-      // Ensure selectedSound defaults to a valid key from the new soundOptions, or 'joyful_melody' if user had old sound
-      setSelectedSound(currentUser.notification_sound && soundOptions[currentUser.notification_sound] ? currentUser.notification_sound : 'joyful_melody');
     } catch (error) {
       console.error("Error loading settings:", error);
     }
@@ -100,23 +49,6 @@ export default function NotificationSettings() {
       await base44.auth.updateMe({ notification_settings: newSettings });
     } catch (error) {
       console.error("Error saving settings:", error);
-    }
-  };
-
-  const handleSoundChange = async (sound) => {
-    setSelectedSound(sound);
-    try {
-      await base44.auth.updateMe({ notification_sound: sound });
-    } catch (error) {
-      console.error("Error saving sound:", error);
-    }
-  };
-
-  const playTestSound = () => {
-    const soundUrl = soundOptions[selectedSound]?.url;
-    if (soundUrl) {
-      const audio = new Audio(soundUrl);
-      audio.play().catch(err => console.error("Failed to play sound:", err));
     }
   };
 
@@ -221,39 +153,6 @@ export default function NotificationSettings() {
                 onCheckedChange={() => handleToggle('daily_summary')}
               />
             </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Notification Sound Selector */}
-      <Card className={getCardClasses()}>
-        <CardHeader>
-          <CardTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-            <Volume2 className="w-6 h-6" />
-            Notification Sound
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-4">
-            <Select value={selectedSound} onValueChange={handleSoundChange}>
-              <SelectTrigger className="flex-1">
-                <SelectValue placeholder="Choose sound" />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(soundOptions).map(([key, sound]) => (
-                  <SelectItem key={key} value={key}>
-                    {sound.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={playTestSound}
-            >
-              <Play className="w-4 h-4" />
-            </Button>
           </div>
         </CardContent>
       </Card>
