@@ -386,7 +386,6 @@ export default function Layout({ children, currentPageName }) {
       }`}
       style={{
         ...(isSeasonalTheme() ? getSeasonalBackgroundStyle() : {}),
-        paddingTop: 'max(1rem, env(safe-area-inset-top))',
         paddingBottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))'
       }}
     >
@@ -534,10 +533,7 @@ export default function Layout({ children, currentPageName }) {
               : theme === 'dark'
                 ? 'bg-gray-900 border-gray-800'
                 : 'border-gray-200/50 backdrop-blur-sm bg-white/80'
-          }`} style={{
-            paddingTop: 'max(1rem, env(safe-area-inset-top))',
-            paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))'
-          }}>
+          }`}>
             <SidebarHeader className={`border-b p-6 ${
               isSeasonalTheme()
                 ? 'border-white/30'
@@ -699,7 +695,7 @@ export default function Layout({ children, currentPageName }) {
                   : 'border-gray-200/50'
             }`} style={{
               padding: '0.75rem 1rem',
-              paddingBottom: 'max(0.75rem, calc(0.75rem + env(safe-area-inset-bottom)))'
+              paddingBottom: 'max(1.5rem, calc(1.5rem + env(safe-area-inset-bottom)))'
             }}>
               <Button
                 variant="outline"
@@ -806,14 +802,14 @@ export default function Layout({ children, currentPageName }) {
           <main className="flex-1 flex flex-col min-w-0 relative z-10" style={{
             paddingBottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))'
           }}>
-            <header className={`backdrop-blur-md border-b px-6 py-4 md:hidden sticky top-0 z-10 ${
+            <header className={`backdrop-blur-md border-b px-6 py-4 md:hidden sticky z-10 ${
               isSeasonalTheme()
                 ? 'bg-white/60 border-white/30'
                 : theme === 'dark'
                   ? 'bg-gray-950/60 border-gray-800'
                   : 'bg-white/60 border-gray-200/50'
             }`} style={{
-              paddingTop: 'max(1rem, calc(1rem + env(safe-area-inset-top)))'
+              top: 0
             }}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
