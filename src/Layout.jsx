@@ -14,7 +14,6 @@ import {
   Share2,
   Bug,
   LogOut,
-  LogIn,
   User as UserIcon,
   Trophy,
   Users,
@@ -53,7 +52,7 @@ import UniversalVoiceAssistant from "./components/shared/UniversalVoiceAssistant
 import MicrophonePermissionCheck from "./components/shared/MicrophonePermissionCheck";
 import PokeNotification from "./components/shared/PokeNotification";
 import AppGuideModal from "./components/shared/AppGuideModal";
-import { User } from "@/entities/User";
+import { base44 } from "@/api/base44Client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -109,13 +108,13 @@ export default function Layout({ children, currentPageName }) {
 
   const checkUserStatusAndTrial = useCallback(async () => {
     try {
-      const currentUser = await User.me();
+      const currentUser = await base44.auth.me();
       
       if (!currentUser.trial_start_date) {
         const today = new Date().toISOString().split('T')[0];
         try {
-          await User.updateMyUserData({ trial_start_date: today });
-          const updatedUser = await User.me();
+          await base44.auth.updateMe({ trial_start_date: today });
+          const updatedUser = await base44.auth.me();
           setUser(updatedUser);
         } catch (updateError) {
           console.error("Error updating trial start date:", updateError);
@@ -140,8 +139,8 @@ export default function Layout({ children, currentPageName }) {
       setAuthCheckComplete(true);
     } catch (error) {
       console.error("Error checking user status:", error);
-      // DON'T set authCheckComplete - stay on loading screen
-      // Base44 will automatically redirect to login
+      // User not authenticated - redirect to login
+      base44.auth.redirectToLogin(window.location.href);
     }
   }, [location.pathname, navigate]);
 
@@ -254,16 +253,11 @@ export default function Layout({ children, currentPageName }) {
 
   const handleLogout = async () => {
     try {
-      await User.logout();
+      await base44.auth.logout();
       window.location.reload();
     } catch (error) {
       console.error("Error logging out:", error);
     }
-  };
-
-  const handleLogin = async () => {
-    const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
-    await User.loginWithRedirect(callbackUrl);
   };
 
   const isSeasonalTheme = () => {
@@ -697,14 +691,15 @@ export default function Layout({ children, currentPageName }) {
               </SidebarGroup>
             </SidebarContent>
 
-            <SidebarFooter className={`border-t p-4 space-y-3 ${
+            <SidebarFooter className={`border-t space-y-3 ${
               isSeasonalTheme()
                 ? 'border-white/30'
                 : theme === 'dark'
                   ? 'border-gray-800 bg-gray-900'
                   : 'border-gray-200/50'
             }`} style={{
-              paddingBottom: 'max(1rem, calc(1rem + env(safe-area-inset-bottom)))'
+              padding: '0.75rem 1rem',
+              paddingBottom: 'max(0.75rem, calc(0.75rem + env(safe-area-inset-bottom)))'
             }}>
               <Button
                 variant="outline"
@@ -773,23 +768,19 @@ export default function Layout({ children, currentPageName }) {
                       ? 'bg-[#1a1a1b] border-gray-800 text-gray-300'
                       : ''
                 }`}>
-                  {user ? (
-                    <>
-                      <DropdownMenuItem onClick={() => navigate(createPageUrl("Profile"))}>
-                        <UserIcon className="w-4 h-4 mr-2" />
-                        My Profile
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate(createPageUrl("MyAccount"))}>
-                        <UserIcon className="w-4 h-4 mr-2" />
-                        My Account
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate(createPageUrl("NotificationSettings"))}>
-                        <Bell className="w-4 h-4 mr-2" />
-                        Notifications
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                    </>
-                  ) : null}
+                  <DropdownMenuItem onClick={() => navigate(createPageUrl("Profile"))}>
+                    <UserIcon className="w-4 h-4 mr-2" />
+                    My Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate(createPageUrl("MyAccount"))}>
+                    <UserIcon className="w-4 h-4 mr-2" />
+                    My Account
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate(createPageUrl("NotificationSettings"))}>
+                    <Bell className="w-4 h-4 mr-2" />
+                    Notifications
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => navigate(createPageUrl("PrivacyPolicy"))}>
                     <Settings className="w-4 h-4 mr-2" />
                     Privacy Policy
@@ -803,17 +794,10 @@ export default function Layout({ children, currentPageName }) {
                     Report a Bug
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  {user ? (
-                    <DropdownMenuItem onClick={handleLogout} className="text-red-600">
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Log Out
-                    </DropdownMenuItem>
-                  ) : (
-                    <DropdownMenuItem onClick={handleLogin}>
-                      <LogIn className="w-4 h-4 mr-2" />
-                      Log In
-                    </DropdownMenuItem>
-                  )}
+                  <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Log Out
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </SidebarFooter>
