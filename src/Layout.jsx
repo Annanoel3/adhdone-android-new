@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -25,8 +24,8 @@ import {
   Bell,
   Sparkles,
   Mic,
-  HelpCircle, // Added HelpCircle icon
-  Info, // Added Info icon
+  HelpCircle,
+  Info,
 } from "lucide-react";
 import {
   Sidebar,
@@ -52,7 +51,7 @@ import TrialWarningModal from "./components/shared/TrialWarningModal";
 import UniversalVoiceAssistant from "./components/shared/UniversalVoiceAssistant";
 import MicrophonePermissionCheck from "./components/shared/MicrophonePermissionCheck";
 import PokeNotification from "./components/shared/PokeNotification";
-import AppGuideModal from "./components/shared/AppGuideModal"; // Added AppGuideModal
+import AppGuideModal from "./components/shared/AppGuideModal";
 import { User } from "@/entities/User";
 import {
   DropdownMenu,
@@ -76,8 +75,8 @@ import OneSignalInit from "./components/shared/OneSignalInit";
 import {
   Tooltip,
   TooltipProvider,
-} from "@/components/ui/tooltip"; // Removed TooltipTrigger, Info import is from lucide-react
-import EasterEggVideo from "./components/shared/EasterEggVideo"; // Added EasterEggVideo import
+} from "@/components/ui/tooltip";
+import EasterEggVideo from "./components/shared/EasterEggVideo";
 
 export default function Layout({ children, currentPageName }) {
   const location = useLocation();
@@ -93,10 +92,9 @@ export default function Layout({ children, currentPageName }) {
   const [accountabilityNotifications, setAccountabilityNotifications] = useState(0);
   const [specialMode, setSpecialMode] = useState(() => {
     const stored = localStorage.getItem('special_mode');
-    // Allow any stored mode to persist, default to 'normal' if none is set
     return stored || 'normal';
   });
-  const [showAppGuide, setShowAppGuide] = useState(false); // Added showAppGuide state
+  const [showAppGuide, setShowAppGuide] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('adhd_theme', theme);
@@ -104,18 +102,13 @@ export default function Layout({ children, currentPageName }) {
 
   useEffect(() => {
     const mode = localStorage.getItem('special_mode') || 'normal';
-    // Remove the logic that explicitly resets 'halloween' to 'normal'
-    // Now, whatever mode is stored, or 'normal' if none, will be used.
-    localStorage.setItem('special_mode', mode); // Ensure it's explicitly saved if it came from the default
-    setSpecialMode(mode); // Update state to reflect localStorage value accurately
-    document.documentElement.setAttribute('data-theme', mode); // Apply the mode directly
-  }, [specialMode]); // This ensures that if specialMode is changed (e.g., from Profile page), it re-applies correctly
+    localStorage.setItem('special_mode', mode);
+    setSpecialMode(mode);
+    document.documentElement.setAttribute('data-theme', mode);
+  }, [specialMode]);
 
   const checkUserStatusAndTrial = useCallback(async () => {
     try {
-      // Clear 401 failure count on successful user fetch
-      sessionStorage.removeItem('auth_fail_count');
-
       const currentUser = await User.me();
       
       if (!currentUser.trial_start_date) {
@@ -147,7 +140,6 @@ export default function Layout({ children, currentPageName }) {
       setAuthCheckComplete(true);
     } catch (error) {
       console.error("Error checking user status:", error);
-      // Base44 will handle authentication automatically
       setAuthCheckComplete(true);
     }
   }, [location.pathname, navigate]);
@@ -219,19 +211,16 @@ export default function Layout({ children, currentPageName }) {
   }, []);
 
   const toggleTheme = () => {
-    // If user is in a special mode, exit to normal mode first
-    const currentSpecialMode = specialMode; // Use the state directly
+    const currentSpecialMode = specialMode;
     if (currentSpecialMode !== 'normal') {
       localStorage.setItem('special_mode', 'normal');
       setSpecialMode('normal');
-      // Don't cycle theme yet, just exit special mode
       setTimeout(() => {
         window.location.reload();
       }, 100);
       return;
     }
     
-    // Normal theme cycling
     setTheme(prev => {
       if (prev === 'minimalist') return 'dark';
       if (prev === 'dark') return 'colorful';
@@ -241,10 +230,9 @@ export default function Layout({ children, currentPageName }) {
 
   const getCurrentSeasonalTheme = () => {
     const now = new Date();
-    const month = now.getMonth() + 1; // 1-12
+    const month = now.getMonth() + 1;
     const day = now.getDate();
     
-    // Determine which seasonal theme should be active
     if (month === 1 && day <= 2) return 'newyears';
     if ((month === 1 && day >= 3) || (month === 2 && day <= 7)) return 'winter';
     if (month === 2 && day >= 8 && day <= 14) return 'valentines';
@@ -254,13 +242,13 @@ export default function Layout({ children, currentPageName }) {
     if ((month === 6 && day >= 22) || (month === 7 && day <= 3)) return 'summer';
     if (month === 7 && day === 4) return 'fourthjuly';
     if ((month === 7 && day >= 5) || (month === 8 && day <= 20)) return 'summer';
-    if ((month === 8 && day >= 21) || month === 9 || month === 11) return 'fall'; // Added month 11 for fall
+    if ((month === 8 && day >= 21) || month === 9 || month === 11) return 'fall';
     if (month === 10) return 'halloween';
     if (month === 12 && day <= 25) return 'christmas';
     if (month === 12 && day >= 26 && day <= 30) return 'winter';
     if (month === 12 && day === 31) return 'newyears';
     
-    return 'spring'; // Default fallback
+    return 'spring';
   };
 
   const handleLogout = async () => {
@@ -274,7 +262,6 @@ export default function Layout({ children, currentPageName }) {
 
   const handleLogin = async () => {
     const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
-    // FIXED: Remove confirmation dialog, just redirect
     await User.loginWithRedirect(callbackUrl);
   };
 
@@ -295,12 +282,10 @@ export default function Layout({ children, currentPageName }) {
 
   const getSeasonalBackgroundStyle = () => {
     const backgrounds = {
-      kawaii: null, // Plain pink background
-      halloween: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/ba3d7eb0b_c9c617da-1d0c-4fed-9830-7f692c5bac3d.png')", // Halloween with ghosts
-      // Fall leaves - orange background (this was URL_2 from my thought process)
+      kawaii: null,
+      halloween: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/ba3d7eb0b_c9c617da-1d0c-4fed-9830-7f692c5bac3d.png')",
       fall: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/01f77998a_ChatGPTImageOct15202504_16_28PM.png')", 
-      winter: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/d7ecb6583_ChatGPTImageOct15202504_16_31PM.png')", // Winter/snow
-      // Christmas - gingerbread, candy canes, presents (this was URL_1 from my thought process)
+      winter: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/d7ecb6583_ChatGPTImageOct15202504_16_31PM.png')",
       christmas: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/8e296b8ab_1ChatGPTImageOct15202504_16_05PM.png')", 
       valentines: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/c990d460e_2ChatGPTImageOct15202504_16_09PM.png')",
       newyears: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/829d2e43c_3ChatGPTImageOct15202504_11_12PM.png')",
@@ -397,14 +382,6 @@ export default function Layout({ children, currentPageName }) {
         </div>
       </div>
     );
-  }
-
-  // If somehow we get here without a user, redirect immediately
-  // This scenario should be caught by checkUserStatusAndTrial, but as a fallback:
-  if (!user) {
-    const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
-    User.loginWithRedirect(callbackUrl);
-    return null;
   }
 
   return (
@@ -764,7 +741,7 @@ export default function Layout({ children, currentPageName }) {
                     <Moon className="w-4 h-4" />
                     <span>Dark Mode</span>
                   </>
-                ) : ( // theme === 'colorful'
+                ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
                     <span>Colorful Mode</span>
@@ -890,7 +867,6 @@ export default function Layout({ children, currentPageName }) {
               {children}
             </div>
 
-            {/* Floating Action Button for Mic - exclude Home, ParkingLot, and SupportSpace pages */}
             {currentPageName !== "Home" && currentPageName !== "ParkingLot" && currentPageName !== "SupportSpace" && (
               <Button
                 onClick={() => {
