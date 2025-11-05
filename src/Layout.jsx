@@ -385,6 +385,7 @@ export default function Layout({ children, currentPageName }) {
       }`}
       style={{
         ...(isSeasonalTheme() ? getSeasonalBackgroundStyle() : {}),
+        paddingTop: 'max(1rem, env(safe-area-inset-top))',
         paddingBottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))'
       }}
     >
@@ -693,8 +694,8 @@ export default function Layout({ children, currentPageName }) {
                   ? 'border-gray-800 bg-gray-900'
                   : 'border-gray-200/50'
             }`} style={{
-              padding: '0.75rem 1rem',
-              paddingBottom: 'max(1.5rem, calc(1.5rem + env(safe-area-inset-bottom)))'
+              padding: '0.5rem 1rem',
+              paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))'
             }}>
               <Button
                 variant="outline"
