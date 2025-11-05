@@ -120,11 +120,10 @@ export default function Layout({ children, currentPageName }) {
       
       // CRITICAL FIX: If no user found (public app), redirect to login
       if (!currentUser || !currentUser.email) {
-        console.log("[AUTH] No user found, redirecting to login");
+        console.log("[AUTH] No user found, showing login screen.");
         setUser(null);
-        const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
-        User.loginWithRedirect(callbackUrl);
-        return; // Don't set authCheckComplete - keep loading screen showing
+        setAuthCheckComplete(true); // Mark auth as complete, but with no user
+        return; 
       }
 
       if (!currentUser.trial_start_date) {
@@ -157,13 +156,11 @@ export default function Layout({ children, currentPageName }) {
     } catch (error) {
       console.error("Error checking user status:", error);
       
-      // If 401, redirect to login and NEVER show the app
+      // If 401, mark auth as complete but with no user - this will show login screen
       if (error.response?.status === 401) {
-        console.log("[AUTH] 401 error, redirecting to login");
+        console.log("[AUTH] 401 error, showing login screen.");
         setUser(null);
-        const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
-        User.loginWithRedirect(callbackUrl);
-        // Don't set authCheckComplete - keep loading screen showing
+        setAuthCheckComplete(true);
       } else {
         // For other errors, allow retry
         setAuthCheckComplete(true);
@@ -413,6 +410,35 @@ export default function Layout({ children, currentPageName }) {
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-4 border-gray-300 border-t-green-500 rounded-full animate-spin"></div>
           <p className="text-lg font-medium">Loading ADHDone...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // CRITICAL FIX: If auth is complete but no user, show login screen
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-green-50 to-emerald-50">
+        <div className="max-w-md w-full p-8">
+          <div className="text-center mb-8">
+            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-green-600 to-green-700 flex items-center justify-center font-bold text-white text-3xl mx-auto mb-6">
+              A
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Welcome to ADHDone</h1>
+            <p className="text-gray-600">Your ADHD-friendly task companion</p>
+          </div>
+          
+          <Button
+            onClick={handleLogin}
+            className="w-full bg-green-600 hover:bg-green-700 text-white py-6 text-lg rounded-xl"
+          >
+            <LogIn className="w-5 h-5 mr-2" />
+            Sign In / Sign Up
+          </Button>
+          
+          <p className="text-center text-sm text-gray-500 mt-4">
+            New to ADHDone? Create your account to get started
+          </p>
         </div>
       </div>
     );
