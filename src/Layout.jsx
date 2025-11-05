@@ -148,10 +148,19 @@ export default function Layout({ children, currentPageName }) {
     } catch (error) {
       console.error("Error checking user status:", error);
       
-      // FIXED: Don't auto-redirect, just mark auth as complete and show login button
+      // If user is not authenticated, redirect to login
       if (error.response?.status === 401) {
         setUser(null);
         setAuthCheckComplete(true);
+        
+        // Redirect to login for new users
+        try {
+          const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
+          await User.loginWithRedirect(callbackUrl);
+        } catch (loginError) {
+          console.error("Login redirect failed:", loginError);
+          setAuthCheckComplete(true);
+        }
       } else {
         // For non-401 errors, keep user logged in and retry later
         setAuthCheckComplete(true);
