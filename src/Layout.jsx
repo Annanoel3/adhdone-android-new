@@ -148,10 +148,10 @@ export default function Layout({ children, currentPageName }) {
     } catch (error) {
       console.error("Error checking user status:", error);
       
-      // If user is not authenticated, redirect to login
+      // If user is not authenticated, redirect to login immediately
       if (error.response?.status === 401) {
         setUser(null);
-        setAuthCheckComplete(true);
+        // DON'T set authCheckComplete to true - keep showing loading while redirecting
         
         // Redirect to login for new users
         try {
@@ -423,7 +423,7 @@ export default function Layout({ children, currentPageName }) {
       style={{
         ...(isSeasonalTheme() ? getSeasonalBackgroundStyle() : {}),
         paddingTop: 'max(1rem, env(safe-area-inset-top))',
-        paddingBottom: 'max(3rem, calc(3rem + env(safe-area-inset-bottom)))'
+        paddingBottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))'
       }}
     >
       {user && <OneSignalInit user={user} />}
@@ -572,7 +572,7 @@ export default function Layout({ children, currentPageName }) {
                 : 'border-gray-200/50 backdrop-blur-sm bg-white/80'
           }`} style={{
             paddingTop: 'max(1rem, env(safe-area-inset-top))',
-            paddingBottom: 'max(1.5rem, calc(1.5rem + env(safe-area-inset-bottom)))'
+            paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))'
           }}>
             <SidebarHeader className={`border-b p-6 ${
               isSeasonalTheme()
@@ -705,7 +705,7 @@ export default function Layout({ children, currentPageName }) {
                                       ? 'bg-green-50 text-green-700 font-medium'
                                       : theme === 'dark'
                                         ? 'bg-gray-800 text-white font-medium'
-                                        : 'bg-gradient-to-r from-purple-100 to-orange-100 text-purple-700 font-medium'
+                                      : 'bg-gradient-to-r from-purple-100 to-orange-100 text-purple-700 font-medium'
                                   : isSeasonalTheme()
                                     ? 'hover:bg-white/40 text-gray-700'
                                     : theme === 'dark'
@@ -859,7 +859,7 @@ export default function Layout({ children, currentPageName }) {
           </Sidebar>
 
           <main className="flex-1 flex flex-col min-w-0 relative z-10" style={{
-            paddingBottom: 'max(3rem, calc(3rem + env(safe-area-inset-bottom)))'
+            paddingBottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))'
           }}>
             <header className={`backdrop-blur-md border-b px-6 py-4 md:hidden sticky top-0 z-10 ${
               isSeasonalTheme()
