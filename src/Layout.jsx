@@ -155,8 +155,7 @@ export default function Layout({ children, currentPageName }) {
     }
 
     try {
-      const { AccountabilityConnection } = await import('@/entities/AccountabilityConnection');
-      const connections = await AccountabilityConnection.filter({
+      const connections = await base44.entities.AccountabilityConnection.filter({
         recipient_email: user.email,
         status: 'pending'
       });
