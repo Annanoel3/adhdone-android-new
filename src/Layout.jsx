@@ -148,10 +148,13 @@ export default function Layout({ children, currentPageName }) {
     } catch (error) {
       console.error("Error checking user status:", error);
       
-      // Redirect to Base44 login immediately, don't show any intermediate screens
+      // Use the SDK's built-in login redirect - it knows the correct URL format
       const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
-      console.log("[AUTH] Redirecting to Base44 login with callback:", callbackUrl);
-      window.location.href = `https://app.base44.com/apps/${window.location.hostname}/login?redirect_uri=${encodeURIComponent(callbackUrl)}`;
+      console.log("[AUTH] Not authenticated, redirecting to login with callback:", callbackUrl);
+      User.loginWithRedirect(callbackUrl);
+      
+      // Keep showing loading screen while redirecting
+      // Don't set authCheckComplete to true
     }
   }, [location.pathname, navigate]);
 
@@ -403,9 +406,10 @@ export default function Layout({ children, currentPageName }) {
   }
 
   // If somehow we get here without a user, redirect immediately
+  // This scenario should be caught by checkUserStatusAndTrial, but as a fallback:
   if (!user) {
     const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
-    window.location.href = `https://app.base44.com/apps/${window.location.hostname}/login?redirect_uri=${encodeURIComponent(callbackUrl)}`;
+    User.loginWithRedirect(callbackUrl);
     return null;
   }
 
