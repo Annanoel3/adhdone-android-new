@@ -104,7 +104,6 @@ export default function Layout({ children, currentPageName }) {
   useEffect(() => {
     const mode = localStorage.getItem('special_mode') || 'normal';
     localStorage.setItem('special_mode', mode);
-    setSpecialMode(mode);
     document.documentElement.setAttribute('data-theme', mode);
   }, [specialMode]);
 
@@ -141,9 +140,8 @@ export default function Layout({ children, currentPageName }) {
       setAuthCheckComplete(true);
     } catch (error) {
       console.error("Error checking user status:", error);
-      // User not authenticated - Base44 will handle the redirect automatically
-      setAuthCheckComplete(true);
-      setUser(null);
+      // Don't set authCheckComplete - stay on loading screen
+      // Base44 will handle the redirect automatically
     }
   }, [location.pathname, navigate]);
 
