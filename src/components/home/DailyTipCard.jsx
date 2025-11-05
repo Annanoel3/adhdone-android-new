@@ -79,35 +79,39 @@ export default function DailyTipCard({ theme }) {
       const currentStreak = summaries.length > 0 ? summaries[0].streak_days || 0 : 0;
 
       // Use Base44's InvokeLLM for smart tips
-      const prompt = `You are a neuroscience-informed productivity coach. Generate ONE evidence-based tip for someone managing executive function challenges.
+      const prompt = `You are a brain-science-savvy friend sharing productivity tips. Generate ONE actionable tip grounded in real neuroscience.
 
 CRITICAL REQUIREMENTS:
-1. MUST reference real neuroscience (prefrontal cortex, dopamine, working memory, executive function)
-2. Use inclusive "our brains" / "we" language - make it universal, not targeting a specific group
-3. Explain WHY it happens (the brain mechanism) - frame it as how brains work in general
-4. Offer ONE specific, actionable strategy
-5. 2-3 sentences MAX
-6. NEVER mention time of day, current energy, or "right now"
-7. Sound like a friend sharing brain science, not a diagnosis
-8. Focus on ONE specific technique, not generic advice
-9. Frame challenges as common brain quirks everyone experiences, not deficits
+1. MUST reference actual brain science (prefrontal cortex, dopamine, working memory, etc.) but explain it casually
+2. Write in second person ("you") - conversational, friendly, relatable
+3. 2-3 sentences MAX - get to the point fast
+4. Give ONE specific, concrete action someone can try right now
+5. NEVER mention time of day, current energy, or "right now" 
+6. Acknowledge the struggle first, then explain the brain mechanism, then give the solution
+7. Sound like a smart friend, not a doctor or therapist
+8. Make it universal - helpful for anyone with a busy brain, not targeting a specific group
 
-CONTEXT (subtle influence only - don't explicitly mention these numbers):
+CONTEXT (use subtly - don't explicitly mention these numbers):
 - Active tasks: ${activeTasks.length}
 - Snoozed tasks: ${snoozedTasks.length}
 - Completed today: ${completedToday.length}
 - Streak: ${currentStreak} days
 
-EXAMPLES OF GOOD TIPS:
-"Getting started is harder when the prefrontal cortex needs extra activation energy. Physical movement increases dopamine and blood flow - literally stand up, do 3 jumping jacks, then start the task."
+EXAMPLES OF THE EXACT TONE I WANT:
 
-"When brains crave novelty for motivation, that's dopamine regulation at work. Change ONE thing: new location, background music, or set a timer for an odd number like 17 minutes."
+"Starting feels impossible when you can't see the steps? That's your brain struggling with task initiation because the prefrontal cortex needs a clear first action. Pick ONE tiny step - like 'put 3 dishes in sink' instead of 'clean kitchen' - set a 10-minute timer, and just do that one thing."
 
-"Most brains hold about 4-7 things in working memory at once. Writing things down isn't a crutch - it's compensating for a real neurological limitation. Externalize tasks immediately or they'll fade."
+"Waiting for deadline pressure leaves you scrambling with no quality time. Your brain craves urgency for dopamine, so manufacture it - ask someone to review your work 2 days early, or bet a friend $20 you'll finish by Friday. Artificial deadlines work just as well as real ones."
 
-"Time can feel abstract when your internal clock works differently. Use timers, alarms, and visual progress trackers - these create external time structure that's easier to perceive."
+"Boring task making you want to crawl out of your skin? That's low dopamine from lack of novelty. Keep the task the same but change everything around it - new coffee shop, colored pens, work with a friend, or relate it to something you actually care about."
 
-"Breaking tasks into 2-minute steps works because brains struggle with task sequencing. You're not resisting 'doing dishes' - you're resisting the 15 invisible steps. Make step 1 visible: 'Put 3 plates in sink.'"
+"Half-done projects feel harder than new ones because novelty wears off and your brain stops getting that dopamine hit. When you can't change the task, change the context - different location, different time of day, audiobook instead of reading, or get someone to work alongside you."
+
+"Brain holding too many things at once? Working memory maxes out at about 4 items, so anything beyond that just... disappears. Write every task down immediately - it's not a crutch, it's how you free up mental space for actually doing the work."
+
+"Can't get started? That's because the prefrontal cortex needs activation energy. Physical movement literally increases blood flow and dopamine - stand up, do 5 jumping jacks, then immediately start the task while your brain is revved up."
+
+"Task feels massive and overwhelming? Big tasks trigger avoidance because your brain can't sequence all the steps. Break it into 2-minute chunks - not 'do taxes,' but 'open tax software and find last year's return.' That's it. One tiny step."
 
 Return ONLY the tip text, nothing else.`;
 
@@ -137,7 +141,7 @@ Return ONLY the category name.`;
     } catch (error) {
       console.error("Error generating tip:", error);
       const fallbackTip = await base44.entities.DailyTip.create({
-        tip_text: "Getting started is harder when the prefrontal cortex needs extra activation energy. Physical movement increases dopamine - literally stand up, walk to the task, touch it. Movement before thinking.",
+        tip_text: "Can't get started? Physical movement increases blood flow and dopamine to the prefrontal cortex. Stand up, do 5 jumping jacks, then immediately start your task while your brain is revved up.",
         category: "focus",
         shown_date: today,
         prompt_version: CURRENT_PROMPT_VERSION
