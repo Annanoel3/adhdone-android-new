@@ -140,8 +140,8 @@ export default function Layout({ children, currentPageName }) {
       setAuthCheckComplete(true);
     } catch (error) {
       console.error("Error checking user status:", error);
-      // Don't set authCheckComplete - stay on loading screen
-      // Base44 will handle the redirect automatically
+      setAuthCheckComplete(true);
+      setUser(null);
     }
   }, [location.pathname, navigate]);
 
