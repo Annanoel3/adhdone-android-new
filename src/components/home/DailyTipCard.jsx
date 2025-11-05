@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lightbulb, Sparkles, Loader2, RefreshCw } from "lucide-react";
@@ -78,17 +79,18 @@ export default function DailyTipCard({ theme }) {
       const currentStreak = summaries.length > 0 ? summaries[0].streak_days || 0 : 0;
 
       // Use Base44's InvokeLLM for smart tips
-      const prompt = `You are a neuroscience-informed ADHD coach. Generate ONE evidence-based tip.
+      const prompt = `You are a neuroscience-informed productivity coach. Generate ONE evidence-based tip for someone managing executive function challenges.
 
 CRITICAL REQUIREMENTS:
 1. MUST reference real neuroscience (prefrontal cortex, dopamine, working memory, executive function)
-2. Use inclusive "our brains" / "we" language - never say "ADHD brains" or "people with ADHD"
-3. Explain WHY it happens (the brain mechanism)
+2. Use inclusive "our brains" / "we" language - make it universal, not targeting a specific group
+3. Explain WHY it happens (the brain mechanism) - frame it as how brains work in general
 4. Offer ONE specific, actionable strategy
 5. 2-3 sentences MAX
 6. NEVER mention time of day, current energy, or "right now"
-7. Sound like a friend, not a textbook
+7. Sound like a friend sharing brain science, not a diagnosis
 8. Focus on ONE specific technique, not generic advice
+9. Frame challenges as common brain quirks everyone experiences, not deficits
 
 CONTEXT (subtle influence only - don't explicitly mention these numbers):
 - Active tasks: ${activeTasks.length}
@@ -97,15 +99,15 @@ CONTEXT (subtle influence only - don't explicitly mention these numbers):
 - Streak: ${currentStreak} days
 
 EXAMPLES OF GOOD TIPS:
-"Task initiation is harder when our prefrontal cortex needs extra activation energy. Physical movement increases dopamine and blood flow - literally stand up, do 3 jumping jacks, then start the task."
+"Getting started is harder when the prefrontal cortex needs extra activation energy. Physical movement increases dopamine and blood flow - literally stand up, do 3 jumping jacks, then start the task."
 
-"If our brains crave novelty for motivation, that's dopamine regulation at work. Change ONE thing: new location, background music, or set a timer for an odd number like 17 minutes."
+"When brains crave novelty for motivation, that's dopamine regulation at work. Change ONE thing: new location, background music, or set a timer for an odd number like 17 minutes."
 
-"Our brains hold about 30% less in working memory. Writing things down isn't a crutch - it's compensating for a real neurological difference. Externalize tasks immediately or they'll vanish."
+"Most brains hold about 4-7 things in working memory at once. Writing things down isn't a crutch - it's compensating for a real neurological limitation. Externalize tasks immediately or they'll fade."
 
-"Time blindness happens when our brain's internal clock works differently. Use timers, alarms, and visual progress trackers - these create external time structure we can actually perceive."
+"Time can feel abstract when your internal clock works differently. Use timers, alarms, and visual progress trackers - these create external time structure that's easier to perceive."
 
-"Breaking tasks into 2-minute steps works because we struggle with task sequencing. You're not resisting 'doing dishes' - you're resisting the 15 invisible steps. Make step 1 visible: 'Put 3 plates in sink.'"
+"Breaking tasks into 2-minute steps works because brains struggle with task sequencing. You're not resisting 'doing dishes' - you're resisting the 15 invisible steps. Make step 1 visible: 'Put 3 plates in sink.'"
 
 Return ONLY the tip text, nothing else.`;
 
@@ -135,7 +137,7 @@ Return ONLY the category name.`;
     } catch (error) {
       console.error("Error generating tip:", error);
       const fallbackTip = await base44.entities.DailyTip.create({
-        tip_text: "Task initiation is harder when our prefrontal cortex needs extra activation energy. Physical movement increases dopamine - literally stand up, walk to the task, touch it. Movement before thinking.",
+        tip_text: "Getting started is harder when the prefrontal cortex needs extra activation energy. Physical movement increases dopamine - literally stand up, walk to the task, touch it. Movement before thinking.",
         category: "focus",
         shown_date: today,
         prompt_version: CURRENT_PROMPT_VERSION
