@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -74,7 +75,6 @@ import SpringMode from "./components/shared/SpringMode";
 import OneSignalInit from "./components/shared/OneSignalInit";
 import {
   Tooltip,
-  TooltipContent,
   TooltipProvider,
 } from "@/components/ui/tooltip"; // Removed TooltipTrigger, Info import is from lucide-react
 import EasterEggVideo from "./components/shared/EasterEggVideo"; // Added EasterEggVideo import
@@ -148,22 +148,10 @@ export default function Layout({ children, currentPageName }) {
     } catch (error) {
       console.error("Error checking user status:", error);
       
-      // CRITICAL FIX: Don't immediately logout on every error
-      // Only logout if we're actually unauthorized, not on network errors
+      // FIXED: Don't auto-redirect, just mark auth as complete and show login button
       if (error.response?.status === 401) {
         setUser(null);
         setAuthCheckComplete(true);
-
-        if (location.pathname === createPageUrl("AuthCallback")) {
-          return;
-        }
-
-        try {
-          const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
-          await User.loginWithRedirect(callbackUrl);
-        } catch (loginError) {
-          console.log("Login redirect not available");
-        }
       } else {
         // For non-401 errors, keep user logged in and retry later
         setAuthCheckComplete(true);
@@ -293,14 +281,8 @@ export default function Layout({ children, currentPageName }) {
 
   const handleLogin = async () => {
     const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
-
-    const confirmed = confirm(
-      "You'll be redirected to your browser to sign in with Google. After signing in, you'll be brought back to the app."
-    );
-
-    if (confirmed) {
-      await User.loginWithRedirect(callbackUrl);
-    }
+    // FIXED: Remove confirmation dialog, just redirect
+    await User.loginWithRedirect(callbackUrl);
   };
 
   const isSeasonalTheme = () => {
@@ -431,7 +413,8 @@ export default function Layout({ children, currentPageName }) {
       }`}
       style={{
         ...(isSeasonalTheme() ? getSeasonalBackgroundStyle() : {}),
-        paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))'
+        paddingTop: 'max(1rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(3rem, calc(3rem + env(safe-area-inset-bottom)))'
       }}
     >
       {user && <OneSignalInit user={user} />}
@@ -579,8 +562,8 @@ export default function Layout({ children, currentPageName }) {
                 ? 'bg-gray-900 border-gray-800'
                 : 'border-gray-200/50 backdrop-blur-sm bg-white/80'
           }`} style={{
-            paddingTop: 'env(safe-area-inset-top)',
-            paddingBottom: 'max(1rem, calc(1rem + env(safe-area-inset-bottom)))'
+            paddingTop: 'max(1rem, env(safe-area-inset-top))',
+            paddingBottom: 'max(1.5rem, calc(1.5rem + env(safe-area-inset-bottom)))'
           }}>
             <SidebarHeader className={`border-b p-6 ${
               isSeasonalTheme()
@@ -867,7 +850,7 @@ export default function Layout({ children, currentPageName }) {
           </Sidebar>
 
           <main className="flex-1 flex flex-col min-w-0 relative z-10" style={{
-            paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))'
+            paddingBottom: 'max(3rem, calc(3rem + env(safe-area-inset-bottom)))'
           }}>
             <header className={`backdrop-blur-md border-b px-6 py-4 md:hidden sticky top-0 z-10 ${
               isSeasonalTheme()
@@ -876,7 +859,7 @@ export default function Layout({ children, currentPageName }) {
                   ? 'bg-gray-950/60 border-gray-800'
                   : 'bg-white/60 border-gray-200/50'
             }`} style={{
-              paddingTop: 'calc(1rem + env(safe-area-inset-top))'
+              paddingTop: 'max(1rem, calc(1rem + env(safe-area-inset-top)))'
             }}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
