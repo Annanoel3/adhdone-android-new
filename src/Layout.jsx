@@ -148,21 +148,16 @@ export default function Layout({ children, currentPageName }) {
     } catch (error) {
       console.error("Error checking user status:", error);
       
-      // If user is not authenticated, redirect to login immediately
+      // CRITICAL: If 401, redirect to login and NEVER show the app
       if (error.response?.status === 401) {
         setUser(null);
-        // DON'T set authCheckComplete to true - keep showing loading while redirecting
-        
-        // Redirect to login for new users
-        try {
-          const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
-          await User.loginWithRedirect(callbackUrl);
-        } catch (loginError) {
-          console.error("Login redirect failed:", loginError);
-          setAuthCheckComplete(true);
-        }
+        // Keep authCheckComplete as FALSE - never show the app
+        // Redirect to login
+        const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
+        User.loginWithRedirect(callbackUrl);
+        // Don't set authCheckComplete to true - keep loading screen showing
       } else {
-        // For non-401 errors, keep user logged in and retry later
+        // For other errors, allow retry
         setAuthCheckComplete(true);
       }
     }
