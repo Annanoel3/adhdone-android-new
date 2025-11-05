@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 
 // Helper function to detect if running in Capacitor mobile app
 function isRunningInCapacitor() {
-    return window.parent !== window && window.parent.Capacitor !== undefined;
+    return window !== window.parent;
 }
 
 export default function OneSignalInit({ user }) {
