@@ -147,14 +147,8 @@ export default function Layout({ children, currentPageName }) {
       setAuthCheckComplete(true);
     } catch (error) {
       console.error("Error checking user status:", error);
-      
-      // Use the SDK's built-in login redirect - it knows the correct URL format
-      const callbackUrl = window.location.origin + createPageUrl("AuthCallback");
-      console.log("[AUTH] Not authenticated, redirecting to login with callback:", callbackUrl);
-      User.loginWithRedirect(callbackUrl);
-      
-      // Keep showing loading screen while redirecting
-      // Don't set authCheckComplete to true
+      // Base44 will handle authentication automatically
+      setAuthCheckComplete(true);
     }
   }, [location.pathname, navigate]);
 
@@ -294,6 +288,11 @@ export default function Layout({ children, currentPageName }) {
     return 'bg-gradient-to-br from-purple-50 via-orange-50 to-teal-50';
   };
 
+  const getSpecialModeCardClass = useCallback(() => {
+    if (specialMode === 'normal') return '';
+    return `${specialMode}-card`;
+  }, [specialMode]);
+
   const getSeasonalBackgroundStyle = () => {
     const backgrounds = {
       kawaii: null, // Plain pink background
@@ -327,11 +326,6 @@ export default function Layout({ children, currentPageName }) {
     }
     return {};
   };
-
-  const getSpecialModeCardClass = useCallback(() => {
-    if (specialMode === 'normal') return '';
-    return `${specialMode}-card`;
-  }, [specialMode]);
 
   const navigationItems = [
     {
