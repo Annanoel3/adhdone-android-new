@@ -45,18 +45,19 @@ export default function Home() {
   const loadData = async () => {
     try {
       const currentUser = await base44.auth.me();
-      setUser(currentUser);
-      
-      // DEBUG: Log current user info
-      console.log("🔍 [HOME DEBUG] Current user:", currentUser.email);
+      console.log("🔍 [HOME DEBUG] RAW USER OBJECT:", JSON.stringify(currentUser, null, 2));
+      console.log("🔍 [HOME DEBUG] User email:", currentUser.email);
       console.log("🔍 [HOME DEBUG] User ID:", currentUser.id);
+      console.log("🔍 [HOME DEBUG] User full_name:", currentUser.full_name);
+      
+      setUser(currentUser);
     } catch (error) {
+      console.error("Error loading user:", error);
       console.log("User not logged in");
     }
     
     const allTasks = await base44.entities.Task.list('-updated_date');
     
-    // DEBUG: Log task information
     console.log("🔍 [HOME DEBUG] Total tasks fetched:", allTasks.length);
     if (allTasks.length > 0) {
       console.log("🔍 [HOME DEBUG] Sample task created_by:", allTasks[0].created_by);
