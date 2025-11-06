@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Task } from "@/entities/Task";
-import { User } from "@/entities/User"; 
+import { base44 } from "@/api/base44Client";
 import WelcomeCard from "../components/home/WelcomeCard";
 import DailyTipCard from "../components/home/DailyTipCard";
 import QuickActions from "../components/home/QuickActions";
@@ -45,7 +44,7 @@ export default function Home() {
 
   const loadData = async () => {
     try {
-      const currentUser = await User.me();
+      const currentUser = await base44.auth.me();
       setUser(currentUser);
       
       // DEBUG: Log current user info
@@ -55,7 +54,7 @@ export default function Home() {
       console.log("User not logged in");
     }
     
-    const allTasks = await Task.list('-updated_date');
+    const allTasks = await base44.entities.Task.list('-updated_date');
     
     // DEBUG: Log task information
     console.log("🔍 [HOME DEBUG] Total tasks fetched:", allTasks.length);
@@ -81,7 +80,7 @@ export default function Home() {
   };
 
   const handleTaskComplete = async (task) => {
-    await Task.update(task.id, { 
+    await base44.entities.Task.update(task.id, { 
       status: 'completed',
       completed_at: new Date().toISOString()
     });

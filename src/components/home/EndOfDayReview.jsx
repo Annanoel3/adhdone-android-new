@@ -16,9 +16,10 @@ import {
   Download,
   Lightbulb // Added Lightbulb icon for improvements section
 } from "lucide-react";
-import { Task } from "@/entities/Task";
+import { Task } from "@/entities/Task"; // Keep Task import as it might be used elsewhere for type inference or other local needs, though the list call is now via base44.
 import { DailySummary } from "@/entities/DailySummary";
 import { EnergyLog } from "@/entities/EnergyLog";
+import { base44 } from "@/api/base44Client";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 
@@ -39,7 +40,7 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
     const startOfDay = new Date(today).toISOString();
 
     // Get today's tasks
-    const allTasks = await Task.list();
+    const allTasks = await base44.entities.Task.list();
     const todayTasks = allTasks.filter(t => {
       const createdDate = new Date(t.created_date).toISOString().split('T')[0];
       return createdDate === today || t.status === 'active' || t.status === 'snoozed'; // Include snoozed tasks for analysis

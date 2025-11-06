@@ -8,8 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { checkAndAwardAchievements } from "../utils/achievementTracker";
 import { awardPoints, getPointsForAction } from "../utils/gamification";
-import { Task } from "@/entities/Task";
-import { DailySummary } from "@/entities/DailySummary";
+import { base44 } from "@/api/base44Client";
 import { motion } from "framer-motion";
 import TaskCompletionCelebration from "../tasks/TaskCompletionCelebration";
 import { updateTodaysSummary } from "../utils/dailySummaryHelper";
@@ -81,9 +80,9 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
       
       await awardPoints(points + bonusPoints);
       
-      const allTasks = await Task.list();
+      const allTasks = await base44.entities.Task.list();
       const completedTasks = allTasks.filter(t => t.status === 'completed');
-      const summaries = await DailySummary.list('-date', 1);
+      const summaries = await base44.entities.DailySummary.list('-date', 1);
       const currentStreak = summaries[0]?.streak_days || 0;
       
       await checkAndAwardAchievements({
@@ -98,12 +97,12 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
   };
 
   const handleUrgencyChange = async (task, newUrgency) => {
-    await Task.update(task.id, { urgency: newUrgency });
+    await base44.entities.Task.update(task.id, { urgency: newUrgency });
     window.location.reload();
   };
 
   const handleEnergyChange = async (task, newEnergy) => {
-    await Task.update(task.id, { energy_required: newEnergy });
+    await base44.entities.Task.update(task.id, { energy_required: newEnergy });
     window.location.reload();
   };
 
@@ -135,7 +134,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
         break;
     }
 
-    await Task.update(task.id, { 
+    await base44.entities.Task.update(task.id, { 
       reminder_interval: newInterval,
       next_reminder: nextReminder.toISOString()
     });
@@ -155,7 +154,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
 
     console.log(`🕐 [REMINDER TIME] Setting reminder for ${nextReminder.toLocaleString()} (${nextReminder.toISOString()})`);
 
-    await Task.update(task.id, { 
+    await base44.entities.Task.update(task.id, { 
       next_reminder: nextReminder.toISOString()
     });
     window.location.reload();

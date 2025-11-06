@@ -34,6 +34,7 @@ import VoiceTaskInput from "./VoiceTaskInput";
 import { InvokeLLM } from "@/integrations/Core";
 import { scheduleReminder, cancelScheduledReminder } from "../utils/reminderScheduler";
 import { User } from "@/entities/User";
+import { base44 } from "@/api/base44Client";
 import {
   Popover,
   PopoverContent,
@@ -85,7 +86,7 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, them
     e.preventDefault();
     if (!newSubTask.trim() || !task) return;
 
-    const currentUser = await User.me();
+    const currentUser = await base44.auth.me();
     const now = new Date();
     let nextReminder = new Date(now.getTime());
     
@@ -170,7 +171,7 @@ Return JSON:
   "subtasks": ["subtask 1", "subtask 2", ...]
 }`;
 
-      const response = await InvokeLLM({
+      const response = await base44.integrations.Core.InvokeLLM({
         prompt,
         response_json_schema: {
           type: "object",
@@ -183,7 +184,7 @@ Return JSON:
         }
       });
 
-      const currentUser = await User.me();
+      const currentUser = await base44.auth.me();
       const now = new Date();
       let nextReminder = new Date(now.getTime());
 

@@ -1,11 +1,9 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { InvokeLLM } from "@/integrations/Core";
-import { User } from "@/entities/User";
-import { Task } from "@/entities/Task";
-import { DailySummary } from "@/entities/DailySummary";
+import { base44 } from "@/api/base44Client";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function MotivationCoach({ theme }) {
@@ -15,7 +13,7 @@ export default function MotivationCoach({ theme }) {
   useEffect(() => {
     const checkForMotivation = async () => {
       try {
-        const user = await User.me();
+        const user = await base44.auth.me();
         const today = new Date().toISOString().split('T')[0];
         
         // Check if we've shown a message today
@@ -33,11 +31,11 @@ export default function MotivationCoach({ theme }) {
     };
 
     const generateMotivation = async () => {
-      const user = await User.me();
+      const user = await base44.auth.me();
       const today = new Date().toISOString().split('T')[0];
       
       // Get TODAY's completed tasks only
-      const allTasks = await Task.list();
+      const allTasks = await base44.entities.Task.list();
       const completedToday = allTasks.filter(t => {
         if (t.status !== 'completed' || !t.completed_at) return false;
         const completedDate = new Date(t.completed_at).toISOString().split('T')[0];
@@ -46,7 +44,7 @@ export default function MotivationCoach({ theme }) {
       
       const activeTasks = allTasks.filter(t => t.status === 'active');
       
-      const summaries = await DailySummary.list('-date', 7);
+      const summaries = await base44.entities.DailySummary.list('-date', 7);
       const recentStreak = summaries[0]?.streak_days || 0;
 
       const prompt = `You are a motivational coach for someone with ADHD. Generate a brief, personalized, encouraging message based on their current situation.
@@ -69,13 +67,13 @@ DO NOT:
 - Use clichés like "you got this"
 - Be preachy or condescending`;
 
-      const response = await InvokeLLM({ prompt });
+      const response = await base44.integrations.Core.InvokeLLM({ prompt });
       
       setMessage(response);
       setIsVisible(true);
       
       // Save that we showed a message today
-      await User.updateMyUserData({ 
+      await base44.auth.updateMe({ 
         last_motivation_message: response,
         last_motivation_date: today
       });
