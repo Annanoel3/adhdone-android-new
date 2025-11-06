@@ -58,16 +58,16 @@ export default function OneSignalInit({ user }) {
               allowLocalhostAsSecureOrigin: true
             });
             
-            // Set external user ID
-            console.log('[OneSignal] ✅ Web SDK setting EMAIL (not ID):', userEmail);
-            window.OneSignal.setExternalUserId(userEmail);
+            // FIXED: Use SDK 5.x login() method instead of deprecated setExternalUserId()
+            console.log('[OneSignal] ✅ Web SDK using login() with EMAIL:', userEmail);
+            window.OneSignal.login(userEmail);
           });
         } else {
-          // User logged out - remove external user ID
+          // FIXED: Use SDK 5.x logout() method instead of deprecated removeExternalUserId()
           if (window.OneSignal) {
             window.OneSignal.push(function() {
-              window.OneSignal.removeExternalUserId();
-              console.log('[OneSignal] Removed external user ID from web SDK');
+              window.OneSignal.logout();
+              console.log('[OneSignal] Web SDK logged out');
             });
           }
         }
