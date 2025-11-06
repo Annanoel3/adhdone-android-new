@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
@@ -20,8 +19,6 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  // The specialMode variable is no longer used for inline styling on the main div,
-  // but it's kept here as it might be used elsewhere or in future changes.
   const specialMode = localStorage.getItem('special_mode') || 'normal';
 
   useEffect(() => {
@@ -34,7 +31,6 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // Reload when coming back to home page
   useEffect(() => {
     if (location.state?.reload) {
       loadData();
@@ -45,11 +41,6 @@ export default function Home() {
   const loadData = async () => {
     try {
       const currentUser = await base44.auth.me();
-      console.log("🔍 [HOME DEBUG] RAW USER OBJECT:", JSON.stringify(currentUser, null, 2));
-      console.log("🔍 [HOME DEBUG] User email:", currentUser.email);
-      console.log("🔍 [HOME DEBUG] User ID:", currentUser.id);
-      console.log("🔍 [HOME DEBUG] User full_name:", currentUser.full_name);
-      
       setUser(currentUser);
     } catch (error) {
       console.error("Error loading user:", error);
@@ -57,14 +48,6 @@ export default function Home() {
     }
     
     const allTasks = await base44.entities.Task.list('-updated_date');
-    
-    console.log("🔍 [HOME DEBUG] Total tasks fetched:", allTasks.length);
-    if (allTasks.length > 0) {
-      console.log("🔍 [HOME DEBUG] Sample task created_by:", allTasks[0].created_by);
-      console.log("🔍 [HOME DEBUG] All unique created_by values:", 
-        [...new Set(allTasks.map(t => t.created_by))]);
-    }
-    
     setTasks(allTasks);
   };
 
@@ -159,7 +142,6 @@ export default function Home() {
         />
       </div>
       
-      {/* Android Navigation Button Spacer */}
       <div style={{ height: '120px' }} aria-hidden="true"></div>
     </div>
   );
