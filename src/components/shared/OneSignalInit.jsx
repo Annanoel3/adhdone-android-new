@@ -8,7 +8,22 @@ function isRunningInCapacitor() {
 export default function OneSignalInit({ user }) {
   useEffect(() => {
     const syncOneSignal = async () => {
+      if (!user) {
+        console.log('[OneSignal] No user provided to OneSignalInit');
+        return;
+      }
+
       const userEmail = user?.email;
+
+      // CRITICAL: Verify we have an email, not an ID
+      if (!userEmail || !userEmail.includes('@')) {
+        console.error('[OneSignal] INVALID EMAIL:', userEmail);
+        console.error('[OneSignal] User object:', user);
+        return;
+      }
+
+      console.log('[OneSignal] ✅ Valid email confirmed:', userEmail);
+      console.log('[OneSignal] User ID (NOT being sent):', user.id);
 
       if (isRunningInCapacitor()) {
         // Running in mobile app - send to native wrapper
@@ -16,10 +31,12 @@ export default function OneSignalInit({ user }) {
         
         if (userEmail) {
           // User logged in - set external user ID via postMessage
-          console.log('[OneSignal] Setting external user ID via postMessage:', userEmail);
+          console.log('[OneSignal] ✅ Sending EMAIL (not ID) via postMessage:', userEmail);
+          console.log('[OneSignal] ❌ NOT sending user ID:', user.id);
+          
           window.parent.postMessage({
             type: 'setOneSignalExternalUserId',
-            externalUserId: userEmail
+            externalUserId: userEmail // ALWAYS the email, NEVER user.id
           }, '*');
         } else {
           // User logged out
@@ -42,8 +59,8 @@ export default function OneSignalInit({ user }) {
             });
             
             // Set external user ID
+            console.log('[OneSignal] ✅ Web SDK setting EMAIL (not ID):', userEmail);
             window.OneSignal.setExternalUserId(userEmail);
-            console.log('[OneSignal] Web SDK initialized with external user ID:', userEmail);
           });
         } else {
           // User logged out - remove external user ID
