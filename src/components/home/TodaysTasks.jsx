@@ -217,7 +217,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
       specialMode === 'normal' ? (
         theme === 'minimalist'
           ? 'bg-white/80 backdrop-blur-sm'
-          : theme === 'dark'
+            : theme === 'dark'
             ? 'bg-gray-800 border border-gray-700'
             : 'bg-white/80 backdrop-blur-sm'
       ) : ''
@@ -352,14 +352,24 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
                               {new Date(task.next_reminder).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
                             </button>
                           </PopoverTrigger>
-                          <PopoverContent className="w-64 p-4" onClick={(e) => e.stopPropagation()}>
+                          <PopoverContent className={`w-64 p-4 ${
+                            theme === 'dark' 
+                              ? 'bg-gray-800 border-gray-700 text-gray-100' 
+                              : 'bg-white border-gray-200'
+                          }`} onClick={(e) => e.stopPropagation()}>
                             <div className="space-y-2">
-                              <label className="text-sm font-medium">Change reminder time:</label>
+                              <label className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
+                                Change reminder time:
+                              </label>
                               <input
                                 type="time"
                                 defaultValue={getCurrentReminderTime(task)}
                                 onChange={(e) => handleReminderTimeChange(task, e.target.value)}
-                                className="w-full border rounded px-3 py-2"
+                                className={`w-full border rounded px-3 py-2 ${
+                                  theme === 'dark'
+                                    ? 'bg-gray-900 border-gray-600 text-gray-100'
+                                    : 'bg-white border-gray-300 text-gray-900'
+                                }`}
                               />
                             </div>
                           </PopoverContent>

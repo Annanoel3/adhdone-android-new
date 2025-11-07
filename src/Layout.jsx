@@ -338,7 +338,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       }`}
       style={{
         ...(isSeasonalTheme() ? getSeasonalBackgroundStyle() : {}),
-        paddingTop: 'env(safe-area-inset-top)',
+        paddingTop: 'max(0px, env(safe-area-inset-top))',
         paddingBottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))'
       }}
     >
@@ -755,14 +755,15 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           <main className="flex-1 flex flex-col min-w-0 relative z-10" style={{
             paddingBottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))'
           }}>
-            <header className={`backdrop-blur-md border-b px-6 py-4 md:hidden sticky top-0 z-10 ${
+            <header className={`backdrop-blur-md border-b px-6 md:hidden sticky top-0 z-10 ${
               isSeasonalTheme()
                 ? 'bg-white/60 border-white/30'
                 : theme === 'dark'
                   ? 'bg-gray-950/60 border-gray-800'
                   : 'bg-white/60 border-gray-200/50'
             }`} style={{
-              paddingTop: 'max(1rem, calc(1rem + env(safe-area-inset-top)))'
+              paddingTop: 'max(1rem, calc(1rem + env(safe-area-inset-top)))',
+              paddingBottom: '1rem'
             }}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
@@ -840,8 +841,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 }
 
 export default function Layout({ children, currentPageName }) {
-  const navigate = useNavigate(); // Keep navigate here for trial ending check
-  const location = useLocation(); // Keep location here for trial ending check
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [user, setUser] = useState(null);
   const [authCheckComplete, setAuthCheckComplete] = useState(false);

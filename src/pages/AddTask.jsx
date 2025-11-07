@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { Task } from "@/entities/Task";
 import { User } from "@/entities/User";
@@ -7,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence } => "framer-motion";
 import { base44 } from "@/api/base44Client";
 import { scheduleReminder } from "../components/utils/reminderScheduler";
 
@@ -353,7 +354,10 @@ Return JSON:
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-8" style={{ paddingTop: 'max(1rem, calc(1rem + env(safe-area-inset-top)))' }}>
+    <div className="min-h-screen p-4 md:p-8" style={{ 
+      paddingTop: 'max(1rem, calc(1rem + env(safe-area-inset-top)))',
+      paddingBottom: 'max(8rem, calc(8rem + env(safe-area-inset-bottom)))'
+    }}>
       <div className="max-w-3xl mx-auto space-y-6">
         <Button
           variant="ghost"
