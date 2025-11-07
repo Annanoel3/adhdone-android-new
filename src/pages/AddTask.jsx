@@ -3,25 +3,29 @@ import React, { useState } from "react";
 import { Task } from "@/entities/Task";
 import { User } from "@/entities/User";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Sparkles, Mic } from "lucide-react";
+import { ArrowLeft, Sparkles, Mic, Loader2, ListChecks, Zap } from "lucide-react"; // Added Loader2, ListChecks, Zap
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Added CardHeader, CardTitle for consistency
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
 import { base44 } from "@/api/base44Client";
 import { scheduleReminder } from "../components/utils/reminderScheduler";
+import { Badge } from "@/components/ui/badge"; // Assuming Badge is used for tasks display
 
 export default function AddTask() {
   const navigate = useNavigate();
-  const [tasks, setTasks] = useState([]);
+  const [tasks, setTasks] = useState([]); // This state is likely meant to be loaded from a parent or initially empty for display
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
-  const [isSaving, setIsSaving] = useState(false);
+  // Consolidated isSaving and isProcessingVoice into a single isProcessing state
+  const [isProcessing, setIsProcessing] = useState(false);
   const [inputMode, setInputMode] = useState('voice');
   const [textInput, setTextInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
-  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState(null);
+
+  // State for optimistic UI
+  const [optimisticTasks, setOptimisticTasks] = useState([]);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -31,9 +35,173 @@ export default function AddTask() {
     return () => clearInterval(interval);
   }, []);
 
+  // Helper for optimistic UI updates
+  const createTaskOptimistically = (taskTitle, taskDetails = {}) => {
+    const tempTask = {
+      id: 'temp-' + Date.now(),
+      title: taskTitle,
+      status: 'active',
+      urgency: 'medium', // Default values
+      energy_required: 'medium', // Default values
+      isProcessing: true, // Marker for optimistic item
+      created_date: new Date().toISOString(),
+      ...taskDetails
+    };
+
+    setOptimisticTasks(prev => [tempTask, ...prev]);
+    return tempTask.id;
+  };
+
+  const replaceOptimisticTask = (tempId, realTask) => {
+    setOptimisticTasks(prev => prev.filter(t => t.id !== tempId));
+    // The `loadData()` call in the outline was likely referring to a parent component's data loading.
+    // Since AddTask navigates away, the `reload: true` state handled by the parent is sufficient.
+    // navigate(createPageUrl("Home"), { state: { reload: true } }); // Navigation will happen once after all processing
+  };
+
+  const removeOptimisticTask = (tempId) => {
+    setOptimisticTasks(prev => prev.filter(t => t.id !== tempId));
+  };
+
+
+  // Common logic for processing transcription/text and creating tasks
+  const processAndCreateTask = async (inputText: string) => {
+    if (!inputText.trim()) return;
+
+    setIsProcessing(true);
+    const tempId = createTaskOptimistically(inputText); // Create optimistic entry
+
+    try {
+      const currentUser = await User.me();
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      // LLM prompt updated as per outline for single task parsing
+      const prompt = `Parse this task: "${inputText}"
+
+Context:
+- Today: ${today.toISOString().split('T')[0]}
+- Tomorrow: ${tomorrow.toISOString().split('T')[0]}
+- Current time: ${now.toLocaleTimeString()}
+
+Extract:
+1. Core task (2-8 words, remove filler like "remind me to")
+2. Urgency (low/medium/high/urgent)
+3. Energy needed (low/medium/high)
+4. Reminder timing if mentioned
+
+Return JSON:
+{
+  "title": "task title",
+  "urgency": "medium",
+  "energy_required": "medium",
+  "reminder_interval": "30min" | "1hour" | "2hours" | "daily" | "once" | null,
+  "reminder_time": "HH:MM" | null,
+  "relative_minutes": number | null
+}`;
+
+      const parsed = await base44.integrations.Core.InvokeLLM({
+        prompt,
+        response_json_schema: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            urgency: { type: "string" },
+            energy_required: { type: "string" },
+            reminder_interval: { type: "string" },
+            reminder_time: { type: "string" },
+            relative_minutes: { type: "number" }
+          }
+        }
+      });
+
+      // Calculate next_reminder based on parsed data
+      let nextReminder: Date | null = null;
+      let actualReminderInterval: string | null = parsed.reminder_interval || null;
+
+      if (parsed.relative_minutes && parsed.relative_minutes > 0) {
+        nextReminder = new Date(now.getTime() + parsed.relative_minutes * 60 * 1000);
+        actualReminderInterval = 'once'; // Relative time implies a one-time reminder
+      } else if (parsed.reminder_time) {
+        const [hours, minutes] = parsed.reminder_time.split(':');
+        nextReminder = new Date();
+        nextReminder.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+        if (nextReminder <= now) {
+          nextReminder.setDate(nextReminder.getDate() + 1); // If time has passed today, set for tomorrow
+        }
+        actualReminderInterval = actualReminderInterval || 'once'; // Specific time implies a one-time reminder unless recurring is specified
+      } else if (parsed.reminder_interval && parsed.reminder_interval !== 'once') {
+        nextReminder = new Date(now.getTime());
+        switch (parsed.reminder_interval) {
+          case '30min':
+            nextReminder.setMinutes(nextReminder.getMinutes() + 30);
+            break;
+          case '1hour':
+            nextReminder.setHours(nextReminder.getHours() + 1);
+            break;
+          case '2hours':
+            nextReminder.setHours(nextReminder.getHours() + 2);
+            break;
+          case 'daily':
+            nextReminder.setDate(nextReminder.getDate() + 1); // Set for next day
+            break;
+        }
+      } else if (!parsed.reminder_interval && !parsed.reminder_time && !parsed.relative_minutes) {
+        // Default reminder if no specific reminder information is found
+        actualReminderInterval = '2hours';
+        nextReminder = new Date();
+        nextReminder.setHours(nextReminder.getHours() + 2);
+      }
+
+      const createdTask = await Task.create({
+        title: parsed.title || inputText.trim(),
+        description: '', // The new prompt doesn't extract description
+        reminder_interval: actualReminderInterval,
+        reminder_count: 0,
+        next_reminder: nextReminder ? nextReminder.toISOString() : null,
+        urgency: parsed.urgency || 'medium',
+        energy_required: parsed.energy_required || 'medium',
+        status: 'active'
+      });
+
+      if (nextReminder) { // Schedule reminder if next_reminder is set
+        try {
+          await scheduleReminder({
+            email: currentUser.email,
+            title: "Task Reminder 📋",
+            body: createdTask.title,
+            sendAtISO: nextReminder.toISOString(),
+            taskId: createdTask.id,
+            data: {
+              screen: "/Tasks",
+              taskId: createdTask.id,
+              urgency: createdTask.urgency,
+              type: 'task_reminder'
+            }
+          });
+        } catch (error) {
+          console.error("Failed to schedule reminder:", error);
+        }
+      }
+
+      replaceOptimisticTask(tempId, createdTask);
+      return true; // Indicate success
+    } catch (error) {
+      console.error("Error creating task:", error);
+      removeOptimisticTask(tempId);
+      alert("Failed to create task. Please try again.");
+      return false; // Indicate failure
+    } finally {
+      // The calling function will set setIsProcessing(false) and navigate
+    }
+  };
+
+
   const startVoiceRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -52,7 +220,7 @@ export default function AddTask() {
         mimeType = 'audio/ogg;codecs=opus';
       }
 
-      const recorder = new MediaRecorder(stream, { 
+      const recorder = new MediaRecorder(stream, {
         mimeType: mimeType,
         audioBitsPerSecond: 128000
       });
@@ -67,12 +235,13 @@ export default function AddTask() {
       recorder.onstop = async () => {
         const audioBlob = new Blob(chunks, { type: mimeType });
         stream.getTracks().forEach(track => track.stop());
-        
+
         if (audioBlob.size === 0) {
+          setIsProcessing(false); // Make sure processing state is reset
           return;
         }
 
-        await handleVoiceTranscription(audioBlob);
+        await handleVoiceTranscription(audioBlob); // Pass the blob to the handler
       };
 
       recorder.start();
@@ -88,12 +257,11 @@ export default function AddTask() {
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       mediaRecorder.stop();
       setIsRecording(false);
+      setIsProcessing(true); // Indicate processing has started after recording stops
     }
   };
 
-  const handleVoiceTranscription = async (audioBlob) => {
-    setIsProcessingVoice(true);
-
+  const handleVoiceTranscription = async (audioBlob: Blob) => {
     try {
       const uploadResult = await base44.integrations.Core.UploadFile({
         file: audioBlob
@@ -108,253 +276,58 @@ export default function AddTask() {
       });
 
       if (response?.success && response?.transcription) {
-        const transcription = response.transcription;
-        
-        // Parse with comprehensive reminder logic
-        const prompt = `Parse this voice input and extract tasks with COMPLETE details. Return as JSON array.
-
-INPUT: "${transcription}"
-
-CRITICAL: Extract ALL reminder information:
-- Specific times (e.g., "at 3pm", "tomorrow at 6pm")
-- Relative times (e.g., "in 30 minutes", "in 2 hours")
-- Events (e.g., "30 minutes before meeting", "before dinner")
-- Recurring (e.g., "every day", "every 2 hours")
-
-Return JSON:
-{
-  "tasks": [
-    {
-      "title": "clean task title",
-      "reminder_type": "specific_time" | "relative" | "before_event" | "recurring" | "none",
-      "reminder_value": "ISO timestamp or interval like '2hours'",
-      "event_description": "optional event description for before_event type",
-      "urgency": "low" | "medium" | "high" | "urgent",
-      "energy_required": "low" | "medium" | "high"
-    }
-  ]
-}`;
-
-        const taskData = await base44.integrations.Core.InvokeLLM({
-          prompt,
-          response_json_schema: {
-            type: "object",
-            properties: {
-              tasks: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    title: { type: "string" },
-                    reminder_type: { type: "string" },
-                    reminder_value: { type: "string" },
-                    event_description: { type: "string" },
-                    urgency: { type: "string" },
-                    energy_required: { type: "string" }
-                  }
-                }
-              }
-            }
-          }
-        });
-
-        // Process and immediately save tasks
-        const currentUser = await User.me();
-        for (const t of (taskData.tasks || [])) {
-          let nextReminderTime = null;
-          let reminderInterval = null;
-
-          if (t.reminder_type === 'specific_time' && t.reminder_value) {
-            nextReminderTime = new Date(t.reminder_value);
-            reminderInterval = 'once';
-          } else if (t.reminder_type === 'relative' && t.reminder_value) {
-            const now = new Date();
-            nextReminderTime = new Date(now.getTime());
-            
-            if (t.reminder_value.includes('minutes')) {
-              const mins = parseInt(t.reminder_value);
-              nextReminderTime.setMinutes(nextReminderTime.getMinutes() + mins);
-              reminderInterval = 'once';
-            } else if (t.reminder_value.includes('hours')) {
-              const hrs = parseInt(t.reminder_value);
-              nextReminderTime.setHours(nextReminderTime.getHours() + hrs);
-              reminderInterval = 'once';
-            }
-          } else if (t.reminder_type === 'recurring') {
-            reminderInterval = t.reminder_value || '2hours';
-            const now = new Date();
-            nextReminderTime = new Date(now.getTime());
-            
-            switch (reminderInterval) {
-              case '2hours':
-                nextReminderTime.setHours(nextReminderTime.getHours() + 2);
-                break;
-              case 'daily':
-                nextReminderTime.setDate(nextReminderTime.getDate() + 1);
-                break;
-            }
-          } else {
-            // Default to 2 hour recurring if no reminder specified
-            reminderInterval = '2hours';
-            nextReminderTime = new Date();
-            nextReminderTime.setHours(nextReminderTime.getHours() + 2);
-          }
-
-          const createdTask = await Task.create({
-            title: t.title,
-            description: t.event_description || '',
-            reminder_interval: reminderInterval,
-            reminder_count: 0,
-            next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null,
-            urgency: t.urgency || 'medium',
-            energy_required: t.energy_required || 'medium',
-            status: 'active'
-          });
-
-          if (nextReminderTime && reminderInterval !== 'once') {
-            try {
-              await scheduleReminder({
-                email: currentUser.email,
-                title: "Task Reminder 📋",
-                body: createdTask.title,
-                sendAtISO: nextReminderTime.toISOString(),
-                taskId: createdTask.id,
-                data: {
-                  screen: "/Tasks",
-                  taskId: createdTask.id,
-                  urgency: createdTask.urgency,
-                  type: 'task_reminder'
-                }
-              });
-            } catch (error) {
-              console.error("Failed to schedule reminder:", error);
-            }
-          }
-        }
-
-        // Navigate back immediately
+        // Use the common processing function for the transcription
+        await processAndCreateTask(response.transcription);
         navigate(createPageUrl("Home"), { state: { reload: true } });
+      } else {
+        throw new Error('Failed to transcribe audio');
       }
     } catch (error) {
       console.error("Voice processing error:", error);
       alert("Failed to process voice input");
+    } finally {
+      setIsProcessing(false); // Reset processing state regardless of success/failure
     }
-
-    setIsProcessingVoice(false);
   };
 
   const handleTextSubmit = async (e) => {
     e.preventDefault();
     if (!textInput.trim()) return;
 
-    setIsProcessingVoice(true);
-
-    try {
-      const prompt = `Parse this text input and extract task details with COMPLETE reminder information.
-
-INPUT: "${textInput}"
-
-Extract:
-- Task title (clean, concise)
-- Priority based on urgency words
-- Energy level based on complexity
-- REMINDER: specific time, relative time, before event, or recurring
-  
-Examples:
-"Call dentist tomorrow at 2pm" → specific_time: tomorrow 2pm
-"Water plants in 30 minutes" → relative: 30 minutes from now
-"Review notes 15 minutes before meeting" → before_event: 15 minutes before
-"Take vitamins every day at 9am" → recurring: daily at 9am
-
-Return JSON:
-{
-  "title": "clean task title",
-  "reminder_type": "specific_time" | "relative" | "before_event" | "recurring" | "none",
-  "reminder_value": "ISO timestamp or interval",
-  "event_description": "event description if before_event",
-  "urgency": "low" | "medium" | "high" | "urgent",
-  "energy_required": "low" | "medium" | "high"
-}`;
-
-      const taskData = await base44.integrations.Core.InvokeLLM({
-        prompt,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            title: { type: "string" },
-            reminder_type: { type: "string" },
-            reminder_value: { type: "string" },
-            event_description: { type: "string" },
-            urgency: { type: "string" },
-            energy_required: { type: "string" }
-          }
-        }
-      });
-
-      const currentUser = await User.me();
-      let nextReminderTime = null;
-      let reminderInterval = null;
-
-      if (taskData.reminder_type === 'specific_time' && taskData.reminder_value) {
-        nextReminderTime = new Date(taskData.reminder_value);
-        reminderInterval = 'once';
-      } else if (taskData.reminder_type === 'recurring' && taskData.reminder_value) {
-        reminderInterval = taskData.reminder_value;
-        nextReminderTime = new Date();
-        if (reminderInterval === 'daily') {
-          nextReminderTime.setDate(nextReminderTime.getDate() + 1);
-        } else {
-          nextReminderTime.setHours(nextReminderTime.getHours() + 2);
-        }
-      } else {
-        // Default
-        reminderInterval = '2hours';
-        nextReminderTime = new Date();
-        nextReminderTime.setHours(nextReminderTime.getHours() + 2);
-      }
-
-      const createdTask = await Task.create({
-        title: taskData.title || textInput.trim(),
-        description: taskData.event_description || '',
-        reminder_interval: reminderInterval,
-        reminder_count: 0,
-        next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null,
-        urgency: taskData.urgency || 'medium',
-        energy_required: taskData.energy_required || 'medium',
-        status: 'active'
-      });
-
-      if (nextReminderTime && reminderInterval !== 'once') {
-        try {
-          await scheduleReminder({
-            email: currentUser.email,
-            title: "Task Reminder 📋",
-            body: createdTask.title,
-            sendAtISO: nextReminderTime.toISOString(),
-            taskId: createdTask.id,
-            data: {
-              screen: "/Tasks",
-              taskId: createdTask.id,
-              urgency: createdTask.urgency,
-              type: 'task_reminder'
-            }
-          });
-        } catch (error) {
-          console.error("Failed to schedule reminder:", error);
-        }
-      }
-
+    const success = await processAndCreateTask(textInput);
+    if (success) {
+      setTextInput(''); // Clear input only on success
       navigate(createPageUrl("Home"), { state: { reload: true } });
-    } catch (error) {
-      console.error("Error parsing task:", error);
-      alert("Failed to create task");
     }
-
-    setIsProcessingVoice(false);
+    setIsProcessing(false); // Reset processing state regardless of success/failure
   };
 
+  // The `getCardClasses` and `getUrgencyColor` functions are assumed to exist or need to be defined
+  // For now, I'll use inline styles/classes that match the rest of the file
+  const getCardClasses = () => {
+    if (theme === 'dark') return 'bg-gray-800 border-gray-700';
+    if (theme === 'minimalist') return 'bg-white border-gray-200';
+    return 'bg-gradient-to-br from-purple-50 via-white to-orange-50 border-purple-200';
+  };
+
+  const getUrgencyColor = (urgency) => {
+    switch (urgency) {
+      case 'urgent': return 'bg-red-500 text-white';
+      case 'high': return 'bg-orange-500 text-white';
+      case 'medium': return 'bg-yellow-500 text-white';
+      case 'low': return 'bg-green-500 text-white';
+      default: return 'bg-gray-400 text-white';
+    }
+  };
+
+  // Combine real tasks with optimistic tasks for display
+  // Note: 'tasks' state is not being populated in this component, assuming it comes from elsewhere or is always empty.
+  // We'll primarily show optimistic tasks here before navigation.
+  const displayTasks = [...optimisticTasks, ...tasks.filter(t => t.status === 'active')];
+
+
   return (
-    <div className="min-h-screen p-4 md:p-8" style={{ 
+    <div className="min-h-screen p-4 md:p-8" style={{
       paddingTop: 'max(1rem, calc(1rem + env(safe-area-inset-top)))',
       paddingBottom: 'max(8rem, calc(8rem + env(safe-area-inset-bottom)))'
     }}>
@@ -426,22 +399,22 @@ Return JSON:
                   </div>
                   <div className="text-center space-y-3 max-w-md">
                     <h2 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                      {isProcessingVoice ? 'Creating your tasks...' : isRecording ? 'Listening...' : 'Ready to capture your tasks?'}
+                      {isProcessing ? 'Creating your task...' : isRecording ? 'Listening...' : 'Ready to capture your tasks?'}
                     </h2>
                     <p className={`text-lg ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                      {isRecording 
-                        ? 'Tap again when done' 
+                      {isRecording
+                        ? 'Tap again when done'
                         : 'Tap the mic and speak - say them one at a time or all at once'
                       }
                     </p>
                   </div>
                   <button
                     onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                    disabled={isProcessingVoice}
+                    disabled={isProcessing}
                     className={`w-32 h-32 rounded-full flex items-center justify-center transition-all ${
                       isRecording
                         ? 'bg-red-500 animate-pulse'
-                        : isProcessingVoice
+                        : isProcessing
                           ? 'bg-gray-400'
                           : theme === 'minimalist'
                             ? 'bg-purple-600 hover:bg-purple-700 hover:scale-110'
@@ -476,18 +449,18 @@ Return JSON:
                         placeholder='e.g., "Call dentist tomorrow at 2pm" or "Water plants every day"'
                         className="h-14 text-lg flex-1"
                         autoFocus
-                        disabled={isProcessingVoice}
+                        disabled={isProcessing}
                       />
-                      <Button 
-                        type="submit" 
-                        disabled={!textInput.trim() || isProcessingVoice}
+                      <Button
+                        type="submit"
+                        disabled={!textInput.trim() || isProcessing}
                         className={`h-14 px-8 ${
                           theme === 'minimalist'
                             ? 'bg-green-600 hover:bg-green-700'
                             : 'bg-gradient-to-r from-purple-600 to-orange-600'
                         }`}
                       >
-                        {isProcessingVoice ? 'Adding...' : 'Add'}
+                        {isProcessing ? 'Adding...' : 'Add'}
                       </Button>
                     </div>
                   </form>
@@ -497,7 +470,78 @@ Return JSON:
           </CardContent>
         </Card>
       </div>
-      
+
+      {/* Recent Tasks - Show optimistic tasks with loading indicator */}
+      {displayTasks.length > 0 && (
+        <Card className={`mt-8 border-none shadow-2xl overflow-hidden ${getCardClasses()}`}>
+          <CardHeader>
+            <CardTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+              <ListChecks className="w-5 h-5" />
+              Your Tasks
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {displayTasks.slice(0, 10).map((task) => (
+              <div
+                key={task.id}
+                className={`p-4 rounded-xl border transition-all ${
+                  task.isProcessing
+                    ? 'opacity-60 animate-pulse'
+                    : theme === 'minimalist'
+                      ? 'bg-white border-gray-200 hover:border-gray-300'
+                      : theme === 'dark'
+                        ? 'bg-gray-900/50 border-gray-700 hover:border-gray-600'
+                        : 'bg-gradient-to-r from-purple-50/50 to-orange-50/50 border-purple-200 hover:border-purple-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h4 className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                        {task.title}
+                      </h4>
+                      {task.isProcessing && (
+                        <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                      )}
+                    </div>
+                    {!task.isProcessing && (
+                      <div className="flex flex-wrap gap-2">
+                        {task.urgency && (
+                           <Badge className={getUrgencyColor(task.urgency)}>
+                             {task.urgency}
+                           </Badge>
+                        )}
+                        {task.energy_required && (
+                          <Badge variant="outline" className="flex items-center gap-1">
+                            <Zap className="w-3 h-3" />
+                            {task.energy_required} energy
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {/* The outline shows a button for view details, but `handleViewDetails` is not defined in the current file.
+                      Since the component navigates away, this might be extraneous or refers to future functionality.
+                      For now, I'll comment it out or remove it if not used. If it should stay, the function needs to be implemented.
+                      Keeping it for structural integrity as per outline, but it won't be functional without `handleViewDetails`.
+                      Let's define a placeholder for `handleViewDetails`.
+                  */}
+                  {!task.isProcessing && (
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => console.log('View details for task:', task.id)} // Placeholder for handleViewDetails
+                    >
+                      <Zap className="w-4 h-4" /> {/* Outline uses Eye, but not imported. Using Zap for now if no Eye*/}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       <div style={{ height: '120px' }} aria-hidden="true"></div>
     </div>
   );
