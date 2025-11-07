@@ -161,74 +161,6 @@ export default function Tasks() {
     return ['christmas', 'valentines', 'newyears', 'stpatricks', 'fourthjuly', 'summer', 'spring'].includes(specialMode);
   };
 
-  // --- New helper functions for popovers ---
-  const getUrgencyColor = (urgency) => {
-    switch (urgency) {
-      case 'urgent': return 'bg-red-500 text-white';
-      case 'high': return 'bg-orange-500 text-white';
-      case 'medium': return 'bg-yellow-400 text-gray-800';
-      case 'low': return 'bg-green-500 text-white';
-      default: return 'bg-gray-200 text-gray-800';
-    }
-  };
-
-  const formatReminderInterval = (interval) => {
-    switch (interval) {
-      case '10min': return 'Every 10 min';
-      case '20min': return 'Every 20 min';
-      case '30min': return 'Every 30 min';
-      case '1hour': return 'Every hour';
-      case '2hours': return 'Every 2 hours';
-      case 'daily': return 'Daily';
-      case 'every_other_day': return 'Every other day';
-      default: return interval;
-    }
-  };
-
-  const getCurrentReminderTime = (task) => {
-    if (!task.next_reminder) return '';
-    const date = new Date(task.next_reminder);
-    return date.toTimeString().slice(0, 5); // "HH:MM"
-  };
-
-  // --- New handler functions for popovers ---
-  const handleUrgencyChange = async (task, newUrgency) => {
-    await Task.update(task.id, { urgency: newUrgency });
-    loadTasks();
-  };
-
-  const handleEnergyChange = async (task, newEnergy) => {
-    await Task.update(task.id, { energy_required: newEnergy });
-    loadTasks();
-  };
-
-  const handleIntervalChange = async (task, newInterval) => {
-    await Task.update(task.id, { reminder_interval: newInterval });
-    loadTasks();
-  };
-
-  const handleReminderTimeChange = async (task, newTime) => {
-    if (!newTime) return; 
-
-    let newReminderDate;
-    if (task.next_reminder) {
-      newReminderDate = new Date(task.next_reminder);
-    } else {
-      newReminderDate = new Date(); 
-    }
-
-    const [hours, minutes] = newTime.split(':').map(Number);
-    newReminderDate.setHours(hours, minutes, 0, 0);
-
-    // If the new reminder time is in the past, set it for the next day.
-    if (newReminderDate < new Date()) {
-      newReminderDate.setDate(newReminderDate.getDate() + 1);
-    }
-
-    await Task.update(task.id, { next_reminder: newReminderDate.toISOString() });
-    loadTasks();
-  };
-
   return (
     <div className="p-4 md:p-8 w-full" style={{ paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
       <div className="max-w-6xl mx-auto">
@@ -331,137 +263,29 @@ export default function Tasks() {
 
         <div className="grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredTasks.map((task) => (
-            // Each grid item now wraps the TaskCard and the new Popover div to keep them together.
-            <div key={task.id}> 
-              <TaskCard
-                task={task}
-                theme={theme}
-                onRefreshTasks={loadTasks}
-                onEditTitle={async (taskId, newTitle) => {
-                  await Task.update(taskId, { title: newTitle });
-                  loadTasks();
-                }}
-                onEdit={(taskToEdit) => {
-                  setSelectedTask(taskToEdit);
-                  setIsEditModalOpen(true);
-                }}
-                onComplete={handleComplete}
-                onSnooze={handleSnooze}
-                onShowDetails={(taskToShow) => {
-                  setSelectedTask(taskToShow);
-                  setIsDetailsModalOpen(true);
-                }}
-                onDelete={handleDelete}
-                subtaskCount={getSubtaskCount(task.id)}
-                completedSubtaskCount={getCompletedSubtaskCount(task.id)}
-              />
-              {/* New block of code for Popover interactions */}
-              <div className="flex flex-wrap items-center gap-2 mt-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button 
-                      onClick={(e) => e.stopPropagation()}
-                      className={`${getUrgencyColor(task.urgency)} px-2 py-1 rounded text-xs cursor-pointer hover:opacity-80 transition-opacity`}
-                    >
-                      {task.urgency}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-48 p-2" onClick={(e) => e.stopPropagation()}>
-                    <div className="space-y-1">
-                      <button onClick={() => handleUrgencyChange(task, 'low')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Low</button>
-                      <button onClick={() => handleUrgencyChange(task, 'medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Medium</button>
-                      <button onClick={() => handleUrgencyChange(task, 'high')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">High</button>
-                      <button onClick={() => handleUrgencyChange(task, 'urgent')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Urgent</button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-
-                {task.energy_required && (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button 
-                        onClick={(e) => e.stopPropagation()}
-                        className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors ${theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600' : 'border-gray-300'}`}
-                      >
-                        <Zap className="w-3 h-3" />
-                        {task.energy_required} energy
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-48 p-2" onClick={(e) => e.stopPropagation()}>
-                      <div className="space-y-1">
-                        <button onClick={() => handleEnergyChange(task, 'low')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Low</button>
-                        <button onClick={() => handleEnergyChange(task, 'medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Medium</button>
-                        <button onClick={() => handleEnergyChange(task, 'high')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">High</button>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                )}
-
-                {task.reminder_interval && (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button 
-                        onClick={(e) => e.stopPropagation()}
-                        className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors ${theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600' : 'border-gray-300'}`}
-                      >
-                        <Clock className="w-3 h-3" />
-                        {formatReminderInterval(task.reminder_interval)}
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-56 p-2" onClick={(e) => e.stopPropagation()}>
-                      <div className="space-y-1">
-                        <button onClick={() => handleIntervalChange(task, '10min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 10 minutes</button>
-                        <button onClick={() => handleIntervalChange(task, '20min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 20 minutes</button>
-                        <button onClick={() => handleIntervalChange(task, '30min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 30 minutes</button>
-                        <button onClick={() => handleIntervalChange(task, '1hour')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every hour</button>
-                        <button onClick={() => handleIntervalChange(task, '2hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 2 hours</button>
-                        <button onClick={() => handleIntervalChange(task, 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
-                        <button onClick={() => handleIntervalChange(task, 'every_other_day')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every other day</button>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                )}
-
-                {task.next_reminder && (
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <button 
-                        onClick={(e) => e.stopPropagation()}
-                        className="border border-blue-300 bg-blue-50 px-2 py-1 rounded text-xs text-blue-700 cursor-pointer hover:bg-blue-100 transition-colors flex items-center gap-1"
-                      >
-                        <Clock className="w-3 h-3" />
-                        {(() => {
-                          const date = new Date(task.next_reminder);
-                          const today = new Date();
-                          const tomorrow = new Date(today);
-                          tomorrow.setDate(tomorrow.getDate() + 1);
-                          
-                          const isToday = date.toDateString() === today.toDateString();
-                          const isTomorrow = date.toDateString() === tomorrow.toDateString();
-                          
-                          const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-                          
-                          if (isToday) return `Today ${timeStr}`;
-                          if (isTomorrow) return `Tomorrow ${timeStr}`;
-                          return `${date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} ${timeStr}`;
-                        })()}
-                      </button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-64 p-4" onClick={(e) => e.stopPropagation()}>
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Change reminder time:</label>
-                        <input
-                          type="time"
-                          defaultValue={getCurrentReminderTime(task)}
-                          onChange={(e) => handleReminderTimeChange(task, e.target.value)}
-                          className="w-full border rounded px-3 py-2"
-                        />
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                )}
-              </div>
-            </div>
+            <TaskCard
+              key={task.id}
+              task={task}
+              theme={theme}
+              onRefreshTasks={loadTasks}
+              onEditTitle={async (taskId, newTitle) => {
+                await Task.update(taskId, { title: newTitle });
+                loadTasks();
+              }}
+              onEdit={(taskToEdit) => {
+                setSelectedTask(taskToEdit);
+                setIsEditModalOpen(true);
+              }}
+              onComplete={handleComplete}
+              onSnooze={handleSnooze}
+              onShowDetails={(taskToShow) => {
+                setSelectedTask(taskToShow);
+                setIsDetailsModalOpen(true);
+              }}
+              onDelete={handleDelete}
+              subtaskCount={getSubtaskCount(task.id)}
+              completedSubtaskCount={getCompletedSubtaskCount(task.id)}
+            />
           ))}
         </div>
 
