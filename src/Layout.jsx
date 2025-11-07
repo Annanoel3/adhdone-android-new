@@ -338,7 +338,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       }`}
       style={{
         ...(isSeasonalTheme() ? getSeasonalBackgroundStyle() : {}),
-        paddingTop: 'max(0px, env(safe-area-inset-top))',
+        paddingTop: 'env(safe-area-inset-top)', // Changed this line
         paddingBottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))'
       }}
     >
@@ -762,7 +762,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                   ? 'bg-gray-950/60 border-gray-800'
                   : 'bg-white/60 border-gray-200/50'
             }`} style={{
-              paddingTop: 'max(1rem, calc(1rem + env(safe-area-inset-top)))',
+              paddingTop: 'calc(1.5rem + env(safe-area-inset-top, 0px))', // Changed this line
               paddingBottom: '1rem'
             }}>
               <div className="flex items-center justify-between">
