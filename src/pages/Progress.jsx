@@ -11,6 +11,7 @@ import { Task } from "@/entities/Task";
 import { DailySummary } from "@/entities/DailySummary";
 import { EnergyLog } from "@/entities/EnergyLog";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
+import { Button } from "@/components/ui/button";
 
 export default function Progress() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
@@ -118,19 +119,37 @@ export default function Progress() {
           ) : ''
         }`}>
           <CardContent className="p-6">
-            <div className="text-center md:text-left">
-              <h1 className={`text-3xl font-bold mb-2 ${
-                isSeasonalTheme() ? `${specialMode}-title` :
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              }`}>
-                Your Progress
-              </h1>
-              <p className={
-                isSeasonalTheme() ? `${specialMode}-text` :
-                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-              }>
-                Track your journey and celebrate your wins
-              </p>
+            <div className="flex items-center justify-between">
+              <div className="text-center md:text-left flex-1">
+                <h1 className={`text-3xl font-bold mb-2 ${
+                  isSeasonalTheme() ? `${specialMode}-title` :
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                }`}>
+                  Your Progress
+                </h1>
+                <p className={
+                  isSeasonalTheme() ? `${specialMode}-text` :
+                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                }>
+                  Track your journey and celebrate your wins
+                </p>
+              </div>
+              <Button
+                onClick={() => {
+                  if (window.triggerEasterEgg) {
+                    window.triggerEasterEgg('awesome');
+                  }
+                }}
+                variant="ghost"
+                size="sm"
+                className={`text-xs opacity-30 hover:opacity-100 transition-opacity ${
+                  theme === 'dark' || ['halloween', 'christmas', 'newyears', 'fourthjuly'].includes(specialMode)
+                    ? 'text-gray-500 hover:text-gray-400'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
+              >
+                🎉 Click me! 🎉
+              </Button>
             </div>
           </CardContent>
         </Card>
