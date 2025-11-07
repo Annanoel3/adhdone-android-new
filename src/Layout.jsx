@@ -178,7 +178,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       }, 100);
       return;
     }
-    
+
     setTheme(prev => {
       if (prev === 'minimalist') return 'dark';
       if (prev === 'dark') return 'colorful';
@@ -190,7 +190,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     const now = new Date();
     const month = now.getMonth() + 1;
     const day = now.getDate();
-    
+
     if (month === 1 && day <= 2) return 'newyears';
     if ((month === 1 && day >= 3) || (month === 2 && day <= 7)) return 'winter';
     if (month === 2 && day >= 8 && day <= 14) return 'valentines';
@@ -205,7 +205,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     if (month === 12 && day <= 25) return 'christmas';
     if (month === 12 && day >= 26 && day <= 30) return 'winter';
     if (month === 12 && day === 31) return 'newyears';
-    
+
     return 'spring';
   };
 
@@ -237,9 +237,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     const backgrounds = {
       kawaii: null,
       halloween: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/ba3d7eb0b_c9c617da-1d0c-4fed-9830-7f692c5bac3d.png')",
-      fall: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/01f77998a_ChatGPTImageOct15202504_16_28PM.png')", 
+      fall: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/01f77998a_ChatGPTImageOct15202504_16_28PM.png')",
       winter: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/d7ecb6583_ChatGPTImageOct15202504_16_31PM.png')",
-      christmas: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/8e296b8ab_1ChatGPTImageOct15202504_16_05PM.png')", 
+      christmas: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/8e296b8ab_1ChatGPTImageOct15202504_16_05PM.png')",
       valentines: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/c990d460e_2ChatGPTImageOct15202504_16_09PM.png')",
       newyears: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/829d2e43c_3ChatGPTImageOct15202504_11_12PM.png')",
       stpatricks: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/4e394e799_4ChatGPTImageOct15202504_14_19PM.png')",
@@ -338,7 +338,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       }`}
       style={{
         ...(isSeasonalTheme() ? getSeasonalBackgroundStyle() : {}),
-        paddingTop: 'env(safe-area-inset-top)', // Changed this line
+        paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))'
       }}
     >
@@ -370,7 +370,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           }}
         />
       )}
-      
+
       {['summer', 'spring', 'valentines', 'stpatricks', 'fall'].includes(specialMode) && (
         <div
           style={{
@@ -385,7 +385,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           }}
         />
       )}
-      
+
       {specialMode === 'winter' && (
         <div
           style={{
@@ -400,7 +400,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           }}
         />
       )}
-      
+
       <style>{`
           ${!isSeasonalTheme() && theme === 'minimalist' ? `
             :root {
@@ -477,7 +477,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             border: 1px solid rgba(255, 255, 255, 0.3) !important;
           }
         `}</style>
-      
+
       <TooltipProvider>
           <Sidebar className={`border-r relative z-10 ${
             isSeasonalTheme()
@@ -488,11 +488,13 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           }`}>
             <SidebarHeader className={`p-6 ${
               isSeasonalTheme()
-                ? 'border-white/30'
+                ? ''
                 : theme === 'dark'
-                  ? 'border-gray-800 bg-gray-900'
-                  : 'border-gray-200/50'
-            }`}>
+                  ? 'bg-gray-900'
+                  : ''
+            }`} style={{
+              paddingTop: 'max(1.5rem, calc(1.5rem + env(safe-area-inset-top)))'
+            }}>
               <div className="flex items-center gap-3">
                 {user && user.profile_picture_url ? (
                     <Link to={createPageUrl("Profile")} onClick={handleNavClick}>
@@ -530,7 +532,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 
             <SidebarContent className={`p-3 ${
               theme === 'dark' ? 'bg-gray-900' : ''
-            }`}>
+            }`} style={{
+              paddingTop: '2rem',
+              paddingBottom: '2rem'
+            }}>
               <SidebarGroup>
                 <SidebarGroupContent>
                   <SidebarMenu className="space-y-1">
@@ -639,15 +644,15 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               </SidebarGroup>
             </SidebarContent>
 
-            <SidebarFooter className={`border-t space-y-3 ${
+            <SidebarFooter className={`space-y-3 ${
               isSeasonalTheme()
-                ? 'border-white/30'
+                ? ''
                 : theme === 'dark'
-                  ? 'border-gray-800 bg-gray-900'
-                  : 'border-gray-200/50'
+                  ? 'bg-gray-900'
+                  : ''
             }`} style={{
-              padding: '0.5rem 1rem',
-              paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))',
+              padding: '1rem 1rem',
+              paddingBottom: 'max(2.5rem, calc(2.5rem + env(safe-area-inset-bottom)))',
               marginTop: '0.3rem'
             }}>
               <Button
@@ -762,7 +767,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                   ? 'bg-gray-950/60 border-gray-800'
                   : 'bg-white/60 border-gray-200/50'
             }`} style={{
-              paddingTop: 'calc(2rem + env(safe-area-inset-top, 0px))', // Changed this line
+              paddingTop: 'calc(2rem + env(safe-area-inset-top, 0px))',
               paddingBottom: '1rem'
             }}>
               <div className="flex items-center justify-between">
@@ -801,8 +806,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 }}
                 size="lg"
                 className={`fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-2xl z-50 md:hidden bg-opacity-90 ${
-                  theme === 'minimalist' 
-                    ? 'bg-purple-600 hover:bg-purple-700' 
+                  theme === 'minimalist'
+                    ? 'bg-purple-600 hover:bg-purple-700'
                     : theme === 'dark'
                       ? 'bg-purple-600 hover:bg-purple-700'
                       : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600'
@@ -850,7 +855,7 @@ export default function Layout({ children, currentPageName }) {
   const checkUserStatusAndTrial = useCallback(async () => {
     try {
       const currentUser = await base44.auth.me();
-      
+
       if (!currentUser.trial_start_date) {
         const today = new Date().toISOString().split('T')[0];
         try {
