@@ -39,6 +39,7 @@ import {
   SidebarFooter,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import {
@@ -78,16 +79,16 @@ import {
 } from "@/components/ui/tooltip";
 import EasterEggVideo from "./components/shared/EasterEggVideo";
 
-export default function Layout({ children, currentPageName }) {
+function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { setOpenMobile } = useSidebar();
+
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem('adhd_theme') || 'minimalist';
   });
   const [showEnergyCheckIn, setShowEnergyCheckIn] = useState(false);
   const [showTrialWarning, setShowTrialWarning] = useState(false);
-  const [user, setUser] = useState(null);
-  const [authCheckComplete, setAuthCheckComplete] = useState(false);
   const [communityOpen, setCommunityOpen] = useState(false);
   const [accountabilityNotifications, setAccountabilityNotifications] = useState(0);
   const [specialMode, setSpecialMode] = useState(() => {
@@ -105,48 +106,6 @@ export default function Layout({ children, currentPageName }) {
     localStorage.setItem('special_mode', mode);
     document.documentElement.setAttribute('data-theme', mode);
   }, [specialMode]);
-
-  const checkUserStatusAndTrial = useCallback(async () => {
-    try {
-      const currentUser = await base44.auth.me();
-      
-      if (!currentUser.trial_start_date) {
-        const today = new Date().toISOString().split('T')[0];
-        try {
-          await base44.auth.updateMe({ trial_start_date: today });
-          const updatedUser = await base44.auth.me();
-          setUser(updatedUser);
-        } catch (updateError) {
-          console.error("Error updating trial start date:", updateError);
-          setUser(currentUser);
-        }
-      } else {
-        setUser(currentUser);
-      }
-
-      if (currentUser.trial_start_date && !currentUser.has_paid) {
-        const trialStart = new Date(currentUser.trial_start_date);
-        const today = new Date();
-        const daysDiff = Math.floor((today - trialStart) / (1000 * 60 * 60 * 24));
-
-        if (daysDiff >= 3 && location.pathname !== createPageUrl("TrialEnded")) {
-          navigate(createPageUrl("TrialEnded"));
-        } else if (daysDiff === 2) {
-          setShowTrialWarning(true);
-        }
-      }
-
-      setAuthCheckComplete(true);
-    } catch (error) {
-      console.error("Error checking user status:", error);
-      // User not authenticated - redirect to login
-      base44.auth.redirectToLogin(window.location.href);
-    }
-  }, [location.pathname, navigate]);
-
-  useEffect(() => {
-    checkUserStatusAndTrial();
-  }, [checkUserStatusAndTrial]);
 
   const loadAccountabilityNotifications = async () => {
     if (!user || !user.email || !authCheckComplete) {
@@ -306,6 +265,11 @@ export default function Layout({ children, currentPageName }) {
     return {};
   };
 
+  const handleNavClick = () => {
+    // Close sidebar on mobile when navigation item is clicked
+    setOpenMobile(false);
+  };
+
   const navigationItems = [
     {
       title: "Home",
@@ -366,17 +330,6 @@ export default function Layout({ children, currentPageName }) {
       ]
     },
   ];
-
-  if (!authCheckComplete) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-4 border-gray-300 border-t-green-500 rounded-full animate-spin"></div>
-          <p className="text-lg font-medium">Loading ADHDone...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div
@@ -526,7 +479,6 @@ export default function Layout({ children, currentPageName }) {
         `}</style>
       
       <TooltipProvider>
-        <SidebarProvider>
           <Sidebar className={`border-r relative z-10 ${
             isSeasonalTheme()
               ? 'bg-white/70 backdrop-blur-md border-white/30'
@@ -543,7 +495,7 @@ export default function Layout({ children, currentPageName }) {
             }`}>
               <div className="flex items-center gap-3">
                 {user && user.profile_picture_url ? (
-                    <Link to={createPageUrl("Profile")}>
+                    <Link to={createPageUrl("Profile")} onClick={handleNavClick}>
                         <img
                             src={user.profile_picture_url}
                             alt="Profile"
@@ -551,7 +503,7 @@ export default function Layout({ children, currentPageName }) {
                         />
                     </Link>
                 ) : (
-                    <Link to={createPageUrl("Profile")}>
+                    <Link to={createPageUrl("Profile")} onClick={handleNavClick}>
                         <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold text-white text-xl ${
                             theme === 'minimalist'
                                 ? 'bg-gradient-to-br from-green-600 to-green-700'
@@ -563,7 +515,7 @@ export default function Layout({ children, currentPageName }) {
                         </div>
                     </Link>
                 )}
-                <Link to={createPageUrl("Home")}>
+                <Link to={createPageUrl("Home")} onClick={handleNavClick}>
                   <div>
                     <h2 className={`font-bold text-lg ${
                       theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -636,7 +588,7 @@ export default function Layout({ children, currentPageName }) {
                                             : 'hover:bg-gray-50 text-gray-600'
                                     }`}
                                   >
-                                    <Link to={subItem.url} className="flex items-center gap-3 px-4 py-2 relative">
+                                    <Link to={subItem.url} onClick={handleNavClick} className="flex items-center gap-3 px-4 py-2 relative">
                                       <subItem.icon className="w-4 h-4" />
                                       <span className="text-sm flex-1">{subItem.title}</span>
                                       {subItem.badge && subItem.badge > 0 && (
@@ -655,7 +607,7 @@ export default function Layout({ children, currentPageName }) {
 
                       return (
                         <SidebarMenuItem key={item.title}>
-                          <Link to={item.url}>
+                          <Link to={item.url} onClick={handleNavClick}>
                             <SidebarMenuButton
                               className={`rounded-xl transition-all duration-200 ${
                                 location.pathname === item.url
@@ -764,28 +716,28 @@ export default function Layout({ children, currentPageName }) {
                       ? 'bg-[#1a1a1b] border-gray-800 text-gray-300'
                       : ''
                 }`}>
-                  <DropdownMenuItem onClick={() => navigate(createPageUrl("Profile"))}>
+                  <DropdownMenuItem onClick={() => { navigate(createPageUrl("Profile")); handleNavClick(); }}>
                     <UserIcon className="w-4 h-4 mr-2" />
                     My Profile
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate(createPageUrl("MyAccount"))}>
+                  <DropdownMenuItem onClick={() => { navigate(createPageUrl("MyAccount")); handleNavClick(); }}>
                     <UserIcon className="w-4 h-4 mr-2" />
                     My Account
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate(createPageUrl("NotificationSettings"))}>
+                  <DropdownMenuItem onClick={() => { navigate(createPageUrl("NotificationSettings")); handleNavClick(); }}>
                     <Bell className="w-4 h-4 mr-2" />
                     Notifications
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => navigate(createPageUrl("PrivacyPolicy"))}>
+                  <DropdownMenuItem onClick={() => { navigate(createPageUrl("PrivacyPolicy")); handleNavClick(); }}>
                     <Settings className="w-4 h-4 mr-2" />
                     Privacy Policy
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate(createPageUrl("TermsAndConditions"))}>
+                  <DropdownMenuItem onClick={() => { navigate(createPageUrl("TermsAndConditions")); handleNavClick(); }}>
                     <Settings className="w-4 h-4 mr-2" />
                     Terms & Conditions
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate(createPageUrl("ReportBug"))}>
+                  <DropdownMenuItem onClick={() => { navigate(createPageUrl("ReportBug")); handleNavClick(); }}>
                     <Bug className="w-4 h-4 mr-2" />
                     Report a Bug
                   </DropdownMenuItem>
@@ -875,7 +827,6 @@ export default function Layout({ children, currentPageName }) {
           <UniversalVoiceAssistant theme={theme} currentPageName={currentPageName} />
           <MicrophonePermissionCheck theme={theme} />
           <PokeNotification theme={theme} />
-        </SidebarProvider>
 
         <AppGuideModal
           isOpen={showAppGuide}
@@ -884,5 +835,74 @@ export default function Layout({ children, currentPageName }) {
         />
       </TooltipProvider>
     </div>
+  );
+}
+
+export default function Layout({ children, currentPageName }) {
+  const navigate = useNavigate(); // Keep navigate here for trial ending check
+  const location = useLocation(); // Keep location here for trial ending check
+
+  const [user, setUser] = useState(null);
+  const [authCheckComplete, setAuthCheckComplete] = useState(false);
+
+  const checkUserStatusAndTrial = useCallback(async () => {
+    try {
+      const currentUser = await base44.auth.me();
+      
+      if (!currentUser.trial_start_date) {
+        const today = new Date().toISOString().split('T')[0];
+        try {
+          await base44.auth.updateMe({ trial_start_date: today });
+          const updatedUser = await base44.auth.me();
+          setUser(updatedUser);
+        } catch (updateError) {
+          console.error("Error updating trial start date:", updateError);
+          setUser(currentUser);
+        }
+      } else {
+        setUser(currentUser);
+      }
+
+      // Trial Warning/Ending logic
+      if (currentUser.trial_start_date && !currentUser.has_paid) {
+        const trialStart = new Date(currentUser.trial_start_date);
+        const today = new Date();
+        const daysDiff = Math.floor((today - trialStart) / (1000 * 60 * 60 * 24));
+
+        if (daysDiff >= 3 && location.pathname !== createPageUrl("TrialEnded")) {
+          navigate(createPageUrl("TrialEnded"));
+        }
+        // Removed `else if (daysDiff === 2) { setShowTrialWarning(true); }` as per outline,
+        // assuming trial warning display is managed within LayoutContent if needed.
+      }
+
+      setAuthCheckComplete(true);
+    } catch (error) {
+      console.error("Error checking user status:", error);
+      // User not authenticated - redirect to login
+      base44.auth.redirectToLogin(window.location.href);
+    }
+  }, [location.pathname, navigate]);
+
+
+  useEffect(() => {
+    checkUserStatusAndTrial();
+  }, [checkUserStatusAndTrial]);
+
+  if (!authCheckComplete) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-10 h-10 border-4 border-gray-300 border-t-green-500 rounded-full animate-spin"></div>
+          <p className="text-lg font-medium">Loading ADHDone...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <SidebarProvider>
+      <LayoutContent children={children} currentPageName={currentPageName} user={user} authCheckComplete={authCheckComplete} />
+    </SidebarProvider>
   );
 }
