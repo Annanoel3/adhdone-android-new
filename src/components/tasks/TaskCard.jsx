@@ -10,7 +10,7 @@ import {
   Clock,
   Zap,
   ListChecks,
-  Bell, // Bell is still used for snooze buttons
+  Bell,
   BellOff,
   Trash2,
   Calendar,
@@ -27,13 +27,13 @@ export default function TaskCard({
   theme,
   onRefreshTasks,
   onEditTitle,
-  onEdit, // New prop
+  onEdit,
   onComplete,
   onSnooze,
   onShowDetails,
   onDelete,
-  subtaskCount, // New prop
-  completedSubtaskCount // New prop
+  subtaskCount,
+  completedSubtaskCount
 }) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(task.title);
@@ -295,8 +295,8 @@ export default function TaskCard({
             </p>
           )}
 
-          {/* Badges - Energy, Urgency, Reminders, Subtasks */}
-          <div className="flex flex-wrap items-center gap-2 mb-3">
+          {/* Badges - Fixed overflow issue by removing mb-3 */}
+          <div className="flex flex-wrap items-center gap-2">
             <Popover>
               <PopoverTrigger asChild>
                 <button
