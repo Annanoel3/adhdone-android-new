@@ -486,14 +486,17 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 ? 'bg-gray-900 border-gray-800'
                 : 'border-gray-200/50 backdrop-blur-sm bg-white/80'
           }`}>
-            <SidebarHeader className={`p-6 ${
+            <SidebarHeader className={`${
               isSeasonalTheme()
-                ? ''
+                ? 'border-0'
                 : theme === 'dark'
-                  ? 'bg-gray-900'
-                  : ''
+                  ? 'bg-gray-900 border-0'
+                  : 'border-0'
             }`} style={{
-              paddingTop: 'max(1.5rem, calc(1.5rem + env(safe-area-inset-top)))'
+              paddingTop: 'max(2rem, calc(2rem + env(safe-area-inset-top)))',
+              paddingLeft: '1.5rem',
+              paddingRight: '1.5rem',
+              paddingBottom: '1.5rem'
             }}>
               <div className="flex items-center gap-3">
                 {user && user.profile_picture_url ? (
@@ -530,11 +533,13 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               </div>
             </SidebarHeader>
 
-            <SidebarContent className={`p-3 ${
+            <SidebarContent className={`${
               theme === 'dark' ? 'bg-gray-900' : ''
             }`} style={{
-              paddingTop: '2rem',
-              paddingBottom: '2rem'
+              paddingTop: '2.5rem',
+              paddingBottom: '2.5rem',
+              paddingLeft: '0.75rem',
+              paddingRight: '0.75rem'
             }}>
               <SidebarGroup>
                 <SidebarGroupContent>
@@ -651,9 +656,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                   ? 'bg-gray-900'
                   : ''
             }`} style={{
-              padding: '1rem 1rem',
-              paddingBottom: 'max(2.5rem, calc(2.5rem + env(safe-area-inset-bottom)))',
-              marginTop: '0.3rem'
+              paddingTop: '1rem',
+              paddingLeft: '1rem',
+              paddingRight: '1rem',
+              paddingBottom: 'max(3rem, calc(3rem + env(safe-area-inset-bottom)))'
             }}>
               <Button
                 variant="outline"
