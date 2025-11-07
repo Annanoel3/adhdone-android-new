@@ -338,7 +338,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       }`}
       style={{
         ...(isSeasonalTheme() ? getSeasonalBackgroundStyle() : {}),
-        paddingTop: 'max(1rem, env(safe-area-inset-top))',
+        paddingTop: 0,
         paddingBottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))'
       }}
     >
@@ -647,7 +647,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                   : 'border-gray-200/50'
             }`} style={{
               padding: '0.5rem 1rem',
-              paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))'
+              paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))',
+              marginTop: '0.3rem'
             }}>
               <Button
                 variant="outline"
@@ -754,15 +755,13 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           <main className="flex-1 flex flex-col min-w-0 relative z-10" style={{
             paddingBottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))'
           }}>
-            <header className={`backdrop-blur-md border-b px-6 py-4 md:hidden sticky z-10 ${
+            <header className={`backdrop-blur-md border-b px-6 py-4 md:hidden sticky top-0 z-10 ${
               isSeasonalTheme()
                 ? 'bg-white/60 border-white/30'
                 : theme === 'dark'
                   ? 'bg-gray-950/60 border-gray-800'
                   : 'bg-white/60 border-gray-200/50'
-            }`} style={{
-              top: 0
-            }}>
+            }`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <SidebarTrigger asChild>
