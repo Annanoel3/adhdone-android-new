@@ -515,7 +515,7 @@ Return JSON:
               {task.reminder_interval && (
                 <Popover>
                   <PopoverTrigger asChild>
-                    <button className="cursor-pointer hover:opacity-80 transition-opacity border px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 bg-white">
+                    <button className="cursor-pointer hover:opacity-80 transition-opacity border px-3 py-1 rounded-full text-sm font-medium bg-white flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {formatReminderInterval(task.reminder_interval)}
                     </button>
@@ -614,7 +614,7 @@ Return JSON:
                 }`}>
                   <Sparkles className="w-8 h-8 mx-auto mb-2 text-purple-600" />
                   <p className="text-sm text-gray-700 mb-3">
-                    This task feels big? Let AI break it into smaller steps!
+                    If this task feels overwhelming, let AI break it down!
                   </p>
                   <Button
                     size="sm"
@@ -768,7 +768,7 @@ Return JSON:
             )}
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button
               variant="outline"
               onClick={handleDelete}
