@@ -762,7 +762,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                   ? 'bg-gray-950/60 border-gray-800'
                   : 'bg-white/60 border-gray-200/50'
             }`} style={{
-              paddingTop: 'calc(1.5rem + env(safe-area-inset-top, 0px))', // Changed this line
+              paddingTop: 'calc(2rem + env(safe-area-inset-top, 0px))', // Changed this line
               paddingBottom: '1rem'
             }}>
               <div className="flex items-center justify-between">

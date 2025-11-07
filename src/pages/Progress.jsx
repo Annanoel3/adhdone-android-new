@@ -134,22 +134,6 @@ export default function Progress() {
                   Track your journey and celebrate your wins
                 </p>
               </div>
-              <Button
-                onClick={() => {
-                  if (window.triggerEasterEgg) {
-                    window.triggerEasterEgg('awesome');
-                  }
-                }}
-                variant="ghost"
-                size="sm"
-                className={`text-xs opacity-30 hover:opacity-100 transition-opacity ${
-                  theme === 'dark' || ['halloween', 'christmas', 'newyears', 'fourthjuly'].includes(specialMode)
-                    ? 'text-gray-500 hover:text-gray-400'
-                    : 'text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                🎉 Click me! 🎉
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -305,6 +289,26 @@ export default function Progress() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* Easter Egg Button - Moved to bottom */}
+        <div className="mt-8 text-center">
+          <Button
+            onClick={() => {
+              if (window.triggerEasterEgg) {
+                window.triggerEasterEgg('awesome');
+              }
+            }}
+            variant="ghost"
+            size="sm"
+            className={`text-xs opacity-30 hover:opacity-100 transition-opacity ${
+              theme === 'dark' || ['halloween', 'christmas', 'newyears', 'fourthjuly'].includes(specialMode)
+                ? 'text-gray-500 hover:text-gray-400'
+                : 'text-gray-400 hover:text-gray-600'
+            }`}
+          >
+            Click me
+          </Button>
+        </div>
       </div>
     </div>
   );
