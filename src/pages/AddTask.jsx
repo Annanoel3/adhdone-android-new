@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Task } from "@/entities/Task";
 import { User } from "@/entities/User";
@@ -8,22 +7,8 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import VoiceTaskInput from "../components/tasks/VoiceTaskInput";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-// Fixed import: scheduleReminder from reminderScheduler
+import { base44 } from "@/api/base44Client";
 import { scheduleReminder } from "../components/utils/reminderScheduler";
 
 export default function AddTask() {
@@ -33,7 +18,9 @@ export default function AddTask() {
   const [isSaving, setIsSaving] = useState(false);
   const [inputMode, setInputMode] = useState('voice');
   const [textInput, setTextInput] = useState('');
-  const [editingTask, setEditingTask] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -43,44 +30,216 @@ export default function AddTask() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleVoiceTranscription = (transcription) => {
-    if (!transcription.trim()) return;
+  const startVoiceRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100
+        }
+      });
 
-    const newTask = {
-      id: `temp-${Date.now()}`,
-      title: transcription,
-      description: '',
-      reminder_interval: '2hours', // Default reminder interval
-      urgency: 'medium',
-      energy_required: 'medium'
-    };
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/mp4';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/ogg;codecs=opus';
+      }
 
-    setTasks(prev => [...prev, newTask]);
+      const recorder = new MediaRecorder(stream, { 
+        mimeType: mimeType,
+        audioBitsPerSecond: 128000
+      });
+      const chunks = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(chunks, { type: mimeType });
+        stream.getTracks().forEach(track => track.stop());
+        
+        if (audioBlob.size === 0) {
+          return;
+        }
+
+        await handleVoiceTranscription(audioBlob);
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Microphone error:", error);
+      alert("Could not access microphone");
+    }
   };
 
-  const handleTextSubmit = (e) => {
+  const stopVoiceRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      mediaRecorder.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const handleVoiceTranscription = async (audioBlob) => {
+    setIsProcessingVoice(true);
+
+    try {
+      const uploadResult = await base44.integrations.Core.UploadFile({
+        file: audioBlob
+      });
+
+      if (!uploadResult?.file_url) {
+        throw new Error('Failed to upload audio file');
+      }
+
+      const response = await base44.functions.invoke('transcribeAudio', {
+        file_url: uploadResult.file_url
+      });
+
+      if (response?.success && response?.transcription) {
+        const transcription = response.transcription;
+        
+        // Parse transcription with AI to extract tasks
+        const prompt = `Parse this voice input and extract tasks. Return as JSON array.
+
+INPUT: "${transcription}"
+
+If it's a list, return each as separate task.
+If it's one thing, return single task.
+
+Return JSON:
+{
+  "tasks": [
+    {
+      "title": "task title",
+      "reminder_interval": "2hours" | "daily" | null,
+      "urgency": "low" | "medium" | "high" | "urgent",
+      "energy_required": "low" | "medium" | "high"
+    }
+  ]
+}`;
+
+        const taskData = await base44.integrations.Core.InvokeLLM({
+          prompt,
+          response_json_schema: {
+            type: "object",
+            properties: {
+              tasks: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    title: { type: "string" },
+                    reminder_interval: { type: "string" },
+                    urgency: { type: "string" },
+                    energy_required: { type: "string" }
+                  }
+                }
+              }
+            }
+          }
+        });
+
+        // Add parsed tasks to the list
+        const newTasks = (taskData.tasks || []).map(t => ({
+          id: `temp-${Date.now()}-${Math.random()}`,
+          title: t.title,
+          description: '',
+          reminder_interval: t.reminder_interval || '2hours',
+          urgency: t.urgency || 'medium',
+          energy_required: t.energy_required || 'medium'
+        }));
+
+        setTasks(prev => [...prev, ...newTasks]);
+      }
+    } catch (error) {
+      console.error("Voice processing error:", error);
+      alert("Failed to process voice input");
+    }
+
+    setIsProcessingVoice(false);
+  };
+
+  const handleTextSubmit = async (e) => {
     e.preventDefault();
     if (!textInput.trim()) return;
 
-    const newTask = {
-      id: `temp-${Date.now()}`,
-      title: textInput.trim(),
-      description: '',
-      reminder_interval: '2hours', // Default reminder interval
-      urgency: 'medium',
-      energy_required: 'medium'
-    };
+    setIsProcessingVoice(true);
 
-    setTasks(prev => [...prev, newTask]);
-    setTextInput('');
+    try {
+      // Parse text with AI to extract task details
+      const prompt = `Parse this text input and extract task details. Return as JSON.
+
+INPUT: "${textInput}"
+
+Extract:
+- Task title (clean, concise)
+- Priority (based on urgency words)
+- Energy level (based on complexity)
+- Reminder interval if mentioned
+
+Return JSON:
+{
+  "title": "clean task title",
+  "reminder_interval": "2hours" | "daily" | null,
+  "urgency": "low" | "medium" | "high" | "urgent",
+  "energy_required": "low" | "medium" | "high"
+}`;
+
+      const taskData = await base44.integrations.Core.InvokeLLM({
+        prompt,
+        response_json_schema: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            reminder_interval: { type: "string" },
+            urgency: { type: "string" },
+            energy_required: { type: "string" }
+          }
+        }
+      });
+
+      const newTask = {
+        id: `temp-${Date.now()}`,
+        title: taskData.title || textInput.trim(),
+        description: '',
+        reminder_interval: taskData.reminder_interval || '2hours',
+        urgency: taskData.urgency || 'medium',
+        energy_required: taskData.energy_required || 'medium'
+      };
+
+      setTasks(prev => [...prev, newTask]);
+      setTextInput('');
+    } catch (error) {
+      console.error("Error parsing task:", error);
+      // Fallback: just create simple task
+      const newTask = {
+        id: `temp-${Date.now()}`,
+        title: textInput.trim(),
+        description: '',
+        reminder_interval: '2hours',
+        urgency: 'medium',
+        energy_required: 'medium'
+      };
+      setTasks(prev => [...prev, newTask]);
+      setTextInput('');
+    }
+
+    setIsProcessingVoice(false);
   };
 
   const handleDeleteTask = (taskId) => {
     setTasks(prev => prev.filter(t => t.id !== taskId));
-  };
-
-  const handleTaskUpdate = (taskId, updates) => {
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
   };
 
   const handleSaveAll = async () => {
@@ -88,18 +247,15 @@ export default function AddTask() {
 
     setIsSaving(true);
     try {
-      // Fetch current user once for all tasks
       const currentUser = await User.me();
       if (!currentUser || !currentUser.email) {
-        throw new Error("User not logged in or email not available for reminders.");
+        throw new Error("User not logged in");
       }
 
       for (const task of tasks) {
         let nextReminderTime = null;
         const now = new Date();
 
-        // Calculate next reminder time based on interval
-        // Only if a reminder interval is set and not 'once' (which means no recurring reminder)
         if (task.reminder_interval && task.reminder_interval !== 'once') {
           nextReminderTime = new Date(now.getTime());
           
@@ -126,29 +282,26 @@ export default function AddTask() {
               nextReminderTime.setDate(nextReminderTime.getDate() + 2);
               break;
             default:
-              // If it's 'once' or some other unhandled value, nextReminderTime remains null
               nextReminderTime = null;
               break;
           }
-          // The outline included a console log here for setting initial reminder
+          
           if (nextReminderTime) {
             console.log(`🕐 [NEW TASK] Setting initial reminder for ${nextReminderTime.toLocaleString()} (${nextReminderTime.toISOString()})`);
           }
         }
         
-        // Create the task in the database
         const createdTask = await Task.create({
           title: task.title,
           description: task.description,
           reminder_interval: task.reminder_interval,
           reminder_count: 0,
-          next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null, // Store calculated next reminder
+          next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null,
           urgency: task.urgency,
           energy_required: task.energy_required,
           status: 'active'
         });
 
-        // Schedule push notification if a reminder is set and it's not a 'once' type reminder
         if (nextReminderTime && task.reminder_interval !== 'once') {
           try {
             await scheduleReminder({
@@ -164,9 +317,9 @@ export default function AddTask() {
                 type: 'task_reminder'
               }
             });
-            console.log(`✅ [NEW TASK] Scheduled reminder for ${nextReminderTime.toLocaleString()} for task: "${createdTask.title}"`);
+            console.log(`✅ [NEW TASK] Scheduled reminder for "${createdTask.title}"`);
           } catch (error) {
-            console.error(`Failed to schedule reminder for task "${createdTask.title}":`, error);
+            console.error(`Failed to schedule reminder:`, error);
           }
         }
       }
@@ -235,7 +388,7 @@ export default function AddTask() {
           <CardContent className="p-8 md:p-12">
             <div className="flex justify-center gap-3 mb-8">
               <Button
-                variant={inputMode === 'voice' ? 'default' : 'ghost'}
+                variant={inputMode === 'voice' ? 'default' : 'outline'}
                 onClick={() => setInputMode('voice')}
                 className={`px-6 h-12 ${
                   inputMode === 'voice' && theme === 'minimalist'
@@ -249,7 +402,7 @@ export default function AddTask() {
                 Voice
               </Button>
               <Button
-                variant={inputMode === 'text' ? 'default' : 'ghost'}
+                variant={inputMode === 'text' ? 'default' : 'outline'}
                 onClick={() => setInputMode('text')}
                 className={`px-6 h-12 ${
                   inputMode === 'text' && theme === 'minimalist'
@@ -273,30 +426,29 @@ export default function AddTask() {
                   exit={{ opacity: 0, y: -20 }}
                   className="flex flex-col items-center gap-8 py-12"
                 >
-                  <div className={`p-6 rounded-3xl ${
-                    theme === 'minimalist'
-                      ? 'bg-green-100'
-                      : theme === 'dark'
-                        ? 'bg-purple-900/30'
-                        : 'bg-gradient-to-br from-purple-100 to-orange-100'
-                  }`}>
-                    <Sparkles className={`w-16 h-16 ${
-                      theme === 'minimalist' ? 'text-green-600' : theme === 'dark' ? 'text-purple-400' : 'text-purple-600'
-                    }`} />
-                  </div>
                   <div className="text-center space-y-3 max-w-md">
                     <h2 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                      Ready to capture your tasks?
+                      {isProcessingVoice ? 'Processing...' : isRecording ? 'Listening...' : 'Speak your tasks'}
                     </h2>
                     <p className={`text-lg ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                      Tap the mic and speak - say them one at a time or all at once
+                      {isRecording ? 'Tap again to finish' : 'Tap the mic and speak naturally'}
                     </p>
                   </div>
-                  <VoiceTaskInput
-                    onTranscription={handleVoiceTranscription}
-                    theme={theme}
-                    inline={false}
-                  />
+                  <button
+                    onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
+                    disabled={isProcessingVoice}
+                    className={`w-24 h-24 rounded-full flex items-center justify-center transition-all ${
+                      isRecording
+                        ? 'bg-red-500 animate-pulse'
+                        : isProcessingVoice
+                          ? 'bg-gray-400'
+                          : theme === 'minimalist'
+                            ? 'bg-green-600 hover:bg-green-700'
+                            : 'bg-gradient-to-br from-purple-600 to-orange-600 hover:scale-110'
+                    } shadow-2xl`}
+                  >
+                    <Mic className="w-12 h-12 text-white" />
+                  </button>
                 </motion.div>
               ) : (
                 <motion.div
@@ -306,22 +458,36 @@ export default function AddTask() {
                   exit={{ opacity: 0, y: -20 }}
                   className="space-y-6 py-8"
                 >
-                  <div className="text-center space-y-3 max-w-md mx-auto">
+                  <div className="text-center space-y-3 max-w-md mx-auto mb-6">
                     <h2 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                      Type your tasks
+                      Type your task or idea
                     </h2>
                     <p className={`text-lg ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                      Enter each task and press Enter to add
+                      AI will organize it - just describe what needs to be done
                     </p>
                   </div>
                   <form onSubmit={handleTextSubmit} className="max-w-xl mx-auto">
-                    <Input
-                      value={textInput}
-                      onChange={(e) => setTextInput(e.target.value)}
-                      placeholder="What needs to be done?"
-                      className="h-14 text-lg"
-                      autoFocus
-                    />
+                    <div className="flex gap-3">
+                      <Input
+                        value={textInput}
+                        onChange={(e) => setTextInput(e.target.value)}
+                        placeholder="e.g., Call dentist tomorrow at 2pm"
+                        className="h-14 text-lg flex-1"
+                        autoFocus
+                        disabled={isProcessingVoice}
+                      />
+                      <Button 
+                        type="submit" 
+                        disabled={!textInput.trim() || isProcessingVoice}
+                        className={`h-14 px-8 ${
+                          theme === 'minimalist'
+                            ? 'bg-green-600 hover:bg-green-700'
+                            : 'bg-gradient-to-r from-purple-600 to-orange-600'
+                        }`}
+                      >
+                        {isProcessingVoice ? 'Adding...' : 'Add'}
+                      </Button>
+                    </div>
                   </form>
                 </motion.div>
               )}
@@ -343,14 +509,13 @@ export default function AddTask() {
                 transition={{ delay: index * 0.05 }}
               >
                 <Card
-                  className={`border shadow-lg hover:shadow-xl transition-all cursor-pointer ${
+                  className={`border shadow-lg ${
                     theme === 'dark'
                       ? 'bg-gray-800 border-gray-700'
                       : theme === 'minimalist'
-                        ? 'bg-white hover:border-green-200'
-                        : 'bg-gradient-to-r from-purple-50/50 to-orange-50/50 hover:from-purple-100/50 hover:to-orange-100/50'
+                        ? 'bg-white'
+                        : 'bg-gradient-to-r from-purple-50/50 to-orange-50/50'
                   }`}
-                  onClick={() => setEditingTask(task)}
                 >
                   <CardContent className="p-5">
                     <div className="flex items-start justify-between gap-3">
@@ -367,15 +532,19 @@ export default function AddTask() {
                           }`}>
                             {task.energy_required} energy
                           </span>
+                          {task.reminder_interval && (
+                            <span className="px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-700">
+                              {task.reminder_interval === '2hours' ? 'Every 2 hours' :
+                               task.reminder_interval === 'daily' ? 'Daily' :
+                               task.reminder_interval}
+                            </span>
+                          )}
                         </div>
                       </div>
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteTask(task.id);
-                        }}
+                        onClick={() => handleDeleteTask(task.id)}
                         className="text-red-500 hover:bg-red-50"
                       >
                         Remove
@@ -386,87 +555,6 @@ export default function AddTask() {
               </motion.div>
             ))}
           </motion.div>
-        )}
-
-        {editingTask && (
-          <Dialog open={!!editingTask} onOpenChange={() => setEditingTask(null)}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Configure Task</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Priority</label>
-                  <Select
-                    value={editingTask.urgency}
-                    onValueChange={(value) => handleTaskUpdate(editingTask.id, { urgency: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="urgent">Urgent</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Energy Required</label>
-                  <Select
-                    value={editingTask.energy_required}
-                    onValueChange={(value) => handleTaskUpdate(editingTask.id, { energy_required: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium mb-2 block">Reminder Interval</label>
-                  <Select
-                    value={editingTask.reminder_interval}
-                    onValueChange={(value) => handleTaskUpdate(editingTask.id, { reminder_interval: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10min">Every 10 minutes</SelectItem>
-                      <SelectItem value="20min">Every 20 minutes</SelectItem>
-                      <SelectItem value="30min">Every 30 minutes</SelectItem>
-                      <SelectItem value="1hour">Every hour</SelectItem>
-                      <SelectItem value="2hours">Every 2 hours</SelectItem>
-                      <SelectItem value="daily">Daily</SelectItem>
-                      <SelectItem value="every_other_day">Every other day</SelectItem>
-                      <SelectItem value="once">Once (no recurring reminders)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <Button
-                  onClick={() => setEditingTask(null)}
-                  className={`w-full ${
-                    theme === 'minimalist'
-                      ? 'bg-green-600 hover:bg-green-700'
-                      : theme === 'dark'
-                        ? 'bg-green-600 hover:bg-green-700'
-                        : 'bg-gradient-to-r from-purple-600 to-orange-600'
-                  }`}
-                >
-                  Done
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
         )}
       </div>
     </div>
