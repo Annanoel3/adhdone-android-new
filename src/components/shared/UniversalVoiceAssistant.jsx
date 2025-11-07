@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -31,7 +32,7 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -50,7 +51,7 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
         mimeType = 'audio/ogg;codecs=opus';
       }
 
-      const recorder = new MediaRecorder(stream, { 
+      const recorder = new MediaRecorder(stream, {
         mimeType: mimeType,
         audioBitsPerSecond: 128000
       });
@@ -65,7 +66,7 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
       recorder.onstop = async () => {
         const audioBlob = new Blob(chunks, { type: mimeType });
         stream.getTracks().forEach(track => track.stop());
-        
+
         if (audioBlob.size === 0) {
           setFeedbackMessage("❌ No audio recorded");
           return;
@@ -159,53 +160,68 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
     }
 
     // Task creation
-    if (lowerCommand.includes('remind me') || 
-        lowerCommand.includes('create a task') || 
+    if (lowerCommand.includes('remind me') ||
+        lowerCommand.includes('create a task') ||
         lowerCommand.includes('add a task') ||
         lowerCommand.includes('make a task') ||
         lowerCommand.includes('new task')) {
-      
+
       setIsProcessing(true);
       setProcessingMessage("Creating your task...");
 
       try {
         const user = await User.me();
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
 
         const prompt = `Extract task details from this voice command. The user said: "${command}"
 
+Current time context:
+- Today's date: ${today.toISOString().split('T')[0]}
+- Tomorrow's date: ${tomorrow.toISOString().split('T')[0]}
+
 CRITICAL RULES:
-1. Extract the CORE ACTION only - remove "remind me", "create a task", etc.
-2. If a specific time is mentioned (like "at 4 pm tomorrow", "at 8 am", "at 3:30"), extract it
-3. If "tomorrow" is mentioned with a time, calculate tomorrow's date
-4. If "every X" is mentioned (every day, every 2 hours, etc.), map to reminder_interval
-5. Keep the task title SHORT and ACTION-FOCUSED (2-8 words max)
+1. Extract the CORE ACTION only - remove "remind me to", "create a task", etc.
+2. If a specific time is mentioned (like "at 6 pm tomorrow", "at 8 am", "at 3:30"), extract it as reminder_time
+3. If "tomorrow" is mentioned, set specific_date to tomorrow's date
+4. If "today" or no date is mentioned, set specific_date to null
+5. If a recurring pattern is mentioned ("every day", "every 2 hours"), set reminder_interval
+6. Keep the task title SHORT and ACTION-FOCUSED (2-8 words max)
+7. For one-time reminders at a specific time, set reminder_interval to "once"
 
 Examples:
-"Remind me to call mom at 3 pm tomorrow" → 
+"Remind me to call mom at 3 pm tomorrow" →
   title: "Call mom"
-  reminder_time: "15:00" (3 PM)
-  specific_date: tomorrow's date
+  reminder_time: "15:00"
+  specific_date: "${tomorrow.toISOString().split('T')[0]}"
+  reminder_interval: "once"
 
-"Remind me to remind my husband to bring his laptop at 4 pm tomorrow" →
-  title: "Remind husband to bring laptop"
-  reminder_time: "16:00" (4 PM)
-  specific_date: tomorrow's date
+"Remind me to bring my husband's laptop at 6 pm tomorrow" →
+  title: "Bring husband's laptop"
+  reminder_time: "18:00"
+  specific_date: "${tomorrow.toISOString().split('T')[0]}"
+  reminder_interval: "once"
 
 "Make a task to finish the report every day at 9 am" →
   title: "Finish report"
   reminder_time: "09:00"
+  specific_date: null
   reminder_interval: "daily"
 
-"Add a task for grocery shopping" →
-  title: "Grocery shopping"
-  (no reminder)
+"Remind me to check emails every 2 hours" →
+  title: "Check emails"
+  reminder_time: null
+  specific_date: null
+  reminder_interval: "2hours"
 
-Return JSON with this structure:
+Return JSON:
 {
   "title": "Clean task title (2-8 words)",
   "reminder_interval": "10min" | "20min" | "30min" | "1hour" | "2hours" | "daily" | "every_other_day" | "once" | null,
   "reminder_time": "HH:MM" (24-hour format) or null,
-  "specific_date": "YYYY-MM-DD" or null (if "tomorrow" or specific date mentioned),
+  "specific_date": "YYYY-MM-DD" or null,
   "urgency": "low" | "medium" | "high" | "urgent",
   "energy_required": "low" | "medium" | "high"
 }`;
@@ -226,25 +242,31 @@ Return JSON with this structure:
         });
 
         let nextReminderTime = null;
-        
+
+        // CRITICAL FIX: Handle specific date + time properly
         if (taskData.reminder_time) {
           const [hours, minutes] = taskData.reminder_time.split(':');
-          
+
           if (taskData.specific_date) {
+            // Specific date mentioned (like "tomorrow")
             nextReminderTime = new Date(taskData.specific_date);
             nextReminderTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
           } else {
+            // No date mentioned, assume today or tomorrow
             nextReminderTime = new Date();
             nextReminderTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-            
+
+            // If time already passed today, schedule for tomorrow
             if (nextReminderTime <= new Date()) {
               nextReminderTime.setDate(nextReminderTime.getDate() + 1);
             }
           }
+
+          console.log(`🕐 [VOICE TASK] Setting reminder for ${nextReminderTime.toLocaleString()} (${nextReminderTime.toISOString()})`);
         } else if (taskData.reminder_interval && taskData.reminder_interval !== 'once') {
-          const now = new Date();
+          // Recurring reminder without specific time - calculate next occurrence
           nextReminderTime = new Date(now.getTime());
-          
+
           switch (taskData.reminder_interval) {
             case '10min':
               nextReminderTime.setMinutes(nextReminderTime.getMinutes() + 10);
@@ -280,7 +302,7 @@ Return JSON with this structure:
           next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null
         });
 
-        if (nextReminderTime && taskData.reminder_interval !== 'once') {
+        if (nextReminderTime) {
           try {
             await scheduleReminder({
               email: user.email,
@@ -295,6 +317,7 @@ Return JSON with this structure:
                 type: 'task_reminder'
               }
             });
+            console.log(`✅ [VOICE TASK] Scheduled reminder for "${createdTask.title}" at ${nextReminderTime.toLocaleString()}`);
           } catch (error) {
             console.error("Failed to schedule reminder:", error);
           }
@@ -302,11 +325,11 @@ Return JSON with this structure:
 
         setFeedbackMessage(`✅ Created: "${taskData.title}"`);
         setIsProcessing(false);
-        
+
         setTimeout(() => {
           window.location.reload();
         }, 1500);
-        
+
         return;
       } catch (error) {
         console.error("Error creating task:", error);
@@ -317,16 +340,16 @@ Return JSON with this structure:
     }
 
     // Parking lot idea
-    if (lowerCommand.includes('save this idea') || 
+    if (lowerCommand.includes('save this idea') ||
         lowerCommand.includes('parking lot') ||
         lowerCommand.includes('remember this')) {
-      
+
       setIsProcessing(true);
       setProcessingMessage("Saving idea...");
 
       try {
         const ideaText = command.replace(/save this idea|parking lot|remember this/gi, '').trim();
-        
+
         await ParkingLotIdea.create({
           idea: ideaText,
           converted_to_task: false
@@ -334,12 +357,12 @@ Return JSON with this structure:
 
         setFeedbackMessage("✅ Idea saved to parking lot!");
         setIsProcessing(false);
-        
+
         setTimeout(() => {
           setIsOpen(false);
           navigate(createPageUrl("ParkingLot"));
         }, 1500);
-        
+
         return;
       } catch (error) {
         console.error("Error saving idea:", error);
@@ -379,8 +402,8 @@ Return JSON with this structure:
           </Button>
 
           <div className={`w-24 h-24 rounded-full flex items-center justify-center ${
-            isRecording 
-              ? 'bg-red-500 animate-pulse' 
+            isRecording
+              ? 'bg-red-500 animate-pulse'
               : isProcessing
                 ? 'bg-blue-500'
                 : theme === 'minimalist'
@@ -400,10 +423,10 @@ Return JSON with this structure:
 
           <div className="text-center">
             <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-              {isProcessing 
+              {isProcessing
                 ? processingMessage
-                : isRecording 
-                  ? "Listening..." 
+                : isRecording
+                  ? "Listening..."
                   : "Voice Assistant"}
             </h3>
             {feedbackMessage ? (
@@ -412,8 +435,8 @@ Return JSON with this structure:
               </p>
             ) : (
               <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                {isRecording 
-                  ? "Tap to stop recording" 
+                {isRecording
+                  ? "Tap to stop recording"
                   : "Tap to start speaking"}
               </p>
             )}
