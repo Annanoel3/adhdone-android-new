@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -375,7 +376,7 @@ Return ONLY the category name, nothing else.`;
           variant="ghost"
           size="sm"
           className={`text-xs opacity-40 hover:opacity-100 transition-opacity ${
-            theme === 'dark' ? 'text-gray-500 hover:text-gray-400' : 'text-gray-400 hover:text-gray-600'
+            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
           }`}
         >
           💡 Too many ideas? 💡
@@ -758,12 +759,12 @@ Return ONLY the category name, nothing else.`;
         </DialogContent>
       </Dialog>
 
-      {/* Easter Egg Button */}
+      {/* Easter Egg Button - REMOVED SECOND EASTER EGG */}
       <div className="mt-6 text-center">
         <Button
           onClick={() => {
             if (window.triggerEasterEgg) {
-              window.triggerEasterEgg();
+              window.triggerEasterEgg('ideas');
             }
           }}
           variant="ghost"
@@ -774,7 +775,7 @@ Return ONLY the category name, nothing else.`;
               : 'text-gray-400 hover:text-gray-600'
           }`}
         >
-          Don't click this 👀
+          💡 Too many ideas? 💡
         </Button>
       </div>
     </div>

@@ -486,7 +486,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 ? 'bg-gray-900 border-gray-800'
                 : 'border-gray-200/50 backdrop-blur-sm bg-white/80'
           }`}>
-            <SidebarHeader className={`border-b p-6 ${
+            <SidebarHeader className={`p-6 ${
               isSeasonalTheme()
                 ? 'border-white/30'
                 : theme === 'dark'

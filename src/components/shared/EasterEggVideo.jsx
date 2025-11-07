@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
@@ -28,6 +29,14 @@ export default function EasterEggVideo() {
     "https://media.giphy.com/media/l0MYEqEzwMWFCg8rm/giphy.gif", // Celebration
     "https://media.giphy.com/media/3otPoS81loriI9sO8o/giphy.gif", // Fist pump
     "https://media.giphy.com/media/26u4cqiYI30juCOGY/giphy.gif", // Yes!
+    "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif", // Ron Swanson giggle
+    "https://media.giphy.com/media/yoJC2K6rCzwNY2EngA/giphy.gif", // Dance celebration
+    "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif", // Office party
+    "https://media.giphy.com/media/26u4cr2dejnss7UB2/giphy.gif", // Success kid
+    "https://media.giphy.com/media/Is1O1TWV0LEJi/giphy.gif", // Kid dancing
+    "https://media.giphy.com/media/26BGIqWh2R1fi6JDa/giphy.gif", // Mind blown good job
+    "https://media.giphy.com/media/ZdlN56usaKaQg/giphy.gif", // Cat thumbs up
+    "https://media.giphy.com/media/MSgJnzNSMGBc6BpGIc/giphy.gif", // Chef's kiss
   ];
 
   // Expose function globally so buttons can trigger it

@@ -116,8 +116,6 @@ export default function FocusTimer() {
     if (audioRef.current) {
       audioRef.current.src = isBreakEnd ? breakEndSound : completionSounds[completionSound].url;
       audioRef.current.play().catch(err => console.log("Audio play failed:", err));
-
-      // Removed applause specific logic as applause is no longer a default sound
     }
   };
 
@@ -400,7 +398,12 @@ export default function FocusTimer() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => playCompletionSound(false)} // Pass false to indicate not break end
+              onClick={() => {
+                if (audioRef.current) {
+                  audioRef.current.src = completionSounds[completionSound].url;
+                  audioRef.current.play().catch(err => console.log("Audio play failed:", err));
+                }
+              }}
             >
               Test Sound
             </Button>
