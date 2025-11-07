@@ -176,51 +176,61 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
         const tomorrow = new Date(today);
         tomorrow.setDate(tomorrow.getDate() + 1);
 
-        const prompt = `Extract task details from this voice command. The user said: "${command}"
+        const prompt = `Extract task details from: "${command}"
 
-Current time context:
-- Today's date: ${today.toISOString().split('T')[0]}
-- Tomorrow's date: ${tomorrow.toISOString().split('T')[0]}
+Current context:
+- Current time: ${now.toLocaleTimeString()}
+- Today: ${today.toISOString().split('T')[0]}
+- Tomorrow: ${tomorrow.toISOString().split('T')[0]}
 
-CRITICAL RULES:
-1. Extract the CORE ACTION only - remove "remind me to", "create a task", etc.
-2. If a specific time is mentioned (like "at 6 pm tomorrow", "at 8 am", "at 3:30"), extract it as reminder_time
-3. If "tomorrow" is mentioned, set specific_date to tomorrow's date
-4. If "today" or no date is mentioned, set specific_date to null
-5. If a recurring pattern is mentioned ("every day", "every 2 hours"), set reminder_interval
-6. Keep the task title SHORT and ACTION-FOCUSED (2-8 words max)
-7. For one-time reminders at a specific time, set reminder_interval to "once"
+CRITICAL PARSING RULES:
+
+1. RELATIVE TIME ("in X minutes/hours"):
+   - "in 5 minutes", "in 10 minutes" → Calculate exact future time, set reminder_interval to "once"
+   - "in 1 hour", "in 2 hours" → Calculate exact future time, set reminder_interval to "once"
+   - These are ONE-TIME reminders at a future point
+
+2. RECURRING TIME ("every X"):
+   - "every 30 minutes" → reminder_interval: "30min", no specific time
+   - "every 2 hours" → reminder_interval: "2hours", no specific time
+   - "every day" → reminder_interval: "daily"
+
+3. SPECIFIC TIME:
+   - "at 6 pm tomorrow" → reminder_time: "18:00", specific_date: tomorrow, reminder_interval: "once"
+   - "at 3:30" → reminder_time: "15:30", reminder_interval: "once"
+
+4. TASK TITLE:
+   - Remove "remind me to/in/at", "every", time phrases
+   - Keep only the core action (2-8 words)
 
 Examples:
-"Remind me to call mom at 3 pm tomorrow" →
+"Remind me in 5 minutes to call mom" →
   title: "Call mom"
-  reminder_time: "15:00"
-  specific_date: "${tomorrow.toISOString().split('T')[0]}"
+  relative_minutes: 5
   reminder_interval: "once"
-
-"Remind me to bring my husband's laptop at 6 pm tomorrow" →
-  title: "Bring husband's laptop"
-  reminder_time: "18:00"
-  specific_date: "${tomorrow.toISOString().split('T')[0]}"
-  reminder_interval: "once"
-
-"Make a task to finish the report every day at 9 am" →
-  title: "Finish report"
-  reminder_time: "09:00"
-  specific_date: null
-  reminder_interval: "daily"
-
-"Remind me to check emails every 2 hours" →
-  title: "Check emails"
   reminder_time: null
   specific_date: null
-  reminder_interval: "2hours"
+
+"Remind me every 30 minutes to stretch" →
+  title: "Stretch"
+  relative_minutes: null
+  reminder_interval: "30min"
+  reminder_time: null
+  specific_date: null
+
+"Remind me at 6 pm tomorrow to pick up package" →
+  title: "Pick up package"
+  relative_minutes: null
+  reminder_interval: "once"
+  reminder_time: "18:00"
+  specific_date: "${tomorrow.toISOString().split('T')[0]}"
 
 Return JSON:
 {
-  "title": "Clean task title (2-8 words)",
+  "title": "Task title (2-8 words)",
+  "relative_minutes": number or null (for "in X minutes/hours" - convert hours to minutes),
   "reminder_interval": "10min" | "20min" | "30min" | "1hour" | "2hours" | "daily" | "every_other_day" | "once" | null,
-  "reminder_time": "HH:MM" (24-hour format) or null,
+  "reminder_time": "HH:MM" or null,
   "specific_date": "YYYY-MM-DD" or null,
   "urgency": "low" | "medium" | "high" | "urgent",
   "energy_required": "low" | "medium" | "high"
@@ -232,6 +242,7 @@ Return JSON:
             type: "object",
             properties: {
               title: { type: "string" },
+              relative_minutes: { type: "number" },
               reminder_interval: { type: "string" },
               reminder_time: { type: "string" },
               specific_date: { type: "string" },
@@ -243,28 +254,31 @@ Return JSON:
 
         let nextReminderTime = null;
 
-        // CRITICAL FIX: Handle specific date + time properly
-        if (taskData.reminder_time) {
+        // Handle relative time (in X minutes/hours)
+        if (taskData.relative_minutes && taskData.relative_minutes > 0) {
+          nextReminderTime = new Date(now.getTime() + taskData.relative_minutes * 60 * 1000);
+          console.log(`🕐 [VOICE TASK] Relative time: ${taskData.relative_minutes} minutes from now = ${nextReminderTime.toLocaleString()}`);
+        }
+        // Handle specific date + time
+        else if (taskData.reminder_time) {
           const [hours, minutes] = taskData.reminder_time.split(':');
 
           if (taskData.specific_date) {
-            // Specific date mentioned (like "tomorrow")
             nextReminderTime = new Date(taskData.specific_date);
             nextReminderTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
           } else {
-            // No date mentioned, assume today or tomorrow
             nextReminderTime = new Date();
             nextReminderTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
-            // If time already passed today, schedule for tomorrow
             if (nextReminderTime <= new Date()) {
               nextReminderTime.setDate(nextReminderTime.getDate() + 1);
             }
           }
 
-          console.log(`🕐 [VOICE TASK] Setting reminder for ${nextReminderTime.toLocaleString()} (${nextReminderTime.toISOString()})`);
-        } else if (taskData.reminder_interval && taskData.reminder_interval !== 'once') {
-          // Recurring reminder without specific time - calculate next occurrence
+          console.log(`🕐 [VOICE TASK] Setting reminder for ${nextReminderTime.toLocaleString()}`);
+        }
+        // Handle recurring reminders without specific time
+        else if (taskData.reminder_interval && taskData.reminder_interval !== 'once') {
           nextReminderTime = new Date(now.getTime());
 
           switch (taskData.reminder_interval) {
