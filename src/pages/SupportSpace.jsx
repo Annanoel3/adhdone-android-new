@@ -1,11 +1,10 @@
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { MessageCircleHeart, Send, Loader2, Info } from "lucide-react";
-import VoiceTaskInput from "../components/tasks/VoiceTaskInput";
+import { MessageCircleHeart, Send, Loader2, Info, Mic } from "lucide-react"; // Added Mic icon
 
 export default function SupportSpace() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
@@ -15,6 +14,12 @@ export default function SupportSpace() {
   const [conversationId, setConversationId] = useState(null);
   const messagesEndRef = useRef(null);
   const specialMode = localStorage.getItem('special_mode') || 'normal';
+
+  // Ref to always get the latest 'messages' array in async operations
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -61,30 +66,30 @@ export default function SupportSpace() {
     }
   };
 
-  const handleVoiceTranscription = (text) => {
-    setCurrentInput(prev => prev ? `${prev} ${text}` : text);
-  };
+  // Centralized function to send messages (both text and voice)
+  const sendMessage = useCallback(async (userMessageContent) => {
+    if (!userMessageContent.trim()) return;
 
-  const handleSend = async () => {
-    if (!currentInput.trim()) return;
+    const newUserMessage = { role: "user", content: userMessageContent.trim() };
     
-    const userMessage = currentInput.trim();
-    setCurrentInput("");
-    
-    // Add user message to chat
-    setMessages(prev => [...prev, { role: "user", content: userMessage }]);
+    // Add user message to chat for immediate UI update
+    setMessages(prev => [...prev, newUserMessage]);
     setIsLoading(true);
 
     try {
       const context = await gatherUserContext();
       
+      // Use messagesRef.current to get the latest messages for prompt building
+      // This includes messages that might have been added by previous async operations
+      const currentMessagesForPrompt = [...messagesRef.current, newUserMessage];
+
       // Build conversation history for context
-      const conversationHistory = messages.map(m => 
+      const conversationHistory = currentMessagesForPrompt.map(m => 
         `${m.role === 'user' ? 'User' : 'You'}: ${m.content}`
       ).join('\n\n');
 
-      // Check if this is the first message (no previous messages)
-      const isFirstMessage = messages.length === 0;
+      // Check if this is the first message (based on messagesRef.current before adding the new message)
+      const isFirstMessage = messagesRef.current.length === 0;
 
       const prompt = `You are a supportive friend and advisor for someone with ADHD/AuDHD. Your PRIMARY goal is to make them feel heard, validated, and understood.
 
@@ -109,7 +114,7 @@ ${conversationHistory}
 
 This is an ONGOING conversation. Reference what was said before naturally. DO NOT repeat their name in every message - you already know who they are.` : ''}
 
-USER'S CURRENT MESSAGE: "${userMessage}"
+USER'S CURRENT MESSAGE: "${userMessageContent}"
 
 YOUR RESPONSE GUIDELINES:
 1. **ACTUALLY READ AND RESPOND TO WHAT THEY JUST SAID** - Don't give generic advice. Address their specific situation, question, or feeling.
@@ -121,12 +126,6 @@ YOUR RESPONSE GUIDELINES:
 7. **USE THEIR CONTEXT WISELY** - Only reference tasks/productivity data if it's actually relevant to what they said
 8. **DON'T USE THEIR NAME IN EVERY MESSAGE** - Only use their name in the first message or when specifically appropriate
 
-Examples of GOOD responses:
-- If they say "I feel like I'm failing at everything": Validate their overwhelm, DON'T immediately list their completed tasks. Ask what's making them feel that way.
-- If they say "My partner doesn't understand me": Focus on the relationship, NOT their productivity stats
-- If they say "I can't get anything done": NOW you can reference their tasks/energy, because it's relevant
-- If they ask a specific question: ANSWER THAT QUESTION. Don't deflect to generic advice.
-
 Respond naturally, warmly, and like you genuinely care about understanding them. Most importantly: READ what they actually said and respond to THAT.`;
 
       const response = await base44.integrations.Core.InvokeLLM({ prompt });
@@ -135,24 +134,20 @@ Respond naturally, warmly, and like you genuinely care about understanding them.
       setMessages(prev => [...prev, { role: "assistant", content: response }]);
 
       // Save to database (create new conversation or update existing)
+      const finalConversationForDb = [...currentMessagesForPrompt, { role: "assistant", content: response }];
+
       if (!conversationId) {
         const newConv = await base44.entities.SupportConversation.create({
-          user_message: userMessage,
+          user_message: userMessageContent,
           ai_response: response,
           conversation_date: new Date().toISOString(),
           tags: ["ongoing_conversation"]
         });
         setConversationId(newConv.id);
       } else {
-        // Update existing conversation with full history
-        const fullHistory = [...messages, 
-          { role: "user", content: userMessage },
-          { role: "assistant", content: response }
-        ];
-        
         await base44.entities.SupportConversation.update(conversationId, {
-          user_message: fullHistory.filter(m => m.role === 'user').map(m => m.content).join('\n---\n'),
-          ai_response: fullHistory.filter(m => m.role === 'assistant').map(m => m.content).join('\n---\n')
+          user_message: finalConversationForDb.filter(m => m.role === 'user').map(m => m.content).join('\n---\n'),
+          ai_response: finalConversationForDb.filter(m => m.role === 'assistant').map(m => m.content).join('\n---\n')
         });
       }
     } catch (error) {
@@ -164,7 +159,35 @@ Respond naturally, warmly, and like you genuinely care about understanding them.
     }
     
     setIsLoading(false);
+  }, [conversationId, messagesRef]); // Depend on messagesRef.current to get latest messages state
+
+  const handleSend = async () => {
+    if (!currentInput.trim()) return;
+    const userMessage = currentInput.trim();
+    setCurrentInput(""); // Clear the input field after sending
+    await sendMessage(userMessage);
   };
+
+  const handleVoiceInput = async (file) => {
+    if (!file) return;
+
+    setIsLoading(true); // Indicate loading while transcribing
+    try {
+      const transcription = await base44.integrations.Core.SpeechToText({ audio_file: file });
+      if (transcription && transcription.text) {
+        await sendMessage(transcription.text);
+      } else {
+        console.warn("No transcription received or transcription was empty.");
+        setMessages(prev => [...prev, { role: "assistant", content: "I couldn't understand that. Could you please try again or type your message?" }]);
+      }
+    } catch (error) {
+      console.error("Error during speech-to-text:", error);
+      setMessages(prev => [...prev, { role: "assistant", content: "There was an error processing your voice. Please try typing instead." }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
 
   const handleNewConversation = () => {
     setMessages([]);
@@ -229,7 +252,7 @@ Respond naturally, warmly, and like you genuinely care about understanding them.
                   : 'bg-gradient-to-br from-purple-50 to-pink-50'
             ) : `bg-white/70 backdrop-blur-md border border-purple-400/30 ${specialMode}-card`
           }`}>
-            <CardContent className="p-6 space-y-4">
+            <CardContent className="p-6 space-y-6">
               <div className={`p-4 rounded-lg ${
                 theme === 'minimalist'
                   ? 'bg-purple-50 border border-purple-200'
@@ -242,12 +265,48 @@ Respond naturally, warmly, and like you genuinely care about understanding them.
                 </p>
               </div>
 
-              <div className="flex gap-2 mb-3">
-                <VoiceTaskInput
-                  onTranscription={handleVoiceTranscription}
-                  theme={theme}
-                  inline={false}
-                />
+              <div className="flex flex-col items-center gap-6">
+                <button
+                  onClick={() => {
+                    const input = document.createElement('input');
+                    input.type = 'file';
+                    input.accept = 'audio/*';
+                    input.capture = 'microphone';
+                    input.onchange = async (e) => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      await handleVoiceInput(file);
+                    };
+                    input.click();
+                  }}
+                  disabled={isLoading}
+                  className={`w-32 h-32 rounded-full flex items-center justify-center transition-all ${
+                    theme === 'minimalist'
+                      ? 'bg-purple-600 hover:bg-purple-700'
+                      : 'bg-gradient-to-br from-purple-600 to-pink-600'
+                  } shadow-2xl hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {isLoading ? (
+                    <Loader2 className="w-16 h-16 text-white animate-spin" />
+                  ) : (
+                    <Mic className="w-16 h-16 text-white" />
+                  )}
+                </button>
+                <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>Tap to Speak</p>
+                <p className={`text-xs text-center max-w-md ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Speak naturally - your message will be transcribed and sent automatically
+                </p>
+              </div>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className={`w-full border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}`} />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className={`px-2 ${theme === 'dark' ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-500'}`}>
+                    Or type
+                  </span>
+                </div>
               </div>
 
               <Textarea
@@ -259,8 +318,9 @@ Respond naturally, warmly, and like you genuinely care about understanding them.
                     handleSend();
                   }
                 }}
-                placeholder="What's on your mind? (Press Enter to send, Shift+Enter for new line)"
-                className="min-h-[120px] text-base"
+                placeholder="Or type your message here... (Press Enter to send, Shift+Enter for new line)"
+                className="min-h-[100px] text-base"
+                disabled={isLoading}
               />
               
               <div className={`p-4 rounded-lg ${
@@ -376,7 +436,7 @@ Respond naturally, warmly, and like you genuinely care about understanding them.
               </CardContent>
             </Card>
 
-            {/* Input area */}
+            {/* Input area with circular mic button */}
             <Card className={`border-none shadow-lg ${
               specialMode === 'normal' ? (
                 theme === 'minimalist' 
@@ -387,12 +447,45 @@ Respond naturally, warmly, and like you genuinely care about understanding them.
               ) : `bg-white/70 backdrop-blur-md border border-purple-400/30 ${specialMode}-card`
             }`}>
               <CardContent className="p-4 space-y-3">
-                <div className="flex gap-2">
-                  <VoiceTaskInput
-                    onTranscription={handleVoiceTranscription}
-                    theme={theme}
-                    inline={false}
-                  />
+                <div className="flex justify-center">
+                  <button
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'audio/*';
+                      input.capture = 'microphone';
+                      input.onchange = async (e) => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        await handleVoiceInput(file);
+                      };
+                      input.click();
+                    }}
+                    disabled={isLoading}
+                    className={`w-20 h-20 rounded-full flex items-center justify-center transition-all ${
+                      theme === 'minimalist'
+                        ? 'bg-purple-600 hover:bg-purple-700'
+                        : 'bg-gradient-to-br from-purple-600 to-pink-600'
+                    } shadow-lg hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    {isLoading ? (
+                      <Loader2 className="w-10 h-10 text-white animate-spin" />
+                    ) : (
+                      <Mic className="w-10 h-10 text-white" />
+                    )}
+                  </button>
+                </div>
+                <p className={`text-xs text-center ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Tap to speak - message sends automatically</p>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <span className={`w-full border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-300'}`} />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className={`px-2 ${theme === 'dark' ? 'bg-gray-800 text-gray-400' : 'bg-white text-gray-500'}`}>
+                      Or type
+                    </span>
+                  </div>
                 </div>
 
                 <Textarea
@@ -406,6 +499,7 @@ Respond naturally, warmly, and like you genuinely care about understanding them.
                   }}
                   placeholder="Continue the conversation... (Press Enter to send)"
                   className="min-h-[80px]"
+                  disabled={isLoading}
                 />
 
                 <Button

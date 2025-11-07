@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Task } from "@/entities/Task";
 import { User } from "@/entities/User";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Sparkles, Mic, Keyboard } from "lucide-react";
+import { ArrowLeft, Sparkles, Mic } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Card, CardContent } from "@/components/ui/card";
@@ -109,20 +109,25 @@ export default function AddTask() {
       if (response?.success && response?.transcription) {
         const transcription = response.transcription;
         
-        // Parse transcription with AI to extract tasks
-        const prompt = `Parse this voice input and extract tasks. Return as JSON array.
+        // Parse with comprehensive reminder logic
+        const prompt = `Parse this voice input and extract tasks with COMPLETE details. Return as JSON array.
 
 INPUT: "${transcription}"
 
-If it's a list, return each as separate task.
-If it's one thing, return single task.
+CRITICAL: Extract ALL reminder information:
+- Specific times (e.g., "at 3pm", "tomorrow at 6pm")
+- Relative times (e.g., "in 30 minutes", "in 2 hours")
+- Events (e.g., "30 minutes before meeting", "before dinner")
+- Recurring (e.g., "every day", "every 2 hours")
 
 Return JSON:
 {
   "tasks": [
     {
-      "title": "task title",
-      "reminder_interval": "2hours" | "daily" | null,
+      "title": "clean task title",
+      "reminder_type": "specific_time" | "relative" | "before_event" | "recurring" | "none",
+      "reminder_value": "ISO timestamp or interval like '2hours'",
+      "event_description": "optional event description for before_event type",
       "urgency": "low" | "medium" | "high" | "urgent",
       "energy_required": "low" | "medium" | "high"
     }
@@ -140,7 +145,9 @@ Return JSON:
                   type: "object",
                   properties: {
                     title: { type: "string" },
-                    reminder_interval: { type: "string" },
+                    reminder_type: { type: "string" },
+                    reminder_value: { type: "string" },
+                    event_description: { type: "string" },
                     urgency: { type: "string" },
                     energy_required: { type: "string" }
                   }
@@ -150,17 +157,82 @@ Return JSON:
           }
         });
 
-        // Add parsed tasks to the list
-        const newTasks = (taskData.tasks || []).map(t => ({
-          id: `temp-${Date.now()}-${Math.random()}`,
-          title: t.title,
-          description: '',
-          reminder_interval: t.reminder_interval || '2hours',
-          urgency: t.urgency || 'medium',
-          energy_required: t.energy_required || 'medium'
-        }));
+        // Process and immediately save tasks
+        const currentUser = await User.me();
+        for (const t of (taskData.tasks || [])) {
+          let nextReminderTime = null;
+          let reminderInterval = null;
 
-        setTasks(prev => [...prev, ...newTasks]);
+          if (t.reminder_type === 'specific_time' && t.reminder_value) {
+            nextReminderTime = new Date(t.reminder_value);
+            reminderInterval = 'once';
+          } else if (t.reminder_type === 'relative' && t.reminder_value) {
+            const now = new Date();
+            nextReminderTime = new Date(now.getTime());
+            
+            if (t.reminder_value.includes('minutes')) {
+              const mins = parseInt(t.reminder_value);
+              nextReminderTime.setMinutes(nextReminderTime.getMinutes() + mins);
+              reminderInterval = 'once';
+            } else if (t.reminder_value.includes('hours')) {
+              const hrs = parseInt(t.reminder_value);
+              nextReminderTime.setHours(nextReminderTime.getHours() + hrs);
+              reminderInterval = 'once';
+            }
+          } else if (t.reminder_type === 'recurring') {
+            reminderInterval = t.reminder_value || '2hours';
+            const now = new Date();
+            nextReminderTime = new Date(now.getTime());
+            
+            switch (reminderInterval) {
+              case '2hours':
+                nextReminderTime.setHours(nextReminderTime.getHours() + 2);
+                break;
+              case 'daily':
+                nextReminderTime.setDate(nextReminderTime.getDate() + 1);
+                break;
+            }
+          } else {
+            // Default to 2 hour recurring if no reminder specified
+            reminderInterval = '2hours';
+            nextReminderTime = new Date();
+            nextReminderTime.setHours(nextReminderTime.getHours() + 2);
+          }
+
+          const createdTask = await Task.create({
+            title: t.title,
+            description: t.event_description || '',
+            reminder_interval: reminderInterval,
+            reminder_count: 0,
+            next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null,
+            urgency: t.urgency || 'medium',
+            energy_required: t.energy_required || 'medium',
+            status: 'active'
+          });
+
+          if (nextReminderTime && reminderInterval !== 'once') {
+            try {
+              await scheduleReminder({
+                email: currentUser.email,
+                title: "Task Reminder 📋",
+                body: createdTask.title,
+                sendAtISO: nextReminderTime.toISOString(),
+                taskId: createdTask.id,
+                data: {
+                  screen: "/Tasks",
+                  taskId: createdTask.id,
+                  urgency: createdTask.urgency,
+                  type: 'task_reminder'
+                }
+              });
+            } catch (error) {
+              console.error("Failed to schedule reminder:", error);
+            }
+          }
+        }
+
+        // Navigate back immediately
+        navigate(createPageUrl("Home"), { state: { reload: true } });
       }
     } catch (error) {
       console.error("Voice processing error:", error);
@@ -177,21 +249,28 @@ Return JSON:
     setIsProcessingVoice(true);
 
     try {
-      // Parse text with AI to extract task details
-      const prompt = `Parse this text input and extract task details. Return as JSON.
+      const prompt = `Parse this text input and extract task details with COMPLETE reminder information.
 
 INPUT: "${textInput}"
 
 Extract:
 - Task title (clean, concise)
-- Priority (based on urgency words)
-- Energy level (based on complexity)
-- Reminder interval if mentioned
+- Priority based on urgency words
+- Energy level based on complexity
+- REMINDER: specific time, relative time, before event, or recurring
+  
+Examples:
+"Call dentist tomorrow at 2pm" → specific_time: tomorrow 2pm
+"Water plants in 30 minutes" → relative: 30 minutes from now
+"Review notes 15 minutes before meeting" → before_event: 15 minutes before
+"Take vitamins every day at 9am" → recurring: daily at 9am
 
 Return JSON:
 {
   "title": "clean task title",
-  "reminder_interval": "2hours" | "daily" | null,
+  "reminder_type": "specific_time" | "relative" | "before_event" | "recurring" | "none",
+  "reminder_value": "ISO timestamp or interval",
+  "event_description": "event description if before_event",
   "urgency": "low" | "medium" | "high" | "urgent",
   "energy_required": "low" | "medium" | "high"
 }`;
@@ -202,181 +281,88 @@ Return JSON:
           type: "object",
           properties: {
             title: { type: "string" },
-            reminder_interval: { type: "string" },
+            reminder_type: { type: "string" },
+            reminder_value: { type: "string" },
+            event_description: { type: "string" },
             urgency: { type: "string" },
             energy_required: { type: "string" }
           }
         }
       });
 
-      const newTask = {
-        id: `temp-${Date.now()}`,
-        title: taskData.title || textInput.trim(),
-        description: '',
-        reminder_interval: taskData.reminder_interval || '2hours',
-        urgency: taskData.urgency || 'medium',
-        energy_required: taskData.energy_required || 'medium'
-      };
-
-      setTasks(prev => [...prev, newTask]);
-      setTextInput('');
-    } catch (error) {
-      console.error("Error parsing task:", error);
-      // Fallback: just create simple task
-      const newTask = {
-        id: `temp-${Date.now()}`,
-        title: textInput.trim(),
-        description: '',
-        reminder_interval: '2hours',
-        urgency: 'medium',
-        energy_required: 'medium'
-      };
-      setTasks(prev => [...prev, newTask]);
-      setTextInput('');
-    }
-
-    setIsProcessingVoice(false);
-  };
-
-  const handleDeleteTask = (taskId) => {
-    setTasks(prev => prev.filter(t => t.id !== taskId));
-  };
-
-  const handleSaveAll = async () => {
-    if (tasks.length === 0) return;
-
-    setIsSaving(true);
-    try {
       const currentUser = await User.me();
-      if (!currentUser || !currentUser.email) {
-        throw new Error("User not logged in");
+      let nextReminderTime = null;
+      let reminderInterval = null;
+
+      if (taskData.reminder_type === 'specific_time' && taskData.reminder_value) {
+        nextReminderTime = new Date(taskData.reminder_value);
+        reminderInterval = 'once';
+      } else if (taskData.reminder_type === 'recurring' && taskData.reminder_value) {
+        reminderInterval = taskData.reminder_value;
+        nextReminderTime = new Date();
+        if (reminderInterval === 'daily') {
+          nextReminderTime.setDate(nextReminderTime.getDate() + 1);
+        } else {
+          nextReminderTime.setHours(nextReminderTime.getHours() + 2);
+        }
+      } else {
+        // Default
+        reminderInterval = '2hours';
+        nextReminderTime = new Date();
+        nextReminderTime.setHours(nextReminderTime.getHours() + 2);
       }
 
-      for (const task of tasks) {
-        let nextReminderTime = null;
-        const now = new Date();
+      const createdTask = await Task.create({
+        title: taskData.title || textInput.trim(),
+        description: taskData.event_description || '',
+        reminder_interval: reminderInterval,
+        reminder_count: 0,
+        next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null,
+        urgency: taskData.urgency || 'medium',
+        energy_required: taskData.energy_required || 'medium',
+        status: 'active'
+      });
 
-        if (task.reminder_interval && task.reminder_interval !== 'once') {
-          nextReminderTime = new Date(now.getTime());
-          
-          switch (task.reminder_interval) {
-            case '10min':
-              nextReminderTime.setMinutes(nextReminderTime.getMinutes() + 10);
-              break;
-            case '20min':
-              nextReminderTime.setMinutes(nextReminderTime.getMinutes() + 20);
-              break;
-            case '30min':
-              nextReminderTime.setMinutes(nextReminderTime.getMinutes() + 30);
-              break;
-            case '1hour':
-              nextReminderTime.setHours(nextReminderTime.getHours() + 1);
-              break;
-            case '2hours':
-              nextReminderTime.setHours(nextReminderTime.getHours() + 2);
-              break;
-            case 'daily':
-              nextReminderTime.setDate(nextReminderTime.getDate() + 1);
-              break;
-            case 'every_other_day':
-              nextReminderTime.setDate(nextReminderTime.getDate() + 2);
-              break;
-            default:
-              nextReminderTime = null;
-              break;
-          }
-          
-          if (nextReminderTime) {
-            console.log(`🕐 [NEW TASK] Setting initial reminder for ${nextReminderTime.toLocaleString()} (${nextReminderTime.toISOString()})`);
-          }
-        }
-        
-        const createdTask = await Task.create({
-          title: task.title,
-          description: task.description,
-          reminder_interval: task.reminder_interval,
-          reminder_count: 0,
-          next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null,
-          urgency: task.urgency,
-          energy_required: task.energy_required,
-          status: 'active'
-        });
-
-        if (nextReminderTime && task.reminder_interval !== 'once') {
-          try {
-            await scheduleReminder({
-              email: currentUser.email,
-              title: "Task Reminder 📋",
-              body: createdTask.title,
-              sendAtISO: nextReminderTime.toISOString(),
+      if (nextReminderTime && reminderInterval !== 'once') {
+        try {
+          await scheduleReminder({
+            email: currentUser.email,
+            title: "Task Reminder 📋",
+            body: createdTask.title,
+            sendAtISO: nextReminderTime.toISOString(),
+            taskId: createdTask.id,
+            data: {
+              screen: "/Tasks",
               taskId: createdTask.id,
-              data: {
-                screen: "/Tasks",
-                taskId: createdTask.id,
-                urgency: createdTask.urgency,
-                type: 'task_reminder'
-              }
-            });
-            console.log(`✅ [NEW TASK] Scheduled reminder for "${createdTask.title}"`);
-          } catch (error) {
-            console.error(`Failed to schedule reminder:`, error);
-          }
+              urgency: createdTask.urgency,
+              type: 'task_reminder'
+            }
+          });
+        } catch (error) {
+          console.error("Failed to schedule reminder:", error);
         }
       }
 
       navigate(createPageUrl("Home"), { state: { reload: true } });
     } catch (error) {
-      console.error("Error saving tasks:", error);
-      alert("Failed to save tasks. Please try again.");
+      console.error("Error parsing task:", error);
+      alert("Failed to create task");
     }
-    setIsSaving(false);
-  };
 
-  const getUrgencyColor = (urgency) => {
-    if (theme === 'dark') {
-      return {
-        low: 'bg-gray-700 text-gray-300',
-        medium: 'bg-blue-700 text-blue-200',
-        high: 'bg-amber-700 text-amber-200',
-        urgent: 'bg-red-700 text-red-200'
-      }[urgency];
-    }
-    return {
-      low: 'bg-gray-100 text-gray-700',
-      medium: 'bg-blue-100 text-blue-700',
-      high: 'bg-amber-100 text-amber-700',
-      urgent: 'bg-red-100 text-red-700'
-    }[urgency];
+    setIsProcessingVoice(false);
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-8">
+    <div className="min-h-screen p-4 md:p-8" style={{ paddingTop: 'max(1rem, calc(1rem + env(safe-area-inset-top)))' }}>
       <div className="max-w-3xl mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <Button
-            variant="ghost"
-            onClick={() => navigate(createPageUrl("Home"))}
-            className="gap-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Back
-          </Button>
-          {tasks.length > 0 && (
-            <Button
-              onClick={handleSaveAll}
-              disabled={isSaving}
-              className={
-                theme === 'minimalist'
-                  ? 'bg-green-600 hover:bg-green-700'
-                  : theme === 'dark'
-                    ? 'bg-green-600 hover:bg-green-700'
-                    : 'bg-gradient-to-r from-purple-600 to-orange-600 hover:from-purple-700 hover:to-orange-700'
-              }
-            >
-              {isSaving ? 'Saving...' : `Save ${tasks.length} Task${tasks.length === 1 ? '' : 's'}`}
-            </Button>
-          )}
-        </div>
+        <Button
+          variant="ghost"
+          onClick={() => navigate(createPageUrl("Home"))}
+          className="gap-2"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Back
+        </Button>
 
         <Card className={`border-none shadow-2xl overflow-hidden ${
           theme === 'dark'
@@ -412,7 +398,6 @@ Return JSON:
                       : ''
                 }`}
               >
-                <Keyboard className="w-5 h-5 mr-2" />
                 Type
               </Button>
             </div>
@@ -426,29 +411,42 @@ Return JSON:
                   exit={{ opacity: 0, y: -20 }}
                   className="flex flex-col items-center gap-8 py-12"
                 >
+                  <div className={`w-32 h-32 rounded-full flex items-center justify-center ${
+                    theme === 'minimalist'
+                      ? 'bg-purple-100'
+                      : 'bg-gradient-to-br from-purple-100 to-pink-100'
+                  }`}>
+                    <Sparkles className={`w-16 h-16 ${
+                      theme === 'minimalist' ? 'text-purple-600' : 'text-purple-700'
+                    }`} />
+                  </div>
                   <div className="text-center space-y-3 max-w-md">
                     <h2 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                      {isProcessingVoice ? 'Processing...' : isRecording ? 'Listening...' : 'Speak your tasks'}
+                      {isProcessingVoice ? 'Creating your tasks...' : isRecording ? 'Listening...' : 'Ready to capture your tasks?'}
                     </h2>
                     <p className={`text-lg ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                      {isRecording ? 'Tap again to finish' : 'Tap the mic and speak naturally'}
+                      {isRecording 
+                        ? 'Tap again when done' 
+                        : 'Tap the mic and speak - say them one at a time or all at once'
+                      }
                     </p>
                   </div>
                   <button
                     onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
                     disabled={isProcessingVoice}
-                    className={`w-24 h-24 rounded-full flex items-center justify-center transition-all ${
+                    className={`w-32 h-32 rounded-full flex items-center justify-center transition-all ${
                       isRecording
                         ? 'bg-red-500 animate-pulse'
                         : isProcessingVoice
                           ? 'bg-gray-400'
                           : theme === 'minimalist'
-                            ? 'bg-green-600 hover:bg-green-700'
-                            : 'bg-gradient-to-br from-purple-600 to-orange-600 hover:scale-110'
+                            ? 'bg-purple-600 hover:bg-purple-700 hover:scale-110'
+                            : 'bg-gradient-to-br from-purple-600 to-pink-600 hover:scale-110'
                     } shadow-2xl`}
                   >
-                    <Mic className="w-12 h-12 text-white" />
+                    <Mic className="w-16 h-16 text-white" />
                   </button>
+                  <p className="text-sm text-gray-500 text-center">Tap to Speak</p>
                 </motion.div>
               ) : (
                 <motion.div
@@ -460,10 +458,10 @@ Return JSON:
                 >
                   <div className="text-center space-y-3 max-w-md mx-auto mb-6">
                     <h2 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                      Type your task or idea
+                      Type your tasks
                     </h2>
                     <p className={`text-lg ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                      AI will organize it - just describe what needs to be done
+                      Enter each task and press Enter to add - AI will organize it with smart reminders
                     </p>
                   </div>
                   <form onSubmit={handleTextSubmit} className="max-w-xl mx-auto">
@@ -471,7 +469,7 @@ Return JSON:
                       <Input
                         value={textInput}
                         onChange={(e) => setTextInput(e.target.value)}
-                        placeholder="e.g., Call dentist tomorrow at 2pm"
+                        placeholder='e.g., "Call dentist tomorrow at 2pm" or "Water plants every day"'
                         className="h-14 text-lg flex-1"
                         autoFocus
                         disabled={isProcessingVoice}
@@ -494,69 +492,9 @@ Return JSON:
             </AnimatePresence>
           </CardContent>
         </Card>
-
-        {tasks.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="space-y-3"
-          >
-            {tasks.map((task, index) => (
-              <motion.div
-                key={task.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
-                <Card
-                  className={`border shadow-lg ${
-                    theme === 'dark'
-                      ? 'bg-gray-800 border-gray-700'
-                      : theme === 'minimalist'
-                        ? 'bg-white'
-                        : 'bg-gradient-to-r from-purple-50/50 to-orange-50/50'
-                  }`}
-                >
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex-1">
-                        <h3 className={`font-semibold text-lg mb-3 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
-                          {task.title}
-                        </h3>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className={`px-3 py-1 rounded-full text-sm font-medium ${getUrgencyColor(task.urgency)}`}>
-                            {task.urgency}
-                          </span>
-                          <span className={`px-3 py-1 rounded-full text-sm ${
-                            theme === 'dark' ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-700'
-                          }`}>
-                            {task.energy_required} energy
-                          </span>
-                          {task.reminder_interval && (
-                            <span className="px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-700">
-                              {task.reminder_interval === '2hours' ? 'Every 2 hours' :
-                               task.reminder_interval === 'daily' ? 'Daily' :
-                               task.reminder_interval}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleDeleteTask(task.id)}
-                        className="text-red-500 hover:bg-red-50"
-                      >
-                        Remove
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </motion.div>
-        )}
       </div>
+      
+      <div style={{ height: '120px' }} aria-hidden="true"></div>
     </div>
   );
 }

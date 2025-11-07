@@ -338,7 +338,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       }`}
       style={{
         ...(isSeasonalTheme() ? getSeasonalBackgroundStyle() : {}),
-        paddingTop: 0,
+        paddingTop: 'env(safe-area-inset-top)',
         paddingBottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))'
       }}
     >
@@ -761,7 +761,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 : theme === 'dark'
                   ? 'bg-gray-950/60 border-gray-800'
                   : 'bg-white/60 border-gray-200/50'
-            }`}>
+            }`} style={{
+              paddingTop: 'max(1rem, calc(1rem + env(safe-area-inset-top)))'
+            }}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
                   <SidebarTrigger asChild>
