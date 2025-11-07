@@ -3,19 +3,19 @@ import React, { useState } from "react";
 import { Task } from "@/entities/Task";
 import { User } from "@/entities/User";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Sparkles, Mic, Loader2, ListChecks, Zap } from "lucide-react"; // Added Loader2, ListChecks, Zap
+import { ArrowLeft, Sparkles, Mic, Loader2, ListChecks, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // Added CardHeader, CardTitle for consistency
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
 import { base44 } from "@/api/base44Client";
 import { scheduleReminder } from "../components/utils/reminderScheduler";
-import { Badge } from "@/components/ui/badge"; // Assuming Badge is used for tasks display
+import { Badge } from "@/components/ui/badge";
 
 export default function AddTask() {
   const navigate = useNavigate();
-  const [tasks, setTasks] = useState([]); // This state is likely meant to be loaded from a parent or initially empty for display
+  const [tasks, setTasks] = useState([]);
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   // Consolidated isSaving and isProcessingVoice into a single isProcessing state
   const [isProcessing, setIsProcessing] = useState(false);
@@ -36,7 +36,7 @@ export default function AddTask() {
   }, []);
 
   // Helper for optimistic UI updates
-  const createTaskOptimistically = (taskTitle, taskDetails = {}) => {
+  const createTaskOptimistically = (taskTitle: string, taskDetails = {}) => {
     const tempTask = {
       id: 'temp-' + Date.now(),
       title: taskTitle,
@@ -52,14 +52,14 @@ export default function AddTask() {
     return tempTask.id;
   };
 
-  const replaceOptimisticTask = (tempId, realTask) => {
+  const replaceOptimisticTask = (tempId: string, realTask: Task) => {
     setOptimisticTasks(prev => prev.filter(t => t.id !== tempId));
     // The `loadData()` call in the outline was likely referring to a parent component's data loading.
     // Since AddTask navigates away, the `reload: true` state handled by the parent is sufficient.
     // navigate(createPageUrl("Home"), { state: { reload: true } }); // Navigation will happen once after all processing
   };
 
-  const removeOptimisticTask = (tempId) => {
+  const removeOptimisticTask = (tempId: string) => {
     setOptimisticTasks(prev => prev.filter(t => t.id !== tempId));
   };
 
@@ -217,14 +217,14 @@ Return JSON:
         mimeType = 'audio/mp4';
       }
       if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/ogg;codecs=opus';
+        mimeType = 'audio/ogg;co_des=opus';
       }
 
       const recorder = new MediaRecorder(stream, {
         mimeType: mimeType,
         audioBitsPerSecond: 128000
       });
-      const chunks = [];
+      const chunks: BlobPart[] = [];
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
@@ -290,7 +290,7 @@ Return JSON:
     }
   };
 
-  const handleTextSubmit = async (e) => {
+  const handleTextSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!textInput.trim()) return;
 
@@ -310,7 +310,7 @@ Return JSON:
     return 'bg-gradient-to-br from-purple-50 via-white to-orange-50 border-purple-200';
   };
 
-  const getUrgencyColor = (urgency) => {
+  const getUrgencyColor = (urgency: string) => {
     switch (urgency) {
       case 'urgent': return 'bg-red-500 text-white';
       case 'high': return 'bg-orange-500 text-white';
@@ -520,19 +520,13 @@ Return JSON:
                       </div>
                     )}
                   </div>
-                  {/* The outline shows a button for view details, but `handleViewDetails` is not defined in the current file.
-                      Since the component navigates away, this might be extraneous or refers to future functionality.
-                      For now, I'll comment it out or remove it if not used. If it should stay, the function needs to be implemented.
-                      Keeping it for structural integrity as per outline, but it won't be functional without `handleViewDetails`.
-                      Let's define a placeholder for `handleViewDetails`.
-                  */}
                   {!task.isProcessing && (
                     <Button
                       size="icon"
                       variant="ghost"
                       onClick={() => console.log('View details for task:', task.id)} // Placeholder for handleViewDetails
                     >
-                      <Zap className="w-4 h-4" /> {/* Outline uses Eye, but not imported. Using Zap for now if no Eye*/}
+                      <Zap className="w-4 h-4" />
                     </Button>
                   )}
                 </div>
