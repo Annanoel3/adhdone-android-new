@@ -58,6 +58,7 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, them
   const [isProcessingVoice, setIsProcessingVoice] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(task ? task.title : '');
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     if (task && isOpen) {
@@ -316,6 +317,7 @@ Return JSON:
   };
 
   const handleUpdateField = async (field, value) => {
+    setIsUpdating(true);
     try {
       const updates = { [field]: value };
       
@@ -353,16 +355,41 @@ Return JSON:
         }
         
         updates.next_reminder = nextReminder ? nextReminder.toISOString() : null;
+        
+        // CRITICAL FIX: Schedule the new recurring reminder
+        if (nextReminder && value !== 'once') {
+          try {
+            const currentUser = await User.me();
+            await scheduleReminder({
+              email: currentUser.email,
+              title: "Task Reminder 📋",
+              body: task.title,
+              sendAtISO: nextReminder.toISOString(),
+              taskId: task.id,
+              data: {
+                screen: "/Tasks",
+                taskId: task.id,
+                urgency: task.urgency,
+                type: 'task_reminder'
+              }
+            });
+          } catch (error) {
+            console.error("Failed to schedule reminder:", error);
+          }
+        }
       }
       
       await Task.update(task.id, updates);
-      onUpdate();
+      await onUpdate();
     } catch (error) {
       console.error(`Error updating ${field}:`, error);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
   const handleUpdateReminderTime = async (newTime) => {
+    setIsUpdating(true);
     try {
       const [hours, minutes] = newTime.split(':');
       const nextReminder = new Date();
@@ -376,10 +403,32 @@ Return JSON:
 
       console.log(`🕐 [REMINDER TIME] Setting reminder for ${nextReminder.toLocaleString()} (${nextReminder.toISOString()})`);
 
+      // CRITICAL FIX: Reschedule the notification
+      try {
+        const currentUser = await User.me();
+        await scheduleReminder({
+          email: currentUser.email,
+          title: "Task Reminder 📋",
+          body: task.title,
+          sendAtISO: nextReminder.toISOString(),
+          taskId: task.id,
+          data: {
+            screen: "/Tasks",
+            taskId: task.id,
+            urgency: task.urgency,
+            type: 'task_reminder'
+          }
+        });
+      } catch (error) {
+        console.error("Failed to schedule reminder:", error);
+      }
+
       await Task.update(task.id, { next_reminder: nextReminder.toISOString() });
-      onUpdate();
+      await onUpdate();
     } catch (error) {
       console.error("Error updating reminder time:", error);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -426,6 +475,15 @@ Return JSON:
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto">
+          {isUpdating && (
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-50 rounded-lg">
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-4 border-gray-300 border-t-purple-600 rounded-full animate-spin"></div>
+                <p className="text-sm font-medium text-gray-700">Updating task...</p>
+              </div>
+            </div>
+          )}
+          
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold">
               {isEditingTitle ? (

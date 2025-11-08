@@ -48,7 +48,6 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
 
     const now = Date.now();
-    // CRITICAL FIX: Give 15 minute buffer instead of 5, to catch reminders that might be slightly late
     const cutoff = now + 15 * 60 * 1000;
 
     console.log('👥 [TASK REMINDERS] Getting all users...');
@@ -83,7 +82,6 @@ Deno.serve(async (req) => {
           
           console.log(`🔍 [TASK REMINDERS] Task "${t.title}": next_reminder=${t.next_reminder}, parsed=${new Date(when).toISOString()}, now=${new Date(now).toISOString()}`);
           
-          // CRITICAL FIX: Check if reminder time is in the past or within the next 15 minutes
           if (when && when <= cutoff) {
             console.log(`🔔 [TASK REMINDERS] Sending reminder to ${user.email}: "${t.title}"`);
 
@@ -97,9 +95,29 @@ Deno.serve(async (req) => {
             if (r?.data?.success) {
               let next = null;
               const ms = t.reminder_interval ? intervalMs[t.reminder_interval] : 0;
+              
+              // CRITICAL FIX: For recurring reminders, schedule the next one
               if (ms && ms > 0) {
-                // CRITICAL FIX: Calculate next reminder from NOW, not from the old reminder time
                 next = new Date(Date.now() + ms).toISOString();
+                
+                // Schedule the next reminder notification
+                try {
+                  await base44.asServiceRole.functions.invoke('schedulePush', {
+                    toUserExternalId: user.email,
+                    title: "Task Reminder 📋",
+                    body: t.title,
+                    sendAtISO: next,
+                    data: {
+                      screen: "/Tasks",
+                      taskId: t.id,
+                      urgency: t.urgency,
+                      type: 'task_reminder'
+                    }
+                  });
+                  console.log(`✅ [TASK REMINDERS] Scheduled next reminder for ${next}`);
+                } catch (scheduleError) {
+                  console.error('❌ [TASK REMINDERS] Failed to schedule next reminder:', scheduleError);
+                }
               }
 
               await base44.asServiceRole.entities.Task.update(t.id, {
