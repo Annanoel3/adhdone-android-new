@@ -19,6 +19,29 @@ function parseWhen(v) {
   return Number.isNaN(d.getTime()) ? 0 : d.getTime();
 }
 
+function isInQuietHours(user) {
+  if (!user.quiet_hours_enabled || !user.quiet_hours_start || !user.quiet_hours_end) {
+    return false;
+  }
+
+  const now = new Date();
+  const currentTime = now.getHours() * 60 + now.getMinutes(); // Current time in minutes since midnight
+
+  const [startHour, startMin] = user.quiet_hours_start.split(':').map(Number);
+  const [endHour, endMin] = user.quiet_hours_end.split(':').map(Number);
+  
+  const startTime = startHour * 60 + startMin;
+  const endTime = endHour * 60 + endMin;
+
+  // Handle quiet hours that span midnight (e.g., 22:00 - 08:00)
+  if (startTime > endTime) {
+    return currentTime >= startTime || currentTime <= endTime;
+  }
+  
+  // Normal case (e.g., 08:00 - 22:00)
+  return currentTime >= startTime && currentTime <= endTime;
+}
+
 Deno.serve(async (req) => {
   try {
     console.log('⏰ [TASK REMINDERS] Starting task reminder check...');
@@ -57,12 +80,19 @@ Deno.serve(async (req) => {
     console.log(`🕐 [TASK REMINDERS] Cutoff time: ${new Date(cutoff).toISOString()}`);
 
     let totalScanned = 0;
-    let ok = 0, fail = 0;
+    let ok = 0, fail = 0, skippedQuietHours = 0;
 
     for (const user of allUsers) {
       try {
         if (user.notification_settings?.task_reminders === false) {
           console.log(`⏭️  [TASK REMINDERS] Skipping ${user.email} - notifications disabled`);
+          continue;
+        }
+
+        // CRITICAL: Check quiet hours
+        if (isInQuietHours(user)) {
+          console.log(`🌙 [TASK REMINDERS] Skipping ${user.email} - in quiet hours (${user.quiet_hours_start} - ${user.quiet_hours_end})`);
+          skippedQuietHours++;
           continue;
         }
 
@@ -146,6 +176,7 @@ Deno.serve(async (req) => {
       scanned: totalScanned,
       sent: ok,
       errors: fail,
+      skippedQuietHours: skippedQuietHours,
       at: new Date().toISOString(),
     };
     
