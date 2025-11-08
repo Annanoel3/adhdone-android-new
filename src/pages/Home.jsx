@@ -64,11 +64,26 @@ export default function Home() {
   };
 
   const handleTaskComplete = async (task) => {
-    await base44.entities.Task.update(task.id, { 
-      status: 'completed',
-      completed_at: new Date().toISOString()
-    });
-    loadData();
+    // Optimistically update UI
+    setTasks(prevTasks => 
+      prevTasks.map(t => 
+        t.id === task.id 
+          ? { ...t, status: 'completed', completed_at: new Date().toISOString() }
+          : t
+      )
+    );
+
+    // Update in background
+    try {
+      await base44.entities.Task.update(task.id, { 
+        status: 'completed',
+        completed_at: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error("Failed to complete task:", error);
+      // Revert on error
+      loadData();
+    }
   };
 
   const handleViewDetails = (task) => {
