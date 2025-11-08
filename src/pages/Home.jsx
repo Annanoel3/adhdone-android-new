@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
@@ -38,6 +37,29 @@ export default function Home() {
       navigate(location.pathname, { replace: true, state: {} });
     }
   }, [location.state, navigate, location.pathname]);
+
+  // CRITICAL FIX: Refresh tasks every 30 seconds to pick up reminder updates from cron
+  useEffect(() => {
+    const refreshInterval = setInterval(() => {
+      console.log('🔄 [HOME] Auto-refreshing tasks to update reminder times...');
+      loadData();
+    }, 30000); // Every 30 seconds
+
+    return () => clearInterval(refreshInterval);
+  }, []);
+
+  // CRITICAL FIX: Refresh tasks when page becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        console.log('👁️ [HOME] Page visible - refreshing tasks...');
+        loadData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   const loadData = async () => {
     try {
