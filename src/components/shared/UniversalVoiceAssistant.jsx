@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -32,13 +31,7 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 44100
-        }
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
       let mimeType = 'audio/webm;codecs=opus';
       if (!MediaRecorder.isTypeSupported(mimeType)) {
@@ -47,14 +40,8 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
       if (!MediaRecorder.isTypeSupported(mimeType)) {
         mimeType = 'audio/mp4';
       }
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/ogg;codecs=opus';
-      }
 
-      const recorder = new MediaRecorder(stream, {
-        mimeType: mimeType,
-        audioBitsPerSecond: 128000
-      });
+      const recorder = new MediaRecorder(stream, { mimeType });
       const chunks = [];
 
       recorder.ondataavailable = (e) => {
@@ -68,10 +55,11 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
         stream.getTracks().forEach(track => track.stop());
 
         if (audioBlob.size === 0) {
-          setFeedbackMessage("❌ No audio recorded");
+          setIsRecording(false);
           return;
         }
 
+        setIsRecording(false);
         await handleTranscription(audioBlob);
       };
 
@@ -80,14 +68,13 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
       setIsRecording(true);
     } catch (error) {
       console.error("Microphone error:", error);
-      setFeedbackMessage("❌ Could not access microphone");
+      alert("Could not access microphone");
     }
   };
 
   const stopRecording = () => {
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       mediaRecorder.stop();
-      setIsRecording(false);
     }
   };
 
@@ -96,29 +83,27 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
     setProcessingMessage("Transcribing...");
 
     try {
-      // Step 1: Upload the audio file
+      // Fix: Pass file directly, not wrapped in object
       const uploadResult = await base44.integrations.Core.UploadFile({
         file: audioBlob
       });
 
       if (!uploadResult?.file_url) {
-        throw new Error('Failed to upload audio file');
+        throw new Error('Failed to upload audio');
       }
 
-      // Step 2: Transcribe using the file URL
       const response = await base44.functions.invoke('transcribeAudio', {
         file_url: uploadResult.file_url
       });
 
-      if (response?.success && response?.transcription) {
-        await processVoiceCommand(response.transcription);
+      if (response?.data?.success && response?.data?.transcription) {
+        await processVoiceCommand(response.data.transcription);
       } else {
-        setFeedbackMessage("❌ Transcription failed");
-        setIsProcessing(false);
+        throw new Error('Transcription failed');
       }
     } catch (error) {
       console.error("Transcription error:", error);
-      setFeedbackMessage("❌ Transcription failed");
+      setFeedbackMessage("❌ Failed to process voice");
       setIsProcessing(false);
     }
   };
