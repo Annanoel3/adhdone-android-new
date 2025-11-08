@@ -1,3 +1,4 @@
+
 import React, { useState } from "react";
 import { Task } from "@/entities/Task";
 import { User } from "@/entities/User";
@@ -75,15 +76,21 @@ Context:
 - Tomorrow: ${tomorrow.toISOString().split('T')[0]}
 - Current time: ${now.toLocaleTimeString()}
 
+CRITICAL: Keep ALL important details in the task title. Only remove filler words like "remind me to", "I need to", etc.
+
+Example:
+"Remind me to call the dentist about my appointment and pick up the prescription" 
+→ "Call dentist about appointment and pick up prescription" (NOT just "Call dentist")
+
 Extract:
-1. Core task (2-8 words, remove filler like "remind me to")
+1. Task title - Keep it detailed and complete (remove only filler words)
 2. Urgency (low/medium/high/urgent)
 3. Energy needed (low/medium/high)
 4. Reminder timing if mentioned
 
 Return JSON:
 {
-  "title": "task title",
+  "title": "complete task description here",
   "urgency": "medium",
   "energy_required": "medium",
   "reminder_interval": "30min" | "1hour" | "2hours" | "daily" | "once" | null,
@@ -247,9 +254,21 @@ Return JSON:
 
   const handleVoiceTranscription = async (audioBlob) => {
     try {
-      const uploadResult = await base44.integrations.Core.UploadFile({
-        file: audioBlob
+      const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, {
+        type: audioBlob.type
       });
+
+      console.log('🎤 [VOICE] Uploading audio file:', {
+        name: audioFile.name,
+        size: audioFile.size,
+        type: audioFile.type
+      });
+
+      const uploadResult = await base44.integrations.Core.UploadFile({
+        file: audioFile
+      });
+
+      console.log('✅ [VOICE] Upload result:', uploadResult);
 
       if (!uploadResult?.file_url) {
         throw new Error('Failed to upload audio file');
@@ -259,6 +278,8 @@ Return JSON:
         file_url: uploadResult.file_url
       });
 
+      console.log('✅ [VOICE] Transcription response:', response);
+
       if (response?.data?.success && response?.data?.transcription) {
         await processAndCreateTask(response.data.transcription);
         navigate(createPageUrl("Home"), { state: { reload: true } });
@@ -267,7 +288,7 @@ Return JSON:
       }
     } catch (error) {
       console.error("Voice processing error:", error);
-      alert("Failed to process voice input");
+      alert("Failed to process voice input. Please try again.");
     } finally {
       setIsProcessing(false);
     }

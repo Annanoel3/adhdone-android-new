@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -83,10 +84,22 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
     setProcessingMessage("Transcribing...");
 
     try {
-      // Fix: Pass file directly, not wrapped in object
-      const uploadResult = await base44.integrations.Core.UploadFile({
-        file: audioBlob
+      // CRITICAL FIX: Convert Blob to File object
+      const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, {
+        type: audioBlob.type
       });
+
+      console.log('🎤 [VOICE ASSISTANT] Uploading audio:', {
+        name: audioFile.name,
+        size: audioFile.size,
+        type: audioFile.type
+      });
+
+      const uploadResult = await base44.integrations.Core.UploadFile({
+        file: audioFile
+      });
+
+      console.log('✅ [VOICE ASSISTANT] Upload result:', uploadResult);
 
       if (!uploadResult?.file_url) {
         throw new Error('Failed to upload audio');
@@ -95,6 +108,8 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
       const response = await base44.functions.invoke('transcribeAudio', {
         file_url: uploadResult.file_url
       });
+
+      console.log('✅ [VOICE ASSISTANT] Transcription:', response);
 
       if (response?.data?.success && response?.data?.transcription) {
         await processVoiceCommand(response.data.transcription);
@@ -168,6 +183,12 @@ Current context:
 - Today: ${today.toISOString().split('T')[0]}
 - Tomorrow: ${tomorrow.toISOString().split('T')[0]}
 
+CRITICAL: Keep ALL important details in the task title. Only remove filler words.
+
+Example:
+"Remind me to call mom and ask about dinner plans"
+→ "Call mom and ask about dinner plans" (NOT just "Call mom")
+
 CRITICAL PARSING RULES:
 
 1. RELATIVE TIME ("in X minutes/hours"):
@@ -186,34 +207,26 @@ CRITICAL PARSING RULES:
 
 4. TASK TITLE:
    - Remove "remind me to/in/at", "every", time phrases
-   - Keep only the core action (2-8 words)
+   - Keep ALL other details - don't shorten unnecessarily
 
 Examples:
 "Remind me in 5 minutes to call mom" →
   title: "Call mom"
   relative_minutes: 5
   reminder_interval: "once"
-  reminder_time: null
-  specific_date: null
 
 "Remind me every 30 minutes to stretch" →
   title: "Stretch"
-  relative_minutes: null
   reminder_interval: "30min"
-  reminder_time: null
-  specific_date: null
 
-"Remind me at 6 pm tomorrow to pick up package" →
-  title: "Pick up package"
-  relative_minutes: null
-  reminder_interval: "once"
-  reminder_time: "18:00"
-  specific_date: "${tomorrow.toISOString().split('T')[0]}"
+"Remind me to call the dentist and schedule an appointment" →
+  title: "Call dentist and schedule an appointment"
+  reminder_interval: "2hours"
 
 Return JSON:
 {
-  "title": "Task title (2-8 words)",
-  "relative_minutes": number or null (for "in X minutes/hours" - convert hours to minutes),
+  "title": "complete task description",
+  "relative_minutes": number or null,
   "reminder_interval": "10min" | "20min" | "30min" | "1hour" | "2hours" | "daily" | "every_other_day" | "once" | null,
   "reminder_time": "HH:MM" or null,
   "specific_date": "YYYY-MM-DD" or null,
