@@ -275,9 +275,9 @@ Return JSON:
         file_url: uploadResult.file_url
       });
 
-      if (response?.success && response?.transcription) {
+      if (response?.data?.success && response?.data?.transcription) {
         // Use the common processing function for the transcription
-        await processAndCreateTask(response.transcription);
+        await processAndCreateTask(response.data.transcription);
         navigate(createPageUrl("Home"), { state: { reload: true } });
       } else {
         throw new Error('Failed to transcribe audio');
@@ -489,9 +489,9 @@ Return JSON:
                     ? 'opacity-60 animate-pulse'
                     : theme === 'minimalist'
                       ? 'bg-white border-gray-200 hover:border-gray-300'
-                      : theme === 'dark'
-                        ? 'bg-gray-900/50 border-gray-700 hover:border-gray-600'
-                        : 'bg-gradient-to-r from-purple-50/50 to-orange-50/50 border-purple-200 hover:border-purple-300'
+                        : theme === 'dark'
+                          ? 'bg-gray-900/50 border-gray-700 hover:border-gray-600'
+                          : 'bg-gradient-to-r from-purple-50/50 to-orange-50/50 border-purple-200 hover:border-purple-300'
                 }`}
               >
                 <div className="flex items-center justify-between">
