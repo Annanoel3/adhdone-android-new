@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Task } from "@/entities/Task";
 import { User } from "@/entities/User";
@@ -17,14 +16,11 @@ export default function AddTask() {
   const navigate = useNavigate();
   const [tasks, setTasks] = useState([]);
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
-  // Consolidated isSaving and isProcessingVoice into a single isProcessing state
   const [isProcessing, setIsProcessing] = useState(false);
   const [inputMode, setInputMode] = useState('voice');
   const [textInput, setTextInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState(null);
-
-  // State for optimistic UI
   const [optimisticTasks, setOptimisticTasks] = useState([]);
 
   React.useEffect(() => {
@@ -35,15 +31,14 @@ export default function AddTask() {
     return () => clearInterval(interval);
   }, []);
 
-  // Helper for optimistic UI updates
-  const createTaskOptimistically = (taskTitle: string, taskDetails = {}) => {
+  const createTaskOptimistically = (taskTitle, taskDetails = {}) => {
     const tempTask = {
       id: 'temp-' + Date.now(),
       title: taskTitle,
       status: 'active',
-      urgency: 'medium', // Default values
-      energy_required: 'medium', // Default values
-      isProcessing: true, // Marker for optimistic item
+      urgency: 'medium',
+      energy_required: 'medium',
+      isProcessing: true,
       created_date: new Date().toISOString(),
       ...taskDetails
     };
@@ -52,24 +47,19 @@ export default function AddTask() {
     return tempTask.id;
   };
 
-  const replaceOptimisticTask = (tempId: string, realTask: Task) => {
-    setOptimisticTasks(prev => prev.filter(t => t.id !== tempId));
-    // The `loadData()` call in the outline was likely referring to a parent component's data loading.
-    // Since AddTask navigates away, the `reload: true` state handled by the parent is sufficient.
-    // navigate(createPageUrl("Home"), { state: { reload: true } }); // Navigation will happen once after all processing
-  };
-
-  const removeOptimisticTask = (tempId: string) => {
+  const replaceOptimisticTask = (tempId, realTask) => {
     setOptimisticTasks(prev => prev.filter(t => t.id !== tempId));
   };
 
+  const removeOptimisticTask = (tempId) => {
+    setOptimisticTasks(prev => prev.filter(t => t.id !== tempId));
+  };
 
-  // Common logic for processing transcription/text and creating tasks
-  const processAndCreateTask = async (inputText: string) => {
+  const processAndCreateTask = async (inputText) => {
     if (!inputText.trim()) return;
 
     setIsProcessing(true);
-    const tempId = createTaskOptimistically(inputText); // Create optimistic entry
+    const tempId = createTaskOptimistically(inputText);
 
     try {
       const currentUser = await User.me();
@@ -78,7 +68,6 @@ export default function AddTask() {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      // LLM prompt updated as per outline for single task parsing
       const prompt = `Parse this task: "${inputText}"
 
 Context:
@@ -117,21 +106,20 @@ Return JSON:
         }
       });
 
-      // Calculate next_reminder based on parsed data
-      let nextReminder: Date | null = null;
-      let actualReminderInterval: string | null = parsed.reminder_interval || null;
+      let nextReminder = null;
+      let actualReminderInterval = parsed.reminder_interval || null;
 
       if (parsed.relative_minutes && parsed.relative_minutes > 0) {
         nextReminder = new Date(now.getTime() + parsed.relative_minutes * 60 * 1000);
-        actualReminderInterval = 'once'; // Relative time implies a one-time reminder
+        actualReminderInterval = 'once';
       } else if (parsed.reminder_time) {
         const [hours, minutes] = parsed.reminder_time.split(':');
         nextReminder = new Date();
         nextReminder.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
         if (nextReminder <= now) {
-          nextReminder.setDate(nextReminder.getDate() + 1); // If time has passed today, set for tomorrow
+          nextReminder.setDate(nextReminder.getDate() + 1);
         }
-        actualReminderInterval = actualReminderInterval || 'once'; // Specific time implies a one-time reminder unless recurring is specified
+        actualReminderInterval = actualReminderInterval || 'once';
       } else if (parsed.reminder_interval && parsed.reminder_interval !== 'once') {
         nextReminder = new Date(now.getTime());
         switch (parsed.reminder_interval) {
@@ -145,11 +133,10 @@ Return JSON:
             nextReminder.setHours(nextReminder.getHours() + 2);
             break;
           case 'daily':
-            nextReminder.setDate(nextReminder.getDate() + 1); // Set for next day
+            nextReminder.setDate(nextReminder.getDate() + 1);
             break;
         }
       } else if (!parsed.reminder_interval && !parsed.reminder_time && !parsed.relative_minutes) {
-        // Default reminder if no specific reminder information is found
         actualReminderInterval = '2hours';
         nextReminder = new Date();
         nextReminder.setHours(nextReminder.getHours() + 2);
@@ -157,7 +144,7 @@ Return JSON:
 
       const createdTask = await Task.create({
         title: parsed.title || inputText.trim(),
-        description: '', // The new prompt doesn't extract description
+        description: '',
         reminder_interval: actualReminderInterval,
         reminder_count: 0,
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
@@ -166,7 +153,7 @@ Return JSON:
         status: 'active'
       });
 
-      if (nextReminder) { // Schedule reminder if next_reminder is set
+      if (nextReminder) {
         try {
           await scheduleReminder({
             email: currentUser.email,
@@ -187,17 +174,14 @@ Return JSON:
       }
 
       replaceOptimisticTask(tempId, createdTask);
-      return true; // Indicate success
+      return true;
     } catch (error) {
       console.error("Error creating task:", error);
       removeOptimisticTask(tempId);
       alert("Failed to create task. Please try again.");
-      return false; // Indicate failure
-    } finally {
-      // The calling function will set setIsProcessing(false) and navigate
+      return false;
     }
   };
-
 
   const startVoiceRecording = async () => {
     try {
@@ -217,14 +201,14 @@ Return JSON:
         mimeType = 'audio/mp4';
       }
       if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/ogg;co_des=opus';
+        mimeType = 'audio/ogg;codecs=opus';
       }
 
       const recorder = new MediaRecorder(stream, {
         mimeType: mimeType,
         audioBitsPerSecond: 128000
       });
-      const chunks: BlobPart[] = [];
+      const chunks = [];
 
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) {
@@ -237,11 +221,11 @@ Return JSON:
         stream.getTracks().forEach(track => track.stop());
 
         if (audioBlob.size === 0) {
-          setIsProcessing(false); // Make sure processing state is reset
+          setIsProcessing(false);
           return;
         }
 
-        await handleVoiceTranscription(audioBlob); // Pass the blob to the handler
+        await handleVoiceTranscription(audioBlob);
       };
 
       recorder.start();
@@ -257,11 +241,11 @@ Return JSON:
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       mediaRecorder.stop();
       setIsRecording(false);
-      setIsProcessing(true); // Indicate processing has started after recording stops
+      setIsProcessing(true);
     }
   };
 
-  const handleVoiceTranscription = async (audioBlob: Blob) => {
+  const handleVoiceTranscription = async (audioBlob) => {
     try {
       const uploadResult = await base44.integrations.Core.UploadFile({
         file: audioBlob
@@ -276,7 +260,6 @@ Return JSON:
       });
 
       if (response?.data?.success && response?.data?.transcription) {
-        // Use the common processing function for the transcription
         await processAndCreateTask(response.data.transcription);
         navigate(createPageUrl("Home"), { state: { reload: true } });
       } else {
@@ -286,31 +269,29 @@ Return JSON:
       console.error("Voice processing error:", error);
       alert("Failed to process voice input");
     } finally {
-      setIsProcessing(false); // Reset processing state regardless of success/failure
+      setIsProcessing(false);
     }
   };
 
-  const handleTextSubmit = async (e: React.FormEvent) => {
+  const handleTextSubmit = async (e) => {
     e.preventDefault();
     if (!textInput.trim()) return;
 
     const success = await processAndCreateTask(textInput);
     if (success) {
-      setTextInput(''); // Clear input only on success
+      setTextInput('');
       navigate(createPageUrl("Home"), { state: { reload: true } });
     }
-    setIsProcessing(false); // Reset processing state regardless of success/failure
+    setIsProcessing(false);
   };
 
-  // The `getCardClasses` and `getUrgencyColor` functions are assumed to exist or need to be defined
-  // For now, I'll use inline styles/classes that match the rest of the file
   const getCardClasses = () => {
     if (theme === 'dark') return 'bg-gray-800 border-gray-700';
     if (theme === 'minimalist') return 'bg-white border-gray-200';
     return 'bg-gradient-to-br from-purple-50 via-white to-orange-50 border-purple-200';
   };
 
-  const getUrgencyColor = (urgency: string) => {
+  const getUrgencyColor = (urgency) => {
     switch (urgency) {
       case 'urgent': return 'bg-red-500 text-white';
       case 'high': return 'bg-orange-500 text-white';
@@ -320,11 +301,7 @@ Return JSON:
     }
   };
 
-  // Combine real tasks with optimistic tasks for display
-  // Note: 'tasks' state is not being populated in this component, assuming it comes from elsewhere or is always empty.
-  // We'll primarily show optimistic tasks here before navigation.
   const displayTasks = [...optimisticTasks, ...tasks.filter(t => t.status === 'active')];
-
 
   return (
     <div className="min-h-screen p-4 md:p-8" style={{
@@ -471,7 +448,6 @@ Return JSON:
         </Card>
       </div>
 
-      {/* Recent Tasks - Show optimistic tasks with loading indicator */}
       {displayTasks.length > 0 && (
         <Card className={`mt-8 border-none shadow-2xl overflow-hidden ${getCardClasses()}`}>
           <CardHeader>
@@ -489,9 +465,9 @@ Return JSON:
                     ? 'opacity-60 animate-pulse'
                     : theme === 'minimalist'
                       ? 'bg-white border-gray-200 hover:border-gray-300'
-                        : theme === 'dark'
-                          ? 'bg-gray-900/50 border-gray-700 hover:border-gray-600'
-                          : 'bg-gradient-to-r from-purple-50/50 to-orange-50/50 border-purple-200 hover:border-purple-300'
+                      : theme === 'dark'
+                        ? 'bg-gray-900/50 border-gray-700 hover:border-gray-600'
+                        : 'bg-gradient-to-r from-purple-50/50 to-orange-50/50 border-purple-200 hover:border-purple-300'
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -507,9 +483,9 @@ Return JSON:
                     {!task.isProcessing && (
                       <div className="flex flex-wrap gap-2">
                         {task.urgency && (
-                           <Badge className={getUrgencyColor(task.urgency)}>
-                             {task.urgency}
-                           </Badge>
+                          <Badge className={getUrgencyColor(task.urgency)}>
+                            {task.urgency}
+                          </Badge>
                         )}
                         {task.energy_required && (
                           <Badge variant="outline" className="flex items-center gap-1">
@@ -520,15 +496,6 @@ Return JSON:
                       </div>
                     )}
                   </div>
-                  {!task.isProcessing && (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => console.log('View details for task:', task.id)} // Placeholder for handleViewDetails
-                    >
-                      <Zap className="w-4 h-4" />
-                    </Button>
-                  )}
                 </div>
               </div>
             ))}
