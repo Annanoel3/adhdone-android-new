@@ -149,7 +149,8 @@ Return JSON:
         nextReminder.setHours(nextReminder.getHours() + 2);
       }
 
-      const createdTask = await Task.create({
+      // Create task in background - don't wait
+      Task.create({
         title: parsed.title || inputText.trim(),
         description: '',
         reminder_interval: actualReminderInterval,
@@ -158,11 +159,9 @@ Return JSON:
         urgency: parsed.urgency || 'medium',
         energy_required: parsed.energy_required || 'medium',
         status: 'active'
-      });
-
-      if (nextReminder) {
-        try {
-          await scheduleReminder({
+      }).then(createdTask => {
+        if (nextReminder) {
+          scheduleReminder({
             email: currentUser.email,
             title: "Task Reminder 📋",
             body: createdTask.title,
@@ -174,18 +173,28 @@ Return JSON:
               urgency: createdTask.urgency,
               type: 'task_reminder'
             }
+          }).catch(error => {
+            console.error("Failed to schedule reminder:", error);
           });
-        } catch (error) {
-          console.error("Failed to schedule reminder:", error);
         }
-      }
+        
+        replaceOptimisticTask(tempId, createdTask);
+      }).catch(error => {
+        console.error("Error creating task:", error);
+        removeOptimisticTask(tempId);
+      });
 
-      replaceOptimisticTask(tempId, createdTask);
+      // Navigate immediately without waiting
+      setTimeout(() => {
+        navigate(createPageUrl("Home"), { state: { reload: true } });
+      }, 500);
+      
       return true;
     } catch (error) {
       console.error("Error creating task:", error);
       removeOptimisticTask(tempId);
       alert("Failed to create task. Please try again.");
+      setIsProcessing(false);
       return false;
     }
   };
@@ -254,6 +263,7 @@ Return JSON:
 
   const handleVoiceTranscription = async (audioBlob) => {
     try {
+      // CRITICAL FIX: Convert Blob to File object with proper name and extension
       const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, {
         type: audioBlob.type
       });
@@ -282,14 +292,12 @@ Return JSON:
 
       if (response?.data?.success && response?.data?.transcription) {
         await processAndCreateTask(response.data.transcription);
-        navigate(createPageUrl("Home"), { state: { reload: true } });
       } else {
         throw new Error('Failed to transcribe audio');
       }
     } catch (error) {
       console.error("Voice processing error:", error);
       alert("Failed to process voice input. Please try again.");
-    } finally {
       setIsProcessing(false);
     }
   };
@@ -298,12 +306,8 @@ Return JSON:
     e.preventDefault();
     if (!textInput.trim()) return;
 
-    const success = await processAndCreateTask(textInput);
-    if (success) {
-      setTextInput('');
-      navigate(createPageUrl("Home"), { state: { reload: true } });
-    }
-    setIsProcessing(false);
+    await processAndCreateTask(textInput);
+    setTextInput('');
   };
 
   const getCardClasses = () => {

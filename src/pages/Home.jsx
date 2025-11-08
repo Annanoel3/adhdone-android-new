@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
@@ -86,6 +87,20 @@ export default function Home() {
     }
   };
 
+  const handleTaskUpdate = async (updatedTask) => {
+    // Optimistically update the task in state
+    setTasks(prevTasks => 
+      prevTasks.map(t => 
+        t.id === updatedTask.id ? { ...t, ...updatedTask } : t
+      )
+    );
+    
+    // If the selected task is being viewed, update it too
+    if (selectedTask && selectedTask.id === updatedTask.id) {
+      setSelectedTask({ ...selectedTask, ...updatedTask });
+    }
+  };
+
   const handleViewDetails = (task) => {
     setSelectedTask(task);
     setIsModalOpen(true);
@@ -152,7 +167,15 @@ export default function Home() {
             setIsModalOpen(false);
             setSelectedTask(null);
           }}
-          onUpdate={loadData}
+          onUpdate={handleTaskUpdate}
+          onDelete={() => {
+            // Remove deleted task from state
+            if (selectedTask) {
+              setTasks(prevTasks => prevTasks.filter(t => t.id !== selectedTask.id));
+            }
+            setIsModalOpen(false);
+            setSelectedTask(null);
+          }}
           theme={theme}
         />
       </div>

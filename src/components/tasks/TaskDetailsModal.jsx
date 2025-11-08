@@ -48,7 +48,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, theme }) {
+export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete, theme }) {
   const [subTasks, setSubTasks] = useState([]);
   const [newSubTask, setNewSubTask] = useState("");
   const [showDecomposition, setShowDecomposition] = useState(false);
@@ -265,23 +265,6 @@ Return JSON:
     onUpdate();
   };
 
-  const handleComplete = async () => {
-    await Task.update(task.id, { status: 'completed' });
-    onUpdate();
-    onClose();
-  };
-
-  const handleDelete = async () => {
-    if (confirm(`Delete "${task.title}" and all its sub-tasks?`)) {
-      for (const subTask of subTasks) {
-        await Task.delete(subTask.id);
-      }
-      await Task.delete(task.id);
-      onUpdate();
-      onClose();
-    }
-  };
-
   const handleUndoDecomposition = async () => {
     if (!previousSubTasks || !task) return;
 
@@ -299,24 +282,30 @@ Return JSON:
   };
 
   const handleSaveTitle = async () => {
-    if (!editedTitle.trim()) {
-      setEditedTitle(task.title);
+    if (!editedTitle.trim() || !task) {
+      setEditedTitle(task?.title || '');
       setIsEditingTitle(false);
       return;
     }
 
+    setIsUpdating(true);
     try {
-      await Task.update(task.id, { title: editedTitle.trim() });
-      onUpdate();
+      // Update in background
+      Task.update(task.id, { title: editedTitle.trim() }).catch(error => {
+        console.error("Error updating task title:", error);
+      });
+      
+      // Optimistically update parent immediately
+      onUpdate({ ...task, title: editedTitle.trim() });
       setIsEditingTitle(false);
-    } catch (error) {
-      console.error("Error updating task title:", error);
-      setEditedTitle(task.title);
-      setIsEditingTitle(false);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
   const handleUpdateField = async (field, value) => {
+    if (!task) return;
+    
     setIsUpdating(true);
     try {
       const updates = { [field]: value };
@@ -356,7 +345,7 @@ Return JSON:
         
         updates.next_reminder = nextReminder ? nextReminder.toISOString() : null;
         
-        // CRITICAL FIX: Schedule the new recurring reminder
+        // Schedule the new recurring reminder
         if (nextReminder && value !== 'once') {
           try {
             const currentUser = await User.me();
@@ -379,23 +368,27 @@ Return JSON:
         }
       }
       
-      await Task.update(task.id, updates);
-      await onUpdate();
-    } catch (error) {
-      console.error(`Error updating ${field}:`, error);
+      // Update in background
+      Task.update(task.id, updates).catch(error => {
+        console.error(`Error updating ${field}:`, error);
+      });
+      
+      // Optimistically update parent immediately
+      onUpdate({ ...task, ...updates });
     } finally {
       setIsUpdating(false);
     }
   };
 
   const handleUpdateReminderTime = async (newTime) => {
+    if (!task) return;
+    
     setIsUpdating(true);
     try {
       const [hours, minutes] = newTime.split(':');
       const nextReminder = new Date();
       nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
       
-      // CRITICAL FIX: If the time is in the past today, set it for tomorrow
       const now = new Date();
       if (nextReminder <= now) {
         nextReminder.setDate(nextReminder.getDate() + 1);
@@ -403,7 +396,7 @@ Return JSON:
 
       console.log(`🕐 [REMINDER TIME] Setting reminder for ${nextReminder.toLocaleString()} (${nextReminder.toISOString()})`);
 
-      // CRITICAL FIX: Reschedule the notification
+      // Reschedule the notification
       try {
         const currentUser = await User.me();
         await scheduleReminder({
@@ -423,10 +416,63 @@ Return JSON:
         console.error("Failed to schedule reminder:", error);
       }
 
-      await Task.update(task.id, { next_reminder: nextReminder.toISOString() });
-      await onUpdate();
-    } catch (error) {
-      console.error("Error updating reminder time:", error);
+      // Update in background
+      Task.update(task.id, { next_reminder: nextReminder.toISOString() }).catch(error => {
+        console.error("Error updating reminder time:", error);
+      });
+      
+      // Optimistically update parent immediately
+      onUpdate({ ...task, next_reminder: nextReminder.toISOString() });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleComplete = async () => {
+    if (!task) return;
+    
+    setIsUpdating(true);
+    try {
+      // Update in background
+      Task.update(task.id, { 
+        status: 'completed',
+        completed_at: new Date().toISOString()
+      }).catch(error => {
+        console.error("Error completing task:", error);
+      });
+      
+      // Optimistically update parent immediately
+      onUpdate({ 
+        ...task, 
+        status: 'completed',
+        completed_at: new Date().toISOString()
+      });
+      
+      onClose();
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!task || !confirm(`Delete "${task.title}" and all its sub-tasks?`)) return;
+    
+    setIsUpdating(true);
+    try {
+      // Delete in background
+      for (const subTask of subTasks) {
+        Task.delete(subTask.id).catch(error => {
+          console.error("Error deleting subtask:", error);
+        });
+      }
+      Task.delete(task.id).catch(error => {
+        console.error("Error deleting task:", error);
+      });
+      
+      // Notify parent immediately
+      if (onDelete) {
+        onDelete();
+      }
     } finally {
       setIsUpdating(false);
     }
@@ -479,7 +525,7 @@ Return JSON:
             <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-50 rounded-lg">
               <div className="flex flex-col items-center gap-3">
                 <div className="w-8 h-8 border-4 border-gray-300 border-t-purple-600 rounded-full animate-spin"></div>
-                <p className="text-sm font-medium text-gray-700">Updating task...</p>
+                <p className="text-sm font-medium text-gray-700">Updating...</p>
               </div>
             </div>
           )}
