@@ -729,31 +729,86 @@ Return JSON:
                 </div>
               )}
 
+              {/* UPDATED: Show manual input and AI suggestion together when no subtasks */}
               {subTasks.length === 0 && (
-                <div className={`p-4 rounded-lg border-2 border-dashed text-center ${
-                  theme === 'minimalist'
-                    ? 'border-purple-200 bg-purple-50/30'
-                    : theme === 'dark'
-                      ? 'border-purple-800 bg-purple-900/20'
-                      : 'border-purple-300 bg-purple-100/30'
-                }`}>
-                  <Sparkles className="w-8 h-8 mx-auto mb-2 text-purple-600" />
-                  <p className="text-sm text-gray-700 mb-3">
-                    If this task feels overwhelming, let AI break it down!
-                  </p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setPreviousSubTasks(subTasks);
-                      setHasDecomposedSuccessfully(false);
-                      setShowDecomposition(true);
-                    }}
-                    className="border-purple-300 hover:bg-purple-50"
-                  >
-                    <Sparkles className="w-4 h-4 mr-2" />
-                    AI Break Down Task
-                  </Button>
+                <div className="space-y-4">
+                  <div className={`p-4 rounded-lg border-2 border-dashed text-center ${
+                    theme === 'minimalist'
+                      ? 'border-purple-200 bg-purple-50/30'
+                      : theme === 'dark'
+                        ? 'border-purple-800 bg-purple-900/20'
+                        : 'border-purple-300 bg-purple-100/30'
+                  }`}>
+                    <Sparkles className="w-8 h-8 mx-auto mb-2 text-purple-600" />
+                    <p className="text-sm text-gray-700 mb-3">
+                      If this task feels overwhelming, let AI break it down!
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setPreviousSubTasks(subTasks);
+                        setHasDecomposedSuccessfully(false);
+                        setShowDecomposition(true);
+                      }}
+                      className="border-purple-300 hover:bg-purple-50"
+                    >
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      AI Break Down Task
+                    </Button>
+                  </div>
+
+                  {/* Manual subtask input - now always visible */}
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Or add subtasks manually:</h4>
+                    <div className="flex gap-2 mb-2">
+                      <Button
+                        variant={subtaskInputMode === 'text' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setSubtaskInputMode('text')}
+                        className="flex-1"
+                      >
+                        <Keyboard className="w-3 h-3 mr-1" />
+                        Type
+                      </Button>
+                      <Button
+                        variant={subtaskInputMode === 'voice' ? 'default' : 'ghost'}
+                        size="sm"
+                        onClick={() => setSubtaskInputMode('voice')}
+                        className="flex-1"
+                      >
+                        <Mic className="w-3 h-3 mr-1" />
+                        Voice
+                      </Button>
+                    </div>
+
+                    {subtaskInputMode === 'text' ? (
+                      <form onSubmit={handleAddSubTask} className="flex gap-2">
+                        <Input
+                          value={newSubTask}
+                          onChange={(e) => setNewSubTask(e.target.value)}
+                          placeholder="Add a new sub-task..."
+                          className="flex-1"
+                        />
+                        <Button type="submit" size="icon" className="flex-shrink-0">
+                          <Plus className="w-4 h-4" />
+                        </Button>
+                      </form>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <p className="text-xs text-gray-500 text-center">
+                          {isProcessingVoice ? "Processing..." : "Speak your subtasks (you can say multiple at once)"}
+                        </p>
+                        <div className="flex justify-center">
+                          <VoiceTaskInput
+                            onTranscription={handleVoiceSubtask}
+                            theme={theme}
+                            inline={false}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 
