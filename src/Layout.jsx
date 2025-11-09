@@ -606,7 +606,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 <Link to={createPageUrl("Home")} onClick={handleNavClick}>
                   <div>
                     <h2 className={`font-bold text-lg ${
-                      theme === 'dark' ? 'text-white' : theme === 'spicybrains' ? 'text-gray-900 drop-shadow-[0_2px_2px_rgba(255,255,0,0.8)]' : 'text-gray-900'
+                      theme === 'dark' ? 'text-white' : theme === 'spicybrains' ? 'text-gray-900' : 'text-gray-900'
                     }`}>{user?.full_name || 'ADHDone'}</h2>
                     <p className={`text-xs ${
                       theme === 'dark' ? 'text-gray-400' : theme === 'spicybrains' ? 'text-gray-800 font-medium' : 'text-gray-500'
@@ -907,7 +907,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                       : theme === 'dark'
                         ? 'text-white'
                         : theme === 'spicybrains'
-                          ? 'text-gray-900 drop-shadow-[0_2px_2px_rgba(255,255,0,0.8)]'
+                          ? 'text-gray-900'
                           : 'text-gray-900'
                   }`}>ADHDone</h1>
                 </div>
