@@ -137,6 +137,15 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 
   useEffect(() => {
     const checkEnergyCheckIn = () => {
+      const now = new Date();
+      const currentHour = now.getHours();
+      
+      // CRITICAL: Only check-in between 8 AM and 8 PM
+      if (currentHour < 8 || currentHour >= 20) {
+        console.log('⏰ [ENERGY CHECK-IN] Outside allowed hours (8 AM - 8 PM)');
+        return;
+      }
+
       const today = new Date().toISOString().split('T')[0];
       const lastCheckInDate = localStorage.getItem('last_energy_checkin_date');
       const checkInCount = parseInt(localStorage.getItem('energy_checkin_count') || '0');
@@ -151,16 +160,16 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       }
 
       const lastCheckIn = localStorage.getItem('last_energy_checkin_time');
-      const now = new Date().getTime();
+      const nowTime = new Date().getTime();
       const fourHours = 4 * 60 * 60 * 1000;
 
-      if (lastCheckIn && now - parseInt(lastCheckIn) < fourHours) {
+      if (lastCheckIn && nowTime - parseInt(lastCheckIn) < fourHours) {
         return;
       }
 
       setTimeout(() => {
         setShowEnergyCheckIn(true);
-        localStorage.setItem('last_energy_checkin_time', now.toString());
+        localStorage.setItem('last_energy_checkin_time', nowTime.toString());
         localStorage.setItem('energy_checkin_count', (checkInCount + 1).toString());
       }, 5 * 60 * 1000);
     };
