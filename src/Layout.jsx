@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -516,7 +515,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                                     ? 'bg-gradient-to-br from-green-500 to-emerald-600'
                                     : 'bg-gradient-to-br from-green-500 to-emerald-600'
                         }`}>
-                            A
+                            {user?.full_name?.charAt(0)?.toUpperCase() || 'A'}
                         </div>
                     </Link>
                 )}
@@ -524,7 +523,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                   <div>
                     <h2 className={`font-bold text-lg ${
                       theme === 'dark' ? 'text-white' : 'text-gray-900'
-                    }`}>ADHDone</h2>
+                    }`}>{user?.full_name || 'ADHDone'}</h2>
                     <p className={`text-xs ${
                       theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
                     }`}>You've got this</p>
@@ -795,7 +794,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                       : theme === 'dark'
                         ? 'text-white'
                         : 'text-gray-900'
-                  }`}>ADHDone</h1>
+                  }`}>{user?.full_name || 'ADHDone'}</h1>
                 </div>
               </div>
             </header>
