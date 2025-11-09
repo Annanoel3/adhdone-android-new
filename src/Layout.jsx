@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -794,7 +795,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                       : theme === 'dark'
                         ? 'text-white'
                         : 'text-gray-900'
-                  }`}>{user?.full_name || 'ADHDone'}</h1>
+                  }`}>ADHDone</h1>
                 </div>
               </div>
             </header>
