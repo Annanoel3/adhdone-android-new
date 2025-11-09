@@ -886,31 +886,29 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               paddingTop: 'calc(2rem + env(safe-area-inset-top, 0px))',
               paddingBottom: '1rem'
             }}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <SidebarTrigger asChild>
-                    <Button variant="ghost" className={`p-2 rounded-xl transition-colors duration-200 ${
-                      isSeasonalTheme()
-                        ? 'hover:bg-white/50 text-gray-800'
-                        : theme === 'dark'
-                          ? 'hover:bg-gray-800 text-white'
-                          : theme === 'spicybrains'
-                            ? 'hover:bg-yellow-300 text-gray-900'
-                            : 'hover:bg-gray-100'
-                    }`}>
-                      <LayoutDashboard className="w-5 h-5" />
-                    </Button>
-                  </SidebarTrigger>
-                  <h1 className={`text-xl font-bold ${
+              <div className="flex items-center gap-4">
+                <SidebarTrigger asChild>
+                  <Button variant="ghost" className={`p-2 rounded-xl transition-colors duration-200 ${
                     isSeasonalTheme()
-                      ? 'text-gray-900'
+                      ? 'hover:bg-white/50 text-gray-800'
                       : theme === 'dark'
-                        ? 'text-white'
+                        ? 'hover:bg-gray-800 text-white'
                         : theme === 'spicybrains'
-                          ? 'text-gray-900'
-                          : 'text-gray-900'
-                  }`}>ADHDone</h1>
-                </div>
+                          ? 'hover:bg-yellow-300 text-gray-900'
+                          : 'hover:bg-gray-100'
+                  }`}>
+                    <LayoutDashboard className="w-5 h-5" />
+                  </Button>
+                </SidebarTrigger>
+                <h1 className={`text-xl font-bold ${
+                  isSeasonalTheme()
+                    ? 'text-gray-900'
+                    : theme === 'dark'
+                      ? 'text-white'
+                      : theme === 'spicybrains'
+                        ? 'text-gray-900'
+                        : 'text-gray-900'
+                }`}>ADHDone</h1>
               </div>
             </header>
 
@@ -1056,17 +1054,16 @@ export default function Layout({ children, currentPageName }) {
         setUser(currentUser);
       }
 
-      // Trial Warning/Ending logic
+      // Trial Warning/Ending logic - 7 DAY TRIAL
       if (currentUser.trial_start_date && !currentUser.has_paid) {
         const trialStart = new Date(currentUser.trial_start_date);
         const today = new Date();
         const daysDiff = Math.floor((today - trialStart) / (1000 * 60 * 60 * 24));
 
-        if (daysDiff >= 3 && location.pathname !== createPageUrl("TrialEnded")) {
+        // End trial after 7 days
+        if (daysDiff >= 7 && location.pathname !== createPageUrl("TrialEnded")) {
           navigate(createPageUrl("TrialEnded"));
         }
-        // Removed `else if (daysDiff === 2) { setShowTrialWarning(true); }` as per outline,
-        // assuming trial warning display is managed within LayoutContent if needed.
       }
 
       setAuthCheckComplete(true);
