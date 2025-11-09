@@ -323,6 +323,7 @@ Return JSON:
   const getCardClasses = () => {
     if (theme === 'dark') return 'bg-gray-800 border-gray-700';
     if (theme === 'minimalist') return 'bg-white border-gray-200';
+    if (theme === 'spicybrains') return 'bg-gradient-to-br from-red-100 via-orange-100 to-yellow-100 border-red-200';
     return 'bg-gradient-to-br from-purple-50 via-white to-orange-50 border-purple-200';
   };
 
@@ -339,7 +340,11 @@ Return JSON:
   const displayTasks = [...optimisticTasks, ...tasks.filter(t => t.status === 'active')];
 
   return (
-    <div className="min-h-screen p-4 md:p-8" style={{
+    <div className={`min-h-screen p-4 md:p-8 ${
+      theme === 'spicybrains' 
+        ? 'bg-gradient-to-br from-red-300 via-orange-300 to-yellow-400' 
+        : ''
+    }`} style={{
       paddingTop: 'max(1rem, calc(1rem + env(safe-area-inset-top)))',
       paddingBottom: 'max(8rem, calc(8rem + env(safe-area-inset-bottom)))'
     }}>
@@ -358,7 +363,9 @@ Return JSON:
             ? 'bg-gray-800'
             : theme === 'minimalist'
               ? 'bg-white'
-              : 'bg-gradient-to-br from-purple-50 via-white to-orange-50'
+              : theme === 'spicybrains'
+                ? 'bg-gradient-to-br from-red-100 via-orange-100 to-yellow-100'
+                : 'bg-gradient-to-br from-purple-50 via-white to-orange-50'
         }`}>
           <CardContent className="p-8 md:p-12">
             <div className="flex justify-center gap-3 mb-8">
@@ -368,9 +375,11 @@ Return JSON:
                 className={`px-6 h-12 ${
                   inputMode === 'voice' && theme === 'minimalist'
                     ? 'bg-green-600 hover:bg-green-700'
-                    : inputMode === 'voice' && theme !== 'dark'
-                      ? 'bg-gradient-to-r from-purple-600 to-orange-600'
-                      : ''
+                    : inputMode === 'voice' && theme === 'spicybrains'
+                      ? 'bg-gradient-to-r from-red-600 to-yellow-600'
+                      : inputMode === 'voice' && theme !== 'dark'
+                        ? 'bg-gradient-to-r from-purple-600 to-orange-600'
+                        : ''
                 }`}
               >
                 <Mic className="w-5 h-5 mr-2" />
@@ -382,9 +391,11 @@ Return JSON:
                 className={`px-6 h-12 ${
                   inputMode === 'text' && theme === 'minimalist'
                     ? 'bg-green-600 hover:bg-green-700'
-                    : inputMode === 'text' && theme !== 'dark'
-                      ? 'bg-gradient-to-r from-purple-600 to-orange-600'
-                      : ''
+                    : inputMode === 'text' && theme === 'spicybrains'
+                      ? 'bg-gradient-to-r from-red-600 to-yellow-600'
+                      : inputMode === 'text' && theme !== 'dark'
+                        ? 'bg-gradient-to-r from-purple-600 to-orange-600'
+                        : ''
                 }`}
               >
                 Type
@@ -403,10 +414,12 @@ Return JSON:
                   <div className={`w-32 h-32 rounded-full flex items-center justify-center ${
                     theme === 'minimalist'
                       ? 'bg-purple-100'
-                      : 'bg-gradient-to-br from-purple-100 to-pink-100'
+                      : theme === 'spicybrains'
+                        ? 'bg-gradient-to-br from-red-200 to-yellow-200'
+                        : 'bg-gradient-to-br from-purple-100 to-pink-100'
                   }`}>
                     <Sparkles className={`w-16 h-16 ${
-                      theme === 'minimalist' ? 'text-purple-600' : 'text-purple-700'
+                      theme === 'minimalist' ? 'text-purple-600' : theme === 'spicybrains' ? 'text-orange-700' : 'text-purple-700'
                     }`} />
                   </div>
                   <div className="text-center space-y-3 max-w-md">
@@ -430,7 +443,9 @@ Return JSON:
                           ? 'bg-gray-400'
                           : theme === 'minimalist'
                             ? 'bg-purple-600 hover:bg-purple-700 hover:scale-110'
-                            : 'bg-gradient-to-br from-purple-600 to-pink-600 hover:scale-110'
+                            : theme === 'spicybrains'
+                              ? 'bg-gradient-to-br from-red-600 to-yellow-600 hover:scale-110'
+                              : 'bg-gradient-to-br from-purple-600 to-pink-600 hover:scale-110'
                     } shadow-2xl`}
                   >
                     <Mic className="w-16 h-16 text-white" />
@@ -469,7 +484,9 @@ Return JSON:
                         className={`h-14 px-8 ${
                           theme === 'minimalist'
                             ? 'bg-green-600 hover:bg-green-700'
-                            : 'bg-gradient-to-r from-purple-600 to-orange-600'
+                            : theme === 'spicybrains'
+                              ? 'bg-gradient-to-r from-red-600 to-yellow-600'
+                              : 'bg-gradient-to-r from-purple-600 to-orange-600'
                         }`}
                       >
                         {isProcessing ? 'Adding...' : 'Add'}
@@ -502,7 +519,9 @@ Return JSON:
                       ? 'bg-white border-gray-200 hover:border-gray-300'
                       : theme === 'dark'
                         ? 'bg-gray-900/50 border-gray-700 hover:border-gray-600'
-                        : 'bg-gradient-to-r from-purple-50/50 to-orange-50/50 border-purple-200 hover:border-purple-300'
+                        : theme === 'spicybrains'
+                          ? 'bg-gradient-to-r from-red-50/50 to-yellow-50/50 border-red-200 hover:border-red-300'
+                          : 'bg-gradient-to-r from-purple-50/50 to-orange-50/50 border-purple-200 hover:border-purple-300'
                 }`}
               >
                 <div className="flex items-center justify-between">
