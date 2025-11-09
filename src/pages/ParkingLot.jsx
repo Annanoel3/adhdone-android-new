@@ -357,13 +357,7 @@ Return ONLY the category name, nothing else.`;
   };
 
   return (
-    <div className={`min-h-screen p-4 md:p-8 max-w-6xl mx-auto ${
-      theme === 'spicybrains' 
-        ? 'bg-gradient-to-br from-yellow-300 via-purple-300 to-yellow-400' 
-        : theme === 'dark' 
-          ? 'bg-gray-900' 
-          : ''
-    }`} style={{ paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
+    <div style={{ paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className={`text-3xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
@@ -442,8 +436,8 @@ Return ONLY the category name, nothing else.`;
                   queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
                   setTextInput("");
                   setShowQuickAdd(false);
-                  setIsRecording(false); // Ensure recording state is reset
-                  setMicrophoneAccessGranted(null); // Reset mic access state
+                  setIsRecording(false);
+                  setMicrophoneAccessGranted(null);
                 }}
                 disabled={!textInput.trim()}
                 className={`flex-1 ${theme === 'minimalist'
@@ -458,8 +452,8 @@ Return ONLY the category name, nothing else.`;
                 onClick={() => {
                   setTextInput("");
                   setShowQuickAdd(false);
-                  setIsRecording(false); // Ensure recording state is reset
-                  setMicrophoneAccessGranted(null); // Reset mic access state
+                  setIsRecording(false);
+                  setMicrophoneAccessGranted(null);
                 }}
                 variant="outline"
               >
