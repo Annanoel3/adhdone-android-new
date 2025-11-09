@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
@@ -144,7 +145,7 @@ export default function Home() {
   const activeTasks = tasks.filter(t => t.status === 'active');
 
   return (
-    <div className="p-4 md:p-8 w-full">
+    <div className={`p-4 md:p-8 w-full ${theme === 'spicybrains' ? 'spicybrains-bg' : ''}`}>
       <div className="max-w-7xl mx-auto">
         <MomentumCelebration 
           completedCount={todayCompleted.length}

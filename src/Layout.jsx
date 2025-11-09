@@ -78,6 +78,13 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 import EasterEggVideo from "./components/shared/EasterEggVideo";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   const location = useLocation();
@@ -96,6 +103,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     return stored || 'normal';
   });
   const [showAppGuide, setShowAppGuide] = useState(false);
+  const [showSpicyBrainsExplanation, setShowSpicyBrainsExplanation] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('adhd_theme', theme);
@@ -189,9 +197,27 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     }
 
     setTheme(prev => {
-      if (prev === 'minimalist') return 'dark';
-      if (prev === 'dark') return 'colorful';
-      return 'minimalist';
+      let nextTheme;
+      if (prev === 'minimalist') {
+        nextTheme = 'dark';
+      } else if (prev === 'dark') {
+        nextTheme = 'colorful';
+      } else if (prev === 'colorful') {
+        nextTheme = 'spicybrains';
+      } else {
+        nextTheme = 'minimalist';
+      }
+
+      if (nextTheme === 'spicybrains') {
+        const hasSeenExplanation = localStorage.getItem('spicybrains_explanation_seen');
+        if (!hasSeenExplanation) {
+          setTimeout(() => {
+            setShowSpicyBrainsExplanation(true);
+            localStorage.setItem('spicybrains_explanation_seen', 'true');
+          }, 500); // Small delay to allow theme to visually change
+        }
+      }
+      return nextTheme;
     });
   };
 
@@ -234,6 +260,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   const getBackgroundClass = () => {
     if (theme === 'dark') return 'bg-[#0a0a0b]';
     if (theme === 'minimalist') return 'bg-gradient-to-br from-stone-50 via-sage-50 to-stone-100';
+    if (theme === 'spicybrains') return 'bg-gradient-to-br from-pink-400 via-purple-500 to-cyan-400';
     return 'bg-gradient-to-br from-purple-50 via-orange-50 to-teal-50';
   };
 
@@ -443,6 +470,47 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               --input: 17 20% 12%;
               --ring: 142 76% 45%;
             }
+          ` : !isSeasonalTheme() && theme === 'spicybrains' ? `
+            :root {
+              --primary: 330 100% 50%;
+              --primary-foreground: 0 0% 100%;
+              --secondary: 280 100% 70%;
+              --accent: 180 100% 50%;
+              --muted: 60 100% 75%;
+              --card: 0 0% 100%;
+              --card-foreground: 0 0% 9%;
+              --background: 330 100% 98%;
+              --foreground: 0 0% 9%;
+              --border: 330 100% 80%;
+              --input: 0 0% 9%;
+              --ring: 330 100% 50%;
+            }
+
+            /* 80s Spicy Brains Theme */
+            .spicybrains-card {
+              background: linear-gradient(135deg, #ff6b9d 0%, #c06bff 50%, #6bc5ff 100%) !important;
+              border: 3px solid #ffff00 !important;
+              box-shadow: 0 8px 32px rgba(255, 0, 255, 0.3) !important;
+            }
+
+            .spicybrains-text {
+              color: #000000 !important;
+              text-shadow: 2px 2px 0px #ffff00, -2px -2px 0px #ff00ff;
+            }
+
+            .spicybrains-button {
+              background: linear-gradient(45deg, #ff0080, #ff8c00, #40e0d0) !important;
+              border: 2px solid #ffff00 !important;
+              box-shadow: 0 4px 15px rgba(255, 0, 128, 0.4) !important;
+              font-weight: bold !important;
+              text-transform: uppercase !important;
+              letter-spacing: 1px !important;
+            }
+
+            .spicybrains-input {
+              border: 3px solid #ff00ff !important;
+              background: linear-gradient(to right, #fff9c4, #ffecb3) !important;
+            }
           ` : !isSeasonalTheme() ? `
             :root {
               --primary: 271 91% 65%;
@@ -493,14 +561,18 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               ? 'bg-white/70 backdrop-blur-md border-white/30'
               : theme === 'dark'
                 ? 'bg-gray-900 border-gray-800'
-                : 'border-gray-200/50 backdrop-blur-sm bg-white/80'
+                : theme === 'spicybrains'
+                  ? 'bg-gradient-to-br from-pink-300 via-purple-300 to-cyan-300 border-yellow-400'
+                  : 'border-gray-200/50 backdrop-blur-sm bg-white/80'
           }`}>
             <SidebarHeader className={`${
               isSeasonalTheme()
                 ? 'border-0'
                 : theme === 'dark'
                   ? 'bg-gray-900 border-0'
-                  : 'border-0'
+                  : theme === 'spicybrains'
+                    ? 'bg-gradient-to-r from-pink-400 to-purple-400 border-0'
+                    : 'border-0'
             }`} style={{
               paddingTop: 'max(2rem, calc(2rem + env(safe-area-inset-top)))',
               paddingLeft: '1.5rem',
@@ -523,7 +595,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                                 ? 'bg-gradient-to-br from-green-600 to-green-700'
                                 : theme === 'dark'
                                     ? 'bg-gradient-to-br from-green-500 to-emerald-600'
-                                    : 'bg-gradient-to-br from-green-500 to-emerald-600'
+                                    : theme === 'spicybrains'
+                                      ? 'bg-gradient-to-br from-pink-500 to-yellow-500 border-2 border-cyan-400'
+                                      : 'bg-gradient-to-br from-green-500 to-emerald-600'
                         }`}>
                             {user?.full_name?.charAt(0)?.toUpperCase() || 'A'}
                         </div>
@@ -532,10 +606,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 <Link to={createPageUrl("Home")} onClick={handleNavClick}>
                   <div>
                     <h2 className={`font-bold text-lg ${
-                      theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      theme === 'dark' ? 'text-white' : theme === 'spicybrains' ? 'text-gray-900 drop-shadow-[0_2px_2px_rgba(255,255,0,0.8)]' : 'text-gray-900'
                     }`}>{user?.full_name || 'ADHDone'}</h2>
                     <p className={`text-xs ${
-                      theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                      theme === 'dark' ? 'text-gray-400' : theme === 'spicybrains' ? 'text-gray-800 font-medium' : 'text-gray-500'
                     }`}>You've got this</p>
                   </div>
                 </Link>
@@ -543,7 +617,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             </SidebarHeader>
 
             <SidebarContent className={`${
-              theme === 'dark' ? 'bg-gray-900' : ''
+              theme === 'dark' ? 'bg-gray-900' : theme === 'spicybrains' ? 'bg-gradient-to-br from-pink-200 via-purple-200 to-cyan-200' : ''
             }`} style={{
               paddingTop: '2.5rem',
               paddingBottom: '2.5rem',
@@ -572,7 +646,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                                       ? 'hover:bg-white/50 text-gray-800'
                                       : theme === 'dark'
                                         ? 'hover:bg-gray-800 text-gray-300 hover:text-white'
-                                        : 'hover:bg-gray-50 text-gray-700'
+                                        : theme === 'spicybrains'
+                                          ? 'hover:bg-gradient-to-r hover:from-yellow-300 hover:to-pink-300 text-gray-900 font-medium'
+                                          : 'hover:bg-gray-50 text-gray-700'
                                   }`}
                                 >
                                   <div className="flex items-center gap-3 py-3 w-full">
@@ -599,12 +675,16 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                                             ? 'bg-green-50 text-green-700 font-medium'
                                             : theme === 'dark'
                                               ? 'bg-gray-800 text-white font-medium'
-                                              : 'bg-gradient-to-r from-purple-100 to-orange-100 text-purple-700 font-medium'
+                                              : theme === 'spicybrains'
+                                                ? 'bg-gradient-to-r from-pink-400 to-yellow-300 text-gray-900 font-bold border-2 border-cyan-400'
+                                                : 'bg-gradient-to-r from-purple-100 to-orange-100 text-purple-700 font-medium'
                                         : isSeasonalTheme()
                                           ? 'hover:bg-white/40 text-gray-700'
                                           : theme === 'dark'
                                             ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
-                                            : 'hover:bg-gray-50 text-gray-600'
+                                            : theme === 'spicybrains'
+                                              ? 'hover:bg-gradient-to-r hover:from-yellow-200 hover:to-pink-200 text-gray-800'
+                                              : 'hover:bg-gray-50 text-gray-600'
                                     }`}
                                   >
                                     <Link to={subItem.url} onClick={handleNavClick} className="flex items-center gap-3 px-4 py-2 relative">
@@ -636,12 +716,16 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                                       ? 'bg-green-50 text-green-700 font-medium'
                                       : theme === 'dark'
                                         ? 'bg-gray-800 text-white font-medium'
-                                      : 'bg-gradient-to-r from-purple-100 to-orange-100 text-purple-700 font-medium'
+                                        : theme === 'spicybrains'
+                                          ? 'bg-gradient-to-r from-pink-400 to-yellow-300 text-gray-900 font-bold border-2 border-cyan-400'
+                                        : 'bg-gradient-to-r from-purple-100 to-orange-100 text-purple-700 font-medium'
                                   : isSeasonalTheme()
                                     ? 'hover:bg-white/40 text-gray-700'
                                     : theme === 'dark'
                                       ? 'hover:bg-gray-800 text-gray-400 hover:text-white'
-                                      : 'hover:bg-gray-50 text-gray-700'
+                                      : theme === 'spicybrains'
+                                        ? 'hover:bg-gradient-to-r hover:from-yellow-300 hover:to-pink-300 text-gray-900 font-medium'
+                                        : 'hover:bg-gray-50 text-gray-700'
                               }`}
                             >
                               <div className="flex items-center gap-3 py-3 w-full">
@@ -663,7 +747,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 ? ''
                 : theme === 'dark'
                   ? 'bg-gray-900'
-                  : ''
+                  : theme === 'spicybrains'
+                    ? 'bg-gradient-to-br from-pink-300 via-purple-300 to-cyan-300'
+                    : ''
             }`} style={{
               paddingTop: '1rem',
               paddingLeft: '1rem',
@@ -678,7 +764,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                     ? 'bg-white/60 hover:bg-white/80 text-gray-800 border-white/40'
                     : theme === 'dark'
                       ? 'border-gray-700 hover:bg-gray-800 text-gray-300 bg-transparent'
-                      : ''
+                      : theme === 'spicybrains'
+                        ? 'bg-gradient-to-r from-yellow-300 to-pink-300 hover:from-yellow-400 hover:to-pink-400 text-gray-900 font-bold border-2 border-cyan-400'
+                        : ''
                 }`}
               >
                 <HelpCircle className="w-4 h-4" />
@@ -693,7 +781,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                     ? 'bg-white/60 hover:bg-white/80 text-gray-800 border-white/40'
                     : theme === 'dark'
                       ? 'border-gray-700 hover:bg-gray-800 text-gray-300 bg-transparent'
-                      : ''
+                      : theme === 'spicybrains'
+                        ? 'bg-gradient-to-r from-yellow-300 to-pink-300 hover:from-yellow-400 hover:to-pink-400 text-gray-900 font-bold border-2 border-cyan-400'
+                        : ''
                 }`}
               >
                 {theme === 'minimalist' ? (
@@ -705,6 +795,11 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                   <>
                     <Moon className="w-4 h-4" />
                     <span>Dark Mode</span>
+                  </>
+                ) : theme === 'spicybrains' ? (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    <span>Spicy Brains</span>
                   </>
                 ) : (
                   <>
@@ -723,7 +818,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                         ? 'bg-white/60 hover:bg-white/80 text-gray-800 border-white/40'
                         : theme === 'dark'
                           ? 'border-gray-700 hover:bg-gray-800 text-gray-300 bg-transparent'
-                          : ''
+                          : theme === 'spicybrains'
+                            ? 'bg-gradient-to-r from-yellow-300 to-pink-300 hover:from-yellow-400 hover:to-pink-400 text-gray-900 font-bold border-2 border-cyan-400'
+                            : ''
                     }`}
                   >
                     <Settings className="w-4 h-4" />
@@ -735,7 +832,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                     ? 'bg-white/95 backdrop-blur-md border-white/40 text-gray-800'
                     : theme === 'dark'
                       ? 'bg-[#1a1a1b] border-gray-800 text-gray-300'
-                      : ''
+                      : theme === 'spicybrains'
+                        ? 'bg-gradient-to-br from-pink-200 to-yellow-200 border-2 border-cyan-400 text-gray-900'
+                        : ''
                 }`}>
                   <DropdownMenuItem onClick={() => { navigate(createPageUrl("Profile")); handleNavClick(); }}>
                     <UserIcon className="w-4 h-4 mr-2" />
@@ -780,7 +879,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 ? 'bg-white/60 border-white/30'
                 : theme === 'dark'
                   ? 'bg-gray-950/60 border-gray-800'
-                  : 'bg-white/60 border-gray-200/50'
+                  : theme === 'spicybrains'
+                    ? 'bg-gradient-to-r from-pink-400/80 to-cyan-400/80 border-yellow-400'
+                    : 'bg-white/60 border-gray-200/50'
             }`} style={{
               paddingTop: 'calc(2rem + env(safe-area-inset-top, 0px))',
               paddingBottom: '1rem'
@@ -793,7 +894,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                         ? 'hover:bg-white/50 text-gray-800'
                         : theme === 'dark'
                           ? 'hover:bg-gray-800 text-white'
-                          : 'hover:bg-gray-100'
+                          : theme === 'spicybrains'
+                            ? 'hover:bg-yellow-300 text-gray-900'
+                            : 'hover:bg-gray-100'
                     }`}>
                       <LayoutDashboard className="w-5 h-5" />
                     </Button>
@@ -803,7 +906,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                       ? 'text-gray-900'
                       : theme === 'dark'
                         ? 'text-white'
-                        : 'text-gray-900'
+                        : theme === 'spicybrains'
+                          ? 'text-gray-900 drop-shadow-[0_2px_2px_rgba(255,255,0,0.8)]'
+                          : 'text-gray-900'
                   }`}>ADHDone</h1>
                 </div>
               </div>
@@ -825,7 +930,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                     ? 'bg-purple-600 hover:bg-purple-700'
                     : theme === 'dark'
                       ? 'bg-purple-600 hover:bg-purple-700'
-                      : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600'
+                      : theme === 'spicybrains'
+                        ? 'bg-gradient-to-r from-pink-500 to-yellow-500 hover:from-pink-600 hover:to-yellow-600 border-2 border-cyan-400'
+                        : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600'
                 }`}
                 style={{
                   marginBottom: 'max(1.5rem, calc(1.5rem + env(safe-area-inset-bottom)))'
@@ -855,6 +962,70 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           onClose={() => setShowAppGuide(false)}
           theme={theme}
         />
+
+        <Dialog open={showSpicyBrainsExplanation} onOpenChange={setShowSpicyBrainsExplanation}>
+          <DialogContent className="max-w-2xl bg-gradient-to-br from-pink-100 via-purple-100 to-cyan-100 border-4 border-yellow-400">
+            <DialogHeader>
+              <DialogTitle className="text-3xl font-bold text-center bg-gradient-to-r from-pink-600 via-purple-600 to-cyan-600 bg-clip-text text-transparent">
+                🧠 Colors for Spicy Brains! 🌈
+              </DialogTitle>
+              <DialogDescription className="text-center text-gray-700 font-medium">
+                Welcome to the most neuroscience-backed colorful theme ever!
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto p-4">
+              <div className="p-4 rounded-lg bg-red-100 border-2 border-red-400">
+                <h3 className="font-bold text-red-900 text-lg mb-2">🔴 Red – Attention and urgency</h3>
+                <p className="text-red-800 text-sm">
+                  Activates the amygdala and increases heart rate and alertness. Triggers a mild stress response, which can boost focus in short bursts. Useful for deadlines or high-priority tasks, but overstimulating if overused.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-lg bg-yellow-100 border-2 border-yellow-400">
+                <h3 className="font-bold text-yellow-900 text-lg mb-2">🟡 Yellow – Optimism and memory</h3>
+                <p className="text-yellow-800 text-sm">
+                  Stimulates the release of serotonin and dopamine. Activates the left hemisphere, which supports logic and memory recall. Helpful for highlighting key ideas or labeling motivational categories (e.g., "goals," "wins," "ideas").
+                </p>
+              </div>
+
+              <div className="p-4 rounded-lg bg-blue-100 border-2 border-blue-400">
+                <h3 className="font-bold text-blue-900 text-lg mb-2">🔵 Blue – Calm and cognitive control</h3>
+                <p className="text-blue-800 text-sm">
+                  Associated with reduced cortisol levels and lower blood pressure. Activates the parasympathetic nervous system, improving concentration and decision-making. Ideal for scheduling, planning, and calming overstimulation.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-lg bg-green-100 border-2 border-green-400">
+                <h3 className="font-bold text-green-900 text-lg mb-2">🟢 Green – Balance and comprehension</h3>
+                <p className="text-green-800 text-sm">
+                  Associated with the ventromedial prefrontal cortex, which processes safety and reward. Supports sustained attention and comfort — good for long-term projects or reference materials.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-lg bg-orange-100 border-2 border-orange-400">
+                <h3 className="font-bold text-orange-900 text-lg mb-2">🟠 Orange – Energy and stimulation</h3>
+                <p className="text-orange-800 text-sm">
+                  Combines red's intensity with yellow's positivity. Increases mental energy and social motivation — effective for tasks that need creativity or teamwork.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-lg bg-purple-100 border-2 border-purple-400">
+                <h3 className="font-bold text-purple-900 text-lg mb-2">🟣 Purple – Creativity and abstraction</h3>
+                <p className="text-purple-800 text-sm">
+                  Stimulates areas involved in imagination (default mode network). Good for brainstorming or categorizing ideas requiring flexible thinking.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-center pt-4">
+              <Button 
+                onClick={() => setShowSpicyBrainsExplanation(false)}
+                className="bg-gradient-to-r from-pink-500 via-purple-500 to-cyan-500 hover:from-pink-600 hover:via-purple-600 hover:to-cyan-600 text-white font-bold text-lg px-8 border-2 border-yellow-400"
+              >
+                Let's Go! 🚀
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </TooltipProvider>
     </div>
   );
