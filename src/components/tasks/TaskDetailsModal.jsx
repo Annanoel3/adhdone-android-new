@@ -459,12 +459,23 @@ Return JSON:
     
     setIsUpdating(true);
     try {
-      // Delete in background
+      // CRITICAL: Cancel scheduled notification before deleting
+      if (task.onesignal_notification_id) {
+        console.log(`🗑️ [DELETE] Canceling notification ${task.onesignal_notification_id} for task "${task.title}"`);
+        await cancelScheduledReminder(task.onesignal_notification_id);
+      }
+
+      // Delete subtasks and their notifications
       for (const subTask of subTasks) {
+        if (subTask.onesignal_notification_id) {
+          await cancelScheduledReminder(subTask.onesignal_notification_id);
+        }
         Task.delete(subTask.id).catch(error => {
           console.error("Error deleting subtask:", error);
         });
       }
+
+      // Delete the task
       Task.delete(task.id).catch(error => {
         console.error("Error deleting task:", error);
       });

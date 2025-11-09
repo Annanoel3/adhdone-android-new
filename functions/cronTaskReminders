@@ -25,7 +25,7 @@ function isInQuietHours(user) {
   }
 
   const now = new Date();
-  const currentTime = now.getHours() * 60 + now.getMinutes(); // Current time in minutes since midnight
+  const currentTime = now.getHours() * 60 + now.getMinutes();
 
   const [startHour, startMin] = user.quiet_hours_start.split(':').map(Number);
   const [endHour, endMin] = user.quiet_hours_end.split(':').map(Number);
@@ -33,12 +33,10 @@ function isInQuietHours(user) {
   const startTime = startHour * 60 + startMin;
   const endTime = endHour * 60 + endMin;
 
-  // Handle quiet hours that span midnight (e.g., 22:00 - 08:00)
   if (startTime > endTime) {
     return currentTime >= startTime || currentTime <= endTime;
   }
   
-  // Normal case (e.g., 08:00 - 22:00)
   return currentTime >= startTime && currentTime <= endTime;
 }
 
@@ -89,7 +87,6 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // CRITICAL: Check quiet hours
         if (isInQuietHours(user)) {
           console.log(`🌙 [TASK REMINDERS] Skipping ${user.email} - in quiet hours (${user.quiet_hours_start} - ${user.quiet_hours_end})`);
           skippedQuietHours++;
@@ -124,15 +121,15 @@ Deno.serve(async (req) => {
 
             if (r?.data?.success) {
               let next = null;
+              let notificationId = null;
               const ms = t.reminder_interval ? intervalMs[t.reminder_interval] : 0;
               
-              // CRITICAL FIX: For recurring reminders, schedule the next one
+              // CRITICAL: For recurring reminders, schedule next and store notification ID
               if (ms && ms > 0) {
                 next = new Date(Date.now() + ms).toISOString();
                 
-                // Schedule the next reminder notification
                 try {
-                  await base44.asServiceRole.functions.invoke('schedulePush', {
+                  const scheduleResponse = await base44.asServiceRole.functions.invoke('schedulePush', {
                     toUserExternalId: user.email,
                     title: "Task Reminder 📋",
                     body: t.title,
@@ -144,15 +141,19 @@ Deno.serve(async (req) => {
                       type: 'task_reminder'
                     }
                   });
-                  console.log(`✅ [TASK REMINDERS] Scheduled next reminder for ${next}`);
+
+                  notificationId = scheduleResponse?.data?.notificationId || null;
+                  console.log(`✅ [TASK REMINDERS] Scheduled next reminder for ${next} with ID: ${notificationId}`);
                 } catch (scheduleError) {
                   console.error('❌ [TASK REMINDERS] Failed to schedule next reminder:', scheduleError);
                 }
               }
 
+              // Update task with new next_reminder and notification ID
               await base44.asServiceRole.entities.Task.update(t.id, {
                 reminder_count: (t.reminder_count || 0) + 1,
                 next_reminder: next,
+                onesignal_notification_id: notificationId
               });
 
               ok++;

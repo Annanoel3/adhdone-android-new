@@ -159,23 +159,33 @@ Return JSON:
         urgency: parsed.urgency || 'medium',
         energy_required: parsed.energy_required || 'medium',
         status: 'active'
-      }).then(createdTask => {
+      }).then(async (createdTask) => {
         if (nextReminder) {
-          scheduleReminder({
-            email: currentUser.email,
-            title: "Task Reminder 📋",
-            body: createdTask.title,
-            sendAtISO: nextReminder.toISOString(),
-            taskId: createdTask.id,
-            data: {
-              screen: "/Tasks",
+          try {
+            // CRITICAL: Store OneSignal notification ID
+            const notificationId = await scheduleReminder({
+              email: currentUser.email,
+              title: "Task Reminder 📋",
+              body: createdTask.title,
+              sendAtISO: nextReminder.toISOString(),
               taskId: createdTask.id,
-              urgency: createdTask.urgency,
-              type: 'task_reminder'
+              data: {
+                screen: "/Tasks",
+                taskId: createdTask.id,
+                urgency: createdTask.urgency,
+                type: 'task_reminder'
+              }
+            });
+
+            // Save the notification ID to task
+            if (notificationId) {
+              await base44.entities.Task.update(createdTask.id, {
+                onesignal_notification_id: notificationId
+              });
             }
-          }).catch(error => {
+          } catch (error) {
             console.error("Failed to schedule reminder:", error);
-          });
+          }
         }
         
         replaceOptimisticTask(tempId, createdTask);

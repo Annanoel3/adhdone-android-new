@@ -1,12 +1,12 @@
 /**
  * Client-side helper for scheduling and canceling push reminders
- * Uses Base44 server functions that forward to Cloudflare Worker
+ * Uses Base44 server functions that forward to OneSignal
  */
 
 import { base44 } from "@/api/base44Client";
 
 /**
- * Schedules push notifications for the signed-in user.
+ * Schedules push notifications and returns OneSignal notification ID
  */
 export async function scheduleReminder({
   email,
@@ -38,7 +38,6 @@ export async function scheduleReminder({
     console.log('[scheduleReminder] Using relative time:', minutesFromNow, 'minutes');
   }
 
-  // Merge custom data with taskId if provided
   if (data || taskId) {
     payload.data = {
       screen: "/Tasks",
@@ -58,7 +57,6 @@ export async function scheduleReminder({
     const response = await base44.functions.invoke('schedulePush', payload);
     console.log('[scheduleReminder] Raw response:', response);
     
-    // Check if response has data property (axios response structure)
     const result = response.data || response;
     console.log('[scheduleReminder] Result:', result);
     
@@ -67,8 +65,8 @@ export async function scheduleReminder({
       throw new Error(result.error || 'Failed to schedule notification');
     }
     
-    console.log('[scheduleReminder] SUCCESS - Response:', result);
-    return result;
+    console.log('[scheduleReminder] SUCCESS - Notification ID:', result.notificationId);
+    return result.notificationId; // Return the OneSignal notification ID
   } catch (error) {
     console.error('[scheduleReminder] FAILED - Error:', error);
     console.error('[scheduleReminder] Error details:', error.message, error.stack);
@@ -77,17 +75,21 @@ export async function scheduleReminder({
 }
 
 /**
- * Cancels a scheduled push notification
+ * Cancels a scheduled push notification by OneSignal notification ID
  */
 export async function cancelScheduledReminder(notificationId) {
-  if (!notificationId) throw new Error("notificationId required");
+  if (!notificationId) {
+    console.log('[cancelScheduledReminder] No notification ID provided, skipping');
+    return;
+  }
 
   try {
+    console.log('[cancelScheduledReminder] Canceling:', notificationId);
     const response = await base44.functions.invoke('cancelScheduled', { notificationId });
-    console.log('Canceled reminder:', response);
+    console.log('[cancelScheduledReminder] Canceled:', response);
     return response;
   } catch (error) {
-    console.error('Failed to cancel reminder:', error);
-    throw error;
+    console.error('[cancelScheduledReminder] Failed:', error);
+    // Don't throw - deletion should succeed even if notification cancel fails
   }
 }
