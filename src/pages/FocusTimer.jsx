@@ -255,7 +255,10 @@ export default function FocusTimer() {
         classes += ' bg-white/80 backdrop-blur-md';
       } else if (currentTheme === 'dark') {
         classes += ' bg-gray-800/80 backdrop-blur-md';
-      } else { // colorful theme
+      } else if (currentTheme === 'spicybrains') {
+        classes += ' bg-white/80 backdrop-blur-md';
+      }
+      else { // colorful theme
         if (isMainTimerCard) {
           classes += currentMode === 'work'
             ? ' bg-gradient-to-br from-purple-200/80 via-pink-200/80 to-orange-200/80 backdrop-blur-md'
@@ -275,7 +278,13 @@ export default function FocusTimer() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto">
+    <div className={`min-h-screen p-4 md:p-8 ${
+      theme === 'spicybrains' 
+        ? 'bg-gradient-to-br from-blue-300 via-blue-400 to-blue-500' 
+        : theme === 'dark' 
+          ? 'bg-gray-900' 
+          : ''
+    }`}>
       <audio ref={audioRef} />
 
       {/* Title Card */}
@@ -501,7 +510,7 @@ export default function FocusTimer() {
                 cx="100"
                 cy="100"
                 r="90"
-                stroke={theme === 'minimalist' ? '#e5e7eb' : theme === 'dark' ? '#374151' : '#ffffff80'}
+                stroke={theme === 'minimalist' ? '#e5e7eb' : theme === 'dark' ? '#374151' : theme === 'spicybrains' ? '#ffffff80' : '#ffffff80'}
                 strokeWidth="12"
                 fill="none"
               />
@@ -514,7 +523,9 @@ export default function FocusTimer() {
                     ? mode === 'work' ? '#16a34a' : '#3b82f6'
                     : theme === 'dark'
                       ? mode === 'work' ? '#22c55e' : '#3b82f6'
-                      : '#ffffff'
+                      : theme === 'spicybrains'
+                        ? mode === 'work' ? '#fde047' : '#93c5fd'
+                        : '#ffffff'
                 }
                 strokeWidth="12"
                 fill="none"
@@ -524,7 +535,7 @@ export default function FocusTimer() {
                 initial={{ strokeDashoffset: 2 * Math.PI * 90 }}
                 animate={{
                   strokeDashoffset: 2 * Math.PI * 90 * (1 - progress / 100),
-                  filter: theme === 'colorful' ? [
+                  filter: theme === 'colorful' || theme === 'spicybrains' ? [
                     'drop-shadow(0 0 8px rgba(255,255,255,0.8))',
                     'drop-shadow(0 0 16px rgba(255,255,255,0.8))',
                     'drop-shadow(0 0 8px rgba(255,255,255,0.8))',
@@ -544,9 +555,9 @@ export default function FocusTimer() {
                   initial={{ scale: 0.9, opacity: 0 }}
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 1.1, opacity: 0 }}
-                  className={`text-6xl md:text-7xl font-bold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}
+                  className={`text-6xl md:text-7xl font-bold mb-4 ${theme === 'dark' || theme === 'spicybrains' ? 'text-white' : 'text-gray-900'}`}
                   style={{
-                    textShadow: theme === 'colorful'
+                    textShadow: theme === 'colorful' || theme === 'spicybrains'
                       ? '0 2px 20px rgba(255,255,255,0.5)'
                       : 'none'
                   }}
@@ -560,8 +571,8 @@ export default function FocusTimer() {
                 transition={{ duration: 2, repeat: Infinity }}
                 className={`text-lg font-medium flex items-center gap-2 ${
                   mode === 'work'
-                    ? theme === 'minimalist' ? 'text-green-600' : theme === 'dark' ? 'text-green-400' : 'text-purple-900'
-                    : theme === 'minimalist' ? 'text-blue-600' : theme === 'dark' ? 'text-blue-400' : 'text-teal-900'
+                    ? theme === 'minimalist' ? 'text-green-600' : theme === 'dark' ? 'text-green-40' : theme === 'spicybrains' ? 'text-yellow-300' : 'text-purple-900'
+                    : theme === 'minimalist' ? 'text-blue-600' : theme === 'dark' ? 'text-blue-400' : theme === 'spicybrains' ? 'text-blue-300' : 'text-teal-900'
                 }`}
               >
                 {mode === 'work' ? (
@@ -578,7 +589,7 @@ export default function FocusTimer() {
               </motion.div>
 
               {sessionCount > 0 && (
-                <div className={`text-sm mt-2 font-medium ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                <div className={`text-sm mt-2 font-medium ${theme === 'dark' || theme === 'spicybrains' ? 'text-gray-200' : 'text-gray-600'}`}>
                   🍅 {sessionCount} pomodoro{sessionCount !== 1 ? 's' : ''} completed
                 </div>
               )}
@@ -598,7 +609,11 @@ export default function FocusTimer() {
                     ? mode === 'work'
                       ? 'bg-green-600 hover:bg-green-700'
                       : 'bg-blue-600 hover:bg-blue-700'
-                    : 'bg-white/90 text-gray-900 hover:bg-white shadow-lg backdrop-blur-sm'
+                    : theme === 'spicybrains'
+                      ? mode === 'work'
+                        ? 'bg-yellow-400 text-blue-900 hover:bg-yellow-300'
+                        : 'bg-blue-400 text-white hover:bg-blue-300'
+                      : 'bg-white/90 text-gray-900 hover:bg-white shadow-lg backdrop-blur-sm'
               }`}
             >
               {isActive ? (
@@ -615,10 +630,11 @@ export default function FocusTimer() {
             </Button>
             <Button
               size="lg"
-              variant={theme === 'colorful' ? 'secondary' : 'outline'}
+              variant={theme === 'colorful' || theme === 'spicybrains' ? 'secondary' : 'outline'}
               onClick={resetTimer}
               className={`w-36 ${
-                theme === 'colorful' ? 'bg-white/70 hover:bg-white/90 backdrop-blur-sm' : ''
+                theme === 'colorful' ? 'bg-white/70 hover:bg-white/90 backdrop-blur-sm' :
+                theme === 'spicybrains' ? 'bg-blue-200 text-blue-800 hover:bg-blue-100 backdrop-blur-sm' : ''
               }`}
             >
               <RotateCcw className="w-5 h-5 mr-2" />

@@ -107,7 +107,13 @@ export default function Progress() {
   const stats = calculateStats();
 
   return (
-    <div className="p-4 md:p-8 w-full">
+    <div className={`min-h-screen p-4 md:p-8 ${
+      theme === 'spicybrains' 
+        ? 'bg-gradient-to-br from-green-300 via-green-400 to-green-500' 
+        : theme === 'dark' 
+          ? 'bg-gray-900' 
+          : ''
+    }`}>
       <div className="max-w-7xl mx-auto">
         <Card className={`${isSeasonalTheme() ? `${specialMode}-card` : ''} border-none shadow-lg mb-6 ${
           !isSeasonalTheme() ? (

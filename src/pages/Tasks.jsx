@@ -162,7 +162,11 @@ export default function Tasks() {
   };
 
   return (
-    <div className="p-4 md:p-8 w-full" style={{ paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
+    <div className={`p-4 md:p-8 w-full ${
+      theme === 'spicybrains' 
+        ? 'bg-gradient-to-br from-red-300 via-orange-300 to-red-400' 
+        : ''
+    }`} style={{ paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
       <div className="max-w-6xl mx-auto">
         <Card className={`${isSeasonalTheme() ? `${specialMode}-card` : ''} border-none shadow-lg mb-6 ${
           !isSeasonalTheme() ? (

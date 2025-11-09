@@ -196,7 +196,13 @@ Respond naturally, warmly, and like you genuinely care about understanding them.
   };
 
   return (
-    <div className="p-4 md:p-8 w-full">
+    <div className={`min-h-screen p-4 md:p-8 ${
+      theme === 'spicybrains' 
+        ? 'bg-gradient-to-br from-blue-300 via-green-300 to-blue-400' 
+        : theme === 'dark' 
+          ? 'bg-gray-900' 
+          : ''
+    }`}>
       <div className="max-w-4xl mx-auto">
         <Card className={`border-none shadow-lg mb-6 ${
           specialMode === 'normal' ? (

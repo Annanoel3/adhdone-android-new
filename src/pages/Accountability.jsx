@@ -67,7 +67,13 @@ export default function Accountability() {
   }
 
   return (
-    <div className="p-4 md:p-8 w-full" style={{ paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
+    <div className={`min-h-screen p-4 md:p-8 w-full ${
+      theme === 'spicybrains' 
+        ? 'bg-gradient-to-br from-orange-300 via-pink-300 to-orange-400' 
+        : theme === 'dark' 
+          ? 'bg-gray-900' 
+          : ''
+    }`} style={{ paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
       <div className="max-w-6xl mx-auto">
         <Card className={`${specialMode !== 'normal' ? `${specialMode}-card` : ''} border-none shadow-lg mb-6 ${
           specialMode === 'normal' ? (
