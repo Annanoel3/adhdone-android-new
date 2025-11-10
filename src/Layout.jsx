@@ -260,7 +260,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   const getBackgroundClass = () => {
     if (theme === 'dark') return 'bg-[#0a0a0b]';
     if (theme === 'minimalist') return 'bg-gradient-to-br from-stone-50 via-sage-50 to-stone-100';
-    if (theme === 'spicybrains') return 'bg-white';
+    if (theme === 'spicybrains') return ''; // Let pages handle their own gradients
     return 'bg-gradient-to-br from-purple-50 via-orange-50 to-teal-50';
   };
 
