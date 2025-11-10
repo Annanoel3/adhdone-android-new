@@ -73,15 +73,39 @@ export default function Home() {
 
   const loadData = async () => {
     try {
+      console.log('📥 [HOME] Loading data...');
       const currentUser = await base44.auth.me();
       setUser(currentUser);
+      console.log('👤 [HOME] User loaded:', currentUser?.email);
     } catch (error) {
       console.error("Error loading user:", error);
       console.log("User not logged in");
     }
     
-    const allTasks = await base44.entities.Task.list('-updated_date');
-    setTasks(allTasks);
+    try {
+      console.log('📋 [HOME] Fetching tasks...');
+      const allTasks = await base44.entities.Task.list('-updated_date');
+      console.log('✅ [HOME] Tasks fetched:', allTasks.length);
+      
+      // Log some task details
+      if (allTasks.length > 0) {
+        const completed = allTasks.filter(t => t.status === 'completed');
+        console.log('✅ [HOME] Completed tasks:', completed.length);
+        
+        // Show first 3 completed tasks with dates
+        if (completed.length > 0) {
+          console.log('📅 [HOME] Sample completed:', completed.slice(0, 3).map(t => ({
+            title: t.title.substring(0, 30),
+            completed_at: t.completed_at,
+            date_local: t.completed_at ? getLocalDateString(new Date(t.completed_at)) : 'no date'
+          })));
+        }
+      }
+      
+      setTasks(allTasks);
+    } catch (error) {
+      console.error('❌ [HOME] Error loading tasks:', error);
+    }
   };
 
   const checkEndOfDayReview = () => {
