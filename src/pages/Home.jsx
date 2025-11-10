@@ -206,8 +206,6 @@ export default function Home() {
           theme={theme}
         />
       </div>
-      
-      <div style={{ height: '120px' }} aria-hidden="true"></div>
     </div>
   );
 }
