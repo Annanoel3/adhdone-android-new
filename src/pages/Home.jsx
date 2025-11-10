@@ -145,7 +145,7 @@ export default function Home() {
   const activeTasks = tasks.filter(t => t.status === 'active');
 
   return (
-    <div className={`p-4 md:p-8 w-full ${
+    <div className={`min-h-screen p-4 md:p-8 w-full ${
       theme === 'spicybrains' 
         ? 'bg-gradient-to-br from-green-300 via-blue-300 to-purple-300' 
         : ''

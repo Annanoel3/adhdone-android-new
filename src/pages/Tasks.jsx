@@ -162,7 +162,7 @@ export default function Tasks() {
   };
 
   return (
-    <div className={`p-4 md:p-8 w-full ${
+    <div className={`min-h-screen p-4 md:p-8 w-full ${
       theme === 'spicybrains' && !isSeasonalTheme()
         ? 'bg-gradient-to-br from-red-300 via-orange-300 to-red-400'
         : ''
