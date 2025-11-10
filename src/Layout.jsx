@@ -374,8 +374,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       }`}
       style={{
         ...(isSeasonalTheme() ? getSeasonalBackgroundStyle() : {}),
-        paddingTop: 'env(safe-area-inset-top)',
-        paddingBottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))'
+        paddingTop: 'env(safe-area-inset-top)'
       }}
     >
       {user && <OneSignalInit user={user} />}
