@@ -698,7 +698,7 @@ Return JSON:
                 <PopoverContent className="w-48 p-2">
                   <div className="space-y-1">
                     <button onClick={() => handleUpdateField('urgency', 'low')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Low Priority</button>
-                    <button onClick={() => handleUpdateField('urgency', 'medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Medium Priority</button>
+                    <button onClick={() => handleUpdateField('urgency', 'medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-100 rounded">Medium Priority</button>
                     <button onClick={() => handleUpdateField('urgency', 'high')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">High Priority</button>
                     <button onClick={() => handleUpdateField('urgency', 'urgent')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Urgent</button>
                   </div>
@@ -729,41 +729,24 @@ Return JSON:
                 </div>
               )}
 
-              {/* UPDATED: Show manual input and AI suggestion together when no subtasks */}
+              {/* UPDATED: Better visual separation for manual input when no subtasks */}
               {subTasks.length === 0 && (
                 <div className="space-y-4">
-                  <div className={`p-4 rounded-lg border-2 border-dashed text-center ${
+                  {/* Manual subtask input - FIRST and more prominent */}
+                  <div className={`p-4 rounded-lg border-2 ${
                     theme === 'minimalist'
-                      ? 'border-purple-200 bg-purple-50/30'
+                      ? 'border-green-200 bg-green-50/30'
                       : theme === 'dark'
-                        ? 'border-purple-800 bg-purple-900/20'
-                        : 'border-purple-300 bg-purple-100/30'
+                        ? 'border-green-800 bg-green-900/20'
+                        : 'border-green-300 bg-green-100/30'
                   }`}>
-                    <Sparkles className="w-8 h-8 mx-auto mb-2 text-purple-600" />
-                    <p className="text-sm text-gray-700 mb-3">
-                      If this task feels overwhelming, let AI break it down!
-                    </p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setPreviousSubTasks(subTasks);
-                        setHasDecomposedSuccessfully(false);
-                        setShowDecomposition(true);
-                      }}
-                      className="border-purple-300 hover:bg-purple-50"
-                    >
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      AI Break Down Task
-                    </Button>
-                  </div>
-
-                  {/* Manual subtask input - now always visible */}
-                  <div>
-                    <h4 className="text-sm font-medium text-gray-700 mb-3">Or add subtasks manually:</h4>
-                    <div className="flex gap-2 mb-2">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Plus className="w-5 h-5 text-green-600" />
+                      <h4 className="text-sm font-semibold text-gray-900">Add Sub-Tasks Manually</h4>
+                    </div>
+                    <div className="flex gap-2 mb-3">
                       <Button
-                        variant={subtaskInputMode === 'text' ? 'default' : 'ghost'}
+                        variant={subtaskInputMode === 'text' ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setSubtaskInputMode('text')}
                         className="flex-1"
@@ -772,7 +755,7 @@ Return JSON:
                         Type
                       </Button>
                       <Button
-                        variant={subtaskInputMode === 'voice' ? 'default' : 'ghost'}
+                        variant={subtaskInputMode === 'voice' ? 'default' : 'outline'}
                         size="sm"
                         onClick={() => setSubtaskInputMode('voice')}
                         className="flex-1"
@@ -808,6 +791,43 @@ Return JSON:
                         </div>
                       </div>
                     )}
+                  </div>
+
+                  {/* Divider */}
+                  <div className="relative">
+                    <div className="absolute inset-0 flex items-center">
+                      <span className="w-full border-t border-gray-300" />
+                    </div>
+                    <div className="relative flex justify-center text-xs uppercase">
+                      <span className="bg-white px-2 text-gray-500">Or</span>
+                    </div>
+                  </div>
+
+                  {/* AI suggestion - SECOND */}
+                  <div className={`p-4 rounded-lg border-2 border-dashed text-center ${
+                    theme === 'minimalist'
+                      ? 'border-purple-200 bg-purple-50/30'
+                      : theme === 'dark'
+                        ? 'border-purple-800 bg-purple-900/20'
+                        : 'border-purple-300 bg-purple-100/30'
+                  }`}>
+                    <Sparkles className="w-8 h-8 mx-auto mb-2 text-purple-600" />
+                    <p className="text-sm text-gray-700 mb-3">
+                      Task feels overwhelming? Let AI break it down!
+                    </p>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setPreviousSubTasks(subTasks);
+                        setHasDecomposedSuccessfully(false);
+                        setShowDecomposition(true);
+                      }}
+                      className="border-purple-300 hover:bg-purple-50"
+                    >
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      AI Break Down Task
+                    </Button>
                   </div>
                 </div>
               )}
