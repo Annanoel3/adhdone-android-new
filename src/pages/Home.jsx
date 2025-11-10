@@ -144,6 +144,24 @@ export default function Home() {
 
   const activeTasks = tasks.filter(t => t.status === 'active');
 
+  // Debug logging
+  useEffect(() => {
+    console.log('🔍 [HOME DEBUG] Tasks loaded:', tasks.length);
+    console.log('🔍 [HOME DEBUG] Completed tasks:', tasks.filter(t => t.status === 'completed').length);
+    console.log('🔍 [HOME DEBUG] Today completed:', todayCompleted.length);
+    
+    // Log a few completed tasks with their completed_at dates
+    const completed = tasks.filter(t => t.status === 'completed' && t.completed_at);
+    console.log('🔍 [HOME DEBUG] Sample completed tasks:', completed.slice(0, 3).map(t => ({
+      title: t.title,
+      completed_at: t.completed_at,
+      date: new Date(t.completed_at).toISOString().split('T')[0]
+    })));
+    
+    const today = new Date().toISOString().split('T')[0];
+    console.log('🔍 [HOME DEBUG] Today date:', today);
+  }, [tasks, todayCompleted]);
+
   return (
     <div className={`min-h-screen p-4 md:p-8 w-full ${
       theme === 'spicybrains' 
