@@ -121,11 +121,17 @@ export default function Home() {
   };
 
   const handleTaskComplete = async (task) => {
+    // CRITICAL FIX: Store local date/time, not UTC
+    const now = new Date();
+    const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
+    
+    console.log('✅ [COMPLETE] Marking task complete with local time:', localISOString);
+    
     // Optimistically update UI
     setTasks(prevTasks => 
       prevTasks.map(t => 
         t.id === task.id 
-          ? { ...t, status: 'completed', completed_at: new Date().toISOString() }
+          ? { ...t, status: 'completed', completed_at: localISOString }
           : t
       )
     );
@@ -134,7 +140,7 @@ export default function Home() {
     try {
       await base44.entities.Task.update(task.id, { 
         status: 'completed',
-        completed_at: new Date().toISOString()
+        completed_at: localISOString
       });
     } catch (error) {
       console.error("Failed to complete task:", error);
