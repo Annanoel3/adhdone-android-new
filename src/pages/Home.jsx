@@ -22,6 +22,15 @@ export default function Home() {
   const navigate = useNavigate();
   const specialMode = localStorage.getItem('special_mode') || 'normal';
 
+  // Helper function to get local date string (not UTC)
+  const getLocalDateString = (date) => {
+    const d = new Date(date);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   useEffect(() => {
     loadData();
     checkEndOfDayReview();
@@ -137,8 +146,8 @@ export default function Home() {
 
   const todayCompleted = tasks.filter(t => {
     if (t.status !== 'completed' || !t.completed_at) return false;
-    const today = new Date().toISOString().split('T')[0];
-    const completedDate = new Date(t.completed_at).toISOString().split('T')[0];
+    const today = getLocalDateString(new Date());
+    const completedDate = getLocalDateString(new Date(t.completed_at));
     return completedDate === today;
   });
 
@@ -155,11 +164,14 @@ export default function Home() {
     console.log('🔍 [HOME DEBUG] Sample completed tasks:', completed.slice(0, 3).map(t => ({
       title: t.title,
       completed_at: t.completed_at,
-      date: new Date(t.completed_at).toISOString().split('T')[0]
+      date_utc: new Date(t.completed_at).toISOString().split('T')[0],
+      date_local: getLocalDateString(new Date(t.completed_at))
     })));
     
-    const today = new Date().toISOString().split('T')[0];
-    console.log('🔍 [HOME DEBUG] Today date:', today);
+    const today = getLocalDateString(new Date());
+    const todayUTC = new Date().toISOString().split('T')[0];
+    console.log('🔍 [HOME DEBUG] Today LOCAL:', today);
+    console.log('🔍 [HOME DEBUG] Today UTC:', todayUTC);
   }, [tasks, todayCompleted]);
 
   return (
