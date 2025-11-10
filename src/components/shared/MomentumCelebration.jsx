@@ -11,10 +11,14 @@ export default function MomentumCelebration({ completedCount, remainingCount, th
     const stored = localStorage.getItem('last_momentum_celebration');
     
     if (stored) {
-      const data = JSON.parse(stored);
-      // Reset daily - allow celebrations again each day
-      if (data.date === today) {
-        return data.count;
+      try {
+        const data = JSON.parse(stored);
+        // Reset daily - allow celebrations again each day
+        if (data.date === today) {
+          return data.count;
+        }
+      } catch (e) {
+        console.error('Error parsing momentum celebration data:', e);
       }
     }
     
@@ -22,15 +26,32 @@ export default function MomentumCelebration({ completedCount, remainingCount, th
   });
 
   useEffect(() => {
-    // CRITICAL FIX: Only show if count is actually valid (greater than 0 and increased)
-    if (completedCount === 0 || completedCount <= lastShownCount || completedCount > 50) {
-      // Don't show if: no tasks completed, count didn't increase, or count is suspiciously high (>50)
+    console.log('🎉 [MOMENTUM] Checking celebration:', { completedCount, lastShownCount });
+    
+    // CRITICAL FIX: Only show if count is valid and increased
+    if (completedCount === 0) {
+      console.log('🎉 [MOMENTUM] No tasks completed yet');
+      return;
+    }
+    
+    if (completedCount <= lastShownCount) {
+      console.log('🎉 [MOMENTUM] Count did not increase:', completedCount, 'vs', lastShownCount);
+      return;
+    }
+    
+    if (completedCount > 50) {
+      console.log('🎉 [MOMENTUM] Count suspiciously high, skipping');
       return;
     }
     
     // Only show on milestones: 1, 3, 5, 8, 10, etc.
     const milestones = [1, 3, 5, 8, 10, 15, 20];
-    if (!milestones.includes(completedCount) && completedCount % 5 !== 0) return;
+    if (!milestones.includes(completedCount) && completedCount % 5 !== 0) {
+      console.log('🎉 [MOMENTUM] Not a milestone, skipping');
+      return;
+    }
+
+    console.log('🎉 [MOMENTUM] SHOWING CELEBRATION!', completedCount);
 
     // Determine message and icon based on progress
     let newMessage = "";
