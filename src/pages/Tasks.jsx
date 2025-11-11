@@ -181,7 +181,7 @@ export default function Tasks() {
       theme === 'spicybrains' && !isSeasonalTheme()
         ? 'bg-gradient-to-br from-red-300 via-orange-300 to-red-400'
         : ''
-    }`} style={{ paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
+    }`}>
       <div className="max-w-6xl mx-auto">
         <Card className={`${isSeasonalTheme() ? `${specialMode}-card` : ''} border-none shadow-lg mb-6 ${
           !isSeasonalTheme() ? (

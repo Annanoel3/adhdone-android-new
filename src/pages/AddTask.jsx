@@ -69,6 +69,11 @@ export default function AddTask() {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
+      // Navigate immediately - don't wait
+      navigate(createPageUrl("Home"), { state: { reload: true } });
+      setIsProcessing(false); // Reset processing state for UI quickly
+
+      // Process in background
       // CRITICAL: Generate date context for next 60 days
       const dateContext = [];
       for (let i = 0; i < 60; i++) {
@@ -188,8 +193,8 @@ Return JSON:
 
       console.log('📅 [TASK] Parsed:', { target_date: parsed.target_date, target_time: parsed.target_time, nextReminder: nextReminder?.toISOString() });
 
-      // Create task in background - don't wait
-      Task.create({
+      // Create task in background
+      const createdTask = await Task.create({
         title: parsed.title || inputText.trim(),
         description: '',
         reminder_interval: actualReminderInterval,
@@ -198,52 +203,44 @@ Return JSON:
         urgency: parsed.urgency || 'medium',
         energy_required: parsed.energy_required || 'medium',
         status: 'active'
-      }).then(async (createdTask) => {
-        if (nextReminder) {
-          try {
-            // CRITICAL: Store OneSignal notification ID
-            const notificationId = await scheduleReminder({
-              email: currentUser.email,
-              title: "Task Reminder 📋",
-              body: createdTask.title,
-              sendAtISO: nextReminder.toISOString(),
-              taskId: createdTask.id,
-              data: {
-                screen: "/Tasks",
-                taskId: createdTask.id,
-                urgency: createdTask.urgency,
-                type: 'task_reminder'
-              }
-            });
-
-            // Save the notification ID to task
-            if (notificationId) {
-              await base44.entities.Task.update(createdTask.id, {
-                onesignal_notification_id: notificationId
-              });
-            }
-          } catch (error) {
-            console.error("Failed to schedule reminder:", error);
-          }
-        }
-        
-        replaceOptimisticTask(tempId, createdTask);
-      }).catch(error => {
-        console.error("Error creating task:", error);
-        removeOptimisticTask(tempId);
       });
 
-      // Navigate immediately without waiting
-      setTimeout(() => {
-        navigate(createPageUrl("Home"), { state: { reload: true } });
-      }, 500);
+      if (nextReminder) {
+        try {
+          // CRITICAL: Store OneSignal notification ID
+          const notificationId = await scheduleReminder({
+            email: currentUser.email,
+            title: "Task Reminder 📋",
+            body: createdTask.title,
+            sendAtISO: nextReminder.toISOString(),
+            taskId: createdTask.id,
+            data: {
+              screen: "/Tasks",
+              taskId: createdTask.id,
+              urgency: createdTask.urgency,
+              type: 'task_reminder'
+            }
+          });
+
+          // Save the notification ID to task
+          if (notificationId) {
+            await base44.entities.Task.update(createdTask.id, {
+              onesignal_notification_id: notificationId
+            });
+          }
+        } catch (error) {
+          console.error("Failed to schedule reminder:", error);
+        }
+      }
+      
+      replaceOptimisticTask(tempId, createdTask);
       
       return true;
     } catch (error) {
       console.error("Error creating task:", error);
       removeOptimisticTask(tempId);
       alert("Failed to create task. Please try again.");
-      setIsProcessing(false);
+      // The setIsProcessing(false) was already called, no need to call it again here.
       return false;
     }
   };
@@ -385,7 +382,7 @@ Return JSON:
         : ''
     }`} style={{
       paddingTop: 'max(1rem, calc(1rem + env(safe-area-inset-top)))',
-      paddingBottom: 'max(8rem, calc(8rem + env(safe-area-inset-bottom)))'
+      paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))'
     }}>
       <div className="max-w-3xl mx-auto space-y-6">
         <Button
@@ -595,8 +592,6 @@ Return JSON:
           </CardContent>
         </Card>
       )}
-
-      <div style={{ height: '120px' }} aria-hidden="true"></div>
     </div>
   );
 }

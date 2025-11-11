@@ -762,26 +762,6 @@ Return ONLY the category name, nothing else.`;
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Easter Egg Button - REMOVED SECOND EASTER EGG */}
-      <div className="mt-6 text-center">
-        <Button
-          onClick={() => {
-            if (window.triggerEasterEgg) {
-              window.triggerEasterEgg('ideas');
-            }
-          }}
-          variant="ghost"
-          size="sm"
-          className={`text-xs opacity-40 hover:opacity-100 transition-opacity ${
-            theme === 'dark' || ['halloween', 'christmas', 'newyears', 'fourthjuly'].includes(specialMode)
-              ? 'text-gray-500 hover:text-gray-400'
-              : 'text-gray-400 hover:text-gray-600'
-          }`}
-        >
-          💡 Too many ideas? 💡
-        </Button>
-      </div>
     </div>
   );
 }
