@@ -433,10 +433,16 @@ Return JSON:
     
     setIsUpdating(true);
     try {
+      // CRITICAL FIX: Store local date/time, not UTC
+      const now = new Date();
+      const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
+      
+      console.log('✅ [COMPLETE] Marking task complete with local time:', localISOString);
+      
       // Update in background
       Task.update(task.id, { 
         status: 'completed',
-        completed_at: new Date().toISOString()
+        completed_at: localISOString
       }).catch(error => {
         console.error("Error completing task:", error);
       });
@@ -445,7 +451,7 @@ Return JSON:
       onUpdate({ 
         ...task, 
         status: 'completed',
-        completed_at: new Date().toISOString()
+        completed_at: localISOString
       });
       
       onClose();

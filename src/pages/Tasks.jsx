@@ -95,9 +95,24 @@ export default function Tasks() {
   };
 
   const handleComplete = async (task) => {
+    // CRITICAL FIX: Store local date/time, not UTC
+    const now = new Date();
+    // Calculate the UTC equivalent of the local time.
+    // getTimezoneOffset returns the difference in minutes between UTC and local time.
+    // If local time is UTC+X, offset is -X. If local time is UTC-Y, offset is +Y.
+    // To get the local time's components into an ISO string with 'Z', we adjust the UTC timestamp.
+    // Example: If local is 12:00 (UTC+2), offset is -120.
+    // now.getTime() will correspond to 10:00 UTC.
+    // now.getTime() - (-120 * 60000) = now.getTime() + 7,200,000 (2 hours).
+    // This effectively converts the 10:00 UTC timestamp to a 12:00 UTC timestamp,
+    // which then produces an ISO string reflecting 12:00 in the HH:mm portion, followed by 'Z'.
+    const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
+    
+    console.log('✅ [COMPLETE] Marking task complete with local time:', localISOString);
+    
     await Task.update(task.id, {
       status: 'completed',
-      completed_at: new Date().toISOString()
+      completed_at: localISOString
     });
     await updateTodaysSummary();
     loadTasks();
