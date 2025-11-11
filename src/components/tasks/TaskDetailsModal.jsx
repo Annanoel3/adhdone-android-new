@@ -380,18 +380,40 @@ Return JSON:
     }
   };
 
-  const handleUpdateReminderTime = async (newTime) => {
+  const handleUpdateReminderTime = async (selectedTime, selectedDate) => {
     if (!task) return;
     
     setIsUpdating(true);
     try {
-      const [hours, minutes] = newTime.split(':');
-      const nextReminder = new Date();
-      nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+      // Get current task's reminder date and time if not provided
+      const currentTaskTime = getCurrentReminderTime(task);
+      const currentTaskDate = getCurrentReminderDate(task);
+
+      const effectiveTime = selectedTime !== undefined ? selectedTime : currentTaskTime;
+      const effectiveDate = selectedDate !== undefined ? selectedDate : currentTaskDate;
+
+      const [hours, minutes] = effectiveTime.split(':');
+      const [year, month, day] = effectiveDate.split('-').map(Number); // YYYY-MM-DD
+
+      let nextReminder = new Date(year, month - 1, day, parseInt(hours), parseInt(minutes), 0, 0);
       
       const now = new Date();
+
+      // If the constructed reminder date/time is in the past, adjust it to the future.
+      // If the selected date is today, and the selected time is in the past, make it tomorrow.
+      // Otherwise, if the selected date itself was in the past, assume user meant 'today' for that date.
       if (nextReminder <= now) {
-        nextReminder.setDate(nextReminder.getDate() + 1);
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        // If the selected date is before today, assume they meant today
+        if (new Date(year, month - 1, day) < today) {
+          nextReminder.setFullYear(now.getFullYear());
+          nextReminder.setMonth(now.getMonth());
+          nextReminder.setDate(now.getDate());
+        }
+        // If even after date adjustment (or if selected date was today), time is in past, push to next day
+        if (nextReminder <= now) {
+          nextReminder.setDate(nextReminder.getDate() + 1);
+        }
       }
 
       console.log(`🕐 [REMINDER TIME] Setting reminder for ${nextReminder.toLocaleString()} (${nextReminder.toISOString()})`);
@@ -518,6 +540,15 @@ Return JSON:
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
     return `${hours}:${minutes}`;
+  };
+
+  const getCurrentReminderDate = (task) => {
+    if (!task.next_reminder) return '';
+    const date = new Date(task.next_reminder);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const formatReminderInterval = (interval) => {
@@ -665,25 +696,48 @@ Return JSON:
                       Next: {formatReminderTime(task.next_reminder)}
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className={`w-64 p-4 ${
+                  <PopoverContent className={`w-72 p-4 ${
                     theme === 'dark' 
                       ? 'bg-gray-800 border-gray-700 text-gray-100' 
                       : 'bg-white border-gray-200'
                   }`}>
-                    <div className="space-y-2">
-                      <label className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
-                        Change reminder time:
-                      </label>
-                      <input
-                        type="time"
-                        defaultValue={getCurrentReminderTime(task)}
-                        onChange={(e) => handleUpdateReminderTime(e.target.value)}
-                        className={`w-full border rounded px-3 py-2 ${
-                          theme === 'dark'
-                            ? 'bg-gray-900 border-gray-600 text-gray-100'
-                            : 'bg-white border-gray-300 text-gray-900'
-                        }`}
-                      />
+                    <div className="space-y-4">
+                      <div>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
+                          Reminder Date:
+                        </label>
+                        <input
+                          type="date"
+                          defaultValue={getCurrentReminderDate(task)}
+                          onChange={(e) => {
+                            const currentTime = getCurrentReminderTime(task);
+                            handleUpdateReminderTime(currentTime, e.target.value);
+                          }}
+                          className={`w-full border rounded px-3 py-2 ${
+                            theme === 'dark'
+                              ? 'bg-gray-900 border-gray-600 text-gray-100'
+                              : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
+                          Reminder Time:
+                        </label>
+                        <input
+                          type="time"
+                          defaultValue={getCurrentReminderTime(task)}
+                          onChange={(e) => {
+                            const currentDate = getCurrentReminderDate(task);
+                            handleUpdateReminderTime(e.target.value, currentDate);
+                          }}
+                          className={`w-full border rounded px-3 py-2 ${
+                            theme === 'dark'
+                              ? 'bg-gray-900 border-gray-600 text-gray-100'
+                              : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                        />
+                      </div>
                     </div>
                   </PopoverContent>
                 </Popover>
