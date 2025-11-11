@@ -134,31 +134,45 @@ export default function TaskCard({
   const handleIntervalChange = async (newInterval) => {
     try {
       const now = new Date();
-      const nextReminder = new Date(now.getTime());
+      const nextReminder = new Date(task.next_reminder || now.getTime()); // Use existing next_reminder date or current date/time
 
-      switch (newInterval) {
-        case '10min':
-          nextReminder.setMinutes(nextReminder.getMinutes() + 10);
-          break;
-        case '20min':
-          nextReminder.setMinutes(nextReminder.getMinutes() + 20);
-          break;
-        case '30min':
-          nextReminder.setMinutes(nextReminder.getMinutes() + 30);
-          break;
-        case '1hour':
-          nextReminder.setHours(nextReminder.getHours() + 1);
-          break;
-        case '2hours':
-          nextReminder.setHours(nextReminder.getHours() + 2);
-          break;
-        case 'daily':
-          nextReminder.setDate(nextReminder.getDate() + 1);
-          break;
-        case 'every_other_day':
-          nextReminder.setDate(nextReminder.getDate() + 2);
-          break;
+      if (newInterval !== 'once') {
+        switch (newInterval) {
+          case '10min':
+            nextReminder.setMinutes(nextReminder.getMinutes() + 10);
+            break;
+          case '20min':
+            nextReminder.setMinutes(nextReminder.getMinutes() + 20);
+            break;
+          case '30min':
+            nextReminder.setMinutes(nextReminder.getMinutes() + 30);
+            break;
+          case '1hour':
+            nextReminder.setHours(nextReminder.getHours() + 1);
+            break;
+          case '2hours':
+            nextReminder.setHours(nextReminder.getHours() + 2);
+            break;
+          case 'daily':
+            if (nextReminder <= now) { // If next reminder is in the past, set for tomorrow
+              nextReminder.setDate(nextReminder.getDate() + 1);
+            }
+            break;
+          case 'every_other_day':
+            if (nextReminder <= now) { // If next reminder is in the past, set for the day after tomorrow
+              nextReminder.setDate(nextReminder.getDate() + 2);
+            }
+            break;
+        }
+      } else {
+        // If changing to 'once', ensure next_reminder is at least now
+        if (nextReminder < now) {
+          // If the existing next_reminder is in the past, set it to now + 10min for example or just now
+          // For 'once', it might be better to just set it to current time if it's past
+          nextReminder.setTime(now.getTime() + (10 * 60 * 1000)); // Set to 10 min from now
+        }
       }
+
 
       await Task.update(task.id, {
         reminder_interval: newInterval,
@@ -177,7 +191,7 @@ export default function TaskCard({
       nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
       // If time is in the past today, set for tomorrow
-      if (nextReminder < new Date()) {
+      if (nextReminder < new Date() && task.reminder_interval === 'once') { // Only for 'once' reminder
         nextReminder.setDate(nextReminder.getDate() + 1);
       }
 
@@ -384,7 +398,7 @@ export default function TaskCard({
             )}
 
             {/* Reminder interval badge */}
-            {task.reminder_interval && (
+            {task.reminder_interval && task.reminder_interval !== 'once' && (
               <Popover>
                 <PopoverTrigger asChild>
                   <button
@@ -406,25 +420,27 @@ export default function TaskCard({
                     <button onClick={() => handleIntervalChange('2hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 2 hours</button>
                     <button onClick={() => handleIntervalChange('daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
                     <button onClick={() => handleIntervalChange('every_other_day')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every other day</button>
+                    <div className="border-t my-1"></div>
+                    <button onClick={() => handleIntervalChange('once')} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium">📅 Set Specific Date Instead</button>
                   </div>
                 </PopoverContent>
               </Popover>
             )}
 
-            {/* Combined Date + Time Badge for ALL tasks with next_reminder */}
-            {task.next_reminder && (
+            {/* Combined Date + Time Badge for one-time reminders */}
+            {task.next_reminder && task.reminder_interval === 'once' && (
               <Popover>
                 <PopoverTrigger asChild>
                   <button
                     onClick={(e) => e.stopPropagation()}
-                    className="border border-blue-300 bg-blue-50 px-2 py-1 rounded text-xs text-blue-700 cursor-pointer hover:bg-blue-100 transition-colors flex items-center gap-1"
+                    className="border border-purple-300 bg-purple-50 px-2 py-1 rounded text-xs text-purple-700 cursor-pointer hover:bg-purple-100 transition-colors flex items-center gap-1"
                   >
                     <Calendar className="w-3 h-3" />
                     {formatReminderDate(task.next_reminder)} • {formatReminderTime(task.next_reminder)}
                   </button>
                 </PopoverTrigger>
-                <PopoverContent className="w-72 p-4" onClick={(e) => e.stopPropagation()}>
-                  <div className="space-y-4">
+                <PopoverContent className="w-72 p-2" onClick={(e) => e.stopPropagation()}>
+                  <div className="space-y-4 p-2">
                     <div>
                       <label className="text-sm font-medium block mb-2">Reminder Date:</label>
                       <input
@@ -448,6 +464,14 @@ export default function TaskCard({
                         }}
                         className="w-full border rounded px-3 py-2"
                       />
+                    </div>
+                    <div className="border-t pt-2">
+                      <button 
+                        onClick={() => handleIntervalChange('daily')} 
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium"
+                      >
+                        🔄 Use Recurring Reminder Instead
+                      </button>
                     </div>
                   </div>
                 </PopoverContent>

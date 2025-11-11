@@ -108,8 +108,19 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
 
   const handleIntervalChange = async (task, newInterval) => {
     const now = new Date();
-    const nextReminder = new Date(now.getTime());
-    
+    let nextReminder = new Date(now.getTime()); // Initialize with current time
+
+    // If switching FROM 'once' TO a recurring interval, we should ensure nextReminder is in the future.
+    // If switching TO 'once', we might want to preserve an existing next_reminder or default to current date.
+    if (newInterval !== 'once' && task.reminder_interval === 'once' && task.next_reminder) {
+      nextReminder = new Date(task.next_reminder); // Use existing reminder as a base
+    } else if (newInterval === 'once') {
+        // When setting to 'once', if there's no existing next_reminder, use current date/time
+        // Otherwise, keep the existing one.
+        nextReminder = task.next_reminder ? new Date(task.next_reminder) : new Date();
+    }
+
+
     switch (newInterval) {
       case '10min':
         nextReminder.setMinutes(nextReminder.getMinutes() + 10);
@@ -127,42 +138,63 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
         nextReminder.setHours(nextReminder.getHours() + 2);
         break;
       case 'daily':
-        nextReminder.setDate(nextReminder.getDate() + 1);
+        if (nextReminder <= now) { // If nextReminder was in the past (e.g. from an old 'once' reminder)
+          nextReminder.setDate(nextReminder.getDate() + 1);
+        }
         break;
       case 'every_other_day':
-        nextReminder.setDate(nextReminder.getDate() + 2);
+        if (nextReminder <= now) {
+          nextReminder.setDate(nextReminder.getDate() + 2);
+        } else if (Math.floor((nextReminder.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) % 2 !== 0) {
+          // If already set for tomorrow, and tomorrow is not an "every other day", push to day after
+          // This ensures it aligns with 'every other day' logic from 'now'
+          nextReminder.setDate(nextReminder.getDate() + 1);
+        }
         break;
-      case 'once': // For 'once' interval, if it's set, we don't automatically advance the date/time
-        // Keep the current next_reminder date/time or initialize it if null
-        // The user will explicitly set it via the combined date/time picker
+      case 'once': 
+        // No automatic date advancement here. The combined date/time picker will handle setting it explicitly.
+        // Ensure it's not in the past today by default, if it wasn't explicitly set.
+        if (nextReminder <= now) {
+            // If the default nextReminder (current time) is already in the past on current day, set it for next day
+            if (nextReminder.toDateString() === now.toDateString()) {
+                nextReminder.setDate(nextReminder.getDate() + 1);
+            }
+        }
+        break;
+      default:
+        // For any unknown interval, default to daily if the time is past
+        if (nextReminder <= now) {
+          nextReminder.setDate(nextReminder.getDate() + 1);
+        }
         break;
     }
 
     await base44.entities.Task.update(task.id, { 
       reminder_interval: newInterval,
-      next_reminder: newInterval === 'once' && !task.next_reminder ? new Date().toISOString() : nextReminder.toISOString()
-    });
-    window.location.reload();
-  };
-
-  const handleReminderTimeChange = async (task, newTime) => {
-    const [hours, minutes] = newTime.split(':');
-    const nextReminder = new Date(task.next_reminder || new Date());
-    nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-    
-    // CRITICAL FIX: If the time is in the past today, set it for tomorrow
-    const now = new Date();
-    if (nextReminder <= now) {
-      nextReminder.setDate(nextReminder.getDate() + 1);
-    }
-
-    console.log(`🕐 [REMINDER TIME] Setting reminder for ${nextReminder.toLocaleString()} (${nextReminder.toISOString()})`);
-
-    await base44.entities.Task.update(task.id, { 
       next_reminder: nextReminder.toISOString()
     });
     window.location.reload();
   };
+
+  // This function is no longer directly used for time-only, but its logic is embedded in handleReminderDateChange
+  // const handleReminderTimeChange = async (task, newTime) => {
+  //   const [hours, minutes] = newTime.split(':');
+  //   const nextReminder = new Date(task.next_reminder || new Date());
+  //   nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    
+  //   // CRITICAL FIX: If the time is in the past today, set it for tomorrow
+  //   const now = new Date();
+  //   if (nextReminder <= now) {
+  //     nextReminder.setDate(nextReminder.getDate() + 1);
+  //   }
+
+  //   console.log(`🕐 [REMINDER TIME] Setting reminder for ${nextReminder.toLocaleString()} (${nextReminder.toISOString()})`);
+
+  //   await base44.entities.Task.update(task.id, { 
+  //     next_reminder: nextReminder.toISOString()
+  //   });
+  //   window.location.reload();
+  // };
 
   const handleReminderDateChange = async (task, newDate, newTime) => {
     const currentNextReminder = task.next_reminder ? new Date(task.next_reminder) : new Date();
@@ -368,7 +400,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
                         </Popover>
                       )}
 
-                      {task.reminder_interval && (
+                      {task.reminder_interval && task.reminder_interval !== 'once' && (
                         <Popover>
                           <PopoverTrigger asChild>
                             <button 
@@ -388,30 +420,31 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
                               <button onClick={() => handleIntervalChange(task, '2hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 2 hours</button>
                               <button onClick={() => handleIntervalChange(task, 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
                               <button onClick={() => handleIntervalChange(task, 'every_other_day')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every other day</button>
-                              <button onClick={() => handleIntervalChange(task, 'once')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Once</button>
+                              <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}></div>
+                              <button onClick={() => handleIntervalChange(task, 'once')} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium">📅 Set Specific Date Instead</button>
                             </div>
                           </PopoverContent>
                         </Popover>
                       )}
 
-                      {/* Combined Date + Time Badge for ALL tasks with next_reminder */}
-                      {task.next_reminder && (
+                      {/* Combined Date + Time Badge for one-time reminders */}
+                      {task.next_reminder && task.reminder_interval === 'once' && (
                         <Popover>
                           <PopoverTrigger asChild>
                             <button 
                               onClick={(e) => e.stopPropagation()}
-                              className="border border-blue-300 bg-blue-50 px-2 py-1 rounded text-xs text-blue-700 cursor-pointer hover:bg-blue-100 transition-colors flex items-center gap-1"
+                              className="border border-purple-300 bg-purple-50 px-2 py-1 rounded text-xs text-purple-700 cursor-pointer hover:bg-purple-100 transition-colors flex items-center gap-1"
                             >
                               <Calendar className="w-3 h-3" />
                               {formatReminderDate(task.next_reminder)} • {new Date(task.next_reminder).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
                             </button>
                           </PopoverTrigger>
-                          <PopoverContent className={`w-72 p-4 ${
+                          <PopoverContent className={`w-72 p-2 ${
                             theme === 'dark' 
                               ? 'bg-gray-800 border-gray-700 text-gray-100' 
                               : 'bg-white border-gray-200'
                           }`} onClick={(e) => e.stopPropagation()}>
-                            <div className="space-y-4">
+                            <div className="space-y-4 p-2">
                               <div>
                                 <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
                                   Reminder Date:
@@ -447,6 +480,14 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
                                       : 'bg-white border-gray-300 text-gray-900'
                                   }`}
                                 />
+                              </div>
+                              <div className={`border-t pt-2 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+                                <button 
+                                  onClick={() => handleIntervalChange(task, 'daily')} 
+                                  className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium"
+                                >
+                                  🔄 Use Recurring Reminder Instead
+                                </button>
                               </div>
                             </div>
                           </PopoverContent>

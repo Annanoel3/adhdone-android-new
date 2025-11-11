@@ -113,7 +113,7 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
       case 'every_other_day':
         nextReminder.setDate(nextReminder.getDate() + 2);
         break;
-      default:
+      default: // This includes 'once' or null interval
         nextReminder = null;
         break;
     }
@@ -124,11 +124,12 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
       urgency: task.urgency,
       energy_required: task.energy_required,
       status: 'active',
-      reminder_interval: task.reminder_interval,
+      reminder_interval: task.reminder_interval, // Subtasks inherit parent's reminder interval
       reminder_count: 0,
       next_reminder: task.reminder_interval && task.reminder_interval !== 'once' && nextReminder ? nextReminder.toISOString() : null
     });
 
+    // Only schedule if a next_reminder was calculated and it's a recurring interval
     if (createdTask.next_reminder && task.reminder_interval !== 'once') {
       try {
         await scheduleReminder({
@@ -211,7 +212,7 @@ Return JSON:
         case 'every_other_day':
           nextReminder.setDate(nextReminder.getDate() + 2);
           break;
-        default:
+        default: // This includes 'once' or null interval
           nextReminder = null;
           break;
       }
@@ -228,6 +229,7 @@ Return JSON:
           next_reminder: task.reminder_interval && task.reminder_interval !== 'once' && nextReminder ? nextReminder.toISOString() : null
         });
 
+        // Only schedule if a next_reminder was calculated and it's a recurring interval
         if (createdTask.next_reminder && task.reminder_interval !== 'once') {
           try {
             await scheduleReminder({
@@ -310,50 +312,60 @@ Return JSON:
     try {
       const updates = { [field]: value };
       
-      // If changing reminder interval, recalculate next_reminder
+      // Cancel existing reminder if one was scheduled
+      if (task.onesignal_notification_id) {
+        try {
+          await cancelScheduledReminder(task.onesignal_notification_id);
+        } catch (error) {
+          console.error("Failed to cancel existing reminder:", error);
+        }
+      }
+
+      // If changing reminder interval, recalculate next_reminder and schedule new one
       if (field === 'reminder_interval') {
         const now = new Date();
-        let nextReminder = new Date(now.getTime());
-        
-        switch (value) {
-          case '10min':
-            nextReminder.setMinutes(nextReminder.getMinutes() + 10);
-            break;
-          case '20min':
-            nextReminder.setMinutes(nextReminder.getMinutes() + 20);
-            break;
-          case '30min':
-            nextReminder.setMinutes(nextReminder.getMinutes() + 30);
-            break;
-          case '1hour':
-            nextReminder.setHours(nextReminder.getHours() + 1);
-            break;
-          case '2hours':
-            nextReminder.setHours(nextReminder.getHours() + 2);
-            break;
-          case 'daily':
-            nextReminder.setDate(nextReminder.getDate() + 1);
-            break;
-          case 'every_other_day':
-            nextReminder.setDate(nextReminder.getDate() + 2);
-            break;
-          case 'once':
-          default:
-            nextReminder = null;
-            break;
+        let nextReminderDate = null; // This will hold the new next_reminder date object
+        const currentUser = await User.me(); // Get user once outside the scheduling block
+
+        if (value === 'once') {
+          // If changing to 'once', keep current next_reminder if it exists,
+          // otherwise set a default future date (e.g., tomorrow 9 AM)
+          if (task.next_reminder) {
+            nextReminderDate = new Date(task.next_reminder);
+          } else {
+            // Default to tomorrow 9 AM if no reminder was set before
+            nextReminderDate = new Date();
+            nextReminderDate.setDate(nextReminderDate.getDate() + 1);
+            nextReminderDate.setHours(9, 0, 0, 0);
+          }
+          // Ensure it's in the future
+          if (nextReminderDate <= now) {
+            nextReminderDate.setDate(nextReminderDate.getDate() + 1);
+          }
+        } else { // Recurring interval
+          nextReminderDate = new Date(now.getTime());
+          switch (value) {
+            case '10min': nextReminderDate.setMinutes(nextReminderDate.getMinutes() + 10); break;
+            case '20min': nextReminderDate.setMinutes(nextReminderDate.getMinutes() + 20); break;
+            case '30min': nextReminderDate.setMinutes(nextReminderDate.getMinutes() + 30); break;
+            case '1hour': nextReminderDate.setHours(nextReminderDate.getHours() + 1); break;
+            case '2hours': nextReminderDate.setHours(nextReminderDate.getHours() + 2); break;
+            case 'daily': nextReminderDate.setDate(nextReminderDate.getDate() + 1); break;
+            case 'every_other_day': nextReminderDate.setDate(nextReminderDate.getDate() + 2); break;
+            // No default needed, as value is expected to be one of the above for recurring
+          }
         }
         
-        updates.next_reminder = nextReminder ? nextReminder.toISOString() : null;
+        updates.next_reminder = nextReminderDate ? nextReminderDate.toISOString() : null;
         
-        // Schedule the new recurring reminder
-        if (nextReminder && value !== 'once') {
+        // Schedule the new reminder if nextReminderDate is valid
+        if (nextReminderDate) {
           try {
-            const currentUser = await User.me();
             await scheduleReminder({
               email: currentUser.email,
               title: "Task Reminder 📋",
               body: task.title,
-              sendAtISO: nextReminder.toISOString(),
+              sendAtISO: nextReminderDate.toISOString(),
               taskId: task.id,
               data: {
                 screen: "/Tasks",
@@ -418,6 +430,15 @@ Return JSON:
 
       console.log(`🕐 [REMINDER TIME] Setting reminder for ${nextReminder.toLocaleString()} (${nextReminder.toISOString()})`);
 
+      // Cancel existing reminder before scheduling a new one
+      if (task.onesignal_notification_id) {
+        try {
+          await cancelScheduledReminder(task.onesignal_notification_id);
+        } catch (error) {
+          console.error("Failed to cancel existing reminder:", error);
+        }
+      }
+
       // Reschedule the notification
       try {
         const currentUser = await User.me();
@@ -460,11 +481,21 @@ Return JSON:
       const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
       
       console.log('✅ [COMPLETE] Marking task complete with local time:', localISOString);
+
+      // Cancel reminder when task is completed
+      if (task.onesignal_notification_id) {
+        try {
+          await cancelScheduledReminder(task.onesignal_notification_id);
+        } catch (error) {
+          console.error("Failed to cancel reminder on completion:", error);
+        }
+      }
       
       // Update in background
       Task.update(task.id, { 
         status: 'completed',
-        completed_at: localISOString
+        completed_at: localISOString,
+        onesignal_notification_id: null // Clear notification ID as reminder is cancelled
       }).catch(error => {
         console.error("Error completing task:", error);
       });
@@ -473,7 +504,8 @@ Return JSON:
       onUpdate({ 
         ...task, 
         status: 'completed',
-        completed_at: localISOString
+        completed_at: localISOString,
+        onesignal_notification_id: null
       });
       
       onClose();
@@ -531,6 +563,16 @@ Return JSON:
       hour: 'numeric', 
       minute: '2-digit',
       hour12: true 
+    });
+  };
+
+  const formatReminderDate = (dateString) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      month: 'short', 
+      day: 'numeric',
+      year: 'numeric'
     });
   };
 
@@ -663,8 +705,8 @@ Return JSON:
                 </PopoverContent>
               </Popover>
 
-              {/* Reminder Interval Badge - Clickable */}
-              {task.reminder_interval && (
+              {/* Reminder Interval Badge - Clickable (for recurring reminders) */}
+              {task.reminder_interval && task.reminder_interval !== 'once' && (
                 <Popover>
                   <PopoverTrigger asChild>
                     <button className="cursor-pointer hover:opacity-80 transition-opacity border px-3 py-1 rounded-full text-sm font-medium bg-white flex items-center gap-1">
@@ -681,19 +723,20 @@ Return JSON:
                       <button onClick={() => handleUpdateField('reminder_interval', '2hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 2 hours</button>
                       <button onClick={() => handleUpdateField('reminder_interval', 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
                       <button onClick={() => handleUpdateField('reminder_interval', 'every_other_day')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every other day</button>
-                      <button onClick={() => handleUpdateField('reminder_interval', 'once')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">One time</button>
+                      <div className="border-t my-1"></div>
+                      <button onClick={() => handleUpdateField('reminder_interval', 'once')} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium">📅 Set Specific Date Instead</button>
                     </div>
                   </PopoverContent>
                 </Popover>
               )}
 
-              {/* Next Reminder Time Badge - Clickable */}
-              {task.next_reminder && (
+              {/* Next Reminder Time Badge - Clickable (Only for 'once' reminders) */}
+              {task.next_reminder && task.reminder_interval === 'once' && (
                 <Popover>
                   <PopoverTrigger asChild>
                     <button className="cursor-pointer hover:opacity-80 transition-opacity bg-blue-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      Next: {formatReminderTime(task.next_reminder)}
+                      {formatReminderDate(task.next_reminder)} • {formatReminderTime(task.next_reminder)}
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className={`w-72 p-4 ${
@@ -738,6 +781,14 @@ Return JSON:
                           }`}
                         />
                       </div>
+                      <div className={`border-t pt-3 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
+                        <button 
+                          onClick={() => handleUpdateField('reminder_interval', 'daily')} 
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium"
+                        >
+                          🔄 Use Recurring Reminder Instead
+                        </button>
+                      </div>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -758,7 +809,7 @@ Return JSON:
                 <PopoverContent className="w-48 p-2">
                   <div className="space-y-1">
                     <button onClick={() => handleUpdateField('urgency', 'low')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Low Priority</button>
-                    <button onClick={() => handleUpdateField('urgency', 'medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-100 rounded">Medium Priority</button>
+                    <button onClick={() => handleUpdateField('urgency', 'medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Medium Priority</button>
                     <button onClick={() => handleUpdateField('urgency', 'high')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">High Priority</button>
                     <button onClick={() => handleUpdateField('urgency', 'urgent')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Urgent</button>
                   </div>
