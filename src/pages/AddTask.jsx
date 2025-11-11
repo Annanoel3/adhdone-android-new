@@ -12,6 +12,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { base44 } from "@/api/base44Client";
 import { scheduleReminder } from "../components/utils/reminderScheduler";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function AddTask() {
   const navigate = useNavigate();
@@ -23,6 +29,8 @@ export default function AddTask() {
   const [isRecording, setIsRecording] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [optimisticTasks, setOptimisticTasks] = useState([]);
+  const [showAdvanceReminderDialog, setShowAdvanceReminderDialog] = useState(false);
+  const [pendingTask, setPendingTask] = useState(null);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -59,7 +67,7 @@ export default function AddTask() {
   const processAndCreateTask = async (inputText) => {
     if (!inputText.trim()) return;
 
-    setIsProcessing(true);
+    // setIsProcessing(true) is handled by the caller functions (handleVoiceTranscription, handleTextSubmit)
     const tempId = createTaskOptimistically(inputText);
 
     try {
@@ -69,12 +77,7 @@ export default function AddTask() {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      // Navigate immediately - don't wait
-      navigate(createPageUrl("Home"), { state: { reload: true } });
-      setIsProcessing(false); // Reset processing state for UI quickly
-
       // Process in background
-      // CRITICAL: Generate date context for next 60 days
       const dateContext = [];
       for (let i = 0; i < 60; i++) {
         const date = new Date(today);
@@ -140,7 +143,6 @@ Return JSON:
       let nextReminder = null;
       let actualReminderInterval = parsed.reminder_interval || null;
 
-      // CRITICAL: Handle far-future dates
       if (parsed.target_date) {
         const targetDate = new Date(parsed.target_date);
         
@@ -148,16 +150,28 @@ Return JSON:
           const [hours, minutes] = parsed.target_time.split(':');
           targetDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
         } else {
-          // Default to 9am if no time specified
           targetDate.setHours(9, 0, 0, 0);
         }
         
-        // Ensure the year is correct if only month/day were specified and it's already passed this year
-        // This logic is already handled by LLM providing YYYY-MM-DD but as a safeguard.
-        // For simplicity, assuming LLM provides a future or today's date if explicit.
-        
         nextReminder = targetDate;
         actualReminderInterval = 'once';
+
+        // CRITICAL: If specific date is set, ask about advance reminder
+        const taskData = {
+          title: parsed.title || inputText.trim(),
+          description: '',
+          reminder_interval: actualReminderInterval,
+          reminder_count: 0,
+          next_reminder: nextReminder.toISOString(),
+          urgency: parsed.urgency || 'medium',
+          energy_required: parsed.energy_required || 'medium',
+          status: 'active'
+        };
+
+        setPendingTask({ taskData, tempId, currentUser });
+        setShowAdvanceReminderDialog(true);
+        setIsProcessing(false); // Reset processing state for UI quickly, dialog will take over
+        return true; // Exit here, task creation will be handled by dialog choice
       } else if (parsed.relative_minutes && parsed.relative_minutes > 0) {
         nextReminder = new Date(now.getTime() + parsed.relative_minutes * 60 * 1000);
         actualReminderInterval = 'once';
@@ -184,14 +198,23 @@ Return JSON:
           case 'daily':
             nextReminder.setDate(nextReminder.getDate() + 1);
             break;
+          default:
+            // For other intervals like weekly, monthly, quarterly, yearly - just set a default first reminder
+            nextReminder.setHours(nextReminder.getHours() + 2);
+            break;
         }
       } else if (!parsed.reminder_interval && !parsed.target_time && !parsed.relative_minutes && !parsed.target_date) {
+        // Default to 2 hours if no specific reminder details
         actualReminderInterval = '2hours';
         nextReminder = new Date();
         nextReminder.setHours(nextReminder.getHours() + 2);
       }
 
       console.log('📅 [TASK] Parsed:', { target_date: parsed.target_date, target_time: parsed.target_time, nextReminder: nextReminder?.toISOString() });
+
+      // Navigate and create task immediately if no advance reminder dialog is needed
+      navigate(createPageUrl("Home"), { state: { reload: true } });
+      setIsProcessing(false);
 
       // Create task in background
       const createdTask = await Task.create({
@@ -240,8 +263,74 @@ Return JSON:
       console.error("Error creating task:", error);
       removeOptimisticTask(tempId);
       alert("Failed to create task. Please try again.");
-      // The setIsProcessing(false) was already called, no need to call it again here.
+      setIsProcessing(false); // Reset processing state in case of error
       return false;
+    }
+  };
+
+  const handleAdvanceReminderChoice = async (minutesBefore) => {
+    if (!pendingTask) return;
+
+    const { taskData, tempId, currentUser } = pendingTask;
+
+    // Navigate immediately to Home as the task is now being finalized
+    navigate(createPageUrl("Home"), { state: { reload: true } });
+    setShowAdvanceReminderDialog(false);
+
+    try {
+      // Create the actual task
+      const createdTask = await Task.create(taskData);
+
+      // Schedule main reminder
+      const mainReminderTime = new Date(taskData.next_reminder);
+      const notificationId = await scheduleReminder({
+        email: currentUser.email,
+        title: "Task Reminder 📋",
+        body: createdTask.title,
+        sendAtISO: mainReminderTime.toISOString(),
+        taskId: createdTask.id,
+        data: {
+          screen: "/Tasks",
+          taskId: createdTask.id,
+          urgency: createdTask.urgency,
+          type: 'task_reminder'
+        }
+      });
+
+      // Schedule advance reminder if chosen
+      if (minutesBefore > 0) {
+        const advanceTime = new Date(mainReminderTime.getTime() - (minutesBefore * 60 * 1000));
+        // Ensure advance time is not in the past
+        if (advanceTime.getTime() > new Date().getTime()) {
+          await scheduleReminder({
+            email: currentUser.email,
+            title: "📋 Upcoming Task",
+            body: `In ${minutesBefore >= 60 ? `${minutesBefore / 60} hour${minutesBefore > 60 ? 's' : ''}` : `${minutesBefore} min`}: ${createdTask.title}`,
+            sendAtISO: advanceTime.toISOString(),
+            taskId: createdTask.id,
+            data: {
+              screen: "/Tasks",
+              taskId: createdTask.id,
+              urgency: createdTask.urgency,
+              type: 'advance_reminder'
+            }
+          });
+        }
+      }
+
+      if (notificationId) {
+        await base44.entities.Task.update(createdTask.id, {
+          onesignal_notification_id: notificationId
+        });
+      }
+
+      replaceOptimisticTask(tempId, createdTask);
+    } catch (error) {
+      console.error("Error creating task with advance reminder:", error);
+      removeOptimisticTask(tempId);
+      alert("Failed to create task with advance reminder. Please try again.");
+    } finally {
+      setPendingTask(null); // Clear pending task regardless of success/failure
     }
   };
 
@@ -293,9 +382,11 @@ Return JSON:
       recorder.start();
       setMediaRecorder(recorder);
       setIsRecording(true);
+      setIsProcessing(true); // Indicate processing has started for transcription/task creation
     } catch (error) {
       console.error("Microphone error:", error);
       alert("Could not access microphone");
+      setIsProcessing(false);
     }
   };
 
@@ -303,7 +394,7 @@ Return JSON:
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       mediaRecorder.stop();
       setIsRecording(false);
-      setIsProcessing(true);
+      // setIsProcessing(true) is already set in startVoiceRecording and kept here
     }
   };
 
@@ -352,6 +443,7 @@ Return JSON:
     e.preventDefault();
     if (!textInput.trim()) return;
 
+    setIsProcessing(true); // Indicate processing has started
     await processAndCreateTask(textInput);
     setTextInput('');
   };
@@ -592,6 +684,36 @@ Return JSON:
           </CardContent>
         </Card>
       )}
+
+      {/* Advance Reminder Dialog */}
+      <Dialog open={showAdvanceReminderDialog} onOpenChange={setShowAdvanceReminderDialog}>
+        <DialogContent className="max-w-md w-[calc(100vw-2rem)]">
+          <DialogHeader>
+            <DialogTitle>Would you like an advance reminder?</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-4">
+            <p className="text-sm text-gray-600">Get notified before the task is due:</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button onClick={() => handleAdvanceReminderChoice(30)} variant="outline" className="h-auto py-3 flex flex-col">
+                <span className="font-semibold">30 minutes</span>
+                <span className="text-xs text-gray-500">before</span>
+              </Button>
+              <Button onClick={() => handleAdvanceReminderChoice(60)} variant="outline" className="h-auto py-3 flex flex-col">
+                <span className="font-semibold">1 hour</span>
+                <span className="text-xs text-gray-500">before</span>
+              </Button>
+              <Button onClick={() => handleAdvanceReminderChoice(1440)} variant="outline" className="h-auto py-3 flex flex-col">
+                <span className="font-semibold">1 day</span>
+                <span className="text-xs text-gray-500">before</span>
+              </Button>
+              <Button onClick={() => handleAdvanceReminderChoice(0)} variant="outline" className="h-auto py-3 flex flex-col">
+                <span className="font-semibold">No thanks</span>
+                <span className="text-xs text-gray-500">just on time</span>
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

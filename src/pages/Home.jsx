@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
@@ -204,7 +205,7 @@ export default function Home() {
   }, [tasks, todayCompleted]);
 
   return (
-    <div className={`min-h-screen p-4 md:p-8 w-full ${
+    <div className={`min-h-screen p-4 md:p-8 w-full pb-0 ${
       theme === 'spicybrains' 
         ? 'bg-gradient-to-br from-green-300 via-blue-300 to-purple-300' 
         : ''

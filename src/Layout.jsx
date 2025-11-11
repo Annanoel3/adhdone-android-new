@@ -715,7 +715,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                                       ? 'bg-green-50 text-green-700 font-medium'
                                       : theme === 'dark'
                                         ? 'bg-gray-800 text-white font-medium'
-                                        : theme === 'spicybrains'
+                                      : theme === 'spicybrains'
                                           ? 'bg-gradient-to-r from-pink-400 to-yellow-300 text-gray-900 font-bold border-2 border-cyan-400'
                                         : 'bg-gradient-to-r from-purple-100 to-orange-100 text-purple-700 font-medium'
                                   : isSeasonalTheme()
@@ -870,9 +870,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             </SidebarFooter>
           </Sidebar>
 
-          <main className="flex-1 flex flex-col min-w-0 min-h-screen relative z-10" style={{
-            paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))'
-          }}>
+          <main className="flex-1 flex flex-col min-w-0 min-h-screen relative z-10">
             <header className={`backdrop-blur-md border-b px-6 md:hidden sticky top-0 z-10 ${
               isSeasonalTheme()
                 ? 'bg-white/60 border-white/30'

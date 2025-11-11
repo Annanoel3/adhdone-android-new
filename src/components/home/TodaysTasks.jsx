@@ -132,11 +132,15 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
       case 'every_other_day':
         nextReminder.setDate(nextReminder.getDate() + 2);
         break;
+      case 'once': // For 'once' interval, if it's set, we don't automatically advance the date/time
+        // Keep the current next_reminder date/time or initialize it if null
+        // The user will explicitly set it via the combined date/time picker
+        break;
     }
 
     await base44.entities.Task.update(task.id, { 
       reminder_interval: newInterval,
-      next_reminder: nextReminder.toISOString()
+      next_reminder: newInterval === 'once' && !task.next_reminder ? new Date().toISOString() : nextReminder.toISOString()
     });
     window.location.reload();
   };
@@ -384,21 +388,22 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
                               <button onClick={() => handleIntervalChange(task, '2hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 2 hours</button>
                               <button onClick={() => handleIntervalChange(task, 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
                               <button onClick={() => handleIntervalChange(task, 'every_other_day')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every other day</button>
+                              <button onClick={() => handleIntervalChange(task, 'once')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Once</button>
                             </div>
                           </PopoverContent>
                         </Popover>
                       )}
 
-                      {/* NEW: Reminder Date Badge (only for one-time reminders) */}
-                      {task.next_reminder && task.reminder_interval === 'once' && (
+                      {/* Combined Date + Time Badge for ALL tasks with next_reminder */}
+                      {task.next_reminder && (
                         <Popover>
                           <PopoverTrigger asChild>
                             <button 
                               onClick={(e) => e.stopPropagation()}
-                              className="border border-purple-300 bg-purple-50 px-2 py-1 rounded text-xs text-purple-700 cursor-pointer hover:bg-purple-100 transition-colors flex items-center gap-1"
+                              className="border border-blue-300 bg-blue-50 px-2 py-1 rounded text-xs text-blue-700 cursor-pointer hover:bg-blue-100 transition-colors flex items-center gap-1"
                             >
                               <Calendar className="w-3 h-3" />
-                              {formatReminderDate(task.next_reminder)}
+                              {formatReminderDate(task.next_reminder)} • {new Date(task.next_reminder).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
                             </button>
                           </PopoverTrigger>
                           <PopoverContent className={`w-72 p-4 ${
@@ -443,40 +448,6 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
                                   }`}
                                 />
                               </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      )}
-
-                      {task.next_reminder && (
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button 
-                              onClick={(e) => e.stopPropagation()}
-                              className="border border-blue-300 bg-white px-2 py-1 rounded text-xs text-blue-700 cursor-pointer hover:bg-blue-50 transition-colors"
-                            >
-                              {new Date(task.next_reminder).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className={`w-64 p-4 ${
-                            theme === 'dark' 
-                              ? 'bg-gray-800 border-gray-700 text-gray-100' 
-                              : 'bg-white border-gray-200'
-                          }`} onClick={(e) => e.stopPropagation()}>
-                            <div className="space-y-2">
-                              <label className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
-                                Change reminder time:
-                              </label>
-                              <input
-                                type="time"
-                                defaultValue={getCurrentReminderTime(task)}
-                                onChange={(e) => handleReminderTimeChange(task, e.target.value)}
-                                className={`w-full border rounded px-3 py-2 ${
-                                  theme === 'dark'
-                                    ? 'bg-gray-900 border-gray-600 text-gray-100'
-                                    : 'bg-white border-gray-300 text-gray-900'
-                                }`}
-                              />
                             </div>
                           </PopoverContent>
                         </Popover>

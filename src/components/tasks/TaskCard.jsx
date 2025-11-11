@@ -411,16 +411,16 @@ export default function TaskCard({
               </Popover>
             )}
 
-            {/* Next Reminder Date Badge - NEW */}
-            {task.next_reminder && task.reminder_interval === 'once' && (
+            {/* Combined Date + Time Badge for ALL tasks with next_reminder */}
+            {task.next_reminder && (
               <Popover>
                 <PopoverTrigger asChild>
                   <button
                     onClick={(e) => e.stopPropagation()}
-                    className="border border-purple-300 bg-purple-50 px-2 py-1 rounded text-xs text-purple-700 cursor-pointer hover:bg-purple-100 transition-colors flex items-center gap-1"
+                    className="border border-blue-300 bg-blue-50 px-2 py-1 rounded text-xs text-blue-700 cursor-pointer hover:bg-blue-100 transition-colors flex items-center gap-1"
                   >
                     <Calendar className="w-3 h-3" />
-                    {formatReminderDate(task.next_reminder)}
+                    {formatReminderDate(task.next_reminder)} • {formatReminderTime(task.next_reminder)}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className="w-72 p-4" onClick={(e) => e.stopPropagation()}>
@@ -449,32 +449,6 @@ export default function TaskCard({
                         className="w-full border rounded px-3 py-2"
                       />
                     </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            )}
-
-            {/* Next Reminder Time Badge (only for recurring reminders, 'once' handled above) */}
-            {task.next_reminder && task.reminder_interval !== 'once' && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    onClick={(e) => e.stopPropagation()}
-                    className="border border-blue-300 bg-blue-50 px-2 py-1 rounded text-xs text-blue-700 cursor-pointer hover:bg-blue-100 transition-colors flex items-center gap-1"
-                  >
-                    <Clock className="w-3 h-3" />
-                    {formatReminderTime(task.next_reminder)}
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-64 p-4" onClick={(e) => e.stopPropagation()}>
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Change reminder time:</label>
-                    <input
-                      type="time"
-                      defaultValue={getCurrentReminderTime(task)}
-                      onChange={(e) => handleReminderTimeChange(e.target.value)}
-                      className="w-full border rounded px-3 py-2"
-                    />
                   </div>
                 </PopoverContent>
               </Popover>
