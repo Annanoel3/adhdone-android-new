@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, Clock, Zap, Pencil } from "lucide-react";
+import { CheckCircle2, Clock, Zap, Pencil, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
@@ -143,7 +143,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
 
   const handleReminderTimeChange = async (task, newTime) => {
     const [hours, minutes] = newTime.split(':');
-    const nextReminder = new Date();
+    const nextReminder = new Date(task.next_reminder || new Date());
     nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
     
     // CRITICAL FIX: If the time is in the past today, set it for tomorrow
@@ -160,12 +160,59 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
     window.location.reload();
   };
 
+  const handleReminderDateChange = async (task, newDate, newTime) => {
+    const currentNextReminder = task.next_reminder ? new Date(task.next_reminder) : new Date();
+    let updatedNextReminder = new Date(currentNextReminder);
+
+    if (newDate) {
+        const selectedDate = new Date(newDate);
+        updatedNextReminder.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+    }
+
+    if (newTime) {
+        const [hours, minutes] = newTime.split(':');
+        updatedNextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    }
+
+    // CRITICAL FIX: If the new reminder date/time is in the past on the current day, adjust it to tomorrow.
+    const now = new Date();
+    if (updatedNextReminder <= now && updatedNextReminder.toDateString() === now.toDateString()) {
+      updatedNextReminder.setDate(updatedNextReminder.getDate() + 1);
+    }
+
+    console.log(`📅 [REMINDER DATE] Setting reminder for ${updatedNextReminder.toLocaleString()} (${updatedNextReminder.toISOString()})`);
+
+    await base44.entities.Task.update(task.id, { 
+      next_reminder: updatedNextReminder.toISOString()
+    });
+    window.location.reload();
+  };
+
   const getCurrentReminderTime = (task) => {
     if (!task.next_reminder) return '';
     const date = new Date(task.next_reminder);
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
     return `${hours}:${minutes}`;
+  };
+
+  const getCurrentReminderDate = (task) => {
+    if (!task.next_reminder) return '';
+    const date = new Date(task.next_reminder);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatReminderDate = (dateString) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+    });
   };
 
   if (activeTasks.length === 0) {
@@ -337,6 +384,65 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
                               <button onClick={() => handleIntervalChange(task, '2hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 2 hours</button>
                               <button onClick={() => handleIntervalChange(task, 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
                               <button onClick={() => handleIntervalChange(task, 'every_other_day')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every other day</button>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      )}
+
+                      {/* NEW: Reminder Date Badge (only for one-time reminders) */}
+                      {task.next_reminder && task.reminder_interval === 'once' && (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button 
+                              onClick={(e) => e.stopPropagation()}
+                              className="border border-purple-300 bg-purple-50 px-2 py-1 rounded text-xs text-purple-700 cursor-pointer hover:bg-purple-100 transition-colors flex items-center gap-1"
+                            >
+                              <Calendar className="w-3 h-3" />
+                              {formatReminderDate(task.next_reminder)}
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className={`w-72 p-4 ${
+                            theme === 'dark' 
+                              ? 'bg-gray-800 border-gray-700 text-gray-100' 
+                              : 'bg-white border-gray-200'
+                          }`} onClick={(e) => e.stopPropagation()}>
+                            <div className="space-y-4">
+                              <div>
+                                <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
+                                  Reminder Date:
+                                </label>
+                                <input
+                                  type="date"
+                                  defaultValue={getCurrentReminderDate(task)}
+                                  onChange={(e) => {
+                                    const currentTime = getCurrentReminderTime(task);
+                                    handleReminderDateChange(task, e.target.value, currentTime);
+                                  }}
+                                  className={`w-full border rounded px-3 py-2 ${
+                                    theme === 'dark'
+                                      ? 'bg-gray-900 border-gray-600 text-gray-100'
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                />
+                              </div>
+                              <div>
+                                <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
+                                  Reminder Time:
+                                </label>
+                                <input
+                                  type="time"
+                                  defaultValue={getCurrentReminderTime(task)}
+                                  onChange={(e) => {
+                                    const currentDate = getCurrentReminderDate(task);
+                                    handleReminderDateChange(task, currentDate, e.target.value);
+                                  }}
+                                  className={`w-full border rounded px-3 py-2 ${
+                                    theme === 'dark'
+                                      ? 'bg-gray-900 border-gray-600 text-gray-100'
+                                      : 'bg-white border-gray-300 text-gray-900'
+                                  }`}
+                                />
+                              </div>
                             </div>
                           </PopoverContent>
                         </Popover>

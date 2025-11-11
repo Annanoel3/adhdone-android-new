@@ -62,18 +62,6 @@ export default function TaskCard({
     }
   };
 
-  // The isReminder flag was used previously, but now we rely on specific properties like task.next_reminder or task.reminder_interval
-  // const isReminder = task.is_reminder || task.reminder_interval === "once";
-
-  // Moved and formatted reminderTime logic into a dedicated helper `formatReminderTime`
-  // const reminderTime = task.next_reminder
-  //   ? new Date(task.next_reminder).toLocaleTimeString('en-US', {
-  //       hour: 'numeric',
-  //       minute: '2-digit',
-  //       hour12: true
-  //     })
-  //   : null;
-
   const taskDate = new Date(task.created_date).toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -221,12 +209,69 @@ export default function TaskCard({
   };
 
   // Get current time for reminder time input
-  const getCurrentReminderTime = (taskItem) => { // Updated to accept taskItem
+  const getCurrentReminderTime = (taskItem) => {
     if (!taskItem.next_reminder) return '';
     const date = new Date(taskItem.next_reminder);
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
     return `${hours}:${minutes}`;
+  };
+
+  const getCurrentReminderDate = (taskItem) => {
+    if (!taskItem.next_reminder) return '';
+    const date = new Date(taskItem.next_reminder);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const formatReminderDate = (dateString) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: date.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+    });
+  };
+
+  const handleReminderDateChange = async (newDate, newTime) => {
+    try {
+      let nextReminder;
+      
+      if (newDate) {
+        nextReminder = new Date(newDate);
+        if (newTime) {
+          const [hours, minutes] = newTime.split(':');
+          nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+        } else {
+          // If only date is provided, keep the existing time from the current next_reminder
+          const currentReminder = task.next_reminder ? new Date(task.next_reminder) : new Date();
+          nextReminder.setHours(currentReminder.getHours(), currentReminder.getMinutes(), 0, 0);
+        }
+      } else if (newTime) {
+        // If only time is provided, keep the existing date from the current next_reminder
+        nextReminder = task.next_reminder ? new Date(task.next_reminder) : new Date();
+        const [hours, minutes] = newTime.split(':');
+        nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+      } else {
+          return; // No change to apply
+      }
+
+      // If combined new date and time is in the past, set for tomorrow if it's a 'once' reminder
+      // This is a simplified check, more robust logic might be needed based on specific requirements
+      if (nextReminder < new Date() && task.reminder_interval === 'once') {
+        nextReminder.setDate(nextReminder.getDate() + 1);
+      }
+
+      await Task.update(task.id, {
+        next_reminder: nextReminder.toISOString()
+      });
+      onRefreshTasks();
+    } catch (error) {
+      console.error("Error updating reminder date/time:", error);
+    }
   };
 
   return (
@@ -366,8 +411,51 @@ export default function TaskCard({
               </Popover>
             )}
 
-            {/* Next Reminder Time Badge */}
-            {task.next_reminder && (
+            {/* Next Reminder Date Badge - NEW */}
+            {task.next_reminder && task.reminder_interval === 'once' && (
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    onClick={(e) => e.stopPropagation()}
+                    className="border border-purple-300 bg-purple-50 px-2 py-1 rounded text-xs text-purple-700 cursor-pointer hover:bg-purple-100 transition-colors flex items-center gap-1"
+                  >
+                    <Calendar className="w-3 h-3" />
+                    {formatReminderDate(task.next_reminder)}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-72 p-4" onClick={(e) => e.stopPropagation()}>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-sm font-medium block mb-2">Reminder Date:</label>
+                      <input
+                        type="date"
+                        defaultValue={getCurrentReminderDate(task)}
+                        onChange={(e) => {
+                          const currentTime = getCurrentReminderTime(task);
+                          handleReminderDateChange(e.target.value, currentTime);
+                        }}
+                        className="w-full border rounded px-3 py-2"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium block mb-2">Reminder Time:</label>
+                      <input
+                        type="time"
+                        defaultValue={getCurrentReminderTime(task)}
+                        onChange={(e) => {
+                          const currentDate = getCurrentReminderDate(task);
+                          handleReminderDateChange(currentDate, e.target.value);
+                        }}
+                        className="w-full border rounded px-3 py-2"
+                      />
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            )}
+
+            {/* Next Reminder Time Badge (only for recurring reminders, 'once' handled above) */}
+            {task.next_reminder && task.reminder_interval !== 'once' && (
               <Popover>
                 <PopoverTrigger asChild>
                   <button
@@ -438,7 +526,7 @@ export default function TaskCard({
             </Button>
           </div>
 
-          {(task.type === 'task' || task.type === 'reminder') && ( // Condition added to only show snooze for tasks/reminders
+          {(task.type === 'task' || task.type === 'reminder') && (
             <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
               <Button
                 variant="outline"
