@@ -108,7 +108,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
 
   const handleIntervalChange = async (task, newInterval) => {
     const now = new Date();
-    let nextReminder = new Date(now.getTime()); // Initialize with current time
+    let nextReminder = new Date(task.next_reminder || now); // Initialize with existing reminder or current time
 
     // If switching FROM 'once' TO a recurring interval, we should ensure nextReminder is in the future.
     // If switching TO 'once', we might want to preserve an existing next_reminder or default to current date.
@@ -175,26 +175,6 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
     });
     window.location.reload();
   };
-
-  // This function is no longer directly used for time-only, but its logic is embedded in handleReminderDateChange
-  // const handleReminderTimeChange = async (task, newTime) => {
-  //   const [hours, minutes] = newTime.split(':');
-  //   const nextReminder = new Date(task.next_reminder || new Date());
-  //   nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-    
-  //   // CRITICAL FIX: If the time is in the past today, set it for tomorrow
-  //   const now = new Date();
-  //   if (nextReminder <= now) {
-  //     nextReminder.setDate(nextReminder.getDate() + 1);
-  //   }
-
-  //   console.log(`🕐 [REMINDER TIME] Setting reminder for ${nextReminder.toLocaleString()} (${nextReminder.toISOString()})`);
-
-  //   await base44.entities.Task.update(task.id, { 
-  //     next_reminder: nextReminder.toISOString()
-  //   });
-  //   window.location.reload();
-  // };
 
   const handleReminderDateChange = async (task, newDate, newTime) => {
     const currentNextReminder = task.next_reminder ? new Date(task.next_reminder) : new Date();
@@ -400,6 +380,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
                         </Popover>
                       )}
 
+                      {/* Show interval badge for recurring reminders */}
                       {task.reminder_interval && task.reminder_interval !== 'once' && (
                         <Popover>
                           <PopoverTrigger asChild>
@@ -427,8 +408,8 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
                         </Popover>
                       )}
 
-                      {/* Combined Date + Time Badge for one-time reminders */}
-                      {task.next_reminder && task.reminder_interval === 'once' && (
+                      {/* Show date badge for one-time reminders with a date set */}
+                      {task.reminder_interval === 'once' && task.next_reminder && (
                         <Popover>
                           <PopoverTrigger asChild>
                             <button 
@@ -489,6 +470,32 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
                                   🔄 Use Recurring Reminder Instead
                                 </button>
                               </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      )}
+
+                      {/* Show "Add Reminder" button if no reminder is set */}
+                      {!task.reminder_interval && !task.next_reminder && (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button 
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-1 border border-dashed border-gray-300 px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors text-gray-500"
+                            >
+                              <Clock className="w-3 h-3" />
+                              Add Reminder
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-56 p-2" onClick={(e) => e.stopPropagation()}>
+                            <div className="space-y-1">
+                              <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Recurring</div>
+                              <button onClick={() => handleIntervalChange(task, '30min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 30 minutes</button>
+                              <button onClick={() => handleIntervalChange(task, '1hour')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every hour</button>
+                              <button onClick={() => handleIntervalChange(task, '2hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 2 hours</button>
+                              <button onClick={() => handleIntervalChange(task, 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
+                              <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}></div>
+                              <button onClick={() => handleIntervalChange(task, 'once')} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium">📅 Set Specific Date</button>
                             </div>
                           </PopoverContent>
                         </Popover>
