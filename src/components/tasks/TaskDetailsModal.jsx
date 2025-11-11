@@ -404,8 +404,13 @@ Return JSON:
       const effectiveTime = selectedTime !== undefined ? selectedTime : currentTaskTime;
       const effectiveDate = selectedDate !== undefined ? selectedDate : currentTaskDate;
 
-      const [hours, minutes] = effectiveTime.split(':');
-      const [year, month, day] = effectiveDate.split('-').map(Number); // YYYY-MM-DD
+      // Ensure effectiveDate and effectiveTime are valid strings before splitting
+      // Provide a fallback to today for date and 09:00 for time if they are empty
+      const finalEffectiveDate = effectiveDate || new Date().toISOString().split('T')[0];
+      const finalEffectiveTime = effectiveTime || '09:00';
+
+      const [hours, minutes] = finalEffectiveTime.split(':');
+      const [year, month, day] = finalEffectiveDate.split('-').map(Number); // YYYY-MM-DD
 
       let nextReminder = new Date(year, month - 1, day, parseInt(hours), parseInt(minutes), 0, 0);
       
@@ -752,13 +757,19 @@ Return JSON:
                 </Popover>
               )}
 
-              {/* Show date badge for one-time reminders */}
-              {task.reminder_interval === 'once' && task.next_reminder && (
+              {/* Show date badge for one-time reminders - FIXED: Show even if next_reminder is null */}
+              {task.reminder_interval === 'once' && (
                 <Popover>
                   <PopoverTrigger asChild>
                     <button className="cursor-pointer hover:opacity-80 transition-opacity bg-purple-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      {formatReminderDate(task.next_reminder)} • {formatReminderTime(task.next_reminder)}
+                      {task.next_reminder ? (
+                        <>
+                          {formatReminderDate(task.next_reminder)} • {formatReminderTime(task.next_reminder)}
+                        </>
+                      ) : (
+                        'Set Date & Time'
+                      )}
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className={`w-72 p-4 ${
@@ -773,9 +784,9 @@ Return JSON:
                         </label>
                         <input
                           type="date"
-                          defaultValue={getCurrentReminderDate(task)}
+                          defaultValue={getCurrentReminderDate(task) || new Date().toISOString().split('T')[0]}
                           onChange={(e) => {
-                            const currentTime = getCurrentReminderTime(task);
+                            const currentTime = getCurrentReminderTime(task) || '09:00';
                             handleUpdateReminderTime(currentTime, e.target.value);
                           }}
                           className={`w-full border rounded px-3 py-2 ${
@@ -791,9 +802,9 @@ Return JSON:
                         </label>
                         <input
                           type="time"
-                          defaultValue={getCurrentReminderTime(task)}
+                          defaultValue={getCurrentReminderTime(task) || '09:00'}
                           onChange={(e) => {
-                            const currentDate = getCurrentReminderDate(task);
+                            const currentDate = getCurrentReminderDate(task) || new Date().toISOString().split('T')[0];
                             handleUpdateReminderTime(e.target.value, currentDate);
                           }}
                           className={`w-full border rounded px-3 py-2 ${
