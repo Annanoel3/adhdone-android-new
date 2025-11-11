@@ -69,12 +69,27 @@ export default function AddTask() {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
+      // CRITICAL: Generate date context for next 60 days
+      const dateContext = [];
+      for (let i = 0; i < 60; i++) {
+        const date = new Date(today);
+        date.setDate(date.getDate() + i);
+        dateContext.push({
+          offset: i,
+          date: date.toISOString().split('T')[0],
+          display: date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
+        });
+      }
+
       const prompt = `Parse this task: "${inputText}"
 
 Context:
-- Today: ${today.toISOString().split('T')[0]}
-- Tomorrow: ${tomorrow.toISOString().split('T')[0]}
+- Today: ${today.toISOString().split('T')[0]} (${today.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })})
+- Tomorrow: ${tomorrow.toISOString().split('T')[0]} (${tomorrow.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })})
 - Current time: ${now.toLocaleTimeString()}
+
+Available dates for the next 60 days:
+${dateContext.slice(0, 30).map(d => `${d.display}: ${d.date}`).join('\n')}
 
 CRITICAL: Keep ALL important details in the task title. Only remove filler words like "remind me to", "I need to", etc.
 
@@ -86,15 +101,18 @@ Extract:
 1. Task title - Keep it detailed and complete (remove only filler words)
 2. Urgency (low/medium/high/urgent)
 3. Energy needed (low/medium/high)
-4. Reminder timing if mentioned
+4. If a specific DATE is mentioned (like "November 17" or "next Friday"), extract it
+5. If a TIME is mentioned (like "at 2pm" or "at 9:30am"), extract it
+6. Reminder interval if mentioned (every hour, daily, etc.)
 
 Return JSON:
 {
   "title": "complete task description here",
   "urgency": "medium",
   "energy_required": "medium",
+  "target_date": "YYYY-MM-DD" | null,
+  "target_time": "HH:MM" | null,
   "reminder_interval": "30min" | "1hour" | "2hours" | "daily" | "once" | null,
-  "reminder_time": "HH:MM" | null,
   "relative_minutes": number | null
 }`;
 
@@ -106,8 +124,9 @@ Return JSON:
             title: { type: "string" },
             urgency: { type: "string" },
             energy_required: { type: "string" },
+            target_date: { type: "string" },
+            target_time: { type: "string" },
             reminder_interval: { type: "string" },
-            reminder_time: { type: "string" },
             relative_minutes: { type: "number" }
           }
         }
@@ -116,11 +135,29 @@ Return JSON:
       let nextReminder = null;
       let actualReminderInterval = parsed.reminder_interval || null;
 
-      if (parsed.relative_minutes && parsed.relative_minutes > 0) {
+      // CRITICAL: Handle far-future dates
+      if (parsed.target_date) {
+        const targetDate = new Date(parsed.target_date);
+        
+        if (parsed.target_time) {
+          const [hours, minutes] = parsed.target_time.split(':');
+          targetDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+        } else {
+          // Default to 9am if no time specified
+          targetDate.setHours(9, 0, 0, 0);
+        }
+        
+        // Ensure the year is correct if only month/day were specified and it's already passed this year
+        // This logic is already handled by LLM providing YYYY-MM-DD but as a safeguard.
+        // For simplicity, assuming LLM provides a future or today's date if explicit.
+        
+        nextReminder = targetDate;
+        actualReminderInterval = 'once';
+      } else if (parsed.relative_minutes && parsed.relative_minutes > 0) {
         nextReminder = new Date(now.getTime() + parsed.relative_minutes * 60 * 1000);
         actualReminderInterval = 'once';
-      } else if (parsed.reminder_time) {
-        const [hours, minutes] = parsed.reminder_time.split(':');
+      } else if (parsed.target_time) {
+        const [hours, minutes] = parsed.target_time.split(':');
         nextReminder = new Date();
         nextReminder.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
         if (nextReminder <= now) {
@@ -143,11 +180,13 @@ Return JSON:
             nextReminder.setDate(nextReminder.getDate() + 1);
             break;
         }
-      } else if (!parsed.reminder_interval && !parsed.reminder_time && !parsed.relative_minutes) {
+      } else if (!parsed.reminder_interval && !parsed.target_time && !parsed.relative_minutes && !parsed.target_date) {
         actualReminderInterval = '2hours';
         nextReminder = new Date();
         nextReminder.setHours(nextReminder.getHours() + 2);
       }
+
+      console.log('📅 [TASK] Parsed:', { target_date: parsed.target_date, target_time: parsed.target_time, nextReminder: nextReminder?.toISOString() });
 
       // Create task in background - don't wait
       Task.create({
