@@ -705,7 +705,29 @@ Return JSON:
                 </PopoverContent>
               </Popover>
 
-              {/* Reminder Interval Badge - Clickable (for recurring reminders) */}
+              {/* Priority Badge - Clickable */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium ${
+                    task.urgency === 'urgent' ? 'bg-red-100 text-red-700' :
+                    task.urgency === 'high' ? 'bg-amber-100 text-amber-700' :
+                    task.urgency === 'medium' ? 'bg-blue-100 text-blue-700' :
+                    'bg-gray-100 text-gray-700'
+                  }`}>
+                    {task.urgency} priority
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-2">
+                  <div className="space-y-1">
+                    <button onClick={() => handleUpdateField('urgency', 'low')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Low Priority</button>
+                    <button onClick={() => handleUpdateField('urgency', 'medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Medium Priority</button>
+                    <button onClick={() => handleUpdateField('urgency', 'high')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">High Priority</button>
+                    <button onClick={() => handleUpdateField('urgency', 'urgent')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Urgent</button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {/* Show interval badge for recurring reminders */}
               {task.reminder_interval && task.reminder_interval !== 'once' && (
                 <Popover>
                   <PopoverTrigger asChild>
@@ -730,11 +752,11 @@ Return JSON:
                 </Popover>
               )}
 
-              {/* Next Reminder Time Badge - Clickable (Only for 'once' reminders) */}
-              {task.next_reminder && task.reminder_interval === 'once' && (
+              {/* Show date badge for one-time reminders */}
+              {task.reminder_interval === 'once' && task.next_reminder && (
                 <Popover>
                   <PopoverTrigger asChild>
-                    <button className="cursor-pointer hover:opacity-80 transition-opacity bg-blue-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
+                    <button className="cursor-pointer hover:opacity-80 transition-opacity bg-purple-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {formatReminderDate(task.next_reminder)} • {formatReminderTime(task.next_reminder)}
                     </button>
@@ -794,27 +816,28 @@ Return JSON:
                 </Popover>
               )}
 
-              {/* Priority Badge - Clickable */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium ${
-                    task.urgency === 'urgent' ? 'bg-red-100 text-red-700' :
-                    task.urgency === 'high' ? 'bg-amber-100 text-amber-700' :
-                    task.urgency === 'medium' ? 'bg-blue-100 text-blue-700' :
-                    'bg-gray-100 text-gray-700'
-                  }`}>
-                    {task.urgency} priority
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-48 p-2">
-                  <div className="space-y-1">
-                    <button onClick={() => handleUpdateField('urgency', 'low')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Low Priority</button>
-                    <button onClick={() => handleUpdateField('urgency', 'medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Medium Priority</button>
-                    <button onClick={() => handleUpdateField('urgency', 'high')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">High Priority</button>
-                    <button onClick={() => handleUpdateField('urgency', 'urgent')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Urgent</button>
-                  </div>
-                </PopoverContent>
-              </Popover>
+              {/* Show "Add Reminder" button if no reminder is set */}
+              {!task.reminder_interval && !task.next_reminder && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="cursor-pointer hover:opacity-80 transition-opacity border border-dashed border-gray-300 px-3 py-1 rounded-full text-sm font-medium text-gray-500 bg-white flex items-center gap-1">
+                      <Clock className="w-3 h-3" />
+                      Add Reminder
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56 p-2">
+                    <div className="space-y-1">
+                      <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Recurring</div>
+                      <button onClick={() => handleUpdateField('reminder_interval', '30min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 30 minutes</button>
+                      <button onClick={() => handleUpdateField('reminder_interval', '1hour')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every hour</button>
+                      <button onClick={() => handleUpdateField('reminder_interval', '2hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 2 hours</button>
+                      <button onClick={() => handleUpdateField('reminder_interval', 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
+                      <div className="border-t my-1"></div>
+                      <button onClick={() => handleUpdateField('reminder_interval', 'once')} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium">📅 Set Specific Date</button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
             </div>
 
             <div className="space-y-4">
