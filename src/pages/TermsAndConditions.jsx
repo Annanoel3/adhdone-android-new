@@ -11,7 +11,7 @@ export default function TermsAndConditions() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const newTheme = localStorage.getItem('adhd_theme') || 'minimalist');
+      const newTheme = localStorage.getItem('adhd_theme') || 'minimalist';
       setTheme(newTheme);
     }, 100);
     return () => clearInterval(interval);
