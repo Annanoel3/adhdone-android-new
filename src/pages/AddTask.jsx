@@ -30,8 +30,6 @@ export default function AddTask() {
   const [optimisticTasks, setOptimisticTasks] = useState([]);
   const [showAdvanceReminderDialog, setShowAdvanceReminderDialog] = useState(false);
   const [pendingTask, setPendingTask] = useState(null);
-  const [audioChunks, setAudioChunks] = useState([]);
-  const [silenceTimeout, setSilenceTimeout] = useState(null);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -41,34 +39,8 @@ export default function AddTask() {
     return () => clearInterval(interval);
   }, []);
 
-  const createTaskOptimistically = (taskTitle, taskDetails = {}) => {
-    const tempTask = {
-      id: 'temp-' + Date.now(),
-      title: taskTitle,
-      status: 'active',
-      urgency: 'medium',
-      energy_required: 'medium',
-      isProcessing: true,
-      created_date: new Date().toISOString(),
-      ...taskDetails
-    };
-
-    setOptimisticTasks(prev => [tempTask, ...prev]);
-    return tempTask.id;
-  };
-
-  const replaceOptimisticTask = (tempId, realTask) => {
-    setOptimisticTasks(prev => prev.filter(t => t.id !== tempId));
-  };
-
-  const removeOptimisticTask = (tempId) => {
-    setOptimisticTasks(prev => prev.filter(t => t.id !== tempId));
-  };
-
-  const processAndCreateTask = async (inputText) => {
+  const processAndCreateTask = async (inputText, shouldNavigate = true) => {
     if (!inputText.trim()) return;
-
-    const tempId = createTaskOptimistically(inputText);
 
     try {
       const currentUser = await User.me();
@@ -166,9 +138,8 @@ Return JSON:
           status: 'active'
         };
 
-        setPendingTask({ taskData, tempId, currentUser });
+        setPendingTask({ taskData, currentUser });
         setShowAdvanceReminderDialog(true);
-        setIsProcessing(false);
         return true;
       } else if (parsed.relative_minutes && parsed.relative_minutes > 0) {
         nextReminder = new Date(now.getTime() + parsed.relative_minutes * 60 * 1000);
@@ -208,9 +179,7 @@ Return JSON:
 
       console.log('📅 [TASK] Parsed:', { target_date: parsed.target_date, target_time: parsed.target_time, nextReminder: nextReminder?.toISOString() });
 
-      navigate(createPageUrl("Home"), { state: { reload: true } });
-      setIsProcessing(false);
-
+      // Create task immediately
       const createdTask = await Task.create({
         title: parsed.title || inputText.trim(),
         description: '',
@@ -222,40 +191,35 @@ Return JSON:
         status: 'active'
       });
 
+      // Schedule reminder in background
       if (nextReminder) {
-        try {
-          const notificationId = await scheduleReminder({
-            email: currentUser.email,
-            title: "Task Reminder 📋",
-            body: createdTask.title,
-            sendAtISO: nextReminder.toISOString(),
+        scheduleReminder({
+          email: currentUser.email,
+          title: "Task Reminder 📋",
+          body: createdTask.title,
+          sendAtISO: nextReminder.toISOString(),
+          taskId: createdTask.id,
+          data: {
+            screen: "/Tasks",
             taskId: createdTask.id,
-            data: {
-              screen: "/Tasks",
-              taskId: createdTask.id,
-              urgency: createdTask.urgency,
-              type: 'task_reminder'
-            }
-          });
-
+            urgency: createdTask.urgency,
+            type: 'task_reminder'
+          }
+        }).then(notificationId => {
           if (notificationId) {
-            await base44.entities.Task.update(createdTask.id, {
+            base44.entities.Task.update(createdTask.id, {
               onesignal_notification_id: notificationId
             });
           }
-        } catch (error) {
+        }).catch(error => {
           console.error("Failed to schedule reminder:", error);
-        }
+        });
       }
-      
-      replaceOptimisticTask(tempId, createdTask);
       
       return true;
     } catch (error) {
       console.error("Error creating task:", error);
-      removeOptimisticTask(tempId);
       alert("Failed to create task. Please try again.");
-      setIsProcessing(false);
       return false;
     }
   };
@@ -263,58 +227,60 @@ Return JSON:
   const handleAdvanceReminderChoice = async (minutesBefore) => {
     if (!pendingTask) return;
 
-    const { taskData, tempId, currentUser } = pendingTask;
+    const { taskData, currentUser } = pendingTask;
 
-    navigate(createPageUrl("Home"), { state: { reload: true } });
     setShowAdvanceReminderDialog(false);
 
     try {
       const createdTask = await Task.create(taskData);
 
       const mainReminderTime = new Date(taskData.next_reminder);
-      const notificationId = await scheduleReminder({
-        email: currentUser.email,
-        title: "Task Reminder 📋",
-        body: createdTask.title,
-        sendAtISO: mainReminderTime.toISOString(),
-        taskId: createdTask.id,
-        data: {
-          screen: "/Tasks",
+      
+      // Schedule reminders in background
+      Promise.all([
+        scheduleReminder({
+          email: currentUser.email,
+          title: "Task Reminder 📋",
+          body: createdTask.title,
+          sendAtISO: mainReminderTime.toISOString(),
           taskId: createdTask.id,
-          urgency: createdTask.urgency,
-          type: 'task_reminder'
-        }
-      });
-
-      if (minutesBefore > 0) {
-        const advanceTime = new Date(mainReminderTime.getTime() - (minutesBefore * 60 * 1000));
-        if (advanceTime.getTime() > new Date().getTime()) {
-          await scheduleReminder({
-            email: currentUser.email,
-            title: "📋 Upcoming Task",
-            body: `In ${minutesBefore >= 60 ? `${minutesBefore / 60} hour${minutesBefore > 60 ? 's' : ''}` : `${minutesBefore} min`}: ${createdTask.title}`,
-            sendAtISO: advanceTime.toISOString(),
+          data: {
+            screen: "/Tasks",
             taskId: createdTask.id,
-            data: {
-              screen: "/Tasks",
+            urgency: createdTask.urgency,
+            type: 'task_reminder'
+          }
+        }),
+        minutesBefore > 0 ? (async () => {
+          const advanceTime = new Date(mainReminderTime.getTime() - (minutesBefore * 60 * 1000));
+          if (advanceTime.getTime() > new Date().getTime()) {
+            return scheduleReminder({
+              email: currentUser.email,
+              title: "📋 Upcoming Task",
+              body: `In ${minutesBefore >= 60 ? `${minutesBefore / 60} hour${minutesBefore > 60 ? 's' : ''}` : `${minutesBefore} min`}: ${createdTask.title}`,
+              sendAtISO: advanceTime.toISOString(),
               taskId: createdTask.id,
-              urgency: createdTask.urgency,
-              type: 'advance_reminder'
-            }
+              data: {
+                screen: "/Tasks",
+                taskId: createdTask.id,
+                urgency: createdTask.urgency,
+                type: 'advance_reminder'
+              }
+            });
+          }
+        })() : null
+      ]).then(([notificationId]) => {
+        if (notificationId) {
+          base44.entities.Task.update(createdTask.id, {
+            onesignal_notification_id: notificationId
           });
         }
-      }
+      }).catch(error => {
+        console.error("Failed to schedule reminders:", error);
+      });
 
-      if (notificationId) {
-        await base44.entities.Task.update(createdTask.id, {
-          onesignal_notification_id: notificationId
-        });
-      }
-
-      replaceOptimisticTask(tempId, createdTask);
     } catch (error) {
       console.error("Error creating task with advance reminder:", error);
-      removeOptimisticTask(tempId);
       alert("Failed to create task with advance reminder. Please try again.");
     } finally {
       setPendingTask(null);
@@ -364,14 +330,17 @@ Return JSON:
           return;
         }
 
-        setIsProcessing(true); // Only set processing when transcribing
+        // Immediately show processing and navigate
+        setIsProcessing(true);
+        navigate(createPageUrl("Home"), { state: { reload: true } });
+        
+        // Process in background
         await handleVoiceTranscription(audioBlob);
       };
 
       recorder.start();
       setMediaRecorder(recorder);
       setIsRecording(true);
-      // DON'T set isProcessing here - button should remain clickable
     } catch (error) {
       console.error("Microphone error:", error);
       alert("Could not access microphone");
@@ -415,13 +384,14 @@ Return JSON:
       console.log('✅ [VOICE] Transcription response:', response);
 
       if (response?.data?.success && response?.data?.transcription) {
-        await processAndCreateTask(response.data.transcription);
+        await processAndCreateTask(response.data.transcription, false); // false = don't navigate again
       } else {
         throw new Error('Failed to transcribe audio');
       }
     } catch (error) {
       console.error("Voice processing error:", error);
       alert("Failed to process voice input. Please try again.");
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -431,8 +401,14 @@ Return JSON:
     if (!textInput.trim()) return;
 
     setIsProcessing(true);
-    await processAndCreateTask(textInput);
     setTextInput('');
+    
+    // Navigate immediately
+    navigate(createPageUrl("Home"), { state: { reload: true } });
+    
+    // Process in background
+    await processAndCreateTask(textInput, false); // false = don't navigate again
+    setIsProcessing(false);
   };
 
   const getCardClasses = () => {
