@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MessageCircle, Send, Loader2, ArrowLeft, Info } from "lucide-react";
+import { MessageCircle, Send, Loader2, ArrowLeft, Info, Flag, MoreVertical } from "lucide-react";
 import { User } from "@/entities/User";
 import { AccountabilityConnection } from "@/entities/AccountabilityConnection";
 import { ChatMessage } from "@/entities/ChatMessage";
@@ -12,11 +11,19 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Badge } from "@/components/ui/badge";
 import { sendAccountabilityMessage } from "../components/utils/notificationHelper";
+import { moderateContent } from "../components/utils/contentModeration";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import ReportContentDialog from "../components/shared/ReportContentDialog";
 
 export default function Chat() {
   const navigate = useNavigate();
@@ -30,8 +37,9 @@ export default function Chat() {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
+  const [reportingMessage, setReportingMessage] = useState(null);
   const pollingIntervalRef = useRef(null);
-  const messagesEndRef = useRef(null); // RE-INTRODUCED useRef for scrolling
+  const messagesEndRef = useRef(null);
 
   useEffect(() => {
     initChat();
@@ -49,24 +57,19 @@ export default function Chat() {
     };
   }, []);
 
-  // Removed the useEffect that scrolled to the bottom on messages change. (As per original comment)
-
   const initChat = async () => {
     try {
       const currentUser = await User.me();
       setUser(currentUser);
 
-      // Get partner email from URL if specified
       const urlParams = new URLSearchParams(window.location.search);
       const partnerEmail = urlParams.get('partner');
 
-      // Get all accepted connections
       const connections = await AccountabilityConnection.filter({ status: 'accepted' });
       const myConnections = connections.filter(c =>
         c.requester_email === currentUser.email || c.recipient_email === currentUser.email
       );
 
-      // Build conversations list
       const convos = await Promise.all(myConnections.map(async (connection) => {
         const isRequester = connection.requester_email === currentUser.email;
         const partnerInfo = {
@@ -76,7 +79,6 @@ export default function Chat() {
           connection: connection
         };
 
-        // Get unread count
         const allMessages = await ChatMessage.filter({ connection_id: connection.id });
         const unreadCount = allMessages.filter(m =>
           m.sender_email === partnerInfo.email &&
@@ -84,7 +86,6 @@ export default function Chat() {
           !m.read_by_recipient
         ).length;
 
-        // Get last message
         const sortedMessages = allMessages.sort((a, b) =>
           new Date(b.created_date) - new Date(a.created_date)
         );
@@ -101,7 +102,6 @@ export default function Chat() {
         };
       }));
 
-      // Sort by most recent message
       convos.sort((a, b) => {
         if (!a.lastMessage && !b.lastMessage) return 0;
         if (!a.lastMessage) return 1;
@@ -111,7 +111,6 @@ export default function Chat() {
 
       setConversations(convos);
 
-      // If partner email specified, open that chat
       if (partnerEmail) {
         const targetConvo = convos.find(c => c.email === partnerEmail);
         if (targetConvo) {
@@ -130,7 +129,6 @@ export default function Chat() {
     setSelectedConnection(partner.connection);
     await loadMessages(partner.connection.id);
 
-    // Start polling for new messages
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
     }
@@ -146,7 +144,7 @@ export default function Chat() {
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
     }
-    initChat(); // Refresh conversation list
+    initChat();
   };
 
   const loadMessages = async (connectionId, showLoading = true) => {
@@ -159,7 +157,6 @@ export default function Chat() {
 
       setMessages(allMessages);
 
-      // Mark messages as read
       const unreadMessages = allMessages.filter(m =>
         m.sender_email !== user?.email && !m.read_by_recipient
       );
@@ -179,6 +176,13 @@ export default function Chat() {
     e.preventDefault();
     if (!newMessage.trim() || !selectedConnection || isSending) return;
 
+    // MODERATION: Check for inappropriate content
+    const moderationResult = moderateContent(newMessage.trim());
+    if (!moderationResult.isClean) {
+      alert(`Your message contains inappropriate language. Please keep communication respectful and appropriate.`);
+      return;
+    }
+
     setIsSending(true);
 
     try {
@@ -193,14 +197,12 @@ export default function Chat() {
       setMessages(prev => [...prev, message]);
       setNewMessage("");
 
-      // Send notification - using correct function name
-      await sendAccountabilityMessage( // Changed function name here
+      await sendAccountabilityMessage(
         selectedPartner.email,
         user.display_name || user.full_name,
         newMessage.trim()
       );
 
-      // Scroll to bottom after sending
       setTimeout(() => {
         if (messagesEndRef.current) {
           messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -209,7 +211,7 @@ export default function Chat() {
 
     } catch (error) {
       console.error("Error sending message:", error);
-      // Removed alert as per outline implies
+      alert("Failed to send message. Please try again.");
     }
 
     setIsSending(false);
@@ -368,7 +370,6 @@ export default function Chat() {
             </CardContent>
           </Card>
 
-          {/* Android Navigation Button Spacer */}
           <div style={{ height: '120px' }} aria-hidden="true"></div>
         </div>
       </div>
@@ -398,7 +399,7 @@ export default function Chat() {
                 {selectedPartner?.display_name?.[0]?.toUpperCase() || '?'}
               </AvatarFallback>
             </Avatar>
-            <div>
+            <div className="flex-1">
               <CardTitle className={theme === 'dark' ? 'text-gray-100' : ''}>
                 {selectedPartner?.display_name}
               </CardTitle>
@@ -406,6 +407,15 @@ export default function Chat() {
                 {selectedPartner?.email}
               </p>
             </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setReportingMessage({ partner: selectedPartner })}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              title="Report user"
+            >
+              <Flag className="w-4 h-4" />
+            </Button>
           </div>
         </CardHeader>
 
@@ -423,30 +433,54 @@ export default function Chat() {
             messages.map((message) => (
               <div
                 key={message.id}
-                className={`flex ${message.sender_email === user?.email ? 'justify-end' : 'justify-start'}`}
+                className={`flex ${message.sender_email === user?.email ? 'justify-end' : 'justify-start'} group`}
               >
-                <div className={`max-w-[70%] rounded-lg p-3 ${
-                  message.sender_email === user?.email
-                    ? theme === 'minimalist'
-                      ? 'bg-green-600 text-white'
+                <div className="flex items-start gap-2">
+                  <div className={`max-w-[70%] rounded-lg p-3 ${
+                    message.sender_email === user?.email
+                      ? theme === 'minimalist'
+                        ? 'bg-green-600 text-white'
+                        : theme === 'dark'
+                          ? 'bg-green-700 text-white'
+                          : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
                       : theme === 'dark'
-                        ? 'bg-green-700 text-white'
-                        : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
-                    : theme === 'dark'
-                      ? 'bg-gray-700 text-gray-100'
-                      : 'bg-gray-100 text-gray-900'
-                }`}>
-                  <p className="text-sm whitespace-pre-wrap break-words">{message.message_text}</p>
-                  <p className={`text-xs mt-1 ${
-                    message.sender_email === user?.email ? 'text-white/70' : theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                        ? 'bg-gray-700 text-gray-100'
+                        : 'bg-gray-100 text-gray-900'
                   }`}>
-                    {new Date(message.created_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
+                    <p className="text-sm whitespace-pre-wrap break-words">{message.message_text}</p>
+                    <p className={`text-xs mt-1 ${
+                      message.sender_email === user?.email ? 'text-white/70' : theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                    }`}>
+                      {new Date(message.created_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
+                  {message.sender_email !== user?.email && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <MoreVertical className="w-4 h-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent>
+                        <DropdownMenuItem
+                          onClick={() => setReportingMessage(message)}
+                          className="text-red-600"
+                        >
+                          <Flag className="w-4 h-4 mr-2" />
+                          Report Message
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </div>
               </div>
             ))
           )}
-          <div ref={messagesEndRef} /> {/* RE-INTRODUCED messagesEndRef div */}
+          <div ref={messagesEndRef} />
         </CardContent>
 
         <div className={`p-4 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
@@ -477,7 +511,18 @@ export default function Chat() {
           </form>
         </div>
       </Card>
-      {/* Android Navigation Button Spacer */}
+
+      <ReportContentDialog
+        isOpen={!!reportingMessage}
+        onClose={() => setReportingMessage(null)}
+        contentType="message"
+        reportedUserEmail={reportingMessage?.sender_email || reportingMessage?.partner?.email}
+        reportedUserName={reportingMessage?.partner ? reportingMessage.partner.display_name : selectedPartner?.display_name}
+        contentId={reportingMessage?.id}
+        contentText={reportingMessage?.message_text}
+        theme={theme}
+      />
+
       <div style={{ height: '120px' }} aria-hidden="true"></div>
     </div>
   );
