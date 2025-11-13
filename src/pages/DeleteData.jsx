@@ -36,16 +36,16 @@ export default function DeleteData() {
           theme === 'dark' ? 'bg-gray-800' : 'bg-white'
         }`}>
           <CardHeader>
-            <CardTitle className={`text-3xl ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+            <CardTitle className={`text-3xl break-words ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
               ADHDone Data Deletion Request
             </CardTitle>
-            <p className={`text-sm mt-2 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+            <p className={`text-sm mt-2 break-words ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
               Developed by MediocreAtBestDev
             </p>
           </CardHeader>
           <CardContent className="space-y-6">
-            <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-              This page explains how to request deletion of some or all of your data while keeping your ADHDone account active. If you wish to delete your entire account, please visit our <a href={createPageUrl("DeleteAccount")} className={`underline ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>Account Deletion page</a>.
+            <p className={`break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+              This page explains how to request deletion of some or all of your data while keeping your ADHDone account active. If you wish to delete your entire account, please visit our <a href={createPageUrl("DeleteAccount")} className={`underline break-words ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>Account Deletion page</a>.
             </p>
 
             <div className={`p-4 rounded-lg border-2 ${
@@ -58,12 +58,12 @@ export default function DeleteData() {
                   theme === 'dark' ? 'text-yellow-400' : 'text-yellow-600'
                 }`} />
                 <div>
-                  <h3 className={`font-semibold mb-1 ${
+                  <h3 className={`font-semibold mb-1 break-words ${
                     theme === 'dark' ? 'text-yellow-400' : 'text-yellow-900'
                   }`}>
                     Important: Data Deletion is Irreversible
                   </h3>
-                  <p className={`text-sm ${
+                  <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-yellow-300' : 'text-yellow-800'
                   }`}>
                     Once your data is deleted, it cannot be recovered. Your account will remain active, but the deleted data will be permanently removed.
@@ -78,14 +78,14 @@ export default function DeleteData() {
                 ? 'bg-blue-900/20 border-blue-700' 
                 : 'bg-blue-50 border-blue-300'
             }`}>
-              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 ${
+              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 break-words ${
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               }`}>
-                <Database className="w-6 h-6" />
+                <Database className="w-6 h-6 flex-shrink-0" />
                 How to Delete Your Data
               </h2>
 
-              <p className={`mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+              <p className={`mb-4 break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                 Follow these simple steps to request data deletion:
               </p>
 
@@ -101,24 +101,24 @@ export default function DeleteData() {
                     }`}>
                       1
                     </div>
-                    <div className="flex-1">
-                      <h3 className={`font-semibold mb-2 ${
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`font-semibold mb-2 break-words ${
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
                       }`}>
                         Send an Email to MediocreAtBestDev
                       </h3>
-                      <p className={`mb-3 text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Email us at <strong>adhdone.space@gmail.com</strong> with the subject line "Data Deletion Request"
+                      <p className={`mb-3 text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Email us at <strong className="break-all">adhdone.space@gmail.com</strong> with the subject line "Data Deletion Request"
                       </p>
                       <div className={`flex items-center gap-2 p-3 rounded-lg ${
                         theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
                       }`}>
-                        <Mail className={`w-5 h-5 ${
+                        <Mail className={`w-5 h-5 flex-shrink-0 ${
                           theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
                         }`} />
                         <a 
                           href="mailto:adhdone.space@gmail.com?subject=Data%20Deletion%20Request"
-                          className={`font-medium ${
+                          className={`font-medium break-all ${
                             theme === 'dark' 
                               ? 'text-blue-400 hover:text-blue-300' 
                               : 'text-blue-600 hover:text-blue-700'
@@ -142,16 +142,16 @@ export default function DeleteData() {
                     }`}>
                       2
                     </div>
-                    <div className="flex-1">
-                      <h3 className={`font-semibold mb-2 ${
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`font-semibold mb-2 break-words ${
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
                       }`}>
                         Specify What Data to Delete
                       </h3>
-                      <p className={`mb-2 text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <p className={`mb-2 text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                         In your email, please include:
                       </p>
-                      <ul className={`list-disc list-inside space-y-1 text-sm ${
+                      <ul className={`list-disc list-inside space-y-1 text-sm break-words ${
                         theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                       }`}>
                         <li>The email address associated with your ADHDone account</li>
@@ -174,13 +174,13 @@ export default function DeleteData() {
                     }`}>
                       3
                     </div>
-                    <div className="flex-1">
-                      <h3 className={`font-semibold mb-2 ${
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`font-semibold mb-2 break-words ${
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
                       }`}>
                         We'll Verify and Confirm
                       </h3>
-                      <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <p className={`text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                         For your security, we may need to verify your identity. We'll confirm receipt of your request within 2 business days.
                       </p>
                     </div>
@@ -198,14 +198,14 @@ export default function DeleteData() {
                     }`}>
                       4
                     </div>
-                    <div className="flex-1">
-                      <h3 className={`font-semibold mb-2 flex items-center gap-2 ${
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`font-semibold mb-2 flex items-center gap-2 break-words ${
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
                       }`}>
-                        <Clock className="w-5 h-5" />
+                        <Clock className="w-5 h-5 flex-shrink-0" />
                         Data Deletion Processing
                       </h3>
-                      <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <p className={`text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                         Once verified, your data will be deleted within <strong>30 days</strong>. You'll receive a confirmation email when complete.
                       </p>
                     </div>
@@ -216,14 +216,14 @@ export default function DeleteData() {
 
             {/* Types of Data Section */}
             <div>
-              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 ${
+              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 break-words ${
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               }`}>
-                <Shield className="w-6 h-6" />
+                <Shield className="w-6 h-6 flex-shrink-0" />
                 Types of Data You Can Request to Delete
               </h2>
 
-              <p className={`mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+              <p className={`mb-4 break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                 You can request deletion of any or all of the following data categories:
               </p>
 
@@ -233,12 +233,12 @@ export default function DeleteData() {
                     ? 'bg-gray-900/50 border-gray-700' 
                     : 'bg-blue-50 border-blue-200'
                 }`}>
-                  <h4 className={`font-semibold mb-2 ${
+                  <h4 className={`font-semibold mb-2 break-words ${
                     theme === 'dark' ? 'text-blue-400' : 'text-blue-900'
                   }`}>
                     ✓ Tasks & Reminders
                   </h4>
-                  <p className={`text-sm ${
+                  <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
                     All tasks, sub-tasks, and associated reminders. You can request deletion of all tasks or tasks from specific date ranges.
@@ -250,12 +250,12 @@ export default function DeleteData() {
                     ? 'bg-gray-900/50 border-gray-700' 
                     : 'bg-blue-50 border-blue-200'
                 }`}>
-                  <h4 className={`font-semibold mb-2 ${
+                  <h4 className={`font-semibold mb-2 break-words ${
                     theme === 'dark' ? 'text-blue-400' : 'text-blue-900'
                   }`}>
                     ✓ Parking Lot Ideas
                   </h4>
-                  <p className={`text-sm ${
+                  <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
                     All ideas stored in your Parking Lot. You can choose to delete all ideas or only specific categories.
@@ -267,12 +267,12 @@ export default function DeleteData() {
                     ? 'bg-gray-900/50 border-gray-700' 
                     : 'bg-blue-50 border-blue-200'
                 }`}>
-                  <h4 className={`font-semibold mb-2 ${
+                  <h4 className={`font-semibold mb-2 break-words ${
                     theme === 'dark' ? 'text-blue-400' : 'text-blue-900'
                   }`}>
                     ✓ Progress Data
                   </h4>
-                  <p className={`text-sm ${
+                  <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
                     Energy logs, daily summaries, achievements, streaks, and weekly challenges. You can delete all or specific time periods.
@@ -284,12 +284,12 @@ export default function DeleteData() {
                     ? 'bg-gray-900/50 border-gray-700' 
                     : 'bg-blue-50 border-blue-200'
                 }`}>
-                  <h4 className={`font-semibold mb-2 ${
+                  <h4 className={`font-semibold mb-2 break-words ${
                     theme === 'dark' ? 'text-blue-400' : 'text-blue-900'
                   }`}>
                     ✓ Chat & Connection History
                   </h4>
-                  <p className={`text-sm ${
+                  <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
                     Messages with accountability partners and connection history. You can delete all messages or messages with specific partners.
@@ -301,12 +301,12 @@ export default function DeleteData() {
                     ? 'bg-gray-900/50 border-gray-700' 
                     : 'bg-blue-50 border-blue-200'
                 }`}>
-                  <h4 className={`font-semibold mb-2 ${
+                  <h4 className={`font-semibold mb-2 break-words ${
                     theme === 'dark' ? 'text-blue-400' : 'text-blue-900'
                   }`}>
                     ✓ Mood Check-ins
                   </h4>
-                  <p className={`text-sm ${
+                  <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
                     All mood check-in records and reactions from your accountability partners.
@@ -318,12 +318,12 @@ export default function DeleteData() {
                     ? 'bg-gray-900/50 border-gray-700' 
                     : 'bg-blue-50 border-blue-200'
                 }`}>
-                  <h4 className={`font-semibold mb-2 ${
+                  <h4 className={`font-semibold mb-2 break-words ${
                     theme === 'dark' ? 'text-blue-400' : 'text-blue-900'
                   }`}>
                     ✓ Support Space Conversations
                   </h4>
-                  <p className={`text-sm ${
+                  <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
                     All conversations with the AI support assistant in your private Support Space.
@@ -335,12 +335,12 @@ export default function DeleteData() {
                     ? 'bg-gray-900/50 border-gray-700' 
                     : 'bg-blue-50 border-blue-200'
                 }`}>
-                  <h4 className={`font-semibold mb-2 ${
+                  <h4 className={`font-semibold mb-2 break-words ${
                     theme === 'dark' ? 'text-blue-400' : 'text-blue-900'
                   }`}>
                     ✓ Focus Room History
                   </h4>
-                  <p className={`text-sm ${
+                  <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
                     Focus room participation history and session data.
@@ -353,12 +353,12 @@ export default function DeleteData() {
                   ? 'bg-gray-900/50 border-gray-700' 
                   : 'bg-gray-50 border-gray-200'
               }`}>
-                <h4 className={`font-semibold mb-2 ${
+                <h4 className={`font-semibold mb-2 break-words ${
                   theme === 'dark' ? 'text-white' : 'text-gray-900'
                 }`}>
                   Note: Profile Information
                 </h4>
-                <p className={`text-sm ${
+                <p className={`text-sm break-words ${
                   theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                 }`}>
                   Your basic profile information (name, email, profile picture) must remain to keep your account active. If you want to delete your profile information, you'll need to request full <a href={createPageUrl("DeleteAccount")} className={`underline ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>account deletion</a> instead.
@@ -372,12 +372,12 @@ export default function DeleteData() {
                 ? 'bg-yellow-900/20 border-yellow-800' 
                 : 'bg-yellow-50 border-yellow-200'
             }`}>
-              <h3 className={`font-semibold mb-2 ${
+              <h3 className={`font-semibold mb-2 break-words ${
                 theme === 'dark' ? 'text-yellow-400' : 'text-yellow-900'
               }`}>
                 Data That Cannot Be Deleted
               </h3>
-              <ul className={`list-disc list-inside space-y-2 text-sm ${
+              <ul className={`list-disc list-inside space-y-2 text-sm break-words ${
                 theme === 'dark' ? 'text-yellow-300' : 'text-yellow-800'
               }`}>
                 <li><strong>Financial transaction records</strong> - Required by law for tax and accounting purposes. <strong>Retention period: Up to 7 years</strong></li>
@@ -392,18 +392,18 @@ export default function DeleteData() {
                 ? 'bg-gray-900/50 border-gray-700' 
                 : 'bg-gray-50 border-gray-200'
             }`}>
-              <h3 className={`font-semibold mb-2 ${
+              <h3 className={`font-semibold mb-2 break-words ${
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               }`}>
                 Additional Information
               </h3>
-              <ul className={`list-disc list-inside space-y-2 text-sm ${
+              <ul className={`list-disc list-inside space-y-2 text-sm break-words ${
                 theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
               }`}>
                 <li>You can request a copy of your data before deletion by including that request in your email</li>
                 <li>After data deletion, your account will remain active and you can continue using ADHDone</li>
                 <li>You can always create new data after deletion is complete</li>
-                <li>For questions about this process, contact MediocreAtBestDev at adhdone.space@gmail.com</li>
+                <li>For questions about this process, contact MediocreAtBestDev at <span className="break-all">adhdone.space@gmail.com</span></li>
               </ul>
             </div>
 

@@ -24,7 +24,6 @@ import {
   Sparkles,
   Mic,
   HelpCircle,
-  Info,
   Shield,
 } from "lucide-react";
 import {
@@ -148,9 +147,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       const now = new Date();
       const currentHour = now.getHours();
       
-      // CRITICAL: Only check-in between 8 AM and 8 PM
       if (currentHour < 8 || currentHour >= 20) {
-        console.log('⏰ [ENERGY CHECK-IN] Outside allowed hours (8 AM - 8 PM)');
         return;
       }
 
@@ -219,29 +216,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       }
       return nextTheme;
     });
-  };
-
-  const getCurrentSeasonalTheme = () => {
-    const now = new Date();
-    const month = now.getMonth() + 1;
-    const day = now.getDate();
-
-    if (month === 1 && day <= 2) return 'newyears';
-    if ((month === 1 && day >= 3) || (month === 2 && day <= 7)) return 'winter';
-    if (month === 2 && day >= 8 && day <= 14) return 'valentines';
-    if ((month === 2 && day >= 15) || (month === 3 && day <= 16)) return 'winter';
-    if (month === 3 && day === 17) return 'stpatricks';
-    if ((month === 3 && day >= 18) || month === 4 || month === 5 || (month === 6 && day <= 21)) return 'spring';
-    if ((month === 6 && day >= 22) || (month === 7 && day <= 3)) return 'summer';
-    if (month === 7 && day === 4) return 'fourthjuly';
-    if ((month === 7 && day >= 5) || (month === 8 && day <= 20)) return 'summer';
-    if ((month === 8 && day >= 21) || month === 9 || month === 11) return 'fall';
-    if (month === 10) return 'halloween';
-    if (month === 12 && day <= 25) return 'christmas';
-    if (month === 12 && day >= 26 && day <= 30) return 'winter';
-    if (month === 12 && day === 31) return 'newyears';
-
-    return 'spring';
   };
 
   const handleLogout = async () => {
@@ -484,7 +458,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               --ring: 330 100% 50%;
             }
 
-            /* 80s Spicy Brains Theme */
             .spicybrains-card {
               background: linear-gradient(135deg, #ff6b9d 0%, #c06bff 50%, #6bc5ff 100%) !important;
               border: 3px solid #ffff00 !important;
@@ -1032,7 +1005,17 @@ export default function Layout({ children, currentPageName }) {
   const [user, setUser] = useState(null);
   const [authCheckComplete, setAuthCheckComplete] = useState(false);
 
+  // List of public pages that don't require authentication
+  const publicPages = ['DeleteAccount', 'DeleteData', 'PrivacyPolicy', 'TermsAndConditions'];
+  const isPublicPage = publicPages.includes(currentPageName);
+
   const checkUserStatusAndTrial = useCallback(async () => {
+    // Skip auth check for public pages
+    if (isPublicPage) {
+      setAuthCheckComplete(true);
+      return;
+    }
+
     try {
       const currentUser = await base44.auth.me();
 
@@ -1068,8 +1051,7 @@ export default function Layout({ children, currentPageName }) {
       // User not authenticated - redirect to login
       base44.auth.redirectToLogin(window.location.href);
     }
-  }, [location.pathname, navigate]);
-
+  }, [location.pathname, navigate, isPublicPage]);
 
   useEffect(() => {
     checkUserStatusAndTrial();
@@ -1080,10 +1062,15 @@ export default function Layout({ children, currentPageName }) {
       <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-700 dark:text-gray-300">
         <div className="flex flex-col items-center gap-4">
           <div className="w-10 h-10 border-4 border-gray-300 border-t-green-500 rounded-full animate-spin"></div>
-          <p className="text-lg font-medium">Loading ADHDone...</p>
+          <p className="text-lg font-medium">Loading...</p>
         </div>
       </div>
     );
+  }
+
+  // Render public pages without sidebar
+  if (isPublicPage) {
+    return <div className="min-h-screen">{children}</div>;
   }
 
   return (

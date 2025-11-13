@@ -36,16 +36,16 @@ export default function DeleteAccount() {
           theme === 'dark' ? 'bg-gray-800' : 'bg-white'
         }`}>
           <CardHeader>
-            <CardTitle className={`text-3xl ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+            <CardTitle className={`text-3xl break-words ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
               ADHDone Account Deletion Request
             </CardTitle>
-            <p className={`text-sm mt-2 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+            <p className={`text-sm mt-2 break-words ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
               Developed by MediocreAtBestDev
             </p>
           </CardHeader>
           <CardContent className="space-y-6">
-            <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-              This page explains how to request deletion of your ADHDone account. If you only want to delete specific data while keeping your account active, please visit our <a href={createPageUrl("DeleteData")} className={`underline ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>Data Deletion page</a>.
+            <p className={`break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+              This page explains how to request deletion of your ADHDone account. If you only want to delete specific data while keeping your account active, please visit our <a href={createPageUrl("DeleteData")} className={`underline break-words ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>Data Deletion page</a>.
             </p>
 
             <div className={`p-4 rounded-lg border-2 ${
@@ -58,12 +58,12 @@ export default function DeleteAccount() {
                   theme === 'dark' ? 'text-red-400' : 'text-red-600'
                 }`} />
                 <div>
-                  <h3 className={`font-semibold mb-1 ${
+                  <h3 className={`font-semibold mb-1 break-words ${
                     theme === 'dark' ? 'text-red-400' : 'text-red-900'
                   }`}>
                     Important: Account Deletion is Permanent
                   </h3>
-                  <p className={`text-sm ${
+                  <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-red-300' : 'text-red-800'
                   }`}>
                     Once your account is deleted, it cannot be recovered. All your data will be permanently removed from our active systems.
@@ -78,14 +78,14 @@ export default function DeleteAccount() {
                 ? 'bg-blue-900/20 border-blue-700' 
                 : 'bg-blue-50 border-blue-300'
             }`}>
-              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 ${
+              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 break-words ${
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               }`}>
-                <Database className="w-6 h-6" />
+                <Database className="w-6 h-6 flex-shrink-0" />
                 How to Delete Your Account
               </h2>
 
-              <p className={`mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+              <p className={`mb-4 break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                 Follow these simple steps to request account deletion:
               </p>
 
@@ -101,24 +101,24 @@ export default function DeleteAccount() {
                     }`}>
                       1
                     </div>
-                    <div className="flex-1">
-                      <h3 className={`font-semibold mb-2 ${
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`font-semibold mb-2 break-words ${
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
                       }`}>
                         Send an Email to MediocreAtBestDev
                       </h3>
-                      <p className={`mb-3 text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Email us at <strong>adhdone.space@gmail.com</strong> with the subject line "Account Deletion Request"
+                      <p className={`mb-3 text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                        Email us at <strong className="break-all">adhdone.space@gmail.com</strong> with the subject line "Account Deletion Request"
                       </p>
                       <div className={`flex items-center gap-2 p-3 rounded-lg ${
                         theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
                       }`}>
-                        <Mail className={`w-5 h-5 ${
+                        <Mail className={`w-5 h-5 flex-shrink-0 ${
                           theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
                         }`} />
                         <a 
                           href="mailto:adhdone.space@gmail.com?subject=Account%20Deletion%20Request"
-                          className={`font-medium ${
+                          className={`font-medium break-all ${
                             theme === 'dark' 
                               ? 'text-blue-400 hover:text-blue-300' 
                               : 'text-blue-600 hover:text-blue-700'
@@ -142,16 +142,16 @@ export default function DeleteAccount() {
                     }`}>
                       2
                     </div>
-                    <div className="flex-1">
-                      <h3 className={`font-semibold mb-2 ${
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`font-semibold mb-2 break-words ${
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
                       }`}>
                         Include Your Account Information
                       </h3>
-                      <p className={`mb-2 text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <p className={`mb-2 text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                         In your email, please provide:
                       </p>
-                      <ul className={`list-disc list-inside space-y-1 text-sm ${
+                      <ul className={`list-disc list-inside space-y-1 text-sm break-words ${
                         theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                       }`}>
                         <li>The email address associated with your ADHDone account</li>
@@ -173,13 +173,13 @@ export default function DeleteAccount() {
                     }`}>
                       3
                     </div>
-                    <div className="flex-1">
-                      <h3 className={`font-semibold mb-2 ${
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`font-semibold mb-2 break-words ${
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
                       }`}>
                         We'll Verify Your Identity
                       </h3>
-                      <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <p className={`text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                         For your security, we may ask you to verify your identity before processing the deletion request. We'll respond within 2 business days.
                       </p>
                     </div>
@@ -197,14 +197,14 @@ export default function DeleteAccount() {
                     }`}>
                       4
                     </div>
-                    <div className="flex-1">
-                      <h3 className={`font-semibold mb-2 flex items-center gap-2 ${
+                    <div className="flex-1 min-w-0">
+                      <h3 className={`font-semibold mb-2 flex items-center gap-2 break-words ${
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
                       }`}>
-                        <Clock className="w-5 h-5" />
+                        <Clock className="w-5 h-5 flex-shrink-0" />
                         Account Deletion Processing
                       </h3>
-                      <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <p className={`text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                         Once verified, your account will be deleted within <strong>30 days</strong>. You'll receive a confirmation email when the process is complete.
                       </p>
                     </div>
@@ -215,14 +215,14 @@ export default function DeleteAccount() {
 
             {/* Data Deletion Details */}
             <div>
-              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 ${
+              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 break-words ${
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               }`}>
-                <Shield className="w-6 h-6" />
+                <Shield className="w-6 h-6 flex-shrink-0" />
                 What Data Will Be Deleted
               </h2>
 
-              <p className={`mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+              <p className={`mb-4 break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                 When you delete your account, the following data will be <strong>permanently removed</strong> from our active systems:
               </p>
 
@@ -232,12 +232,12 @@ export default function DeleteAccount() {
                     ? 'bg-gray-900/50 border-gray-700' 
                     : 'bg-red-50 border-red-200'
                 }`}>
-                  <h4 className={`font-semibold mb-2 flex items-center gap-2 ${
+                  <h4 className={`font-semibold mb-2 flex items-center gap-2 break-words ${
                     theme === 'dark' ? 'text-red-400' : 'text-red-900'
                   }`}>
                     ❌ Profile & Account Information
                   </h4>
-                  <p className={`text-sm ${
+                  <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
                     Your name, email address, profile picture, bio, and all account settings.
@@ -249,12 +249,12 @@ export default function DeleteAccount() {
                     ? 'bg-gray-900/50 border-gray-700' 
                     : 'bg-red-50 border-red-200'
                 }`}>
-                  <h4 className={`font-semibold mb-2 flex items-center gap-2 ${
+                  <h4 className={`font-semibold mb-2 flex items-center gap-2 break-words ${
                     theme === 'dark' ? 'text-red-400' : 'text-red-900'
                   }`}>
                     ❌ All Tasks & Reminders
                   </h4>
-                  <p className={`text-sm ${
+                  <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
                     Every task you've created, including sub-tasks, descriptions, and all associated reminders.
@@ -266,12 +266,12 @@ export default function DeleteAccount() {
                     ? 'bg-gray-900/50 border-gray-700' 
                     : 'bg-red-50 border-red-200'
                 }`}>
-                  <h4 className={`font-semibold mb-2 flex items-center gap-2 ${
+                  <h4 className={`font-semibold mb-2 flex items-center gap-2 break-words ${
                     theme === 'dark' ? 'text-red-400' : 'text-red-900'
                   }`}>
                     ❌ Parking Lot Ideas
                   </h4>
-                  <p className={`text-sm ${
+                  <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
                     All ideas and notes stored in your Parking Lot.
@@ -283,12 +283,12 @@ export default function DeleteAccount() {
                     ? 'bg-gray-900/50 border-gray-700' 
                     : 'bg-red-50 border-red-200'
                 }`}>
-                  <h4 className={`font-semibold mb-2 flex items-center gap-2 ${
+                  <h4 className={`font-semibold mb-2 flex items-center gap-2 break-words ${
                     theme === 'dark' ? 'text-red-400' : 'text-red-900'
                   }`}>
                     ❌ Progress & Activity Data
                   </h4>
-                  <p className={`text-sm ${
+                  <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
                     Energy logs, daily summaries, achievements, streaks, weekly challenges, and all progress tracking data.
@@ -300,12 +300,12 @@ export default function DeleteAccount() {
                     ? 'bg-gray-900/50 border-gray-700' 
                     : 'bg-red-50 border-red-200'
                 }`}>
-                  <h4 className={`font-semibold mb-2 flex items-center gap-2 ${
+                  <h4 className={`font-semibold mb-2 flex items-center gap-2 break-words ${
                     theme === 'dark' ? 'text-red-400' : 'text-red-900'
                   }`}>
                     ❌ Social Features Data
                   </h4>
-                  <p className={`text-sm ${
+                  <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
                     Accountability connections, chat messages, mood check-ins, focus room participation, and leaderboard presence.
@@ -317,12 +317,12 @@ export default function DeleteAccount() {
                     ? 'bg-gray-900/50 border-gray-700' 
                     : 'bg-red-50 border-red-200'
                 }`}>
-                  <h4 className={`font-semibold mb-2 flex items-center gap-2 ${
+                  <h4 className={`font-semibold mb-2 flex items-center gap-2 break-words ${
                     theme === 'dark' ? 'text-red-400' : 'text-red-900'
                   }`}>
                     ❌ Support Space Conversations
                   </h4>
-                  <p className={`text-sm ${
+                  <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
                     All private conversations with the AI support assistant.
@@ -337,17 +337,17 @@ export default function DeleteAccount() {
                 ? 'bg-yellow-900/20 border-yellow-800' 
                 : 'bg-yellow-50 border-yellow-200'
             }`}>
-              <h3 className={`font-semibold mb-2 ${
+              <h3 className={`font-semibold mb-2 break-words ${
                 theme === 'dark' ? 'text-yellow-400' : 'text-yellow-900'
               }`}>
                 Data Retention & Exceptions
               </h3>
-              <p className={`mb-3 text-sm ${
+              <p className={`mb-3 text-sm break-words ${
                 theme === 'dark' ? 'text-yellow-300' : 'text-yellow-800'
               }`}>
                 Some data may be retained for legal or business purposes:
               </p>
-              <ul className={`list-disc list-inside space-y-2 text-sm ${
+              <ul className={`list-disc list-inside space-y-2 text-sm break-words ${
                 theme === 'dark' ? 'text-yellow-300' : 'text-yellow-800'
               }`}>
                 <li><strong>Financial records</strong> (subscription payments, refunds) - Required by law for tax and accounting purposes. <strong>Retention period: Up to 7 years</strong></li>
@@ -362,12 +362,12 @@ export default function DeleteAccount() {
                 ? 'bg-gray-900/50 border-gray-700' 
                 : 'bg-gray-50 border-gray-200'
             }`}>
-              <h3 className={`font-semibold mb-2 ${
+              <h3 className={`font-semibold mb-2 break-words ${
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               }`}>
                 Before You Delete Your Account
               </h3>
-              <ul className={`list-disc list-inside space-y-2 text-sm ${
+              <ul className={`list-disc list-inside space-y-2 text-sm break-words ${
                 theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
               }`}>
                 <li>Consider requesting a copy of your data before deletion (include this in your email request)</li>
