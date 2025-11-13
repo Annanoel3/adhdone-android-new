@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,12 +15,13 @@ import {
   CreditCard, 
   MessageSquare, 
   Loader2,
-  ExternalLink,
   Heart,
   Star,
   Bell,
   Info,
-  Settings
+  Settings,
+  Shield,
+  Trash2
 } from "lucide-react";
 import { User } from "@/entities/User";
 import { UserFeedback } from "@/entities/UserFeedback";
@@ -32,7 +32,6 @@ import { createPageUrl } from "@/utils";
 export default function MyAccount() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [user, setUser] = useState(null);
-  // isLoadingPortal is removed as Stripe portal management is no longer applicable
   const [feedbackType, setFeedbackType] = useState('general');
   const [reason, setReason] = useState('');
   const [detailedFeedback, setDetailedFeedback] = useState('');
@@ -59,8 +58,6 @@ export default function MyAccount() {
       console.error("Error loading user:", error);
     }
   };
-
-  // handleManageSubscription function removed as Stripe integration is replaced by native IAP
 
   const handleSubmitFeedback = async () => {
     if (!detailedFeedback.trim()) {
@@ -228,6 +225,81 @@ ${detailedFeedback}
                 : 'Subscribe to unlock all features and support the development of ADHDone!'
               }
             </p>
+          </CardContent>
+        </Card>
+
+        {/* Data & Privacy Management */}
+        <Card className={`border-none shadow-lg ${
+          theme === 'dark' ? 'bg-gray-800' : 'bg-white/90 backdrop-blur-sm'
+        }`}>
+          <CardHeader>
+            <CardTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-white' : ''}`}>
+              <Shield className="w-5 h-5" />
+              Data & Privacy
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+              Manage your data, privacy settings, and account deletion options.
+            </p>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Button
+                onClick={() => navigate(createPageUrl("PrivacyPolicy"))}
+                variant="outline"
+                className="h-auto py-3 flex flex-col items-start gap-1"
+              >
+                <div className="flex items-center gap-2 w-full">
+                  <Shield className="w-4 h-4" />
+                  <span className="font-medium">Privacy Policy</span>
+                </div>
+                <span className="text-xs text-left text-gray-500">
+                  How we protect your data
+                </span>
+              </Button>
+
+              <Button
+                onClick={() => navigate(createPageUrl("TermsAndConditions"))}
+                variant="outline"
+                className="h-auto py-3 flex flex-col items-start gap-1"
+              >
+                <div className="flex items-center gap-2 w-full">
+                  <Shield className="w-4 h-4" />
+                  <span className="font-medium">Terms & Conditions</span>
+                </div>
+                <span className="text-xs text-left text-gray-500">
+                  Our terms of service
+                </span>
+              </Button>
+
+              <Button
+                onClick={() => navigate(createPageUrl("DeleteData"))}
+                variant="outline"
+                className="h-auto py-3 flex flex-col items-start gap-1 text-blue-600 border-blue-600 hover:bg-blue-50"
+              >
+                <div className="flex items-center gap-2 w-full">
+                  <Trash2 className="w-4 h-4" />
+                  <span className="font-medium">Delete My Data</span>
+                </div>
+                <span className="text-xs text-left text-blue-600/80">
+                  Keep account, remove data
+                </span>
+              </Button>
+
+              <Button
+                onClick={() => navigate(createPageUrl("DeleteAccount"))}
+                variant="outline"
+                className="h-auto py-3 flex flex-col items-start gap-1 text-red-600 border-red-600 hover:bg-red-50"
+              >
+                <div className="flex items-center gap-2 w-full">
+                  <Trash2 className="w-4 h-4" />
+                  <span className="font-medium">Delete Account</span>
+                </div>
+                <span className="text-xs text-left text-red-600/80">
+                  Permanently close account
+                </span>
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
