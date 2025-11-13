@@ -39,8 +39,8 @@ export default function AddTask() {
     return () => clearInterval(interval);
   }, []);
 
-  const processAndCreateTask = async (inputText, shouldNavigate = true) => {
-    if (!inputText.trim()) return;
+  const processAndCreateTask = async (inputText) => {
+    if (!inputText.trim()) return false;
 
     try {
       const currentUser = await User.me();
@@ -160,7 +160,7 @@ JSON:
         nextReminder.setHours(nextReminder.getHours() + 2);
       }
 
-      // Create task immediately
+      // CRITICAL FIX: Create task BEFORE navigating
       const createdTask = await Task.create({
         title: parsed.title || inputText.trim(),
         description: '',
@@ -172,7 +172,7 @@ JSON:
         status: 'active'
       });
 
-      // Schedule reminder in background
+      // Schedule reminder in background (non-blocking)
       if (nextReminder) {
         scheduleReminder({
           email: currentUser.email,
@@ -211,13 +211,15 @@ JSON:
     const { taskData, currentUser } = pendingTask;
 
     setShowAdvanceReminderDialog(false);
+    setIsProcessing(true);
 
     try {
+      // Create task first
       const createdTask = await Task.create(taskData);
 
       const mainReminderTime = new Date(taskData.next_reminder);
       
-      // Schedule reminders in background
+      // Schedule reminders in background (non-blocking)
       Promise.all([
         scheduleReminder({
           email: currentUser.email,
@@ -260,11 +262,14 @@ JSON:
         console.error("Failed to schedule reminders:", error);
       });
 
+      // Navigate after task is created
+      navigate(createPageUrl("Home"), { state: { reload: true } });
     } catch (error) {
       console.error("Error creating task with advance reminder:", error);
       alert("Failed to create task with advance reminder. Please try again.");
     } finally {
       setPendingTask(null);
+      setIsProcessing(false);
     }
   };
 
@@ -311,11 +316,7 @@ JSON:
           return;
         }
 
-        // Immediately show processing and navigate
         setIsProcessing(true);
-        navigate(createPageUrl("Home"), { state: { reload: true } });
-        
-        // Process in background
         await handleVoiceTranscription(audioBlob);
       };
 
@@ -355,7 +356,12 @@ JSON:
       });
 
       if (response?.data?.success && response?.data?.transcription) {
-        await processAndCreateTask(response.data.transcription, false);
+        // CRITICAL FIX: Wait for task creation before navigating
+        const success = await processAndCreateTask(response.data.transcription);
+        if (success && !showAdvanceReminderDialog) {
+          // Only navigate if not showing advance reminder dialog
+          navigate(createPageUrl("Home"), { state: { reload: true } });
+        }
       } else {
         throw new Error('Failed to transcribe audio');
       }
@@ -372,12 +378,18 @@ JSON:
     if (!textInput.trim()) return;
 
     setIsProcessing(true);
+    const input = textInput;
     setTextInput('');
     
-    navigate(createPageUrl("Home"), { state: { reload: true } });
+    // CRITICAL FIX: Wait for task creation before navigating
+    const success = await processAndCreateTask(input);
     
-    await processAndCreateTask(textInput, false);
     setIsProcessing(false);
+    
+    if (success && !showAdvanceReminderDialog) {
+      // Only navigate if not showing advance reminder dialog
+      navigate(createPageUrl("Home"), { state: { reload: true } });
+    }
   };
 
   const getCardClasses = () => {
