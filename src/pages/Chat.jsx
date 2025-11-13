@@ -11,7 +11,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Badge } from "@/components/ui/badge";
 import { sendAccountabilityMessage } from "../components/utils/notificationHelper";
-import { moderateContent } from "../components/utils/contentModeration";
+import { validateContent } from "../components/utils/contentModeration";
 import {
   Popover,
   PopoverContent,
@@ -176,10 +176,10 @@ export default function Chat() {
     e.preventDefault();
     if (!newMessage.trim() || !selectedConnection || isSending) return;
 
-    // MODERATION: Check for inappropriate content
-    const moderationResult = moderateContent(newMessage.trim());
-    if (!moderationResult.isClean) {
-      alert(`Your message contains inappropriate language. Please keep communication respectful and appropriate.`);
+    // MODERATION: Check for inappropriate content (only really bad words)
+    const validationResult = validateContent(newMessage.trim(), 'message');
+    if (!validationResult.valid) {
+      alert(validationResult.message);
       return;
     }
 

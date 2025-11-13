@@ -1,32 +1,24 @@
-// Content moderation utility - blocks inappropriate language
+// Content moderation utility - blocks really bad words and inappropriate language
+// Used only in public spaces (Chat, profiles) - NOT in private Support Space
 
 const INAPPROPRIATE_WORDS = [
-  // Sexual content
-  'porn', 'xxx', 'sex', 'nude', 'naked', 'nsfw', 'dick', 'cock', 'pussy', 'vagina', 
-  'penis', 'boobs', 'tits', 'ass', 'anal', 'oral', 'blowjob', 'handjob', 'masturbate',
-  'orgasm', 'horny', 'erotic', 'seduction', 'fetish', 'bdsm', 'kinky', 'dildo',
-  'vibrator', 'cum', 'cumming', 'ejaculate', 'semen', 'sperm', 'testicle', 'scrotum',
-  'nipple', 'breast', 'clitoris', 'labia', 'vulva', 'aroused', 'arousal',
+  // Explicit sexual content
+  'porn', 'xxx', 'nude', 'naked', 'nsfw', 'dick', 'cock', 'pussy', 
+  'penis', 'boobs', 'tits', 'ass', 'anal', 'blowjob', 'handjob', 
+  'orgasm', 'horny', 'erotic', 'bdsm', 'dildo', 'cum', 'cumming',
   
-  // Violence/threats
-  'kill', 'murder', 'rape', 'molest', 'assault', 'abuse', 'torture', 'mutilate',
-  'suicide', 'kys', 'genocide', 'terrorism', 'terrorist', 'bomb', 'shoot', 'stab',
-  'strangle', 'choke', 'suffocate', 'lynch', 'execute', 'slaughter', 'massacre',
-  'dismember', 'decapitate', 'behead', 'eviscerate',
+  // Severe violence/threats
+  'rape', 'molest', 
   
-  // Hate speech/slurs
-  'nigger', 'nigga', 'faggot', 'fag', 'tranny', 'retard', 'retarded', 'spic', 
-  'chink', 'gook', 'kike', 'wetback', 'beaner', 'towelhead', 'raghead', 'dyke',
-  'cunt', 'whore', 'slut', 'bitch', 'hoe',
+  // Hate speech/slurs (the worst ones)
+  'nigger', 'nigga', 'faggot', 'fag', 'tranny', 'retard', 'retarded', 
+  'chink', 'gook', 'kike', 'wetback', 'beaner', 'towelhead', 'raghead',
+  'cunt', 'whore', 'slut',
   
-  // Drugs (hard drugs, not medication)
-  'cocaine', 'heroin', 'meth', 'methamphetamine', 'ecstasy', 'mdma', 'lsd', 
-  'shrooms', 'mushrooms', 'crack', 'fentanyl', 'oxy', 'xanax', 'percocet',
-  
-  // Scam/illegal activity
-  'cashapp', 'venmo', 'paypal', 'zelle', 'bitcoin', 'crypto', 'invest', 'trading',
-  'money laundering', 'fraud', 'scam', 'phishing', 'hack', 'hacking', 'stolen',
-  'credit card', 'ssn', 'social security'
+  // Scam/phishing attempts
+  'cashapp me', 'venmo me', 'paypal me', 'send money', 'wire transfer',
+  'bitcoin wallet', 'crypto wallet', 'credit card number', 'ssn', 
+  'social security number', 'bank account', 'routing number'
 ];
 
 // Common letter substitutions used to bypass filters
@@ -67,13 +59,44 @@ function normalizeText(text) {
 }
 
 /**
+ * Censors inappropriate words with asterisks
+ * @param {string} text - Text to censor
+ * @returns {string} - Censored text
+ */
+export function censorContent(text) {
+  if (!text || typeof text !== 'string') {
+    return text;
+  }
+
+  let censoredText = text;
+  const words = text.split(/\s+/);
+  
+  for (const word of words) {
+    const normalizedWord = normalizeText(word);
+    
+    for (const badWord of INAPPROPRIATE_WORDS) {
+      const normalizedBadWord = normalizeText(badWord);
+      
+      if (normalizedWord.includes(normalizedBadWord)) {
+        // Replace the word with asterisks (keep first letter)
+        const replacement = word[0] + '*'.repeat(Math.max(1, word.length - 1));
+        censoredText = censoredText.replace(new RegExp(`\\b${word}\\b`, 'gi'), replacement);
+        break;
+      }
+    }
+  }
+
+  return censoredText;
+}
+
+/**
  * Checks if text contains inappropriate content
  * @param {string} text - Text to check
- * @returns {Object} - { isClean: boolean, flaggedWords: string[] }
+ * @returns {Object} - { isClean: boolean, flaggedWords: string[], censoredText: string }
  */
 export function moderateContent(text) {
   if (!text || typeof text !== 'string') {
-    return { isClean: true, flaggedWords: [] };
+    return { isClean: true, flaggedWords: [], censoredText: text };
   }
 
   const normalizedText = normalizeText(text);
@@ -85,29 +108,34 @@ export function moderateContent(text) {
     
     // Check if the inappropriate word appears in the text
     if (normalizedText.includes(normalizedWord)) {
-      // Verify it's a whole word match or surrounded by non-letters
-      const regex = new RegExp(`(^|[^a-z])${normalizedWord}([^a-z]|$)`, 'i');
-      if (regex.test(normalizedText)) {
-        flaggedWords.push(word);
-      }
+      flaggedWords.push(word);
     }
   }
 
   return {
     isClean: flaggedWords.length === 0,
-    flaggedWords: flaggedWords
+    flaggedWords: flaggedWords,
+    censoredText: censorContent(text)
   };
 }
 
 /**
- * Validates text and throws an error if inappropriate
+ * Validates text and provides helpful feedback
  */
-export function validateContent(text, fieldName = 'Content') {
+export function validateContent(text, fieldName = 'Message') {
   const result = moderateContent(text);
   
   if (!result.isClean) {
-    throw new Error(`${fieldName} contains inappropriate language. Please keep communication respectful and appropriate.`);
+    return {
+      valid: false,
+      message: `Please edit your ${fieldName.toLowerCase()} to remove inappropriate words and try again.`,
+      censoredText: result.censoredText
+    };
   }
   
-  return true;
+  return {
+    valid: true,
+    message: null,
+    censoredText: text
+  };
 }
