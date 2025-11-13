@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import { Task } from "@/entities/Task";
 import { User } from "@/entities/User";
@@ -31,6 +30,8 @@ export default function AddTask() {
   const [optimisticTasks, setOptimisticTasks] = useState([]);
   const [showAdvanceReminderDialog, setShowAdvanceReminderDialog] = useState(false);
   const [pendingTask, setPendingTask] = useState(null);
+  const [audioChunks, setAudioChunks] = useState([]);
+  const [silenceTimeout, setSilenceTimeout] = useState(null);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -67,7 +68,6 @@ export default function AddTask() {
   const processAndCreateTask = async (inputText) => {
     if (!inputText.trim()) return;
 
-    // setIsProcessing(true) is handled by the caller functions (handleVoiceTranscription, handleTextSubmit)
     const tempId = createTaskOptimistically(inputText);
 
     try {
@@ -77,7 +77,6 @@ export default function AddTask() {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
 
-      // Process in background
       const dateContext = [];
       for (let i = 0; i < 60; i++) {
         const date = new Date(today);
@@ -156,7 +155,6 @@ Return JSON:
         nextReminder = targetDate;
         actualReminderInterval = 'once';
 
-        // CRITICAL: If specific date is set, ask about advance reminder
         const taskData = {
           title: parsed.title || inputText.trim(),
           description: '',
@@ -170,8 +168,8 @@ Return JSON:
 
         setPendingTask({ taskData, tempId, currentUser });
         setShowAdvanceReminderDialog(true);
-        setIsProcessing(false); // Reset processing state for UI quickly, dialog will take over
-        return true; // Exit here, task creation will be handled by dialog choice
+        setIsProcessing(false);
+        return true;
       } else if (parsed.relative_minutes && parsed.relative_minutes > 0) {
         nextReminder = new Date(now.getTime() + parsed.relative_minutes * 60 * 1000);
         actualReminderInterval = 'once';
@@ -199,12 +197,10 @@ Return JSON:
             nextReminder.setDate(nextReminder.getDate() + 1);
             break;
           default:
-            // For other intervals like weekly, monthly, quarterly, yearly - just set a default first reminder
             nextReminder.setHours(nextReminder.getHours() + 2);
             break;
         }
       } else if (!parsed.reminder_interval && !parsed.target_time && !parsed.relative_minutes && !parsed.target_date) {
-        // Default to 2 hours if no specific reminder details
         actualReminderInterval = '2hours';
         nextReminder = new Date();
         nextReminder.setHours(nextReminder.getHours() + 2);
@@ -212,11 +208,9 @@ Return JSON:
 
       console.log('📅 [TASK] Parsed:', { target_date: parsed.target_date, target_time: parsed.target_time, nextReminder: nextReminder?.toISOString() });
 
-      // Navigate and create task immediately if no advance reminder dialog is needed
       navigate(createPageUrl("Home"), { state: { reload: true } });
       setIsProcessing(false);
 
-      // Create task in background
       const createdTask = await Task.create({
         title: parsed.title || inputText.trim(),
         description: '',
@@ -230,7 +224,6 @@ Return JSON:
 
       if (nextReminder) {
         try {
-          // CRITICAL: Store OneSignal notification ID
           const notificationId = await scheduleReminder({
             email: currentUser.email,
             title: "Task Reminder 📋",
@@ -245,7 +238,6 @@ Return JSON:
             }
           });
 
-          // Save the notification ID to task
           if (notificationId) {
             await base44.entities.Task.update(createdTask.id, {
               onesignal_notification_id: notificationId
@@ -263,7 +255,7 @@ Return JSON:
       console.error("Error creating task:", error);
       removeOptimisticTask(tempId);
       alert("Failed to create task. Please try again.");
-      setIsProcessing(false); // Reset processing state in case of error
+      setIsProcessing(false);
       return false;
     }
   };
@@ -273,15 +265,12 @@ Return JSON:
 
     const { taskData, tempId, currentUser } = pendingTask;
 
-    // Navigate immediately to Home as the task is now being finalized
     navigate(createPageUrl("Home"), { state: { reload: true } });
     setShowAdvanceReminderDialog(false);
 
     try {
-      // Create the actual task
       const createdTask = await Task.create(taskData);
 
-      // Schedule main reminder
       const mainReminderTime = new Date(taskData.next_reminder);
       const notificationId = await scheduleReminder({
         email: currentUser.email,
@@ -297,10 +286,8 @@ Return JSON:
         }
       });
 
-      // Schedule advance reminder if chosen
       if (minutesBefore > 0) {
         const advanceTime = new Date(mainReminderTime.getTime() - (minutesBefore * 60 * 1000));
-        // Ensure advance time is not in the past
         if (advanceTime.getTime() > new Date().getTime()) {
           await scheduleReminder({
             email: currentUser.email,
@@ -330,7 +317,7 @@ Return JSON:
       removeOptimisticTask(tempId);
       alert("Failed to create task with advance reminder. Please try again.");
     } finally {
-      setPendingTask(null); // Clear pending task regardless of success/failure
+      setPendingTask(null);
     }
   };
 
@@ -373,16 +360,18 @@ Return JSON:
 
         if (audioBlob.size === 0) {
           setIsProcessing(false);
+          setIsRecording(false);
           return;
         }
 
+        setIsProcessing(true); // Only set processing when transcribing
         await handleVoiceTranscription(audioBlob);
       };
 
       recorder.start();
       setMediaRecorder(recorder);
       setIsRecording(true);
-      setIsProcessing(true); // Indicate processing has started for transcription/task creation
+      // DON'T set isProcessing here - button should remain clickable
     } catch (error) {
       console.error("Microphone error:", error);
       alert("Could not access microphone");
@@ -394,13 +383,11 @@ Return JSON:
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       mediaRecorder.stop();
       setIsRecording(false);
-      // setIsProcessing(true) is already set in startVoiceRecording and kept here
     }
   };
 
   const handleVoiceTranscription = async (audioBlob) => {
     try {
-      // CRITICAL FIX: Convert Blob to File object with proper name and extension
       const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, {
         type: audioBlob.type
       });
@@ -443,7 +430,7 @@ Return JSON:
     e.preventDefault();
     if (!textInput.trim()) return;
 
-    setIsProcessing(true); // Indicate processing has started
+    setIsProcessing(true);
     await processAndCreateTask(textInput);
     setTextInput('');
   };
@@ -556,7 +543,7 @@ Return JSON:
                     </h2>
                     <p className={`text-lg ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
                       {isRecording
-                        ? 'Tap again when done'
+                        ? 'Tap to stop listening'
                         : 'Tap the mic and speak - say them one at a time or all at once'
                       }
                     </p>
@@ -568,7 +555,7 @@ Return JSON:
                       isRecording
                         ? 'bg-red-500 animate-pulse'
                         : isProcessing
-                          ? 'bg-gray-400'
+                          ? 'bg-gray-400 cursor-not-allowed'
                           : theme === 'minimalist'
                             ? 'bg-purple-600 hover:bg-purple-700 hover:scale-110'
                             : theme === 'spicybrains'
@@ -576,9 +563,15 @@ Return JSON:
                               : 'bg-gradient-to-br from-purple-600 to-pink-600 hover:scale-110'
                     } shadow-2xl`}
                   >
-                    <Mic className="w-16 h-16 text-white" />
+                    {isProcessing ? (
+                      <Loader2 className="w-16 h-16 text-white animate-spin" />
+                    ) : (
+                      <Mic className="w-16 h-16 text-white" />
+                    )}
                   </button>
-                  <p className="text-sm text-gray-500 text-center">Tap to Speak</p>
+                  <p className="text-sm text-gray-500 text-center">
+                    {isProcessing ? 'Processing...' : isRecording ? 'Tap to Stop' : 'Tap to Speak'}
+                  </p>
                 </motion.div>
               ) : (
                 <motion.div
@@ -685,7 +678,6 @@ Return JSON:
         </Card>
       )}
 
-      {/* Advance Reminder Dialog */}
       <Dialog open={showAdvanceReminderDialog} onOpenChange={setShowAdvanceReminderDialog}>
         <DialogContent className="max-w-md w-[calc(100vw-2rem)]">
           <DialogHeader>
