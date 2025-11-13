@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
@@ -205,11 +204,13 @@ export default function Home() {
   }, [tasks, todayCompleted]);
 
   return (
-    <div className={`min-h-screen p-4 md:p-8 w-full pb-0 ${
+    <div className={`min-h-screen p-4 md:p-8 w-full ${
       theme === 'spicybrains' 
         ? 'bg-gradient-to-br from-green-300 via-blue-300 to-purple-300' 
         : ''
-    }`}>
+    }`} style={{
+      paddingBottom: 'max(8rem, calc(8rem + env(safe-area-inset-bottom)))'
+    }}>
       <div className="max-w-7xl mx-auto">
         <MomentumCelebration 
           completedCount={todayCompleted.length}

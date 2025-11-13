@@ -14,6 +14,7 @@ export default function TaskNotification() {
   const [task, setTask] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showSnoozeOption, setShowSnoozeOption] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
 
   useEffect(() => {
@@ -85,6 +86,17 @@ export default function TaskNotification() {
     }
   };
 
+  const handleNotNow = () => {
+    // For recurring tasks, just go back - they'll get reminded again on schedule
+    if (task.reminder_interval && task.reminder_interval !== 'once') {
+      navigate(createPageUrl("Home"));
+      return;
+    }
+
+    // For one-time reminders, offer snooze
+    setShowSnoozeOption(true);
+  };
+
   const handleSnooze = async () => {
     if (!task) return;
 
@@ -92,7 +104,7 @@ export default function TaskNotification() {
 
     try {
       const nextReminder = new Date();
-      nextReminder.setMinutes(nextReminder.getMinutes() + 15);
+      nextReminder.setMinutes(nextReminder.getMinutes() + 30);
 
       await base44.entities.Task.update(task.id, {
         snooze_count: (task.snooze_count || 0) + 1,
@@ -105,7 +117,7 @@ export default function TaskNotification() {
       navigate(createPageUrl("Home"), { 
         state: { 
           reload: true,
-          message: "No problem! Reminder set for 15 minutes ⏰"
+          message: "No problem! Reminder set for 30 minutes ⏰"
         } 
       });
     } catch (error) {
@@ -132,6 +144,8 @@ export default function TaskNotification() {
     }
   };
 
+  const isRecurringTask = task && task.reminder_interval && task.reminder_interval !== 'once';
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center p-4">
@@ -152,103 +166,156 @@ export default function TaskNotification() {
         theme === 'dark' ? 'bg-gray-800' : 'bg-white'
       }`}>
         <CardContent className="p-8">
-          <div className="text-center mb-6">
-            <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${
-              theme === 'dark' ? 'bg-purple-900/30' : 'bg-gradient-to-br from-purple-100 to-pink-100'
-            }`}>
-              <Clock className={`w-8 h-8 ${
-                theme === 'dark' ? 'text-purple-400' : 'text-purple-600'
-              }`} />
-            </div>
-            <h2 className={`text-2xl font-bold mb-2 ${
-              theme === 'dark' ? 'text-white' : 'text-gray-900'
-            }`}>
-              Task Reminder
-            </h2>
-            <p className={`text-sm ${
-              theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-            }`}>
-              It's time for this task
-            </p>
-          </div>
+          {showSnoozeOption ? (
+            <>
+              <div className="text-center mb-6">
+                <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${
+                  theme === 'dark' ? 'bg-blue-900/30' : 'bg-gradient-to-br from-blue-100 to-purple-100'
+                }`}>
+                  <Clock className={`w-8 h-8 ${
+                    theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
+                  }`} />
+                </div>
+                <h2 className={`text-2xl font-bold mb-2 ${
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                }`}>
+                  Would you like to snooze?
+                </h2>
+                <p className={`text-sm ${
+                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                }`}>
+                  Get reminded again in 30 minutes
+                </p>
+              </div>
 
-          <div className={`p-4 rounded-xl mb-6 ${
-            theme === 'dark' ? 'bg-gray-900/50' : 'bg-gradient-to-r from-purple-50/50 to-orange-50/50'
-          }`}>
-            <h3 className={`text-lg font-semibold mb-3 ${
-              theme === 'dark' ? 'text-white' : 'text-gray-900'
-            }`}>
-              {task.title}
-            </h3>
+              <div className="space-y-3">
+                <Button
+                  onClick={handleSnooze}
+                  disabled={isProcessing}
+                  className={`w-full h-14 text-lg ${
+                    theme === 'minimalist'
+                      ? 'bg-blue-600 hover:bg-blue-700'
+                      : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'
+                  }`}
+                >
+                  {isProcessing ? (
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  ) : (
+                    <Clock className="w-5 h-5 mr-2" />
+                  )}
+                  Yes, remind me in 30 minutes
+                </Button>
 
-            <div className="flex flex-wrap gap-2">
-              {task.urgency && (
-                <Badge className={`${getUrgencyColor(task.urgency)} border`}>
-                  {task.urgency}
-                </Badge>
-              )}
-              {task.energy_required && (
-                <Badge variant="outline" className="flex items-center gap-1">
-                  <Zap className="w-3 h-3" />
-                  {task.energy_required} energy
-                </Badge>
-              )}
-            </div>
+                <Button
+                  onClick={() => navigate(createPageUrl("Home"))}
+                  disabled={isProcessing}
+                  variant="outline"
+                  className={`w-full h-14 text-lg ${
+                    theme === 'dark' 
+                      ? 'bg-gray-700 border-gray-600 hover:bg-gray-600 text-white'
+                      : ''
+                  }`}
+                >
+                  No, go back
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="text-center mb-6">
+                <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${
+                  theme === 'dark' ? 'bg-purple-900/30' : 'bg-gradient-to-br from-purple-100 to-pink-100'
+                }`}>
+                  <Clock className={`w-8 h-8 ${
+                    theme === 'dark' ? 'text-purple-400' : 'text-purple-600'
+                  }`} />
+                </div>
+                <h2 className={`text-2xl font-bold mb-2 ${
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                }`}>
+                  Task Reminder
+                </h2>
+                <p className={`text-sm ${
+                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                }`}>
+                  {isRecurringTask ? "It's time for this task" : "One-time reminder"}
+                </p>
+              </div>
 
-            {task.description && (
-              <p className={`mt-3 text-sm ${
-                theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+              <div className={`p-4 rounded-xl mb-6 ${
+                theme === 'dark' ? 'bg-gray-900/50' : 'bg-gradient-to-r from-purple-50/50 to-orange-50/50'
               }`}>
-                {task.description}
-              </p>
-            )}
-          </div>
+                <h3 className={`text-lg font-semibold mb-3 ${
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                }`}>
+                  {task.title}
+                </h3>
 
-          <div className="space-y-3">
-            <Button
-              onClick={handleComplete}
-              disabled={isProcessing}
-              className={`w-full h-14 text-lg ${
-                theme === 'minimalist'
-                  ? 'bg-green-600 hover:bg-green-700'
-                  : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
-              }`}
-            >
-              {isProcessing ? (
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-              ) : (
-                <CheckCircle2 className="w-5 h-5 mr-2" />
-              )}
-              Yes, I did this!
-            </Button>
+                <div className="flex flex-wrap gap-2">
+                  {task.urgency && (
+                    <Badge className={`${getUrgencyColor(task.urgency)} border`}>
+                      {task.urgency}
+                    </Badge>
+                  )}
+                  {task.energy_required && (
+                    <Badge variant="outline" className="flex items-center gap-1">
+                      <Zap className="w-3 h-3" />
+                      {task.energy_required} energy
+                    </Badge>
+                  )}
+                </div>
 
-            <Button
-              onClick={handleSnooze}
-              disabled={isProcessing}
-              variant="outline"
-              className={`w-full h-14 text-lg ${
-                theme === 'dark' 
-                  ? 'bg-gray-700 border-gray-600 hover:bg-gray-600 text-white'
-                  : ''
-              }`}
-            >
-              {isProcessing ? (
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-              ) : (
-                <Clock className="w-5 h-5 mr-2" />
-              )}
-              I need a little more time
-            </Button>
-          </div>
+                {task.description && (
+                  <p className={`mt-3 text-sm ${
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                  }`}>
+                    {task.description}
+                  </p>
+                )}
+              </div>
 
-          <button
-            onClick={() => navigate(createPageUrl("Home"))}
-            className={`w-full mt-4 text-sm ${
-              theme === 'dark' ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            Back to Home
-          </button>
+              <div className="space-y-3">
+                <Button
+                  onClick={handleComplete}
+                  disabled={isProcessing}
+                  className={`w-full h-14 text-lg ${
+                    theme === 'minimalist'
+                      ? 'bg-green-600 hover:bg-green-700'
+                      : 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
+                  }`}
+                >
+                  {isProcessing ? (
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="w-5 h-5 mr-2" />
+                  )}
+                  Yes, I did this!
+                </Button>
+
+                <Button
+                  onClick={handleNotNow}
+                  disabled={isProcessing}
+                  variant="outline"
+                  className={`w-full h-14 text-lg ${
+                    theme === 'dark' 
+                      ? 'bg-gray-700 border-gray-600 hover:bg-gray-600 text-white'
+                      : ''
+                  }`}
+                >
+                  {isRecurringTask ? "Not yet" : "I need more time"}
+                </Button>
+              </div>
+
+              <button
+                onClick={() => navigate(createPageUrl("Home"))}
+                className={`w-full mt-4 text-sm ${
+                  theme === 'dark' ? 'text-gray-400 hover:text-gray-300' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                Back to Home
+              </button>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>
