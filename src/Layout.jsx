@@ -25,7 +25,7 @@ import {
   Mic,
   HelpCircle,
   Info,
-  ExternalLink,
+  Shield,
 } from "lucide-react";
 import {
   Sidebar,
@@ -214,7 +214,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           setTimeout(() => {
             setShowSpicyBrainsExplanation(true);
             localStorage.setItem('spicybrains_explanation_seen', 'true');
-          }, 500); // Small delay to allow theme to visually change
+          }, 500);
         }
       }
       return nextTheme;
@@ -260,7 +260,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   const getBackgroundClass = () => {
     if (theme === 'dark') return 'bg-[#0a0a0b]';
     if (theme === 'minimalist') return 'bg-gradient-to-br from-stone-50 via-sage-50 to-stone-100';
-    if (theme === 'spicybrains') return ''; // Let pages handle their own gradients
+    if (theme === 'spicybrains') return '';
     return 'bg-gradient-to-br from-purple-50 via-orange-50 to-teal-50';
   };
 
@@ -302,7 +302,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   };
 
   const handleNavClick = () => {
-    // Close sidebar on mobile when navigation item is clicked
     setOpenMobile(false);
   };
 
@@ -848,22 +847,12 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                     Notifications
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    onClick={(e) => {
-                      e.preventDefault();
-                      window.open('https://adhd-one.framer.website/privacy-policy', '_blank');
-                    }}
-                  >
-                    <ExternalLink className="w-4 h-4 mr-2" />
+                  <DropdownMenuItem onClick={() => { navigate(createPageUrl("PrivacyPolicy")); handleNavClick(); }}>
+                    <Shield className="w-4 h-4 mr-2" />
                     Privacy Policy
                   </DropdownMenuItem>
-                  <DropdownMenuItem 
-                    onClick={(e) => {
-                      e.preventDefault();
-                      window.open('https://adhd-one.framer.website/terms-conditions', '_blank');
-                    }}
-                  >
-                    <ExternalLink className="w-4 h-4 mr-2" />
+                  <DropdownMenuItem onClick={() => { navigate(createPageUrl("TermsAndConditions")); handleNavClick(); }}>
+                    <Shield className="w-4 h-4 mr-2" />
                     Terms & Conditions
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => { navigate(createPageUrl("ReportBug")); handleNavClick(); }}>
