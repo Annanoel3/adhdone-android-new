@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -26,6 +25,7 @@ import {
   Mic,
   HelpCircle,
   Info,
+  ExternalLink,
 } from "lucide-react";
 import {
   Sidebar,
@@ -848,12 +848,22 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                     Notifications
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => { navigate(createPageUrl("PrivacyPolicy")); handleNavClick(); }}>
-                    <Settings className="w-4 h-4 mr-2" />
+                  <DropdownMenuItem 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      window.open('https://adhd-one.framer.website/privacy-policy', '_blank');
+                    }}
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
                     Privacy Policy
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { navigate(createPageUrl("TermsAndConditions")); handleNavClick(); }}>
-                    <Settings className="w-4 h-4 mr-2" />
+                  <DropdownMenuItem 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      window.open('https://adhd-one.framer.website/terms-conditions', '_blank');
+                    }}
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
                     Terms & Conditions
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => { navigate(createPageUrl("ReportBug")); handleNavClick(); }}>
