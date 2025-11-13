@@ -177,7 +177,7 @@ JSON:
         scheduleReminder({
           email: currentUser.email,
           title: "Task Reminder 📋",
-          body: createdTask.title,
+          body: `${createdTask.title}\n\nTap to mark as complete!`,
           sendAtISO: nextReminder.toISOString(),
           taskId: createdTask.id,
           data: {
@@ -222,7 +222,7 @@ JSON:
         scheduleReminder({
           email: currentUser.email,
           title: "Task Reminder 📋",
-          body: createdTask.title,
+          body: `${createdTask.title}\n\nTap to mark as complete!`,
           sendAtISO: mainReminderTime.toISOString(),
           taskId: createdTask.id,
           data: {
@@ -238,7 +238,7 @@ JSON:
             return scheduleReminder({
               email: currentUser.email,
               title: "📋 Upcoming Task",
-              body: `In ${minutesBefore >= 60 ? `${minutesBefore / 60} hour${minutesBefore > 60 ? 's' : ''}` : `${minutesBefore} min`}: ${createdTask.title}`,
+              body: `In ${minutesBefore >= 60 ? `${minutesBefore / 60} hour${minutesBefore > 60 ? 's' : ''}` : `${minutesBefore} min`}: ${createdTask.title}\n\nTap to view details.`,
               sendAtISO: advanceTime.toISOString(),
               taskId: createdTask.id,
               data: {
