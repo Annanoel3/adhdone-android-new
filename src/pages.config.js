@@ -26,6 +26,7 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import IAPSetupGuide from './pages/IAPSetupGuide';
 import TermsAndConditions from './pages/TermsAndConditions';
 import SpotifyCallback from './pages/SpotifyCallback';
+import TaskNotification from './pages/TaskNotification';
 import Layout from './Layout.jsx';
 
 
@@ -58,6 +59,7 @@ export const PAGES = {
     "IAPSetupGuide": IAPSetupGuide,
     "TermsAndConditions": TermsAndConditions,
     "SpotifyCallback": SpotifyCallback,
+    "TaskNotification": TaskNotification,
 }
 
 export const pagesConfig = {

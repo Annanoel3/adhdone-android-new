@@ -45,54 +45,32 @@ export default function AddTask() {
     try {
       const currentUser = await User.me();
       const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const tomorrow = new Date(today);
+      const today = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+      const tomorrow = new Date(now);
       tomorrow.setDate(tomorrow.getDate() + 1);
+      const tomorrowStr = tomorrow.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 
-      const dateContext = [];
-      for (let i = 0; i < 60; i++) {
-        const date = new Date(today);
-        date.setDate(date.getDate() + i);
-        dateContext.push({
-          offset: i,
-          date: date.toISOString().split('T')[0],
-          display: date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })
-        });
-      }
+      // OPTIMIZED: Shorter, more focused prompt
+      const prompt = `Parse task: "${inputText}"
 
-      const prompt = `Parse this task: "${inputText}"
-
-Context:
-- Today: ${today.toISOString().split('T')[0]} (${today.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })})
-- Tomorrow: ${tomorrow.toISOString().split('T')[0]} (${tomorrow.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })})
-- Current time: ${now.toLocaleTimeString()}
-
-Available dates for the next 60 days:
-${dateContext.slice(0, 30).map(d => `${d.display}: ${d.date}`).join('\n')}
-
-CRITICAL: Keep ALL important details in the task title. Only remove filler words like "remind me to", "I need to", etc.
-
-Example:
-"Remind me to call the dentist about my appointment and pick up the prescription" 
-→ "Call dentist about appointment and pick up prescription" (NOT just "Call dentist")
+Today: ${today} | Tomorrow: ${tomorrowStr} | Time: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
 
 Extract:
-1. Task title - Keep it detailed and complete (remove only filler words)
-2. Urgency (low/medium/high/urgent)
-3. Energy needed (low/medium/high)
-4. If a specific DATE is mentioned (like "November 17" or "next Friday"), extract it
-5. If a TIME is mentioned (like "at 2pm" or "at 9:30am"), extract it
-6. Reminder interval if mentioned (every hour, daily, etc.)
+1. Clean title (remove "remind me", "I need to")
+2. Urgency: low/medium/high/urgent
+3. Energy: low/medium/high
+4. Specific date mentioned? (e.g., "Nov 17", "tomorrow", "next Friday")
+5. Time mentioned? (e.g., "2pm", "9:30am")
+6. Recurring? (e.g., "daily", "every hour", "every 2 hours")
 
-Return JSON:
+JSON:
 {
-  "title": "complete task description here",
+  "title": "clean title with all details",
   "urgency": "medium",
   "energy_required": "medium",
-  "target_date": "YYYY-MM-DD" | null,
-  "target_time": "HH:MM" | null,
-  "reminder_interval": "30min" | "1hour" | "2hours" | "daily" | "once" | null,
-  "relative_minutes": number | null
+  "target_date": "YYYY-MM-DD or null",
+  "target_time": "HH:MM or null",
+  "reminder_interval": "10min|20min|30min|1hour|2hours|daily|every_other_day|once|null"
 }`;
 
       const parsed = await base44.integrations.Core.InvokeLLM({
@@ -105,8 +83,7 @@ Return JSON:
             energy_required: { type: "string" },
             target_date: { type: "string" },
             target_time: { type: "string" },
-            reminder_interval: { type: "string" },
-            relative_minutes: { type: "number" }
+            reminder_interval: { type: "string" }
           }
         }
       });
@@ -141,9 +118,6 @@ Return JSON:
         setPendingTask({ taskData, currentUser });
         setShowAdvanceReminderDialog(true);
         return true;
-      } else if (parsed.relative_minutes && parsed.relative_minutes > 0) {
-        nextReminder = new Date(now.getTime() + parsed.relative_minutes * 60 * 1000);
-        actualReminderInterval = 'once';
       } else if (parsed.target_time) {
         const [hours, minutes] = parsed.target_time.split(':');
         nextReminder = new Date();
@@ -155,6 +129,12 @@ Return JSON:
       } else if (parsed.reminder_interval && parsed.reminder_interval !== 'once') {
         nextReminder = new Date(now.getTime());
         switch (parsed.reminder_interval) {
+          case '10min':
+            nextReminder.setMinutes(nextReminder.getMinutes() + 10);
+            break;
+          case '20min':
+            nextReminder.setMinutes(nextReminder.getMinutes() + 20);
+            break;
           case '30min':
             nextReminder.setMinutes(nextReminder.getMinutes() + 30);
             break;
@@ -167,17 +147,18 @@ Return JSON:
           case 'daily':
             nextReminder.setDate(nextReminder.getDate() + 1);
             break;
+          case 'every_other_day':
+            nextReminder.setDate(nextReminder.getDate() + 2);
+            break;
           default:
             nextReminder.setHours(nextReminder.getHours() + 2);
             break;
         }
-      } else if (!parsed.reminder_interval && !parsed.target_time && !parsed.relative_minutes && !parsed.target_date) {
+      } else if (!parsed.reminder_interval && !parsed.target_time && !parsed.target_date) {
         actualReminderInterval = '2hours';
         nextReminder = new Date();
         nextReminder.setHours(nextReminder.getHours() + 2);
       }
-
-      console.log('📅 [TASK] Parsed:', { target_date: parsed.target_date, target_time: parsed.target_time, nextReminder: nextReminder?.toISOString() });
 
       // Create task immediately
       const createdTask = await Task.create({
@@ -200,7 +181,7 @@ Return JSON:
           sendAtISO: nextReminder.toISOString(),
           taskId: createdTask.id,
           data: {
-            screen: "/Tasks",
+            screen: "/TaskNotification",
             taskId: createdTask.id,
             urgency: createdTask.urgency,
             type: 'task_reminder'
@@ -245,7 +226,7 @@ Return JSON:
           sendAtISO: mainReminderTime.toISOString(),
           taskId: createdTask.id,
           data: {
-            screen: "/Tasks",
+            screen: "/TaskNotification",
             taskId: createdTask.id,
             urgency: createdTask.urgency,
             type: 'task_reminder'
@@ -261,7 +242,7 @@ Return JSON:
               sendAtISO: advanceTime.toISOString(),
               taskId: createdTask.id,
               data: {
-                screen: "/Tasks",
+                screen: "/TaskNotification",
                 taskId: createdTask.id,
                 urgency: createdTask.urgency,
                 type: 'advance_reminder'
@@ -361,17 +342,9 @@ Return JSON:
         type: audioBlob.type
       });
 
-      console.log('🎤 [VOICE] Uploading audio file:', {
-        name: audioFile.name,
-        size: audioFile.size,
-        type: audioFile.type
-      });
-
       const uploadResult = await base44.integrations.Core.UploadFile({
         file: audioFile
       });
-
-      console.log('✅ [VOICE] Upload result:', uploadResult);
 
       if (!uploadResult?.file_url) {
         throw new Error('Failed to upload audio file');
@@ -381,10 +354,8 @@ Return JSON:
         file_url: uploadResult.file_url
       });
 
-      console.log('✅ [VOICE] Transcription response:', response);
-
       if (response?.data?.success && response?.data?.transcription) {
-        await processAndCreateTask(response.data.transcription, false); // false = don't navigate again
+        await processAndCreateTask(response.data.transcription, false);
       } else {
         throw new Error('Failed to transcribe audio');
       }
@@ -403,11 +374,9 @@ Return JSON:
     setIsProcessing(true);
     setTextInput('');
     
-    // Navigate immediately
     navigate(createPageUrl("Home"), { state: { reload: true } });
     
-    // Process in background
-    await processAndCreateTask(textInput, false); // false = don't navigate again
+    await processAndCreateTask(textInput, false);
     setIsProcessing(false);
   };
 
