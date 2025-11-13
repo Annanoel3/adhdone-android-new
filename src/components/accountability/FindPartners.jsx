@@ -1,355 +1,358 @@
 import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { Search, UserPlus, Mail, X } from "lucide-react";
+import { Search, UserPlus, Loader2, Ban, ShieldAlert } from "lucide-react";
 import { base44 } from "@/api/base44Client";
-import { User } from "@/entities/User";
+import { Link } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 
 export default function FindPartners({ theme, user, onUpdate }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
-  const [requestMessage, setRequestMessage] = useState("");
-  const [isSending, setIsSending] = useState(false);
-  const [existingConnections, setExistingConnections] = useState([]);
+  const [myConnections, setMyConnections] = useState([]);
+  const [blockedUsers, setBlockedUsers] = useState([]);
+  const [blockingMe, setBlockingMe] = useState([]);
+  const [blockingUser, setBlockingUser] = useState(null);
+  const [blockReason, setBlockReason] = useState("");
 
   useEffect(() => {
-    loadExistingConnections();
+    if (user) {
+      loadConnections();
+      loadBlockedUsers();
+    }
   }, [user]);
 
-  const loadExistingConnections = async () => {
-    if (!user?.email) return;
-    
+  const loadConnections = async () => {
     try {
       const connections = await base44.entities.AccountabilityConnection.list();
-      setExistingConnections(connections);
+      setMyConnections(connections);
     } catch (error) {
       console.error("Error loading connections:", error);
     }
   };
 
-  const handleSearch = async () => {
+  const loadBlockedUsers = async () => {
+    try {
+      // Users I've blocked
+      const blocked = await base44.entities.BlockedUser.filter({
+        blocker_email: user.email
+      });
+      setBlockedUsers(blocked);
+
+      // Users who blocked me (using service role)
+      const blockingMeList = await base44.asServiceRole.entities.BlockedUser.filter({
+        blocked_email: user.email
+      });
+      setBlockingMe(blockingMeList);
+    } catch (error) {
+      console.error("Error loading blocked users:", error);
+    }
+  };
+
+  const handleSearch = async (e) => {
+    e.preventDefault();
     if (!searchQuery.trim()) return;
 
     setIsSearching(true);
     try {
-      console.log('[FindPartners] Searching for:', searchQuery);
-      
-      const response = await base44.functions.invoke('searchUsers', { 
-        query: searchQuery.trim() 
+      const response = await base44.functions.invoke('searchUsers', {
+        query: searchQuery.trim()
       });
-      
-      console.log('[FindPartners] Search response:', response);
-      
-      const results = response.data?.users || [];
-      
-      console.log('[FindPartners] Results:', results);
-      
-      // Filter out current user (extra safety check)
-      const filteredResults = results.filter(u => u.email !== user.email);
-      setSearchResults(filteredResults);
+
+      if (response?.data?.users) {
+        // Filter out blocked users and users who blocked me
+        const blockedEmails = new Set(blockedUsers.map(b => b.blocked_email));
+        const blockingMeEmails = new Set(blockingMe.map(b => b.blocker_email));
+        
+        const filteredResults = response.data.users.filter(u => 
+          u.email !== user.email && 
+          !blockedEmails.has(u.email) &&
+          !blockingMeEmails.has(u.email)
+        );
+        
+        setSearchResults(filteredResults);
+      }
     } catch (error) {
-      console.error("[FindPartners] Error searching users:", error);
-      alert("Failed to search users. Please try again.");
+      console.error("Error searching users:", error);
     }
     setIsSearching(false);
   };
 
-  const getConnectionStatus = (targetEmail) => {
-    if (!user?.email || !targetEmail) return { status: 'none', connection: null };
-    
-    const connection = existingConnections.find(c =>
+  const handleSendRequest = async (targetUser) => {
+    try {
+      await base44.entities.AccountabilityConnection.create({
+        requester_email: user.email,
+        requester_name: user.display_name || user.full_name,
+        requester_picture: user.profile_picture_url,
+        recipient_email: targetUser.email,
+        recipient_name: targetUser.display_name || targetUser.full_name,
+        recipient_picture: targetUser.profile_picture_url,
+        status: 'pending'
+      });
+
+      setSearchResults(prev => prev.filter(u => u.email !== targetUser.email));
+      if (onUpdate) onUpdate();
+    } catch (error) {
+      console.error("Error sending connection request:", error);
+      alert("Failed to send request. Please try again.");
+    }
+  };
+
+  const handleBlockUser = async () => {
+    if (!blockingUser) return;
+
+    try {
+      await base44.entities.BlockedUser.create({
+        blocker_email: user.email,
+        blocked_email: blockingUser.email,
+        blocked_name: blockingUser.display_name || blockingUser.full_name,
+        blocked_picture: blockingUser.profile_picture_url,
+        reason: blockReason.trim() || null
+      });
+
+      // Remove from search results
+      setSearchResults(prev => prev.filter(u => u.email !== blockingUser.email));
+      
+      // Remove any existing connections
+      const existingConnections = myConnections.filter(c =>
+        (c.requester_email === blockingUser.email && c.recipient_email === user.email) ||
+        (c.recipient_email === blockingUser.email && c.requester_email === user.email)
+      );
+      
+      for (const conn of existingConnections) {
+        await base44.entities.AccountabilityConnection.delete(conn.id);
+      }
+
+      await loadBlockedUsers();
+      await loadConnections();
+      setBlockingUser(null);
+      setBlockReason("");
+      if (onUpdate) onUpdate();
+    } catch (error) {
+      console.error("Error blocking user:", error);
+      alert("Failed to block user. Please try again.");
+    }
+  };
+
+  const hasConnection = (targetEmail) => {
+    return myConnections.some(c =>
       (c.requester_email === user.email && c.recipient_email === targetEmail) ||
       (c.recipient_email === user.email && c.requester_email === targetEmail)
     );
-
-    if (!connection) return { status: 'none', connection: null };
-    if (connection.status === 'accepted') return { status: 'connected', connection };
-    if (connection.requester_email === user.email) return { status: 'sent', connection };
-    return { status: 'received', connection };
-  };
-
-  const handleCancelRequest = async (connection) => {
-    if (!connection) return;
-    
-    const confirmed = confirm("Cancel this connection request?");
-    if (!confirmed) return;
-
-    try {
-      await base44.entities.AccountabilityConnection.delete(connection.id);
-      await loadExistingConnections();
-      if (onUpdate) onUpdate();
-    } catch (error) {
-      console.error("Error canceling request:", error);
-      alert("Failed to cancel request. Please try again.");
-    }
-  };
-
-  const handleSendRequest = async () => {
-    if (!selectedUser || !user?.email) {
-      alert("Missing user information. Please try again.");
-      return;
-    }
-
-    // Check if a connection already exists
-    const existingConnection = existingConnections.find(c =>
-      (c.requester_email === user.email && c.recipient_email === selectedUser.email) ||
-      (c.recipient_email === user.email && c.requester_email === selectedUser.email)
-    );
-
-    if (existingConnection) {
-      alert("A connection request already exists with this user!");
-      setSelectedUser(null);
-      setRequestMessage("");
-      return;
-    }
-
-    setIsSending(true);
-    try {
-      console.log('[FindPartners] Creating connection request...');
-      console.log('[FindPartners] Requester:', user.email);
-      console.log('[FindPartners] Recipient:', selectedUser.email);
-      
-      // Make sure we have all required fields
-      const connectionData = {
-        requester_email: user.email,
-        requester_name: user.display_name || user.full_name || 'Anonymous',
-        requester_picture: user.profile_picture_url || '',
-        recipient_email: selectedUser.email,
-        recipient_name: selectedUser.display_name || selectedUser.full_name || 'Anonymous',
-        recipient_picture: selectedUser.profile_picture_url || '',
-        status: 'pending',
-        message: requestMessage.trim() || ''
-      };
-
-      console.log('[FindPartners] Connection data:', connectionData);
-
-      const connection = await base44.entities.AccountabilityConnection.create(connectionData);
-      
-      console.log('[FindPartners] Connection created successfully:', connection);
-
-      setSelectedUser(null);
-      setRequestMessage("");
-      await loadExistingConnections();
-      if (onUpdate) onUpdate();
-      
-      alert("Request sent successfully!");
-    } catch (error) {
-      console.error("[FindPartners] Error sending request:", error);
-      console.error("[FindPartners] Error details:", error.message);
-      console.error("[FindPartners] Error stack:", error.stack);
-      alert("Failed to send request. Please try again.");
-    }
-    setIsSending(false);
   };
 
   return (
     <div className="space-y-6">
-      <Card className={`${theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white/80 backdrop-blur-sm'} border-none shadow-md`}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="w-5 h-5" />
-            Find Accountability Partners
-          </CardTitle>
-          <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-            Connect with other ADHDone users who are also looking for accountability partners
-          </p>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex gap-2">
+      <Card className={`border-none shadow-md ${
+        theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+      }`}>
+        <CardContent className="p-6">
+          <form onSubmit={handleSearch} className="flex gap-2">
             <Input
-              placeholder="Search by name or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSearch();
-              }}
+              placeholder="Search by name or email..."
               className="flex-1"
             />
-            <Button 
-              onClick={handleSearch}
-              disabled={isSearching}
-              className={
-                theme === 'minimalist'
+            <Button
+              type="submit"
+              disabled={isSearching || !searchQuery.trim()}
+              className={theme === 'minimalist'
+                ? 'bg-green-600 hover:bg-green-700'
+                : theme === 'dark'
                   ? 'bg-green-600 hover:bg-green-700'
-                  : theme === 'dark'
-                    ? 'bg-green-600 hover:bg-green-700'
-                    : 'bg-gradient-to-r from-purple-600 to-orange-600 hover:from-purple-700 hover:to-orange-700'
+                  : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
               }
             >
-              <Search className="w-4 h-4 mr-2" />
-              {isSearching ? 'Searching...' : 'Search'}
+              {isSearching ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <>
+                  <Search className="w-4 h-4 mr-2" />
+                  Search
+                </>
+              )}
             </Button>
-          </div>
-
-          {searchResults.length > 0 && (
-            <div className="space-y-3">
-              <h3 className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                Search Results
-              </h3>
-              {searchResults.map((foundUser) => {
-                const { status, connection } = getConnectionStatus(foundUser.email);
-                
-                return (
-                  <div
-                    key={foundUser.email}
-                    className={`flex items-center justify-between p-4 rounded-lg border ${
-                      theme === 'dark' 
-                        ? 'bg-gray-900/50 border-gray-700' 
-                        : 'bg-gray-50 border-gray-200'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarImage src={foundUser.profile_picture_url} />
-                        <AvatarFallback className={
-                          theme === 'minimalist' ? 'bg-purple-100 text-purple-700' : 'bg-gradient-to-br from-purple-200 to-pink-200 text-purple-800'
-                        }>
-                          {(foundUser.display_name || foundUser.email)[0].toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                          {foundUser.display_name || 'Anonymous User'}
-                        </p>
-                        <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                          {foundUser.email}
-                        </p>
-                        {foundUser.looking_for_accountability && (
-                          <Badge className="mt-1 bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
-                            Looking for partners
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-
-                    {status === 'none' && (
-                      <Button
-                        onClick={() => setSelectedUser(foundUser)}
-                        size="sm"
-                        className={
-                          theme === 'minimalist'
-                            ? 'bg-green-600 hover:bg-green-700'
-                            : theme === 'dark'
-                              ? 'bg-green-600 hover:bg-green-700'
-                              : 'bg-gradient-to-r from-purple-600 to-orange-600 hover:from-purple-700 hover:to-orange-700'
-                        }
-                      >
-                        <UserPlus className="w-4 h-4 mr-2" />
-                        Connect
-                      </Button>
-                    )}
-
-                    {status === 'sent' && (
-                      <button
-                        onClick={() => handleCancelRequest(connection)}
-                        className="group"
-                      >
-                        <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300 cursor-pointer hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors flex items-center gap-1">
-                          Request Sent
-                          <X className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </Badge>
-                      </button>
-                    )}
-
-                    {status === 'received' && (
-                      <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300">
-                        Pending Your Response
-                      </Badge>
-                    )}
-
-                    {status === 'connected' && (
-                      <Badge className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
-                        Connected
-                      </Badge>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {!isSearching && searchQuery && searchResults.length === 0 && (
-            <div className="text-center py-8">
-              <p className={`${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                No users found. Try a different search term.
-              </p>
-            </div>
-          )}
+          </form>
         </CardContent>
       </Card>
 
-      <Dialog open={!!selectedUser} onOpenChange={() => setSelectedUser(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Send Connection Request</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            {selectedUser && (
-              <div className="flex items-center gap-3">
-                <Avatar>
-                  <AvatarImage src={selectedUser.profile_picture_url} />
-                  <AvatarFallback className="bg-purple-100 text-purple-700">
-                    {(selectedUser.display_name || selectedUser.email)[0].toUpperCase()}
-                  </AvatarFallback>
-                </Avatar>
-                <div>
-                  <p className="font-medium">{selectedUser.display_name || 'Anonymous User'}</p>
-                  <p className="text-sm text-gray-600">{selectedUser.email}</p>
-                </div>
-              </div>
-            )}
-
-            <div>
-              <label className="text-sm font-medium mb-2 block">
-                Add a personal message (optional)
-              </label>
-              <Textarea
-                value={requestMessage}
-                onChange={(e) => setRequestMessage(e.target.value)}
-                placeholder="Hi! I'd love to be accountability partners..."
-                className="min-h-[100px]"
-              />
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setSelectedUser(null);
-                  setRequestMessage("");
-                }}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleSendRequest}
-                disabled={isSending}
-                className={`flex-1 ${
-                  theme === 'minimalist'
-                    ? 'bg-green-600 hover:bg-green-700'
-                    : theme === 'dark'
-                      ? 'bg-green-600 hover:bg-green-700'
-                      : 'bg-gradient-to-r from-purple-600 to-orange-600 hover:from-purple-700 hover:to-orange-700'
+      {searchResults.length > 0 && (
+        <Card className={`border-none shadow-md ${
+          theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+        }`}>
+          <CardContent className="p-6 space-y-3">
+            {searchResults.map((result) => (
+              <div
+                key={result.email}
+                className={`flex items-center gap-4 p-4 rounded-lg border ${
+                  theme === 'dark'
+                    ? 'border-gray-700 bg-gray-900/50'
+                    : 'border-gray-200 bg-gray-50'
                 }`}
               >
-                <Mail className="w-4 h-4 mr-2" />
-                {isSending ? 'Sending...' : 'Send Request'}
-              </Button>
+                <Link to={createPageUrl("UserProfile") + `?email=${result.email}`} className="flex items-center gap-3 flex-1 min-w-0">
+                  <Avatar className="w-12 h-12 flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity">
+                    <AvatarImage src={result.profile_picture_url} className="object-cover" />
+                    <AvatarFallback className={
+                      theme === 'minimalist' ? 'bg-purple-100 text-purple-700' : 'bg-gradient-to-br from-purple-200 to-pink-200 text-purple-800'
+                    }>
+                      {result.display_name?.[0]?.toUpperCase() || result.full_name?.[0]?.toUpperCase() || '?'}
+                    </AvatarFallback>
+                  </Avatar>
+
+                  <div className="flex-1 min-w-0">
+                    <h3 className={`font-semibold truncate hover:underline ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
+                      {result.display_name || result.full_name}
+                    </h3>
+                    <p className={`text-sm truncate ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                      {result.email}
+                    </p>
+                    {result.level && (
+                      <Badge variant="outline" className="text-xs mt-1">
+                        Level {result.level}
+                      </Badge>
+                    )}
+                  </div>
+                </Link>
+
+                <div className="flex items-center gap-2">
+                  {hasConnection(result.email) ? (
+                    <Badge variant="outline" className="text-xs">
+                      Connected
+                    </Badge>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => handleSendRequest(result)}
+                      className={theme === 'minimalist'
+                        ? 'bg-green-600 hover:bg-green-700'
+                        : theme === 'dark'
+                          ? 'bg-green-600 hover:bg-green-700'
+                          : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
+                      }
+                    >
+                      <UserPlus className="w-4 h-4 mr-1" />
+                      Connect
+                    </Button>
+                  )}
+                  
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setBlockingUser(result)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Ban className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {blockedUsers.length > 0 && (
+        <Card className={`border-none shadow-md ${
+          theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+        }`}>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <ShieldAlert className="w-5 h-5 text-red-600" />
+              <h3 className={`font-semibold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
+                Blocked Users ({blockedUsers.length})
+              </h3>
             </div>
+            <div className="space-y-2">
+              {blockedUsers.map((blocked) => (
+                <div
+                  key={blocked.id}
+                  className={`flex items-center justify-between p-3 rounded-lg border ${
+                    theme === 'dark'
+                      ? 'border-gray-700 bg-gray-900/50'
+                      : 'border-gray-200 bg-gray-50'
+                  }`}
+                >
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <Avatar className="w-10 h-10 flex-shrink-0">
+                      <AvatarImage src={blocked.blocked_picture} className="object-cover" />
+                      <AvatarFallback className="bg-red-100 text-red-700">
+                        {blocked.blocked_name?.[0]?.toUpperCase() || '?'}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className={`font-medium truncate ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
+                        {blocked.blocked_name}
+                      </p>
+                      <p className={`text-xs truncate ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {blocked.blocked_email}
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      if (confirm(`Unblock ${blocked.blocked_name}?`)) {
+                        await base44.entities.BlockedUser.delete(blocked.id);
+                        await loadBlockedUsers();
+                      }
+                    }}
+                  >
+                    Unblock
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <Dialog open={!!blockingUser} onOpenChange={() => {
+        setBlockingUser(null);
+        setBlockReason("");
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Block User</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to block {blockingUser?.display_name || blockingUser?.full_name}? They won't be able to send you connection requests or see your profile on the leaderboard.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <Input
+              placeholder="Reason for blocking (optional)"
+              value={blockReason}
+              onChange={(e) => setBlockReason(e.target.value)}
+            />
           </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => {
+              setBlockingUser(null);
+              setBlockReason("");
+            }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleBlockUser}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              <Ban className="w-4 h-4 mr-2" />
+              Block User
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
