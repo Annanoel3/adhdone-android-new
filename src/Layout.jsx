@@ -1033,15 +1033,39 @@ export default function Layout({ children, currentPageName }) {
         setUser(currentUser);
       }
 
-      // Trial Warning/Ending logic - 7 DAY TRIAL
-      if (currentUser.trial_start_date && !currentUser.has_paid) {
+      // IMPROVED: Trial logic with manual trial_end_date override
+      // Priority 1: Check if user has lifetime access
+      if (currentUser.is_lifetime_access) {
+        setAuthCheckComplete(true);
+        return;
+      }
+
+      // Priority 2: Check if user has paid subscription
+      if (currentUser.has_paid) {
+        setAuthCheckComplete(true);
+        return;
+      }
+
+      // Priority 3: Check manual trial_end_date (for testers)
+      if (currentUser.trial_end_date) {
+        const trialEnd = new Date(currentUser.trial_end_date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        
+        if (today > trialEnd && location.pathname !== createPageUrl("TrialEnded")) {
+          navigate(createPageUrl("TrialEnded"));
+          return;
+        }
+      } 
+      // Priority 4: Default 7-day trial from trial_start_date
+      else if (currentUser.trial_start_date) {
         const trialStart = new Date(currentUser.trial_start_date);
         const today = new Date();
         const daysDiff = Math.floor((today - trialStart) / (1000 * 60 * 60 * 24));
 
-        // End trial after 7 days
         if (daysDiff >= 7 && location.pathname !== createPageUrl("TrialEnded")) {
           navigate(createPageUrl("TrialEnded"));
+          return;
         }
       }
 
