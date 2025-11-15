@@ -15,12 +15,16 @@ import ConnectionRequests from "../components/accountability/ConnectionRequests"
 import PartnerMoodFeed from "../components/accountability/PartnerMoodFeed";
 import MoodCheckInCard from "../components/accountability/MoodCheckInCard";
 
+// Assuming 'base44' is a globally available object or imported elsewhere
+// If 'base44' needs to be imported explicitly, add: import base44 from 'path/to/base44';
+
 export default function Accountability() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [specialMode, setSpecialMode] = useState(() => localStorage.getItem('special_mode') || 'normal');
   const [user, setUser] = useState(null);
   const [activeTab, setActiveTab] = useState('partners');
   const [isLoading, setIsLoading] = useState(true);
+  const [requestCount, setRequestCount] = useState(0); // New state for request count
 
   useEffect(() => {
     loadUser();
@@ -55,6 +59,32 @@ export default function Accountability() {
     await loadUser();
   };
 
+  // New useEffect hook to load and update request count
+  useEffect(() => {
+    const loadRequestCount = async () => {
+      // Ensure user and user.email are available before making the request
+      if (!user || !user.email) return;
+      try {
+        // Assuming base44.entities.AccountabilityConnection is correctly defined and accessible
+        const connections = await base44.entities.AccountabilityConnection.filter({
+          recipient_email: user.email,
+          status: 'pending'
+        });
+        setRequestCount(connections.length);
+      } catch (error) {
+        console.error("Error loading request count:", error);
+      }
+    };
+
+    if (user) {
+      loadRequestCount(); // Initial load when user is available
+      // Set up an interval to refresh the request count every 30 seconds
+      const interval = setInterval(loadRequestCount, 30000);
+      // Clean up the interval when the component unmounts or user changes
+      return () => clearInterval(interval);
+    }
+  }, [user]); // Re-run this effect when the user object changes
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -68,10 +98,10 @@ export default function Accountability() {
 
   return (
     <div className={`min-h-screen p-4 md:p-8 w-full ${
-      theme === 'spicybrains' 
-        ? 'bg-gradient-to-br from-orange-300 via-pink-300 to-orange-400' 
-        : theme === 'dark' 
-          ? 'bg-gray-900' 
+      theme === 'spicybrains'
+        ? 'bg-gradient-to-br from-orange-300 via-pink-300 to-orange-400'
+        : theme === 'dark'
+          ? 'bg-gray-900'
           : ''
     }`} style={{ paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
       <div className="max-w-6xl mx-auto">
@@ -124,33 +154,40 @@ export default function Accountability() {
         </Card>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
+          {/* Modified TabsList className to keep existing styles but also include dark theme specific background from prompt */}
           <TabsList className={`grid w-full grid-cols-4 mb-6 ${
             specialMode !== 'normal' ? `bg-white/70 backdrop-blur-sm border` :
             theme === 'minimalist'
               ? 'bg-white/70 backdrop-blur-sm border border-gray-200'
               : theme === 'dark'
-                ? 'bg-gray-800/70 backdrop-blur-sm border border-gray-700'
+                ? 'bg-gray-800/70 backdrop-blur-sm border border-gray-700' // Existing dark theme
                 : 'bg-gradient-to-br from-blue-50/70 to-purple-50/70 backdrop-blur-sm border border-blue-100'
           }`}>
-            <TabsTrigger value="partners">
+            <TabsTrigger value="partners" className={theme === 'dark' ? 'data-[state=active]:bg-gray-700' : ''}>
               <div className="flex items-center gap-2">
                 <Users className="w-4 h-4" />
                 <span className="hidden sm:inline">Partners</span>
               </div>
             </TabsTrigger>
-            <TabsTrigger value="find">
+            <TabsTrigger value="find" className={theme === 'dark' ? 'data-[state=active]:bg-gray-700' : ''}>
               <div className="flex items-center gap-2">
                 <Search className="w-4 h-4" />
                 <span className="hidden sm:inline">Find</span>
               </div>
             </TabsTrigger>
-            <TabsTrigger value="requests">
+            {/* Requests tab with conditional badge for request count */}
+            <TabsTrigger value="requests" className={`relative ${theme === 'dark' ? 'data-[state=active]:bg-gray-700' : ''}`}>
               <div className="flex items-center gap-2">
                 <Mail className="w-4 h-4" />
                 <span className="hidden sm:inline">Requests</span>
+                {requestCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                    {requestCount}
+                  </span>
+                )}
               </div>
             </TabsTrigger>
-            <TabsTrigger value="feed">
+            <TabsTrigger value="feed" className={theme === 'dark' ? 'data-[state=active]:bg-gray-700' : ''}>
               <div className="flex items-center gap-2">
                 <MessageCircle className="w-4 h-4" />
                 <span className="hidden sm:inline">Feed</span>
@@ -178,7 +215,7 @@ export default function Accountability() {
           </TabsContent>
         </Tabs>
       </div>
-      
+
       <div style={{ height: '120px' }} aria-hidden="true"></div>
     </div>
   );

@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -51,6 +50,13 @@ export default function TaskCard({
         medium: 'bg-blue-100 text-blue-700 border-blue-200',
         high: 'bg-amber-100 text-amber-700 border-amber-200',
         urgent: 'bg-red-100 text-red-700 border-red-200'
+      }[urgency];
+    } else if (theme === 'dark') {
+      return {
+        low: 'bg-gray-700 text-gray-300 border-gray-600',
+        medium: 'bg-blue-900 text-blue-300 border-blue-700',
+        high: 'bg-amber-900 text-amber-300 border-amber-700',
+        urgent: 'bg-red-900 text-red-300 border-red-700'
       }[urgency];
     } else {
       return {
@@ -134,21 +140,17 @@ export default function TaskCard({
   const handleIntervalChange = async (newInterval) => {
     try {
       const now = new Date();
-      let nextReminder = new Date(); // Default to now if no next_reminder exists
+      let nextReminder = new Date();
 
       if (task.next_reminder) {
         nextReminder = new Date(task.next_reminder);
       } else {
-        // If no existing reminder, set an initial next_reminder based on newInterval
-        // For 'once', set to 10 min from now as a default
         if (newInterval === 'once') {
           nextReminder.setTime(now.getTime() + (10 * 60 * 1000));
         }
       }
 
       if (newInterval !== 'once') {
-        // For recurring reminders, ensure next_reminder is in the future if it's currently in the past.
-        // Also adjust based on the new interval relative to current time or existing next_reminder
         switch (newInterval) {
           case '10min':
             if (nextReminder < now) nextReminder = new Date(now.getTime() + 10 * 60 * 1000);
@@ -177,8 +179,6 @@ export default function TaskCard({
             break;
         }
       } else {
-        // If changing to 'once' and the existing next_reminder is in the past,
-        // set it to now + a small buffer (e.g., 10 min) to make it relevant.
         if (nextReminder < now) {
           nextReminder.setTime(now.getTime() + (10 * 60 * 1000));
         }
@@ -197,11 +197,10 @@ export default function TaskCard({
   const handleReminderTimeChange = async (newTime) => {
     try {
       const [hours, minutes] = newTime.split(':');
-      const nextReminder = new Date(task.next_reminder || new Date()); // Use existing next_reminder date or current date
+      const nextReminder = new Date(task.next_reminder || new Date());
       nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
-      // If time is in the past today, set for tomorrow
-      if (nextReminder < new Date() && task.reminder_interval === 'once') { // Only for 'once' reminder
+      if (nextReminder < new Date() && task.reminder_interval === 'once') {
         nextReminder.setDate(nextReminder.getDate() + 1);
       }
 
@@ -232,7 +231,6 @@ export default function TaskCard({
     }
   };
 
-  // Get current time for reminder time input
   const getCurrentReminderTime = (taskItem) => {
     if (!taskItem.next_reminder) return '';
     const date = new Date(taskItem.next_reminder);
@@ -270,21 +268,17 @@ export default function TaskCard({
           const [hours, minutes] = newTime.split(':');
           nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
         } else {
-          // If only date is provided, keep the existing time from the current next_reminder
           const currentReminder = task.next_reminder ? new Date(task.next_reminder) : new Date();
           nextReminder.setHours(currentReminder.getHours(), currentReminder.getMinutes(), 0, 0);
         }
       } else if (newTime) {
-        // If only time is provided, keep the existing date from the current next_reminder
         nextReminder = task.next_reminder ? new Date(task.next_reminder) : new Date();
         const [hours, minutes] = newTime.split(':');
         nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
       } else {
-          return; // No change to apply
+          return;
       }
 
-      // If combined new date and time is in the past, set for tomorrow if it's a 'once' reminder
-      // This is a simplified check, more robust logic might be needed based on specific requirements
       if (nextReminder < new Date() && task.reminder_interval === 'once') {
         nextReminder.setDate(nextReminder.getDate() + 1);
       }
@@ -364,7 +358,7 @@ export default function TaskCard({
             </p>
           )}
 
-          {/* Badges - Fixed overflow issue by removing mb-3 */}
+          {/* Badges */}
           <div className="flex flex-wrap items-center gap-2">
             <Popover>
               <PopoverTrigger asChild>
@@ -374,12 +368,12 @@ export default function TaskCard({
                   {task.urgency}
                 </button>
               </PopoverTrigger>
-              <PopoverContent className="w-48 p-2" onClick={(e) => e.stopPropagation()}>
+              <PopoverContent className={`w-48 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                 <div className="space-y-1">
-                  <button onClick={() => handleUrgencyChange('low')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Low</button>
-                  <button onClick={() => handleUrgencyChange('medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Medium</button>
-                  <button onClick={() => handleUrgencyChange('high')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">High</button>
-                  <button onClick={() => handleUrgencyChange('urgent')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Urgent</button>
+                  <button onClick={() => handleUrgencyChange('low')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Low</button>
+                  <button onClick={() => handleUrgencyChange('medium')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Medium</button>
+                  <button onClick={() => handleUrgencyChange('high')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>High</button>
+                  <button onClick={() => handleUrgencyChange('urgent')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Urgent</button>
                 </div>
               </PopoverContent>
             </Popover>
@@ -397,11 +391,11 @@ export default function TaskCard({
                     {task.energy_required} energy
                   </button>
                 </PopoverTrigger>
-                <PopoverContent className="w-48 p-2" onClick={(e) => e.stopPropagation()}>
+                <PopoverContent className={`w-48 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                   <div className="space-y-1">
-                    <button onClick={() => handleEnergyChange('low')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Low</button>
-                    <button onClick={() => handleEnergyChange('medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Medium</button>
-                    <button onClick={() => handleEnergyChange('high')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">High</button>
+                    <button onClick={() => handleEnergyChange('low')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Low</button>
+                    <button onClick={() => handleEnergyChange('medium')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Medium</button>
+                    <button onClick={() => handleEnergyChange('high')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>High</button>
                   </div>
                 </PopoverContent>
               </Popover>
@@ -413,25 +407,25 @@ export default function TaskCard({
                 <PopoverTrigger asChild>
                   <button
                     onClick={(e) => e.stopPropagation()}
-                    className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors ${
-                      theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600' : 'border-gray-300'
+                    className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
+                      theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600' : 'border-gray-300 hover:bg-gray-50'
                     }`}
                   >
                     <Clock className="w-3 h-3" />
                     {formatReminderInterval(task.reminder_interval)}
                   </button>
                 </PopoverTrigger>
-                <PopoverContent className="w-56 p-2" onClick={(e) => e.stopPropagation()}>
+                <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                   <div className="space-y-1">
-                    <button onClick={() => handleIntervalChange('10min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 10 minutes</button>
-                    <button onClick={() => handleIntervalChange('20min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 20 minutes</button>
-                    <button onClick={() => handleIntervalChange('30min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 30 minutes</button>
-                    <button onClick={() => handleIntervalChange('1hour')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every hour</button>
-                    <button onClick={() => handleIntervalChange('2hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 2 hours</button>
-                    <button onClick={() => handleIntervalChange('daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
-                    <button onClick={() => handleIntervalChange('every_other_day')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every other day</button>
-                    <div className="border-t my-1"></div>
-                    <button onClick={() => handleIntervalChange('once')} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium">📅 Set Specific Date Instead</button>
+                    <button onClick={() => handleIntervalChange('10min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 10 minutes</button>
+                    <button onClick={() => handleIntervalChange('20min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 20 minutes</button>
+                    <button onClick={() => handleIntervalChange('30min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 30 minutes</button>
+                    <button onClick={() => handleIntervalChange('1hour')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button>
+                    <button onClick={() => handleIntervalChange('2hours')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button>
+                    <button onClick={() => handleIntervalChange('daily')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Daily</button>
+                    <button onClick={() => handleIntervalChange('every_other_day')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every other day</button>
+                    <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : ''}`}></div>
+                    <button onClick={() => handleIntervalChange('once')} className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}>📅 Set Specific Date Instead</button>
                   </div>
                 </PopoverContent>
               </Popover>
@@ -443,16 +437,20 @@ export default function TaskCard({
                 <PopoverTrigger asChild>
                   <button
                     onClick={(e) => e.stopPropagation()}
-                    className="border border-purple-300 bg-purple-50 px-2 py-1 rounded text-xs text-purple-700 cursor-pointer hover:bg-purple-100 transition-colors flex items-center gap-1"
+                    className={`border px-2 py-1 rounded text-xs cursor-pointer transition-colors flex items-center gap-1 ${
+                      theme === 'dark'
+                        ? 'border-purple-700 bg-purple-900/30 text-purple-300 hover:bg-purple-900/50'
+                        : 'border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100'
+                    }`}
                   >
                     <Calendar className="w-3 h-3" />
                     {formatReminderDate(task.next_reminder)} • {formatReminderTime(task.next_reminder)}
                   </button>
                 </PopoverTrigger>
-                <PopoverContent className="w-72 p-2" onClick={(e) => e.stopPropagation()}>
+                <PopoverContent className={`w-72 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                   <div className="space-y-4 p-2">
                     <div>
-                      <label className="text-sm font-medium block mb-2">Reminder Date:</label>
+                      <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Reminder Date:</label>
                       <input
                         type="date"
                         defaultValue={getCurrentReminderDate(task)}
@@ -460,11 +458,11 @@ export default function TaskCard({
                           const currentTime = getCurrentReminderTime(task);
                           handleReminderDateChange(e.target.value, currentTime);
                         }}
-                        className="w-full border rounded px-3 py-2"
+                        className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
                       />
                     </div>
                     <div>
-                      <label className="text-sm font-medium block mb-2">Reminder Time:</label>
+                      <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Reminder Time:</label>
                       <input
                         type="time"
                         defaultValue={getCurrentReminderTime(task)}
@@ -472,13 +470,13 @@ export default function TaskCard({
                           const currentDate = getCurrentReminderDate(task);
                           handleReminderDateChange(currentDate, e.target.value);
                         }}
-                        className="w-full border rounded px-3 py-2"
+                        className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
                       />
                     </div>
-                    <div className="border-t pt-2">
+                    <div className={`border-t pt-2 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
                       <button 
                         onClick={() => handleIntervalChange('daily')} 
-                        className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium"
+                        className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}
                       >
                         🔄 Use Recurring Reminder Instead
                       </button>
@@ -494,21 +492,25 @@ export default function TaskCard({
                 <PopoverTrigger asChild>
                   <button
                     onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-1 border border-dashed border-gray-300 px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors text-gray-500"
+                    className={`flex items-center gap-1 border border-dashed px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
+                      theme === 'dark'
+                        ? 'border-gray-600 text-gray-400 hover:bg-gray-700'
+                        : 'border-gray-300 text-gray-500 hover:bg-gray-50'
+                    }`}
                   >
                     <Clock className="w-3 h-3" />
                     Add Reminder
                   </button>
                 </PopoverTrigger>
-                <PopoverContent className="w-56 p-2" onClick={(e) => e.stopPropagation()}>
+                <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                   <div className="space-y-1">
-                    <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Recurring</div>
-                    <button onClick={() => handleIntervalChange('30min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 30 minutes</button>
-                    <button onClick={() => handleIntervalChange('1hour')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every hour</button>
-                    <button onClick={() => handleIntervalChange('2hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 2 hours</button>
-                    <button onClick={() => handleIntervalChange('daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
-                    <div className="border-t my-1"></div>
-                    <button onClick={() => handleIntervalChange('once')} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium">📅 Set Specific Date</button>
+                    <div className={`px-3 py-2 text-xs font-semibold uppercase ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Recurring</div>
+                    <button onClick={() => handleIntervalChange('30min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 30 minutes</button>
+                    <button onClick={() => handleIntervalChange('1hour')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button>
+                    <button onClick={() => handleIntervalChange('2hours')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button>
+                    <button onClick={() => handleIntervalChange('daily')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Daily</button>
+                    <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : ''}`}></div>
+                    <button onClick={() => handleIntervalChange('once')} className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}>📅 Set Specific Date</button>
                   </div>
                 </PopoverContent>
               </Popover>
@@ -528,7 +530,7 @@ export default function TaskCard({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-gray-100">
+          <div className={`flex flex-wrap items-center justify-between gap-2 pt-2 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
             <div className="flex gap-2 flex-shrink-0">
               <Button
                 variant="ghost"
@@ -561,7 +563,7 @@ export default function TaskCard({
           </div>
 
           {(task.type === 'task' || task.type === 'reminder') && (
-            <div className="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
+            <div className={`flex flex-wrap gap-2 pt-2 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
               <Button
                 variant="outline"
                 size="sm"

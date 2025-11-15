@@ -101,55 +101,57 @@ export default function ConnectionRequests({ theme, user }) {
                 <div key={request.id} className={`p-4 rounded-lg border ${
                   theme === 'dark' ? 'border-gray-700 bg-gray-900/50' : 'border-gray-200 bg-gray-50/50'
                 }`}>
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-start gap-4 flex-1">
-                      <Avatar className="w-12 h-12">
-                        {request.requester_picture ? (
-                          <AvatarImage src={request.requester_picture} />
-                        ) : (
-                          <AvatarFallback className={
-                            theme === 'minimalist' ? 'bg-purple-100 text-purple-700' : 'bg-gradient-to-br from-purple-200 to-pink-200 text-purple-800'
-                          }>
-                            {(request.requester_name || request.requester_email)[0].toUpperCase()}
-                          </AvatarFallback>
-                        )}
-                      </Avatar>
-                      
-                      <div className="flex-1">
-                        <h4 className={`font-semibold mb-1 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
-                          {request.requester_name || request.requester_email.split('@')[0]}
-                        </h4>
-                        <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                          {request.requester_email}
+                  <div className="flex items-start gap-3 mb-3">
+                    <Avatar className="w-12 h-12 flex-shrink-0">
+                      {request.requester_picture ? (
+                        <AvatarImage src={request.requester_picture} />
+                      ) : (
+                        <AvatarFallback className={
+                          theme === 'minimalist' ? 'bg-purple-100 text-purple-700' : 'bg-gradient-to-br from-purple-200 to-pink-200 text-purple-800'
+                        }>
+                          {(request.requester_name || request.requester_email)[0].toUpperCase()}
+                        </AvatarFallback>
+                      )}
+                    </Avatar>
+                    
+                    <div className="flex-1 min-w-0">
+                      <h4 className={`font-semibold mb-1 break-words ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
+                        {request.requester_name || request.requester_email.split('@')[0]}
+                      </h4>
+                      <p className={`text-sm break-words ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                        {request.requester_email}
+                      </p>
+                      {request.message && (
+                        <p className={`text-sm mt-2 italic break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                          "{request.message}"
                         </p>
-                        {request.message && (
-                          <p className={`text-sm mt-2 italic ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                            "{request.message}"
-                          </p>
-                        )}
-                        <Badge variant="outline" className="text-xs mt-2">
-                          {new Date(request.created_date).toLocaleDateString()}
-                        </Badge>
-                      </div>
+                      )}
+                      <Badge variant="outline" className="text-xs mt-2">
+                        {new Date(request.created_date).toLocaleDateString()}
+                      </Badge>
                     </div>
+                  </div>
 
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleAccept(request.id)}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
-                        <Check className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDecline(request.id)}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </div>
+                  <div className="flex gap-2 justify-end">
+                    <Button
+                      size="sm"
+                      onClick={() => handleAccept(request.id)}
+                      className="bg-green-600 hover:bg-green-700"
+                    >
+                      <Check className="w-4 h-4 mr-1" />
+                      Accept
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleDecline(request.id)}
+                      className={`text-red-600 hover:text-red-700 ${
+                        theme === 'dark' ? 'border-gray-600 hover:bg-red-900/20' : 'hover:bg-red-50'
+                      }`}
+                    >
+                      <X className="w-4 h-4 mr-1" />
+                      Decline
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -181,11 +183,11 @@ export default function ConnectionRequests({ theme, user }) {
                   theme === 'dark' ? 'border-gray-700 bg-gray-900/50' : 'border-gray-200 bg-gray-50/50'
                 }`}>
                   <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h4 className={`font-semibold mb-1 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
+                    <div className="flex-1 min-w-0">
+                      <h4 className={`font-semibold mb-1 break-words ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
                         {request.recipient_name || request.recipient_email.split('@')[0]}
                       </h4>
-                      <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                      <p className={`text-sm break-words ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
                         {request.recipient_email}
                       </p>
                       <Badge variant="outline" className="text-xs mt-2">
@@ -197,7 +199,7 @@ export default function ConnectionRequests({ theme, user }) {
                       size="sm"
                       variant="ghost"
                       onClick={() => handleDecline(request.id)}
-                      className="text-gray-600"
+                      className={theme === 'dark' ? 'text-gray-400 hover:text-gray-300 hover:bg-gray-700' : 'text-gray-600'}
                     >
                       Cancel
                     </Button>
