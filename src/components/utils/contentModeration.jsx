@@ -1,4 +1,3 @@
-
 // Content moderation utility - blocks inappropriate language, personal info, and predatory behavior
 // Used only in public spaces (Chat, profiles) - NOT in private Support Space
 
@@ -35,6 +34,24 @@ const PREDATORY_PATTERNS = [
   /\b(meet (up|in person)|hang out|come over)\b/i,
   /\b(virgin|sexual|dating|girlfriend|boyfriend)\b/i,
   /\b(you look|looking good|nice body)\b/i,
+];
+
+// Political and sensitive topic patterns
+const POLITICAL_PATTERNS = [
+  /\b(trump|biden|democrat|republican|liberal|conservative|left-?wing|right-?wing)\b/i,
+  /\b(abortion|pro-life|pro-choice)\b/i,
+  /\b(gun (control|rights)|second amendment|2nd amendment)\b/i,
+  /\b(immigration|border wall|illegal alien)\b/i,
+  /\b(blm|black lives matter|all lives matter)\b/i,
+  /\b(antifa|proud boys)\b/i,
+  /\b(vaccine mandate|anti-vax|anti-vaxx)\b/i,
+  /\b(election (fraud|stolen|rigged))\b/i,
+  /\b(fake news|mainstream media|msm)\b/i,
+  /\b(climate (change|hoax|crisis))\b/i,
+  /\b(woke|cancel culture)\b/i,
+  /\b(lgbtq|transgender|trans rights)\b/i,
+  /\b(israel|palestine|gaza)\b/i,
+  /\b(russia|ukraine|putin)\b/i,
 ];
 
 // Common letter substitutions used to bypass filters
@@ -93,6 +110,22 @@ function checkPredatoryPatterns(text) {
   for (const pattern of PREDATORY_PATTERNS) {
     if (pattern.test(text)) {
       matchedPatterns.push('inappropriate question');
+      break; // Only need to flag once
+    }
+  }
+  
+  return matchedPatterns;
+}
+
+/**
+ * Checks for political and sensitive topics
+ */
+function checkPoliticalContent(text) {
+  const matchedPatterns = [];
+  
+  for (const pattern of POLITICAL_PATTERNS) {
+    if (pattern.test(text)) {
+      matchedPatterns.push('political or sensitive topic');
       break; // Only need to flag once
     }
   }
@@ -205,7 +238,7 @@ Respond ONLY with a JSON object:
  */
 export async function moderateContent(text) {
   if (!text || typeof text !== 'string') {
-    return { isClean: true, flaggedWords: [], violations: [], predatoryPatterns: [], censoredText: text, aiCheck: null };
+    return { isClean: true, flaggedWords: [], violations: [], predatoryPatterns: [], politicalPatterns: [], censoredText: text, aiCheck: null };
   }
 
   const normalizedText = normalizeText(text);
@@ -222,6 +255,9 @@ export async function moderateContent(text) {
   // Check for predatory patterns
   const predatoryPatterns = checkPredatoryPatterns(text);
 
+  // Check for political content
+  const politicalPatterns = checkPoliticalContent(text);
+
   // Check for personal information
   const personalInfoViolations = checkPersonalInfo(text);
 
@@ -231,6 +267,7 @@ export async function moderateContent(text) {
   const isClean = flaggedWords.length === 0 && 
                   personalInfoViolations.length === 0 && 
                   predatoryPatterns.length === 0 &&
+                  politicalPatterns.length === 0 &&
                   aiCheck.isSafe &&
                   aiCheck.severity === 'none';
 
@@ -239,6 +276,7 @@ export async function moderateContent(text) {
     flaggedWords: flaggedWords,
     violations: personalInfoViolations,
     predatoryPatterns: predatoryPatterns,
+    politicalPatterns: politicalPatterns,
     censoredText: censorContent(text),
     aiCheck: aiCheck
   };
@@ -257,6 +295,8 @@ export async function validateContent(text, fieldName = 'Message') {
       message = 'Please keep language appropriate and focused on work/tasks. Let\'s maintain a safe and supportive environment for everyone. 🌟';
     } else if (result.predatoryPatterns.length > 0) {
       message = 'Please keep conversations focused on work and productivity. Let\'s maintain a safe and supportive environment for everyone. 🌟';
+    } else if (result.politicalPatterns.length > 0) {
+      message = 'Please keep conversations focused on work, tasks, and productivity - not politics or controversial topics. Let\'s maintain a safe and supportive environment for everyone. 🌟';
     } else if (result.violations.length > 0) {
       message = 'For your safety, please don\'t share personal information. Let\'s keep conversations focused on work and tasks. 🌟';
     } else if (!result.aiCheck.isSafe) {
