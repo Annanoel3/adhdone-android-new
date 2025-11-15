@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,11 +10,12 @@ import { ChatMessage } from "@/entities/ChatMessage";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Badge } from "@/components/ui/badge";
-// import { sendAccountabilityMessage } from "../components/utils/notificationHelper"; // This import is likely no longer needed if notifySend fully replaces it.
 import { validateContent } from "../components/utils/contentModeration";
+import { base44 } from "@/api/base44Client";
 import {
   Popover,
   PopoverContent,
+  PopoverTrigger,
 } from "@/components/ui/popover";
 import {
   DropdownMenu,
@@ -24,19 +24,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import ReportContentDialog from "../components/shared/ReportContentDialog";
-import { PopoverTrigger } from "@radix-ui/react-popover";
-
-// Placeholder for base44 functions if not defined elsewhere. In a real app, this would be an SDK import.
-// For the purpose of generating a runnable code, we define a mock here.
-const base44 = {
-    functions: {
-        invoke: async (funcName, payload) => {
-            console.log(`Mock base44.functions.invoke('${funcName}', ${JSON.stringify(payload)})`);
-            // Simulate API call
-            return new Promise(resolve => setTimeout(resolve, 100)); // Short delay for mock
-        }
-    }
-};
 
 export default function Chat() {
   const navigate = useNavigate();
@@ -45,17 +32,14 @@ export default function Chat() {
   const [user, setUser] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  // Renamed selectedPartner to currentPartner as per outline's implicit naming
   const [currentPartner, setCurrentPartner] = useState(null);
-  // Renamed selectedConnection to currentConversation as per outline's implicit naming
   const [currentConversation, setCurrentConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
-  // Separate states for reporting a user vs. a specific chat message
   const [reportingUser, setReportingUser] = useState(null);
   const [showReportUserDialog, setShowReportUserDialog] = useState(false);
-  const [reportingChatMessage, setReportingChatMessage] = useState(null); // Used for reporting specific messages
+  const [reportingChatMessage, setReportingChatMessage] = useState(null);
 
   const pollingIntervalRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -95,7 +79,7 @@ export default function Chat() {
           email: isRequester ? connection.recipient_email : connection.requester_email,
           display_name: isRequester ? connection.recipient_name : connection.requester_name,
           profile_picture_url: isRequester ? connection.recipient_picture : connection.requester_picture,
-          connection: connection // Store the full connection object here
+          connection: connection
         };
 
         const allMessages = await ChatMessage.filter({ connection_id: connection.id });
@@ -145,7 +129,7 @@ export default function Chat() {
 
   const openChat = async (partner) => {
     setCurrentPartner(partner);
-    setCurrentConversation(partner.connection); // Store the connection object itself
+    setCurrentConversation(partner.connection);
     await loadMessages(partner.connection.id);
 
     if (pollingIntervalRef.current) {
@@ -163,7 +147,7 @@ export default function Chat() {
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
     }
-    initChat(); // Re-initialize to refresh conversation list (e.g., unread counts)
+    initChat();
   };
 
   const loadMessages = async (connectionId, showLoading = true) => {
@@ -172,7 +156,7 @@ export default function Chat() {
 
       const allMessages = await ChatMessage.filter({
         connection_id: connectionId
-      }, 'created_date', 100); // Assuming 100 is a reasonable limit
+      }, 'created_date', 100);
 
       setMessages(allMessages);
 
@@ -180,16 +164,14 @@ export default function Chat() {
         m.sender_email !== user?.email && !m.read_by_recipient
       );
 
-      // Mark unread messages as read
       for (const msg of unreadMessages) {
         await ChatMessage.update(msg.id, { read_by_recipient: true });
       }
 
-      // Update conversations to reflect read messages (cleared unread count)
       setConversations(prevConvos =>
         prevConvos.map(convo =>
           convo.connection.id === connectionId
-            ? { ...convo, unreadCount: 0 } // Reset unread count for the current chat
+            ? { ...convo, unreadCount: 0 }
             : convo
         )
       );
@@ -216,7 +198,7 @@ export default function Chat() {
     }
 
     const messageText = newMessage.trim();
-    setNewMessage(""); // Clear input immediately
+    setNewMessage("");
 
     try {
       const newMsg = await ChatMessage.create({
@@ -229,7 +211,6 @@ export default function Chat() {
 
       setMessages(prev => [...prev, newMsg]);
 
-      // Send instant push notification to recipient using base44.functions.invoke
       try {
         await base44.functions.invoke('notifySend', {
           user_email: currentPartner.email,
@@ -241,7 +222,6 @@ export default function Chat() {
         console.error("Error sending notification:", notifError);
       }
 
-      // Scroll to the latest message
       setTimeout(() => {
         if (messagesEndRef.current) {
           messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -273,7 +253,6 @@ export default function Chat() {
     );
   }
 
-  // Show conversation list if no currentPartner is selected
   if (!currentPartner) {
     return (
       <div className="p-4 md:p-8 w-full" style={{ paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
@@ -431,7 +410,6 @@ export default function Chat() {
     );
   }
 
-  // Show individual chat when currentPartner is selected
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto">
       <Card className={`border-none shadow-lg h-[calc(100vh-200px)] flex flex-col ${
@@ -442,7 +420,7 @@ export default function Chat() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={closeChat} // Use closeChat function
+              onClick={closeChat}
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
@@ -462,7 +440,6 @@ export default function Chat() {
                 {currentPartner?.email}
               </p>
             </div>
-            {/* Dropdown for user actions including reporting */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="icon" variant="ghost">
@@ -472,10 +449,10 @@ export default function Chat() {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem
                   onClick={() => {
-                    setReportingUser(currentPartner); // Set the current partner as the user to report
+                    setReportingUser(currentPartner);
                     setShowReportUserDialog(true);
                   }}
-                  className="text-red-600" // Styling for report action
+                  className="text-red-600"
                 >
                   <Flag className="w-4 h-4 mr-2" />
                   Report User
@@ -520,7 +497,6 @@ export default function Chat() {
                       {new Date(message.created_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
-                  {/* Dropdown for reporting individual messages, only if not sent by current user */}
                   {message.sender_email !== user?.email && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -534,7 +510,7 @@ export default function Chat() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
                         <DropdownMenuItem
-                          onClick={() => setReportingChatMessage(message)} // Set the message to report
+                          onClick={() => setReportingChatMessage(message)}
                           className="text-red-600"
                         >
                           <Flag className="w-4 h-4 mr-2" />
@@ -579,27 +555,25 @@ export default function Chat() {
         </div>
       </Card>
 
-      {/* Dialog for reporting a user */}
       <ReportContentDialog
         isOpen={showReportUserDialog}
         onClose={() => {
           setShowReportUserDialog(false);
           setReportingUser(null);
         }}
-        contentType="user" // Specify content type as 'user'
+        contentType="user"
         reportedUserEmail={reportingUser?.email}
         reportedUserName={reportingUser?.display_name || reportingUser?.full_name}
-        contentId={null} // No specific content ID when reporting a user directly
+        contentId={null}
         contentText={null}
         theme={theme}
       />
 
-      {/* Dialog for reporting a specific chat message */}
       <ReportContentDialog
-        isOpen={!!reportingChatMessage} // Open if a message is set for reporting
+        isOpen={!!reportingChatMessage}
         onClose={() => setReportingChatMessage(null)}
         contentType="message"
-        reportedUserEmail={reportingChatMessage?.sender_email} // The sender of the reported message
+        reportedUserEmail={reportingChatMessage?.sender_email}
         reportedUserName={
           reportingChatMessage?.sender_email === user?.email
             ? user?.display_name || user?.full_name

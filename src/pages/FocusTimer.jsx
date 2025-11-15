@@ -182,6 +182,14 @@ export default function FocusTimer() {
     audio.play().catch(err => console.log("Audio play failed:", err));
   };
 
+  const handleTestSound = () => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+    }
+    audioRef.current.src = completionSounds[completionSound].url;
+    audioRef.current.play().catch(err => console.log("Audio play failed:", err));
+  };
+
   const handleTimerComplete = useCallback(() => {
     setIsActive(false);
 
@@ -470,11 +478,7 @@ export default function FocusTimer() {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                const audio = audioRef.current || new Audio();
-                audio.src = completionSounds[completionSound].url;
-                audio.play().catch(err => console.log("Audio play failed:", err));
-              }}
+              onClick={handleTestSound}
             >
               Test Sound
             </Button>

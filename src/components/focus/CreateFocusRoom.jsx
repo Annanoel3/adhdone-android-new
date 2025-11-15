@@ -75,7 +75,8 @@ export default function CreateFocusRoom({ user, theme, onRoomCreated }) {
   };
 
   const handleTestSound = () => {
-    const audio = new Audio(completionSounds[completionSound].url);
+    const audio = new Audio();
+    audio.src = completionSounds[completionSound].url;
     audio.play().catch(err => console.log("Audio play failed:", err));
   };
 
