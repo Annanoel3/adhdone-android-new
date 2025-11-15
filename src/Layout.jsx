@@ -86,6 +86,9 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
+// Add Capacitor App import
+import { App as CapacitorApp } from '@capacitor/app';
+
 function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -340,6 +343,38 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       ]
     },
   ];
+
+  // Handle Android back button
+  useEffect(() => {
+    let backButtonListener;
+
+    const setupBackButton = async () => {
+      try {
+        if (window.Capacitor && CapacitorApp) { // Ensure Capacitor and CapacitorApp are defined
+          backButtonListener = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+            // If not on home page, go to home
+            if (location.pathname !== createPageUrl("Home")) {
+              navigate(createPageUrl("Home"));
+            } else {
+              // If on home page, exit app
+              CapacitorApp.exitApp();
+            }
+          });
+        }
+      } catch (error) {
+        // Not running in Capacitor, ignore
+        console.log("Not running in native app, or error setting up back button listener:", error);
+      }
+    };
+
+    setupBackButton();
+
+    return () => {
+      if (backButtonListener) {
+        backButtonListener.remove();
+      }
+    };
+  }, [location.pathname, navigate]);
 
   return (
     <div
