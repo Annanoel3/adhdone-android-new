@@ -48,6 +48,7 @@ import { FocusRoomEmoji } from "@/entities/FocusRoomEmoji";
 import { User } from "@/entities/User";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { validateContent } from "../utils/contentModeration"; // New import
 
 export default function ActiveFocusRoom({ room, onLeave }) {
   const navigate = useNavigate();
@@ -87,7 +88,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
     },
     jr_station: {
       name: "JR Station Notification",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Station%20Notification.mp3"
+      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Station%20Notification%203.mp3"
     },
     jr_station_3: {
       name: "JR Station Notification 3",
@@ -253,6 +254,14 @@ export default function ActiveFocusRoom({ room, onLeave }) {
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !user) return;
+    
+    // MODERATION: Check for inappropriate content
+    const validationResult = validateContent(newMessage.trim(), 'message');
+    if (!validationResult.valid) {
+      alert(validationResult.message);
+      setNewMessage("");
+      return;
+    }
     
     try {
       await FocusRoomEmoji.create({
@@ -491,8 +500,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
                             </p>
                           )}
                         </div>
-                      </div>
-                    </button>
+                      </button>
                   ))}
                 </div>
               </SheetContent>

@@ -1,5 +1,4 @@
-
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +17,9 @@ export default function CreateFocusRoom({ user, theme, onRoomCreated }) {
   const [currentTask, setCurrentTask] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [selectedPlaylist, setSelectedPlaylist] = useState('none');
-  const [completionSound, setCompletionSound] = useState('chime'); // This will likely default to an old value not in the new list, but that's fine for initial state
+  const [completionSound, setCompletionSound] = useState('joyful_melody');
+  const [isCreating, setIsCreating] = useState(false);
+  const audioRef = useRef(null);
 
   const playlists = {
     none: { name: "No Music" },
@@ -31,19 +32,47 @@ export default function CreateFocusRoom({ user, theme, onRoomCreated }) {
   };
 
   const completionSounds = {
-    joyful_melody: { name: "Joyful Melody" },
-    piano_melody: { name: "Piano Melody" },
-    short_notification: { name: "Short Notification" },
-    short_piano: { name: "Short Piano Notification" },
-    applause: { name: "Applause" },
-    jr_station: { name: "JR Station Notification" },
-    jr_station_3: { name: "JR Station Notification 3" },
-    jr_osaka_loop: { name: "JR Osaka Loop" },
-    jr_morning_tranquility: { name: "JR Morning Tranquility" },
-    jr_flower_shop: { name: "JR Flower Shop" }
+    joyful_melody: {
+      name: "Joyful Melody",
+      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/Joyful%20Melody.wav"
+    },
+    piano_melody: {
+      name: "Piano Melody",
+      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/Piano%20Melody.mp3"
+    },
+    short_notification: {
+      name: "Short Notification",
+      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/Short%20Notification.wav"
+    },
+    short_piano: {
+      name: "Short Piano Notification",
+      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/Short%20Piano%20Notification.mp3"
+    },
+    applause: {
+      name: "Applause",
+      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/Applause.wav"
+    },
+    jr_station: {
+      name: "JR Station Notification",
+      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Station%20Notification.mp3"
+    },
+    jr_station_3: {
+      name: "JR Station Notification 3",
+      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Station%20Notification%203.mp3"
+    },
+    jr_osaka_loop: {
+      name: "JR Osaka Loop",
+      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Osaka%20Loop%204.mp3"
+    },
+    jr_morning_tranquility: {
+      name: "JR Morning Tranquility",
+      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Morning%20Tranquility.mp3"
+    },
+    jr_flower_shop: {
+      name: "JR Flower Shop",
+      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Flower%20Shop.mp3"
+    }
   };
-
-  const [isCreating, setIsCreating] = useState(false);
 
   const generateRoomCode = () => {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -98,6 +127,7 @@ export default function CreateFocusRoom({ user, theme, onRoomCreated }) {
           ? 'bg-gray-800/90 backdrop-blur-sm'
           : 'bg-gradient-to-br from-blue-50 to-cyan-50'
     }`}>
+      <audio ref={audioRef} />
       <CardHeader>
         <CardTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-gray-100' : ''}`}>
           <Sparkles className="w-5 h-5" />
@@ -182,16 +212,29 @@ export default function CreateFocusRoom({ user, theme, onRoomCreated }) {
             <Bell className="w-4 h-4" />
             Completion Sound
           </Label>
-          <Select value={completionSound} onValueChange={setCompletionSound}>
-            <SelectTrigger className={theme === 'dark' ? 'bg-gray-700 text-gray-100 border-gray-600' : ''}>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {Object.entries(completionSounds).map(([key, sound]) => (
-                <SelectItem key={key} value={key}>{sound.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex gap-2">
+            <Select value={completionSound} onValueChange={setCompletionSound}>
+              <SelectTrigger className={`flex-1 ${theme === 'dark' ? 'bg-gray-700 text-gray-100 border-gray-600' : ''}`}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Object.entries(completionSounds).map(([key, sound]) => (
+                  <SelectItem key={key} value={key}>{sound.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const audio = audioRef.current || new Audio();
+                audio.src = completionSounds[completionSound].url;
+                audio.play().catch(err => console.log("Audio play failed:", err));
+              }}
+            >
+              Test
+            </Button>
+          </div>
         </div>
 
         <div className="flex items-center space-x-2">
