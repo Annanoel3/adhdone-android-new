@@ -188,7 +188,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     const handleBackButton = async () => {
       try {
         // Dynamic import to avoid build errors (Capacitor is added during APK build)
-        const { App } = await import('@capacitor/app');
+        const capacitorModule = await import('@capacitor/app');
+        const { App } = capacitorModule;
         
         App.addListener('backButton', ({ canGoBack }) => {
           if (currentPageName === 'Home') {
@@ -202,7 +203,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           App.removeAllListeners();
         };
       } catch (error) {
-        // Capacitor not available in web build
+        // Capacitor not available in web build - this is expected
         console.log('Capacitor App not available');
       }
     };
