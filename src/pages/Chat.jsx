@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -213,10 +214,10 @@ export default function Chat() {
 
       try {
         await base44.functions.invoke('notifySend', {
-          user_email: currentPartner.email,
+          toUserId: currentPartner.email,
           title: `💬 Message from ${user.display_name || user.full_name}`,
-          message: messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText,
-          url: '/chat'
+          body: messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText,
+          screen: '/chat'
         });
       } catch (notifError) {
         console.error("Error sending notification:", notifError);

@@ -183,6 +183,33 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     checkEnergyCheckIn();
   }, []);
 
+  // Android back button handler
+  useEffect(() => {
+    const handleBackButton = async () => {
+      try {
+        // Dynamic import to avoid build errors (Capacitor is added during APK build)
+        const { App } = await import('@capacitor/app');
+        
+        App.addListener('backButton', ({ canGoBack }) => {
+          if (currentPageName === 'Home') {
+            App.exitApp();
+          } else {
+            navigate(createPageUrl('Home'));
+          }
+        });
+
+        return () => {
+          App.removeAllListeners();
+        };
+      } catch (error) {
+        // Capacitor not available in web build
+        console.log('Capacitor App not available');
+      }
+    };
+
+    handleBackButton();
+  }, [currentPageName, navigate]);
+
   const toggleTheme = () => {
     const currentSpecialMode = specialMode;
     if (currentSpecialMode !== 'normal') {
