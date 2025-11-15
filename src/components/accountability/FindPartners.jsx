@@ -106,10 +106,10 @@ export default function FindPartners({ theme, user, onUpdate }) {
       // Send push notification to recipient
       try {
         await base44.functions.invoke('notifySend', {
-          user_email: targetUser.email,
+          toUserId: targetUser.email,
           title: '🤝 New Partner Request!',
-          message: `${user.display_name || user.full_name} wants to be your accountability partner`,
-          url: '/accountability?tab=requests'
+          body: `${user.display_name || user.full_name} wants to be your accountability partner`,
+          screen: '/accountability?tab=requests'
         });
       } catch (notifError) {
         console.error("Error sending notification:", notifError);
