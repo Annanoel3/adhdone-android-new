@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
@@ -10,7 +9,7 @@ export default function EasterEggVideo() {
   const [title, setTitle] = useState('');
   const [subtitle, setSubtitle] = useState('');
 
-  // Curated lists of working GIFs
+  // Curated lists of working, non-political GIFs
   const ideasGifs = [
     "https://media.giphy.com/media/l0IylOPCNkiqOgMyA/giphy.gif", // Mind blown
     "https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif", // Head exploding
@@ -19,6 +18,9 @@ export default function EasterEggVideo() {
     "https://media.giphy.com/media/3og0INyCmHlNylks9O/giphy.gif", // Mind racing
     "https://media.giphy.com/media/APqEbxBsVlkWSuFpth/giphy.gif", // Brain overload
     "https://media.giphy.com/media/SDogLD4FOZMM8/giphy.gif", // Thinking too much
+    "https://media.giphy.com/media/Um3ljJl8jrnHy/giphy.gif", // Hamster wheel brain
+    "https://media.giphy.com/media/3og0IMJcSI8p6hYQXS/giphy.gif", // Mind blown cat
+    "https://media.giphy.com/media/26xBI73gWquCBBCDe/giphy.gif", // Brain freeze
   ];
 
   const awesomeGifs = [
@@ -31,27 +33,47 @@ export default function EasterEggVideo() {
     "https://media.giphy.com/media/26u4cqiYI30juCOGY/giphy.gif", // Yes!
     "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif", // Ron Swanson giggle
     "https://media.giphy.com/media/yoJC2K6rCzwNY2EngA/giphy.gif", // Dance celebration
-    "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif", // Office party
     "https://media.giphy.com/media/26u4cr2dejnss7UB2/giphy.gif", // Success kid
     "https://media.giphy.com/media/Is1O1TWV0LEJi/giphy.gif", // Kid dancing
     "https://media.giphy.com/media/26BGIqWh2R1fi6JDa/giphy.gif", // Mind blown good job
     "https://media.giphy.com/media/ZdlN56usaKaQg/giphy.gif", // Cat thumbs up
     "https://media.giphy.com/media/MSgJnzNSMGBc6BpGIc/giphy.gif", // Chef's kiss
+    "https://media.giphy.com/media/l2R032V7qRAF8J6sU/giphy.gif", // Happy dance
+    "https://media.giphy.com/media/IwAZ6dvvvaTtdI8SD5/giphy.gif", // You're a star
+    "https://media.giphy.com/media/3o6ZtaO9BZHcOjmErm/giphy.gif", // High five
+    "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif", // Sparkles
   ];
+
+  // Track which GIF was shown last for each type
+  const [lastGifIndex, setLastGifIndex] = React.useState({
+    ideas: -1,
+    awesome: -1
+  });
 
   // Expose function globally so buttons can trigger it
   React.useEffect(() => {
     window.triggerEasterEgg = (type = 'ideas') => {
-      const dayOfYear = Math.floor((new Date() - new Date(new Date().getFullYear(), 0, 0)) / 1000 / 60 / 60 / 24);
-      
       let selectedGif, selectedTitle, selectedSubtitle;
+      let gifList = type === 'ideas' ? ideasGifs : awesomeGifs;
+      let lastIndex = lastGifIndex[type];
+      
+      // Pick a random GIF that's different from the last one
+      let randomIndex;
+      do {
+        randomIndex = Math.floor(Math.random() * gifList.length);
+      } while (randomIndex === lastIndex && gifList.length > 1);
+      
+      setLastGifIndex(prev => ({
+        ...prev,
+        [type]: randomIndex
+      }));
       
       if (type === 'ideas') {
-        selectedGif = ideasGifs[dayOfYear % ideasGifs.length];
+        selectedGif = gifList[randomIndex];
         selectedTitle = "🧠💥 Too many ideas! 💥🧠";
         selectedSubtitle = "That's what the Parking Lot is for! 🚗💡";
       } else {
-        selectedGif = awesomeGifs[dayOfYear % awesomeGifs.length];
+        selectedGif = gifList[randomIndex];
         selectedTitle = "🎉 You're crushing it! 🎉";
         selectedSubtitle = "Keep being amazing! ✨";
       }
@@ -69,7 +91,7 @@ export default function EasterEggVideo() {
     return () => {
       delete window.triggerEasterEgg;
     };
-  }, []);
+  }, [lastGifIndex]);
 
   return (
     <AnimatePresence>

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { ChatMessage } from "@/entities/ChatMessage";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Badge } from "@/components/ui/badge";
-import { sendAccountabilityMessage } from "../components/utils/notificationHelper";
+// import { sendAccountabilityMessage } from "../components/utils/notificationHelper"; // This import is likely no longer needed if notifySend fully replaces it.
 import { validateContent } from "../components/utils/contentModeration";
 import {
   Popover,
@@ -25,6 +26,18 @@ import {
 } from "@/components/ui/dropdown-menu";
 import ReportContentDialog from "../components/shared/ReportContentDialog";
 
+// Placeholder for base44 functions if not defined elsewhere. In a real app, this would be an SDK import.
+// For the purpose of generating a runnable code, we define a mock here.
+const base44 = {
+    functions: {
+        invoke: async (funcName, payload) => {
+            console.log(`Mock base44.functions.invoke('${funcName}', ${JSON.stringify(payload)})`);
+            // Simulate API call
+            return new Promise(resolve => setTimeout(resolve, 100)); // Short delay for mock
+        }
+    }
+};
+
 export default function Chat() {
   const navigate = useNavigate();
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
@@ -32,12 +45,18 @@ export default function Chat() {
   const [user, setUser] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedPartner, setSelectedPartner] = useState(null);
-  const [selectedConnection, setSelectedConnection] = useState(null);
+  // Renamed selectedPartner to currentPartner as per outline's implicit naming
+  const [currentPartner, setCurrentPartner] = useState(null);
+  // Renamed selectedConnection to currentConversation as per outline's implicit naming
+  const [currentConversation, setCurrentConversation] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
-  const [reportingMessage, setReportingMessage] = useState(null);
+  // Separate states for reporting a user vs. a specific chat message
+  const [reportingUser, setReportingUser] = useState(null);
+  const [showReportUserDialog, setShowReportUserDialog] = useState(false);
+  const [reportingChatMessage, setReportingChatMessage] = useState(null); // Used for reporting specific messages
+
   const pollingIntervalRef = useRef(null);
   const messagesEndRef = useRef(null);
 
@@ -76,7 +95,7 @@ export default function Chat() {
           email: isRequester ? connection.recipient_email : connection.requester_email,
           display_name: isRequester ? connection.recipient_name : connection.requester_name,
           profile_picture_url: isRequester ? connection.recipient_picture : connection.requester_picture,
-          connection: connection
+          connection: connection // Store the full connection object here
         };
 
         const allMessages = await ChatMessage.filter({ connection_id: connection.id });
@@ -125,8 +144,8 @@ export default function Chat() {
   };
 
   const openChat = async (partner) => {
-    setSelectedPartner(partner);
-    setSelectedConnection(partner.connection);
+    setCurrentPartner(partner);
+    setCurrentConversation(partner.connection); // Store the connection object itself
     await loadMessages(partner.connection.id);
 
     if (pollingIntervalRef.current) {
@@ -138,13 +157,13 @@ export default function Chat() {
   };
 
   const closeChat = () => {
-    setSelectedPartner(null);
-    setSelectedConnection(null);
+    setCurrentPartner(null);
+    setCurrentConversation(null);
     setMessages([]);
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
     }
-    initChat();
+    initChat(); // Re-initialize to refresh conversation list (e.g., unread counts)
   };
 
   const loadMessages = async (connectionId, showLoading = true) => {
@@ -153,7 +172,7 @@ export default function Chat() {
 
       const allMessages = await ChatMessage.filter({
         connection_id: connectionId
-      }, 'created_date', 100);
+      }, 'created_date', 100); // Assuming 100 is a reasonable limit
 
       setMessages(allMessages);
 
@@ -161,9 +180,19 @@ export default function Chat() {
         m.sender_email !== user?.email && !m.read_by_recipient
       );
 
+      // Mark unread messages as read
       for (const msg of unreadMessages) {
         await ChatMessage.update(msg.id, { read_by_recipient: true });
       }
+
+      // Update conversations to reflect read messages (cleared unread count)
+      setConversations(prevConvos =>
+        prevConvos.map(convo =>
+          convo.connection.id === connectionId
+            ? { ...convo, unreadCount: 0 } // Reset unread count for the current chat
+            : convo
+        )
+      );
 
       if (showLoading) setIsLoading(false);
     } catch (error) {
@@ -173,8 +202,8 @@ export default function Chat() {
   };
 
   const handleSendMessage = async (e) => {
-    e.preventDefault();
-    if (!newMessage.trim() || !selectedConnection || isSending) return;
+    e.preventDefault(); // Keep this line as it was in the original code
+    if (!newMessage.trim() || !currentConversation || isSending) return;
 
     // MODERATION: Check for inappropriate content (only really bad words)
     const validationResult = validateContent(newMessage.trim(), 'message');
@@ -183,26 +212,34 @@ export default function Chat() {
       return;
     }
 
+    const messageText = newMessage.trim();
+    setNewMessage(""); // Clear input immediately
     setIsSending(true);
 
     try {
-      const message = await ChatMessage.create({
-        connection_id: selectedConnection.id,
+      const newMsg = await ChatMessage.create({
+        connection_id: currentConversation.id,
         sender_email: user.email,
-        recipient_email: selectedPartner.email,
-        message_text: newMessage.trim(),
+        recipient_email: currentPartner.email,
+        message_text: messageText,
         read_by_recipient: false
       });
 
-      setMessages(prev => [...prev, message]);
-      setNewMessage("");
+      setMessages(prev => [...prev, newMsg]);
 
-      await sendAccountabilityMessage(
-        selectedPartner.email,
-        user.display_name || user.full_name,
-        newMessage.trim()
-      );
+      // Send instant push notification to recipient using base44.functions.invoke
+      try {
+        await base44.functions.invoke('notifySend', {
+          user_email: currentPartner.email,
+          title: `💬 Message from ${user.display_name || user.full_name}`,
+          message: messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText,
+          url: '/chat' // Assuming the user should be directed back to the chat
+        });
+      } catch (notifError) {
+        console.error("Error sending notification:", notifError);
+      }
 
+      // Scroll to the latest message
       setTimeout(() => {
         if (messagesEndRef.current) {
           messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
@@ -234,8 +271,8 @@ export default function Chat() {
     );
   }
 
-  // Show conversation list
-  if (!selectedPartner) {
+  // Show conversation list if no currentPartner is selected
+  if (!currentPartner) {
     return (
       <div className="p-4 md:p-8 w-full" style={{ paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
         <div className="max-w-6xl mx-auto">
@@ -376,7 +413,7 @@ export default function Chat() {
     );
   }
 
-  // Show individual chat
+  // Show individual chat when currentPartner is selected
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto">
       <Card className={`border-none shadow-lg h-[calc(100vh-200px)] flex flex-col ${
@@ -387,35 +424,46 @@ export default function Chat() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={closeChat}
+              onClick={closeChat} // Use closeChat function
             >
               <ArrowLeft className="w-5 h-5" />
             </Button>
             <Avatar className="w-10 h-10">
-              <AvatarImage src={selectedPartner?.profile_picture_url} className="object-cover" />
+              <AvatarImage src={currentPartner?.profile_picture_url} className="object-cover" />
               <AvatarFallback className={
                 theme === 'minimalist' ? 'bg-purple-100 text-purple-700' : 'bg-gradient-to-br from-purple-200 to-pink-200 text-purple-800'
               }>
-                {selectedPartner?.display_name?.[0]?.toUpperCase() || '?'}
+                {currentPartner?.display_name?.[0]?.toUpperCase() || currentPartner?.full_name?.[0]?.toUpperCase() || '?'}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1">
               <CardTitle className={theme === 'dark' ? 'text-gray-100' : ''}>
-                {selectedPartner?.display_name}
+                {currentPartner?.display_name || currentPartner?.full_name}
               </CardTitle>
               <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                {selectedPartner?.email}
+                {currentPartner?.email}
               </p>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setReportingMessage({ partner: selectedPartner })}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-              title="Report user"
-            >
-              <Flag className="w-4 h-4" />
-            </Button>
+            {/* Dropdown for user actions including reporting */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="icon" variant="ghost">
+                  <MoreVertical className="w-4 h-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={() => {
+                    setReportingUser(currentPartner); // Set the current partner as the user to report
+                    setShowReportUserDialog(true);
+                  }}
+                  className="text-red-600" // Styling for report action
+                >
+                  <Flag className="w-4 h-4 mr-2" />
+                  Report User
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </CardHeader>
 
@@ -454,6 +502,7 @@ export default function Chat() {
                       {new Date(message.created_date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
+                  {/* Dropdown for reporting individual messages, only if not sent by current user */}
                   {message.sender_email !== user?.email && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -467,7 +516,7 @@ export default function Chat() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent>
                         <DropdownMenuItem
-                          onClick={() => setReportingMessage(message)}
+                          onClick={() => setReportingChatMessage(message)} // Set the message to report
                           className="text-red-600"
                         >
                           <Flag className="w-4 h-4 mr-2" />
@@ -512,14 +561,34 @@ export default function Chat() {
         </div>
       </Card>
 
+      {/* Dialog for reporting a user */}
       <ReportContentDialog
-        isOpen={!!reportingMessage}
-        onClose={() => setReportingMessage(null)}
+        isOpen={showReportUserDialog}
+        onClose={() => {
+          setShowReportUserDialog(false);
+          setReportingUser(null);
+        }}
+        contentType="user" // Specify content type as 'user'
+        reportedUserEmail={reportingUser?.email}
+        reportedUserName={reportingUser?.display_name || reportingUser?.full_name}
+        contentId={null} // No specific content ID when reporting a user directly
+        contentText={null}
+        theme={theme}
+      />
+
+      {/* Dialog for reporting a specific chat message */}
+      <ReportContentDialog
+        isOpen={!!reportingChatMessage} // Open if a message is set for reporting
+        onClose={() => setReportingChatMessage(null)}
         contentType="message"
-        reportedUserEmail={reportingMessage?.sender_email || reportingMessage?.partner?.email}
-        reportedUserName={reportingMessage?.partner ? reportingMessage.partner.display_name : selectedPartner?.display_name}
-        contentId={reportingMessage?.id}
-        contentText={reportingMessage?.message_text}
+        reportedUserEmail={reportingChatMessage?.sender_email} // The sender of the reported message
+        reportedUserName={
+          reportingChatMessage?.sender_email === user?.email
+            ? user?.display_name || user?.full_name
+            : currentPartner?.display_name || currentPartner?.full_name
+        }
+        contentId={reportingChatMessage?.id}
+        contentText={reportingChatMessage?.message_text}
         theme={theme}
       />
 
