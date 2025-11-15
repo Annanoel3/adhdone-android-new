@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -341,39 +340,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       ]
     },
   ];
-
-  // Handle Android back button
-  useEffect(() => {
-    let backButtonListener;
-
-    const setupBackButton = async () => {
-      try {
-        // Dynamically import Capacitor App only if available
-        const { App: CapacitorApp } = await import('@capacitor/app');
-        
-        backButtonListener = await CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-          // If not on home page, go to home
-          if (location.pathname !== createPageUrl("Home")) {
-            navigate(createPageUrl("Home"));
-          } else {
-            // If on home page, exit app
-            CapacitorApp.exitApp();
-          }
-        });
-      } catch (error) {
-        // Not running in Capacitor or Capacitor not installed, ignore
-        console.log("Capacitor not available or error setting up back button listener:", error);
-      }
-    };
-
-    setupBackButton();
-
-    return () => {
-      if (backButtonListener) {
-        backButtonListener.remove();
-      }
-    };
-  }, [location.pathname, navigate]);
 
   return (
     <div
