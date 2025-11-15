@@ -762,6 +762,7 @@ Return ONLY the category name, nothing else.`;
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <div style={{ paddingBottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))' }} aria-hidden="true"></div>
     </div>
   );
 }

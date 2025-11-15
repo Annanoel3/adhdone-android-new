@@ -296,8 +296,8 @@ export default function Progress() {
           </TabsContent>
         </Tabs>
 
-        {/* Easter Egg Button - Moved to bottom */}
-        <div className="mt-8 text-center">
+        {/* Easter Egg Button - Moved to bottom with safe area padding */}
+        <div className="mt-8 text-center" style={{ paddingBottom: 'max(1.5rem, calc(1.5rem + env(safe-area-inset-bottom)))' }}>
           <Button
             onClick={() => {
               if (window.triggerEasterEgg) {
