@@ -1,3 +1,4 @@
+
 // Content moderation utility - blocks inappropriate language, personal info, and predatory behavior
 // Used only in public spaces (Chat, profiles) - NOT in private Support Space
 
@@ -250,16 +251,16 @@ export async function validateContent(text, fieldName = 'Message') {
   const result = await moderateContent(text);
   
   if (!result.isClean) {
-    let message = '';
+    let message = 'Please keep conversations focused on work, tasks, and productivity. Let\'s maintain a safe and supportive environment for everyone. 🌟';
     
     if (result.flaggedWords.length > 0) {
-      message = `Please edit your ${fieldName.toLowerCase()} to remove inappropriate words and try again.`;
+      message = 'Please keep language appropriate and focused on work/tasks. Let\'s maintain a safe and supportive environment for everyone. 🌟';
     } else if (result.predatoryPatterns.length > 0) {
-      message = `Your message contains inappropriate questions. Please keep conversations respectful and focused on productivity support.`;
+      message = 'Please keep conversations focused on work and productivity. Let\'s maintain a safe and supportive environment for everyone. 🌟';
     } else if (result.violations.length > 0) {
-      message = `For your safety, please don't share ${result.violations.join(', ')} in messages. This helps protect all users.`;
+      message = 'For your safety, please don\'t share personal information. Let\'s keep conversations focused on work and tasks. 🌟';
     } else if (!result.aiCheck.isSafe) {
-      message = `Your message was flagged for safety concerns. ${result.aiCheck.reason || 'Please keep conversations appropriate and respectful.'}`;
+      message = 'Please keep conversations focused on work, tasks, and productivity. Let\'s maintain a safe and supportive environment for everyone. 🌟';
     }
     
     return {

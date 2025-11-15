@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -227,9 +228,11 @@ export default function CreateFocusRoom({ user, theme, onRoomCreated }) {
               variant="outline"
               size="sm"
               onClick={() => {
-                const audio = audioRef.current || new Audio();
-                audio.src = completionSounds[completionSound].url;
-                audio.play().catch(err => console.log("Audio play failed:", err));
+                if (!audioRef.current) {
+                  audioRef.current = new Audio();
+                }
+                audioRef.current.src = completionSounds[completionSound].url;
+                audioRef.current.play().catch(err => console.log("Audio play failed:", err));
               }}
             >
               Test
