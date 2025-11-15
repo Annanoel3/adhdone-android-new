@@ -140,13 +140,13 @@ export default function AccountabilityPartners({ theme, user }) {
           {partners.map((partner) => (
             <div
               key={partner.connection_id}
-              className={`flex items-center gap-4 p-4 rounded-lg border ${
+              className={`flex flex-col sm:flex-row items-start sm:items-center gap-3 p-4 rounded-lg border ${
                 theme === 'dark'
                   ? 'border-gray-700 bg-gray-900/50'
                   : 'border-gray-200 bg-gray-50'
               }`}
             >
-              <Link to={createPageUrl("UserProfile") + `?email=${partner.email}`} className="flex items-center gap-3 flex-1 min-w-0">
+              <Link to={createPageUrl("UserProfile") + `?email=${partner.email}`} className="flex items-center gap-3 flex-1 min-w-0 w-full sm:w-auto">
                 <Avatar className="w-12 h-12 flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity">
                   <AvatarImage src={partner.profile_picture_url} className="object-cover" />
                   <AvatarFallback className={
@@ -171,14 +171,15 @@ export default function AccountabilityPartners({ theme, user }) {
                 </div>
               </Link>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => navigate(createPageUrl("Chat") + `?partner=${partner.email}`)}
+                  className="flex-1 sm:flex-none"
                 >
-                  <MessageCircle className="w-4 h-4 mr-1" />
-                  Chat
+                  <MessageCircle className="w-4 h-4 sm:mr-1" />
+                  <span className="hidden sm:inline">Chat</span>
                 </Button>
                 
                 <Button
