@@ -67,47 +67,47 @@ export default function FocusTimer() {
   const completionSounds = {
     joyful_melody: {
       name: "Joyful Melody",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/Joyful%20Melody.wav"
+      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/Joyful%20Melody.wav"
     },
     piano_melody: {
       name: "Piano Melody",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/Piano%20Melody.mp3"
+      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/Piano%20Melody.mp3"
     },
     short_notification: {
       name: "Short Notification",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/Short%20Notification.wav"
+      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/Short%20Notification.wav"
     },
     short_piano: {
       name: "Short Piano Notification",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/Short%20Piano%20Notification.mp3"
+      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/Short%20Piano%20Notification.mp3"
     },
     applause: {
       name: "Applause",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/Applause.wav"
+      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/Applause.wav"
     },
     jr_station: {
       name: "JR Station Notification",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Station%20Notification.mp3"
+      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/JR%20Station%20Notification.mp3"
     },
     jr_station_3: {
       name: "JR Station Notification 3",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Station%20Notification%203.mp3"
+      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/JR%20Station%20Notification%203.mp3"
     },
     jr_osaka_loop: {
       name: "JR Osaka Loop",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Osaka%20Loop%204.mp3"
+      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/JR%20Osaka%20Loop%204.mp3"
     },
     jr_morning_tranquility: {
       name: "JR Morning Tranquility",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Morning%20Tranquility.mp3"
+      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/JR%20Morning%20Tranquility.mp3"
     },
     jr_flower_shop: {
       name: "JR Flower Shop",
-      url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Flower%20Shop.mp3"
+      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/JR%20Flower%20Shop.mp3"
     }
   };
 
-  const breakEndSound = "https://audio-previews.elements.envatousercontent.com/files/200532414/preview.mp3?response-content-disposition=attachment%3B+filename%3D%22TX6WF5K-reveal-asia.mp3%22";
+  const breakEndSound = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/TX6WF5K-reveal-asia.mp3";
 
   useEffect(() => {
     const interval = setInterval(() => {
