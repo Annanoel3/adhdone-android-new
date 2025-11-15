@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -531,7 +532,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             isSeasonalTheme()
               ? 'bg-white/70 backdrop-blur-md border-white/30'
               : theme === 'dark'
-                ? 'bg-gray-900 border-gray-800'
+                ? 'bg-gray-950 border-gray-800'
                 : theme === 'spicybrains'
                   ? 'bg-gradient-to-br from-pink-300 via-purple-300 to-cyan-300 border-yellow-400'
                   : 'border-gray-200/50 backdrop-blur-sm bg-white/80'
@@ -588,7 +589,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             </SidebarHeader>
 
             <SidebarContent className={`${
-              theme === 'dark' ? 'bg-gray-900' : theme === 'spicybrains' ? 'bg-gradient-to-br from-pink-200 via-purple-200 to-cyan-200' : ''
+              theme === 'dark' ? 'bg-gray-950' : theme === 'spicybrains' ? 'bg-gradient-to-br from-pink-200 via-purple-200 to-cyan-200' : ''
             }`} style={{
               paddingTop: '2.5rem',
               paddingBottom: '2.5rem',
@@ -717,7 +718,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               isSeasonalTheme()
                 ? ''
                 : theme === 'dark'
-                  ? 'bg-gray-900'
+                  ? 'bg-gray-950'
                   : theme === 'spicybrains'
                     ? 'bg-gradient-to-br from-pink-300 via-purple-300 to-cyan-300'
                     : ''
@@ -760,12 +761,12 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 {theme === 'minimalist' ? (
                   <>
                     <Sun className="w-4 h-4" />
-                    <span>Light Mode</span>
+                    <span>Light Theme</span>
                   </>
                 ) : theme === 'dark' ? (
                   <>
                     <Moon className="w-4 h-4" />
-                    <span>Dark Mode</span>
+                    <span>Dark Theme</span>
                   </>
                 ) : theme === 'spicybrains' ? (
                   <>
@@ -775,7 +776,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    <span>Colorful Mode</span>
+                    <span>Colorful Theme</span>
                   </>
                 )}
               </Button>
@@ -847,7 +848,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               isSeasonalTheme()
                 ? 'bg-white/60 border-white/30'
                 : theme === 'dark'
-                  ? 'bg-gray-950/60 border-gray-800'
+                  ? 'bg-gray-950/80 border-gray-800'
                   : theme === 'spicybrains'
                     ? 'bg-gradient-to-r from-pink-400/80 to-cyan-400/80 border-yellow-400'
                     : 'bg-white/60 border-gray-200/50'
