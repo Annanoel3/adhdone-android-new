@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,25 +18,32 @@ export default function CreateFocusRoom({ user, theme, onRoomCreated }) {
   const [currentTask, setCurrentTask] = useState("");
   const [isPrivate, setIsPrivate] = useState(false);
   const [selectedPlaylist, setSelectedPlaylist] = useState('none');
-  const [completionSound, setCompletionSound] = useState('chime');
-  const [isCreating, setIsCreating] = useState(false);
+  const [completionSound, setCompletionSound] = useState('chime'); // This will likely default to an old value not in the new list, but that's fine for initial state
 
   const playlists = {
     none: { name: "No Music" },
     study: { name: "Deep Focus Study" },
     lofi: { name: "Lo-Fi Beats" },
+    slowjazz: { name: "Slow Jazz" },
     cleaning: { name: "Cleaning Energy" },
     ambient: { name: "Ambient Sounds" },
     classical: { name: "Classical Focus" }
   };
 
   const completionSounds = {
-    chime: { name: "Gentle Chime" },
+    joyful_melody: { name: "Joyful Melody" },
+    piano_melody: { name: "Piano Melody" },
+    short_notification: { name: "Short Notification" },
+    short_piano: { name: "Short Piano Notification" },
     applause: { name: "Applause" },
-    success: { name: "Success Bell" },
-    ding: { name: "Achievement Ding" },
-    trumpet: { name: "Victory" }
+    jr_station: { name: "JR Station Notification" },
+    jr_station_3: { name: "JR Station Notification 3" },
+    jr_osaka_loop: { name: "JR Osaka Loop" },
+    jr_morning_tranquility: { name: "JR Morning Tranquility" },
+    jr_flower_shop: { name: "JR Flower Shop" }
   };
+
+  const [isCreating, setIsCreating] = useState(false);
 
   const generateRoomCode = () => {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
