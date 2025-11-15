@@ -15,7 +15,7 @@ import {
   Sun,
   Moon,
   Palette,
-  Trash2 // New import
+  Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -32,15 +32,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  AlertDialog, // New import
-  AlertDialogAction, // New import
-  AlertDialogCancel, // New import
-  AlertDialogContent, // New import
-  AlertDialogDescription, // New import
-  AlertDialogFooter, // New import
-  AlertDialogHeader, // New import
-  AlertDialogTitle, // New import
-  AlertDialogTrigger, // New import
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { FocusRoom } from "@/entities/FocusRoom";
 import { FocusRoomParticipant } from "@/entities/FocusRoomParticipant";
@@ -48,7 +48,7 @@ import { FocusRoomEmoji } from "@/entities/FocusRoomEmoji";
 import { User } from "@/entities/User";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { validateContent } from "../utils/contentModeration"; // New import
+import { validateContent } from "../utils/contentModeration";
 
 export default function ActiveFocusRoom({ room, onLeave }) {
   const navigate = useNavigate();
@@ -64,6 +64,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
   const audioRef = useRef(null);
   const messagesEndRef = useRef(null);
   const timerCompleteHandledRef = useRef(false);
+  const wakeLockRef = useRef(null);
 
   const completionSounds = {
     joyful_melody: {
@@ -138,6 +139,65 @@ export default function ActiveFocusRoom({ room, onLeave }) {
     }, 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Wake Lock management
+  useEffect(() => {
+    const requestWakeLock = async () => {
+      if (!currentRoom.timer_started_at) return;
+      
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLockRef.current = await navigator.wakeLock.request('screen');
+          console.log('Wake Lock activated');
+        }
+      } catch (err) {
+        console.log('Wake Lock error:', err);
+      }
+    };
+
+    const releaseWakeLock = async () => {
+      if (wakeLockRef.current) {
+        try {
+          await wakeLockRef.current.release();
+          wakeLockRef.current = null;
+          console.log('Wake Lock released');
+        } catch (err) {
+          console.log('Wake Lock release error:', err);
+        }
+      }
+    };
+
+    if (currentRoom.timer_started_at) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+
+    return () => {
+      releaseWakeLock();
+    };
+  }, [currentRoom.timer_started_at]);
+
+  // Re-acquire wake lock when page becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && currentRoom.timer_started_at && !wakeLockRef.current) {
+        try {
+          if ('wakeLock' in navigator) {
+            wakeLockRef.current = await navigator.wakeLock.request('screen');
+            console.log('Wake Lock re-acquired');
+          }
+        } catch (err) {
+          console.log('Wake Lock re-acquire error:', err);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [currentRoom.timer_started_at]);
 
   // REMOVED auto-scroll effect
 

@@ -34,6 +34,7 @@ export default function FocusTimer() {
   const specialMode = localStorage.getItem('special_mode') || 'normal';
   const intervalRef = useRef(null);
   const audioRef = useRef(null);
+  const wakeLockRef = useRef(null);
 
   const playlists = {
     none: { name: "No Music", embed: null },
@@ -115,6 +116,65 @@ export default function FocusTimer() {
     }, 100);
     return () => clearInterval(interval);
   }, []);
+
+  // Wake Lock management
+  useEffect(() => {
+    const requestWakeLock = async () => {
+      if (!isActive) return;
+      
+      try {
+        if ('wakeLock' in navigator) {
+          wakeLockRef.current = await navigator.wakeLock.request('screen');
+          console.log('Wake Lock activated');
+        }
+      } catch (err) {
+        console.log('Wake Lock error:', err);
+      }
+    };
+
+    const releaseWakeLock = async () => {
+      if (wakeLockRef.current) {
+        try {
+          await wakeLockRef.current.release();
+          wakeLockRef.current = null;
+          console.log('Wake Lock released');
+        } catch (err) {
+          console.log('Wake Lock release error:', err);
+        }
+      }
+    };
+
+    if (isActive) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+
+    return () => {
+      releaseWakeLock();
+    };
+  }, [isActive]);
+
+  // Re-acquire wake lock when page becomes visible
+  useEffect(() => {
+    const handleVisibilityChange = async () => {
+      if (document.visibilityState === 'visible' && isActive && !wakeLockRef.current) {
+        try {
+          if ('wakeLock' in navigator) {
+            wakeLockRef.current = await navigator.wakeLock.request('screen');
+            console.log('Wake Lock re-acquired');
+          }
+        } catch (err) {
+          console.log('Wake Lock re-acquire error:', err);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [isActive]);
 
   const playCompletionSound = (isBreakEnd = false) => {
     const audio = audioRef.current || new Audio();
