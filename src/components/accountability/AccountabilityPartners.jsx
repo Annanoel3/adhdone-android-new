@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,7 @@ export default function AccountabilityPartners({ theme, user }) {
         return {
           connection_id: connection.id,
           email: isRequester ? connection.recipient_email : connection.requester_email,
-          display_name: isRequester ? connection.recipient_name : connection.requester_name,
+          display_name: isRequester ? (connection.recipient_name || 'Unknown') : (connection.requester_name || 'Unknown'),
           profile_picture_url: isRequester ? connection.recipient_picture : connection.requester_picture,
           partner_streak: connection.partner_streak || 0,
         };
