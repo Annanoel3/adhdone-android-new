@@ -256,7 +256,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
     if (!newMessage.trim() || !user) return;
     
     // MODERATION: Check for inappropriate content
-    const validationResult = await validateContent(newMessage.trim(), 'message');
+    const validationResult = validateContent(newMessage.trim(), 'message');
     if (!validationResult.valid) {
       alert(validationResult.message);
       setNewMessage("");
