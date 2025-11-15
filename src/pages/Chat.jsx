@@ -281,13 +281,13 @@ export default function Chat() {
               theme === 'minimalist'
                 ? 'bg-white/90 backdrop-blur-sm'
                 : theme === 'dark'
-                  ? 'bg-gray-800/90 backdrop-blur-sm'
+                  ? 'bg-gray-900/90 backdrop-blur-sm'
                   : 'bg-gradient-to-br from-blue-50 to-purple-50'
             ) : ''
           }`}>
             <CardContent className="p-6">
-              <div className="text-center">
-                <div className="flex items-center justify-center gap-2 mb-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
                   <h1 className={`text-3xl font-bold ${
                     specialMode !== 'normal' ? `${specialMode}-title` :
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
@@ -314,18 +314,34 @@ export default function Chat() {
                     </PopoverContent>
                   </Popover>
                 </div>
-                <p className={
-                  specialMode !== 'normal' ? `${specialMode}-text` :
-                  theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                }>
-                  Message your accountability partners
-                </p>
+                
+                {conversations.length > 0 && (
+                  <Button
+                    onClick={() => navigate(createPageUrl("Accountability") + "?tab=find")}
+                    size="sm"
+                    className={`${
+                      theme === 'minimalist'
+                        ? 'bg-green-600 hover:bg-green-700'
+                        : theme === 'dark'
+                          ? 'bg-green-600 hover:bg-green-700'
+                          : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
+                    }`}
+                  >
+                    New Message
+                  </Button>
+                )}
               </div>
+              <p className={`mt-2 ${
+                specialMode !== 'normal' ? `${specialMode}-text` :
+                theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+              }`}>
+                Message your accountability partners
+              </p>
             </CardContent>
           </Card>
 
           <Card className={`border-none shadow-lg ${
-            theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+            theme === 'dark' ? 'bg-gray-900/90' : 'bg-white'
           }`}>
             <CardContent className="p-6">
               {conversations.length === 0 ? (
