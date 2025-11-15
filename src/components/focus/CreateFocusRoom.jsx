@@ -20,7 +20,6 @@ export default function CreateFocusRoom({ user, theme, onRoomCreated }) {
   const [selectedPlaylist, setSelectedPlaylist] = useState('none');
   const [completionSound, setCompletionSound] = useState('joyful_melody');
   const [isCreating, setIsCreating] = useState(false);
-  const audioRef = useRef(null);
 
   const playlists = {
     none: { name: "No Music" },
@@ -73,6 +72,11 @@ export default function CreateFocusRoom({ user, theme, onRoomCreated }) {
       name: "JR Flower Shop",
       url: "https://urfdjvbxdjtxgdsyqhlk.supabase.co/storage/v1/object/public/Notifications/JR%20Flower%20Shop.mp3"
     }
+  };
+
+  const handleTestSound = () => {
+    const audio = new Audio(completionSounds[completionSound].url);
+    audio.play().catch(err => console.log("Audio play failed:", err));
   };
 
   const generateRoomCode = () => {
@@ -128,7 +132,6 @@ export default function CreateFocusRoom({ user, theme, onRoomCreated }) {
           ? 'bg-gray-800/90 backdrop-blur-sm'
           : 'bg-gradient-to-br from-blue-50 to-cyan-50'
     }`}>
-      <audio ref={audioRef} />
       <CardHeader>
         <CardTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-gray-100' : ''}`}>
           <Sparkles className="w-5 h-5" />
@@ -227,13 +230,7 @@ export default function CreateFocusRoom({ user, theme, onRoomCreated }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                if (!audioRef.current) {
-                  audioRef.current = new Audio();
-                }
-                audioRef.current.src = completionSounds[completionSound].url;
-                audioRef.current.play().catch(err => console.log("Audio play failed:", err));
-              }}
+              onClick={handleTestSound}
             >
               Test
             </Button>
