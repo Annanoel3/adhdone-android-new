@@ -500,7 +500,8 @@ export default function ActiveFocusRoom({ room, onLeave }) {
                             </p>
                           )}
                         </div>
-                      </button>
+                      </div>
+                    </button>
                   ))}
                 </div>
               </SheetContent>
