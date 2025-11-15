@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -175,9 +176,76 @@ export default function PrivacyPolicy() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-green-600 mt-1">✓</span>
-                  <span><strong>Ensure safety:</strong> Moderate content and prevent abuse of the platform</span>
+                  <span><strong>Ensure safety:</strong> Moderate content using AI to prevent abuse, protect users from predatory behavior, and maintain a safe community environment</span>
                 </li>
               </ul>
+            </section>
+
+            {/* Community Safety */}
+            <section>
+              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 ${
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              }`}>
+                <Shield className="w-6 h-6" />
+                Community Safety
+              </h2>
+
+              <div className={`p-4 rounded-lg border mb-4 ${
+                theme === 'dark' 
+                  ? 'bg-amber-900/20 border-amber-700' 
+                  : 'bg-amber-50 border-amber-200'
+              }`}>
+                <p className={`font-semibold mb-2 ${
+                  theme === 'dark' ? 'text-amber-400' : 'text-amber-900'
+                }`}>
+                  AI-Powered Content Moderation
+                </p>
+                <p className={`text-sm ${
+                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                }`}>
+                  All messages in chat and public spaces are analyzed by AI for inappropriate content, personal information sharing, and predatory behavior patterns. This helps protect all users, especially those who may be underage.
+                </p>
+              </div>
+
+              <p className={`mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                <strong>We strive to ensure safe interactions within ADHDone:</strong>
+              </p>
+
+              <ul className={`space-y-2 mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-1">✓</span>
+                  <span>Messages are monitored by AI for safety violations but are not manually reviewed unless reported</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-1">✓</span>
+                  <span>Sharing of phone numbers, email addresses, and locations is automatically blocked</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-1">✓</span>
+                  <span>Users can report and block others for inappropriate behavior</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-blue-600 mt-1">✓</span>
+                  <span>Reports are taken seriously and reviewed promptly</span>
+                </li>
+              </ul>
+
+              <div className={`p-4 rounded-lg border ${
+                theme === 'dark' 
+                  ? 'bg-red-900/20 border-red-700' 
+                  : 'bg-red-50 border-red-200'
+              }`}>
+                <p className={`font-semibold mb-2 ${
+                  theme === 'dark' ? 'text-red-400' : 'text-red-900'
+                }`}>
+                  Important Notice
+                </p>
+                <p className={`text-sm ${
+                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                }`}>
+                  While we implement safety measures and work diligently to protect our users, ADHDone cannot guarantee the actions or intentions of other users. We are not responsible for interactions between users outside of our moderation systems. <strong>If you encounter suspicious activity, please block the user immediately and report them to us.</strong> Your safety is our priority.
+                </p>
+              </div>
             </section>
 
             {/* Data Security */}
@@ -186,14 +254,14 @@ export default function PrivacyPolicy() {
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               }`}>
                 <Lock className="w-6 h-6" />
-                Data Security
+                Data Security & Storage
               </h2>
 
               <p className={`mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                 We implement industry-standard security measures to protect your data:
               </p>
 
-              <ul className={`space-y-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+              <ul className={`space-y-2 mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                 <li className="flex items-start gap-2">
                   <span className="text-blue-600 mt-1">🔒</span>
                   <span><strong>Encryption in transit:</strong> All data is encrypted using HTTPS/TLS when transmitted between your device and our servers</span>
@@ -211,6 +279,23 @@ export default function PrivacyPolicy() {
                   <span><strong>Regular backups:</strong> Your data is backed up regularly to prevent loss</span>
                 </li>
               </ul>
+
+              <div className={`p-4 rounded-lg border ${
+                theme === 'dark' 
+                  ? 'bg-gray-900/50 border-gray-700' 
+                  : 'bg-blue-50 border-blue-200'
+              }`}>
+                <p className={`font-semibold mb-2 ${
+                  theme === 'dark' ? 'text-blue-400' : 'text-blue-900'
+                }`}>
+                  Message Storage
+                </p>
+                <p className={`text-sm ${
+                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                }`}>
+                  Chat messages are stored in our database to provide conversation history. While messages are analyzed by AI for safety, they are not manually reviewed unless reported by users. You can delete your messages or entire conversations at any time.
+                </p>
+              </div>
             </section>
 
             {/* Data Sharing */}
