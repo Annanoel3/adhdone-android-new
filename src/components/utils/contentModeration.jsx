@@ -23,6 +23,19 @@ const INAPPROPRIATE_WORDS = [
   'social security number', 'bank account', 'routing number'
 ];
 
+// Predatory question patterns
+const PREDATORY_PATTERNS = [
+  /\b(where (are|do) you|your location|what('?s| is) your address)\b/i,
+  /\b(are you (pretty|hot|cute|sexy|beautiful|single))\b/i,
+  /\b(how old are you|what('?s| is) your age|are you (\d+)|are you (18|under|over))\b/i,
+  /\b(send (me |)((a |)pic|photo|selfie|picture))\b/i,
+  /\b(got (snap|snapchat|insta|instagram|whatsapp|telegram|kik))\b/i,
+  /\b(add me on|let('?s| us) talk on|move to)\b/i,
+  /\b(meet (up|in person)|hang out|come over)\b/i,
+  /\b(virgin|sexual|dating|girlfriend|boyfriend)\b/i,
+  /\b(you look|looking good|nice body)\b/i,
+];
+
 // Common letter substitutions used to bypass filters
 const SUBSTITUTIONS = {
   '@': 'a',
@@ -68,6 +81,22 @@ function normalizeText(text) {
   normalized = normalized.replace(/[^a-z0-9]/g, '');
   
   return normalized;
+}
+
+/**
+ * Checks for predatory question patterns
+ */
+function checkPredatoryPatterns(text) {
+  const matchedPatterns = [];
+  
+  for (const pattern of PREDATORY_PATTERNS) {
+    if (pattern.test(text)) {
+      matchedPatterns.push('inappropriate question');
+      break; // Only need to flag once
+    }
+  }
+  
+  return matchedPatterns;
 }
 
 /**
@@ -138,6 +167,7 @@ Analyze this message for predatory behavior, grooming, or inappropriate contact 
 - Sexual or romantic advances
 - Requests for personal photos
 - Manipulation tactics or isolation attempts
+- Questions about appearance, location, or personal details
 
 Message: "${text}"
 
@@ -174,7 +204,7 @@ Respond ONLY with a JSON object:
  */
 export async function moderateContent(text) {
   if (!text || typeof text !== 'string') {
-    return { isClean: true, flaggedWords: [], violations: [], censoredText: text, aiCheck: null };
+    return { isClean: true, flaggedWords: [], violations: [], predatoryPatterns: [], censoredText: text, aiCheck: null };
   }
 
   const normalizedText = normalizeText(text);
@@ -188,6 +218,9 @@ export async function moderateContent(text) {
     }
   }
 
+  // Check for predatory patterns
+  const predatoryPatterns = checkPredatoryPatterns(text);
+
   // Check for personal information
   const personalInfoViolations = checkPersonalInfo(text);
 
@@ -196,6 +229,7 @@ export async function moderateContent(text) {
 
   const isClean = flaggedWords.length === 0 && 
                   personalInfoViolations.length === 0 && 
+                  predatoryPatterns.length === 0 &&
                   aiCheck.isSafe &&
                   aiCheck.severity === 'none';
 
@@ -203,6 +237,7 @@ export async function moderateContent(text) {
     isClean: isClean,
     flaggedWords: flaggedWords,
     violations: personalInfoViolations,
+    predatoryPatterns: predatoryPatterns,
     censoredText: censorContent(text),
     aiCheck: aiCheck
   };
@@ -219,6 +254,8 @@ export async function validateContent(text, fieldName = 'Message') {
     
     if (result.flaggedWords.length > 0) {
       message = `Please edit your ${fieldName.toLowerCase()} to remove inappropriate words and try again.`;
+    } else if (result.predatoryPatterns.length > 0) {
+      message = `Your message contains inappropriate questions. Please keep conversations respectful and focused on productivity support.`;
     } else if (result.violations.length > 0) {
       message = `For your safety, please don't share ${result.violations.join(', ')} in messages. This helps protect all users.`;
     } else if (!result.aiCheck.isSafe) {
