@@ -45,6 +45,10 @@ export default function FocusTimer() {
       name: "Lo-Fi Beats",
       embed: "https://open.spotify.com/embed/playlist/37i9dQZF1DWWQRwui0ExPn?utm_source=generator"
     },
+    slowjazz: {
+      name: "Slow Jazz",
+      embed: "https://open.spotify.com/embed/playlist/37i9dQZF1DWV7EzJMK2FUI?utm_source=generator"
+    },
     cleaning: {
       name: "Cleaning Energy",
       embed: "https://open.spotify.com/embed/playlist/37i9dQZF1DX3rxVfibe1L0?utm_source=generator"
@@ -113,10 +117,9 @@ export default function FocusTimer() {
   }, []);
 
   const playCompletionSound = (isBreakEnd = false) => {
-    if (audioRef.current) {
-      audioRef.current.src = isBreakEnd ? breakEndSound : completionSounds[completionSound].url;
-      audioRef.current.play().catch(err => console.log("Audio play failed:", err));
-    }
+    const audio = audioRef.current || new Audio();
+    audio.src = isBreakEnd ? breakEndSound : completionSounds[completionSound].url;
+    audio.play().catch(err => console.log("Audio play failed:", err));
   };
 
   const handleTimerComplete = useCallback(() => {
@@ -408,10 +411,9 @@ export default function FocusTimer() {
               variant="outline"
               size="sm"
               onClick={() => {
-                if (audioRef.current) {
-                  audioRef.current.src = completionSounds[completionSound].url;
-                  audioRef.current.play().catch(err => console.log("Audio play failed:", err));
-                }
+                const audio = audioRef.current || new Audio();
+                audio.src = completionSounds[completionSound].url;
+                audio.play().catch(err => console.log("Audio play failed:", err));
               }}
             >
               Test Sound
