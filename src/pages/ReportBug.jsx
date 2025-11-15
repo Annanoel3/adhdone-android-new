@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Bug, Send, Loader2, CheckCircle2 } from "lucide-react";
+import { MessageCircle, Send, Loader2, CheckCircle2 } from "lucide-react";
 import { SendEmail } from "@/integrations/Core";
 import { User } from "@/entities/User";
 import { Task } from "@/entities/Task";
@@ -42,7 +41,7 @@ export default function ReportBug() {
 
       // Compose email
       const emailBody = `
-🐛 BUG REPORT
+💬 USER FEEDBACK
 
 USER INFORMATION:
 - Name: ${user.full_name}
@@ -57,10 +56,10 @@ SYSTEM INFORMATION:
 - Theme: ${theme}
 - Timestamp: ${new Date().toISOString()}
 
-BUG DESCRIPTION:
+FEEDBACK:
 ${bugDescription}
 
-${stepsToReproduce ? `STEPS TO REPRODUCE:
+${stepsToReproduce ? `ADDITIONAL DETAILS:
 ${stepsToReproduce}` : ''}
 
 ${expectedBehavior ? `EXPECTED BEHAVIOR:
@@ -72,9 +71,9 @@ ${tasks.length > 0 ? tasks.map(t => `- ${t.title} (${t.status})`).join('\n') : '
 
       await SendEmail({
         to: "adhdone.space@gmail.com",
-        subject: `🐛 Bug Report - ADHDone App`,
+        subject: `💬 User Feedback - ADHDone App`,
         body: emailBody,
-        from_name: "ADHDone Bug Reporter"
+        from_name: "ADHDone Feedback"
       });
 
       setSubmitted(true);
@@ -87,8 +86,8 @@ ${tasks.length > 0 ? tasks.map(t => `- ${t.title} (${t.status})`).join('\n') : '
         setSubmitted(false);
       }, 3000);
     } catch (error) {
-      console.error("Error submitting bug report:", error);
-      alert("Failed to submit bug report. Please try again.");
+      console.error("Error submitting feedback:", error);
+      alert("Failed to submit feedback. Please try again.");
     }
 
     setIsSubmitting(false);
@@ -99,18 +98,21 @@ ${tasks.length > 0 ? tasks.map(t => `- ${t.title} (${t.status})`).join('\n') : '
       <div className="text-center mb-8">
         <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${
           theme === 'minimalist' 
-            ? 'bg-gradient-to-br from-red-100 to-orange-100' 
+            ? 'bg-gradient-to-br from-purple-100 to-blue-100' 
             : theme === 'dark'
-              ? 'bg-gradient-to-br from-red-900 to-orange-900'
-              : 'bg-gradient-to-br from-red-200 to-orange-200'
+              ? 'bg-gradient-to-br from-purple-900 to-blue-900'
+              : 'bg-gradient-to-br from-purple-200 to-blue-200'
         }`}>
-          <Bug className={`w-8 h-8 ${
-            theme === 'minimalist' ? 'text-red-600' : theme === 'dark' ? 'text-red-400' : 'text-red-700'
+          <MessageCircle className={`w-8 h-8 ${
+            theme === 'minimalist' ? 'text-purple-600' : theme === 'dark' ? 'text-purple-400' : 'text-purple-700'
           }`} />
         </div>
-        <h1 className={`text-3xl font-bold mb-2 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>Report a Bug</h1>
-        <p className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
-          Help us improve by reporting any issues you encounter
+        <h1 className={`text-3xl font-bold mb-2 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>Feedback</h1>
+        <p className={`mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+          Share bugs, suggestions, or thoughts about ADHDone
+        </p>
+        <p className={`text-sm ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
+          As a solo developer, I personally review and address every piece of feedback. Your input helps make ADHDone better for everyone.
         </p>
       </div>
 
@@ -130,7 +132,7 @@ ${tasks.length > 0 ? tasks.map(t => `- ${t.title} (${t.status})`).join('\n') : '
               Thank you!
             </h2>
             <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-              Your bug report has been sent. We'll look into it as soon as possible.
+              Your feedback has been sent. I appreciate you taking the time to help improve ADHDone!
             </p>
           </CardContent>
         </Card>
@@ -139,25 +141,25 @@ ${tasks.length > 0 ? tasks.map(t => `- ${t.title} (${t.status})`).join('\n') : '
           theme === 'minimalist' 
             ? 'bg-white/90 backdrop-blur-sm' 
             : theme === 'dark'
-              ? 'bg-gray-800/90 backdrop-blur-sm'
-              : 'bg-gradient-to-br from-red-50 to-orange-50'
+              ? 'bg-gray-900/90 backdrop-blur-sm'
+              : 'bg-gradient-to-br from-purple-50 to-blue-50'
         }`}>
           <CardHeader>
             <CardTitle className={theme === 'dark' ? 'text-gray-100' : ''}>
-              What went wrong?
+              Share Your Thoughts
             </CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="description" className={theme === 'dark' ? 'text-gray-200' : ''}>
-                  Bug Description *
+                  Your Feedback *
                 </Label>
                 <Textarea
                   id="description"
                   value={bugDescription}
                   onChange={(e) => setBugDescription(e.target.value)}
-                  placeholder="Describe what happened... be as specific as possible"
+                  placeholder="Found a bug? Have a feature suggestion? Let me know!"
                   className="min-h-[120px] text-base"
                   required
                 />
@@ -165,26 +167,26 @@ ${tasks.length > 0 ? tasks.map(t => `- ${t.title} (${t.status})`).join('\n') : '
 
               <div className="space-y-2">
                 <Label htmlFor="steps" className={theme === 'dark' ? 'text-gray-200' : ''}>
-                  Steps to Reproduce (Optional)
+                  Additional Details (Optional)
                 </Label>
                 <Textarea
                   id="steps"
                   value={stepsToReproduce}
                   onChange={(e) => setStepsToReproduce(e.target.value)}
-                  placeholder="1. I clicked on...&#10;2. Then I...&#10;3. And then..."
+                  placeholder="Any extra context that might help..."
                   className="min-h-[100px] text-base"
                 />
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="expected" className={theme === 'dark' ? 'text-gray-200' : ''}>
-                  What Did You Expect to Happen? (Optional)
+                  What Would You Like to See? (Optional)
                 </Label>
                 <Textarea
                   id="expected"
                   value={expectedBehavior}
                   onChange={(e) => setExpectedBehavior(e.target.value)}
-                  placeholder="I expected..."
+                  placeholder="For bugs: what you expected to happen. For suggestions: how you'd like it to work..."
                   className="min-h-[80px] text-base"
                 />
               </div>
@@ -197,7 +199,7 @@ ${tasks.length > 0 ? tasks.map(t => `- ${t.title} (${t.status})`).join('\n') : '
                     : 'bg-blue-100 border border-blue-200'
               }`}>
                 <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-                  We'll automatically include your user info and browser details to help us debug the issue.
+                  We'll automatically include your user info and browser details to help understand the context.
                 </p>
               </div>
 
@@ -206,10 +208,10 @@ ${tasks.length > 0 ? tasks.map(t => `- ${t.title} (${t.status})`).join('\n') : '
                 disabled={!bugDescription.trim() || isSubmitting}
                 className={`w-full ${
                   theme === 'minimalist' 
-                    ? 'bg-red-600 hover:bg-red-700' 
+                    ? 'bg-purple-600 hover:bg-purple-700' 
                     : theme === 'dark'
-                      ? 'bg-red-600 hover:bg-red-700'
-                      : 'bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-700 hover:to-orange-700'
+                      ? 'bg-purple-600 hover:bg-purple-700'
+                      : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700'
                 }`}
               >
                 {isSubmitting ? (
@@ -220,7 +222,7 @@ ${tasks.length > 0 ? tasks.map(t => `- ${t.title} (${t.status})`).join('\n') : '
                 ) : (
                   <>
                     <Send className="w-4 h-4 mr-2" />
-                    Submit Bug Report
+                    Send Feedback
                   </>
                 )}
               </Button>
