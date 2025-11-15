@@ -771,7 +771,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 ) : theme === 'spicybrains' ? (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    <span>Spicy Brains</span>
+                    <span>Spicy Brains Theme</span>
                   </>
                 ) : (
                   <>
@@ -831,7 +831,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => { navigate(createPageUrl("ReportBug")); handleNavClick(); }}>
                     <Bug className="w-4 h-4 mr-2" />
-                    Report a Bug
+                    Feedback
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleLogout} className="text-red-600">
