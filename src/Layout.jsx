@@ -188,8 +188,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     const handleBackButton = async () => {
       try {
         // Dynamic import to avoid build errors (Capacitor is added during APK build)
-        const capacitorModule = await import('@capacitor/app');
-        const { App } = capacitorModule;
+        const { App } = await import('@capacitor/app');
         
         App.addListener('backButton', ({ canGoBack }) => {
           if (currentPageName === 'Home') {
