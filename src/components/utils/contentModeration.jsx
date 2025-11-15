@@ -1,3 +1,4 @@
+
 // Content moderation utility - blocks inappropriate language, personal info, and predatory behavior
 // Used only in public spaces (Chat, profiles) - NOT in private Support Space
 
@@ -20,7 +21,11 @@ const INAPPROPRIATE_WORDS = [
   // Scam/phishing attempts
   'cashapp me', 'venmo me', 'paypal me', 'send money', 'wire transfer',
   'bitcoin wallet', 'crypto wallet', 'credit card number', 'ssn', 
-  'social security number', 'bank account', 'routing number'
+  'social security number', 'bank account', 'routing number',
+  
+  // Investment scams
+  'get rich quick', 'guaranteed profit', 'make money fast', 'investment opportunity',
+  'crypto opportunity', 'nft investment', 'binary options', 'forex trading guaranteed'
 ];
 
 // Predatory question patterns
@@ -34,6 +39,18 @@ const PREDATORY_PATTERNS = [
   /\b(meet (up|in person)|hang out|come over)\b/i,
   /\b(virgin|sexual|dating|girlfriend|boyfriend)\b/i,
   /\b(you look|looking good|nice body)\b/i,
+];
+
+// Scam patterns
+const SCAM_PATTERNS = [
+  /\b(click (this|here)|check (this|out)|visit (my|this))\s+(link|website|page)\b/i,
+  /\b(dm me|message me|text me).{0,20}(business|opportunity|offer)\b/i,
+  /\b(limited time|act now|hurry|urgent).{0,30}(offer|deal|opportunity)\b/i,
+  /\b\$\d+.{0,20}(per (day|week|hour)|guaranteed|profit|return)\b/i,
+  /\b(work from home|side hustle|passive income).{0,30}(guaranteed|easy|simple)\b/i,
+  /\b(amazon|apple|google|microsoft).{0,30}(gift card|voucher|prize)\b/i,
+  /\b(verify your account|confirm your (identity|account))\b/i,
+  /\b(suspended|locked|compromised).{0,20}account\b/i,
 ];
 
 // Political and sensitive topic patterns
@@ -238,7 +255,7 @@ Respond ONLY with a JSON object:
  */
 export async function moderateContent(text) {
   if (!text || typeof text !== 'string') {
-    return { isClean: true, flaggedWords: [], violations: [], predatoryPatterns: [], politicalPatterns: [], censoredText: text, aiCheck: null };
+    return { isClean: true, flaggedWords: [], violations: [], predatoryPatterns: [], politicalPatterns: [], scamPatterns: [], censoredText: text, aiCheck: null };
   }
 
   const normalizedText = normalizeText(text);
@@ -258,6 +275,15 @@ export async function moderateContent(text) {
   // Check for political content
   const politicalPatterns = checkPoliticalContent(text);
 
+  // Check for scam patterns
+  const scamPatterns = [];
+  for (const pattern of SCAM_PATTERNS) {
+    if (pattern.test(text)) {
+      scamPatterns.push('potential scam');
+      break;
+    }
+  }
+
   // Check for personal information
   const personalInfoViolations = checkPersonalInfo(text);
 
@@ -268,6 +294,7 @@ export async function moderateContent(text) {
                   personalInfoViolations.length === 0 && 
                   predatoryPatterns.length === 0 &&
                   politicalPatterns.length === 0 &&
+                  scamPatterns.length === 0 &&
                   aiCheck.isSafe &&
                   aiCheck.severity === 'none';
 
@@ -277,6 +304,7 @@ export async function moderateContent(text) {
     violations: personalInfoViolations,
     predatoryPatterns: predatoryPatterns,
     politicalPatterns: politicalPatterns,
+    scamPatterns: scamPatterns,
     censoredText: censorContent(text),
     aiCheck: aiCheck
   };
@@ -297,6 +325,8 @@ export async function validateContent(text, fieldName = 'Message') {
       message = 'Please keep conversations focused on work and productivity. Let\'s maintain a safe and supportive environment for everyone. 🌟';
     } else if (result.politicalPatterns.length > 0) {
       message = 'Please keep conversations focused on work, tasks, and productivity - not politics or controversial topics. Let\'s maintain a safe and supportive environment for everyone. 🌟';
+    } else if (result.scamPatterns.length > 0) {
+      message = 'This message looks like spam or a scam. Please keep conversations focused on work and tasks only. 🚫';
     } else if (result.violations.length > 0) {
       message = 'For your safety, please don\'t share personal information. Let\'s keep conversations focused on work and tasks. 🌟';
     } else if (!result.aiCheck.isSafe) {

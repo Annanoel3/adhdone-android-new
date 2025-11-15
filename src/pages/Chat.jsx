@@ -16,7 +16,6 @@ import { validateContent } from "../components/utils/contentModeration";
 import {
   Popover,
   PopoverContent,
-  PopoverTrigger,
 } from "@/components/ui/popover";
 import {
   DropdownMenu,
@@ -25,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import ReportContentDialog from "../components/shared/ReportContentDialog";
+import { PopoverTrigger } from "@radix-ui/react-popover";
 
 // Placeholder for base44 functions if not defined elsewhere. In a real app, this would be an SDK import.
 // For the purpose of generating a runnable code, we define a mock here.
@@ -202,19 +202,21 @@ export default function Chat() {
   };
 
   const handleSendMessage = async (e) => {
-    e.preventDefault(); // Keep this line as it was in the original code
+    e.preventDefault();
     if (!newMessage.trim() || !currentConversation || isSending) return;
 
-    // MODERATION: Check for inappropriate content (only really bad words)
-    const validationResult = validateContent(newMessage.trim(), 'message');
+    setIsSending(true);
+
+    // MODERATION: Check for inappropriate content
+    const validationResult = await validateContent(newMessage.trim(), 'message');
     if (!validationResult.valid) {
       alert(validationResult.message);
+      setIsSending(false);
       return;
     }
 
     const messageText = newMessage.trim();
     setNewMessage(""); // Clear input immediately
-    setIsSending(true);
 
     try {
       const newMsg = await ChatMessage.create({
@@ -233,7 +235,7 @@ export default function Chat() {
           user_email: currentPartner.email,
           title: `💬 Message from ${user.display_name || user.full_name}`,
           message: messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText,
-          url: '/chat' // Assuming the user should be directed back to the chat
+          url: '/chat'
         });
       } catch (notifError) {
         console.error("Error sending notification:", notifError);
