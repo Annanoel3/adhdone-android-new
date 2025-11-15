@@ -1,5 +1,7 @@
-// Content moderation utility - blocks really bad words and inappropriate language
+// Content moderation utility - blocks inappropriate language, personal info, and predatory behavior
 // Used only in public spaces (Chat, profiles) - NOT in private Support Space
+
+import { base44 } from "@/api/base44Client";
 
 const INAPPROPRIATE_WORDS = [
   // Explicit sexual content
@@ -41,6 +43,16 @@ const SUBSTITUTIONS = {
   ' ': ''
 };
 
+// Regex patterns for personal information
+const PATTERNS = {
+  email: /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/,
+  phone: /(\+\d{1,3}[-.\s]?)?(\(?\d{3}\)?[-.\s]?)?\d{3}[-.\s]?\d{4}|\d{10,}/,
+  // Addresses with street numbers, coordinates, or common location formats
+  location: /\b\d+\s+[A-Za-z]+\s+(st|street|ave|avenue|rd|road|blvd|boulevard|dr|drive|ln|lane|way|court|ct|place|pl)\b/i,
+  coordinates: /[-+]?\d{1,3}\.\d+,\s*[-+]?\d{1,3}\.\d+/,
+  zipcode: /\b\d{5}(-\d{4})?\b/
+};
+
 /**
  * Normalizes text to catch attempts to bypass the filter
  */
@@ -59,9 +71,32 @@ function normalizeText(text) {
 }
 
 /**
+ * Checks for personal information patterns
+ */
+function checkPersonalInfo(text) {
+  const violations = [];
+  
+  if (PATTERNS.email.test(text)) {
+    violations.push('email address');
+  }
+  
+  if (PATTERNS.phone.test(text)) {
+    violations.push('phone number');
+  }
+  
+  if (PATTERNS.location.test(text) || PATTERNS.coordinates.test(text)) {
+    violations.push('location/address');
+  }
+  
+  if (PATTERNS.zipcode.test(text)) {
+    violations.push('zip code');
+  }
+  
+  return violations;
+}
+
+/**
  * Censors inappropriate words with asterisks
- * @param {string} text - Text to censor
- * @returns {string} - Censored text
  */
 export function censorContent(text) {
   if (!text || typeof text !== 'string') {
@@ -78,7 +113,6 @@ export function censorContent(text) {
       const normalizedBadWord = normalizeText(badWord);
       
       if (normalizedWord.includes(normalizedBadWord)) {
-        // Replace the word with asterisks (keep first letter)
         const replacement = word[0] + '*'.repeat(Math.max(1, word.length - 1));
         censoredText = censoredText.replace(new RegExp(`\\b${word}\\b`, 'gi'), replacement);
         break;
@@ -90,45 +124,110 @@ export function censorContent(text) {
 }
 
 /**
- * Checks if text contains inappropriate content
- * @param {string} text - Text to check
- * @returns {Object} - { isClean: boolean, flaggedWords: string[], censoredText: string }
+ * AI-based check for predatory behavior patterns
  */
-export function moderateContent(text) {
+async function checkPredatoryBehavior(text) {
+  try {
+    const prompt = `You are a content moderation AI protecting users in a productivity/ADHD support app.
+
+Analyze this message for predatory behavior, grooming, or inappropriate contact attempts. Look for:
+- Requests to move conversation off-platform
+- Age-related questions or comments
+- Attempts to establish private contact (phone, social media, other apps)
+- Inappropriate relationship building with potentially underage users
+- Sexual or romantic advances
+- Requests for personal photos
+- Manipulation tactics or isolation attempts
+
+Message: "${text}"
+
+Respond ONLY with a JSON object:
+{
+  "isSafe": true/false,
+  "reason": "brief explanation if unsafe, otherwise empty string",
+  "severity": "none/low/medium/high"
+}`;
+
+    const response = await base44.integrations.Core.InvokeLLM({
+      prompt: prompt,
+      response_json_schema: {
+        type: "object",
+        properties: {
+          isSafe: { type: "boolean" },
+          reason: { type: "string" },
+          severity: { type: "string", enum: ["none", "low", "medium", "high"] }
+        },
+        required: ["isSafe", "reason", "severity"]
+      }
+    });
+
+    return response;
+  } catch (error) {
+    console.error("AI moderation error:", error);
+    // Fail open to avoid blocking legitimate messages on error
+    return { isSafe: true, reason: "", severity: "none" };
+  }
+}
+
+/**
+ * Checks if text contains inappropriate content
+ */
+export async function moderateContent(text) {
   if (!text || typeof text !== 'string') {
-    return { isClean: true, flaggedWords: [], censoredText: text };
+    return { isClean: true, flaggedWords: [], violations: [], censoredText: text, aiCheck: null };
   }
 
   const normalizedText = normalizeText(text);
   const flaggedWords = [];
 
-  // Check for exact matches and substring matches
+  // Check for inappropriate words
   for (const word of INAPPROPRIATE_WORDS) {
     const normalizedWord = normalizeText(word);
-    
-    // Check if the inappropriate word appears in the text
     if (normalizedText.includes(normalizedWord)) {
       flaggedWords.push(word);
     }
   }
 
+  // Check for personal information
+  const personalInfoViolations = checkPersonalInfo(text);
+
+  // Run AI check for predatory behavior
+  const aiCheck = await checkPredatoryBehavior(text);
+
+  const isClean = flaggedWords.length === 0 && 
+                  personalInfoViolations.length === 0 && 
+                  aiCheck.isSafe &&
+                  aiCheck.severity === 'none';
+
   return {
-    isClean: flaggedWords.length === 0,
+    isClean: isClean,
     flaggedWords: flaggedWords,
-    censoredText: censorContent(text)
+    violations: personalInfoViolations,
+    censoredText: censorContent(text),
+    aiCheck: aiCheck
   };
 }
 
 /**
  * Validates text and provides helpful feedback
  */
-export function validateContent(text, fieldName = 'Message') {
-  const result = moderateContent(text);
+export async function validateContent(text, fieldName = 'Message') {
+  const result = await moderateContent(text);
   
   if (!result.isClean) {
+    let message = '';
+    
+    if (result.flaggedWords.length > 0) {
+      message = `Please edit your ${fieldName.toLowerCase()} to remove inappropriate words and try again.`;
+    } else if (result.violations.length > 0) {
+      message = `For your safety, please don't share ${result.violations.join(', ')} in messages. This helps protect all users.`;
+    } else if (!result.aiCheck.isSafe) {
+      message = `Your message was flagged for safety concerns. ${result.aiCheck.reason || 'Please keep conversations appropriate and respectful.'}`;
+    }
+    
     return {
       valid: false,
-      message: `Please edit your ${fieldName.toLowerCase()} to remove inappropriate words and try again.`,
+      message: message,
       censoredText: result.censoredText
     };
   }
