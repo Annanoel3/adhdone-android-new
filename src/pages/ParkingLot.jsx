@@ -599,12 +599,60 @@ Return ONLY the category name, nothing else.`;
                         theme === 'dark' ? 'text-purple-400' :
                         'text-purple-600'
                       }`} />
-                      <h3 className={`font-semibold text-lg ${
-                        specialMode !== 'normal' ? `${specialMode}-title` :
-                        theme === 'dark' ? 'text-gray-100' : 'text-gray-900'
-                      }`}>
-                        {group.parent.idea}
-                      </h3>
+                      <div className="flex-1">
+                        {(() => {
+                          const format = group.parent.list_format || 'plain';
+                          const lines = group.parent.idea.split('\n').filter(line => line.trim());
+                          
+                          if (format === 'plain' || lines.length === 1) {
+                            return (
+                              <h3 className={`font-semibold text-lg whitespace-pre-wrap ${
+                                specialMode !== 'normal' ? `${specialMode}-title` :
+                                theme === 'dark' ? 'text-gray-100' : 'text-gray-900'
+                              }`}>
+                                {group.parent.idea}
+                              </h3>
+                            );
+                          }
+                          
+                          if (format === 'checkbox') {
+                            return (
+                              <div className="space-y-2">
+                                {lines.map((line, index) => (
+                                  <div key={index} className="flex items-start gap-2">
+                                    <input
+                                      type="checkbox"
+                                      className="mt-1 rounded"
+                                      onChange={() => {}}
+                                    />
+                                    <span className={`font-semibold text-lg ${
+                                      specialMode !== 'normal' ? `${specialMode}-title` :
+                                      theme === 'dark' ? 'text-gray-100' : 'text-gray-900'
+                                    }`}>
+                                      {line}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          }
+                          
+                          if (format === 'numbered') {
+                            return (
+                              <ol className="list-decimal list-inside space-y-1">
+                                {lines.map((line, index) => (
+                                  <li key={index} className={`font-semibold text-lg ${
+                                    specialMode !== 'normal' ? `${specialMode}-title` :
+                                    theme === 'dark' ? 'text-gray-100' : 'text-gray-900'
+                                  }`}>
+                                    {line}
+                                  </li>
+                                ))}
+                              </ol>
+                            );
+                          }
+                        })()}
+                      </div>
                     </div>
                     {group.parent.category && (
                       <Badge className={categoryColors[group.parent.category] || categoryColors.misc}>
