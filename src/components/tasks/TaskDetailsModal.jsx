@@ -940,17 +940,20 @@ Return JSON:
                     </div>
 
                     {subtaskInputMode === 'text' ? (
-                      <form onSubmit={handleAddSubTask} className="flex gap-2">
-                        <Input
-                          value={newSubTask}
-                          onChange={(e) => setNewSubTask(e.target.value)}
-                          placeholder="Add a new sub-task..."
-                          className="flex-1"
-                        />
-                        <Button type="submit" size="icon" className="flex-shrink-0">
-                          <Plus className="w-4 h-4" />
-                        </Button>
-                      </form>
+                      <div className="space-y-2">
+                        <form onSubmit={handleAddSubTask} className="flex gap-2">
+                          <Input
+                            value={newSubTask}
+                            onChange={(e) => setNewSubTask(e.target.value)}
+                            placeholder="Add a new sub-task..."
+                            className="flex-1"
+                          />
+                          <Button type="submit" size="icon" className="flex-shrink-0">
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                        </form>
+                        <p className="text-xs text-gray-500">💡 Tip: Separate multiple sub-tasks with commas</p>
+                      </div>
                     ) : (
                       <div className="flex flex-col gap-2">
                         <p className="text-xs text-gray-500 text-center">
@@ -1091,17 +1094,20 @@ Return JSON:
                     </div>
 
                     {subtaskInputMode === 'text' ? (
-                      <form onSubmit={handleAddSubTask} className="flex gap-2">
-                        <Input
-                          value={newSubTask}
-                          onChange={(e) => setNewSubTask(e.target.value)}
-                          placeholder="Add a new sub-task..."
-                          className="flex-1"
-                        />
-                        <Button type="submit" size="icon" className="flex-shrink-0">
-                          <Plus className="w-4 h-4" />
-                        </Button>
-                      </form>
+                      <div className="space-y-2">
+                        <form onSubmit={handleAddSubTask} className="flex gap-2">
+                          <Input
+                            value={newSubTask}
+                            onChange={(e) => setNewSubTask(e.target.value)}
+                            placeholder="Add a new sub-task..."
+                            className="flex-1"
+                          />
+                          <Button type="submit" size="icon" className="flex-shrink-0">
+                            <Plus className="w-4 h-4" />
+                          </Button>
+                        </form>
+                        <p className="text-xs text-gray-500">💡 Tip: Separate multiple sub-tasks with commas</p>
+                      </div>
                     ) : (
                       <div className="flex flex-col gap-2">
                         <p className="text-xs text-gray-500 text-center">
