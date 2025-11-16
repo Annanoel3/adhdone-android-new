@@ -1115,7 +1115,40 @@ Return JSON:
             )}
           </div>
 
-          <DialogFooter className="gap-2">
+          <DialogFooter className="gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              onClick={async () => {
+                if (!confirm(`Convert "${task.title}" to a parking lot idea?`)) return;
+                
+                setIsUpdating(true);
+                try {
+                  // Cancel reminder if exists
+                  if (task.onesignal_notification_id) {
+                    await cancelScheduledReminder(task.onesignal_notification_id);
+                  }
+                  
+                  // Create parking lot idea
+                  await base44.entities.ParkingLotIdea.create({
+                    idea: task.title + (task.description ? `\n\n${task.description}` : ''),
+                    converted_to_task: false
+                  });
+                  
+                  // Delete task
+                  await base44.entities.Task.delete(task.id);
+                  
+                  if (onDelete) {
+                    onDelete();
+                  }
+                } finally {
+                  setIsUpdating(false);
+                }
+              }}
+              className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+            >
+              <Lightbulb className="w-4 h-4 mr-2" />
+              To Parking Lot
+            </Button>
             <Button
               variant="outline"
               onClick={handleDelete}
