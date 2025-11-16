@@ -88,29 +88,41 @@ JSON:
   "reminder_interval": "10min|20min|30min|1hour|2hours|daily|every_other_day|once|null"
 }`;
 
-      // First, check if this is a list that should go to parking lot
-      console.log('🔄 [PROCESS] Checking if this is a list...');
-      const listCheckPrompt = `Analyze this input: "${inputText}"
+      // First, check if this belongs in parking lot vs task
+      console.log('🔄 [PROCESS] Checking if this is a parking lot idea or task...');
+      const categoryCheckPrompt = `Analyze this input: "${inputText}"
 
-Is this a LIST of items (like a shopping list, packing list, todo checklist)?
+PARKING LOT items (ideas, notes, thinking):
+- Random thoughts/ideas: "Steel guitar strings might be better"
+- Open-ended thinking: "Think about what I should tell my professor"
+- Shopping lists without urgency: "I need milk, eggs, paper"
+- Collections to read/watch: "I need to read twilight and cirque du freak"
+- Notes/information: "Brazilian blowouts cost $200"
+- Project components: "My project needs a hypothesis, summary, references"
+- App ideas: "New app idea for plant watering reminders"
+- Diagnostic thinking: "Not sure if car leak is from transmission or seal"
 
-Rules:
-- If it mentions multiple items separated by commas, colons, "and", etc.
-- If it's a collection of things to do/bring/buy
-- Examples: "Bring: towels, sunscreen, water" or "Buy milk, eggs, bread"
+TASKS (time-bound, actionable):
+- Specific reminders: "Remind me to do ___ tomorrow"
+- Deadlines: "Turn in homework this Tuesday"
+- Recurring actions: "Do laundry, remind me once a day"
+- Appointments: "Therapist at 12 p.m. on Tuesday"
+- Events: "Martin's wedding is on the 30th"
 
 Return JSON:
 {
+  "category": "parking_lot" | "task",
   "is_list": true/false,
-  "main_idea": "short title for the list",
+  "main_idea": "short title",
   "items": ["item 1", "item 2", ...] or []
 }`;
 
-      const listCheck = await base44.integrations.Core.InvokeLLM({
-        prompt: listCheckPrompt,
+      const categoryCheck = await base44.integrations.Core.InvokeLLM({
+        prompt: categoryCheckPrompt,
         response_json_schema: {
           type: "object",
           properties: {
+            category: { type: "string" },
             is_list: { type: "boolean" },
             main_idea: { type: "string" },
             items: { type: "array", items: { type: "string" } }
@@ -118,34 +130,49 @@ Return JSON:
         }
       });
 
-      console.log('🔄 [PROCESS] List check result:', listCheck);
+      console.log('🔄 [PROCESS] Category check result:', categoryCheck);
 
-      // If it's a list, create parking lot entry with sub-ideas
-      if (listCheck.is_list && listCheck.items && listCheck.items.length > 1) {
-        console.log('📝 [PROCESS] Creating parking lot entry with checklist...');
+      // If it belongs in parking lot, create idea(s)
+      if (categoryCheck.category === 'parking_lot') {
+        console.log('📝 [PROCESS] Creating parking lot entry...');
         
-        // Create main parking lot idea
-        const mainIdea = await base44.entities.ParkingLotIdea.create({
-          idea: listCheck.main_idea,
-          converted_to_task: false,
-          list_format: 'checkbox'
-        });
-
-        // Create sub-ideas as checkboxes
-        for (const item of listCheck.items) {
-          await base44.entities.ParkingLotIdea.create({
-            idea: item,
-            parent_idea_id: mainIdea.id,
+        if (categoryCheck.is_list && categoryCheck.items && categoryCheck.items.length > 1) {
+          // Create main parking lot idea with sub-items
+          const mainIdea = await base44.entities.ParkingLotIdea.create({
+            idea: categoryCheck.main_idea,
             converted_to_task: false,
             list_format: 'checkbox'
           });
-        }
 
-        console.log('✅ [PROCESS] Parking lot entry created with', listCheck.items.length, 'items');
-        toast.success('Added to Parking Lot! 📝', {
-          description: `"${listCheck.main_idea}" with ${listCheck.items.length} items`,
-          duration: 3000
-        });
+          // Create sub-ideas as checkboxes
+          for (const item of categoryCheck.items) {
+            await base44.entities.ParkingLotIdea.create({
+              idea: item,
+              parent_idea_id: mainIdea.id,
+              converted_to_task: false,
+              list_format: 'checkbox'
+            });
+          }
+
+          console.log('✅ [PROCESS] Parking lot list created with', categoryCheck.items.length, 'items');
+          toast.success('Added to Parking Lot! 📝', {
+            description: `"${categoryCheck.main_idea}" with ${categoryCheck.items.length} items`,
+            duration: 3000
+          });
+        } else {
+          // Create single parking lot idea
+          await base44.entities.ParkingLotIdea.create({
+            idea: inputText.trim(),
+            converted_to_task: false,
+            list_format: 'plain'
+          });
+
+          console.log('✅ [PROCESS] Parking lot idea created');
+          toast.success('Added to Parking Lot! 📝', {
+            description: inputText.trim().substring(0, 50) + (inputText.length > 50 ? '...' : ''),
+            duration: 3000
+          });
+        }
         
         return true;
       }
