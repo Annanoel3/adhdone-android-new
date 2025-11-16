@@ -710,7 +710,9 @@ export default function FocusTimer() {
       </Card>
 
       {/* Easter Egg Button */}
-      <div className="mt-6 text-center">
+      <div className="mt-6 text-center" style={{ 
+        marginBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' 
+      }}>
         <Button
           onClick={handleEasterEgg}
           variant="ghost"
