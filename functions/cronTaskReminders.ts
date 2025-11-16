@@ -124,10 +124,9 @@ Deno.serve(async (req) => {
               let notificationId = null;
               const ms = t.reminder_interval ? intervalMs[t.reminder_interval] : 0;
               
-              // CRITICAL: For recurring reminders, schedule next from the original reminder time
+              // For recurring reminders, just update next_reminder time
+              // Cron will handle sending the notification, no need for OneSignal scheduling
               if (ms && ms > 0) {
-                // Calculate next reminder from the LAST reminder time, not from now
-                // This ensures we don't skip reminders if the cron was delayed
                 const lastReminderTime = parseWhen(t.next_reminder);
                 let nextTime = lastReminderTime + ms;
                 
@@ -138,26 +137,7 @@ Deno.serve(async (req) => {
                 }
                 
                 next = new Date(nextTime).toISOString();
-                
-                try {
-                  const scheduleResponse = await base44.asServiceRole.functions.invoke('schedulePush', {
-                    toUserExternalId: user.email,
-                    title: "Task Reminder 📋",
-                    body: t.title,
-                    sendAtISO: next,
-                    data: {
-                      screen: "/Tasks",
-                      taskId: t.id,
-                      urgency: t.urgency,
-                      type: 'task_reminder'
-                    }
-                  });
-
-                  notificationId = scheduleResponse?.data?.notificationId || null;
-                  console.log(`✅ [TASK REMINDERS] Scheduled next reminder for ${next} with ID: ${notificationId}`);
-                } catch (scheduleError) {
-                  console.error('❌ [TASK REMINDERS] Failed to schedule next reminder:', scheduleError);
-                }
+                console.log(`✅ [TASK REMINDERS] Next recurring reminder scheduled for ${next}`);
               }
 
               // Update task with new next_reminder and notification ID
