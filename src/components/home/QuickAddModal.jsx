@@ -156,10 +156,6 @@ Return JSON:
         onClose();
         // Navigate to home to refresh the task list
         navigate(createPageUrl("Home"), { state: { reload: true } });
-        } catch (error) {
-          console.error("Error creating task:", error);
-          alert("Failed to create task. Please try again.");
-        }
       } else {
         // It's an idea
         await base44.entities.ParkingLotIdea.create({
