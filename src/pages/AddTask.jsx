@@ -128,7 +128,10 @@ JSON:
         if (nextReminder <= now) {
           nextReminder.setDate(nextReminder.getDate() + 1);
         }
-        actualReminderInterval = actualReminderInterval || 'once';
+        // Only force 'once' if no recurring interval was specified
+        if (!actualReminderInterval || !recurringIntervals.includes(actualReminderInterval)) {
+          actualReminderInterval = 'once';
+        }
       } else if (parsed.reminder_interval && parsed.reminder_interval !== 'once') {
         nextReminder = new Date(now.getTime());
         switch (parsed.reminder_interval) {
