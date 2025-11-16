@@ -604,7 +604,7 @@ Return ONLY the category name, nothing else.`;
                           const format = group.parent.list_format || 'plain';
                           const lines = group.parent.idea.split('\n').filter(line => line.trim());
                           
-                          if (format === 'plain' || lines.length === 1) {
+                          if (format === 'plain') {
                             return (
                               <h3 className={`font-semibold text-lg whitespace-pre-wrap ${
                                 specialMode !== 'normal' ? `${specialMode}-title` :
@@ -622,10 +622,9 @@ Return ONLY the category name, nothing else.`;
                                   <div key={index} className="flex items-start gap-2">
                                     <input
                                       type="checkbox"
-                                      className="mt-1 rounded"
-                                      onChange={() => {}}
+                                      className="mt-1 rounded cursor-pointer"
                                     />
-                                    <span className={`font-semibold text-lg ${
+                                    <span className={`text-base ${
                                       specialMode !== 'normal' ? `${specialMode}-title` :
                                       theme === 'dark' ? 'text-gray-100' : 'text-gray-900'
                                     }`}>
@@ -641,7 +640,7 @@ Return ONLY the category name, nothing else.`;
                             return (
                               <ol className="list-decimal list-inside space-y-1">
                                 {lines.map((line, index) => (
-                                  <li key={index} className={`font-semibold text-lg ${
+                                  <li key={index} className={`text-base ${
                                     specialMode !== 'normal' ? `${specialMode}-title` :
                                     theme === 'dark' ? 'text-gray-100' : 'text-gray-900'
                                   }`}>
