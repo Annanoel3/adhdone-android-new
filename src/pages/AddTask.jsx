@@ -383,21 +383,35 @@ JSON:
   };
 
   const handleTextSubmit = async (e) => {
+    console.log('📝 [TEXT INPUT] ========== SUBMIT START ==========');
     e.preventDefault();
-    if (!textInput.trim()) return;
+    if (!textInput.trim()) {
+      console.log('📝 [TEXT INPUT] ❌ Empty input, returning');
+      return;
+    }
 
+    console.log('📝 [TEXT INPUT] Input text:', textInput);
     setIsProcessing(true);
     const input = textInput;
     setTextInput('');
     
-    // CRITICAL FIX: Wait for task creation before navigating
-    const success = await processAndCreateTask(input);
-    
-    setIsProcessing(false);
-    
-    if (success && !showAdvanceReminderDialog) {
-      // Only navigate if not showing advance reminder dialog
-      navigate(createPageUrl("Home"), { state: { reload: true } });
+    try {
+      console.log('📝 [TEXT INPUT] Calling processAndCreateTask...');
+      const success = await processAndCreateTask(input);
+      console.log('📝 [TEXT INPUT] processAndCreateTask result:', success);
+      
+      setIsProcessing(false);
+      
+      if (success && !showAdvanceReminderDialog) {
+        console.log('📝 [TEXT INPUT] ✅ Success, navigating to Home');
+        navigate(createPageUrl("Home"), { state: { reload: true } });
+      } else {
+        console.log('📝 [TEXT INPUT] ⚠️ Not navigating:', { success, showAdvanceReminderDialog });
+      }
+    } catch (error) {
+      console.error('📝 [TEXT INPUT] ❌ ERROR:', error);
+      setIsProcessing(false);
+      alert('Failed to create task: ' + error.message);
     }
   };
 
