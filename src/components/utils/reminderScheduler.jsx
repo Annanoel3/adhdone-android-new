@@ -75,21 +75,91 @@ export async function scheduleReminder({
 }
 
 /**
- * Cancels a scheduled push notification by OneSignal notification ID
+ * Cancels scheduled push notification(s) by OneSignal notification ID(s)
+ * Accepts either a single ID string or an array of IDs
  */
-export async function cancelScheduledReminder(notificationId) {
-  if (!notificationId) {
+export async function cancelScheduledReminder(notificationIds) {
+  if (!notificationIds) {
     console.log('[cancelScheduledReminder] No notification ID provided, skipping');
     return;
   }
 
+  // Convert single ID to array for uniform processing
+  const idsArray = Array.isArray(notificationIds) ? notificationIds : [notificationIds];
+
   try {
-    console.log('[cancelScheduledReminder] Canceling:', notificationId);
-    const response = await base44.functions.invoke('cancelScheduled', { notificationId });
-    console.log('[cancelScheduledReminder] Canceled:', response);
-    return response;
+    console.log('[cancelScheduledReminder] Canceling notifications:', idsArray);
+    
+    // Cancel all notifications in parallel
+    const cancelPromises = idsArray.map(id => 
+      base44.functions.invoke('cancelScheduled', { notificationId: id })
+        .catch(error => {
+          console.error(`[cancelScheduledReminder] Failed to cancel ${id}:`, error);
+          return null; // Don't fail the whole operation
+        })
+    );
+    
+    const results = await Promise.all(cancelPromises);
+    console.log('[cancelScheduledReminder] Canceled all:', results);
+    return results;
   } catch (error) {
     console.error('[cancelScheduledReminder] Failed:', error);
     // Don't throw - deletion should succeed even if notification cancel fails
   }
+}
+
+/**
+ * Schedules multiple recurring reminders and returns array of notification IDs
+ */
+export async function scheduleRecurringReminders({
+  email,
+  title,
+  body,
+  startTime,
+  intervalMs,
+  count = 50, // Schedule next 50 occurrences
+  taskId,
+  data,
+  android_channel_id
+}) {
+  console.log('[scheduleRecurringReminders] Scheduling', count, 'notifications starting at', startTime);
+  
+  const notificationIds = [];
+  const baseData = {
+    screen: "/Tasks",
+    ...(taskId && { taskId }),
+    ...(data || {})
+  };
+
+  // Schedule all reminders in parallel
+  const schedulePromises = [];
+  for (let i = 0; i < count; i++) {
+    const sendAt = new Date(new Date(startTime).getTime() + (intervalMs * i));
+    
+    schedulePromises.push(
+      scheduleReminder({
+        email,
+        title,
+        body,
+        sendAtISO: sendAt.toISOString(),
+        taskId,
+        data: baseData,
+        android_channel_id
+      }).then(notificationId => {
+        if (notificationId) {
+          console.log(`[scheduleRecurringReminders] Scheduled #${i + 1} for ${sendAt.toISOString()}: ${notificationId}`);
+        }
+        return notificationId;
+      }).catch(error => {
+        console.error(`[scheduleRecurringReminders] Failed to schedule #${i + 1}:`, error);
+        return null;
+      })
+    );
+  }
+
+  const results = await Promise.all(schedulePromises);
+  const validIds = results.filter(id => id !== null);
+  
+  console.log(`[scheduleRecurringReminders] Scheduled ${validIds.length}/${count} notifications`);
+  return validIds;
 }
