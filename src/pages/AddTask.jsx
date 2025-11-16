@@ -93,26 +93,27 @@ JSON:
       const categoryCheckPrompt = `Analyze this input: "${inputText}"
 
 CRITICAL RULES:
-1. If user explicitly says "parking lot", it's ALWAYS parking_lot
-2. If NO clear timing (no "tomorrow", "at 3pm", "every day", etc) AND it sounds like an idea/thought/list → parking_lot
-3. Only use "task" if there's clear timing OR it's obviously an actionable event
+1. If user explicitly says "parking lot" → ALWAYS parking_lot
+2. If it's an ACTIONABLE TODO (even without timing) → task
+   Examples: "clean the toilet", "call dentist", "do laundry", "fix the sink"
+3. If it's IDEAS, THOUGHTS, INFORMATION, or LISTS → parking_lot
 
-PARKING LOT (ideas, thoughts, lists without clear timing):
-- Explicit mentions: "add to parking lot", "parking lot idea"
-- Random ideas: "Steel guitar strings might be better"
-- Thinking/planning: "Think about what I should tell my professor"
-- Lists without timing: "I need milk, eggs, paper", "read twilight and cirque du freak"
-- Information/notes: "Brazilian blowouts cost $200"
-- Project brainstorming: "My project needs a hypothesis, summary, references"
-- App ideas: "New app idea for plant watering reminders"
+TASKS (actionable todos, with or without timing):
+- Clear todos: "clean the toilet", "call dentist", "fix the car", "submit report"
+- With timing: "Remind me tomorrow", "Call at 2pm", "Do laundry every day"
+- Deadlines: "Turn in homework Tuesday", "Pay rent by the 1st"
+- Appointments: "Therapist at 12 p.m.", "Meeting at 9am"
+- Events: "Martin's wedding on the 30th", "Birthday party Saturday"
+
+PARKING LOT (ideas, thoughts, lists, information):
+- Explicit: "add to parking lot", "parking lot idea"
+- Ideas/thoughts: "Steel guitar strings might be better", "Maybe try meditation"
+- Planning: "Think about what to tell my professor"
+- Shopping/reading lists: "I need milk, eggs, paper", "read twilight and cirque du freak"
+- Information: "Brazilian blowouts cost $200"
+- Brainstorming: "My project needs hypothesis, summary, references"
 - Questions: "Not sure if car leak is from transmission or seal"
-- Things to explore: "Look into meditation apps", "Research vacation spots"
-
-TASKS (clear timing OR actionable events):
-- With timing: "Remind me tomorrow", "Call dentist at 2pm", "Do laundry every day"
-- Deadlines: "Turn in homework this Tuesday", "Pay rent by the 1st"
-- Appointments: "Therapist at 12 p.m. on Tuesday", "Meeting at 9am"
-- Events: "Martin's wedding is on the 30th", "Birthday party Saturday"
+- Research: "Look into meditation apps", "Research vacation spots"
 
 Return JSON:
 {
