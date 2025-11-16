@@ -78,8 +78,12 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
   const handleSubTaskToggle = async (subTask) => {
     const newStatus = subTask.status === 'completed' ? 'active' : 'completed';
     await Task.update(subTask.id, { status: newStatus });
-    fetchSubTasks(task.id);
-    onUpdate();
+    await fetchSubTasks(task.id);
+    
+    // FIX: Call onUpdate without arguments
+    if (onUpdate) {
+      onUpdate();
+    }
   };
 
   const handleAddSubTask = async (e) => {
@@ -88,6 +92,10 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
 
     try {
       const currentUser = await base44.auth.me();
+      
+      // Split by comma to support multiple subtasks
+      const subtaskTitles = newSubTask.split(',').map(s => s.trim()).filter(s => s.length > 0);
+      
       const now = new Date();
       let nextReminder = new Date(now.getTime());
       
@@ -118,39 +126,46 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
           break;
       }
 
-      const createdTask = await Task.create({
-        title: newSubTask,
-        parent_task_id: task.id,
-        urgency: task.urgency,
-        energy_required: task.energy_required,
-        status: 'active',
-        reminder_interval: task.reminder_interval,
-        reminder_count: 0,
-        next_reminder: task.reminder_interval && task.reminder_interval !== 'once' && nextReminder ? nextReminder.toISOString() : null
-      });
-
-      // Only schedule if a next_reminder was calculated and it's a recurring interval
-      if (createdTask.next_reminder && task.reminder_interval !== 'once') {
-        scheduleReminder({
-          email: currentUser.email,
-          title: "Task Reminder 📋",
-          body: createdTask.title,
-          sendAtISO: createdTask.next_reminder,
-          taskId: createdTask.id,
-          data: {
-            screen: "/Tasks",
-            taskId: createdTask.id,
-            urgency: createdTask.urgency,
-            type: 'task_reminder'
-          }
-        }).catch(error => {
-          console.error("Failed to schedule reminder:", error);
+      // Create all subtasks
+      for (const title of subtaskTitles) {
+        const createdTask = await Task.create({
+          title: title,
+          parent_task_id: task.id,
+          urgency: task.urgency,
+          energy_required: task.energy_required,
+          status: 'active',
+          reminder_interval: task.reminder_interval,
+          reminder_count: 0,
+          next_reminder: task.reminder_interval && task.reminder_interval !== 'once' && nextReminder ? nextReminder.toISOString() : null
         });
+
+        // Only schedule if a next_reminder was calculated and it's a recurring interval
+        if (createdTask.next_reminder && task.reminder_interval !== 'once') {
+          scheduleReminder({
+            email: currentUser.email,
+            title: "Task Reminder 📋",
+            body: createdTask.title,
+            sendAtISO: createdTask.next_reminder,
+            taskId: createdTask.id,
+            data: {
+              screen: "/Tasks",
+              taskId: createdTask.id,
+              urgency: createdTask.urgency,
+              type: 'task_reminder'
+            }
+          }).catch(error => {
+            console.error("Failed to schedule reminder:", error);
+          });
+        }
       }
 
       setNewSubTask("");
       await fetchSubTasks(task.id);
-      onUpdate();
+      
+      // FIX: Call onUpdate without arguments to avoid passing invalid task data
+      if (onUpdate) {
+        onUpdate();
+      }
     } catch (error) {
       console.error("Error adding subtask:", error);
       alert("Failed to add subtask. Please try again.");
@@ -253,8 +268,12 @@ Return JSON:
         }
       }
 
-      fetchSubTasks(task.id);
-      onUpdate();
+      await fetchSubTasks(task.id);
+      
+      // FIX: Call onUpdate without arguments
+      if (onUpdate) {
+        onUpdate();
+      }
     } catch (error) {
       console.error("Error processing voice subtask:", error);
       alert("Failed to process voice input. Please try again.");
@@ -265,8 +284,12 @@ Return JSON:
 
   const handleDeleteSubTask = async (subTaskId) => {
     await Task.delete(subTaskId);
-    fetchSubTasks(task.id);
-    onUpdate();
+    await fetchSubTasks(task.id);
+    
+    // FIX: Call onUpdate without arguments
+    if (onUpdate) {
+      onUpdate();
+    }
   };
 
   const handleUndoDecomposition = async () => {
