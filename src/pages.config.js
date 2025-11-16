@@ -29,7 +29,7 @@ import SpotifyCallback from './pages/SpotifyCallback';
 import TaskNotification from './pages/TaskNotification';
 import DeleteAccount from './pages/DeleteAccount';
 import DeleteData from './pages/DeleteData';
-import Layout from './Layout.jsx';
+import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
@@ -69,5 +69,5 @@ export const PAGES = {
 export const pagesConfig = {
     mainPage: "Home",
     Pages: PAGES,
-    Layout: Layout,
+    Layout: __Layout,
 };
