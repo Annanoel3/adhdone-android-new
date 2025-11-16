@@ -4,8 +4,7 @@ import {
   DialogContent,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Mic, Keyboard, Loader2 } from "lucide-react";
+import { Mic, Keyboard } from "lucide-react";
 import VoiceTaskInput from "../tasks/VoiceTaskInput";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -14,38 +13,7 @@ import { scheduleReminder } from "../utils/reminderScheduler";
 
 export default function QuickAddModal({ isOpen, onClose, theme }) {
   const [mode, setMode] = useState('voice');
-  const [textInput, setTextInput] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
   const navigate = useNavigate();
-
-  const handleTextSubmit = async (e) => {
-    e.preventDefault();
-    console.log('📝 [QUICK ADD TEXT] ========== SUBMIT START ==========');
-    console.log('📝 [QUICK ADD TEXT] Input:', textInput);
-    
-    if (!textInput.trim()) {
-      console.log('📝 [QUICK ADD TEXT] ❌ Empty input');
-      return;
-    }
-
-    setIsProcessing(true);
-    const input = textInput;
-    setTextInput('');
-    
-    try {
-      await processTextInput(input);
-    } catch (error) {
-      console.error('📝 [QUICK ADD TEXT] ❌ Error:', error);
-      alert('Failed to create task: ' + error.message);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const processTextInput = async (transcription) => {
-    console.log('📝 [QUICK ADD TEXT] Processing:', transcription);
-    await handleVoiceInput(transcription);
-  };
 
   const handleVoiceInput = async (transcription) => {
     try {
