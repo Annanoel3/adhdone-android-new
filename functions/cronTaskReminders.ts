@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
 
     const now = Date.now();
-    const cutoff = now + 15 * 60 * 1000;
+    const cutoff = now + 5 * 60 * 1000; // Check tasks due in next 5 minutes
 
     console.log('👥 [TASK REMINDERS] Getting all users...');
     const allUsers = await base44.asServiceRole.entities.User.list();
@@ -107,9 +107,9 @@ Deno.serve(async (req) => {
           
           const when = parseWhen(t.next_reminder);
           
-          console.log(`🔍 [TASK REMINDERS] Task "${t.title}": next_reminder=${t.next_reminder}, parsed=${new Date(when).toISOString()}, now=${new Date(now).toISOString()}`);
+          console.log(`🔍 [TASK REMINDERS] Task "${t.title}": interval=${t.reminder_interval}, next_reminder=${t.next_reminder}, parsed=${new Date(when).toISOString()}, now=${new Date(now).toISOString()}, cutoff=${new Date(cutoff).toISOString()}`);
           
-          if (when && when <= cutoff) {
+          if (when && when <= now) {
             console.log(`🔔 [TASK REMINDERS] Sending reminder to ${user.email}: "${t.title}"`);
 
             const r = await base44.asServiceRole.functions.invoke('notifySend', {
@@ -141,19 +141,22 @@ Deno.serve(async (req) => {
               }
 
               // Update task with new next_reminder
-              await base44.asServiceRole.entities.Task.update(t.id, {
+              const updateResult = await base44.asServiceRole.entities.Task.update(t.id, {
                 reminder_count: (t.reminder_count || 0) + 1,
                 next_reminder: next
               });
+              
+              console.log(`💾 [TASK REMINDERS] Updated task with next_reminder: ${next || 'none'}`);
+              console.log(`💾 [TASK REMINDERS] Update result:`, updateResult);
 
               ok++;
-              console.log(`✅ [TASK REMINDERS] Sent successfully - next reminder: ${next || 'none'}`);
+              console.log(`✅ [TASK REMINDERS] Sent successfully`);
             } else {
               console.error('❌ [TASK REMINDERS] Failed:', r?.data);
               fail++;
             }
-          } else if (when > cutoff) {
-            console.log(`⏳ [TASK REMINDERS] Task "${t.title}" reminder not yet due (${new Date(when).toISOString()})`);
+          } else if (when > now) {
+            console.log(`⏳ [TASK REMINDERS] Task "${t.title}" reminder not yet due: ${new Date(when).toISOString()} (in ${Math.round((when - now) / 60000)} minutes)`);
           }
         }
       } catch (userError) {
