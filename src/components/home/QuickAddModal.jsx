@@ -153,8 +153,18 @@ Return JSON:
         });
       }
 
-      onClose();
-      navigate(createPageUrl("Home"), { state: { reload: true } });
+        onClose();
+        navigate(createPageUrl("Home"), { state: { reload: true } });
+      } else {
+        // It's an idea
+        await base44.entities.ParkingLotIdea.create({
+          idea: transcription,
+          converted_to_task: false
+        });
+
+        onClose();
+        navigate(createPageUrl("ParkingLot"));
+      }
     } catch (error) {
       console.error("Error processing input:", error);
       alert("Failed to process your input. Please try again.");
