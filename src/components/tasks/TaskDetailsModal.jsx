@@ -655,7 +655,7 @@ Return JSON:
           )}
           
           <DialogHeader>
-            <DialogTitle className="text-2xl font-bold">
+            <DialogTitle className="text-2xl font-bold pt-4">
               {isEditingTitle ? (
                 <div className="flex items-center gap-2">
                   <Input
