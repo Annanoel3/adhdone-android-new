@@ -16,26 +16,24 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
   const navigate = useNavigate();
 
   const handleVoiceInput = async (transcription) => {
-    try {
-      // Use AI to classify if it's a task or idea
-      const classificationPrompt = `Classify this input as either "task" or "idea":
+    const lowerCommand = transcription.toLowerCase();
 
-"${transcription}"
+    // Check for explicit idea keywords
+    const ideaKeywords = ['idea', 'ideas', 'maybe', 'someday', 'thought', 'note to self', 'remember this'];
+    const isExplicitIdea = ideaKeywords.some(keyword => lowerCommand.includes(keyword));
 
-A TASK is something actionable with urgency/deadline (e.g., "call dentist", "remind me to...", "need to buy milk")
-An IDEA is a thought, note, or non-urgent item to remember (e.g., "vacation ideas", "learn Spanish someday", "book recommendations")
+    // Check for task keywords or actionable language
+    const taskKeywords = ['remind me', 'task', 'todo', 'need to', 'have to', 'must', 'should', 'call', 'buy', 'get', 'send', 'email', 'message'];
+    const isExplicitTask = taskKeywords.some(keyword => lowerCommand.includes(keyword));
 
-Return only one word: "task" or "idea"`;
+    // Default to task if contains time/date references or no explicit markers
+    const hasTimeReference = /tomorrow|today|tonight|morning|afternoon|evening|\d+\s*(am|pm|hour|minute|day|week)/i.test(transcription);
+    
+    const shouldCreateTask = isExplicitTask || (!isExplicitIdea && hasTimeReference) || (!isExplicitIdea && !isExplicitTask);
 
-      const classification = await base44.integrations.Core.InvokeLLM({
-        prompt: classificationPrompt
-      });
-
-      const isTask = classification.toLowerCase().trim().includes('task');
-
-      if (isTask) {
-        // It's a task
-        try {
+    if (shouldCreateTask) {
+      // It's a task
+      try {
         const user = await base44.auth.me();
 
         const prompt = `Extract task details from this voice input: "${transcription}"
