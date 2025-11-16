@@ -14,6 +14,8 @@ import { scheduleReminder } from "../utils/reminderScheduler";
 
 export default function QuickAddModal({ isOpen, onClose, theme }) {
   const [mode, setMode] = useState('voice');
+  const [textInput, setTextInput] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
   const navigate = useNavigate();
 
   const handleVoiceInput = async (transcription) => {
