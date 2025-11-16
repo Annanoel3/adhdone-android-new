@@ -88,7 +88,70 @@ JSON:
   "reminder_interval": "10min|20min|30min|1hour|2hours|daily|every_other_day|once|null"
 }`;
 
-      console.log('🔄 [PROCESS] Calling LLM...');
+      // First, check if this is a list that should go to parking lot
+      console.log('🔄 [PROCESS] Checking if this is a list...');
+      const listCheckPrompt = `Analyze this input: "${inputText}"
+
+Is this a LIST of items (like a shopping list, packing list, todo checklist)?
+
+Rules:
+- If it mentions multiple items separated by commas, colons, "and", etc.
+- If it's a collection of things to do/bring/buy
+- Examples: "Bring: towels, sunscreen, water" or "Buy milk, eggs, bread"
+
+Return JSON:
+{
+  "is_list": true/false,
+  "main_idea": "short title for the list",
+  "items": ["item 1", "item 2", ...] or []
+}`;
+
+      const listCheck = await base44.integrations.Core.InvokeLLM({
+        prompt: listCheckPrompt,
+        response_json_schema: {
+          type: "object",
+          properties: {
+            is_list: { type: "boolean" },
+            main_idea: { type: "string" },
+            items: { type: "array", items: { type: "string" } }
+          }
+        }
+      });
+
+      console.log('🔄 [PROCESS] List check result:', listCheck);
+
+      // If it's a list, create parking lot entry with sub-ideas
+      if (listCheck.is_list && listCheck.items && listCheck.items.length > 1) {
+        console.log('📝 [PROCESS] Creating parking lot entry with checklist...');
+        
+        // Create main parking lot idea
+        const mainIdea = await base44.entities.ParkingLotIdea.create({
+          idea: listCheck.main_idea,
+          converted_to_task: false,
+          list_format: 'checkbox'
+        });
+
+        // Create sub-ideas as checkboxes
+        for (const item of listCheck.items) {
+          await base44.entities.ParkingLotIdea.create({
+            idea: item,
+            parent_idea_id: mainIdea.id,
+            converted_to_task: false,
+            list_format: 'checkbox'
+          });
+        }
+
+        console.log('✅ [PROCESS] Parking lot entry created with', listCheck.items.length, 'items');
+        toast.success('Added to Parking Lot! 📝', {
+          description: `"${listCheck.main_idea}" with ${listCheck.items.length} items`,
+          duration: 3000
+        });
+        
+        return true;
+      }
+
+      // Otherwise, continue with normal task creation
+      console.log('🔄 [PROCESS] Calling LLM for task parsing...');
       const parsed = await base44.integrations.Core.InvokeLLM({
         prompt,
         response_json_schema: {
