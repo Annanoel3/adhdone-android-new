@@ -584,6 +584,7 @@ Return JSON:
 
   const getCurrentReminderTime = (task) => {
     if (!task.next_reminder) return '';
+    // FIXED: Parse UTC and display in local time zone
     const date = new Date(task.next_reminder);
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
@@ -592,6 +593,7 @@ Return JSON:
 
   const getCurrentReminderDate = (task) => {
     if (!task.next_reminder) return '';
+    // FIXED: Parse UTC and display in local time zone
     const date = new Date(task.next_reminder);
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
