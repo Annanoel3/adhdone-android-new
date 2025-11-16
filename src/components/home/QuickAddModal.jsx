@@ -18,6 +18,34 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const navigate = useNavigate();
 
+  const handleTextSubmit = async (e) => {
+    e.preventDefault();
+    console.log('📝 [QUICK ADD TEXT] ========== SUBMIT START ==========');
+    console.log('📝 [QUICK ADD TEXT] Input:', textInput);
+    
+    if (!textInput.trim()) {
+      console.log('📝 [QUICK ADD TEXT] ❌ Empty input');
+      return;
+    }
+
+    setIsProcessing(true);
+    const input = textInput;
+    setTextInput('');
+    
+    try {
+      await processTextInput(input);
+    } catch (error) {
+      console.error('📝 [QUICK ADD TEXT] ❌ Error:', error);
+      alert('Failed to create task: ' + error.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const processTextInput = async (transcription) => {
+    try {
+      console.log('📝 [QUICK ADD TEXT] Processing:', transcription);
+
   const handleVoiceInput = async (transcription) => {
     try {
       console.log('🎤 [QUICK ADD] Voice input received:', transcription);
