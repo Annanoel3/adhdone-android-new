@@ -98,7 +98,7 @@ Return JSON:
         }
       }
 
-      console.log('Creating task with data:', {
+      console.log('✅ [QUICK ADD] Creating task with data:', {
         title: taskData.title,
         urgency: taskData.urgency || 'medium',
         energy_required: taskData.energy_required || 'medium',
@@ -116,7 +116,7 @@ Return JSON:
         next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null
       });
 
-      console.log('Task created successfully:', createdTask);
+      console.log('✅ [QUICK ADD] Task created successfully:', createdTask);
 
       // Schedule reminder in background (don't await)
       if (nextReminderTime && taskData.reminder_interval !== 'once') {
@@ -137,18 +137,8 @@ Return JSON:
         });
       }
 
-        onClose();
-        navigate(createPageUrl("Home"), { state: { reload: true } });
-      } else {
-        // It's an idea
-        await base44.entities.ParkingLotIdea.create({
-          idea: transcription,
-          converted_to_task: false
-        });
-
-        onClose();
-        navigate(createPageUrl("ParkingLot"));
-      }
+      onClose();
+      navigate(createPageUrl("Home"), { state: { reload: true } });
     } catch (error) {
       console.error("Error processing input:", error);
       alert("Failed to process your input. Please try again.");
