@@ -304,12 +304,12 @@ Return JSON:
     try {
       const updates = { [field]: value };
       
-      // Cancel existing reminder if one was scheduled
-      if (task.onesignal_notification_id) {
+      // Cancel existing reminders if any were scheduled
+      if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
         try {
-          await cancelScheduledReminder(task.onesignal_notification_id);
+          await cancelScheduledReminder(task.onesignal_notification_ids);
         } catch (error) {
-          console.error("Failed to cancel existing reminder:", error);
+          console.error("Failed to cancel existing reminders:", error);
         }
       }
 
@@ -427,12 +427,12 @@ Return JSON:
 
       console.log(`🕐 [REMINDER TIME] Setting reminder for ${nextReminder.toLocaleString()} (${nextReminder.toISOString()})`);
 
-      // Cancel existing reminder before scheduling a new one
-      if (task.onesignal_notification_id) {
+      // Cancel existing reminders before scheduling a new one
+      if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
         try {
-          await cancelScheduledReminder(task.onesignal_notification_id);
+          await cancelScheduledReminder(task.onesignal_notification_ids);
         } catch (error) {
-          console.error("Failed to cancel existing reminder:", error);
+          console.error("Failed to cancel existing reminders:", error);
         }
       }
 
@@ -479,12 +479,12 @@ Return JSON:
       
       console.log('✅ [COMPLETE] Marking task complete with local time:', localISOString);
 
-      // Cancel reminder when task is completed
-      if (task.onesignal_notification_id) {
+      // Cancel all scheduled reminders when task is completed
+      if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
         try {
-          await cancelScheduledReminder(task.onesignal_notification_id);
+          await cancelScheduledReminder(task.onesignal_notification_ids);
         } catch (error) {
-          console.error("Failed to cancel reminder on completion:", error);
+          console.error("Failed to cancel reminders on completion:", error);
         }
       }
       
@@ -492,7 +492,7 @@ Return JSON:
       Task.update(task.id, { 
         status: 'completed',
         completed_at: localISOString,
-        onesignal_notification_id: null // Clear notification ID as reminder is cancelled
+        onesignal_notification_ids: [] // Clear notification IDs as reminders are cancelled
       }).catch(error => {
         console.error("Error completing task:", error);
       });
@@ -502,7 +502,7 @@ Return JSON:
         ...task, 
         status: 'completed',
         completed_at: localISOString,
-        onesignal_notification_id: null
+        onesignal_notification_ids: []
       });
       
       onClose();
@@ -516,16 +516,16 @@ Return JSON:
     
     setIsUpdating(true);
     try {
-      // CRITICAL: Cancel scheduled notification before deleting
-      if (task.onesignal_notification_id) {
-        console.log(`🗑️ [DELETE] Canceling notification ${task.onesignal_notification_id} for task "${task.title}"`);
-        await cancelScheduledReminder(task.onesignal_notification_id);
+      // CRITICAL: Cancel all scheduled notifications before deleting
+      if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+        console.log(`🗑️ [DELETE] Canceling ${task.onesignal_notification_ids.length} notifications for task "${task.title}"`);
+        await cancelScheduledReminder(task.onesignal_notification_ids);
       }
 
       // Delete subtasks and their notifications
       for (const subTask of subTasks) {
-        if (subTask.onesignal_notification_id) {
-          await cancelScheduledReminder(subTask.onesignal_notification_id);
+        if (subTask.onesignal_notification_ids && subTask.onesignal_notification_ids.length > 0) {
+          await cancelScheduledReminder(subTask.onesignal_notification_ids);
         }
         Task.delete(subTask.id).catch(error => {
           console.error("Error deleting subtask:", error);
@@ -1123,9 +1123,9 @@ Return JSON:
                 
                 setIsUpdating(true);
                 try {
-                  // Cancel reminder if exists
-                  if (task.onesignal_notification_id) {
-                    await cancelScheduledReminder(task.onesignal_notification_id);
+                  // Cancel reminders if exist
+                  if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+                    await cancelScheduledReminder(task.onesignal_notification_ids);
                   }
                   
                   // Create parking lot idea

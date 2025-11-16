@@ -305,30 +305,69 @@ Return JSON:
 
       console.log('🔄 [PROCESS] ✅ Task created:', createdTask.id);
 
-      // Only schedule one-time reminders with OneSignal
-      // Recurring reminders are handled by cron job
-      if (nextReminder && actualReminderInterval === 'once') {
-        scheduleReminder({
-          email: currentUser.email,
-          title: "Task Reminder 📋",
-          body: `${createdTask.title}\n\nTap to mark as complete!`,
-          sendAtISO: nextReminder.toISOString(),
-          taskId: createdTask.id,
-          data: {
-            screen: "/TaskNotification",
+      // Schedule reminders with OneSignal
+      if (nextReminder) {
+        const intervalMs = {
+          '10min': 10 * 60 * 1000,
+          '20min': 20 * 60 * 1000,
+          '30min': 30 * 60 * 1000,
+          '1hour': 60 * 60 * 1000,
+          '2hours': 2 * 60 * 60 * 1000,
+          'daily': 24 * 60 * 60 * 1000,
+          'every_other_day': 2 * 24 * 60 * 60 * 1000,
+        };
+
+        if (actualReminderInterval === 'once') {
+          // One-time reminder
+          scheduleReminder({
+            email: currentUser.email,
+            title: "Task Reminder 📋",
+            body: `${createdTask.title}\n\nTap to mark as complete!`,
+            sendAtISO: nextReminder.toISOString(),
             taskId: createdTask.id,
-            urgency: createdTask.urgency,
-            type: 'task_reminder'
-          }
-        }).then(notificationId => {
-          if (notificationId) {
-            base44.entities.Task.update(createdTask.id, {
-              onesignal_notification_id: notificationId
+            data: {
+              screen: "/TaskNotification",
+              taskId: createdTask.id,
+              urgency: createdTask.urgency,
+              type: 'task_reminder'
+            }
+          }).then(notificationId => {
+            if (notificationId) {
+              base44.entities.Task.update(createdTask.id, {
+                onesignal_notification_ids: [notificationId]
+              });
+            }
+          }).catch(error => {
+            console.error("Failed to schedule reminder:", error);
+          });
+        } else if (intervalMs[actualReminderInterval]) {
+          // Recurring reminder - schedule next 50 occurrences
+          import('../components/utils/reminderScheduler').then(module => {
+            return module.scheduleRecurringReminders({
+              email: currentUser.email,
+              title: "Task Reminder 📋",
+              body: `${createdTask.title}\n\nTap to mark as complete!`,
+              startTime: nextReminder.toISOString(),
+              intervalMs: intervalMs[actualReminderInterval],
+              count: 50,
+              taskId: createdTask.id,
+              data: {
+                screen: "/TaskNotification",
+                taskId: createdTask.id,
+                urgency: createdTask.urgency,
+                type: 'task_reminder'
+              }
             });
-          }
-        }).catch(error => {
-          console.error("Failed to schedule reminder:", error);
-        });
+          }).then(notificationIds => {
+            if (notificationIds && notificationIds.length > 0) {
+              base44.entities.Task.update(createdTask.id, {
+                onesignal_notification_ids: notificationIds
+              });
+            }
+          }).catch(error => {
+            console.error("Failed to schedule recurring reminders:", error);
+          });
+        }
       }
       
       console.log('🔄 [PROCESS] ========== SUCCESS - RETURNING TRUE ==========');
