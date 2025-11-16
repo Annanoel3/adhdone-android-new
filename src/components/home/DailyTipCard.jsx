@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lightbulb, Sparkles, Loader2, RefreshCw } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 
-const CURRENT_PROMPT_VERSION = 2; // Increment this when you update the prompt
+const CURRENT_PROMPT_VERSION = 3; // Increment this when you update the prompt
 
 export default function DailyTipCard({ theme }) {
   const [todaysTip, setTodaysTip] = useState(null);
@@ -79,39 +78,35 @@ export default function DailyTipCard({ theme }) {
       const currentStreak = summaries.length > 0 ? summaries[0].streak_days || 0 : 0;
 
       // Use Base44's InvokeLLM for smart tips
-      const prompt = `You are a brain-science-savvy friend sharing productivity tips. Generate ONE actionable tip grounded in real neuroscience.
+      const prompt = `You're that friend who gets it - the one who makes everything feel possible with a little humor and real talk. Generate ONE quick, helpful tip.
 
 CRITICAL REQUIREMENTS:
-1. MUST reference actual brain science (prefrontal cortex, dopamine, working memory, etc.) but explain it casually
-2. Write in second person ("you") - conversational, friendly, relatable
-3. 2-3 sentences MAX - get to the point fast
-4. Give ONE specific, concrete action someone can try right now
-5. NEVER mention time of day, current energy, or "right now" 
-6. Acknowledge the struggle first, then explain the brain mechanism, then give the solution
-7. Sound like a smart friend, not a doctor or therapist
-8. Make it universal - helpful for anyone with a busy brain, not targeting a specific group
+1. Keep it SHORT - 1-2 sentences max
+2. Add a touch of humor or wit (but stay genuinely helpful)
+3. Talk like a warm, funny therapist - not clinical, just real
+4. Give ONE specific thing someone can actually do
+5. Skip the heavy brain science - just explain WHY it works in plain English
+6. Make it feel like texting advice to a friend who's struggling
 
-CONTEXT (use subtly - don't explicitly mention these numbers):
+CONTEXT (use subtly):
 - Active tasks: ${activeTasks.length}
 - Snoozed tasks: ${snoozedTasks.length}
 - Completed today: ${completedToday.length}
 - Streak: ${currentStreak} days
 
-EXAMPLES OF THE EXACT TONE I WANT:
+EXAMPLES OF THE VIBE:
 
-"Starting feels impossible when you can't see the steps? That's your brain struggling with task initiation because the prefrontal cortex needs a clear first action. Pick ONE tiny step - like 'put 3 dishes in sink' instead of 'clean kitchen' - set a 10-minute timer, and just do that one thing."
+"Staring at a task like it's a cryptic puzzle? Your brain needs a clear first step to get moving. Try this: write down literally the FIRST tiny thing (not 'do laundry' but 'pick up the basket'), set a timer for 5 minutes, and see what happens."
 
-"Waiting for deadline pressure leaves you scrambling with no quality time. Your brain craves urgency for dopamine, so manufacture it - ask someone to review your work 2 days early, or bet a friend $20 you'll finish by Friday. Artificial deadlines work just as well as real ones."
+"Waiting until panic mode to start? (Same.) Your brain gets hooked on that last-minute adrenaline rush. Trick it by creating fake urgency - tell someone you'll send them the thing by tomorrow, or bet yourself $20 you'll finish by Friday."
 
-"Boring task making you want to crawl out of your skin? That's low dopamine from lack of novelty. Keep the task the same but change everything around it - new coffee shop, colored pens, work with a friend, or relate it to something you actually care about."
+"Task so boring you'd rather watch paint dry? Change everything AROUND the task - different spot, fun music, work near a friend, fancy drink. Your brain craves novelty, so give it that without changing what you actually need to do."
 
-"Half-done projects feel harder than new ones because novelty wears off and your brain stops getting that dopamine hit. When you can't change the task, change the context - different location, different time of day, audiobook instead of reading, or get someone to work alongside you."
+"Brain juggling seventeen things and dropping them all? You can only hold about 4 things at once before stuff just... vanishes. Do a brain dump - write every single thing down so your mind can stop white-knuckling the list and actually focus on doing."
 
-"Brain holding too many things at once? Working memory maxes out at about 4 items, so anything beyond that just... disappears. Write every task down immediately - it's not a crutch, it's how you free up mental space for actually doing the work."
+"Motivation taking a permanent vacation? That's cool - motivation is flaky anyway. Start with just 2 minutes of the easiest possible version of the task. Action creates momentum, not the other way around."
 
-"Can't get started? That's because the prefrontal cortex needs activation energy. Physical movement literally increases blood flow and dopamine - stand up, do 5 jumping jacks, then immediately start the task while your brain is revved up."
-
-"Task feels massive and overwhelming? Big tasks trigger avoidance because your brain can't sequence all the steps. Break it into 2-minute chunks - not 'do taxes,' but 'open tax software and find last year's return.' That's it. One tiny step."
+"Stuck in analysis paralysis? Pick the first option that doesn't actively suck, set a timer for 20 minutes, and start. 'Good enough' beats 'perfect but never started' every single time."
 
 Return ONLY the tip text, nothing else.`;
 
@@ -141,7 +136,7 @@ Return ONLY the category name.`;
     } catch (error) {
       console.error("Error generating tip:", error);
       const fallbackTip = await base44.entities.DailyTip.create({
-        tip_text: "Can't get started? Physical movement increases blood flow and dopamine to the prefrontal cortex. Stand up, do 5 jumping jacks, then immediately start your task while your brain is revved up.",
+        tip_text: "Stuck in cement? Stand up, do 5 jumping jacks (seriously), then immediately dive into your task. Movement gets the blood flowing and tricks your brain into action mode.",
         category: "focus",
         shown_date: today,
         prompt_version: CURRENT_PROMPT_VERSION
