@@ -108,7 +108,7 @@ Return JSON:
           }
         }
 
-        await Task.create({
+        const createdTask = await base44.entities.Task.create({
           title: taskData.title,
           urgency: taskData.urgency || 'medium',
           energy_required: taskData.energy_required || 'medium',
@@ -125,10 +125,10 @@ Return JSON:
               title: "Task Reminder 📋",
               body: taskData.title,
               sendAtISO: nextReminderTime.toISOString(),
-              taskId: taskData.id,
+              taskId: createdTask.id,
               data: {
                 screen: "/Tasks",
-                taskId: taskData.id,
+                taskId: createdTask.id,
                 urgency: taskData.urgency,
                 type: 'task_reminder'
               }
@@ -147,7 +147,7 @@ Return JSON:
     } else {
       // It's an idea
       try {
-        await ParkingLotIdea.create({
+        await base44.entities.ParkingLotIdea.create({
           idea: transcription,
           converted_to_task: false
         });
