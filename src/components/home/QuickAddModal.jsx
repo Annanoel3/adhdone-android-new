@@ -16,25 +16,6 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
   const navigate = useNavigate();
 
   const handleVoiceInput = async (transcription) => {
-    const lowerCommand = transcription.toLowerCase();
-
-    // Check for "Parking Lot" keyword FIRST
-    if (lowerCommand.includes('parking lot')) {
-      try {
-        await base44.entities.ParkingLotIdea.create({
-          idea: transcription,
-          converted_to_task: false
-        });
-        onClose();
-        navigate(createPageUrl("ParkingLot"));
-      } catch (error) {
-        console.error("Error creating idea:", error);
-        alert("Failed to save idea. Please try again.");
-      }
-      return;
-    }
-
-    // Otherwise, create a task
     try {
       const user = await base44.auth.me();
 
