@@ -16,15 +16,26 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
   const navigate = useNavigate();
 
   const handleVoiceInput = async (transcription) => {
-    const lowerCommand = transcription.toLowerCase();
+    try {
+      // Use AI to classify if it's a task or idea
+      const classificationPrompt = `Classify this input as either "task" or "idea":
 
-    // Determine if it's a task or idea
-    if (lowerCommand.includes('remind me') || 
-        lowerCommand.includes('task') ||
-        lowerCommand.includes('todo')) {
-      
-      // It's a task
-      try {
+"${transcription}"
+
+A TASK is something actionable with urgency/deadline (e.g., "call dentist", "remind me to...", "need to buy milk")
+An IDEA is a thought, note, or non-urgent item to remember (e.g., "vacation ideas", "learn Spanish someday", "book recommendations")
+
+Return only one word: "task" or "idea"`;
+
+      const classification = await base44.integrations.Core.InvokeLLM({
+        prompt: classificationPrompt
+      });
+
+      const isTask = classification.toLowerCase().trim().includes('task');
+
+      if (isTask) {
+        // It's a task
+        try {
         const user = await base44.auth.me();
 
         const prompt = `Extract task details from this voice input: "${transcription}"
