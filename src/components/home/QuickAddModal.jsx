@@ -177,18 +177,9 @@ Return JSON:
               </Button>
             </div>
           ) : (
-            <form onSubmit={handleTextSubmit} className="space-y-4">
-              <Input
-                value={textInput}
-                onChange={(e) => setTextInput(e.target.value)}
-                placeholder="Type your task here..."
-                className={`text-lg ${theme === 'dark' ? 'bg-gray-700 text-white' : ''}`}
-                autoFocus
-                disabled={isProcessing}
-              />
+            <div className="space-y-4">
               <Button
-                type="submit"
-                disabled={!textInput.trim() || isProcessing}
+                onClick={() => navigate(createPageUrl("AddTask"))}
                 className={`w-full ${
                   theme === 'minimalist'
                     ? 'bg-green-600 hover:bg-green-700'
@@ -197,25 +188,29 @@ Return JSON:
                       : 'bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700'
                 }`}
               >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Creating...
-                  </>
-                ) : (
-                  'Create Task'
-                )}
+                Add Task
+              </Button>
+              <Button
+                onClick={() => navigate(createPageUrl("ParkingLot"))}
+                className={`w-full ${
+                  theme === 'minimalist'
+                    ? 'bg-purple-600 hover:bg-purple-700'
+                    : theme === 'dark'
+                      ? 'bg-purple-600 hover:bg-purple-700'
+                      : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
+                }`}
+              >
+                Save Idea
               </Button>
               <Button
                 variant="ghost"
                 onClick={() => setMode('voice')}
                 className="w-full flex items-center justify-center gap-2 text-sm"
-                type="button"
               >
                 <Mic className="w-4 h-4" />
                 Or use voice
               </Button>
-            </form>
+            </div>
           )}
         </div>
       </DialogContent>
