@@ -423,7 +423,7 @@ Return ONLY the category name, nothing else.`;
             <Textarea
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
-              placeholder="What's on your mind?"
+              placeholder="What's on your mind? (Try: 'Add milk to my shopping list')"
               className={`min-h-[120px] ${theme === 'dark' ? 'bg-gray-800 text-gray-100 border-gray-700' : ''}`}
               autoFocus
             />
@@ -431,6 +431,33 @@ Return ONLY the category name, nothing else.`;
               <Button
                 onClick={async () => {
                   if (!textInput.trim()) return;
+                  
+                  // Check if user is trying to add to an existing list
+                  const addToListMatch = textInput.toLowerCase().match(/add (.+?) to (?:the |my )?(.+?)(?:\s+list)?$/i);
+                  
+                  if (addToListMatch) {
+                    const [_, itemToAdd, listName] = addToListMatch;
+                    
+                    // Find matching parent idea
+                    const matchingIdea = topLevelIdeas.find(idea => 
+                      idea.idea.toLowerCase().includes(listName.toLowerCase().trim())
+                    );
+                    
+                    if (matchingIdea) {
+                      // Add as sub-idea to the matched list
+                      await base44.entities.ParkingLotIdea.create({
+                        idea: itemToAdd.trim(),
+                        parent_idea_id: matchingIdea.id,
+                        converted_to_task: false
+                      });
+                      queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+                      setTextInput("");
+                      setShowQuickAdd(false);
+                      return;
+                    }
+                  }
+                  
+                  // Otherwise create as new idea
                   await base44.entities.ParkingLotIdea.create({
                     idea: textInput,
                     converted_to_task: false,
@@ -616,15 +643,28 @@ Return ONLY the category name, nothing else.`;
                           }
                           
                           if (format === 'checkbox') {
+                            const checkedItems = group.parent.checked_items || [];
                             return (
                               <div className="space-y-2">
                                 {lines.map((line, index) => (
                                   <div key={index} className="flex items-start gap-2">
                                     <input
                                       type="checkbox"
+                                      checked={checkedItems.includes(index)}
+                                      onChange={async () => {
+                                        const newCheckedItems = checkedItems.includes(index)
+                                          ? checkedItems.filter(i => i !== index)
+                                          : [...checkedItems, index];
+                                        await base44.entities.ParkingLotIdea.update(group.parent.id, {
+                                          checked_items: newCheckedItems
+                                        });
+                                        queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+                                      }}
                                       className="mt-1 rounded cursor-pointer"
                                     />
                                     <span className={`text-base ${
+                                      checkedItems.includes(index) ? 'line-through text-gray-400' : ''
+                                    } ${
                                       specialMode !== 'normal' ? `${specialMode}-title` :
                                       theme === 'dark' ? 'text-gray-100' : 'text-gray-900'
                                     }`}>
@@ -781,6 +821,29 @@ Return ONLY the category name, nothing else.`;
                         </Popover>
                       </div>
                     ))}
+                    
+                    {/* Manual add to list */}
+                    <form onSubmit={async (e) => {
+                      e.preventDefault();
+                      const input = e.target.elements.subidea.value;
+                      if (!input.trim()) return;
+                      await base44.entities.ParkingLotIdea.create({
+                        idea: input.trim(),
+                        parent_idea_id: group.parent.id,
+                        converted_to_task: false
+                      });
+                      queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+                      e.target.reset();
+                    }} className="flex gap-2">
+                      <Input
+                        name="subidea"
+                        placeholder="Add item to this list..."
+                        className="flex-1 h-9 text-sm"
+                      />
+                      <Button type="submit" size="icon" className="h-9 w-9 flex-shrink-0">
+                        <Plus className="w-4 h-4" />
+                      </Button>
+                    </form>
                   </div>
                 )}
               </CardContent>
