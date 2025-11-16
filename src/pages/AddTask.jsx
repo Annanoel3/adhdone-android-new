@@ -96,12 +96,14 @@ JSON:
       });
       console.log('🔄 [PROCESS] ✅ LLM parsed:', parsed);
 
+      console.log('🔄 [PROCESS] Calculating reminder times...');
       let nextReminder = null;
       let actualReminderInterval = parsed.reminder_interval || null;
       
       const recurringIntervals = ['10min', '20min', '30min', '1hour', '2hours', 'daily', 'every_other_day'];
 
       if (parsed.target_date) {
+        console.log('🔄 [PROCESS] Has target_date:', parsed.target_date);
         const targetDate = new Date(parsed.target_date);
         
         if (parsed.target_time) {
