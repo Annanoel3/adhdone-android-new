@@ -88,6 +88,8 @@ JSON:
 
       let nextReminder = null;
       let actualReminderInterval = parsed.reminder_interval || null;
+      
+      const recurringIntervals = ['10min', '20min', '30min', '1hour', '2hours', 'daily', 'every_other_day'];
 
       if (parsed.target_date) {
         const targetDate = new Date(parsed.target_date);
@@ -100,7 +102,10 @@ JSON:
         }
         
         nextReminder = targetDate;
-        actualReminderInterval = 'once';
+        // Only force 'once' if no recurring interval was specified
+        if (!actualReminderInterval || !recurringIntervals.includes(actualReminderInterval)) {
+          actualReminderInterval = 'once';
+        }
 
         const taskData = {
           title: parsed.title || inputText.trim(),
