@@ -80,9 +80,9 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
     await Task.update(subTask.id, { status: newStatus });
     await fetchSubTasks(task.id);
     
-    // FIX: Call onUpdate without arguments
+    // Call onUpdate with parent task to trigger refresh
     if (onUpdate) {
-      onUpdate();
+      onUpdate(task);
     }
   };
 
@@ -128,7 +128,7 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
 
       // Create all subtasks
       for (const title of subtaskTitles) {
-        const createdTask = await Task.create({
+        await Task.create({
           title: title,
           parent_task_id: task.id,
           urgency: task.urgency,
@@ -139,32 +139,16 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
           next_reminder: task.reminder_interval && task.reminder_interval !== 'once' && nextReminder ? nextReminder.toISOString() : null
         });
 
-        // Only schedule if a next_reminder was calculated and it's a recurring interval
-        if (createdTask.next_reminder && task.reminder_interval !== 'once') {
-          scheduleReminder({
-            email: currentUser.email,
-            title: "Task Reminder 📋",
-            body: createdTask.title,
-            sendAtISO: createdTask.next_reminder,
-            taskId: createdTask.id,
-            data: {
-              screen: "/Tasks",
-              taskId: createdTask.id,
-              urgency: createdTask.urgency,
-              type: 'task_reminder'
-            }
-          }).catch(error => {
-            console.error("Failed to schedule reminder:", error);
-          });
-        }
+        // Note: Recurring reminders are handled by cron job, not OneSignal
+        // Only one-time reminders (interval='once') should use OneSignal
       }
 
       setNewSubTask("");
-      await fetchSubTasks(task.id);
+      const updatedSubTasks = await fetchSubTasks(task.id);
       
-      // FIX: Call onUpdate without arguments to avoid passing invalid task data
+      // Call onUpdate with the parent task to trigger refresh
       if (onUpdate) {
-        onUpdate();
+        onUpdate(task);
       }
     } catch (error) {
       console.error("Error adding subtask:", error);
@@ -235,7 +219,7 @@ Return JSON:
       }
 
       for (const subtaskTitle of response.subtasks || []) {
-        const createdTask = await Task.create({
+        await Task.create({
           title: subtaskTitle.trim(),
           parent_task_id: task.id,
           urgency: task.urgency,
@@ -246,33 +230,15 @@ Return JSON:
           next_reminder: task.reminder_interval && task.reminder_interval !== 'once' && nextReminder ? nextReminder.toISOString() : null
         });
 
-        // Only schedule if a next_reminder was calculated and it's a recurring interval
-        if (createdTask.next_reminder && task.reminder_interval !== 'once') {
-          try {
-            await scheduleReminder({
-              email: currentUser.email,
-              title: "Task Reminder 📋",
-              body: createdTask.title,
-              sendAtISO: createdTask.next_reminder,
-              taskId: createdTask.id,
-              data: {
-                screen: "/Tasks",
-                taskId: createdTask.id,
-                urgency: createdTask.urgency,
-                type: 'task_reminder'
-              }
-            });
-          } catch (error) {
-            console.error("Failed to schedule reminder:", error);
-          }
-        }
+        // Note: Recurring reminders are handled by cron job, not OneSignal
+        // Only one-time reminders (interval='once') should use OneSignal
       }
 
       await fetchSubTasks(task.id);
       
-      // FIX: Call onUpdate without arguments
+      // Call onUpdate with parent task to trigger refresh
       if (onUpdate) {
-        onUpdate();
+        onUpdate(task);
       }
     } catch (error) {
       console.error("Error processing voice subtask:", error);
@@ -286,9 +252,9 @@ Return JSON:
     await Task.delete(subTaskId);
     await fetchSubTasks(task.id);
     
-    // FIX: Call onUpdate without arguments
+    // Call onUpdate with parent task to trigger refresh
     if (onUpdate) {
-      onUpdate();
+      onUpdate(task);
     }
   };
 
