@@ -688,6 +688,36 @@ Return ONLY the category name, nothing else.`;
                             <Pencil className="w-4 h-4" />
                             Edit
                           </button>
+                          <div className="border-t my-1" />
+                          <div className="px-3 py-1 text-xs font-semibold text-gray-500">Format</div>
+                          <button
+                            onClick={async () => {
+                              await base44.entities.ParkingLotIdea.update(group.parent.id, { list_format: 'plain' });
+                              queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded"
+                          >
+                            Plain Text
+                          </button>
+                          <button
+                            onClick={async () => {
+                              await base44.entities.ParkingLotIdea.update(group.parent.id, { list_format: 'checkbox' });
+                              queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded"
+                          >
+                            ☑️ Checklist
+                          </button>
+                          <button
+                            onClick={async () => {
+                              await base44.entities.ParkingLotIdea.update(group.parent.id, { list_format: 'numbered' });
+                              queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded"
+                          >
+                            🔢 Numbered List
+                          </button>
+                          <div className="border-t my-1" />
                           <button
                             onClick={() => handleDelete(group.parent.id)}
                             className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 text-red-600 rounded flex items-center gap-2"
