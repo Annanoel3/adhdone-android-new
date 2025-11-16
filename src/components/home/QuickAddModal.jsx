@@ -145,10 +145,8 @@ Return JSON:
         }
 
         onClose();
-        // Small delay to ensure task is fully saved
-        setTimeout(() => {
-          window.location.reload();
-        }, 300);
+        // Navigate to home to refresh the task list
+        navigate(createPageUrl("Home"), { state: { reload: true } });
       } catch (error) {
         console.error("Error creating task:", error);
         alert("Failed to create task. Please try again.");
