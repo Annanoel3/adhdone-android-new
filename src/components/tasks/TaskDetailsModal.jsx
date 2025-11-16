@@ -86,52 +86,52 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
     e.preventDefault();
     if (!newSubTask.trim() || !task) return;
 
-    const currentUser = await base44.auth.me();
-    const now = new Date();
-    let nextReminder = new Date(now.getTime());
-    
-    switch (task.reminder_interval) {
-      case '10min':
-        nextReminder.setMinutes(nextReminder.getMinutes() + 10);
-        break;
-      case '20min':
-        nextReminder.setMinutes(nextReminder.getMinutes() + 20);
-        break;
-      case '30min':
-        nextReminder.setMinutes(nextReminder.getMinutes() + 30);
-        break;
-      case '1hour':
-        nextReminder.setHours(nextReminder.getHours() + 1);
-        break;
-      case '2hours':
-        nextReminder.setHours(nextReminder.getHours() + 2);
-        break;
-      case 'daily':
-        nextReminder.setDate(nextReminder.getDate() + 1);
-        break;
-      case 'every_other_day':
-        nextReminder.setDate(nextReminder.getDate() + 2);
-        break;
-      default: // This includes 'once' or null interval
-        nextReminder = null;
-        break;
-    }
+    try {
+      const currentUser = await base44.auth.me();
+      const now = new Date();
+      let nextReminder = new Date(now.getTime());
+      
+      switch (task.reminder_interval) {
+        case '10min':
+          nextReminder.setMinutes(nextReminder.getMinutes() + 10);
+          break;
+        case '20min':
+          nextReminder.setMinutes(nextReminder.getMinutes() + 20);
+          break;
+        case '30min':
+          nextReminder.setMinutes(nextReminder.getMinutes() + 30);
+          break;
+        case '1hour':
+          nextReminder.setHours(nextReminder.getHours() + 1);
+          break;
+        case '2hours':
+          nextReminder.setHours(nextReminder.getHours() + 2);
+          break;
+        case 'daily':
+          nextReminder.setDate(nextReminder.getDate() + 1);
+          break;
+        case 'every_other_day':
+          nextReminder.setDate(nextReminder.getDate() + 2);
+          break;
+        default: // This includes 'once' or null interval
+          nextReminder = null;
+          break;
+      }
 
-    const createdTask = await Task.create({
-      title: newSubTask,
-      parent_task_id: task.id,
-      urgency: task.urgency,
-      energy_required: task.energy_required,
-      status: 'active',
-      reminder_interval: task.reminder_interval, // Subtasks inherit parent's reminder interval
-      reminder_count: 0,
-      next_reminder: task.reminder_interval && task.reminder_interval !== 'once' && nextReminder ? nextReminder.toISOString() : null
-    });
+      const createdTask = await Task.create({
+        title: newSubTask,
+        parent_task_id: task.id,
+        urgency: task.urgency,
+        energy_required: task.energy_required,
+        status: 'active',
+        reminder_interval: task.reminder_interval,
+        reminder_count: 0,
+        next_reminder: task.reminder_interval && task.reminder_interval !== 'once' && nextReminder ? nextReminder.toISOString() : null
+      });
 
-    // Only schedule if a next_reminder was calculated and it's a recurring interval
-    if (createdTask.next_reminder && task.reminder_interval !== 'once') {
-      try {
-        await scheduleReminder({
+      // Only schedule if a next_reminder was calculated and it's a recurring interval
+      if (createdTask.next_reminder && task.reminder_interval !== 'once') {
+        scheduleReminder({
           email: currentUser.email,
           title: "Task Reminder 📋",
           body: createdTask.title,
@@ -143,15 +143,18 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
             urgency: createdTask.urgency,
             type: 'task_reminder'
           }
+        }).catch(error => {
+          console.error("Failed to schedule reminder:", error);
         });
-      } catch (error) {
-        console.error("Failed to schedule reminder:", error);
       }
-    }
 
-    setNewSubTask("");
-    fetchSubTasks(task.id);
-    onUpdate();
+      setNewSubTask("");
+      await fetchSubTasks(task.id);
+      onUpdate();
+    } catch (error) {
+      console.error("Error adding subtask:", error);
+      alert("Failed to add subtask. Please try again.");
+    }
   };
 
   const handleVoiceSubtask = async (transcription) => {
