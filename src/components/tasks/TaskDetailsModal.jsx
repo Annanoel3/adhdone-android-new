@@ -25,7 +25,8 @@ import {
   Keyboard,
   Pencil,
   Check,
-  X
+  X,
+  Lightbulb
 } from "lucide-react";
 import { Task } from "@/entities/Task";
 import TaskDecompositionModal from "./TaskDecompositionModal";

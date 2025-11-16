@@ -75,7 +75,6 @@ export default function MomentumCelebration({ completedCount, remainingCount, th
       setMessage(newMessage);
       setIcon(newIcon);
       setShow(true);
-      setLastShownCount(completedCount);
       
       // Save to localStorage with today's date
       const today = new Date().toISOString().split('T')[0];
@@ -83,15 +82,21 @@ export default function MomentumCelebration({ completedCount, remainingCount, th
         count: completedCount,
         date: today
       }));
-
-      // Auto-dismiss after 2 seconds
-      const timer = setTimeout(() => {
-        setShow(false);
-      }, 2000);
-
-      return () => clearTimeout(timer);
+      
+      setLastShownCount(completedCount);
     }
   }, [completedCount, remainingCount, lastShownCount]);
+
+  // Separate effect for auto-dismiss timer
+  useEffect(() => {
+    if (!show) return;
+    
+    const timer = setTimeout(() => {
+      setShow(false);
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [show]);
 
   const Icon = icon;
 
