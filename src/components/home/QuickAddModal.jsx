@@ -4,7 +4,8 @@ import {
   DialogContent,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Mic, Keyboard } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Mic, Keyboard, Loader2 } from "lucide-react";
 import VoiceTaskInput from "../tasks/VoiceTaskInput";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
