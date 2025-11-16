@@ -92,7 +92,10 @@ JSON:
       console.log('🔄 [PROCESS] Checking if this is a parking lot idea or task...');
       const categoryCheckPrompt = `Analyze this input: "${inputText}"
 
+CRITICAL: If user explicitly says "parking lot" or "add to parking lot" or "save to parking lot", it's ALWAYS a parking_lot item.
+
 PARKING LOT items (ideas, notes, thinking):
+- EXPLICIT parking lot mentions: "add this to parking lot", "parking lot idea", "save this to parking lot"
 - Random thoughts/ideas: "Steel guitar strings might be better"
 - Open-ended thinking: "Think about what I should tell my professor"
 - Shopping lists without urgency: "I need milk, eggs, paper"
