@@ -140,11 +140,10 @@ Deno.serve(async (req) => {
                 console.log(`✅ [TASK REMINDERS] Next recurring reminder scheduled for ${next}`);
               }
 
-              // Update task with new next_reminder and notification ID
+              // Update task with new next_reminder
               await base44.asServiceRole.entities.Task.update(t.id, {
                 reminder_count: (t.reminder_count || 0) + 1,
-                next_reminder: next,
-                onesignal_notification_id: notificationId
+                next_reminder: next
               });
 
               ok++;
