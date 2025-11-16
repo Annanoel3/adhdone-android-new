@@ -158,13 +158,12 @@ Return JSON:
         onClose();
         // Navigate to home to refresh the task list
         navigate(createPageUrl("Home"), { state: { reload: true } });
-      } catch (error) {
-        console.error("Error creating task:", error);
-        alert("Failed to create task. Please try again.");
-      }
-    } else {
-      // It's an idea
-      try {
+        } catch (error) {
+          console.error("Error creating task:", error);
+          alert("Failed to create task. Please try again.");
+        }
+      } else {
+        // It's an idea
         await base44.entities.ParkingLotIdea.create({
           idea: transcription,
           converted_to_task: false
@@ -172,10 +171,10 @@ Return JSON:
 
         onClose();
         navigate(createPageUrl("ParkingLot"));
-      } catch (error) {
-        console.error("Error saving idea:", error);
-        alert("Failed to save idea. Please try again.");
       }
+    } catch (error) {
+      console.error("Error processing input:", error);
+      alert("Failed to process your input. Please try again.");
     }
   };
 
