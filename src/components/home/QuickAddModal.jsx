@@ -9,9 +9,6 @@ import VoiceTaskInput from "../tasks/VoiceTaskInput";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { base44 } from "@/api/base44Client";
-import { Task } from "@/entities/Task";
-import { ParkingLotIdea } from "@/entities/ParkingLotIdea";
-import { User } from "@/entities/User";
 import { scheduleReminder } from "../utils/reminderScheduler";
 
 export default function QuickAddModal({ isOpen, onClose, theme }) {
@@ -28,7 +25,7 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
       
       // It's a task
       try {
-        const user = await User.me();
+        const user = await base44.auth.me();
 
         const prompt = `Extract task details from this voice input: "${transcription}"
 

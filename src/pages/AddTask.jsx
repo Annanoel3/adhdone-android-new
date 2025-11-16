@@ -1,6 +1,4 @@
 import React, { useState } from "react";
-import { Task } from "@/entities/Task";
-import { User } from "@/entities/User";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Sparkles, Mic, Loader2, ListChecks, Zap } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -43,7 +41,7 @@ export default function AddTask() {
     if (!inputText.trim()) return false;
 
     try {
-      const currentUser = await User.me();
+      const currentUser = await base44.auth.me();
       const now = new Date();
       const today = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
       const tomorrow = new Date(now);
