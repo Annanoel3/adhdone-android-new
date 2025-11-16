@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle2, Clock, Zap, Pencil, Calendar } from "lucide-react";
@@ -20,8 +19,10 @@ import {
 
 export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails }) {
   const navigate = useNavigate();
-  const activeTasks = tasks.filter(t => t.status === 'active').slice(0, 5);
+  // Filter out subtasks - only show parent tasks
+  const activeTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id).slice(0, 5);
   const [celebratingTaskId, setCelebratingTaskId] = React.useState(null);
+  const [expandedTasks, setExpandedTasks] = React.useState({});
   const specialMode = localStorage.getItem('special_mode') || 'normal';
 
   const getUrgencyColor = (urgency) => {
@@ -275,6 +276,17 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
     );
   }
 
+  const getSubtasks = (taskId) => {
+    return tasks.filter(t => t.parent_task_id === taskId);
+  };
+
+  const toggleTaskExpansion = (taskId) => {
+    setExpandedTasks(prev => ({
+      ...prev,
+      [taskId]: !prev[taskId]
+    }));
+  };
+
   return (
     <Card className={`${specialMode !== 'normal' ? `${specialMode}-card` : ''} border-none shadow-md ${
       specialMode === 'normal' ? (
@@ -303,7 +315,10 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
       </CardHeader>
       <CardContent className="p-6">
         <div className="space-y-3">
-          {activeTasks.map((task) => (
+          {activeTasks.map((task) => {
+            const subtasks = getSubtasks(task.id);
+            const completedSubtasks = subtasks.filter(st => st.status === 'completed');
+            return (
             <div key={task.id} className="relative">
               {celebratingTaskId === task.id && (
                 <TaskCompletionCelebration theme={theme} />
@@ -515,9 +530,57 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
                     <CheckCircle2 className="w-4 h-4" />
                   </Button>
                 </div>
+                
+                {/* Subtasks Dropdown */}
+                {subtasks.length > 0 && (
+                  <div className="mt-2 pl-2">
+                    <button
+                      onClick={() => toggleTaskExpansion(task.id)}
+                      className={`flex items-center gap-2 text-sm w-full text-left p-2 rounded ${
+                        theme === 'dark' ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-50 text-gray-600'
+                      }`}
+                    >
+                      <ListChecks className="w-4 h-4" />
+                      <span>{completedSubtasks.length}/{subtasks.length} subtasks</span>
+                      <span className="ml-auto">{expandedTasks[task.id] ? '▼' : '▶'}</span>
+                    </button>
+                    
+                    {expandedTasks[task.id] && (
+                      <div className="mt-1 space-y-1 pl-6">
+                        {subtasks.map(subtask => (
+                          <div
+                            key={subtask.id}
+                            className={`flex items-center gap-2 p-2 rounded text-sm ${
+                              theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-50'
+                            }`}
+                          >
+                            <button
+                              onClick={() => handleComplete(subtask)}
+                              className={`flex-shrink-0 ${
+                                subtask.status === 'completed'
+                                  ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                                  : theme === 'dark' ? 'text-gray-600' : 'text-gray-400'
+                              }`}
+                            >
+                              <CheckCircle2 className="w-4 h-4" />
+                            </button>
+                            <span className={`flex-1 ${
+                              subtask.status === 'completed'
+                                ? 'line-through opacity-50'
+                                : theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                            }`}>
+                              {subtask.title}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </motion.div>
             </div>
-          ))}
+          );
+          })}
         </div>
       </CardContent>
     </Card>
