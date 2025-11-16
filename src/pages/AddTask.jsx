@@ -218,7 +218,7 @@ JSON:
 
     try {
       // Create task first
-      const createdTask = await Task.create(taskData);
+      const createdTask = await base44.entities.Task.create(taskData);
 
       const mainReminderTime = new Date(taskData.next_reminder);
       
