@@ -140,7 +140,7 @@ Return JSON:
       onClose();
       navigate(createPageUrl("Home"), { state: { reload: true } });
     } catch (error) {
-      console.error("Error processing input:", error);
+      console.error("❌ [QUICK ADD] Error processing input:", error);
       alert("Failed to process your input. Please try again.");
     }
   };
