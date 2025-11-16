@@ -38,7 +38,7 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
     try {
       const user = await base44.auth.me();
 
-        const prompt = `Extract task details from this voice input: "${transcription}"
+      const prompt = `Extract task details from this voice input: "${transcription}"
 
 RULES:
 1. Extract the CORE ACTION only
@@ -56,121 +56,110 @@ Return JSON:
   "energy_required": "low" | "medium" | "high"
 }`;
 
-        const taskData = await base44.integrations.Core.InvokeLLM({
-          prompt,
-          response_json_schema: {
-            type: "object",
-            properties: {
-              title: { type: "string" },
-              reminder_interval: { type: "string" },
-              reminder_time: { type: "string" },
-              specific_date: { type: "string" },
-              urgency: { type: "string" },
-              energy_required: { type: "string" }
-            }
+      const taskData = await base44.integrations.Core.InvokeLLM({
+        prompt,
+        response_json_schema: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            reminder_interval: { type: "string" },
+            reminder_time: { type: "string" },
+            specific_date: { type: "string" },
+            urgency: { type: "string" },
+            energy_required: { type: "string" }
           }
-        });
+        }
+      });
 
-        let nextReminderTime = null;
+      let nextReminderTime = null;
+      
+      if (taskData.reminder_time) {
+        const [hours, minutes] = taskData.reminder_time.split(':');
         
-        if (taskData.reminder_time) {
-          const [hours, minutes] = taskData.reminder_time.split(':');
+        if (taskData.specific_date) {
+          nextReminderTime = new Date(taskData.specific_date);
+          nextReminderTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+        } else {
+          nextReminderTime = new Date();
+          nextReminderTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
           
-          if (taskData.specific_date) {
-            nextReminderTime = new Date(taskData.specific_date);
-            nextReminderTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-          } else {
-            nextReminderTime = new Date();
-            nextReminderTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-            
-            if (nextReminderTime <= new Date()) {
-              nextReminderTime.setDate(nextReminderTime.getDate() + 1);
-            }
-          }
-        } else if (taskData.reminder_interval && taskData.reminder_interval !== 'once') {
-          const now = new Date();
-          nextReminderTime = new Date(now.getTime());
-          
-          switch (taskData.reminder_interval) {
-            case '10min':
-              nextReminderTime.setMinutes(nextReminderTime.getMinutes() + 10);
-              break;
-            case '20min':
-              nextReminderTime.setMinutes(nextReminderTime.getMinutes() + 20);
-              break;
-            case '30min':
-              nextReminderTime.setMinutes(nextReminderTime.getMinutes() + 30);
-              break;
-            case '1hour':
-              nextReminderTime.setHours(nextReminderTime.getHours() + 1);
-              break;
-            case '2hours':
-              nextReminderTime.setHours(nextReminderTime.getHours() + 2);
-              break;
-            case 'daily':
-              nextReminderTime.setDate(nextReminderTime.getDate() + 1);
-              break;
-            case 'every_other_day':
-              nextReminderTime.setDate(nextReminderTime.getDate() + 2);
-              break;
+          if (nextReminderTime <= new Date()) {
+            nextReminderTime.setDate(nextReminderTime.getDate() + 1);
           }
         }
-
-        console.log('Creating task with data:', {
-          title: taskData.title,
-          urgency: taskData.urgency || 'medium',
-          energy_required: taskData.energy_required || 'medium',
-          reminder_interval: taskData.reminder_interval || null,
-          next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null
-        });
-
-        const createdTask = await base44.entities.Task.create({
-          title: taskData.title,
-          urgency: taskData.urgency || 'medium',
-          energy_required: taskData.energy_required || 'medium',
-          status: 'active',
-          reminder_interval: taskData.reminder_interval || null,
-          reminder_count: 0,
-          next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null
-        });
-
-        console.log('Task created successfully:', createdTask);
-
-        // Schedule reminder in background (don't await)
-        if (nextReminderTime && taskData.reminder_interval !== 'once') {
-          scheduleReminder({
-            email: user.email,
-            title: "Task Reminder 📋",
-            body: taskData.title,
-            sendAtISO: nextReminderTime.toISOString(),
-            taskId: createdTask.id,
-            data: {
-              screen: "/Tasks",
-              taskId: createdTask.id,
-              urgency: taskData.urgency,
-              type: 'task_reminder'
-            }
-          }).catch(error => {
-            console.error("Failed to schedule reminder:", error);
-          });
+      } else if (taskData.reminder_interval && taskData.reminder_interval !== 'once') {
+        const now = new Date();
+        nextReminderTime = new Date(now.getTime());
+        
+        switch (taskData.reminder_interval) {
+          case '10min':
+            nextReminderTime.setMinutes(nextReminderTime.getMinutes() + 10);
+            break;
+          case '20min':
+            nextReminderTime.setMinutes(nextReminderTime.getMinutes() + 20);
+            break;
+          case '30min':
+            nextReminderTime.setMinutes(nextReminderTime.getMinutes() + 30);
+            break;
+          case '1hour':
+            nextReminderTime.setHours(nextReminderTime.getHours() + 1);
+            break;
+          case '2hours':
+            nextReminderTime.setHours(nextReminderTime.getHours() + 2);
+            break;
+          case 'daily':
+            nextReminderTime.setDate(nextReminderTime.getDate() + 1);
+            break;
+          case 'every_other_day':
+            nextReminderTime.setDate(nextReminderTime.getDate() + 2);
+            break;
         }
-
-        onClose();
-        // Navigate to home to refresh the task list
-        navigate(createPageUrl("Home"), { state: { reload: true } });
-      } else {
-        // It's an idea
-        await base44.entities.ParkingLotIdea.create({
-          idea: transcription,
-          converted_to_task: false
-        });
-
-        onClose();
-        navigate(createPageUrl("ParkingLot"));
       }
+
+      console.log('Creating task with data:', {
+        title: taskData.title,
+        urgency: taskData.urgency || 'medium',
+        energy_required: taskData.energy_required || 'medium',
+        reminder_interval: taskData.reminder_interval || null,
+        next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null
+      });
+
+      const createdTask = await base44.entities.Task.create({
+        title: taskData.title,
+        urgency: taskData.urgency || 'medium',
+        energy_required: taskData.energy_required || 'medium',
+        status: 'active',
+        reminder_interval: taskData.reminder_interval || null,
+        reminder_count: 0,
+        next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null
+      });
+
+      console.log('Task created successfully:', createdTask);
+
+      // Schedule reminder in background (don't await)
+      if (nextReminderTime && taskData.reminder_interval !== 'once') {
+        scheduleReminder({
+          email: user.email,
+          title: "Task Reminder 📋",
+          body: taskData.title,
+          sendAtISO: nextReminderTime.toISOString(),
+          taskId: createdTask.id,
+          data: {
+            screen: "/Tasks",
+            taskId: createdTask.id,
+            urgency: taskData.urgency,
+            type: 'task_reminder'
+          }
+        }).catch(error => {
+          console.error("Failed to schedule reminder:", error);
+        });
+      }
+
+      onClose();
+      navigate(createPageUrl("Home"), { state: { reload: true } });
     } catch (error) {
-      console.error("Error processing input:", error);
-      alert("Failed to process your input. Please try again.");
+      console.error("Error creating task:", error);
+      alert("Failed to create task. Please try again.");
     }
   };
 
