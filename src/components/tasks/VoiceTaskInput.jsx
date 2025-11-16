@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Mic, Square, Loader2 } from "lucide-react";
@@ -121,10 +120,17 @@ export default function VoiceTaskInput({ onTranscription, theme, inline = true }
       const responseData = result?.data || result;
       
       if (responseData?.success && responseData?.transcription) {
-        console.log('[VOICE INPUT] Transcription successful:', responseData.transcription);
-        onTranscription(responseData.transcription);
+        console.log('[VOICE INPUT] ✅ Transcription successful:', responseData.transcription);
+        try {
+          console.log('[VOICE INPUT] 🎯 Calling onTranscription callback...');
+          await onTranscription(responseData.transcription);
+          console.log('[VOICE INPUT] ✅ Callback completed');
+        } catch (callbackError) {
+          console.error('[VOICE INPUT] ❌ Callback error:', callbackError);
+          alert("Error processing transcription: " + callbackError.message);
+        }
       } else {
-        console.error('[VOICE INPUT] Transcription failed:', responseData);
+        console.error('[VOICE INPUT] ❌ Transcription failed:', responseData);
         const errorMsg = responseData?.error || "Failed to transcribe audio. Please try again.";
         alert(errorMsg);
       }
