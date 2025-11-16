@@ -200,8 +200,9 @@ JSON:
 
       console.log('🔄 [PROCESS] ✅ Task created:', createdTask.id);
 
-      // Schedule reminder in background (non-blocking)
-      if (nextReminder) {
+      // Only schedule one-time reminders with OneSignal
+      // Recurring reminders are handled by cron job
+      if (nextReminder && actualReminderInterval === 'once') {
         scheduleReminder({
           email: currentUser.email,
           title: "Task Reminder 📋",
@@ -251,7 +252,8 @@ JSON:
 
       const mainReminderTime = new Date(taskData.next_reminder);
       
-      // Schedule reminders in background (non-blocking)
+      // Schedule one-time notification and advance reminder
+      // (Recurring reminders are handled by cron job)
       Promise.all([
         scheduleReminder({
           email: currentUser.email,
