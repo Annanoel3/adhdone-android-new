@@ -178,8 +178,14 @@ JSON:
         nextReminder.setHours(nextReminder.getHours() + 2);
       }
 
-      // CRITICAL FIX: Create task BEFORE navigating
-      console.log('Creating task...');
+      console.log('🔄 [PROCESS] Creating task with data:', {
+        title: parsed.title || inputText.trim(),
+        reminder_interval: actualReminderInterval,
+        next_reminder: nextReminder ? nextReminder.toISOString() : null,
+        urgency: parsed.urgency || 'medium',
+        energy_required: parsed.energy_required || 'medium'
+      });
+      
       const createdTask = await base44.entities.Task.create({
         title: parsed.title || inputText.trim(),
         description: '',
@@ -191,7 +197,7 @@ JSON:
         status: 'active'
       });
 
-      console.log('Task created:', createdTask);
+      console.log('🔄 [PROCESS] ✅ Task created:', createdTask.id);
 
       // Schedule reminder in background (non-blocking)
       if (nextReminder) {
