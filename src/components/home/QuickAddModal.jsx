@@ -43,8 +43,9 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
   };
 
   const processTextInput = async (transcription) => {
-    try {
-      console.log('📝 [QUICK ADD TEXT] Processing:', transcription);
+    console.log('📝 [QUICK ADD TEXT] Processing:', transcription);
+    await handleVoiceInput(transcription);
+  };
 
   const handleVoiceInput = async (transcription) => {
     try {
