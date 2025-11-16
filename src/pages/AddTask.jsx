@@ -52,14 +52,14 @@ export default function AddTask() {
       console.log('🔄 [PROCESS] ✅ User:', currentUser?.email);
       
       const now = new Date();
-      const today = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+      const today = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
       const tomorrow = new Date(now);
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+      const tomorrowStr = tomorrow.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
       const prompt = `Parse task: "${inputText}"
 
-Today: ${today} | Tomorrow: ${tomorrowStr} | Time: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+Today: ${today} | Tomorrow: ${tomorrowStr} | Current Time: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
 
 Extract:
 1. Clean title (remove "remind me", "I need to")
