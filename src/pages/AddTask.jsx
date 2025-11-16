@@ -161,7 +161,8 @@ JSON:
       }
 
       // CRITICAL FIX: Create task BEFORE navigating
-      const createdTask = await Task.create({
+      console.log('Creating task...');
+      const createdTask = await base44.entities.Task.create({
         title: parsed.title || inputText.trim(),
         description: '',
         reminder_interval: actualReminderInterval,
@@ -171,6 +172,8 @@ JSON:
         energy_required: parsed.energy_required || 'medium',
         status: 'active'
       });
+
+      console.log('Task created:', createdTask);
 
       // Schedule reminder in background (non-blocking)
       if (nextReminder) {

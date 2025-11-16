@@ -108,6 +108,14 @@ Return JSON:
           }
         }
 
+        console.log('Creating task with data:', {
+          title: taskData.title,
+          urgency: taskData.urgency || 'medium',
+          energy_required: taskData.energy_required || 'medium',
+          reminder_interval: taskData.reminder_interval || null,
+          next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null
+        });
+
         const createdTask = await base44.entities.Task.create({
           title: taskData.title,
           urgency: taskData.urgency || 'medium',
@@ -118,28 +126,32 @@ Return JSON:
           next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null
         });
 
+        console.log('Task created successfully:', createdTask);
+
+        // Schedule reminder in background (don't await)
         if (nextReminderTime && taskData.reminder_interval !== 'once') {
-          try {
-            await scheduleReminder({
-              email: user.email,
-              title: "Task Reminder 📋",
-              body: taskData.title,
-              sendAtISO: nextReminderTime.toISOString(),
+          scheduleReminder({
+            email: user.email,
+            title: "Task Reminder 📋",
+            body: taskData.title,
+            sendAtISO: nextReminderTime.toISOString(),
+            taskId: createdTask.id,
+            data: {
+              screen: "/Tasks",
               taskId: createdTask.id,
-              data: {
-                screen: "/Tasks",
-                taskId: createdTask.id,
-                urgency: taskData.urgency,
-                type: 'task_reminder'
-              }
-            });
-          } catch (error) {
+              urgency: taskData.urgency,
+              type: 'task_reminder'
+            }
+          }).catch(error => {
             console.error("Failed to schedule reminder:", error);
-          }
+          });
         }
 
         onClose();
-        window.location.reload();
+        // Small delay to ensure task is fully saved
+        setTimeout(() => {
+          window.location.reload();
+        }, 300);
       } catch (error) {
         console.error("Error creating task:", error);
         alert("Failed to create task. Please try again.");
