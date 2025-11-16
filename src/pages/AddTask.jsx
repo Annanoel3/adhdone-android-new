@@ -130,9 +130,10 @@ JSON:
           status: 'active'
         };
 
+        console.log('🔄 [PROCESS] Showing advance reminder dialog - NOT navigating yet');
         setPendingTask({ taskData, currentUser });
         setShowAdvanceReminderDialog(true);
-        return true;
+        return false; // Don't navigate - let dialog handle it
       } else if (parsed.target_time) {
         const [hours, minutes] = parsed.target_time.split(':');
         nextReminder = new Date();
