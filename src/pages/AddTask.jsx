@@ -92,25 +92,27 @@ JSON:
       console.log('🔄 [PROCESS] Checking if this is a parking lot idea or task...');
       const categoryCheckPrompt = `Analyze this input: "${inputText}"
 
-CRITICAL: If user explicitly says "parking lot" or "add to parking lot" or "save to parking lot", it's ALWAYS a parking_lot item.
+CRITICAL RULES:
+1. If user explicitly says "parking lot", it's ALWAYS parking_lot
+2. If NO clear timing (no "tomorrow", "at 3pm", "every day", etc) AND it sounds like an idea/thought/list → parking_lot
+3. Only use "task" if there's clear timing OR it's obviously an actionable event
 
-PARKING LOT items (ideas, notes, thinking):
-- EXPLICIT parking lot mentions: "add this to parking lot", "parking lot idea", "save this to parking lot"
-- Random thoughts/ideas: "Steel guitar strings might be better"
-- Open-ended thinking: "Think about what I should tell my professor"
-- Shopping lists without urgency: "I need milk, eggs, paper"
-- Collections to read/watch: "I need to read twilight and cirque du freak"
-- Notes/information: "Brazilian blowouts cost $200"
-- Project components: "My project needs a hypothesis, summary, references"
+PARKING LOT (ideas, thoughts, lists without clear timing):
+- Explicit mentions: "add to parking lot", "parking lot idea"
+- Random ideas: "Steel guitar strings might be better"
+- Thinking/planning: "Think about what I should tell my professor"
+- Lists without timing: "I need milk, eggs, paper", "read twilight and cirque du freak"
+- Information/notes: "Brazilian blowouts cost $200"
+- Project brainstorming: "My project needs a hypothesis, summary, references"
 - App ideas: "New app idea for plant watering reminders"
-- Diagnostic thinking: "Not sure if car leak is from transmission or seal"
+- Questions: "Not sure if car leak is from transmission or seal"
+- Things to explore: "Look into meditation apps", "Research vacation spots"
 
-TASKS (time-bound, actionable):
-- Specific reminders: "Remind me to do ___ tomorrow"
-- Deadlines: "Turn in homework this Tuesday"
-- Recurring actions: "Do laundry, remind me once a day"
-- Appointments: "Therapist at 12 p.m. on Tuesday"
-- Events: "Martin's wedding is on the 30th"
+TASKS (clear timing OR actionable events):
+- With timing: "Remind me tomorrow", "Call dentist at 2pm", "Do laundry every day"
+- Deadlines: "Turn in homework this Tuesday", "Pay rent by the 1st"
+- Appointments: "Therapist at 12 p.m. on Tuesday", "Meeting at 9am"
+- Events: "Martin's wedding is on the 30th", "Birthday party Saturday"
 
 Return JSON:
 {
