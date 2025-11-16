@@ -84,10 +84,10 @@ export default function MomentumCelebration({ completedCount, remainingCount, th
         date: today
       }));
 
-      // Auto-dismiss after 3 seconds
+      // Auto-dismiss after 2 seconds
       const timer = setTimeout(() => {
         setShow(false);
-      }, 3000);
+      }, 2000);
 
       return () => clearTimeout(timer);
     }
