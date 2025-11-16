@@ -107,10 +107,10 @@ Deno.serve(async (req) => {
           
           const when = parseWhen(t.next_reminder);
           
-          console.log(`🔍 [TASK REMINDERS] Task "${t.title}": interval=${t.reminder_interval}, next_reminder=${t.next_reminder}, parsed=${new Date(when).toISOString()}, now=${new Date(now).toISOString()}, cutoff=${new Date(cutoff).toISOString()}`);
+          console.log(`🔍 [TASK REMINDERS] Task "${t.title}" (ID: ${t.id}): interval=${t.reminder_interval}, next_reminder=${t.next_reminder}, parsed=${new Date(when).toISOString()}, now=${new Date(now).toISOString()}`);
           
           if (when && when <= now) {
-            console.log(`🔔 [TASK REMINDERS] Sending reminder to ${user.email}: "${t.title}"`);
+            console.log(`🔔 [TASK REMINDERS] Sending reminder to ${user.email}: "${t.title}" (ID: ${t.id})`);
 
             const r = await base44.asServiceRole.functions.invoke('notifySend', {
               toUserId: user.email,
@@ -121,11 +121,11 @@ Deno.serve(async (req) => {
 
             if (r?.data?.success) {
               let next = null;
-              let notificationId = null;
               const ms = t.reminder_interval ? intervalMs[t.reminder_interval] : 0;
               
-              // For recurring reminders, just update next_reminder time
-              // Cron will handle sending the notification, no need for OneSignal scheduling
+              console.log(`📊 [TASK REMINDERS] Task has interval: ${t.reminder_interval}, ms: ${ms}`);
+              
+              // For recurring reminders, calculate next time
               if (ms && ms > 0) {
                 const lastReminderTime = parseWhen(t.next_reminder);
                 let nextTime = lastReminderTime + ms;
@@ -137,26 +137,34 @@ Deno.serve(async (req) => {
                 }
                 
                 next = new Date(nextTime).toISOString();
-                console.log(`✅ [TASK REMINDERS] Next recurring reminder scheduled for ${next}`);
+                console.log(`✅ [TASK REMINDERS] Calculated next reminder: ${next} (in ${Math.round((nextTime - nowTime) / 60000)} minutes)`);
+              } else {
+                console.log(`⚠️ [TASK REMINDERS] No recurring interval, next_reminder will be null`);
               }
 
               // Update task with new next_reminder
-              const updateResult = await base44.asServiceRole.entities.Task.update(t.id, {
-                reminder_count: (t.reminder_count || 0) + 1,
-                next_reminder: next
-              });
+              console.log(`💾 [TASK REMINDERS] Updating task ${t.id} with reminder_count: ${(t.reminder_count || 0) + 1}, next_reminder: ${next}`);
               
-              console.log(`💾 [TASK REMINDERS] Updated task with next_reminder: ${next || 'none'}`);
-              console.log(`💾 [TASK REMINDERS] Update result:`, updateResult);
+              try {
+                const updateResult = await base44.asServiceRole.entities.Task.update(t.id, {
+                  reminder_count: (t.reminder_count || 0) + 1,
+                  next_reminder: next
+                });
+                
+                console.log(`💾 [TASK REMINDERS] ✅ Update successful for task ${t.id}:`, JSON.stringify(updateResult));
+              } catch (updateError) {
+                console.error(`💾 [TASK REMINDERS] ❌ Update FAILED for task ${t.id}:`, updateError);
+                throw updateError;
+              }
 
               ok++;
-              console.log(`✅ [TASK REMINDERS] Sent successfully`);
+              console.log(`✅ [TASK REMINDERS] Complete for task ${t.id}`);
             } else {
-              console.error('❌ [TASK REMINDERS] Failed:', r?.data);
+              console.error('❌ [TASK REMINDERS] Notification send failed:', r?.data);
               fail++;
             }
           } else if (when > now) {
-            console.log(`⏳ [TASK REMINDERS] Task "${t.title}" reminder not yet due: ${new Date(when).toISOString()} (in ${Math.round((when - now) / 60000)} minutes)`);
+            console.log(`⏳ [TASK REMINDERS] Task "${t.title}" (ID: ${t.id}) not yet due: ${new Date(when).toISOString()} (in ${Math.round((when - now) / 60000)} minutes)`);
           }
         }
       } catch (userError) {
