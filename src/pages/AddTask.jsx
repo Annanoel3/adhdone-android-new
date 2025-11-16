@@ -224,10 +224,14 @@ JSON:
         });
       }
       
+      console.log('🔄 [PROCESS] ========== SUCCESS - RETURNING TRUE ==========');
       return true;
     } catch (error) {
-      console.error("Error creating task:", error);
-      alert("Failed to create task. Please try again.");
+      console.error('🔄 [PROCESS] ========== ERROR ==========');
+      console.error('🔄 [PROCESS] Error:', error);
+      console.error('🔄 [PROCESS] Error message:', error.message);
+      console.error('🔄 [PROCESS] Error stack:', error.stack);
+      alert("Failed to create task: " + error.message);
       return false;
     }
   };
