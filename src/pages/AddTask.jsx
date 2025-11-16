@@ -38,17 +38,25 @@ export default function AddTask() {
   }, []);
 
   const processAndCreateTask = async (inputText) => {
-    if (!inputText.trim()) return false;
+    console.log('🔄 [PROCESS] ========== START ==========');
+    console.log('🔄 [PROCESS] Input:', inputText);
+    
+    if (!inputText.trim()) {
+      console.log('🔄 [PROCESS] ❌ Empty input');
+      return false;
+    }
 
     try {
+      console.log('🔄 [PROCESS] Getting user...');
       const currentUser = await base44.auth.me();
+      console.log('🔄 [PROCESS] ✅ User:', currentUser?.email);
+      
       const now = new Date();
       const today = now.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
       const tomorrow = new Date(now);
       tomorrow.setDate(tomorrow.getDate() + 1);
       const tomorrowStr = tomorrow.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
 
-      // OPTIMIZED: Shorter, more focused prompt
       const prompt = `Parse task: "${inputText}"
 
 Today: ${today} | Tomorrow: ${tomorrowStr} | Time: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
@@ -71,6 +79,7 @@ JSON:
   "reminder_interval": "10min|20min|30min|1hour|2hours|daily|every_other_day|once|null"
 }`;
 
+      console.log('🔄 [PROCESS] Calling LLM...');
       const parsed = await base44.integrations.Core.InvokeLLM({
         prompt,
         response_json_schema: {
@@ -85,6 +94,7 @@ JSON:
           }
         }
       });
+      console.log('🔄 [PROCESS] ✅ LLM parsed:', parsed);
 
       let nextReminder = null;
       let actualReminderInterval = parsed.reminder_interval || null;
