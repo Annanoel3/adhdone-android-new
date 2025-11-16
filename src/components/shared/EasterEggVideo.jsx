@@ -44,8 +44,8 @@ export default function EasterEggVideo() {
     "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif", // Sparkles
   ];
 
-  // Track which GIF was shown last for each type
-  const [lastGifIndex, setLastGifIndex] = React.useState({
+  // Track which GIF was shown last for each type using ref to persist across renders
+  const lastGifIndexRef = React.useRef({
     ideas: -1,
     awesome: -1
   });
@@ -55,7 +55,7 @@ export default function EasterEggVideo() {
     window.triggerEasterEgg = (type = 'ideas') => {
       let selectedGif, selectedTitle, selectedSubtitle;
       let gifList = type === 'ideas' ? ideasGifs : awesomeGifs;
-      let lastIndex = lastGifIndex[type];
+      let lastIndex = lastGifIndexRef.current[type];
       
       // Pick a random GIF that's different from the last one
       let randomIndex;
@@ -63,10 +63,8 @@ export default function EasterEggVideo() {
         randomIndex = Math.floor(Math.random() * gifList.length);
       } while (randomIndex === lastIndex && gifList.length > 1);
       
-      setLastGifIndex(prev => ({
-        ...prev,
-        [type]: randomIndex
-      }));
+      // Update the ref directly (no state update needed)
+      lastGifIndexRef.current[type] = randomIndex;
       
       if (type === 'ideas') {
         selectedGif = gifList[randomIndex];
@@ -91,7 +89,7 @@ export default function EasterEggVideo() {
     return () => {
       delete window.triggerEasterEgg;
     };
-  }, [lastGifIndex]);
+  }, []); // Empty dependency array - only set up once
 
   return (
     <AnimatePresence>

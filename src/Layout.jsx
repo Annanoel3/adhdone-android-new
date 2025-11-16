@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -191,10 +190,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         const { App } = await import('@capacitor/app');
         
         App.addListener('backButton', ({ canGoBack }) => {
-          if (currentPageName === 'Home') {
+          if (location.pathname === createPageUrl('Home') || !canGoBack) {
             App.exitApp();
           } else {
-            navigate(createPageUrl('Home'));
+            navigate(-1);
           }
         });
 
@@ -208,7 +207,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     };
 
     handleBackButton();
-  }, [currentPageName, navigate]);
+  }, [location.pathname, navigate]);
 
   const toggleTheme = () => {
     const currentSpecialMode = specialMode;
