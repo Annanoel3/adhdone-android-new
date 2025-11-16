@@ -16,25 +16,27 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
   const navigate = useNavigate();
 
   const handleVoiceInput = async (transcription) => {
+    const lowerCommand = transcription.toLowerCase();
+
+    // Check for "Parking Lot" keyword FIRST
+    if (lowerCommand.includes('parking lot')) {
+      try {
+        await base44.entities.ParkingLotIdea.create({
+          idea: transcription,
+          converted_to_task: false
+        });
+        onClose();
+        navigate(createPageUrl("ParkingLot"));
+      } catch (error) {
+        console.error("Error creating idea:", error);
+        alert("Failed to save idea. Please try again.");
+      }
+      return;
+    }
+
+    // Otherwise, create a task
     try {
-      const lowerCommand = transcription.toLowerCase();
-
-      // Check for explicit idea keywords
-      const ideaKeywords = ['idea', 'ideas', 'maybe', 'someday', 'thought', 'note to self', 'remember this'];
-      const isExplicitIdea = ideaKeywords.some(keyword => lowerCommand.includes(keyword));
-
-      // Check for task keywords or actionable language
-      const taskKeywords = ['remind me', 'task', 'todo', 'need to', 'have to', 'must', 'should', 'call', 'buy', 'get', 'send', 'email', 'message'];
-      const isExplicitTask = taskKeywords.some(keyword => lowerCommand.includes(keyword));
-
-      // Default to task if contains time/date references or no explicit markers
-      const hasTimeReference = /tomorrow|today|tonight|morning|afternoon|evening|\d+\s*(am|pm|hour|minute|day|week)/i.test(transcription);
-      
-      const shouldCreateTask = isExplicitTask || (!isExplicitIdea && hasTimeReference) || (!isExplicitIdea && !isExplicitTask);
-
-      if (shouldCreateTask) {
-        // It's a task
-        const user = await base44.auth.me();
+      const user = await base44.auth.me();
 
         const prompt = `Extract task details from this voice input: "${transcription}"
 
