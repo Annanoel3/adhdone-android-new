@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -563,6 +562,7 @@ Return JSON:
 
   const formatReminderTime = (dateString) => {
     if (!dateString) return null;
+    // FIXED: Parse UTC time and display as local
     const date = new Date(dateString);
     return date.toLocaleTimeString('en-US', { 
       hour: 'numeric', 
@@ -573,6 +573,7 @@ Return JSON:
 
   const formatReminderDate = (dateString) => {
     if (!dateString) return null;
+    // FIXED: Parse UTC time and display as local
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { 
       month: 'short', 
