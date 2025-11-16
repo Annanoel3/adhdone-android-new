@@ -184,29 +184,30 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 
   // Android back button handler
   useEffect(() => {
-    const handleBackButton = async () => {
-      try {
-        // Dynamic import to avoid build errors (Capacitor is added during APK build)
-        const { App } = await import('@capacitor/app');
-        
-        App.addListener('backButton', ({ canGoBack }) => {
-          if (location.pathname === createPageUrl('Home') || !canGoBack) {
-            App.exitApp();
-          } else {
-            navigate(-1);
-          }
-        });
+    // Check if Capacitor is available (only in native builds)
+    if (typeof window !== 'undefined' && window.Capacitor) {
+      const setupBackButton = async () => {
+        try {
+          const { App } = window.Capacitor.Plugins;
+          
+          App.addListener('backButton', ({ canGoBack }) => {
+            if (location.pathname === createPageUrl('Home') || !canGoBack) {
+              App.exitApp();
+            } else {
+              navigate(-1);
+            }
+          });
 
-        return () => {
-          App.removeAllListeners();
-        };
-      } catch (error) {
-        // Capacitor not available in web build - this is expected
-        console.log('Capacitor App not available');
-      }
-    };
+          return () => {
+            App.removeAllListeners();
+          };
+        } catch (error) {
+          console.log('Capacitor App plugin not available:', error);
+        }
+      };
 
-    handleBackButton();
+      setupBackButton();
+    }
   }, [location.pathname, navigate]);
 
   const toggleTheme = () => {
