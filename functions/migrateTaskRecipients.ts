@@ -8,10 +8,16 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     console.log(`Running migration as user: ${user.email}`);
 
+    // Try to get tasks with regular client first to debug RLS
+    console.log('Attempting to fetch tasks with regular client (user scope)...');
+    const userTasks = await base44.entities.Task.list('-created_date', 100);
+    console.log(`User scope found ${userTasks.length} tasks`);
+
     // Use service role to get ALL tasks regardless of RLS
+    console.log('Attempting to fetch tasks with service role...');
     const tasks = await base44.asServiceRole.entities.Task.list('-created_date', 10000);
     
-    console.log(`Found ${tasks.length} total tasks`);
+    console.log(`Service role found ${tasks.length} total tasks`);
     
     let updated = 0;
     let skipped = 0;
