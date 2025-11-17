@@ -137,7 +137,8 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
           status: 'active',
           reminder_interval: task.reminder_interval,
           reminder_count: 0,
-          next_reminder: task.reminder_interval && task.reminder_interval !== 'once' && nextReminder ? nextReminder.toISOString() : null
+          next_reminder: task.reminder_interval && task.reminder_interval !== 'once' && nextReminder ? nextReminder.toISOString() : null,
+          notification_recipient_email: currentUser.email
         });
 
         // Note: Recurring reminders are handled by cron job, not OneSignal
@@ -228,7 +229,8 @@ Return JSON:
           status: 'active',
           reminder_interval: task.reminder_interval,
           reminder_count: 0,
-          next_reminder: task.reminder_interval && task.reminder_interval !== 'once' && nextReminder ? nextReminder.toISOString() : null
+          next_reminder: task.reminder_interval && task.reminder_interval !== 'once' && nextReminder ? nextReminder.toISOString() : null,
+          notification_recipient_email: currentUser.email
         });
 
         // Note: Recurring reminders are handled by cron job, not OneSignal
