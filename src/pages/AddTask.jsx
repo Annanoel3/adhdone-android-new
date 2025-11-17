@@ -226,9 +226,10 @@ Return JSON:
       if (parsed.target_date && parsed.target_time && actualReminderInterval === 'once') {
         // One-time reminder with specific date/time
         console.log('🔄 [PROCESS] One-time reminder with date/time');
-        const targetDate = new Date(parsed.target_date);
-        const [hours, minutes] = parsed.target_time.split(':');
-        targetDate.setHours(parseInt(hours, 10), parseInt(minutes, 10), 0, 0);
+        // Parse date components to avoid timezone issues
+        const [year, month, day] = parsed.target_date.split('-').map(n => parseInt(n, 10));
+        const [hours, minutes] = parsed.target_time.split(':').map(n => parseInt(n, 10));
+        const targetDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
         nextReminder = targetDate;
         actualReminderInterval = 'once';
 
