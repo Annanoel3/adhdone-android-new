@@ -112,6 +112,12 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     const mode = localStorage.getItem('special_mode') || 'normal';
     localStorage.setItem('special_mode', mode);
     document.documentElement.setAttribute('data-theme', mode);
+    
+    // Reset theme to minimalist when switching to a special mode
+    if (mode !== 'normal' && theme !== 'minimalist') {
+      setTheme('minimalist');
+      localStorage.setItem('adhd_theme', 'minimalist');
+    }
   }, [specialMode]);
 
   const loadAccountabilityNotifications = async () => {
