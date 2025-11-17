@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
 
     console.log('🔍 [FOCUS ROOM CLEANUP] Fetching all focus rooms...');
-    const rooms = await base44.asServiceRole.entities.FocusRoom.list();
+    const rooms = await base44.asServiceRole.entities.FocusRoom.filter({});
     console.log(`📊 [FOCUS ROOM CLEANUP] Found ${rooms.length} total focus rooms`);
     
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
