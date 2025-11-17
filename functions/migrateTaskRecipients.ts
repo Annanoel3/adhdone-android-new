@@ -1,15 +1,12 @@
-import { createClient } from 'npm:@base44/sdk@0.8.4';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
 
 Deno.serve(async (req) => {
   try {
-    // Initialize with service role (no auth required for migration)
-    const base44 = createClient(
-      Deno.env.get('BASE44_APP_ID'),
-      Deno.env.get('BASE44_API_KEY')
-    );
+    // Initialize from request
+    const base44 = createClientFromRequest(req);
 
-    // Get all tasks
-    const tasks = await base44.entities.Task.list('-created_date', 10000);
+    // Get all tasks using service role to bypass RLS
+    const tasks = await base44.asServiceRole.entities.Task.list('-created_date', 10000);
     
     console.log(`Found ${tasks.length} total tasks`);
     
@@ -19,7 +16,7 @@ Deno.serve(async (req) => {
     for (const task of tasks) {
       // Only update if notification_recipient_email is not set
       if (!task.notification_recipient_email && task.created_by) {
-        await base44.entities.Task.update(task.id, {
+        await base44.asServiceRole.entities.Task.update(task.id, {
           notification_recipient_email: task.created_by
         });
         updated++;
