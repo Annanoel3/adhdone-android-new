@@ -104,8 +104,8 @@ Deno.serve(async (req) => {
     for (const task of recurringTasks) {
       const remainingCount = task.onesignal_notification_ids?.length || 0;
       
-      // Refill if less than 10 reminders left
-      if (remainingCount < 10) {
+      // Refill if less than 5 reminders left
+      if (remainingCount < 5) {
         console.log(`🔋 [REFILL REMINDERS] Task "${task.title}" (${task.id}) has ${remainingCount} reminders left - refilling...`);
         
         try {
@@ -116,12 +116,12 @@ Deno.serve(async (req) => {
           const startTime = new Date(now.getTime() + interval);
           
           const newNotificationIds = await scheduleRecurringReminders({
-            email: task.created_by,
+            email: task.notification_recipient_email || task.created_by,
             title: "Task Reminder 📋",
             body: task.title,
             startTime: startTime.toISOString(),
             intervalMs: interval,
-            count: 50,
+            count: 10,
             taskId: task.id
           });
 
