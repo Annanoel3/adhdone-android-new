@@ -65,18 +65,20 @@ TOMORROW IS: ${tomorrowStr}
 CURRENT TIME: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
 
 IMPORTANT RULES:
+- If user says "one-time reminder" or "once" WITHOUT a specific time → set reminder_interval="once" and target_time="09:00" with tomorrow's date
 - For "X minutes/hours from now" → use reminder_interval (10min, 20min, 30min, 1hour, 2hours), NOT target_date/target_time
 - For specific times like "at 2pm" → use target_time ONLY (no target_date unless date is mentioned)
 - For "tomorrow at 2pm" → use target_date AND target_time
 - For "Nov 17" or "next Friday" → calculate and use target_date
+- For recurring (daily, weekly, etc.) → use reminder_interval
 
 Extract:
-1. Clean title (remove "remind me", "I need to")
+1. Clean title (remove "remind me", "I need to", "one-time reminder", "once")
 2. Urgency: low/medium/high/urgent
 3. Energy: low/medium/high
-4. target_date: ONLY if specific date mentioned (e.g., "tomorrow", "Nov 17", "next Friday")
-5. target_time: ONLY if specific time mentioned (e.g., "2pm", "9:30am")
-6. reminder_interval: For relative times like "5 minutes from now" use 10min/20min/30min/1hour/2hours/daily/every_other_day
+4. target_date: ONLY if specific date mentioned OR if user says "one-time"/"once" without time (set to tomorrow)
+5. target_time: ONLY if specific time mentioned OR if user says "one-time"/"once" without time (set to "09:00")
+6. reminder_interval: "once" for one-time reminders, or 10min/20min/30min/1hour/2hours/daily/every_other_day for recurring
 
 JSON:
 {
