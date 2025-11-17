@@ -626,72 +626,12 @@ Return ONLY the category name, nothing else.`;
                         theme === 'dark' ? 'text-purple-400' :
                         'text-purple-600'
                       }`} />
-                      <div className="flex-1">
-                        {(() => {
-                          const format = group.parent.list_format || 'plain';
-                          const lines = group.parent.idea.split('\n').filter(line => line.trim());
-                          
-                          if (format === 'plain') {
-                            return (
-                              <h3 className={`font-semibold text-lg whitespace-pre-wrap ${
-                                specialMode !== 'normal' ? `${specialMode}-title` :
-                                theme === 'dark' ? 'text-gray-100' : 'text-gray-900'
-                              }`}>
-                                {group.parent.idea}
-                              </h3>
-                            );
-                          }
-                          
-                          if (format === 'checkbox') {
-                            const checkedItems = group.parent.checked_items || [];
-                            return (
-                              <div className="space-y-2">
-                                {lines.map((line, index) => (
-                                  <div key={index} className="flex items-start gap-2">
-                                    <input
-                                      type="checkbox"
-                                      checked={checkedItems.includes(index)}
-                                      onChange={async () => {
-                                        const newCheckedItems = checkedItems.includes(index)
-                                          ? checkedItems.filter(i => i !== index)
-                                          : [...checkedItems, index];
-                                        await base44.entities.ParkingLotIdea.update(group.parent.id, {
-                                          checked_items: newCheckedItems
-                                        });
-                                        queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
-                                      }}
-                                      className="mt-1 rounded cursor-pointer"
-                                    />
-                                    <span className={`text-base ${
-                                      checkedItems.includes(index) ? 'line-through text-gray-400' : ''
-                                    } ${
-                                      specialMode !== 'normal' ? `${specialMode}-title` :
-                                      theme === 'dark' ? 'text-gray-100' : 'text-gray-900'
-                                    }`}>
-                                      {line}
-                                    </span>
-                                  </div>
-                                ))}
-                              </div>
-                            );
-                          }
-                          
-                          if (format === 'numbered') {
-                            return (
-                              <ol className="list-decimal list-inside space-y-1">
-                                {lines.map((line, index) => (
-                                  <li key={index} className={`text-base ${
-                                    specialMode !== 'normal' ? `${specialMode}-title` :
-                                    theme === 'dark' ? 'text-gray-100' : 'text-gray-900'
-                                  }`}>
-                                    {line}
-                                  </li>
-                                ))}
-                              </ol>
-                            );
-                          }
-                        })()}
-                      </div>
+                      <h3 className={`font-semibold text-lg whitespace-pre-wrap ${
+                        specialMode !== 'normal' ? `${specialMode}-title` :
+                        theme === 'dark' ? 'text-gray-100' : 'text-gray-900'
+                      }`}>
+                        {group.parent.idea}
+                      </h3>
                     </div>
                     {group.parent.category && (
                       <Badge className={categoryColors[group.parent.category] || categoryColors.misc}>
@@ -772,55 +712,97 @@ Return ONLY the category name, nothing else.`;
 
                 {group.subIdeas.length > 0 && (
                   <div className="ml-6 space-y-2 mt-4">
-                    {group.subIdeas.map((subIdea) => (
-                      <div key={subIdea.id} className={`flex items-start justify-between p-3 rounded-lg ${
-                        theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
-                      }`}>
-                        <p className={`flex-1 text-sm ${
-                          specialMode !== 'normal' ? `${specialMode}-text` :
-                          theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    {group.subIdeas.map((subIdea, index) => {
+                      const format = group.parent.list_format || 'plain';
+                      const checkedItems = group.parent.checked_items || [];
+                      const isChecked = checkedItems.includes(index);
+                      
+                      return (
+                        <div key={subIdea.id} className={`flex items-start justify-between p-3 rounded-lg ${
+                          theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
                         }`}>
-                          • {subIdea.idea}
-                        </p>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button size="icon" variant="ghost" className="h-6 w-6">
-                              <MoreVertical className="w-3 h-3" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-48 p-2">
-                            <div className="space-y-1">
-                              <button
-                                onClick={() => handleConvertToTask(subIdea)}
-                                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-2"
-                              >
-                                <CheckCircle2 className="w-4 h-4" />
-                                Convert to Task
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setEditingIdea(subIdea);
-                                  setEditText(subIdea.idea);
-                                  setEditCategory(subIdea.category || "misc");
-                                  setShowEditModal(true);
-                                }}
-                                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-2"
-                              >
-                                <Pencil className="w-4 h-4" />
-                                Edit
-                              </button>
-                              <button
-                                onClick={() => handleDelete(subIdea.id)}
-                                className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 text-red-600 rounded flex items-center gap-2"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                                Delete
-                              </button>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    ))}
+                          <div className="flex items-start gap-2 flex-1">
+                            {format === 'checkbox' ? (
+                              <>
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={async () => {
+                                    const newCheckedItems = isChecked
+                                      ? checkedItems.filter(i => i !== index)
+                                      : [...checkedItems, index];
+                                    await base44.entities.ParkingLotIdea.update(group.parent.id, {
+                                      checked_items: newCheckedItems
+                                    });
+                                    queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+                                  }}
+                                  className="mt-0.5 rounded cursor-pointer"
+                                />
+                                <p className={`flex-1 text-sm ${
+                                  isChecked ? 'line-through text-gray-400' : ''
+                                } ${
+                                  specialMode !== 'normal' ? `${specialMode}-text` :
+                                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                                }`}>
+                                  {subIdea.idea}
+                                </p>
+                              </>
+                            ) : format === 'numbered' ? (
+                              <p className={`flex-1 text-sm ${
+                                specialMode !== 'normal' ? `${specialMode}-text` :
+                                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                              }`}>
+                                {index + 1}. {subIdea.idea}
+                              </p>
+                            ) : (
+                              <p className={`flex-1 text-sm ${
+                                specialMode !== 'normal' ? `${specialMode}-text` :
+                                theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                              }`}>
+                                • {subIdea.idea}
+                              </p>
+                            )}
+                          </div>
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-6 w-6">
+                                <MoreVertical className="w-3 h-3" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-48 p-2">
+                              <div className="space-y-1">
+                                <button
+                                  onClick={() => handleConvertToTask(subIdea)}
+                                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-2"
+                                >
+                                  <CheckCircle2 className="w-4 h-4" />
+                                  Convert to Task
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setEditingIdea(subIdea);
+                                    setEditText(subIdea.idea);
+                                    setEditCategory(subIdea.category || "misc");
+                                    setShowEditModal(true);
+                                  }}
+                                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-2"
+                                >
+                                  <Pencil className="w-4 h-4" />
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(subIdea.id)}
+                                  className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 text-red-600 rounded flex items-center gap-2"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete
+                                </button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      );
+                    })}
                     
                     {/* Manual add to list */}
                     <form onSubmit={async (e) => {
