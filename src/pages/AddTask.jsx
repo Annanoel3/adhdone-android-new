@@ -232,22 +232,30 @@ Return JSON:
         nextReminder = targetDate;
         actualReminderInterval = 'once';
 
-        const taskData = {
-          title: parsed.title || inputText.trim(),
-          description: '',
-          reminder_interval: actualReminderInterval,
-          reminder_count: 0,
-          next_reminder: nextReminder.toISOString(),
-          urgency: parsed.urgency || 'medium',
-          energy_required: parsed.energy_required || 'medium',
-          status: 'active',
-          notification_recipient_email: currentUser.email
-        };
+        // Check if at least 1 day away
+        const oneDayFromNow = new Date(now.getTime() + (24 * 60 * 60 * 1000));
+        const isAtLeastOneDayAway = nextReminder >= oneDayFromNow;
 
-        console.log('🔄 [PROCESS] Showing advance reminder dialog - NOT navigating yet');
-        setPendingTask({ taskData, currentUser });
-        setShowAdvanceReminderDialog(true);
-        return false; // Don't navigate - let dialog handle it
+        if (isAtLeastOneDayAway) {
+          // Show advance reminder dialog for tasks 1+ day away
+          const taskData = {
+            title: parsed.title || inputText.trim(),
+            description: '',
+            reminder_interval: actualReminderInterval,
+            reminder_count: 0,
+            next_reminder: nextReminder.toISOString(),
+            urgency: parsed.urgency || 'medium',
+            energy_required: parsed.energy_required || 'medium',
+            status: 'active',
+            notification_recipient_email: currentUser.email
+          };
+
+          console.log('🔄 [PROCESS] Task 1+ day away - showing advance reminder dialog');
+          setPendingTask({ taskData, currentUser });
+          setShowAdvanceReminderDialog(true);
+          return false; // Don't navigate - let dialog handle it
+        }
+        // Otherwise, continue with normal creation (no advance reminder dialog)
       } else if (parsed.reminder_interval && recurringIntervals.includes(parsed.reminder_interval)) {
         // Recurring reminder
         console.log('🔄 [PROCESS] Recurring reminder:', parsed.reminder_interval);
