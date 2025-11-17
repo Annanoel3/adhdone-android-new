@@ -78,7 +78,7 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
 
   const handleSubTaskToggle = async (subTask) => {
     const newStatus = subTask.status === 'completed' ? 'active' : 'completed';
-    await Task.update(subTask.id, { status: newStatus });
+    await base44.entities.Task.update(subTask.id, { status: newStatus });
     await fetchSubTasks(task.id);
     
     // Call onUpdate with parent task to trigger refresh
