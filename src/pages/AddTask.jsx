@@ -64,21 +64,21 @@ TODAY IS: ${today}
 TOMORROW IS: ${tomorrowStr}
 CURRENT TIME: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
 
-IMPORTANT RULES:
-- If user says "one-time reminder" or "once" WITHOUT a specific time → set reminder_interval="once" and target_time="09:00" with tomorrow's date
-- For "X minutes/hours from now" → use reminder_interval (10min, 20min, 30min, 1hour, 2hours), NOT target_date/target_time
-- For specific times like "at 2pm" → use target_time ONLY (no target_date unless date is mentioned)
-- For "tomorrow at 2pm" → use target_date AND target_time
-- For "Nov 17" or "next Friday" → calculate and use target_date
-- For recurring (daily, weekly, etc.) → use reminder_interval
+CRITICAL RULES:
+- "in X minutes/hours from now" (e.g., "in 10 minutes", "in 2 hours") → ONE-TIME reminder, set target_time to calculated time, reminder_interval="once"
+- "every X minutes/hours" (e.g., "every 10 minutes", "every 2 hours") → RECURRING reminder, use reminder_interval
+- "at 2pm" → ONE-TIME, target_time ONLY (no target_date unless date mentioned), reminder_interval="once"
+- "tomorrow at 2pm" → ONE-TIME, target_date AND target_time, reminder_interval="once"
+- "daily", "every day", "every other day" → RECURRING, use reminder_interval
+- "one-time" or "once" without specific time → set for tomorrow 9 AM
 
 Extract:
-1. Clean title (remove "remind me", "I need to", "one-time reminder", "once")
+1. Clean title (remove "remind me", "I need to", "one-time", "in X minutes")
 2. Urgency: low/medium/high/urgent
 3. Energy: low/medium/high
-4. target_date: ONLY if specific date mentioned OR if user says "one-time"/"once" without time (set to tomorrow)
-5. target_time: ONLY if specific time mentioned OR if user says "one-time"/"once" without time (set to "09:00")
-6. reminder_interval: "once" for one-time reminders, or 10min/20min/30min/1hour/2hours/daily/every_other_day for recurring
+4. target_date: For "tomorrow" or specific dates OR for "in X minutes/hours" use TODAY's date
+5. target_time: For "at 2pm" or "in X minutes" calculate the exact time (24-hour format HH:MM)
+6. reminder_interval: "once" for one-time, or daily/every_other_day for recurring (DO NOT use 10min/20min/30min/1hour/2hours for "in X" - those are ONLY for "every X")
 
 JSON:
 {
@@ -207,7 +207,7 @@ Return JSON:
       let nextReminder = null;
       let actualReminderInterval = parsed.reminder_interval || null;
       
-      const recurringIntervals = ['10min', '20min', '30min', '1hour', '2hours', 'daily', 'every_other_day'];
+      const recurringIntervals = ['daily', 'every_other_day'];
 
       if (parsed.target_date) {
         console.log('🔄 [PROCESS] Has target_date:', parsed.target_date);
@@ -221,10 +221,8 @@ Return JSON:
         }
         
         nextReminder = targetDate;
-        // Only force 'once' if no recurring interval was specified
-        if (!actualReminderInterval || !recurringIntervals.includes(actualReminderInterval)) {
-          actualReminderInterval = 'once';
-        }
+        // Force 'once' since we have a specific date/time
+        actualReminderInterval = 'once';
 
         const taskData = {
           title: parsed.title || inputText.trim(),
@@ -249,40 +247,22 @@ Return JSON:
         if (nextReminder <= now) {
           nextReminder.setDate(nextReminder.getDate() + 1);
         }
-        // Only force 'once' if no recurring interval was specified
-        if (!actualReminderInterval || !recurringIntervals.includes(actualReminderInterval)) {
-          actualReminderInterval = 'once';
-        }
-      } else if (parsed.reminder_interval && parsed.reminder_interval !== 'once') {
+        // Force 'once' since we have a specific time
+        actualReminderInterval = 'once';
+      } else if (parsed.reminder_interval && recurringIntervals.includes(parsed.reminder_interval)) {
+        // Recurring reminder
         nextReminder = new Date(now.getTime());
         switch (parsed.reminder_interval) {
-          case '10min':
-            nextReminder.setMinutes(nextReminder.getMinutes() + 10);
-            break;
-          case '20min':
-            nextReminder.setMinutes(nextReminder.getMinutes() + 20);
-            break;
-          case '30min':
-            nextReminder.setMinutes(nextReminder.getMinutes() + 30);
-            break;
-          case '1hour':
-            nextReminder.setHours(nextReminder.getHours() + 1);
-            break;
-          case '2hours':
-            nextReminder.setHours(nextReminder.getHours() + 2);
-            break;
           case 'daily':
             nextReminder.setDate(nextReminder.getDate() + 1);
             break;
           case 'every_other_day':
             nextReminder.setDate(nextReminder.getDate() + 2);
             break;
-          default:
-            nextReminder.setHours(nextReminder.getHours() + 2);
-            break;
         }
       } else if (!parsed.reminder_interval && !parsed.target_time && !parsed.target_date) {
-        actualReminderInterval = '2hours';
+        // No timing specified - default to 2 hours
+        actualReminderInterval = 'once';
         nextReminder = new Date();
         nextReminder.setHours(nextReminder.getHours() + 2);
       }
@@ -309,70 +289,33 @@ Return JSON:
 
       console.log('🔄 [PROCESS] ✅ Task created:', createdTask.id);
 
-      // Schedule reminders with OneSignal
-      if (nextReminder) {
-        const intervalMs = {
-          '10min': 10 * 60 * 1000,
-          '20min': 20 * 60 * 1000,
-          '30min': 30 * 60 * 1000,
-          '1hour': 60 * 60 * 1000,
-          '2hours': 2 * 60 * 60 * 1000,
-          'daily': 24 * 60 * 60 * 1000,
-          'every_other_day': 2 * 24 * 60 * 60 * 1000,
-        };
-
-        if (actualReminderInterval === 'once') {
-          // One-time reminder
-          scheduleReminder({
-            email: currentUser.email,
-            title: "Task Reminder 📋",
-            body: `${createdTask.title}\n\nTap to mark as complete!`,
-            sendAtISO: nextReminder.toISOString(),
+      // Schedule reminders - NOTE: Only 'once' interval uses OneSignal
+      // Recurring intervals (daily, every_other_day) are handled by cron job
+      if (nextReminder && actualReminderInterval === 'once') {
+        // One-time reminder via OneSignal
+        scheduleReminder({
+          email: currentUser.email,
+          title: "Task Reminder 📋",
+          body: `${createdTask.title}\n\nTap to mark as complete!`,
+          sendAtISO: nextReminder.toISOString(),
+          taskId: createdTask.id,
+          data: {
+            screen: "/TaskNotification",
             taskId: createdTask.id,
-            data: {
-              screen: "/TaskNotification",
-              taskId: createdTask.id,
-              urgency: createdTask.urgency,
-              type: 'task_reminder'
-            }
-          }).then(notificationId => {
-            if (notificationId) {
-              base44.entities.Task.update(createdTask.id, {
-                onesignal_notification_ids: [notificationId]
-              });
-            }
-          }).catch(error => {
-            console.error("Failed to schedule reminder:", error);
-          });
-        } else if (intervalMs[actualReminderInterval]) {
-          // Recurring reminder - schedule next 10 occurrences
-          import('../components/utils/reminderScheduler').then(module => {
-            return module.scheduleRecurringReminders({
-              email: currentUser.email,
-              title: "Task Reminder 📋",
-              body: `${createdTask.title}\n\nTap to mark as complete!`,
-              startTime: nextReminder.toISOString(),
-              intervalMs: intervalMs[actualReminderInterval],
-              count: 10,
-              taskId: createdTask.id,
-              data: {
-                screen: "/TaskNotification",
-                taskId: createdTask.id,
-                urgency: createdTask.urgency,
-                type: 'task_reminder'
-              }
+            urgency: createdTask.urgency,
+            type: 'task_reminder'
+          }
+        }).then(notificationId => {
+          if (notificationId) {
+            base44.entities.Task.update(createdTask.id, {
+              onesignal_notification_ids: [notificationId]
             });
-          }).then(notificationIds => {
-            if (notificationIds && notificationIds.length > 0) {
-              base44.entities.Task.update(createdTask.id, {
-                onesignal_notification_ids: notificationIds
-              });
-            }
-          }).catch(error => {
-            console.error("Failed to schedule recurring reminders:", error);
-          });
-        }
+          }
+        }).catch(error => {
+          console.error("Failed to schedule reminder:", error);
+        });
       }
+      // Note: Recurring reminders (daily, every_other_day) are handled by cronTaskReminders
       
       console.log('🔄 [PROCESS] ========== SUCCESS - RETURNING TRUE ==========');
       return true;
