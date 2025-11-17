@@ -64,21 +64,35 @@ TODAY IS: ${today}
 TOMORROW IS: ${tomorrowStr}
 CURRENT TIME: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
 
-CRITICAL RULES:
-- "in X minutes/hours" (e.g., "in 10 minutes", "in 2 hours") → ONE-TIME, set target_time to calculated time, reminder_interval="once"
-- "every X minutes/hours" (e.g., "every 10 minutes", "every hour") → RECURRING, use reminder_interval (10min/20min/30min/1hour/2hours)
-- "at 2pm" → ONE-TIME, target_time ONLY, reminder_interval="once"
-- "tomorrow at 2pm" → ONE-TIME, target_date AND target_time, reminder_interval="once"
-- "daily", "every day" → RECURRING, reminder_interval="daily"
-- "every other day" → RECURRING, reminder_interval="every_other_day"
+CRITICAL DISTINCTION - READ CAREFULLY:
+
+"in X" vs "every X":
+- If user says "in 10 minutes" or "in 1 hour" → This is ONE-TIME ONLY
+  Set: reminder_interval="once", target_date=TODAY, target_time=CALCULATED_TIME
+  
+- If user says "every 10 minutes" or "every hour" → This is RECURRING
+  Set: reminder_interval="10min" or "1hour", no target_date/target_time
+
+Examples:
+❌ WRONG: "in 10 minutes" → reminder_interval="10min" 
+✅ CORRECT: "in 10 minutes" → reminder_interval="once", target_time="14:35" (if now is 14:25)
+
+❌ WRONG: "every hour" → reminder_interval="once", target_time="15:25"
+✅ CORRECT: "every hour" → reminder_interval="1hour"
+
+Other rules:
+- "at 2pm" → ONE-TIME, reminder_interval="once", target_time="14:00"
+- "tomorrow at 2pm" → ONE-TIME, reminder_interval="once", target_date=TOMORROW, target_time="14:00"
+- "daily"/"every day" → reminder_interval="daily"
+- "every other day" → reminder_interval="every_other_day"
 
 Extract:
-1. Clean title (remove "remind me", "I need to", "in X minutes")
+1. Clean title (remove "remind me", "I need to", "in X minutes/hours", etc)
 2. Urgency: low/medium/high/urgent
 3. Energy: low/medium/high
-4. target_date: For "tomorrow" or specific dates OR for "in X minutes/hours" use TODAY's date
-5. target_time: For "at 2pm" or "in X minutes" calculate exact time (24-hour HH:MM)
-6. reminder_interval: "once" for one-time OR 10min/20min/30min/1hour/2hours/daily/every_other_day for recurring
+4. target_date: ONLY for "in X" (TODAY) or "tomorrow" or specific dates
+5. target_time: ONLY for "in X" (calculate) or "at 2pm" (specific time) - format HH:MM 24-hour
+6. reminder_interval: "once" for "in X" OR "at X" | 10min/20min/30min/1hour/2hours for "every X" | daily/every_other_day
 
 JSON:
 {
