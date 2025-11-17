@@ -345,7 +345,7 @@ Return JSON:
             console.error("Failed to schedule reminder:", error);
           });
         } else if (intervalMs[actualReminderInterval]) {
-          // Recurring reminder - schedule next 50 occurrences
+          // Recurring reminder - schedule next 10 occurrences
           import('../components/utils/reminderScheduler').then(module => {
             return module.scheduleRecurringReminders({
               email: currentUser.email,
@@ -353,7 +353,7 @@ Return JSON:
               body: `${createdTask.title}\n\nTap to mark as complete!`,
               startTime: nextReminder.toISOString(),
               intervalMs: intervalMs[actualReminderInterval],
-              count: 50,
+              count: 10,
               taskId: createdTask.id,
               data: {
                 screen: "/TaskNotification",

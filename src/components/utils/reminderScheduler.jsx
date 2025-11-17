@@ -117,7 +117,7 @@ export async function scheduleRecurringReminders({
   body,
   startTime,
   intervalMs,
-  count = 50, // Schedule next 50 occurrences
+  count = 10, // Schedule next 10 occurrences
   taskId,
   data,
   android_channel_id
