@@ -21,8 +21,28 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
 
     console.log('🔍 [FOCUS ROOM CLEANUP] Fetching all focus rooms...');
-    const rooms = await base44.asServiceRole.entities.FocusRoom.filter({});
-    console.log(`📊 [FOCUS ROOM CLEANUP] Found ${rooms.length} total focus rooms`);
+    let rooms = [];
+    try {
+      rooms = await base44.asServiceRole.entities.FocusRoom.filter({ is_active: true });
+      console.log(`📊 [FOCUS ROOM CLEANUP] Found ${rooms.length} active focus rooms`);
+    } catch (error) {
+      console.error('❌ [FOCUS ROOM CLEANUP] Error fetching rooms:', error.message);
+      return Response.json({ 
+        success: false, 
+        error: 'Failed to fetch focus rooms: ' + error.message 
+      }, { status: 500 });
+    }
+
+    if (!rooms || rooms.length === 0) {
+      console.log('✅ [FOCUS ROOM CLEANUP] No active rooms to clean up');
+      return Response.json({
+        success: true,
+        scanned: 0,
+        deactivated: 0,
+        participants_cleaned: 0,
+        at: new Date().toISOString(),
+      });
+    }
     
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
     
@@ -30,38 +50,38 @@ Deno.serve(async (req) => {
     let cleaned = 0;
 
     for (const room of rooms) {
-      if (!room.is_active) {
-        console.log(`⏭️  [FOCUS ROOM CLEANUP] Skipping room ${room.id} - already inactive`);
-        continue;
-      }
-
-      const participants = await base44.asServiceRole.entities.FocusRoomParticipant.filter({ 
-        room_id: room.id 
-      });
-
-      console.log(`👥 [FOCUS ROOM CLEANUP] Room "${room.room_name}" has ${participants.length} participants`);
-
-      let hasRecentActivity = false;
-      for (const p of participants) {
-        if (p.last_seen && p.last_seen > oneHourAgo) {
-          hasRecentActivity = true;
-          console.log(`✅ [FOCUS ROOM CLEANUP] Found recent activity from ${p.display_name || p.user_email}`);
-          break;
-        }
-      }
-
-      if (!hasRecentActivity) {
-        console.log(`🗑️  [FOCUS ROOM CLEANUP] Deactivating room "${room.room_name}" - no activity in 1 hour`);
-        await base44.asServiceRole.entities.FocusRoom.update(room.id, {
-          is_active: false
+      try {
+        const participants = await base44.asServiceRole.entities.FocusRoomParticipant.filter({ 
+          room_id: room.id 
         });
-        deactivated++;
 
-        console.log(`🧹 [FOCUS ROOM CLEANUP] Cleaning up ${participants.length} participants from room`);
+        console.log(`👥 [FOCUS ROOM CLEANUP] Room "${room.room_name}" has ${participants.length} participants`);
+
+        let hasRecentActivity = false;
         for (const p of participants) {
-          await base44.asServiceRole.entities.FocusRoomParticipant.delete(p.id);
+          if (p.last_seen && p.last_seen > oneHourAgo) {
+            hasRecentActivity = true;
+            console.log(`✅ [FOCUS ROOM CLEANUP] Found recent activity from ${p.display_name || p.user_email}`);
+            break;
+          }
         }
-        cleaned += participants.length;
+
+        if (!hasRecentActivity) {
+          console.log(`🗑️  [FOCUS ROOM CLEANUP] Deactivating room "${room.room_name}" - no activity in 1 hour`);
+          await base44.asServiceRole.entities.FocusRoom.update(room.id, {
+            is_active: false
+          });
+          deactivated++;
+
+          console.log(`🧹 [FOCUS ROOM CLEANUP] Cleaning up ${participants.length} participants from room`);
+          for (const p of participants) {
+            await base44.asServiceRole.entities.FocusRoomParticipant.delete(p.id);
+          }
+          cleaned += participants.length;
+        }
+      } catch (error) {
+        console.error(`❌ [FOCUS ROOM CLEANUP] Error processing room ${room.id}:`, error.message);
+        // Continue with next room
       }
     }
 
