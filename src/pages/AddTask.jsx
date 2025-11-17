@@ -232,7 +232,8 @@ Return JSON:
           next_reminder: nextReminder.toISOString(),
           urgency: parsed.urgency || 'medium',
           energy_required: parsed.energy_required || 'medium',
-          status: 'active'
+          status: 'active',
+          notification_recipient_email: currentUser.email
         };
 
         console.log('🔄 [PROCESS] Showing advance reminder dialog - NOT navigating yet');
@@ -300,7 +301,8 @@ Return JSON:
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
         urgency: parsed.urgency || 'medium',
         energy_required: parsed.energy_required || 'medium',
-        status: 'active'
+        status: 'active',
+        notification_recipient_email: currentUser.email
       });
 
       console.log('🔄 [PROCESS] ✅ Task created:', createdTask.id);
