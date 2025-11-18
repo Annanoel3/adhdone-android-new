@@ -4,7 +4,7 @@ import { Lightbulb, Sparkles, Loader2, RefreshCw } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 
-const CURRENT_PROMPT_VERSION = 3; // Increment this when you update the prompt
+const CURRENT_PROMPT_VERSION = 4; // Increment this when you update the prompt
 
 export default function DailyTipCard({ theme }) {
   const [todaysTip, setTodaysTip] = useState(null);
