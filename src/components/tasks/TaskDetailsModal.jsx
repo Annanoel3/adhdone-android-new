@@ -286,11 +286,61 @@ Return JSON:
 
     setIsUpdating(true);
     try {
-      // Update in background
-      Task.update(task.id, { title: editedTitle.trim() }).catch(error => {
-        console.error("Error updating task title:", error);
-      });
-      
+      // If task has recurring reminders, cancel old notifications and reschedule with new title
+      if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0 && task.reminder_interval && task.reminder_interval !== 'once') {
+        try {
+          const currentUser = await base44.auth.me();
+
+          // Cancel existing scheduled notifications
+          await cancelScheduledReminder(task.onesignal_notification_ids);
+
+          // Reschedule with updated title
+          const intervalMs = {
+            '10min': 10 * 60 * 1000,
+            '20min': 20 * 60 * 1000,
+            '30min': 30 * 60 * 1000,
+            '1hour': 60 * 60 * 1000,
+            '2hours': 2 * 60 * 60 * 1000,
+            'daily': 24 * 60 * 60 * 1000,
+            'every_other_day': 2 * 24 * 60 * 60 * 1000,
+          };
+
+          if (intervalMs[task.reminder_interval] && task.next_reminder) {
+            const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
+            const newNotificationIds = await scheduleRecurringReminders({
+              email: currentUser.email,
+              title: "Task Reminder 📋",
+              body: `${editedTitle.trim()}\n\nTap to mark as complete!`,
+              startTime: task.next_reminder,
+              intervalMs: intervalMs[task.reminder_interval],
+              count: 10,
+              taskId: task.id,
+              data: {
+                screen: "/TaskNotification",
+                taskId: task.id,
+                urgency: task.urgency,
+                type: 'task_reminder'
+              }
+            });
+
+            // Update with new notification IDs
+            Task.update(task.id, { 
+              title: editedTitle.trim(),
+              onesignal_notification_ids: newNotificationIds 
+            }).catch(error => {
+              console.error("Error updating task:", error);
+            });
+          }
+        } catch (error) {
+          console.error("Failed to reschedule notifications:", error);
+        }
+      } else {
+        // Just update title if no recurring reminders
+        Task.update(task.id, { title: editedTitle.trim() }).catch(error => {
+          console.error("Error updating task title:", error);
+        });
+      }
+
       // Optimistically update parent immediately
       onUpdate({ ...task, title: editedTitle.trim() });
       setIsEditingTitle(false);
