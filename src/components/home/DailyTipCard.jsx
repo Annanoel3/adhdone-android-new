@@ -77,6 +77,36 @@ export default function DailyTipCard({ theme }) {
 
       const currentStreak = summaries.length > 0 ? summaries[0].streak_days || 0 : 0;
 
+      // Determine context-aware tone based on progress
+      let contextualGuidance = '';
+      if (completedToday.length >= 3) {
+        contextualGuidance = `
+TONE: They've completed ${completedToday.length} tasks today - they're ON FIRE! Give an encouraging tip about momentum, celebrating wins, or maintaining energy. NO tips about getting started or struggling - they're already crushing it!
+
+Examples:
+"You're on a roll with ${completedToday.length} wins today! Ride that dopamine wave - your brain's loving this success pattern. Take a victory lap (literal 5-minute walk counts), then pick what's next while you're still buzzing."
+
+"${completedToday.length} tasks down? That's not luck, that's momentum. Your brain just proved it CAN focus. Keep the streak alive by tackling one more small thing before the day ends - future you will thank present you."
+
+"Look at you go! ${completedToday.length} done today. When you're in the zone like this, your brain's actually rewiring itself to find productivity easier. Celebrate this win, then consider: what ONE more thing would make tomorrow you super grateful?"`;
+      } else if (completedToday.length >= 1) {
+        contextualGuidance = `
+TONE: They've completed ${completedToday.length} task(s) today - good start! Give a tip about building on that momentum or keeping it going. Be encouraging but not over-the-top.
+
+Examples:
+"Nice! You already checked one off today. That first task is the hardest because it breaks the inertia. Your brain's warmed up now - what's the next tiny win you can grab before the momentum fades?"
+
+"You've proven you can do stuff today - ${completedToday.length} down! Now ride that little spark of motivation while it's hot. Pick something that'll take under 10 minutes and knock it out before your brain remembers how to procrastinate."`;
+      } else {
+        contextualGuidance = `
+TONE: They haven't completed anything yet today. Give a gentle, motivating tip about getting started. NO judgment - just helpful nudges.
+
+Examples:
+"Drowning in tasks and haven't finished anything? Start with just one small win - pick something that takes less than 5 minutes. It's like giving your motivation a shot of espresso; once you complete it, you'll feel ready to tackle the next one!"
+
+"Staring at a task like it's a cryptic puzzle? Your brain needs a clear first step to get moving. Try this: write down literally the FIRST tiny thing (not 'do laundry' but 'pick up the basket'), set a timer for 5 minutes, and see what happens."`;
+      }
+
       // Use Base44's InvokeLLM for smart tips
       const prompt = `You're that friend who gets it - the one who makes everything feel possible with a little humor and real talk. Generate ONE quick, helpful tip.
 
@@ -88,15 +118,15 @@ CRITICAL REQUIREMENTS:
 5. Skip the heavy brain science - just explain WHY it works in plain English
 6. Make it feel like texting advice to a friend who's struggling
 
-CONTEXT (use subtly):
+${contextualGuidance}
+
+CONTEXT:
 - Active tasks: ${activeTasks.length}
 - Snoozed tasks: ${snoozedTasks.length}
 - Completed today: ${completedToday.length}
 - Streak: ${currentStreak} days
 
-EXAMPLES OF THE VIBE:
-
-"Staring at a task like it's a cryptic puzzle? Your brain needs a clear first step to get moving. Try this: write down literally the FIRST tiny thing (not 'do laundry' but 'pick up the basket'), set a timer for 5 minutes, and see what happens."
+OTHER EXAMPLES OF THE VIBE (use for inspiration, not literally):
 
 "Waiting until panic mode to start? (Same.) Your brain gets hooked on that last-minute adrenaline rush. Trick it by creating fake urgency - tell someone you'll send them the thing by tomorrow, or bet yourself $20 you'll finish by Friday."
 
@@ -105,8 +135,6 @@ EXAMPLES OF THE VIBE:
 "Brain juggling seventeen things and dropping them all? You can only hold about 4 things at once before stuff just... vanishes. Do a brain dump - write every single thing down so your mind can stop white-knuckling the list and actually focus on doing."
 
 "Motivation taking a permanent vacation? That's cool - motivation is flaky anyway. Start with just 2 minutes of the easiest possible version of the task. Action creates momentum, not the other way around."
-
-"Stuck in analysis paralysis? Pick the first option that doesn't actively suck, set a timer for 20 minutes, and start. 'Good enough' beats 'perfect but never started' every single time."
 
 Return ONLY the tip text, nothing else.`;
 
