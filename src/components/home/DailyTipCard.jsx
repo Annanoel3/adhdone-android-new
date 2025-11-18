@@ -22,11 +22,24 @@ export default function DailyTipCard({ theme }) {
     // Check if we already have a tip for today
     const existingTips = await base44.entities.DailyTip.filter({ shown_date: today });
     
-    // If we have a tip but it's an old version, delete it and regenerate
+    // Get current task completion count
+    const tasks = await base44.entities.Task.list('-created_date', 20);
+    const completedToday = tasks.filter(t => {
+      if (t.status !== 'completed' || !t.completed_at) return false;
+      const completedDate = new Date(t.completed_at).toISOString().split('T')[0];
+      return completedDate === today;
+    }).length;
+    
+    // If we have a tip but it's an old version OR context changed significantly, regenerate
     if (existingTips.length > 0) {
       const tip = existingTips[0];
-      if (!tip.prompt_version || tip.prompt_version < CURRENT_PROMPT_VERSION) {
-        console.log('🔄 [DAILY TIP] Old prompt version detected, regenerating...');
+      const needsRegeneration = 
+        !tip.prompt_version || 
+        tip.prompt_version < CURRENT_PROMPT_VERSION ||
+        shouldRegenerateForContext(completedToday);
+      
+      if (needsRegeneration) {
+        console.log('🔄 [DAILY TIP] Regenerating tip (context changed or old version)...');
         await base44.entities.DailyTip.delete(tip.id);
         await generateSmartTip(today);
       } else {
@@ -37,6 +50,21 @@ export default function DailyTipCard({ theme }) {
       // Generate a new tip for today
       await generateSmartTip(today);
     }
+  };
+
+  const shouldRegenerateForContext = (completedCount) => {
+    // Regenerate at key milestones: 0→1 (first task), 2→3 (crushing it mode)
+    const lastCheckKey = 'dailyTip_lastCompletedCount';
+    const lastCount = parseInt(localStorage.getItem(lastCheckKey) || '0', 10);
+    
+    // Store current count
+    localStorage.setItem(lastCheckKey, completedCount.toString());
+    
+    // Regenerate when crossing thresholds
+    if (lastCount === 0 && completedCount >= 1) return true; // Got started!
+    if (lastCount < 3 && completedCount >= 3) return true; // Crushing it!
+    
+    return false;
   };
 
   const handleRefresh = async () => {
