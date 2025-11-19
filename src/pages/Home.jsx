@@ -126,11 +126,21 @@ export default function Home() {
     
     console.log('✅ [COMPLETE] Marking task complete with local time:', localISOString);
     
+    // Cancel all scheduled reminders when task is completed
+    if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+      try {
+        const { cancelScheduledReminder } = await import('../components/utils/reminderScheduler');
+        await cancelScheduledReminder(task.onesignal_notification_ids);
+      } catch (error) {
+        console.error("Failed to cancel reminders on completion:", error);
+      }
+    }
+    
     // Optimistically update UI
     setTasks(prevTasks => 
       prevTasks.map(t => 
         t.id === task.id 
-          ? { ...t, status: 'completed', completed_at: localISOString }
+          ? { ...t, status: 'completed', completed_at: localISOString, onesignal_notification_ids: [] }
           : t
       )
     );
@@ -139,7 +149,8 @@ export default function Home() {
     try {
       await base44.entities.Task.update(task.id, { 
         status: 'completed',
-        completed_at: localISOString
+        completed_at: localISOString,
+        onesignal_notification_ids: []
       });
     } catch (error) {
       console.error("Failed to complete task:", error);
