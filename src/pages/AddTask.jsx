@@ -108,36 +108,39 @@ JSON:
       console.log('🔄 [PROCESS] Checking if this is a parking lot idea or task...');
       const categoryCheckPrompt = `Analyze this input: "${inputText}"
 
-CRITICAL RULES:
-1. If user explicitly says "parking lot" → ALWAYS parking_lot
-2. If it's an ACTIONABLE TODO (even without timing) → task
-   Examples: "clean the toilet", "call dentist", "do laundry", "fix the sink"
-3. If it's IDEAS, THOUGHTS, INFORMATION, or LISTS → parking_lot
+      CRITICAL RULES:
+      1. If user explicitly says "parking lot" → ALWAYS parking_lot
+      2. If it's an ACTIONABLE TODO that needs to be done → task
+      Examples: "clean the toilet", "call dentist", "do laundry", "Amazon returns", "pay bills"
+      3. If it's IDEAS, THOUGHTS, INFORMATION, or vague LISTS → parking_lot
 
-TASKS (actionable todos, with or without timing):
-- Clear todos: "clean the toilet", "call dentist", "fix the car", "submit report"
-- With timing: "Remind me tomorrow", "Call at 2pm", "Do laundry every day"
-- Deadlines: "Turn in homework Tuesday", "Pay rent by the 1st"
-- Appointments: "Therapist at 12 p.m.", "Meeting at 9am"
-- Events: "Martin's wedding on the 30th", "Birthday party Saturday"
+      TASKS (concrete actions that need to be done):
+      - Clear actionable todos: "clean the toilet", "call dentist", "Amazon returns", "submit report", "pay rent"
+      - With timing: "Remind me tomorrow", "Call at 2pm", "Do laundry every day"
+      - Deadlines: "Turn in homework Tuesday", "Pay rent by the 1st"
+      - Appointments: "Therapist at 12 p.m.", "Meeting at 9am"
+      - Events: "Martin's wedding on the 30th", "Birthday party Saturday"
+      - Errands: "Pick up dry cleaning", "Drop off package", "Go to post office"
 
-PARKING LOT (ideas, thoughts, lists, information):
-- Explicit: "add to parking lot", "parking lot idea"
-- Ideas/thoughts: "Steel guitar strings might be better", "Maybe try meditation"
-- Planning: "Think about what to tell my professor"
-- Shopping/reading lists: "I need milk, eggs, paper", "read twilight and cirque du freak"
-- Information: "Brazilian blowouts cost $200"
-- Brainstorming: "My project needs hypothesis, summary, references"
-- Questions: "Not sure if car leak is from transmission or seal"
-- Research: "Look into meditation apps", "Research vacation spots"
+      PARKING LOT (ideas, thoughts, non-actionable information):
+      - Explicit: "add to parking lot", "parking lot idea"
+      - Ideas/thoughts: "Steel guitar strings might be better", "Maybe try meditation"
+      - Planning: "Think about what to tell my professor"
+      - Shopping/reading lists WITHOUT urgency: "I need milk, eggs, paper", "read twilight and cirque du freak"
+      - Information: "Brazilian blowouts cost $200"
+      - Brainstorming: "My project needs hypothesis, summary, references"
+      - Questions: "Not sure if car leak is from transmission or seal"
+      - Research: "Look into meditation apps", "Research vacation spots"
 
-Return JSON:
-{
-  "category": "parking_lot" | "task",
-  "is_list": true/false,
-  "main_idea": "short title",
-  "items": ["item 1", "item 2", ...] or []
-}`;
+      KEY DISTINCTION: If someone needs to DO it (action verb), it's a TASK. If they're just capturing info/ideas, it's PARKING LOT.
+
+      Return JSON:
+      {
+      "category": "parking_lot" | "task",
+      "is_list": true/false,
+      "main_idea": "short title",
+      "items": ["item 1", "item 2", ...] or []
+      }`;
 
       const categoryCheck = await base44.integrations.Core.InvokeLLM({
         prompt: categoryCheckPrompt,
