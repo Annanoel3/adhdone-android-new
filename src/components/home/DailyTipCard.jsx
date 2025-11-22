@@ -86,7 +86,7 @@ export default function DailyTipCard({ theme }) {
     try {
       const user = await base44.auth.me();
       const tasks = await base44.entities.Task.list('-created_date', 20);
-      
+
       const summaries = await (async () => {
         try {
           return await base44.entities.DailySummary.list('-date', 7);
@@ -95,8 +95,8 @@ export default function DailyTipCard({ theme }) {
         }
       })();
 
-      const activeTasks = tasks.filter(t => t.status === 'active');
-      const snoozedTasks = tasks.filter(t => t.status === 'snoozed');
+      const activeTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id);
+      const snoozedTasks = tasks.filter(t => t.status === 'snoozed' && !t.parent_task_id);
       const completedToday = tasks.filter(t => {
         if (t.status !== 'completed' || !t.completed_at) return false;
         const completedDate = new Date(t.completed_at).toISOString().split('T')[0];

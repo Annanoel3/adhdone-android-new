@@ -191,7 +191,7 @@ export default function Home() {
     return completedDate === today;
   });
 
-  const activeTasks = tasks.filter(t => t.status === 'active');
+  const activeTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id);
 
   // Debug logging
   useEffect(() => {
