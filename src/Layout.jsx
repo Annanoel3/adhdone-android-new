@@ -579,7 +579,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                     ? 'bg-gradient-to-r from-pink-400 to-purple-400 border-0'
                     : 'border-0'
             }`} style={{
-              paddingTop: 'max(2rem, calc(2rem + env(safe-area-inset-top)))',
+              paddingTop: 'max(3rem, calc(2rem + env(safe-area-inset-top)))',
               paddingLeft: '1.5rem',
               paddingRight: '1.5rem',
               paddingBottom: '1.5rem'
@@ -759,7 +759,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               paddingTop: '1rem',
               paddingLeft: '1rem',
               paddingRight: '1rem',
-              paddingBottom: 'max(3rem, calc(3rem + env(safe-area-inset-bottom)))'
+              paddingBottom: 'max(4rem, calc(2rem + env(safe-area-inset-bottom)))'
             }}>
               <Button
                 variant="outline"
