@@ -886,7 +886,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                     ? 'bg-gradient-to-r from-pink-400/80 to-cyan-400/80 border-yellow-400'
                     : 'bg-white/60 border-gray-200/50'
             }`} style={{
-              paddingTop: 'calc(2rem + env(safe-area-inset-top, 0px))',
+              paddingTop: 'max(2.5rem, calc(2rem + env(safe-area-inset-top, 0px)))',
               paddingBottom: '1rem'
             }}>
               <div className="flex items-center gap-4">
