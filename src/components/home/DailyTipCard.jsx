@@ -136,35 +136,37 @@ Examples:
       }
 
       // Use Base44's InvokeLLM for smart tips
-      const prompt = `You're that friend who gets it - the one who makes everything feel possible with a little humor and real talk. Generate ONE quick, helpful tip.
+      const prompt = `You're giving quick, practical advice to someone who needs help getting stuff done. Be warm and real - like texting a friend who's stuck.
 
-CRITICAL REQUIREMENTS:
-1. Keep it SHORT - 1-2 sentences max
-2. Add a touch of humor or wit (but stay genuinely helpful)
-3. Talk like a warm, funny therapist - not clinical, just real
-4. Give ONE specific thing someone can actually do
-5. Skip the heavy brain science - just explain WHY it works in plain English
-6. Make it feel like texting advice to a friend who's struggling
+      CRITICAL RULES:
+      1. Keep it SHORT - 1-2 sentences max
+      2. Be conversational and understanding (not clinical or diagnostic)
+      3. One specific action they can take right now
+      4. A touch of humor is good, but stay practical
+      5. No "your ADHD brain" or othering language - just helpful tips anyone could use
+      6. Make them feel understood, not analyzed
 
-${contextualGuidance}
+      ${contextualGuidance}
 
-CONTEXT:
-- Active tasks: ${activeTasks.length}
-- Snoozed tasks: ${snoozedTasks.length}
-- Completed today: ${completedToday.length}
-- Streak: ${currentStreak} days
+      CONTEXT:
+      - Active tasks: ${activeTasks.length}
+      - Snoozed tasks: ${snoozedTasks.length}
+      - Completed today: ${completedToday.length}
+      - Streak: ${currentStreak} days
 
-OTHER EXAMPLES OF THE VIBE (use for inspiration, not literally):
+      EXAMPLES OF THE VIBE:
 
-"Waiting until panic mode to start? (Same.) Your brain gets hooked on that last-minute adrenaline rush. Trick it by creating fake urgency - tell someone you'll send them the thing by tomorrow, or bet yourself $20 you'll finish by Friday."
+      "Procrastinating until the last minute? Create fake urgency - tell a friend you'll send them your work by tomorrow. Sometimes you just need an audience to get moving."
 
-"Task so boring you'd rather watch paint dry? Change everything AROUND the task - different spot, fun music, work near a friend, fancy drink. Your brain craves novelty, so give it that without changing what you actually need to do."
+      "Task too boring to start? Change the environment - move to a different spot, put on upbeat music, make a fancy drink. Sometimes your brain needs novelty more than motivation."
 
-"Brain juggling seventeen things and dropping them all? You can only hold about 4 things at once before stuff just... vanishes. Do a brain dump - write every single thing down so your mind can stop white-knuckling the list and actually focus on doing."
+      "Drowning in your to-do list? Write everything down somewhere safe, then pick ONE thing. You can't hold it all in your head and actually do stuff at the same time."
 
-"Motivation taking a permanent vacation? That's cool - motivation is flaky anyway. Start with just 2 minutes of the easiest possible version of the task. Action creates momentum, not the other way around."
+      "Can't find the energy to start? Set a timer for 2 minutes and do the easiest possible version. Starting creates momentum - waiting for motivation doesn't."
 
-Return ONLY the tip text, nothing else.`;
+      "Task feels overwhelming? Just do the first tiny step - open the document, grab the cleaning spray, pull out your phone. Once you start, continuing is easier."
+
+      Return ONLY the tip text, nothing else.`;
 
       const tipText = await base44.integrations.Core.InvokeLLM({
         prompt: prompt
