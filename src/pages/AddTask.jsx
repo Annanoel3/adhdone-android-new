@@ -60,49 +60,71 @@ export default function AddTask() {
 
       const prompt = `Parse task: "${inputText}"
 
-TODAY IS: ${today}
-TOMORROW IS: ${tomorrowStr}
-CURRENT TIME: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+      TODAY IS: ${today}
+      TOMORROW IS: ${tomorrowStr}
+      CURRENT TIME: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
 
-CRITICAL DISTINCTION - READ CAREFULLY:
+      CRITICAL DISTINCTION - READ CAREFULLY:
 
-"in X" vs "every X":
-- If user says "in 10 minutes" or "in 1 hour" → This is ONE-TIME ONLY
-  Set: reminder_interval="once", target_date=TODAY, target_time=CALCULATED_TIME
-  
-- If user says "every 10 minutes" or "every hour" → This is RECURRING
-  Set: reminder_interval="10min" or "1hour", no target_date/target_time
+      "in X" vs "every X":
+      - If user says "in 10 minutes" or "in 1 hour" → This is ONE-TIME ONLY
+      Set: reminder_interval="once", target_date=TODAY, target_time=CALCULATED_TIME
 
-Examples:
-❌ WRONG: "in 10 minutes" → reminder_interval="10min" 
-✅ CORRECT: "in 10 minutes" → reminder_interval="once", target_time="14:35" (if now is 14:25)
+      - If user says "every 10 minutes" or "every hour" → This is RECURRING
+      Set: reminder_interval="10min" or "1hour", no target_date/target_time
 
-❌ WRONG: "every hour" → reminder_interval="once", target_time="15:25"
-✅ CORRECT: "every hour" → reminder_interval="1hour"
+      Examples:
+      ❌ WRONG: "in 10 minutes" → reminder_interval="10min" 
+      ✅ CORRECT: "in 10 minutes" → reminder_interval="once", target_time="14:35" (if now is 14:25)
 
-Other rules:
-- "at 2pm" → ONE-TIME, reminder_interval="once", target_time="14:00"
-- "tomorrow at 2pm" → ONE-TIME, reminder_interval="once", target_date=TOMORROW, target_time="14:00"
-- "daily"/"every day" → reminder_interval="daily"
-- "every other day" → reminder_interval="every_other_day"
+      ❌ WRONG: "every hour" → reminder_interval="once", target_time="15:25"
+      ✅ CORRECT: "every hour" → reminder_interval="1hour"
 
-Extract:
-1. Clean title (remove "remind me", "I need to", "in X minutes/hours", etc)
-2. Urgency: low/medium/high/urgent
-3. Energy: low/medium/high
-4. target_date: ONLY for "in X" (TODAY) or "tomorrow" or specific dates
-5. target_time: ONLY for "in X" (calculate) or "at 2pm" (specific time) - format HH:MM 24-hour
-6. reminder_interval: "once" for "in X" OR "at X" | 10min/20min/30min/1hour/2hours for "every X" | daily/every_other_day
+      Other rules:
+      - "at 2pm" → ONE-TIME, reminder_interval="once", target_time="14:00"
+      - "tomorrow at 2pm" → ONE-TIME, reminder_interval="once", target_date=TOMORROW, target_time="14:00"
+      - "daily"/"every day" → reminder_interval="daily"
+      - "every other day" → reminder_interval="every_other_day"
 
-JSON:
-{
-  "title": "clean title",
-  "urgency": "medium",
-  "energy_required": "medium",
-  "target_date": "YYYY-MM-DD or null",
-  "target_time": "HH:MM or null",
-  "reminder_interval": "10min|20min|30min|1hour|2hours|daily|every_other_day|once|null"
-}`;
+      SMART SUGGESTIONS (if NO timing is specified):
+      Analyze the task and suggest appropriate reminder_interval AND urgency:
+
+      Examples of smart suggestions:
+      - "clean the Legos off the floor" → reminder_interval="1hour", urgency="medium"
+      - "clean the dishes" → reminder_interval="2hours", urgency="medium"
+      - "give the dog a bath" → reminder_interval="daily", urgency="low"
+      - "make dentist appointment" → reminder_interval="1hour", urgency="high"
+      - "call mom" → reminder_interval="daily", urgency="medium"
+      - "pick up package" → reminder_interval="2hours", urgency="high"
+      - "water plants" → reminder_interval="daily", urgency="low"
+      - "take out trash" → reminder_interval="1hour", urgency="medium"
+      - "reply to email" → reminder_interval="1hour", urgency="high"
+      - "exercise" → reminder_interval="daily", urgency="medium"
+
+      Guidelines for suggestions:
+      - Urgent/time-sensitive tasks (appointments, pickups, deadlines) → 1hour, urgency="high" or "urgent"
+      - Quick chores/cleanup → 1hour or 2hours, urgency="medium"
+      - Daily habits/routines → daily, urgency="low" or "medium"
+      - Important but not urgent → 2hours or daily, urgency="medium"
+      - One-off tasks without deadline → 2hours, urgency="medium"
+
+      Extract:
+      1. Clean title (remove "remind me", "I need to", "in X minutes/hours", etc)
+      2. Urgency: low/medium/high/urgent (ALWAYS suggest based on task type)
+      3. Energy: low/medium/high (ALWAYS suggest based on task type)
+      4. target_date: ONLY for "in X" (TODAY) or "tomorrow" or specific dates
+      5. target_time: ONLY for "in X" (calculate) or "at 2pm" (specific time) - format HH:MM 24-hour
+      6. reminder_interval: "once" for "in X" OR "at X" | 10min/20min/30min/1hour/2hours for "every X" | daily/every_other_day (ALWAYS suggest if not specified)
+
+      JSON:
+      {
+      "title": "clean title",
+      "urgency": "medium",
+      "energy_required": "medium",
+      "target_date": "YYYY-MM-DD or null",
+      "target_time": "HH:MM or null",
+      "reminder_interval": "10min|20min|30min|1hour|2hours|daily|every_other_day|once|null"
+      }`;
 
       // First, check if this belongs in parking lot vs task
       console.log('🔄 [PROCESS] Checking if this is a parking lot idea or task...');
