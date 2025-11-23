@@ -38,10 +38,56 @@ export default function AddTask() {
     return () => clearInterval(interval);
   }, []);
 
+  const detectMultipleTasks = async (inputText) => {
+    console.log('🔍 [DETECT] Checking if input contains multiple tasks...');
+
+    const multiTaskPrompt = `Analyze this input and determine if it contains multiple separate tasks:
+
+  INPUT: "${inputText}"
+
+  If it contains multiple distinct tasks (separated by "and", commas, or just logically separate actions), split them.
+  If it's just ONE task with details/context, keep it as one.
+
+  Examples of MULTIPLE tasks:
+  - "clean the dishes and take out the trash"
+  - "call dentist, schedule car appointment, pay rent"
+  - "do laundry then fold clothes and put them away" (3 tasks)
+  - "buy milk eggs and bread"
+
+  Examples of SINGLE task:
+  - "clean the kitchen thoroughly including dishes and counters" (one task with details)
+  - "call dentist about tooth pain" (one task with context)
+
+  Return JSON:
+  {
+  "is_multiple": true/false,
+  "tasks": ["task 1", "task 2", ...] (if multiple) or ["original input"] (if single)
+  }`;
+
+    try {
+      const result = await base44.integrations.Core.InvokeLLM({
+        prompt: multiTaskPrompt,
+        response_json_schema: {
+          type: "object",
+          properties: {
+            is_multiple: { type: "boolean" },
+            tasks: { type: "array", items: { type: "string" } }
+          }
+        }
+      });
+
+      console.log('🔍 [DETECT] Result:', result);
+      return result.tasks || [inputText];
+    } catch (error) {
+      console.error('🔍 [DETECT] Error detecting tasks, treating as single:', error);
+      return [inputText];
+    }
+  };
+
   const processAndCreateTask = async (inputText) => {
     console.log('🔄 [PROCESS] ========== START ==========');
     console.log('🔄 [PROCESS] Input:', inputText);
-    
+
     if (!inputText.trim()) {
       console.log('🔄 [PROCESS] ❌ Empty input');
       return false;
@@ -564,10 +610,18 @@ export default function AddTask() {
       });
 
       if (response?.data?.success && response?.data?.transcription) {
-        // CRITICAL FIX: Wait for task creation before navigating
-        const success = await processAndCreateTask(response.data.transcription);
-        if (success && !showAdvanceReminderDialog) {
-          // Only navigate if not showing advance reminder dialog
+        // Detect if multiple tasks
+        const taskList = await detectMultipleTasks(response.data.transcription);
+        console.log('🎤 [VOICE] Detected', taskList.length, 'task(s)');
+
+        // Process each task
+        let allSuccess = true;
+        for (const taskText of taskList) {
+          const success = await processAndCreateTask(taskText);
+          if (!success) allSuccess = false;
+        }
+
+        if (allSuccess && !showAdvanceReminderDialog) {
           navigate(createPageUrl("Home"), { state: { reload: true } });
         }
       } else {
@@ -593,19 +647,27 @@ export default function AddTask() {
     setIsProcessing(true);
     const input = textInput;
     setTextInput('');
-    
+
     try {
-      console.log('📝 [TEXT INPUT] Calling processAndCreateTask...');
-      const success = await processAndCreateTask(input);
-      console.log('📝 [TEXT INPUT] processAndCreateTask result:', success);
-      
+      // Detect if multiple tasks
+      const taskList = await detectMultipleTasks(input);
+      console.log('📝 [TEXT INPUT] Detected', taskList.length, 'task(s)');
+
+      // Process each task
+      let allSuccess = true;
+      for (const taskText of taskList) {
+        console.log('📝 [TEXT INPUT] Processing:', taskText);
+        const success = await processAndCreateTask(taskText);
+        if (!success) allSuccess = false;
+      }
+
       setIsProcessing(false);
-      
-      if (success && !showAdvanceReminderDialog) {
-        console.log('📝 [TEXT INPUT] ✅ Success, navigating to Home');
+
+      if (allSuccess && !showAdvanceReminderDialog) {
+        console.log('📝 [TEXT INPUT] ✅ All successful, navigating to Home');
         navigate(createPageUrl("Home"), { state: { reload: true } });
       } else {
-        console.log('📝 [TEXT INPUT] ⚠️ Not navigating:', { success, showAdvanceReminderDialog });
+        console.log('📝 [TEXT INPUT] ⚠️ Not navigating:', { allSuccess, showAdvanceReminderDialog });
       }
     } catch (error) {
       console.error('📝 [TEXT INPUT] ❌ ERROR:', error);
