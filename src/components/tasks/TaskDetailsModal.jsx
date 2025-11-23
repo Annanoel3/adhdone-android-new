@@ -787,19 +787,64 @@ Return JSON:
                     <button className="cursor-pointer hover:opacity-80 transition-opacity border px-3 py-1 rounded-full text-sm font-medium bg-white flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {formatReminderInterval(task.reminder_interval)}
+                      {(task.reminder_interval === 'daily' || task.reminder_interval === 'every_other_day') && task.next_reminder && (
+                        <span className="ml-1">• {formatReminderTime(task.next_reminder)}</span>
+                      )}
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-56 p-2">
-                    <div className="space-y-1">
-                      <button onClick={() => handleUpdateField('reminder_interval', '10min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 10 minutes</button>
-                      <button onClick={() => handleUpdateField('reminder_interval', '20min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 20 minutes</button>
-                      <button onClick={() => handleUpdateField('reminder_interval', '30min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 30 minutes</button>
-                      <button onClick={() => handleUpdateField('reminder_interval', '1hour')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every hour</button>
-                      <button onClick={() => handleUpdateField('reminder_interval', '2hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 2 hours</button>
-                      <button onClick={() => handleUpdateField('reminder_interval', 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
-                      <button onClick={() => handleUpdateField('reminder_interval', 'every_other_day')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every other day</button>
-                      <div className="border-t my-1"></div>
-                      <button onClick={() => handleUpdateField('reminder_interval', 'once')} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium">📅 Set Specific Date Instead</button>
+                  <PopoverContent className={`w-72 p-4 ${
+                    theme === 'dark' 
+                      ? 'bg-gray-800 border-gray-700 text-gray-100' 
+                      : 'bg-white border-gray-200'
+                  }`}>
+                    <div className="space-y-3">
+                      {/* Time picker for daily/every_other_day */}
+                      {(task.reminder_interval === 'daily' || task.reminder_interval === 'every_other_day') && (
+                        <div className="pb-3 border-b">
+                          <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
+                            Reminder Time:
+                          </label>
+                          <input
+                            type="time"
+                            defaultValue={getCurrentReminderTime(task) || '09:00'}
+                            onChange={(e) => {
+                              const now = new Date();
+                              const [hours, minutes] = e.target.value.split(':');
+                              let nextReminder = new Date();
+                              nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                              
+                              // If time is in the past today, set for tomorrow
+                              if (nextReminder <= now) {
+                                if (task.reminder_interval === 'daily') {
+                                  nextReminder.setDate(nextReminder.getDate() + 1);
+                                } else {
+                                  nextReminder.setDate(nextReminder.getDate() + 2);
+                                }
+                              }
+                              
+                              handleUpdateReminderTime(e.target.value, nextReminder.toISOString().split('T')[0]);
+                            }}
+                            className={`w-full border rounded px-3 py-2 ${
+                              theme === 'dark'
+                                ? 'bg-gray-900 border-gray-600 text-gray-100'
+                                : 'bg-white border-gray-300 text-gray-900'
+                            }`}
+                          />
+                        </div>
+                      )}
+                      
+                      {/* Interval options */}
+                      <div className="space-y-1">
+                        <button onClick={() => handleUpdateField('reminder_interval', '10min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 10 minutes</button>
+                        <button onClick={() => handleUpdateField('reminder_interval', '20min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 20 minutes</button>
+                        <button onClick={() => handleUpdateField('reminder_interval', '30min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 30 minutes</button>
+                        <button onClick={() => handleUpdateField('reminder_interval', '1hour')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every hour</button>
+                        <button onClick={() => handleUpdateField('reminder_interval', '2hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 2 hours</button>
+                        <button onClick={() => handleUpdateField('reminder_interval', 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
+                        <button onClick={() => handleUpdateField('reminder_interval', 'every_other_day')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every other day</button>
+                        <div className="border-t my-1"></div>
+                        <button onClick={() => handleUpdateField('reminder_interval', 'once')} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium">📅 Set Specific Date Instead</button>
+                      </div>
                     </div>
                   </PopoverContent>
                 </Popover>
