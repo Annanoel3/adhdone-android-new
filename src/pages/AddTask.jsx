@@ -45,18 +45,20 @@ export default function AddTask() {
 
   INPUT: "${inputText}"
 
-  If it contains multiple distinct tasks (separated by "and", commas, or just logically separate actions), split them.
-  If it's just ONE task with details/context, keep it as one.
+  CRITICAL: Check if the second part DEPENDS on the first part (uses pronouns like "them", "they", "it", or requires context from first part).
+  If it's dependent, keep as ONE task. If independent, split into multiple.
 
-  Examples of MULTIPLE tasks:
-  - "clean the dishes and take out the trash"
-  - "call dentist, schedule car appointment, pay rent"
-  - "do laundry then fold clothes and put them away" (3 tasks)
-  - "buy milk eggs and bread"
+  Examples of MULTIPLE independent tasks:
+  - "clean the dishes and take out the trash" → ["clean the dishes", "take out the trash"]
+  - "call dentist, schedule car appointment, pay rent" → 3 separate tasks
+  - "buy milk and eggs, then call mom" → ["buy milk and eggs", "call mom"]
 
-  Examples of SINGLE task:
-  - "clean the kitchen thoroughly including dishes and counters" (one task with details)
-  - "call dentist about tooth pain" (one task with context)
+  Examples of SINGLE task (dependent parts):
+  - "call the mini place and ask them to send recommendations by email" → ONE task ("them" refers to mini place)
+  - "text Sarah and see if she wants to meet up" → ONE task ("she" refers to Sarah)
+  - "open the document and add the notes" → ONE task ("the document" carries over)
+  - "clean the kitchen thoroughly including dishes and counters" → ONE task (details of same task)
+  - "call dentist about tooth pain" → ONE task (additional context)
 
   Return JSON:
   {
