@@ -45,20 +45,25 @@ export default function AddTask() {
 
   INPUT: "${inputText}"
 
-  CRITICAL: Check if the second part DEPENDS on the first part (uses pronouns like "them", "they", "it", or requires context from first part).
-  If it's dependent, keep as ONE task. If independent, split into multiple.
+  CRITICAL RULE: Two UNRELATED actions = SPLIT. Related/dependent parts = KEEP AS ONE.
 
-  Examples of MULTIPLE independent tasks:
-  - "clean the dishes and take out the trash" → ["clean the dishes", "take out the trash"]
-  - "call dentist, schedule car appointment, pay rent" → 3 separate tasks
-  - "buy milk and eggs, then call mom" → ["buy milk and eggs", "call mom"]
+  Check if the second part DEPENDS on the first:
+  - Uses pronouns (them, they, it, her, him) referring to first part? → ONE task
+  - Requires context from first part to make sense? → ONE task
+  - Completely unrelated actions that can be done independently? → SPLIT
 
-  Examples of SINGLE task (dependent parts):
-  - "call the mini place and ask them to send recommendations by email" → ONE task ("them" refers to mini place)
-  - "text Sarah and see if she wants to meet up" → ONE task ("she" refers to Sarah)
-  - "open the document and add the notes" → ONE task ("the document" carries over)
-  - "clean the kitchen thoroughly including dishes and counters" → ONE task (details of same task)
-  - "call dentist about tooth pain" → ONE task (additional context)
+  Examples of MULTIPLE independent tasks (SPLIT THESE):
+  - "clean the dishes and take out the trash" → 2 tasks (unrelated chores)
+  - "call dentist and pay rent" → 2 tasks (completely different)
+  - "buy milk, call mom, and do laundry" → 3 tasks (all independent)
+  - "water the plants and schedule dentist appointment" → 2 tasks (unrelated)
+
+  Examples of SINGLE task (KEEP AS ONE):
+  - "call the mini place and ask them to send recommendations" → ONE ("them" = mini place)
+  - "text Sarah and see if she wants to meet up" → ONE ("she" = Sarah)
+  - "open the document and add the notes" → ONE (same document)
+  - "call dentist about my tooth pain" → ONE (additional detail)
+  - "buy milk and eggs" → ONE (same shopping trip)
 
   Return JSON:
   {
