@@ -101,19 +101,32 @@ Deno.serve(async (req) => {
     let refilled = 0;
     let skipped = 0;
 
+    const now = new Date();
+
     for (const task of recurringTasks) {
-      const remainingCount = task.onesignal_notification_ids?.length || 0;
+      const interval = intervalMs[task.reminder_interval];
+      const nextReminder = task.next_reminder ? new Date(task.next_reminder) : null;
       
-      // Refill if less than 5 reminders left
-      if (remainingCount < 5) {
-        console.log(`🔋 [REFILL REMINDERS] Task "${task.title}" (${task.id}) has ${remainingCount} reminders left - refilling...`);
+      // Calculate how far into the future we have reminders scheduled
+      // If next_reminder + (10 * interval) is less than 5 intervals from now, we need to refill
+      const bufferThreshold = now.getTime() + (5 * interval);
+      const lastScheduledApprox = nextReminder ? nextReminder.getTime() + (9 * interval) : 0;
+      
+      const needsRefill = !nextReminder || nextReminder.getTime() < now.getTime() || lastScheduledApprox < bufferThreshold;
+      
+      if (needsRefill) {
+        console.log(`🔋 [REFILL REMINDERS] Task "${task.title}" (${task.id}) needs refill - next_reminder: ${task.next_reminder}`);
         
         try {
-          const now = new Date();
-          const interval = intervalMs[task.reminder_interval];
-          
-          // Start from now + interval
-          const startTime = new Date(now.getTime() + interval);
+          // Start from now + interval (or next_reminder if it's in the future)
+          let startTime;
+          if (nextReminder && nextReminder.getTime() > now.getTime()) {
+            // Calculate where we'd be after existing scheduled reminders
+            startTime = new Date(nextReminder.getTime() + (10 * interval));
+          } else {
+            // Start fresh from now
+            startTime = new Date(now.getTime() + interval);
+          }
           
           const newNotificationIds = await scheduleRecurringReminders({
             email: task.notification_recipient_email || task.created_by,
@@ -126,17 +139,18 @@ Deno.serve(async (req) => {
           });
 
           if (newNotificationIds.length > 0) {
-            // Append new notification IDs to existing ones
-            const updatedIds = [
-              ...(task.onesignal_notification_ids || []),
-              ...newNotificationIds
-            ];
+            // Calculate the new next_reminder (first upcoming one)
+            const newNextReminder = nextReminder && nextReminder.getTime() > now.getTime() 
+              ? nextReminder 
+              : new Date(now.getTime() + interval);
             
+            // Replace old notification IDs with new ones (old ones have already fired)
             await base44.asServiceRole.entities.Task.update(task.id, {
-              onesignal_notification_ids: updatedIds
+              onesignal_notification_ids: newNotificationIds,
+              next_reminder: newNextReminder.toISOString()
             });
             
-            console.log(`✅ [REFILL REMINDERS] Added ${newNotificationIds.length} reminders to task ${task.id}`);
+            console.log(`✅ [REFILL REMINDERS] Scheduled ${newNotificationIds.length} reminders for task ${task.id}, next: ${newNextReminder.toISOString()}`);
             refilled++;
           }
         } catch (error) {
