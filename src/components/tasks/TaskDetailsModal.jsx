@@ -365,11 +365,21 @@ Return JSON:
         }
       }
 
-      // If changing reminder interval, recalculate next_reminder and schedule new one
+      // If changing reminder interval, recalculate next_reminder and schedule new notifications
       if (field === 'reminder_interval') {
         const now = new Date();
-        let nextReminderDate = null; // This will hold the new next_reminder date object
-        const currentUser = await User.me(); // Get user once outside the scheduling block
+        let nextReminderDate = null;
+        const currentUser = await User.me();
+
+        const intervalMs = {
+          '10min': 10 * 60 * 1000,
+          '20min': 20 * 60 * 1000,
+          '30min': 30 * 60 * 1000,
+          '1hour': 60 * 60 * 1000,
+          '2hours': 2 * 60 * 60 * 1000,
+          'daily': 24 * 60 * 60 * 1000,
+          'every_other_day': 2 * 24 * 60 * 60 * 1000,
+        };
 
         if (value === 'once') {
           // If changing to 'once', keep current next_reminder if it exists,
@@ -377,7 +387,6 @@ Return JSON:
           if (task.next_reminder) {
             nextReminderDate = new Date(task.next_reminder);
           } else {
-            // Default to tomorrow 9 AM if no reminder was set before
             nextReminderDate = new Date();
             nextReminderDate.setDate(nextReminderDate.getDate() + 1);
             nextReminderDate.setHours(9, 0, 0, 0);
@@ -386,7 +395,33 @@ Return JSON:
           if (nextReminderDate <= now) {
             nextReminderDate.setDate(nextReminderDate.getDate() + 1);
           }
-        } else { // Recurring interval
+          
+          updates.next_reminder = nextReminderDate.toISOString();
+          updates.onesignal_notification_ids = [];
+          
+          // Schedule single one-time reminder
+          try {
+            const notificationId = await scheduleReminder({
+              email: currentUser.email,
+              title: "Task Reminder 📋",
+              body: `${task.title}\n\nTap to mark as complete!`,
+              sendAtISO: nextReminderDate.toISOString(),
+              taskId: task.id,
+              data: {
+                screen: "/TaskNotification",
+                taskId: task.id,
+                urgency: task.urgency,
+                type: 'task_reminder'
+              }
+            });
+            if (notificationId) {
+              updates.onesignal_notification_ids = [notificationId];
+            }
+          } catch (error) {
+            console.error("Failed to schedule one-time reminder:", error);
+          }
+        } else if (intervalMs[value]) {
+          // Recurring interval - calculate next reminder and schedule batch
           nextReminderDate = new Date(now.getTime());
           switch (value) {
             case '10min': nextReminderDate.setMinutes(nextReminderDate.getMinutes() + 10); break;
@@ -396,30 +431,32 @@ Return JSON:
             case '2hours': nextReminderDate.setHours(nextReminderDate.getHours() + 2); break;
             case 'daily': nextReminderDate.setDate(nextReminderDate.getDate() + 1); break;
             case 'every_other_day': nextReminderDate.setDate(nextReminderDate.getDate() + 2); break;
-            // No default needed, as value is expected to be one of the above for recurring
           }
-        }
-        
-        updates.next_reminder = nextReminderDate ? nextReminderDate.toISOString() : null;
-        
-        // Schedule the new reminder if nextReminderDate is valid
-        if (nextReminderDate) {
+          
+          updates.next_reminder = nextReminderDate.toISOString();
+          
+          // Schedule recurring reminders (10 at a time)
           try {
-            await scheduleReminder({
+            const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
+            const newNotificationIds = await scheduleRecurringReminders({
               email: currentUser.email,
               title: "Task Reminder 📋",
-              body: task.title,
-              sendAtISO: nextReminderDate.toISOString(),
+              body: `${task.title}\n\nTap to mark as complete!`,
+              startTime: nextReminderDate.toISOString(),
+              intervalMs: intervalMs[value],
+              count: 10,
               taskId: task.id,
               data: {
-                screen: "/Tasks",
+                screen: "/TaskNotification",
                 taskId: task.id,
                 urgency: task.urgency,
                 type: 'task_reminder'
               }
             });
+            updates.onesignal_notification_ids = newNotificationIds || [];
           } catch (error) {
-            console.error("Failed to schedule reminder:", error);
+            console.error("Failed to schedule recurring reminders:", error);
+            updates.onesignal_notification_ids = [];
           }
         }
       }
