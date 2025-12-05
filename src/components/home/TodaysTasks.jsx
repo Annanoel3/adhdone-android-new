@@ -108,8 +108,21 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
   };
 
   const handleIntervalChange = async (task, newInterval) => {
+    console.log('🔄 [INTERVAL CHANGE] Updating interval to:', newInterval);
+    
+    // Cancel existing reminders
+    if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+      try {
+        const { cancelScheduledReminder } = await import('../utils/reminderScheduler');
+        await cancelScheduledReminder(task.onesignal_notification_ids);
+        console.log('🔄 [INTERVAL CHANGE] Cancelled old reminders');
+      } catch (error) {
+        console.error('Failed to cancel reminders:', error);
+      }
+    }
+    
     const now = new Date();
-    let nextReminder = new Date(task.next_reminder || now); // Initialize with existing reminder or current time
+    let nextReminder = new Date(task.next_reminder || now);
 
     // If switching FROM 'once' TO a recurring interval, we should ensure nextReminder is in the future.
     // If switching TO 'once', we might want to preserve an existing next_reminder or default to current date.
