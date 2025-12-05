@@ -183,9 +183,70 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
         break;
     }
 
+    const intervalMs = {
+      '10min': 10 * 60 * 1000,
+      '20min': 20 * 60 * 1000,
+      '30min': 30 * 60 * 1000,
+      '1hour': 60 * 60 * 1000,
+      '2hours': 2 * 60 * 60 * 1000,
+      'daily': 24 * 60 * 60 * 1000,
+      'every_other_day': 2 * 24 * 60 * 60 * 1000,
+    };
+
+    let newNotificationIds = [];
+    
+    // Schedule new reminders
+    try {
+      const currentUser = await base44.auth.me();
+      
+      if (newInterval === 'once') {
+        // Schedule single one-time reminder
+        const { scheduleReminder } = await import('../utils/reminderScheduler');
+        const notificationId = await scheduleReminder({
+          email: currentUser.email,
+          title: "Task Reminder 📋",
+          body: `${task.title}\n\nTap to mark as complete!`,
+          sendAtISO: nextReminder.toISOString(),
+          taskId: task.id,
+          data: {
+            screen: "/TaskNotification",
+            taskId: task.id,
+            urgency: task.urgency,
+            type: 'task_reminder'
+          }
+        });
+        if (notificationId) {
+          newNotificationIds = [notificationId];
+        }
+        console.log('🔄 [INTERVAL CHANGE] Scheduled one-time reminder:', notificationId);
+      } else if (intervalMs[newInterval]) {
+        // Schedule recurring reminders (10 at a time)
+        const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
+        newNotificationIds = await scheduleRecurringReminders({
+          email: currentUser.email,
+          title: "Task Reminder 📋",
+          body: `${task.title}\n\nTap to mark as complete!`,
+          startTime: nextReminder.toISOString(),
+          intervalMs: intervalMs[newInterval],
+          count: 10,
+          taskId: task.id,
+          data: {
+            screen: "/TaskNotification",
+            taskId: task.id,
+            urgency: task.urgency,
+            type: 'task_reminder'
+          }
+        });
+        console.log('🔄 [INTERVAL CHANGE] Scheduled recurring reminders:', newNotificationIds.length);
+      }
+    } catch (error) {
+      console.error('Failed to schedule new reminders:', error);
+    }
+
     await base44.entities.Task.update(task.id, { 
       reminder_interval: newInterval,
-      next_reminder: nextReminder.toISOString()
+      next_reminder: nextReminder.toISOString(),
+      onesignal_notification_ids: newNotificationIds
     });
     window.location.reload();
   };
