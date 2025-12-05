@@ -27,6 +27,8 @@ async function scheduleRecurringReminders({
     const sendAt = new Date(new Date(startTime).getTime() + (intervalMs * i));
     
     try {
+      console.log(`[scheduleRecurringReminders] Scheduling #${i + 1}/${count} for ${sendAt.toISOString()}`);
+      
       const response = await fetch(`${Deno.env.get('SCHEDULER_URL')}/schedulePush`, {
         method: 'POST',
         headers: {
@@ -36,25 +38,32 @@ async function scheduleRecurringReminders({
         body: JSON.stringify({
           toUserExternalId: email,
           title,
-          body,
+          body: `${body}\n\nTap to mark as complete!`,
           sendAtISO: sendAt.toISOString(),
           data: {
-            screen: "/Tasks",
+            screen: "/TaskNotification",
             taskId,
+            urgency: 'medium',
             type: 'task_reminder'
           }
         })
       });
 
       const result = await response.json();
+      console.log(`[scheduleRecurringReminders] Response #${i + 1}:`, result);
+      
       if (result.notificationId) {
         notificationIds.push(result.notificationId);
+        console.log(`[scheduleRecurringReminders] ✅ Added notification ID: ${result.notificationId}`);
+      } else {
+        console.error(`[scheduleRecurringReminders] ❌ No notification ID in response:`, result);
       }
     } catch (error) {
-      console.error(`Failed to schedule reminder #${i + 1}:`, error);
+      console.error(`[scheduleRecurringReminders] ❌ Failed to schedule reminder #${i + 1}:`, error);
     }
   }
   
+  console.log(`[scheduleRecurringReminders] Total scheduled: ${notificationIds.length}/${count}`);
   return notificationIds;
 }
 
