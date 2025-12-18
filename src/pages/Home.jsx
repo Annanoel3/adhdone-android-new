@@ -129,11 +129,15 @@ export default function Home() {
     // Cancel all scheduled reminders when task is completed
     if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
       try {
+        console.log('🔕 [COMPLETE] Cancelling reminders:', task.onesignal_notification_ids);
         const { cancelScheduledReminder } = await import('../components/utils/reminderScheduler');
         await cancelScheduledReminder(task.onesignal_notification_ids);
+        console.log('✅ [COMPLETE] Successfully cancelled reminders');
       } catch (error) {
-        console.error("Failed to cancel reminders on completion:", error);
+        console.error("❌ [COMPLETE] Failed to cancel reminders:", error);
       }
+    } else {
+      console.log('ℹ️ [COMPLETE] No reminders to cancel for this task');
     }
     
     // Optimistically update UI
@@ -184,8 +188,9 @@ export default function Home() {
     setShowEndOfDayReview(false);
   };
 
+  // FIXED: Filter out subtasks from today's completed count
   const todayCompleted = tasks.filter(t => {
-    if (t.status !== 'completed' || !t.completed_at) return false;
+    if (t.status !== 'completed' || !t.completed_at || t.parent_task_id) return false;
     const today = getLocalDateString(new Date());
     const completedDate = getLocalDateString(new Date(t.completed_at));
     return completedDate === today;
