@@ -200,24 +200,25 @@ export default function Home() {
 
   // Debug logging
   useEffect(() => {
-    console.log('🔍 [HOME DEBUG] Tasks loaded:', tasks.length);
-    console.log('🔍 [HOME DEBUG] Completed tasks:', tasks.filter(t => t.status === 'completed').length);
-    console.log('🔍 [HOME DEBUG] Today completed:', todayCompleted.length);
+    console.log('🔍 [HOME DEBUG] ========== TASK COUNT DEBUG ==========');
+    console.log('🔍 [HOME DEBUG] Total tasks loaded:', tasks.length);
+    console.log('🔍 [HOME DEBUG] Active tasks (all):', tasks.filter(t => t.status === 'active').length);
+    console.log('🔍 [HOME DEBUG] Active PARENT tasks:', activeTasks.length);
+    console.log('🔍 [HOME DEBUG] Active SUBTASKS:', tasks.filter(t => t.status === 'active' && t.parent_task_id).length);
+    console.log('🔍 [HOME DEBUG] Completed tasks (all):', tasks.filter(t => t.status === 'completed').length);
+    console.log('🔍 [HOME DEBUG] Completed today (parent only):', todayCompleted.length);
     
-    // Log a few completed tasks with their completed_at dates
-    const completed = tasks.filter(t => t.status === 'completed' && t.completed_at);
-    console.log('🔍 [HOME DEBUG] Sample completed tasks:', completed.slice(0, 3).map(t => ({
-      title: t.title,
-      completed_at: t.completed_at,
-      date_utc: new Date(t.completed_at).toISOString().split('T')[0],
-      date_local: getLocalDateString(new Date(t.completed_at))
-    })));
+    // Show all active parent tasks
+    const activeParents = tasks.filter(t => t.status === 'active' && !t.parent_task_id);
+    console.log('🔍 [HOME DEBUG] Active parent tasks list:');
+    activeParents.forEach((t, i) => {
+      console.log(`  ${i+1}. "${t.title}" (id: ${t.id})`);
+    });
     
     const today = getLocalDateString(new Date());
-    const todayUTC = new Date().toISOString().split('T')[0];
-    console.log('🔍 [HOME DEBUG] Today LOCAL:', today);
-    console.log('🔍 [HOME DEBUG] Today UTC:', todayUTC);
-  }, [tasks, todayCompleted]);
+    console.log('🔍 [HOME DEBUG] Today date:', today);
+    console.log('🔍 [HOME DEBUG] =====================================');
+  }, [tasks, todayCompleted, activeTasks]);
 
   return (
     <div className={`min-h-screen p-4 md:p-8 w-full ${
