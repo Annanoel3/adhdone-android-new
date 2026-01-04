@@ -297,6 +297,7 @@ export default function Tasks() {
                     setIsEditModalOpen(true);
                   }}
                   onComplete={handleComplete}
+                  onUncomplete={handleUncomplete}
                   onSnooze={handleSnooze}
                   onShowDetails={(taskToShow) => {
                     setSelectedTask(taskToShow);
