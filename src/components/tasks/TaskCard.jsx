@@ -28,6 +28,7 @@ export default function TaskCard({
   onEditTitle,
   onEdit,
   onComplete,
+  onUncomplete,
   onSnooze,
   onShowDetails,
   onDelete,
@@ -551,15 +552,28 @@ export default function TaskCard({
                 <Trash2 className="w-4 h-4" />
               </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleCompleteTask}
-              className={`h-8 w-8 flex-shrink-0 ${theme === 'dark' ? 'hover:bg-gray-700 text-green-500 hover:text-green-400' : 'text-green-600 hover:text-green-700'}`}
-              aria-label="Mark task complete"
-            >
-              <CheckCircle2 className="w-5 h-5" />
-            </Button>
+            {task.status === 'completed' ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onUncomplete && onUncomplete(task)}
+                className={`flex items-center gap-2 flex-shrink-0 ${theme === 'dark' ? 'hover:bg-gray-700 text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
+                aria-label="Mark as active"
+              >
+                <Clock className="w-4 h-4" />
+                Make Active
+              </Button>
+            ) : (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleCompleteTask}
+                className={`h-8 w-8 flex-shrink-0 ${theme === 'dark' ? 'hover:bg-gray-700 text-green-500 hover:text-green-400' : 'text-green-600 hover:text-green-700'}`}
+                aria-label="Mark task complete"
+              >
+                <CheckCircle2 className="w-5 h-5" />
+              </Button>
+            )}
           </div>
 
           {(task.type === 'task' || task.type === 'reminder') && (
