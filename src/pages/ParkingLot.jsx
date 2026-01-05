@@ -240,9 +240,14 @@ export default function ParkingLot() {
       const idea = ideas.find(i => i.id === ideaId);
       const updatedPictures = [...(idea.pictures || []), file_url];
       await base44.entities.ParkingLotIdea.update(ideaId, { pictures: updatedPictures });
-      queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+      
+      // Invalidate after a short delay to prevent white screen
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+      }, 100);
     } catch (error) {
       console.error("Error uploading picture:", error);
+      alert("Failed to upload image. Please try again.");
     } finally {
       setIsUploadingPicture(null);
     }
@@ -252,12 +257,20 @@ export default function ParkingLot() {
     const idea = ideas.find(i => i.id === ideaId);
     const updatedPictures = idea.pictures.filter(p => p !== pictureUrl);
     await base44.entities.ParkingLotIdea.update(ideaId, { pictures: updatedPictures });
-    queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+    
+    // Invalidate after a short delay to prevent white screen
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+    }, 100);
   };
 
   const handleNotesUpdate = async (ideaId, notes) => {
     await base44.entities.ParkingLotIdea.update(ideaId, { notes });
-    queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+    
+    // Invalidate after a short delay to prevent issues
+    setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+    }, 100);
   };
 
   const deleteIdeaMutation = useMutation({

@@ -714,10 +714,14 @@ Return JSON:
       const { file_url } = await base44.integrations.Core.UploadFile({ file });
       const updatedPictures = [...taskPictures, file_url];
       setTaskPictures(updatedPictures);
-      await Task.update(task.id, { pictures: updatedPictures });
-      onUpdate();
+      
+      // Update in background without calling onUpdate to avoid reload
+      Task.update(task.id, { pictures: updatedPictures }).catch(error => {
+        console.error("Error updating task pictures:", error);
+      });
     } catch (error) {
       console.error("Error uploading picture:", error);
+      alert("Failed to upload image. Please try again.");
     } finally {
       setIsUploadingPicture(false);
     }
@@ -726,13 +730,18 @@ Return JSON:
   const handleRemovePicture = async (pictureUrl) => {
     const updatedPictures = taskPictures.filter(p => p !== pictureUrl);
     setTaskPictures(updatedPictures);
-    await Task.update(task.id, { pictures: updatedPictures });
-    onUpdate();
+    
+    // Update in background without calling onUpdate to avoid reload
+    Task.update(task.id, { pictures: updatedPictures }).catch(error => {
+      console.error("Error updating task pictures:", error);
+    });
   };
 
   const handleNotesUpdate = async () => {
-    await Task.update(task.id, { notes: taskNotes });
-    onUpdate();
+    // Update in background without calling onUpdate to avoid reload
+    Task.update(task.id, { notes: taskNotes }).catch(error => {
+      console.error("Error updating task notes:", error);
+    });
   };
 
   return (
