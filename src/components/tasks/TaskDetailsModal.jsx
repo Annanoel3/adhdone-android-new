@@ -38,6 +38,7 @@ import { InvokeLLM } from "@/integrations/Core";
 import { scheduleReminder, cancelScheduledReminder } from "../utils/reminderScheduler";
 import { User } from "@/entities/User";
 import { base44 } from "@/api/base44Client";
+import ImageViewer from "../shared/ImageViewer";
 import {
   Popover,
   PopoverContent,
@@ -65,6 +66,7 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
   const [isUploadingPicture, setIsUploadingPicture] = useState(false);
   const [taskPictures, setTaskPictures] = useState([]);
   const [taskNotes, setTaskNotes] = useState('');
+  const [viewingImage, setViewingImage] = useState(null);
 
   useEffect(() => {
     if (task && isOpen) {
@@ -1072,10 +1074,14 @@ Return JSON:
                       <img
                         src={pic}
                         alt="Task attachment"
-                        className="w-full h-32 object-cover rounded-lg border"
+                        className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => setViewingImage(pic)}
                       />
                       <button
-                        onClick={() => handleRemovePicture(pic)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemovePicture(pic);
+                        }}
                         className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                       >
                         <X className="w-4 h-4" />
@@ -1446,6 +1452,12 @@ Return JSON:
           onUpdate();
         }}
         theme={theme}
+      />
+
+      <ImageViewer
+        imageUrl={viewingImage}
+        isOpen={!!viewingImage}
+        onClose={() => setViewingImage(null)}
       />
     </>
   );

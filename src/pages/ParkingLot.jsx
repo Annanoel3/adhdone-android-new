@@ -26,6 +26,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import ImageViewer from "../components/shared/ImageViewer";
 
 // IdeaCard component is kept as per instruction to preserve existing code,
 // though it is no longer directly used in the ParkingLot's main rendering loop
@@ -191,6 +192,7 @@ export default function ParkingLot() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [expandedNotes, setExpandedNotes] = useState({});
   const [isUploadingPicture, setIsUploadingPicture] = useState(null);
+  const [viewingImage, setViewingImage] = useState(null);
   
   const specialMode = localStorage.getItem('special_mode') || 'normal';
   
@@ -881,10 +883,14 @@ Return ONLY the category name, nothing else.`;
                         <img
                           src={pic}
                           alt="Idea attachment"
-                          className="w-full h-24 object-cover rounded border"
+                          className="w-full h-24 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={() => setViewingImage(pic)}
                         />
                         <button
-                          onClick={() => handleRemovePicture(group.parent.id, pic)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemovePicture(group.parent.id, pic);
+                          }}
                           className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
                         >
                           <X className="w-3 h-3" />
@@ -1009,6 +1015,13 @@ Return ONLY the category name, nothing else.`;
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ImageViewer
+        imageUrl={viewingImage}
+        isOpen={!!viewingImage}
+        onClose={() => setViewingImage(null)}
+      />
+
       <div style={{ paddingBottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))' }} aria-hidden="true"></div>
     </div>
   );
