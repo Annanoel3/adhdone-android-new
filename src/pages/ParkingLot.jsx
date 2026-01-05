@@ -241,12 +241,17 @@ export default function ParkingLot() {
       const { file_url } = await base44.integrations.Core.UploadFile({ file });
       const idea = ideas.find(i => i.id === ideaId);
       const updatedPictures = [...(idea.pictures || []), file_url];
-      await base44.entities.ParkingLotIdea.update(ideaId, { pictures: updatedPictures });
       
-      // Invalidate after a short delay to prevent white screen
-      setTimeout(() => {
-        queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
-      }, 100);
+      // Update in background without invalidating to prevent white screen
+      base44.entities.ParkingLotIdea.update(ideaId, { pictures: updatedPictures }).catch(error => {
+        console.error("Error updating idea pictures:", error);
+      });
+      
+      // Optimistically update local state
+      queryClient.setQueryData(['parkingLotIdeas'], (oldData) => {
+        if (!oldData) return oldData;
+        return oldData.map(i => i.id === ideaId ? { ...i, pictures: updatedPictures } : i);
+      });
     } catch (error) {
       console.error("Error uploading picture:", error);
       alert("Failed to upload image. Please try again.");
@@ -258,21 +263,30 @@ export default function ParkingLot() {
   const handleRemovePicture = async (ideaId, pictureUrl) => {
     const idea = ideas.find(i => i.id === ideaId);
     const updatedPictures = idea.pictures.filter(p => p !== pictureUrl);
-    await base44.entities.ParkingLotIdea.update(ideaId, { pictures: updatedPictures });
     
-    // Invalidate after a short delay to prevent white screen
-    setTimeout(() => {
-      queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
-    }, 100);
+    // Update in background without invalidating to prevent white screen
+    base44.entities.ParkingLotIdea.update(ideaId, { pictures: updatedPictures }).catch(error => {
+      console.error("Error updating idea pictures:", error);
+    });
+    
+    // Optimistically update local state
+    queryClient.setQueryData(['parkingLotIdeas'], (oldData) => {
+      if (!oldData) return oldData;
+      return oldData.map(i => i.id === ideaId ? { ...i, pictures: updatedPictures } : i);
+    });
   };
 
   const handleNotesUpdate = async (ideaId, notes) => {
-    await base44.entities.ParkingLotIdea.update(ideaId, { notes });
+    // Update in background without invalidating to prevent issues
+    base44.entities.ParkingLotIdea.update(ideaId, { notes }).catch(error => {
+      console.error("Error updating idea notes:", error);
+    });
     
-    // Invalidate after a short delay to prevent issues
-    setTimeout(() => {
-      queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
-    }, 100);
+    // Optimistically update local state
+    queryClient.setQueryData(['parkingLotIdeas'], (oldData) => {
+      if (!oldData) return oldData;
+      return oldData.map(i => i.id === ideaId ? { ...i, notes } : i);
+    });
   };
 
   const deleteIdeaMutation = useMutation({
