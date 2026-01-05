@@ -240,18 +240,15 @@ export default function ParkingLot() {
     try {
       const { file_url } = await base44.integrations.Core.UploadFile({ file });
       const idea = ideas.find(i => i.id === ideaId);
+      if (!idea) return;
+      
       const updatedPictures = [...(idea.pictures || []), file_url];
       
-      // Update in background without invalidating to prevent white screen
-      base44.entities.ParkingLotIdea.update(ideaId, { pictures: updatedPictures }).catch(error => {
-        console.error("Error updating idea pictures:", error);
-      });
+      // Update database in background
+      await base44.entities.ParkingLotIdea.update(ideaId, { pictures: updatedPictures });
       
-      // Optimistically update local state
-      queryClient.setQueryData(['parkingLotIdeas'], (oldData) => {
-        if (!oldData) return oldData;
-        return oldData.map(i => i.id === ideaId ? { ...i, pictures: updatedPictures } : i);
-      });
+      // Refetch to get fresh data
+      await queryClient.refetchQueries({ queryKey: ['parkingLotIdeas'] });
     } catch (error) {
       console.error("Error uploading picture:", error);
       alert("Failed to upload image. Please try again.");
@@ -262,31 +259,25 @@ export default function ParkingLot() {
 
   const handleRemovePicture = async (ideaId, pictureUrl) => {
     const idea = ideas.find(i => i.id === ideaId);
+    if (!idea) return;
+    
     const updatedPictures = idea.pictures.filter(p => p !== pictureUrl);
     
-    // Update in background without invalidating to prevent white screen
-    base44.entities.ParkingLotIdea.update(ideaId, { pictures: updatedPictures }).catch(error => {
-      console.error("Error updating idea pictures:", error);
-    });
-    
-    // Optimistically update local state
-    queryClient.setQueryData(['parkingLotIdeas'], (oldData) => {
-      if (!oldData) return oldData;
-      return oldData.map(i => i.id === ideaId ? { ...i, pictures: updatedPictures } : i);
-    });
+    try {
+      await base44.entities.ParkingLotIdea.update(ideaId, { pictures: updatedPictures });
+      await queryClient.refetchQueries({ queryKey: ['parkingLotIdeas'] });
+    } catch (error) {
+      console.error("Error removing picture:", error);
+    }
   };
 
   const handleNotesUpdate = async (ideaId, notes) => {
-    // Update in background without invalidating to prevent issues
-    base44.entities.ParkingLotIdea.update(ideaId, { notes }).catch(error => {
-      console.error("Error updating idea notes:", error);
-    });
-    
-    // Optimistically update local state
-    queryClient.setQueryData(['parkingLotIdeas'], (oldData) => {
-      if (!oldData) return oldData;
-      return oldData.map(i => i.id === ideaId ? { ...i, notes } : i);
-    });
+    try {
+      await base44.entities.ParkingLotIdea.update(ideaId, { notes });
+      await queryClient.refetchQueries({ queryKey: ['parkingLotIdeas'] });
+    } catch (error) {
+      console.error("Error updating notes:", error);
+    }
   };
 
   const deleteIdeaMutation = useMutation({
