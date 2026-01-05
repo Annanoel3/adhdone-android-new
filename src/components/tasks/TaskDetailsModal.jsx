@@ -26,7 +26,10 @@ import {
   Pencil,
   Check,
   X,
-  Lightbulb
+  Lightbulb,
+  Image as ImageIcon,
+  Upload,
+  FileText
 } from "lucide-react";
 import { Task } from "@/entities/Task";
 import TaskDecompositionModal from "./TaskDecompositionModal";
@@ -59,6 +62,9 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(task ? task.title : '');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isUploadingPicture, setIsUploadingPicture] = useState(false);
+  const [taskPictures, setTaskPictures] = useState([]);
+  const [taskNotes, setTaskNotes] = useState('');
 
   useEffect(() => {
     if (task && isOpen) {
@@ -67,6 +73,8 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
       setHasDecomposedSuccessfully(false);
       setEditedTitle(task.title);
       setIsEditingTitle(false);
+      setTaskPictures(task.pictures || []);
+      setTaskNotes(task.notes || '');
     }
   }, [task, isOpen]);
 
@@ -697,6 +705,36 @@ Return JSON:
     return formats[interval] || interval;
   };
 
+  const handlePictureUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingPicture(true);
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const updatedPictures = [...taskPictures, file_url];
+      setTaskPictures(updatedPictures);
+      await Task.update(task.id, { pictures: updatedPictures });
+      onUpdate();
+    } catch (error) {
+      console.error("Error uploading picture:", error);
+    } finally {
+      setIsUploadingPicture(false);
+    }
+  };
+
+  const handleRemovePicture = async (pictureUrl) => {
+    const updatedPictures = taskPictures.filter(p => p !== pictureUrl);
+    setTaskPictures(updatedPictures);
+    await Task.update(task.id, { pictures: updatedPictures });
+    onUpdate();
+  };
+
+  const handleNotesUpdate = async () => {
+    await Task.update(task.id, { notes: taskNotes });
+    onUpdate();
+  };
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -979,6 +1017,79 @@ Return JSON:
                   </PopoverContent>
                 </Popover>
               )}
+            </div>
+
+            {/* Pictures Section */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4" />
+                  Pictures
+                </label>
+                <label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handlePictureUpload}
+                    className="hidden"
+                    disabled={isUploadingPicture}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isUploadingPicture}
+                    className="cursor-pointer"
+                    onClick={(e) => e.currentTarget.previousElementSibling?.click()}
+                  >
+                    {isUploadingPicture ? (
+                      <>
+                        <div className="w-4 h-4 mr-2 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4 mr-2" />
+                        Upload Image
+                      </>
+                    )}
+                  </Button>
+                </label>
+              </div>
+              {taskPictures.length > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  {taskPictures.map((pic, idx) => (
+                    <div key={idx} className="relative group">
+                      <img
+                        src={pic}
+                        alt="Task attachment"
+                        className="w-full h-32 object-cover rounded-lg border"
+                      />
+                      <button
+                        onClick={() => handleRemovePicture(pic)}
+                        className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Notes Section */}
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Notes
+              </label>
+              <Textarea
+                value={taskNotes}
+                onChange={(e) => setTaskNotes(e.target.value)}
+                onBlur={handleNotesUpdate}
+                placeholder="Add any additional notes..."
+                className="min-h-[80px]"
+              />
             </div>
 
             <div className="space-y-4">
