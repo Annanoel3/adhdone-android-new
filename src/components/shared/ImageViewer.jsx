@@ -24,7 +24,10 @@ export default function ImageViewer({ imageUrl, isOpen, onClose }) {
             <X className="w-6 h-6" />
           </Button>
 
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-50">
+          <div 
+            className="absolute left-1/2 -translate-x-1/2 flex gap-2 z-50"
+            style={{ bottom: 'max(1rem, calc(1rem + env(safe-area-inset-bottom)))' }}
+          >
             <Button
               onClick={() => setZoom(Math.max(0.5, zoom - 0.25))}
               variant="ghost"
