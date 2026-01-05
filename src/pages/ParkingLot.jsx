@@ -189,6 +189,8 @@ export default function ParkingLot() {
   const [editText, setEditText] = useState("");
   const [editCategory, setEditCategory] = useState("misc");
   const [showEditModal, setShowEditModal] = useState(false);
+  const [expandedNotes, setExpandedNotes] = useState({});
+  const [isUploadingPicture, setIsUploadingPicture] = useState(null);
   
   const specialMode = localStorage.getItem('special_mode') || 'normal';
   
@@ -216,7 +218,9 @@ export default function ParkingLot() {
         urgency: 'medium',
         energy_required: 'medium',
         reminder_interval: "30min",
-        reminder_count: 0
+        reminder_count: 0,
+        pictures: ideaToConvert.pictures || [],
+        notes: ideaToConvert.notes || ''
       });
       await base44.entities.ParkingLotIdea.update(ideaToConvert.id, { converted_to_task: true });
     },
@@ -227,6 +231,33 @@ export default function ParkingLot() {
 
   const handleConvertToTask = (ideaToConvert) => {
     convertToTaskMutation.mutate(ideaToConvert);
+  };
+
+  const handlePictureUpload = async (ideaId, file) => {
+    setIsUploadingPicture(ideaId);
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      const idea = ideas.find(i => i.id === ideaId);
+      const updatedPictures = [...(idea.pictures || []), file_url];
+      await base44.entities.ParkingLotIdea.update(ideaId, { pictures: updatedPictures });
+      queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+    } catch (error) {
+      console.error("Error uploading picture:", error);
+    } finally {
+      setIsUploadingPicture(null);
+    }
+  };
+
+  const handleRemovePicture = async (ideaId, pictureUrl) => {
+    const idea = ideas.find(i => i.id === ideaId);
+    const updatedPictures = idea.pictures.filter(p => p !== pictureUrl);
+    await base44.entities.ParkingLotIdea.update(ideaId, { pictures: updatedPictures });
+    queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+  };
+
+  const handleNotesUpdate = async (ideaId, notes) => {
+    await base44.entities.ParkingLotIdea.update(ideaId, { notes });
+    queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
   };
 
   const deleteIdeaMutation = useMutation({
@@ -828,6 +859,88 @@ Return ONLY the category name, nothing else.`;
                     </form>
                   </div>
                 )}
+
+                {/* Pictures */}
+                {group.parent.pictures && group.parent.pictures.length > 0 && (
+                  <div className="mt-4 grid grid-cols-3 gap-2">
+                    {group.parent.pictures.map((pic, idx) => (
+                      <div key={idx} className="relative group">
+                        <img
+                          src={pic}
+                          alt="Idea attachment"
+                          className="w-full h-24 object-cover rounded border"
+                        />
+                        <button
+                          onClick={() => handleRemovePicture(group.parent.id, pic)}
+                          className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Notes Section */}
+                {expandedNotes[group.parent.id] && (
+                  <div className="mt-4">
+                    <Textarea
+                      defaultValue={group.parent.notes || ''}
+                      onBlur={(e) => handleNotesUpdate(group.parent.id, e.target.value)}
+                      placeholder="Add notes..."
+                      className="text-sm min-h-[80px]"
+                    />
+                  </div>
+                )}
+                {group.parent.notes && !expandedNotes[group.parent.id] && (
+                  <div className={`mt-4 p-3 rounded-lg text-sm ${
+                    theme === 'dark' ? 'bg-gray-900/50 text-gray-300' : 'bg-gray-50 text-gray-700'
+                  }`}>
+                    {group.parent.notes}
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2 mt-4 pt-3 border-t">
+                  <label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handlePictureUpload(group.parent.id, file);
+                      }}
+                      className="hidden"
+                      disabled={isUploadingPicture === group.parent.id}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={isUploadingPicture === group.parent.id}
+                      className="cursor-pointer"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.currentTarget.previousElementSibling?.click();
+                      }}
+                    >
+                      {isUploadingPicture === group.parent.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <ImageIcon className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setExpandedNotes({
+                      ...expandedNotes,
+                      [group.parent.id]: !expandedNotes[group.parent.id]
+                    })}
+                  >
+                    <FileText className="w-4 h-4" />
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))
