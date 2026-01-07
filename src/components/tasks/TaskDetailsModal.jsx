@@ -181,9 +181,11 @@ INPUT: "${transcription}"
 If it's a list of things, return each as a separate subtask.
 If it's one thing, return it as a single subtask.
 
+CRITICAL: Maintain the EXACT ORDER the items were spoken in.
+
 Return JSON:
 {
-  "subtasks": ["subtask 1", "subtask 2", ...]
+  "subtasks": ["subtask 1", "subtask 2", ...] (IN THE ORDER SPOKEN)
 }`;
 
       const response = await base44.integrations.Core.InvokeLLM({
