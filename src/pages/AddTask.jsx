@@ -105,6 +105,172 @@ export default function AddTask() {
       const currentUser = await base44.auth.me();
       console.log('🔄 [PROCESS] ✅ User:', currentUser?.email);
       
+      // FIRST: Check if user wants a task with subtasks
+      const subtaskCheckPrompt = `Analyze this input: "${inputText}"
+
+Does the user want to create ONE task WITH subtasks/steps?
+
+Look for phrases like:
+- "with subtasks"
+- "with steps"
+- "break it down into"
+- "and then", "then", "after that" (indicating sequential steps)
+- Lists within a single task context
+
+Examples of ONE TASK WITH SUBTASKS:
+- "remind me to clean the house with subtasks: clean kitchen, clean bathroom, vacuum"
+- "prepare for the meeting with steps: review slides, print handouts, set up room"
+- "grocery shopping: milk, eggs, bread, cheese"
+- "call dentist and then schedule the appointment and then confirm insurance"
+
+Examples of MULTIPLE SEPARATE TASKS (not subtasks):
+- "call dentist and also buy groceries" (two unrelated tasks)
+- "clean dishes and take out trash" (two separate chores)
+
+Return JSON:
+{
+  "has_subtasks": true/false,
+  "main_task": "main task title" (if has_subtasks),
+  "subtasks": ["subtask 1", "subtask 2", ...] (if has_subtasks, IN ORDER)
+}`;
+
+      const subtaskCheck = await base44.integrations.Core.InvokeLLM({
+        prompt: subtaskCheckPrompt,
+        response_json_schema: {
+          type: "object",
+          properties: {
+            has_subtasks: { type: "boolean" },
+            main_task: { type: "string" },
+            subtasks: { type: "array", items: { type: "string" } }
+          }
+        }
+      });
+
+      console.log('🔄 [PROCESS] Subtask check:', subtaskCheck);
+
+      // If user wants subtasks, create parent + subtasks
+      if (subtaskCheck.has_subtasks && subtaskCheck.subtasks && subtaskCheck.subtasks.length > 0) {
+        console.log('🔄 [PROCESS] Creating task with subtasks...');
+        
+        // Parse the main task for timing/priority
+        const now = new Date();
+        const today = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+        
+        const mainTaskPrompt = `Parse this main task: "${subtaskCheck.main_task}"
+
+TODAY IS: ${today}
+CURRENT TIME: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+
+Extract timing, urgency, and energy for the MAIN task (not subtasks):
+- Urgency based on context
+- Energy required
+- Reminder interval (suggest appropriate default)
+
+JSON:
+{
+  "urgency": "low|medium|high|urgent",
+  "energy_required": "low|medium|high",
+  "reminder_interval": "30min|1hour|2hours|daily|every_other_day|once"
+}`;
+
+        const mainTaskParsed = await base44.integrations.Core.InvokeLLM({
+          prompt: mainTaskPrompt,
+          response_json_schema: {
+            type: "object",
+            properties: {
+              urgency: { type: "string" },
+              energy_required: { type: "string" },
+              reminder_interval: { type: "string" }
+            }
+          }
+        });
+
+        // Calculate next_reminder for parent task
+        let nextReminder = null;
+        const intervalMs = {
+          '30min': 30 * 60 * 1000,
+          '1hour': 60 * 60 * 1000,
+          '2hours': 2 * 60 * 60 * 1000,
+          'daily': 24 * 60 * 60 * 1000,
+          'every_other_day': 2 * 24 * 60 * 60 * 1000,
+        };
+
+        if (mainTaskParsed.reminder_interval && intervalMs[mainTaskParsed.reminder_interval]) {
+          nextReminder = new Date(now.getTime());
+          switch (mainTaskParsed.reminder_interval) {
+            case '30min': nextReminder.setMinutes(nextReminder.getMinutes() + 30); break;
+            case '1hour': nextReminder.setHours(nextReminder.getHours() + 1); break;
+            case '2hours': nextReminder.setHours(nextReminder.getHours() + 2); break;
+            case 'daily': nextReminder.setDate(nextReminder.getDate() + 1); break;
+            case 'every_other_day': nextReminder.setDate(nextReminder.getDate() + 2); break;
+          }
+        }
+
+        // Create parent task
+        const parentTask = await base44.entities.Task.create({
+          title: subtaskCheck.main_task,
+          description: '',
+          reminder_interval: mainTaskParsed.reminder_interval || '1hour',
+          reminder_count: 0,
+          next_reminder: nextReminder ? nextReminder.toISOString() : null,
+          urgency: mainTaskParsed.urgency || 'medium',
+          energy_required: mainTaskParsed.energy_required || 'medium',
+          status: 'active',
+          notification_recipient_email: currentUser.email
+        });
+
+        console.log('🔄 [PROCESS] ✅ Parent task created:', parentTask.id);
+
+        // Create subtasks IN ORDER
+        for (const subtaskTitle of subtaskCheck.subtasks) {
+          await base44.entities.Task.create({
+            title: subtaskTitle.trim(),
+            parent_task_id: parentTask.id,
+            urgency: mainTaskParsed.urgency || 'medium',
+            energy_required: mainTaskParsed.energy_required || 'medium',
+            status: 'active',
+            reminder_interval: mainTaskParsed.reminder_interval || '1hour',
+            reminder_count: 0,
+            next_reminder: nextReminder ? nextReminder.toISOString() : null,
+            notification_recipient_email: currentUser.email
+          });
+        }
+
+        console.log('🔄 [PROCESS] ✅ Created', subtaskCheck.subtasks.length, 'subtasks');
+
+        // Schedule reminders if needed
+        if (nextReminder && intervalMs[mainTaskParsed.reminder_interval || '1hour']) {
+          import('../components/utils/reminderScheduler').then(module => {
+            return module.scheduleRecurringReminders({
+              email: currentUser.email,
+              title: "Task Reminder 📋",
+              body: `${parentTask.title}\n\nTap to mark as complete!`,
+              startTime: nextReminder.toISOString(),
+              intervalMs: intervalMs[mainTaskParsed.reminder_interval || '1hour'],
+              count: 10,
+              taskId: parentTask.id,
+              data: {
+                screen: "/TaskNotification",
+                taskId: parentTask.id,
+                urgency: parentTask.urgency,
+                type: 'task_reminder'
+              }
+            });
+          }).then(notificationIds => {
+            if (notificationIds && notificationIds.length > 0) {
+              base44.entities.Task.update(parentTask.id, {
+                onesignal_notification_ids: notificationIds
+              });
+            }
+          }).catch(error => {
+            console.error("Failed to schedule reminders:", error);
+          });
+        }
+
+        console.log('🔄 [PROCESS] ========== SUCCESS WITH SUBTASKS ==========');
+        return true;
+      }
+      
       const now = new Date();
       const today = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
       const tomorrow = new Date(now);
