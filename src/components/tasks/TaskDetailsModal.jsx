@@ -571,13 +571,13 @@ Return JSON:
 
   const handleComplete = async () => {
     if (!task) return;
-    
+
     setIsUpdating(true);
     try {
       // CRITICAL FIX: Store local date/time, not UTC
       const now = new Date();
       const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
-      
+
       console.log('✅ [COMPLETE] Marking task complete with local time:', localISOString);
 
       // Cancel all scheduled reminders when task is completed
@@ -588,7 +588,7 @@ Return JSON:
           console.error("Failed to cancel reminders on completion:", error);
         }
       }
-      
+
       // Update in background
       Task.update(task.id, { 
         status: 'completed',
@@ -597,7 +597,84 @@ Return JSON:
       }).catch(error => {
         console.error("Error completing task:", error);
       });
-      
+
+      // Check if task is recurring and create new instance
+      if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
+        console.log('🔄 [RECURRING] Creating new instance for pattern:', task.recurrence_pattern);
+
+        const currentUser = await base44.auth.me();
+        let nextReminder = new Date();
+
+        // Calculate next reminder based on recurrence
+        switch (task.recurrence_pattern) {
+          case 'daily':
+            nextReminder.setDate(nextReminder.getDate() + 1);
+            break;
+          case 'weekly':
+            nextReminder.setDate(nextReminder.getDate() + 7);
+            break;
+          case 'monthly':
+            nextReminder.setMonth(nextReminder.getMonth() + 1);
+            break;
+        }
+
+        // Create new task instance
+        const newTask = await Task.create({
+          title: task.title,
+          description: task.description,
+          urgency: task.urgency,
+          energy_required: task.energy_required,
+          reminder_interval: task.reminder_interval,
+          reminder_count: 0,
+          next_reminder: nextReminder.toISOString(),
+          status: 'active',
+          recurrence_pattern: task.recurrence_pattern,
+          notification_recipient_email: currentUser.email,
+          pictures: task.pictures || [],
+          notes: task.notes || ''
+        });
+
+        // Schedule reminders for new task if needed
+        const intervalMs = {
+          '10min': 10 * 60 * 1000,
+          '20min': 20 * 60 * 1000,
+          '30min': 30 * 60 * 1000,
+          '1hour': 60 * 60 * 1000,
+          '2hours': 2 * 60 * 60 * 1000,
+          'daily': 24 * 60 * 60 * 1000,
+          'every_other_day': 2 * 24 * 60 * 60 * 1000,
+        };
+
+        if (task.reminder_interval && task.reminder_interval !== 'once' && intervalMs[task.reminder_interval]) {
+          try {
+            const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
+            const notificationIds = await scheduleRecurringReminders({
+              email: currentUser.email,
+              title: "Task Reminder 📋",
+              body: `${task.title}\n\nTap to mark as complete!`,
+              startTime: nextReminder.toISOString(),
+              intervalMs: intervalMs[task.reminder_interval],
+              count: 10,
+              taskId: newTask.id,
+              data: {
+                screen: "/TaskNotification",
+                taskId: newTask.id,
+                urgency: task.urgency,
+                type: 'task_reminder'
+              }
+            });
+
+            if (notificationIds && notificationIds.length > 0) {
+              await Task.update(newTask.id, { onesignal_notification_ids: notificationIds });
+            }
+          } catch (error) {
+            console.error("Failed to schedule reminders for recurring task:", error);
+          }
+        }
+
+        console.log('✅ [RECURRING] New task created:', newTask.id);
+      }
+
       // Optimistically update parent immediately
       onUpdate({ 
         ...task, 
@@ -605,7 +682,7 @@ Return JSON:
         completed_at: localISOString,
         onesignal_notification_ids: []
       });
-      
+
       onClose();
     } finally {
       setIsUpdating(false);
@@ -823,6 +900,31 @@ Return JSON:
             )}
 
             <div className="flex flex-wrap gap-2">
+              {/* Recurrence Badge - Clickable */}
+              {task.recurrence_pattern && task.recurrence_pattern !== 'none' && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
+                      theme === 'minimalist'
+                        ? 'bg-indigo-100 text-indigo-700'
+                        : theme === 'dark'
+                          ? 'bg-indigo-900 text-indigo-300'
+                          : 'bg-indigo-200 text-indigo-800'
+                    }`}>
+                      🔄 {task.recurrence_pattern}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-48 p-2">
+                    <div className="space-y-1">
+                      <button onClick={() => handleUpdateField('recurrence_pattern', 'none')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">No Recurrence</button>
+                      <button onClick={() => handleUpdateField('recurrence_pattern', 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
+                      <button onClick={() => handleUpdateField('recurrence_pattern', 'weekly')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Weekly</button>
+                      <button onClick={() => handleUpdateField('recurrence_pattern', 'monthly')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Monthly</button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+
               {/* Energy Badge - Clickable */}
               <Popover>
                 <PopoverTrigger asChild>
@@ -1030,7 +1132,25 @@ Return JSON:
                   </PopoverContent>
                 </Popover>
               )}
-            </div>
+
+              {/* Show "Make Recurring" button if no recurrence set */}
+              {(!task.recurrence_pattern || task.recurrence_pattern === 'none') && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="cursor-pointer hover:opacity-80 transition-opacity border border-dashed border-gray-300 px-3 py-1 rounded-full text-sm font-medium text-gray-500 bg-white flex items-center gap-1">
+                      🔄 Make Recurring
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-48 p-2">
+                    <div className="space-y-1">
+                      <button onClick={() => handleUpdateField('recurrence_pattern', 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
+                      <button onClick={() => handleUpdateField('recurrence_pattern', 'weekly')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Weekly</button>
+                      <button onClick={() => handleUpdateField('recurrence_pattern', 'monthly')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Monthly</button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+              </div>
 
             {/* Pictures Section */}
             <div className="space-y-3">
