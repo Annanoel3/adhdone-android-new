@@ -603,9 +603,16 @@ Return JSON:
         console.log('🔄 [RECURRING] Creating new instance for pattern:', task.recurrence_pattern);
 
         const currentUser = await base44.auth.me();
-        let nextReminder = new Date();
+        let nextReminder;
 
-        // Calculate next reminder based on recurrence
+        // If task has a specific reminder time, use that as the base
+        if (task.next_reminder) {
+          nextReminder = new Date(task.next_reminder);
+        } else {
+          nextReminder = new Date();
+        }
+
+        // Calculate next reminder based on recurrence pattern
         switch (task.recurrence_pattern) {
           case 'daily':
             nextReminder.setDate(nextReminder.getDate() + 1);
