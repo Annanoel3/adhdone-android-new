@@ -368,8 +368,12 @@ Return JSON:
     try {
       const updates = { [field]: value };
       
-      // Cancel existing reminders if any were scheduled
-      if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+      // CRITICAL: Don't cancel reminders when only updating recurrence_pattern
+      const shouldCancelReminders = field !== 'recurrence_pattern' && 
+        task.onesignal_notification_ids && 
+        task.onesignal_notification_ids.length > 0;
+      
+      if (shouldCancelReminders) {
         try {
           await cancelScheduledReminder(task.onesignal_notification_ids);
         } catch (error) {
