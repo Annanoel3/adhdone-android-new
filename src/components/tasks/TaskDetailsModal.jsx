@@ -437,16 +437,35 @@ Return JSON:
             console.error("Failed to schedule one-time reminder:", error);
           }
         } else if (intervalMs[value]) {
-          // Recurring interval - calculate next reminder and schedule batch
-          nextReminderDate = new Date(now.getTime());
-          switch (value) {
-            case '10min': nextReminderDate.setMinutes(nextReminderDate.getMinutes() + 10); break;
-            case '20min': nextReminderDate.setMinutes(nextReminderDate.getMinutes() + 20); break;
-            case '30min': nextReminderDate.setMinutes(nextReminderDate.getMinutes() + 30); break;
-            case '1hour': nextReminderDate.setHours(nextReminderDate.getHours() + 1); break;
-            case '2hours': nextReminderDate.setHours(nextReminderDate.getHours() + 2); break;
-            case 'daily': nextReminderDate.setDate(nextReminderDate.getDate() + 1); break;
-            case 'every_other_day': nextReminderDate.setDate(nextReminderDate.getDate() + 2); break;
+          // FIXED: Preserve existing next_reminder when switching to recurring
+          // This allows setting a specific date THEN making it recurring
+          if (task.next_reminder) {
+            nextReminderDate = new Date(task.next_reminder);
+            // Only adjust if in the past
+            if (nextReminderDate <= now) {
+              nextReminderDate = new Date(now.getTime());
+              switch (value) {
+                case '10min': nextReminderDate.setMinutes(nextReminderDate.getMinutes() + 10); break;
+                case '20min': nextReminderDate.setMinutes(nextReminderDate.getMinutes() + 20); break;
+                case '30min': nextReminderDate.setMinutes(nextReminderDate.getMinutes() + 30); break;
+                case '1hour': nextReminderDate.setHours(nextReminderDate.getHours() + 1); break;
+                case '2hours': nextReminderDate.setHours(nextReminderDate.getHours() + 2); break;
+                case 'daily': nextReminderDate.setDate(nextReminderDate.getDate() + 1); break;
+                case 'every_other_day': nextReminderDate.setDate(nextReminderDate.getDate() + 2); break;
+              }
+            }
+          } else {
+            // No existing date, calculate from now
+            nextReminderDate = new Date(now.getTime());
+            switch (value) {
+              case '10min': nextReminderDate.setMinutes(nextReminderDate.getMinutes() + 10); break;
+              case '20min': nextReminderDate.setMinutes(nextReminderDate.getMinutes() + 20); break;
+              case '30min': nextReminderDate.setMinutes(nextReminderDate.getMinutes() + 30); break;
+              case '1hour': nextReminderDate.setHours(nextReminderDate.getHours() + 1); break;
+              case '2hours': nextReminderDate.setHours(nextReminderDate.getHours() + 2); break;
+              case 'daily': nextReminderDate.setDate(nextReminderDate.getDate() + 1); break;
+              case 'every_other_day': nextReminderDate.setDate(nextReminderDate.getDate() + 2); break;
+            }
           }
           
           updates.next_reminder = nextReminderDate.toISOString();
@@ -988,7 +1007,7 @@ Return JSON:
                     <button className="cursor-pointer hover:opacity-80 transition-opacity border px-3 py-1 rounded-full text-sm font-medium bg-white flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {formatReminderInterval(task.reminder_interval)}
-                      {(task.reminder_interval === 'daily' || task.reminder_interval === 'every_other_day') && task.next_reminder && (
+                      {task.next_reminder && (
                         <span className="ml-1">• {formatReminderTime(task.next_reminder)}</span>
                       )}
                     </button>
@@ -999,31 +1018,18 @@ Return JSON:
                       : 'bg-white border-gray-200'
                   }`}>
                     <div className="space-y-3">
-                      {/* Time picker for daily/every_other_day */}
-                      {(task.reminder_interval === 'daily' || task.reminder_interval === 'every_other_day') && (
-                        <div className="pb-3 border-b">
+                      {/* Date & Time picker for all recurring intervals */}
+                      <div className="pb-3 border-b space-y-3">
+                        <div>
                           <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
-                            Reminder Time:
+                            First Reminder Date:
                           </label>
                           <input
-                            type="time"
-                            defaultValue={getCurrentReminderTime(task) || '09:00'}
+                            type="date"
+                            defaultValue={getCurrentReminderDate(task) || new Date().toISOString().split('T')[0]}
                             onChange={(e) => {
-                              const now = new Date();
-                              const [hours, minutes] = e.target.value.split(':');
-                              let nextReminder = new Date();
-                              nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-                              
-                              // If time is in the past today, set for tomorrow
-                              if (nextReminder <= now) {
-                                if (task.reminder_interval === 'daily') {
-                                  nextReminder.setDate(nextReminder.getDate() + 1);
-                                } else {
-                                  nextReminder.setDate(nextReminder.getDate() + 2);
-                                }
-                              }
-                              
-                              handleUpdateReminderTime(e.target.value, nextReminder.toISOString().split('T')[0]);
+                              const currentTime = getCurrentReminderTime(task) || '09:00';
+                              handleUpdateReminderTime(currentTime, e.target.value);
                             }}
                             className={`w-full border rounded px-3 py-2 ${
                               theme === 'dark'
@@ -1032,7 +1038,25 @@ Return JSON:
                             }`}
                           />
                         </div>
-                      )}
+                        <div>
+                          <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
+                            Reminder Time:
+                          </label>
+                          <input
+                            type="time"
+                            defaultValue={getCurrentReminderTime(task) || '09:00'}
+                            onChange={(e) => {
+                              const currentDate = getCurrentReminderDate(task) || new Date().toISOString().split('T')[0];
+                              handleUpdateReminderTime(e.target.value, currentDate);
+                            }}
+                            className={`w-full border rounded px-3 py-2 ${
+                              theme === 'dark'
+                                ? 'bg-gray-900 border-gray-600 text-gray-100'
+                                : 'bg-white border-gray-300 text-gray-900'
+                            }`}
+                          />
+                        </div>
+                      </div>
                       
                       {/* Interval options */}
                       <div className="space-y-1">
@@ -1044,7 +1068,7 @@ Return JSON:
                         <button onClick={() => handleUpdateField('reminder_interval', 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
                         <button onClick={() => handleUpdateField('reminder_interval', 'every_other_day')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every other day</button>
                         <div className="border-t my-1"></div>
-                        <button onClick={() => handleUpdateField('reminder_interval', 'once')} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium">📅 Set Specific Date Instead</button>
+                        <button onClick={() => handleUpdateField('reminder_interval', 'once')} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium">📅 One-Time Only</button>
                       </div>
                     </div>
                   </PopoverContent>
