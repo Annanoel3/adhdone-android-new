@@ -47,7 +47,6 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import EnergyCheckInModal from "./components/shared/EnergyCheckInModal";
-import TrialWarningModal from "./components/shared/TrialWarningModal";
 import UniversalVoiceAssistant from "./components/shared/UniversalVoiceAssistant";
 import MicrophonePermissionCheck from "./components/shared/MicrophonePermissionCheck";
 import PokeNotification from "./components/shared/PokeNotification";
@@ -94,7 +93,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     return localStorage.getItem('adhd_theme') || 'minimalist';
   });
   const [showEnergyCheckIn, setShowEnergyCheckIn] = useState(false);
-  const [showTrialWarning, setShowTrialWarning] = useState(false);
   const [communityOpen, setCommunityOpen] = useState(false);
   const [accountabilityNotifications, setAccountabilityNotifications] = useState(0);
   const [specialMode, setSpecialMode] = useState(() => {
@@ -949,11 +947,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             onClose={() => setShowEnergyCheckIn(false)}
             theme={theme}
           />
-          <TrialWarningModal
-            isOpen={showTrialWarning}
-            onClose={() => setShowTrialWarning(false)}
-            theme={theme}
-          />
           <UniversalVoiceAssistant theme={theme} currentPageName={currentPageName} />
           <MicrophonePermissionCheck theme={theme} />
           <PokeNotification theme={theme} />
@@ -1044,7 +1037,6 @@ export default function Layout({ children, currentPageName }) {
   const isPublicPage = publicPages.includes(currentPageName);
 
   const checkUserStatusAndTrial = useCallback(async () => {
-    // Skip auth check for public pages
     if (isPublicPage) {
       setAuthCheckComplete(true);
       return;
@@ -1052,64 +1044,13 @@ export default function Layout({ children, currentPageName }) {
 
     try {
       const currentUser = await base44.auth.me();
-
-      if (!currentUser.trial_start_date) {
-        const today = new Date().toISOString().split('T')[0];
-        try {
-          await base44.auth.updateMe({ trial_start_date: today });
-          const updatedUser = await base44.auth.me();
-          setUser(updatedUser);
-        } catch (updateError) {
-          console.error("Error updating trial start date:", updateError);
-          setUser(currentUser);
-        }
-      } else {
-        setUser(currentUser);
-      }
-
-      // IMPROVED: Trial logic with manual trial_end_date override
-      // Priority 1: Check if user has lifetime access
-      if (currentUser.is_lifetime_access) {
-        setAuthCheckComplete(true);
-        return;
-      }
-
-      // Priority 2: Check if user has paid subscription
-      if (currentUser.has_paid) {
-        setAuthCheckComplete(true);
-        return;
-      }
-
-      // Priority 3: Check manual trial_end_date (for testers)
-      if (currentUser.trial_end_date) {
-        const trialEnd = new Date(currentUser.trial_end_date);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        
-        if (today > trialEnd && location.pathname !== createPageUrl("TrialEnded")) {
-          navigate(createPageUrl("TrialEnded"));
-          return;
-        }
-      } 
-      // Priority 4: Default 7-day trial from trial_start_date
-      else if (currentUser.trial_start_date) {
-        const trialStart = new Date(currentUser.trial_start_date);
-        const today = new Date();
-        const daysDiff = Math.floor((today - trialStart) / (1000 * 60 * 60 * 24));
-
-        if (daysDiff >= 7 && location.pathname !== createPageUrl("TrialEnded")) {
-          navigate(createPageUrl("TrialEnded"));
-          return;
-        }
-      }
-
+      setUser(currentUser);
       setAuthCheckComplete(true);
     } catch (error) {
       console.error("Error checking user status:", error);
-      // User not authenticated - redirect to login
       base44.auth.redirectToLogin(window.location.href);
     }
-  }, [location.pathname, navigate, isPublicPage]);
+  }, [isPublicPage]);
 
   useEffect(() => {
     checkUserStatusAndTrial();

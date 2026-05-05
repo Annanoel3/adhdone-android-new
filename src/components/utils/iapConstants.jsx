@@ -1,6 +1,6 @@
 export const IAP_PRODUCTS = {
-  MONTHLY: process.env.IAP_MONTHLY_ID || 'adhdone_premium_monthly',
-  YEARLY: process.env.IAP_YEARLY_ID || 'adhdone_premium_yearly',
+  MONTHLY: 'adhdone_premium_monthly',
+  YEARLY: 'adhdone_premium_yearly',
 };
 
 export const TRIAL_DAYS = 5;

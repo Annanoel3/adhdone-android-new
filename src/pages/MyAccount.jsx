@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/select";
 import { 
   User as UserIcon, 
-  CreditCard, 
   MessageSquare, 
   Loader2,
   Heart,
@@ -151,7 +150,7 @@ ${detailedFeedback}
           My Account
         </h1>
         <p className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
-          Manage your subscription and share feedback
+          Manage your account and share feedback
         </p>
       </div>
 
@@ -188,45 +187,7 @@ ${detailedFeedback}
           </CardContent>
         </Card>
 
-        {/* Subscription Management */}
-        <Card className={`border-none shadow-lg ${
-          theme === 'dark' ? 'bg-gray-800' : 'bg-white/90 backdrop-blur-sm'
-        }`}>
-          <CardHeader>
-            <CardTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-white' : ''}`}>
-              <CreditCard className="w-5 h-5" />
-              Subscription
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Status</p>
-              <p className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                {user.has_paid ? '✅ Active Subscriber' : '⏰ Trial Period'}
-              </p>
-            </div>
-            
-            {user.has_paid && user.subscription_start_date && (
-              <div>
-                <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Member Since</p>
-                <p className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                  {new Date(user.subscription_start_date).toLocaleDateString('en-US', { 
-                    month: 'long', 
-                    day: 'numeric', 
-                    year: 'numeric' 
-                  })}
-                </p>
-              </div>
-            )}
 
-            <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-              {user.has_paid 
-                ? 'Manage your subscription through the App Store or Play Store settings on your device.'
-                : 'Subscribe to unlock all features and support the development of ADHDone!'
-              }
-            </p>
-          </CardContent>
-        </Card>
 
         {/* Data & Privacy Management */}
         <Card className={`border-none shadow-lg ${
@@ -335,7 +296,7 @@ ${detailedFeedback}
                     <li>• Task reminders (based on your reminder settings)</li>
                     <li>• Achievement unlocked notifications</li>
                     <li>• Accountability partner messages and pokes</li>
-                    <li>• Trial expiration warnings</li>
+ 
                   </ul>
                 </div>
               </div>

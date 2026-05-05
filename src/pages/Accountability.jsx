@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -9,14 +8,12 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { User } from "@/entities/User";
+import { base44 } from "@/api/base44Client";
 import AccountabilityPartners from "../components/accountability/AccountabilityPartners";
 import FindPartners from "../components/accountability/FindPartners";
 import ConnectionRequests from "../components/accountability/ConnectionRequests";
 import PartnerMoodFeed from "../components/accountability/PartnerMoodFeed";
 import MoodCheckInCard from "../components/accountability/MoodCheckInCard";
-
-// Assuming 'base44' is a globally available object or imported elsewhere
-// If 'base44' needs to be imported explicitly, add: import base44 from 'path/to/base44';
 
 export default function Accountability() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
