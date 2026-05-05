@@ -182,10 +182,7 @@ export default function FocusTimer() {
   };
 
   const handleTestSound = () => {
-    const url = completionSounds[completionSound]?.url;
-    if (!url) return;
-    const audio = new Audio(url);
-    audio.play().catch(err => console.log("Audio play failed:", err));
+    playCompletionSound(false);
   };
 
   const handleTimerComplete = useCallback(() => {
