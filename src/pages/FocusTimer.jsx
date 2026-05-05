@@ -182,11 +182,36 @@ export default function FocusTimer() {
   };
 
   const handleTestSound = () => {
-    if (!audioRef.current) {
-      audioRef.current = new Audio();
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+
+      // Play a pleasant two-note chime using Web Audio API
+      const playTone = (freq, startTime, duration, gainVal = 0.4) => {
+        const oscillator = ctx.createOscillator();
+        const gainNode = ctx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(ctx.destination);
+
+        oscillator.type = 'sine';
+        oscillator.frequency.setValueAtTime(freq, startTime);
+
+        gainNode.gain.setValueAtTime(0, startTime);
+        gainNode.gain.linearRampToValueAtTime(gainVal, startTime + 0.01);
+        gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+        oscillator.start(startTime);
+        oscillator.stop(startTime + duration);
+      };
+
+      const now = ctx.currentTime;
+      playTone(880, now, 0.5);        // A5 - first note
+      playTone(1108.73, now + 0.25, 0.6); // C#6 - second note (pleasant major third)
+
+      // Close context after sounds finish
+      setTimeout(() => ctx.close(), 1200);
+    } catch (err) {
+      console.log("Web Audio API not available:", err);
     }
-    audioRef.current.src = completionSounds[completionSound].url;
-    audioRef.current.play().catch(err => console.log("Audio play failed:", err));
   };
 
   const handleTimerComplete = useCallback(() => {
