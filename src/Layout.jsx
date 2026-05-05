@@ -128,8 +128,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 
   const [specialMode, setSpecialMode] = useState(() => {
     const stored = localStorage.getItem('special_mode');
-    // If user hasn't manually set a mode, use date-based mode
-    if (!stored || stored === 'normal') return getDateBasedMode();
+    // If nothing stored yet, use date-based mode as default
+    if (!stored) return getDateBasedMode();
+    // If user explicitly set 'normal', respect that
     return stored;
   });
   const [showAppGuide, setShowAppGuide] = useState(false);
@@ -250,8 +251,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   const toggleTheme = () => {
     const currentSpecialMode = specialMode;
     if (currentSpecialMode !== 'normal') {
-      localStorage.removeItem('special_mode');
-      setSpecialMode(getDateBasedMode());
+      localStorage.setItem('special_mode', 'normal');
+      setSpecialMode('normal');
+      setTheme('minimalist');
+      localStorage.setItem('adhd_theme', 'minimalist');
       setTimeout(() => {
         window.location.reload();
       }, 100);
