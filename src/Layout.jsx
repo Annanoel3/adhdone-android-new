@@ -95,9 +95,42 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   const [showEnergyCheckIn, setShowEnergyCheckIn] = useState(false);
   const [communityOpen, setCommunityOpen] = useState(false);
   const [accountabilityNotifications, setAccountabilityNotifications] = useState(0);
+  const getDateBasedMode = () => {
+    const now = new Date();
+    const month = now.getMonth() + 1; // 1-12
+    const day = now.getDate();
+
+    // Christmas: Dec 20 - Dec 26
+    if (month === 12 && day >= 20 && day <= 26) return 'christmas';
+    // New Years: Dec 27 - Jan 5
+    if ((month === 12 && day >= 27) || (month === 1 && day <= 5)) return 'newyears';
+    // Valentine's: Feb 10 - Feb 16
+    if (month === 2 && day >= 10 && day <= 16) return 'valentines';
+    // St. Patrick's: Mar 10 - Mar 20
+    if (month === 3 && day >= 10 && day <= 20) return 'stpatricks';
+    // Fourth of July: Jul 1 - Jul 7
+    if (month === 7 && day >= 1 && day <= 7) return 'fourthjuly';
+    // Halloween: Oct 25 - Nov 5
+    if ((month === 10 && day >= 25) || (month === 11 && day <= 5)) return 'halloween';
+    // Spring: Mar 21 - May 31
+    if ((month === 3 && day >= 21) || month === 4 || month === 5) return 'spring';
+    // Summer: Jun 1 - Aug 31 (excluding Jul 1-7)
+    if (month === 6 || (month === 7 && day > 7) || month === 8) return 'summer';
+    // Fall: Sep 1 - Oct 24, Nov 6 - Nov 30
+    if (month === 9 || (month === 10 && day <= 24) || (month === 11 && day >= 6)) return 'fall';
+    // Winter: Dec 1 - Dec 19
+    if (month === 12 && day <= 19) return 'winter';
+    // Jan 6 - Feb 9, Feb 17 - Mar 9
+    if ((month === 1 && day >= 6) || (month === 2 && (day < 10 || day > 16)) || (month === 3 && day < 10)) return 'winter';
+
+    return 'normal';
+  };
+
   const [specialMode, setSpecialMode] = useState(() => {
     const stored = localStorage.getItem('special_mode');
-    return stored || 'normal';
+    // If user hasn't manually set a mode, use date-based mode
+    if (!stored || stored === 'normal') return getDateBasedMode();
+    return stored;
   });
   const [showAppGuide, setShowAppGuide] = useState(false);
   const [showSpicyBrainsExplanation, setShowSpicyBrainsExplanation] = useState(false);
@@ -217,8 +250,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   const toggleTheme = () => {
     const currentSpecialMode = specialMode;
     if (currentSpecialMode !== 'normal') {
-      localStorage.setItem('special_mode', 'normal');
-      setSpecialMode('normal');
+      localStorage.removeItem('special_mode');
+      setSpecialMode(getDateBasedMode());
       setTimeout(() => {
         window.location.reload();
       }, 100);
