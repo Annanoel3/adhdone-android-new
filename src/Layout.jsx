@@ -261,6 +261,15 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       return;
     }
 
+    // If currently on spicybrains, next step is seasonal
+    if (theme === 'spicybrains') {
+      const seasonal = getDateBasedMode();
+      localStorage.setItem('special_mode', seasonal);
+      setSpecialMode(seasonal);
+      setTimeout(() => window.location.reload(), 100);
+      return;
+    }
+
     setTheme(prev => {
       let nextTheme;
       if (prev === 'minimalist') {
@@ -838,7 +847,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 ) : theme === 'spicybrains' ? (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    <span>Spicy Brains Theme</span>
+                    <span>Spicy Brains → Seasonal</span>
                   </>
                 ) : (
                   <>
