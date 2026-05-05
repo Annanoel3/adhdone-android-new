@@ -2,20 +2,17 @@ import Accountability from './pages/Accountability';
 import AddTask from './pages/AddTask';
 import AuthCallback from './pages/AuthCallback';
 import Chat from './pages/Chat';
-import CronSetup from './pages/CronSetup';
 import DeleteAccount from './pages/DeleteAccount';
 import DeleteData from './pages/DeleteData';
 import FocusRooms from './pages/FocusRooms';
 import FocusTimer from './pages/FocusTimer';
 import Home from './pages/Home';
-import IAPSetupGuide from './pages/IAPSetupGuide';
 import Insights from './pages/Insights';
 import InstallInstructions from './pages/InstallInstructions';
 import Leaderboard from './pages/Leaderboard';
 import MyAccount from './pages/MyAccount';
 import NotificationSettings from './pages/NotificationSettings';
 import ParkingLot from './pages/ParkingLot';
-import PaymentSuccess from './pages/PaymentSuccess';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import Profile from './pages/Profile';
 import ProfileSettings from './pages/ProfileSettings';
@@ -37,20 +34,17 @@ export const PAGES = {
     "AddTask": AddTask,
     "AuthCallback": AuthCallback,
     "Chat": Chat,
-    "CronSetup": CronSetup,
     "DeleteAccount": DeleteAccount,
     "DeleteData": DeleteData,
     "FocusRooms": FocusRooms,
     "FocusTimer": FocusTimer,
     "Home": Home,
-    "IAPSetupGuide": IAPSetupGuide,
     "Insights": Insights,
     "InstallInstructions": InstallInstructions,
     "Leaderboard": Leaderboard,
     "MyAccount": MyAccount,
     "NotificationSettings": NotificationSettings,
     "ParkingLot": ParkingLot,
-    "PaymentSuccess": PaymentSuccess,
     "PrivacyPolicy": PrivacyPolicy,
     "Profile": Profile,
     "ProfileSettings": ProfileSettings,
