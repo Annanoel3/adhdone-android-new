@@ -181,43 +181,16 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   }, [user, authCheckComplete]);
 
   useEffect(() => {
-    const checkEnergyCheckIn = () => {
-      const now = new Date();
-      const currentHour = now.getHours();
-      
-      if (currentHour < 8 || currentHour >= 20) {
-        return;
-      }
+    const today = new Date().toISOString().split('T')[0];
+    const lastCheckInDate = localStorage.getItem('last_energy_checkin_date');
 
-      const today = new Date().toISOString().split('T')[0];
-      const lastCheckInDate = localStorage.getItem('last_energy_checkin_date');
-      const checkInCount = parseInt(localStorage.getItem('energy_checkin_count') || '0');
-
-      if (lastCheckInDate !== today) {
-        localStorage.setItem('energy_checkin_count', '0');
-        localStorage.setItem('last_energy_checkin_date', today);
-      }
-
-      if (checkInCount >= 2) {
-        return;
-      }
-
-      const lastCheckIn = localStorage.getItem('last_energy_checkin_time');
-      const nowTime = new Date().getTime();
-      const fourHours = 4 * 60 * 60 * 1000;
-
-      if (lastCheckIn && nowTime - parseInt(lastCheckIn) < fourHours) {
-        return;
-      }
-
+    if (lastCheckInDate !== today) {
+      // First open of the day — show after a short delay
       setTimeout(() => {
         setShowEnergyCheckIn(true);
-        localStorage.setItem('last_energy_checkin_time', nowTime.toString());
-        localStorage.setItem('energy_checkin_count', (checkInCount + 1).toString());
-      }, 5 * 60 * 1000);
-    };
-
-    checkEnergyCheckIn();
+        localStorage.setItem('last_energy_checkin_date', today);
+      }, 3000);
+    }
   }, []);
 
   // Android back button handler
