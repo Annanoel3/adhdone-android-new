@@ -194,6 +194,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
     };
 
     let newNotificationIds = [];
+    let lastScheduledUntil = null;
     
     // Schedule new reminders
     try {
@@ -222,7 +223,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
       } else if (intervalMs[newInterval]) {
         // Schedule recurring reminders (10 at a time)
         const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
-        newNotificationIds = await scheduleRecurringReminders({
+        const recurringResult = await scheduleRecurringReminders({
           email: currentUser.email,
           title: "Task Reminder 📋",
           body: `${task.title}\n\nTap to mark as complete!`,
@@ -237,6 +238,8 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
             type: 'task_reminder'
           }
         });
+        newNotificationIds = recurringResult.notificationIds || [];
+        lastScheduledUntil = recurringResult.lastScheduledUntil || null;
         console.log('🔄 [INTERVAL CHANGE] Scheduled recurring reminders:', newNotificationIds.length);
       }
     } catch (error) {
@@ -246,7 +249,8 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
     await base44.entities.Task.update(task.id, { 
       reminder_interval: newInterval,
       next_reminder: nextReminder.toISOString(),
-      onesignal_notification_ids: newNotificationIds
+      onesignal_notification_ids: newNotificationIds,
+      ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
     });
     window.location.reload();
   };
