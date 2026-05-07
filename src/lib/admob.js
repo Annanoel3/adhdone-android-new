@@ -1,13 +1,12 @@
-import { Capacitor, registerPlugin } from '@capacitor/core';
-
 const AD_UNIT_ID = 'ca-app-pub-7979856440890193/4453371625';
-const SHOW_EVERY_N_OPENS = 3; // Show ad every 3rd app open
+const SHOW_EVERY_N_OPENS = 3;
 
 let AdMob = null;
 
 export async function initAdMob() {
-  if (!Capacitor.isNativePlatform()) return;
   try {
+    const { Capacitor, registerPlugin } = await import('@capacitor/core');
+    if (!Capacitor.isNativePlatform()) return;
     AdMob = registerPlugin('AdMob');
     await AdMob.initialize({ initializeForTesting: false });
     console.log('[AdMob] initialized');
