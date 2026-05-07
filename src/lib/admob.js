@@ -5,9 +5,10 @@ let AdMob = null;
 
 export async function initAdMob() {
   try {
-    const { Capacitor, registerPlugin } = await import('@capacitor/core');
-    if (!Capacitor.isNativePlatform()) return;
-    AdMob = registerPlugin('AdMob');
+    // Only runs in native Capacitor builds where window.Capacitor is injected
+    if (!window.Capacitor?.isNativePlatform()) return;
+    AdMob = window.Capacitor.Plugins.AdMob;
+    if (!AdMob) return;
     await AdMob.initialize({ initializeForTesting: false });
     console.log('[AdMob] initialized');
   } catch (e) {
@@ -28,18 +29,12 @@ export async function showInterstitialAd() {
   }
 }
 
-/**
- * Call once on app launch. Shows an ad every Nth open automatically.
- * Returns true if an ad was shown.
- */
 export async function maybeShowAdOnOpen() {
   const count = parseInt(localStorage.getItem('appOpenCount') || '0') + 1;
   localStorage.setItem('appOpenCount', String(count));
 
   if (count % SHOW_EVERY_N_OPENS === 0) {
-    const shown = await showInterstitialAd();
-    if (!shown) return false;
-    return true;
+    return await showInterstitialAd();
   }
   return false;
 }
