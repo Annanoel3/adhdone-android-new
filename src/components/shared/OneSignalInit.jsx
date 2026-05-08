@@ -40,19 +40,20 @@ export default function OneSignalInit({ user }) {
             }, 500);
         }
 
-        function attemptLogin(email) {
+        function attemptLogin(externalId) {
             const bridge = getNotifyBridge();
             if (!bridge) {
                 startWatcher();
                 return;
             }
-            console.log('[OneSignal] Calling NotifyBridge.login() with:', email);
-            bridge.login({ externalId: email })
+            console.log('[OneSignal] Calling NotifyBridge.requestPermission() then login() with:', externalId);
+            bridge.requestPermission()
+                .catch(() => {}) // permission dialog — resolve regardless of user choice
+                .then(() => bridge.login({ externalId }))
                 .then((response) => {
-                    console.log('[OneSignal] ✅ External ID set:', email, '| playerId:', response?.playerId);
-                    lastSuccessRef.current = email;
+                    console.log('[OneSignal] ✅ External ID set:', externalId, '| playerId:', response?.playerId);
+                    lastSuccessRef.current = externalId;
                     pendingEmailRef.current = null;
-                    // Save player ID to the database so backend can target this device
                     const playerId = response?.playerId;
                     if (playerId) {
                         base44.functions.invoke('saveMyPlayerId', { playerId })
@@ -69,9 +70,21 @@ export default function OneSignalInit({ user }) {
 
         const isNative = !!window.Capacitor?.isNativePlatform?.();
         const email = user?.email;
-        const emailValid = email && email.includes('@');
 
-        if (!emailValid) {
+        // Determine external ID — prefer real email, fall back to generated email from user ID
+        let externalId;
+        if (email && email.includes('@')) {
+            externalId = email;
+            console.log('[OneSignal] Using real email as external ID:', externalId);
+        } else if (user?.id) {
+            externalId = `${user.id}@adhdone.app`;
+            console.log('[OneSignal] No email found, using generated ID:', externalId);
+        } else {
+            console.warn('[OneSignal] No email or user ID available, skipping');
+            return;
+        }
+
+        if (!user) {
             // User logged out — clean up
             pendingEmailRef.current = null;
             if (isNative) {
@@ -86,12 +99,12 @@ export default function OneSignalInit({ user }) {
         }
 
         if (isNative) {
-            if (email === lastSuccessRef.current) {
-                console.log('[OneSignal] External ID already set for:', email);
+            if (externalId === lastSuccessRef.current) {
+                console.log('[OneSignal] External ID already set for:', externalId);
                 return;
             }
-            pendingEmailRef.current = email;
-            attemptLogin(email);
+            pendingEmailRef.current = externalId;
+            attemptLogin(externalId);
         } else {
             // Web browser — use OneSignal web SDK
             window.OneSignal = window.OneSignal || [];
@@ -100,8 +113,8 @@ export default function OneSignalInit({ user }) {
                     appId: 'dc1933bc-e49e-4d8a-aa4a-2c9ca749ff37',
                     allowLocalhostAsSecureOrigin: true,
                 });
-                console.log('[OneSignal] Web SDK login() with:', email);
-                window.OneSignal.login(email);
+                console.log('[OneSignal] Web SDK login() with:', externalId);
+                window.OneSignal.login(externalId);
             });
         }
 
