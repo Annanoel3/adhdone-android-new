@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 
 // Helper function to detect if running in Capacitor mobile app
 function isRunningInCapacitor() {
-    return window !== window.parent;
+    return window.Capacitor?.isNativePlatform?.() ?? false;
 }
 
 export default function OneSignalInit({ user }) {
@@ -26,24 +26,22 @@ export default function OneSignalInit({ user }) {
       console.log('[OneSignal] User ID (NOT being sent):', user.id);
 
       if (isRunningInCapacitor()) {
-        // Running in mobile app - send to native wrapper
+        // Running in Capacitor native app - call NotifyBridge plugin directly
         console.log('[OneSignal] Running in Capacitor mobile app');
-        
+        const NotifyBridge = window.Capacitor?.Plugins?.NotifyBridge;
+
+        if (!NotifyBridge) {
+          console.warn('[OneSignal] NotifyBridge plugin not found');
+          return;
+        }
+
         if (userEmail) {
-          // User logged in - set external user ID via postMessage
-          console.log('[OneSignal] ✅ Sending EMAIL (not ID) via postMessage:', userEmail);
-          console.log('[OneSignal] ❌ NOT sending user ID:', user.id);
-          
-          window.parent.postMessage({
-            type: 'setOneSignalExternalUserId',
-            externalUserId: userEmail // ALWAYS the email, NEVER user.id
-          }, '*');
+          console.log('[OneSignal] ✅ Calling NotifyBridge.login() with:', userEmail);
+          await NotifyBridge.requestPermission();
+          await NotifyBridge.login({ externalId: userEmail });
         } else {
-          // User logged out
-          console.log('[OneSignal] User logged out in mobile app');
-          window.parent.postMessage({
-            type: 'oneSignalLogout'
-          }, '*');
+          console.log('[OneSignal] Calling NotifyBridge.logout()');
+          await NotifyBridge.logout();
         }
       } else {
         // Running in web browser - use web SDK
