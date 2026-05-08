@@ -15,15 +15,19 @@ export default function OneSignalInit({ user }) {
 
       const userEmail = user?.email;
 
-      // CRITICAL: Verify we have an email, not an ID
-      if (!userEmail || !userEmail.includes('@')) {
-        console.error('[OneSignal] INVALID EMAIL:', userEmail);
-        console.error('[OneSignal] User object:', user);
+      // Use real email if available, otherwise construct a fake one from user.id
+      // (OneSignal requires email format for external ID)
+      let externalId;
+      if (userEmail && userEmail.includes('@')) {
+        externalId = userEmail;
+        console.log('[OneSignal] ✅ Using real email as external ID:', externalId);
+      } else if (user?.id) {
+        externalId = `${user.id}@adhdone.app`;
+        console.log('[OneSignal] ⚠️ No email found, using generated ID:', externalId);
+      } else {
+        console.error('[OneSignal] No email or user ID available, skipping');
         return;
       }
-
-      console.log('[OneSignal] ✅ Valid email confirmed:', userEmail);
-      console.log('[OneSignal] User ID (NOT being sent):', user.id);
 
       if (isRunningInCapacitor()) {
         // Running in Capacitor native app - call NotifyBridge plugin directly
@@ -35,10 +39,10 @@ export default function OneSignalInit({ user }) {
           return;
         }
 
-        if (userEmail) {
-          console.log('[OneSignal] ✅ Calling NotifyBridge.login() with:', userEmail);
+        if (externalId) {
+          console.log('[OneSignal] ✅ Calling NotifyBridge.login() with:', externalId);
           await NotifyBridge.requestPermission();
-          await NotifyBridge.login({ externalId: userEmail });
+          await NotifyBridge.login({ externalId: externalId });
         } else {
           console.log('[OneSignal] Calling NotifyBridge.logout()');
           await NotifyBridge.logout();
@@ -47,7 +51,7 @@ export default function OneSignalInit({ user }) {
         // Running in web browser - use web SDK
         console.log('[OneSignal] Running in web browser');
         
-        if (userEmail) {
+        if (externalId) {
           // Initialize OneSignal web SDK
           window.OneSignal = window.OneSignal || [];
           window.OneSignal.push(function() {
@@ -55,10 +59,9 @@ export default function OneSignalInit({ user }) {
               appId: "dc1933bc-e49e-4d8a-aa4a-2c9ca749ff37",
               allowLocalhostAsSecureOrigin: true
             });
-            
-            // FIXED: Use SDK 5.x login() method instead of deprecated setExternalUserId()
-            console.log('[OneSignal] ✅ Web SDK using login() with EMAIL:', userEmail);
-            window.OneSignal.login(userEmail);
+
+            console.log('[OneSignal] ✅ Web SDK using login() with:', externalId);
+            window.OneSignal.login(externalId);
           });
         } else {
           // FIXED: Use SDK 5.x logout() method instead of deprecated removeExternalUserId()
