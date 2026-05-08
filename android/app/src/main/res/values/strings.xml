@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">ADHDone</string>
+    <string name="title_activity_main">ADHDone</string>
+    <string name="package_name">co.median.android.odxqpdy</string>
+    <string name="custom_url_scheme">co.median.android.odxqpdy</string>
+</resources>
