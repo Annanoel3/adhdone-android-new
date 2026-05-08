@@ -1,81 +1,117 @@
-import { useEffect } from 'react';
-
-// Helper function to detect if running in Capacitor mobile app
-function isRunningInCapacitor() {
-    return window !== window.parent;
-}
+import { useEffect, useRef } from 'react';
+import { base44 } from '@/api/base44Client';
 
 export default function OneSignalInit({ user }) {
-  useEffect(() => {
-    const syncOneSignal = async () => {
-      if (!user) {
-        console.log('[OneSignal] No user provided to OneSignalInit');
-        return;
-      }
+    const lastSuccessRef = useRef(null);
+    const watcherRef = useRef(null);
+    const pendingEmailRef = useRef(null);
 
-      const userEmail = user?.email;
+    useEffect(() => {
+        // --- helpers defined inside effect to close over refs ---
 
-      // CRITICAL: Verify we have an email, not an ID
-      if (!userEmail || !userEmail.includes('@')) {
-        console.error('[OneSignal] INVALID EMAIL:', userEmail);
-        console.error('[OneSignal] User object:', user);
-        return;
-      }
-
-      console.log('[OneSignal] ✅ Valid email confirmed:', userEmail);
-      console.log('[OneSignal] User ID (NOT being sent):', user.id);
-
-      if (isRunningInCapacitor()) {
-        // Running in mobile app - send to native wrapper
-        console.log('[OneSignal] Running in Capacitor mobile app');
-        
-        if (userEmail) {
-          // User logged in - set external user ID via postMessage
-          console.log('[OneSignal] ✅ Sending EMAIL (not ID) via postMessage:', userEmail);
-          console.log('[OneSignal] ❌ NOT sending user ID:', user.id);
-          
-          window.parent.postMessage({
-            type: 'setOneSignalExternalUserId',
-            externalUserId: userEmail // ALWAYS the email, NEVER user.id
-          }, '*');
-        } else {
-          // User logged out
-          console.log('[OneSignal] User logged out in mobile app');
-          window.parent.postMessage({
-            type: 'oneSignalLogout'
-          }, '*');
+        function getNotifyBridge() {
+            if (!window.Capacitor) return null;
+            // Check already-registered global first
+            const existing = window.NotifyBridge || window.Capacitor?.Plugins?.NotifyBridge;
+            if (existing && typeof existing.login === 'function') return existing;
+            // Try registering via Capacitor 7+ API
+            if (window.Capacitor.registerPlugin) {
+                try {
+                    const registered = window.Capacitor.registerPlugin('NotifyBridge');
+                    if (registered && typeof registered.login === 'function') {
+                        window.NotifyBridge = registered;
+                        return registered;
+                    }
+                } catch (e) {}
+            }
+            return null;
         }
-      } else {
-        // Running in web browser - use web SDK
-        console.log('[OneSignal] Running in web browser');
-        
-        if (userEmail) {
-          // Initialize OneSignal web SDK
-          window.OneSignal = window.OneSignal || [];
-          window.OneSignal.push(function() {
-            window.OneSignal.init({
-              appId: "dc1933bc-e49e-4d8a-aa4a-2c9ca749ff37",
-              allowLocalhostAsSecureOrigin: true
-            });
-            
-            // FIXED: Use SDK 5.x login() method instead of deprecated setExternalUserId()
-            console.log('[OneSignal] ✅ Web SDK using login() with EMAIL:', userEmail);
-            window.OneSignal.login(userEmail);
-          });
-        } else {
-          // FIXED: Use SDK 5.x logout() method instead of deprecated removeExternalUserId()
-          if (window.OneSignal) {
-            window.OneSignal.push(function() {
-              window.OneSignal.logout();
-              console.log('[OneSignal] Web SDK logged out');
-            });
-          }
+
+        function startWatcher() {
+            if (watcherRef.current) return;
+            console.log('[OneSignal] NotifyBridge not ready yet, polling...');
+            watcherRef.current = setInterval(() => {
+                const bridge = getNotifyBridge();
+                if (bridge && pendingEmailRef.current) {
+                    clearInterval(watcherRef.current);
+                    watcherRef.current = null;
+                    attemptLogin(pendingEmailRef.current);
+                }
+            }, 500);
         }
-      }
-    };
 
-    syncOneSignal();
-  }, [user]);
+        function attemptLogin(email) {
+            const bridge = getNotifyBridge();
+            if (!bridge) {
+                startWatcher();
+                return;
+            }
+            console.log('[OneSignal] Calling NotifyBridge.login() with:', email);
+            bridge.login({ externalId: email })
+                .then((response) => {
+                    console.log('[OneSignal] ✅ External ID set:', email, '| playerId:', response?.playerId);
+                    lastSuccessRef.current = email;
+                    pendingEmailRef.current = null;
+                    // Save player ID to the database so backend can target this device
+                    const playerId = response?.playerId;
+                    if (playerId) {
+                        base44.functions.invoke('saveMyPlayerId', { playerId })
+                            .catch(err => console.warn('[OneSignal] saveMyPlayerId failed:', err));
+                    }
+                })
+                .catch((err) => {
+                    console.warn('[OneSignal] login() failed, will retry:', err);
+                    startWatcher();
+                });
+        }
 
-  return null;
+        // --- main logic ---
+
+        const isNative = !!window.Capacitor?.isNativePlatform?.();
+        const email = user?.email;
+        const emailValid = email && email.includes('@');
+
+        if (!emailValid) {
+            // User logged out — clean up
+            pendingEmailRef.current = null;
+            if (isNative) {
+                const bridge = getNotifyBridge();
+                if (bridge?.logout) {
+                    bridge.logout().catch(() => {});
+                }
+            } else if (window.OneSignal?.push) {
+                window.OneSignal.push(() => window.OneSignal.logout?.());
+            }
+            return;
+        }
+
+        if (isNative) {
+            if (email === lastSuccessRef.current) {
+                console.log('[OneSignal] External ID already set for:', email);
+                return;
+            }
+            pendingEmailRef.current = email;
+            attemptLogin(email);
+        } else {
+            // Web browser — use OneSignal web SDK
+            window.OneSignal = window.OneSignal || [];
+            window.OneSignal.push(function () {
+                window.OneSignal.init({
+                    appId: 'dc1933bc-e49e-4d8a-aa4a-2c9ca749ff37',
+                    allowLocalhostAsSecureOrigin: true,
+                });
+                console.log('[OneSignal] Web SDK login() with:', email);
+                window.OneSignal.login(email);
+            });
+        }
+
+        return () => {
+            if (watcherRef.current) {
+                clearInterval(watcherRef.current);
+                watcherRef.current = null;
+            }
+        };
+    }, [user]);
+
+    return null;
 }
