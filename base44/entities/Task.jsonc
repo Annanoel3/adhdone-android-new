@@ -1,0 +1,138 @@
+{
+  "name": "Task",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Task title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed task description"
+    },
+    "reminder_interval": {
+      "type": "string",
+      "enum": [
+        "10min",
+        "20min",
+        "30min",
+        "1hour",
+        "2hours",
+        "daily",
+        "every_other_day",
+        "once"
+      ],
+      "description": "How often to remind"
+    },
+    "reminder_count": {
+      "type": "number",
+      "description": "How many times to send reminders (0 = until complete)",
+      "default": 0
+    },
+    "next_reminder": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When to send next reminder"
+    },
+    "last_scheduled_until": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of the last (furthest-out) scheduled reminder \u2014 used by cron to know when to refill"
+    },
+    "onesignal_notification_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Array of OneSignal scheduled notification IDs for batch cancellation"
+    },
+    "notification_recipient_email": {
+      "type": "string",
+      "description": "Email of the user who should receive notifications for this task"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "completed",
+        "snoozed"
+      ],
+      "default": "active"
+    },
+    "urgency": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "urgent"
+      ],
+      "default": "medium"
+    },
+    "energy_required": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium"
+    },
+    "parent_task_id": {
+      "type": "string",
+      "description": "The ID of the parent task, if this is a sub-task"
+    },
+    "snooze_count": {
+      "type": "number",
+      "default": 0
+    },
+    "consecutive_snoozes": {
+      "type": "number",
+      "default": 0,
+      "description": "Track consecutive snoozes for adaptive reminders"
+    },
+    "original_interval": {
+      "type": "string",
+      "description": "Original reminder interval before adaptation"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When task was completed"
+    },
+    "pictures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Array of image URLs attached to this task",
+      "default": []
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional notes for this task"
+    },
+    "recurrence_pattern": {
+      "type": "string",
+      "enum": [
+        "none",
+        "daily",
+        "weekly",
+        "monthly"
+      ],
+      "default": "none",
+      "description": "How often this task should recur after completion"
+    }
+  },
+  "required": [
+    "title"
+  ],
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

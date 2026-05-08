@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 Deno.serve(async (req) => {
     try {
@@ -11,7 +11,6 @@ Deno.serve(async (req) => {
 
         const { challenge_type } = await req.json();
 
-        // Get current week's challenges
         const today = new Date();
         const dayOfWeek = today.getDay();
         const diff = today.getDate() - dayOfWeek + (dayOfWeek === 0 ? -6 : 1);
@@ -35,24 +34,24 @@ Deno.serve(async (req) => {
                 completion_date: isCompleted ? new Date().toISOString() : null
             });
 
-            // Award points if completed
             if (isCompleted) {
                 const bonusPoints = 100;
-                await base44.entities.User.updateMyUserData({
+                // Use the correct SDK method for updating current user data
+                await base44.auth.updateMe({
                     total_points: (user.total_points || 0) + bonusPoints,
                     daily_points: (user.daily_points || 0) + bonusPoints
                 });
 
-                // Send notification
-                await base44.asServiceRole.functions.invoke('sendOneSignalPush', {
-                    userEmail: user.email,
+                await base44.asServiceRole.functions.invoke('notifySend', {
+                    toUserId: user.email,
                     title: "🎯 Challenge Complete!",
-                    message: `${challenge.title} completed! +${bonusPoints} bonus points!`
+                    body: `${challenge.title} completed! +${bonusPoints} bonus points!`,
+                    screen: '/Progress'
                 });
             }
 
-            return Response.json({ 
-                success: true, 
+            return Response.json({
+                success: true,
                 progress: newProgress,
                 completed: isCompleted
             });

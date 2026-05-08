@@ -159,7 +159,13 @@ export async function scheduleRecurringReminders({
 
   const results = await Promise.all(schedulePromises);
   const validIds = results.filter(id => id !== null);
-  
+
   console.log(`[scheduleRecurringReminders] Scheduled ${validIds.length}/${count} notifications`);
-  return validIds;
+
+  // Return both the IDs and the last scheduled time so callers can persist last_scheduled_until
+  const lastScheduledUntil = validIds.length > 0
+    ? new Date(new Date(startTime).getTime() + intervalMs * (validIds.length - 1)).toISOString()
+    : null;
+
+  return { notificationIds: validIds, lastScheduledUntil };
 }

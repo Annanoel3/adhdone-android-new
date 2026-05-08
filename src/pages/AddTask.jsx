@@ -256,10 +256,11 @@ JSON:
                 type: 'task_reminder'
               }
             });
-          }).then(notificationIds => {
+          }).then(({ notificationIds, lastScheduledUntil }) => {
             if (notificationIds && notificationIds.length > 0) {
               base44.entities.Task.update(parentTask.id, {
-                onesignal_notification_ids: notificationIds
+                onesignal_notification_ids: notificationIds,
+                ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
               });
             }
           }).catch(error => {
@@ -607,10 +608,11 @@ JSON:
                 type: 'task_reminder'
               }
             });
-          }).then(notificationIds => {
+          }).then(({ notificationIds, lastScheduledUntil }) => {
             if (notificationIds && notificationIds.length > 0) {
               base44.entities.Task.update(createdTask.id, {
-                onesignal_notification_ids: notificationIds
+                onesignal_notification_ids: notificationIds,
+                ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
               });
             }
           }).catch(error => {
