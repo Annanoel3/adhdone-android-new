@@ -43,6 +43,9 @@ export function PomodoroProvider({ children }) {
   const scheduledNotifIdRef = useRef(null);
 
   const scheduleTimerNotification = useCallback(async (secondsRemaining, currentMode) => {
+    // Only schedule if the app is not visible (backgrounded / screen off)
+    if (document.visibilityState === 'visible') return;
+
     // Cancel any existing scheduled notification first
     if (scheduledNotifIdRef.current) {
       cancelScheduled({ notificationId: scheduledNotifIdRef.current }).catch(() => {});
@@ -119,6 +122,21 @@ export function PomodoroProvider({ children }) {
       }, 1000);
     }
   }, [playCompletionSound, breakDuration, workDuration, cancelTimerNotification]);
+
+  // Schedule notification when app goes to background, cancel when it comes back
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && isActive && timeLeft > 0) {
+        // App backgrounded — schedule the fallback notification
+        scheduleTimerNotification(timeLeft, mode);
+      } else if (document.visibilityState === 'visible') {
+        // App foregrounded — cancel it, in-app timer will handle completion
+        cancelTimerNotification();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [isActive, timeLeft, mode, scheduleTimerNotification, cancelTimerNotification]);
 
   // Persist state whenever it changes
   useEffect(() => {
