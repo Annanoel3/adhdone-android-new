@@ -15,18 +15,6 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     checkAppState();
-
-    // Listen to system color scheme preference and sync to app theme
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleColorSchemeChange = (e) => {
-      const currentTheme = localStorage.getItem('adhd_theme');
-      // Only auto-switch if user hasn't manually picked a non-default theme
-      if (!currentTheme || currentTheme === 'minimalist' || currentTheme === 'dark') {
-        localStorage.setItem('adhd_theme', e.matches ? 'dark' : 'minimalist');
-      }
-    };
-    mediaQuery.addEventListener('change', handleColorSchemeChange);
-    return () => mediaQuery.removeEventListener('change', handleColorSchemeChange);
   }, []);
 
   const checkAppState = async () => {
