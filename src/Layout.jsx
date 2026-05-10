@@ -692,7 +692,12 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                                   }`}
                                 >
                                   <div className="flex items-center gap-3 py-3 w-full">
-                                    <item.icon className="w-5 h-5" />
+                                    <div className="relative">
+                                      <item.icon className="w-5 h-5" />
+                                      {!isOpen && accountabilityNotifications > 0 && (
+                                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-white" />
+                                      )}
+                                    </div>
                                     <span className="flex-1">{item.title}</span>
                                     {isOpen ? (
                                       <ChevronDown className="w-4 h-4" />

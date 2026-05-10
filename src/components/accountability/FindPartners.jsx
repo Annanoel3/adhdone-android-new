@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -161,8 +160,17 @@ export default function FindPartners({ theme, user, onUpdate }) {
 
   const hasConnection = (targetEmail) => {
     return myConnections.some(c =>
-      (c.requester_email === user.email && c.recipient_email === targetEmail) ||
-      (c.recipient_email === user.email && c.requester_email === targetEmail)
+      ((c.requester_email === user.email && c.recipient_email === targetEmail) ||
+      (c.recipient_email === user.email && c.requester_email === targetEmail)) &&
+      c.status === 'accepted'
+    );
+  };
+
+  const hasPendingRequest = (targetEmail) => {
+    return myConnections.some(c =>
+      ((c.requester_email === user.email && c.recipient_email === targetEmail) ||
+      (c.recipient_email === user.email && c.requester_email === targetEmail)) &&
+      c.status === 'pending'
     );
   };
 
@@ -245,6 +253,10 @@ export default function FindPartners({ theme, user, onUpdate }) {
                   {hasConnection(result.email) ? (
                     <Badge variant="outline" className="text-xs">
                       Connected
+                    </Badge>
+                  ) : hasPendingRequest(result.email) ? (
+                    <Badge variant="outline" className="text-xs text-amber-600 border-amber-400">
+                      Pending
                     </Badge>
                   ) : (
                     <Button
