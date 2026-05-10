@@ -186,15 +186,16 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     const lastCheckInDate = localStorage.getItem('last_energy_checkin_date');
     const currentHour = now.getHours(); // local time
 
-    if (lastCheckInDate !== today && currentHour < 12) {
-      // First open of the day before noon — show after a short delay
-      setTimeout(() => {
-        setShowEnergyCheckIn(true);
-        localStorage.setItem('last_energy_checkin_date', today);
-      }, 3000);
-    } else if (lastCheckInDate !== today) {
-      // After noon — skip the popup but still mark today so it won't show later
+    if (lastCheckInDate !== today) {
+      // Mark immediately so re-mounts don't trigger it again
       localStorage.setItem('last_energy_checkin_date', today);
+
+      if (currentHour < 12) {
+        // Only show the popup if it's before noon
+        setTimeout(() => {
+          setShowEnergyCheckIn(true);
+        }, 3000);
+      }
     }
   }, []);
 
