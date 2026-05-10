@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { schedulePush } from '@/functions/schedulePush';
+import { cancelScheduled } from '@/functions/cancelScheduled';
 
 const PomodoroContext = createContext(null);
 
@@ -38,6 +40,40 @@ export function PomodoroProvider({ children }) {
 
   const intervalRef = useRef(null);
   const audioRef = useRef(null);
+  const scheduledNotifIdRef = useRef(null);
+
+  const scheduleTimerNotification = useCallback(async (secondsRemaining, currentMode) => {
+    // Cancel any existing scheduled notification first
+    if (scheduledNotifIdRef.current) {
+      cancelScheduled({ notificationId: scheduledNotifIdRef.current }).catch(() => {});
+      scheduledNotifIdRef.current = null;
+    }
+    try {
+      const user = await import('@/api/base44Client').then(m => m.base44.auth.me());
+      if (!user?.email) return;
+      const sendAt = new Date(Date.now() + secondsRemaining * 1000).toISOString();
+      const title = currentMode === 'work' ? '🍅 Focus session complete!' : '☕ Break time over!';
+      const body = currentMode === 'work' ? 'Great work! Time for a break.' : 'Ready to focus again?';
+      const result = await schedulePush({
+        toUserExternalId: user.email,
+        title,
+        body,
+        sendAtISO: sendAt,
+      });
+      if (result?.data?.notificationId) {
+        scheduledNotifIdRef.current = result.data.notificationId;
+      }
+    } catch (e) {
+      // Silently fail — in-app sound still works
+    }
+  }, []);
+
+  const cancelTimerNotification = useCallback(() => {
+    if (scheduledNotifIdRef.current) {
+      cancelScheduled({ notificationId: scheduledNotifIdRef.current }).catch(() => {});
+      scheduledNotifIdRef.current = null;
+    }
+  }, []);
 
   const completionSounds = {
     joyful_melody: { name: "Joyful Melody", url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/Joyful%20Melody.wav" },
@@ -61,20 +97,28 @@ export function PomodoroProvider({ children }) {
   }, [completionSound]);
 
   const handleTimerComplete = useCallback((currentMode, currentSessionCount) => {
+    // Cancel the scheduled notification since we completed in-app
+    cancelTimerNotification();
     if (currentMode === 'work') {
       playCompletionSound(false);
       const newSessionCount = currentSessionCount + 1;
       setSessionCount(newSessionCount);
       setMode('break');
       setTimeLeft(breakDuration * 60);
-      setTimeout(() => setIsActive(true), 1000);
+      setTimeout(() => {
+        setIsActive(true);
+        scheduleTimerNotification(breakDuration * 60, 'break');
+      }, 1000);
     } else {
       playCompletionSound(true);
       setMode('work');
       setTimeLeft(workDuration * 60);
-      setTimeout(() => setIsActive(true), 1000);
+      setTimeout(() => {
+        setIsActive(true);
+        scheduleTimerNotification(workDuration * 60, 'work');
+      }, 1000);
     }
-  }, [playCompletionSound, breakDuration, workDuration]);
+  }, [playCompletionSound, breakDuration, workDuration, cancelTimerNotification]);
 
   // Persist state whenever it changes
   useEffect(() => {
@@ -108,14 +152,30 @@ export function PomodoroProvider({ children }) {
     }
   }, [timeLeft]);
 
-  const toggleTimer = () => setIsActive(prev => !prev);
+  const toggleTimer = useCallback(() => {
+    setIsActive(prev => {
+      const nowActive = !prev;
+      if (nowActive) {
+        // Starting/resuming — schedule a notification
+        setTimeLeft(tl => {
+          scheduleTimerNotification(tl, mode);
+          return tl;
+        });
+      } else {
+        // Pausing — cancel the notification
+        cancelTimerNotification();
+      }
+      return nowActive;
+    });
+  }, [scheduleTimerNotification, cancelTimerNotification, mode]);
 
-  const resetTimer = () => {
+  const resetTimer = useCallback(() => {
+    cancelTimerNotification();
     setIsActive(false);
     setMode('work');
     setTimeLeft(workDuration * 60);
     setSessionCount(0);
-  };
+  }, [cancelTimerNotification, workDuration]);
 
   const handleWorkDurationChange = (value) => {
     const duration = parseInt(value, 10);
@@ -135,6 +195,7 @@ export function PomodoroProvider({ children }) {
       completionSound, setCompletionSound, selectedPlaylist, setSelectedPlaylist,
       completionSounds, toggleTimer, resetTimer,
       handleWorkDurationChange, handleBreakDurationChange,
+      scheduleTimerNotification, cancelTimerNotification,
     }}>
       {children}
     </PomodoroContext.Provider>
