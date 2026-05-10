@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles, X } from "lucide-react";
@@ -42,7 +41,7 @@ export default function MotivationCoach({ theme }) {
         return completedDate === today;
       });
       
-      const activeTasks = allTasks.filter(t => t.status === 'active');
+      const activeTasks = allTasks.filter(t => t.status === 'active' && !t.parent_task_id);
       
       const summaries = await base44.entities.DailySummary.list('-date', 7);
       const recentStreak = summaries[0]?.streak_days || 0;
