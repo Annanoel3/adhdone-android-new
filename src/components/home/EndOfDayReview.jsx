@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   Dialog,
@@ -203,7 +202,7 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
   if (!summary || isLoading) {
     return (
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto flex flex-col items-center justify-center p-8">
+        <DialogContent className={`max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto flex flex-col items-center justify-center p-8 ${theme === 'dark' ? 'bg-gray-900 text-white border-gray-700' : 'bg-white'}`}>
           <Sparkles className="w-12 h-12 text-purple-600 animate-pulse" />
           <p className="mt-4 text-lg font-semibold text-gray-700">Generating your day's review...</p>
         </DialogContent>
@@ -213,7 +212,7 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto">
+      <DialogContent className={`max-w-lg w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto ${theme === 'dark' ? 'bg-gray-900 text-white border-gray-700' : 'bg-white'}`}>
         <DialogHeader>
           <DialogTitle className="text-xl sm:text-2xl flex items-center gap-2">
             <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600" />
@@ -225,50 +224,44 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
           {/* Main Stats */}
           <div className="grid grid-cols-3 gap-3 sm:gap-4">
             <Card className={`border-none ${
-              theme === 'minimalist'
-                ? 'bg-green-50'
-                : 'bg-gradient-to-br from-green-100 to-teal-100'
+              theme === 'dark' ? 'bg-green-900/40' : theme === 'minimalist' ? 'bg-green-50' : 'bg-gradient-to-br from-green-100 to-teal-100'
             }`}>
               <CardContent className="p-3 sm:p-4 text-center">
-                <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">
+                <div className={`text-2xl sm:text-3xl font-bold mb-1 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                   {summary.tasks_completed}
                 </div>
-                <p className="text-xs sm:text-sm text-gray-600">Completed</p>
+                <p className={`text-xs sm:text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Completed</p>
               </CardContent>
             </Card>
 
             <Card className={`border-none ${
-              theme === 'minimalist'
-                ? 'bg-blue-50'
-                : 'bg-gradient-to-br from-blue-100 to-purple-100'
+              theme === 'dark' ? 'bg-blue-900/40' : theme === 'minimalist' ? 'bg-blue-50' : 'bg-gradient-to-br from-blue-100 to-purple-100'
             }`}>
               <CardContent className="p-3 sm:p-4 text-center">
-                <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">
+                <div className={`text-2xl sm:text-3xl font-bold mb-1 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                   {summary.tasks_remaining}
                 </div>
-                <p className="text-xs sm:text-sm text-gray-600">Remaining</p>
+                <p className={`text-xs sm:text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Remaining</p>
               </CardContent>
             </Card>
 
             <Card className={`border-none ${
-              theme === 'minimalist'
-                ? 'bg-orange-50'
-                : 'bg-gradient-to-br from-orange-100 to-red-100'
+              theme === 'dark' ? 'bg-orange-900/40' : theme === 'minimalist' ? 'bg-orange-50' : 'bg-gradient-to-br from-orange-100 to-red-100'
             }`}>
               <CardContent className="p-3 sm:p-4 text-center">
-                <div className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">
+                <div className={`text-2xl sm:text-3xl font-bold mb-1 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                   {summary.completion_rate}%
                 </div>
-                <p className="text-xs sm:text-sm text-gray-600">Done</p>
+                <p className={`text-xs sm:text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Done</p>
               </CardContent>
             </Card>
           </div>
 
           {/* Progress Bar */}
-          <Card className="border-none shadow-md">
+          <Card className={`border-none shadow-md ${theme === 'dark' ? 'bg-gray-800' : ''}`}>
             <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between mb-3">
-                <span className="font-medium text-sm sm:text-base text-gray-900">Today's Progress</span>
+                <span className={`font-medium text-sm sm:text-base ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Today's Progress</span>
                 <Badge className={
                   summary.completion_rate >= 80 ? 'bg-green-100 text-green-700' :
                   summary.completion_rate >= 50 ? 'bg-blue-100 text-blue-700' :
@@ -292,12 +285,10 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
 
           {/* Highlights */}
           <Card className={`border-none ${
-            theme === 'minimalist'
-              ? 'bg-purple-50'
-              : 'bg-gradient-to-br from-purple-100 to-pink-100'
+            theme === 'dark' ? 'bg-purple-900/40' : theme === 'minimalist' ? 'bg-purple-50' : 'bg-gradient-to-br from-purple-100 to-pink-100'
           }`}>
             <CardContent className="p-4 sm:p-6">
-              <h3 className="font-semibold text-sm sm:text-base text-gray-900 mb-3 flex items-center gap-2">
+              <h3 className={`font-semibold text-sm sm:text-base mb-3 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                 <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5" />
                 Today's Highlights
               </h3>
@@ -305,7 +296,7 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
                 {summary.highlights.map((highlight, index) => (
                   <li key={index} className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                    <span className="text-xs sm:text-sm text-gray-700 break-words">{highlight}</span>
+                    <span className={`text-xs sm:text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{highlight}</span>
                   </li>
                 ))}
               </ul>
@@ -314,12 +305,10 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
 
           {/* Improvements / Insights */}
           <Card className={`border-none ${
-            theme === 'minimalist'
-              ? 'bg-yellow-50' // New color for minimalist theme
-              : 'bg-gradient-to-br from-yellow-100 to-orange-100' // New color for gradient theme
+            theme === 'dark' ? 'bg-yellow-900/40' : theme === 'minimalist' ? 'bg-yellow-50' : 'bg-gradient-to-br from-yellow-100 to-orange-100'
           }`}>
             <CardContent className="p-4 sm:p-6">
-              <h3 className="font-semibold text-sm sm:text-base text-gray-900 mb-3 flex items-center gap-2">
+              <h3 className={`font-semibold text-sm sm:text-base mb-3 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                 <Lightbulb className="w-4 h-4 sm:w-5 sm:h-5" />
                 Today's Insights
               </h3>
@@ -327,7 +316,7 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
                 {summary.improvements.map((improvement, index) => (
                   <li key={index} className="flex items-start gap-2">
                     <Lightbulb className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                    <span className="text-xs sm:text-sm text-gray-700 break-words">{improvement}</span>
+                    <span className={`text-xs sm:text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{improvement}</span>
                   </li>
                 ))}
               </ul>
@@ -336,9 +325,9 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
 
           {/* Energy Pattern */}
           {summary.energy_levels.length > 0 && (
-            <Card className="border-none shadow-md">
+            <Card className={`border-none shadow-md ${theme === 'dark' ? 'bg-gray-800' : ''}`}>
               <CardContent className="p-4 sm:p-6">
-                <h3 className="font-semibold text-sm sm:text-base text-gray-900 mb-3">Energy Throughout the Day</h3>
+                <h3 className={`font-semibold text-sm sm:text-base mb-3 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Energy Throughout the Day</h3>
                 <div className="flex flex-wrap gap-2">
                   {summary.energy_levels.map((log, index) => (
                     <Badge
