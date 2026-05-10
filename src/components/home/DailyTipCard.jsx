@@ -4,7 +4,9 @@ import { Lightbulb, Sparkles, Loader2, RefreshCw } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 
-const CURRENT_PROMPT_VERSION = 5; // Increment this when you update the prompt
+const CURRENT_PROMPT_VERSION = 6; // Increment this when you update the prompt
+
+const isEvening = () => new Date().getHours() >= 17;
 
 export default function DailyTipCard({ theme }) {
   const [todaysTip, setTodaysTip] = useState(null);
@@ -59,6 +61,15 @@ export default function DailyTipCard({ theme }) {
     
     // Store current count
     localStorage.setItem(lastCheckKey, completedCount.toString());
+
+    // Regenerate when it's evening and we haven't generated an evening tip yet
+    const eveningKey = 'dailyTip_eveningGenerated';
+    const eveningDate = localStorage.getItem(eveningKey);
+    const today = new Date().toISOString().split('T')[0];
+    if (isEvening() && eveningDate !== today) {
+      localStorage.setItem(eveningKey, today);
+      return true; // Switch to "Tonight's Tip"
+    }
     
     // Regenerate when crossing thresholds
     if (lastCount === 0 && completedCount >= 1) return true; // Got started!
@@ -110,10 +121,40 @@ export default function DailyTipCard({ theme }) {
       const moodDate = localStorage.getItem('today_mood_date');
       const todayMood = moodDate === todayDate ? localStorage.getItem('today_mood') : null;
 
+      // Tasks created today (for evening context)
+      const createdToday = tasks.filter(t => {
+        if (!t.created_date) return false;
+        return new Date(t.created_date).toISOString().split('T')[0] === todayDate;
+      });
+
+      // For evening: completed today excludes tasks whose next_reminder is set for a future date
+      // (i.e. tasks that were "completed" but actually have a future reminder — treat as not done today)
+      const todayStr = todayDate;
+      const completedTodayFiltered = completedToday.filter(t => {
+        if (!t.next_reminder) return true;
+        const reminderDate = new Date(t.next_reminder).toISOString().split('T')[0];
+        return reminderDate <= todayStr;
+      });
+
+      const evening = isEvening();
+
       // Determine context-aware tone based on mood + progress
+      const effectiveCompleted = evening ? completedTodayFiltered : completedToday;
       let contextualGuidance = '';
 
-      if (todayMood === 'not_great') {
+      if (evening) {
+        // Evening-specific guidance based on mood + day's results
+        const moodLabel = { not_great: 'not great', feeling_ok: 'okay', good: 'good', lets_go: 'energized' }[todayMood] || 'unknown';
+        const moodSummary = todayMood ? `They said they were feeling ${moodLabel} about the day.` : 'No mood check-in today.';
+        contextualGuidance = `
+CONTEXT: It's evening. This is "Tonight's Tip" — a wind-down, reflective tip, not a productivity push.
+MOOD CHECK-IN: ${moodSummary}
+DAY SUMMARY: They created ${createdToday.length} task(s) today and completed ${effectiveCompleted.length} of them.
+TONE: Warm and reflective. Acknowledge how their day actually went. If they had a rough mood but still got things done, celebrate that. If they struggled, be kind and help them close out the day with self-compassion. No pressure to do more tonight — just help them wind down well.
+Examples:
+"You made it through the day — that counts for something. Take a few minutes to jot down anything still on your mind so your brain can actually rest tonight."
+"${effectiveCompleted.length > 0 ? `You finished ${effectiveCompleted.length} thing(s) today — that's real progress.` : "Even if today felt like a wash, tomorrow is a clean slate."} Before you close out, write down your one priority for tomorrow so you don't have to think about it tonight."`;
+      } else if (todayMood === 'not_great') {
         contextualGuidance = `
 MOOD: The user said they're not feeling great about the day ahead. This is the most important thing to address.
 TONE: Compassionate, zero pressure, focus on finding just ONE tiny foothold. Normalize struggling. Help them find the will to begin without guilt.
@@ -141,14 +182,14 @@ TONE: Match their energy! Celebrate it, give them tips on riding that momentum a
 Examples:
 "You're fired up - love it! Strike while the iron is hot: batch your hardest tasks together while you're in this state. Motivation this good doesn't come every day."
 "LET'S GO energy is precious. Make a quick list of your top 3 priorities and attack them in order. Don't let that drive get scattered - focus it!"`;
-      } else if (completedToday.length >= 3) {
+      } else if (effectiveCompleted.length >= 3) {
         contextualGuidance = `
-TONE: They've completed ${completedToday.length} tasks today - they're ON FIRE! Give an encouraging tip about momentum.
+TONE: They've completed ${effectiveCompleted.length} tasks today - they're ON FIRE! Give an encouraging tip about momentum.
 Examples:
-"You're on a roll with ${completedToday.length} wins today! Ride that dopamine wave - your brain's loving this success pattern."`;
-      } else if (completedToday.length >= 1) {
+"You're on a roll with ${effectiveCompleted.length} wins today! Ride that dopamine wave - your brain's loving this success pattern."`;
+      } else if (effectiveCompleted.length >= 1) {
         contextualGuidance = `
-TONE: They've completed ${completedToday.length} task(s) today - good start! Keep it going.
+TONE: They've completed ${effectiveCompleted.length} task(s) today - good start! Keep it going.
 Examples:
 "Nice! You already checked one off today. Your brain's warmed up - what's the next tiny win you can grab?"`;
       } else {
@@ -174,7 +215,8 @@ Examples:
       CONTEXT:
       - Active tasks: ${activeTasks.length}
       - Snoozed tasks: ${snoozedTasks.length}
-      - Completed today: ${completedToday.length}
+      - Tasks created today: ${createdToday.length}
+      - Completed today: ${effectiveCompleted.length}
       - Streak: ${currentStreak} days
 
       EXAMPLES OF THE VIBE:
@@ -270,7 +312,7 @@ Return ONLY the category name.`;
                 theme === 'minimalist' ? 'text-amber-600' : theme === 'dark' ? 'text-amber-400' : 'text-yellow-700'
               }`} />
             </div>
-            <span>Today's Tip</span>
+            <span>{isEvening() ? "Tonight's Tip" : "Today's Tip"}</span>
           </div>
           <Button
             variant="ghost"
