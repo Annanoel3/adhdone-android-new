@@ -692,13 +692,13 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                                   }`}
                                 >
                                   <div className="flex items-center gap-3 py-3 w-full">
-                                    <div className="relative">
-                                      <item.icon className="w-5 h-5" />
-                                      {!isOpen && accountabilityNotifications > 0 && (
-                                        <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border border-white" />
-                                      )}
-                                    </div>
+                                    <item.icon className="w-5 h-5" />
                                     <span className="flex-1">{item.title}</span>
+                                    {accountabilityNotifications > 0 && (
+                                      <span className="bg-red-500 text-white text-xs rounded-full min-w-[1.25rem] h-5 flex items-center justify-center font-bold px-1">
+                                        {accountabilityNotifications}
+                                      </span>
+                                    )}
                                     {isOpen ? (
                                       <ChevronDown className="w-4 h-4" />
                                     ) : (

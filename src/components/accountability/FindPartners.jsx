@@ -26,6 +26,7 @@ export default function FindPartners({ theme, user, onUpdate }) {
   const [blockingMe, setBlockingMe] = useState([]);
   const [blockingUser, setBlockingUser] = useState(null);
   const [blockReason, setBlockReason] = useState("");
+  const [sentRequests, setSentRequests] = useState(new Set());
 
   useEffect(() => {
     if (user) {
@@ -114,7 +115,7 @@ export default function FindPartners({ theme, user, onUpdate }) {
         console.error("Error sending notification:", notifError);
       }
 
-      setSearchResults(prev => prev.filter(u => u.email !== targetUser.email));
+      setSentRequests(prev => new Set([...prev, targetUser.email]));
       if (onUpdate) onUpdate();
     } catch (error) {
       console.error("Error sending connection request:", error);
@@ -254,9 +255,9 @@ export default function FindPartners({ theme, user, onUpdate }) {
                     <Badge variant="outline" className="text-xs">
                       Connected
                     </Badge>
-                  ) : hasPendingRequest(result.email) ? (
+                  ) : hasPendingRequest(result.email) || sentRequests.has(result.email) ? (
                     <Badge variant="outline" className="text-xs text-amber-600 border-amber-400">
-                      Pending
+                      Request Sent
                     </Badge>
                   ) : (
                     <Button
