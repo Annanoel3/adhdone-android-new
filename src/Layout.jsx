@@ -839,7 +839,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 ) : theme === 'spicybrains' ? (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    <span>Spicy Brains → Seasonal</span>
+                    <span>Spicy Brains ✨</span>
                   </>
                 ) : (
                   <>
