@@ -470,13 +470,6 @@ export default function FocusTimer() {
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleTestSound}
-            >
-              Test Sound
-            </Button>
           </div>
         </CardContent>
       </Card>
