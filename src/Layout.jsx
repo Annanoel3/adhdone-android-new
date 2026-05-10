@@ -813,41 +813,54 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 <span>App Guide</span>
               </Button>
 
-              <Button
-                variant="outline"
-                onClick={toggleTheme}
-                className={`w-full flex items-center justify-center gap-2 rounded-xl ${
-                  isSeasonalTheme()
-                    ? 'bg-white/60 hover:bg-white/80 text-gray-800 border-white/40'
-                    : theme === 'dark'
-                      ? 'border-gray-700 hover:bg-gray-800 text-gray-300 bg-transparent'
-                      : theme === 'spicybrains'
-                        ? 'bg-gradient-to-r from-yellow-300 to-pink-300 hover:from-yellow-400 hover:to-pink-400 text-gray-900 font-bold border-2 border-cyan-400'
-                        : ''
-                }`}
-              >
-                {theme === 'minimalist' ? (
-                  <>
-                    <Sun className="w-4 h-4" />
-                    <span>Light Theme</span>
-                  </>
-                ) : theme === 'dark' ? (
-                  <>
-                    <Moon className="w-4 h-4" />
-                    <span>Dark Theme</span>
-                  </>
-                ) : theme === 'spicybrains' ? (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    <span>Spicy Brains ✨</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    <span>Colorful Theme</span>
-                  </>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={toggleTheme}
+                  className={`flex-1 flex items-center justify-center gap-2 rounded-xl ${
+                    isSeasonalTheme()
+                      ? 'bg-white/60 hover:bg-white/80 text-gray-800 border-white/40'
+                      : theme === 'dark'
+                        ? 'border-gray-700 hover:bg-gray-800 text-gray-300 bg-transparent'
+                        : theme === 'spicybrains'
+                          ? 'bg-gradient-to-r from-yellow-300 to-pink-300 hover:from-yellow-400 hover:to-pink-400 text-gray-900 font-bold border-2 border-cyan-400'
+                          : ''
+                  }`}
+                >
+                  {theme === 'minimalist' ? (
+                    <>
+                      <Sun className="w-4 h-4" />
+                      <span>Light Theme</span>
+                    </>
+                  ) : theme === 'dark' ? (
+                    <>
+                      <Moon className="w-4 h-4" />
+                      <span>Dark Theme</span>
+                    </>
+                  ) : theme === 'spicybrains' ? (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Spicy Brains ✨</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Colorful Theme</span>
+                    </>
+                  )}
+                </Button>
+                {theme === 'spicybrains' && (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setShowSpicyBrainsExplanation(true)}
+                    title="Why these colors?"
+                    className="flex-shrink-0 rounded-xl border-2 border-cyan-400 bg-gradient-to-r from-yellow-300 to-pink-300 hover:from-yellow-400 hover:to-pink-400 text-gray-900"
+                  >
+                    <HelpCircle className="w-4 h-4" />
+                  </Button>
                 )}
-              </Button>
+              </div>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
