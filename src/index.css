@@ -154,5 +154,15 @@ button:focus-visible {
   }
   body {
     @apply bg-background text-foreground;
+    overscroll-behavior-y: none;
+  }
+  button,
+  [role="button"],
+  a,
+  [data-radix-collection-item],
+  nav,
+  nav * {
+    user-select: none;
+    -webkit-user-select: none;
   }
 }

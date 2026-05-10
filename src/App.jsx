@@ -8,7 +8,8 @@ import { queryClientInstance } from '@/lib/query-client'
 import VisualEditAgent from '@/lib/VisualEditAgent'
 import NavigationTracker from '@/lib/NavigationTracker'
 import { pagesConfig } from './pages.config'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
 import { setupIframeMessaging } from './lib/iframe-messaging';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
@@ -23,6 +24,43 @@ setupIframeMessaging();
 const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   <Layout currentPageName={currentPageName}>{children}</Layout>
   : <>{children}</>;
+
+const pageVariants = {
+  initial: { x: '100%', opacity: 0 },
+  in: { x: 0, opacity: 1 },
+  out: { x: '-30%', opacity: 0 },
+};
+
+const pageTransition = {
+  type: 'tween',
+  ease: 'easeInOut',
+  duration: 0.25,
+};
+
+const AnimatedRoutes = () => {
+  const location = useLocation();
+  return (
+    <AnimatePresence mode="wait">
+      <motion.div
+        key={location.pathname}
+        initial="initial"
+        animate="in"
+        exit="out"
+        variants={pageVariants}
+        transition={pageTransition}
+        style={{ width: '100%', height: '100%' }}
+      >
+        <Routes location={location}>
+          <Route path="/" element={<MainPage />} />
+          {Object.entries(Pages).map(([path, Page]) => (
+            <Route key={path} path={`/${path}`} element={<Page />} />
+          ))}
+          <Route path="*" element={<PageNotFound />} />
+        </Routes>
+      </motion.div>
+    </AnimatePresence>
+  );
+};
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin } = useAuth();
@@ -50,13 +88,7 @@ const AuthenticatedApp = () => {
   // Render the main app
   return (
     <LayoutWrapper currentPageName={mainPageKey}>
-      <Routes>
-        <Route path="/" element={<MainPage />} />
-        {Object.entries(Pages).map(([path, Page]) => (
-          <Route key={path} path={`/${path}`} element={<Page />} />
-        ))}
-        <Route path="*" element={<PageNotFound />} />
-      </Routes>
+      <AnimatedRoutes />
     </LayoutWrapper>
   );
 };
