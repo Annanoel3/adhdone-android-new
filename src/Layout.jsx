@@ -47,6 +47,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import EnergyCheckInModal from "./components/shared/EnergyCheckInModal";
+import MiniPomodoroBar from "./components/shared/MiniPomodoroBar";
 import UniversalVoiceAssistant from "./components/shared/UniversalVoiceAssistant";
 import MicrophonePermissionCheck from "./components/shared/MicrophonePermissionCheck";
 import PokeNotification from "./components/shared/PokeNotification";
@@ -93,6 +94,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     return localStorage.getItem('adhd_theme') || 'minimalist';
   });
   const [showEnergyCheckIn, setShowEnergyCheckIn] = useState(false);
+  const [energyCheckInTitle, setEnergyCheckInTitle] = useState('');
   const [communityOpen, setCommunityOpen] = useState(false);
   const [accountabilityNotifications, setAccountabilityNotifications] = useState(0);
   const getDateBasedMode = () => {
@@ -181,16 +183,33 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   }, [user, authCheckComplete]);
 
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
-    const lastCheckInDate = localStorage.getItem('last_energy_checkin_date');
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const currentHour = now.getHours(); // local time
 
-    if (lastCheckInDate !== today) {
-      // First open of the day — show after a short delay
-      setTimeout(() => {
-        setShowEnergyCheckIn(true);
-        localStorage.setItem('last_energy_checkin_date', today);
-      }, 3000);
+    // Three time windows, each with their own localStorage key
+    if (currentHour < 12) {
+      // Morning: before noon
+      const key = `energy_checkin_morning_${today}`;
+      if (!localStorage.getItem(key)) {
+        localStorage.setItem(key, '1');
+        setTimeout(() => {
+          setEnergyCheckInTitle('How are you feeling about the day ahead?');
+          setShowEnergyCheckIn(true);
+        }, 3000);
+      }
+    } else if (currentHour < 19) {
+      // Afternoon: noon–7pm
+      const key = `energy_checkin_afternoon_${today}`;
+      if (!localStorage.getItem(key)) {
+        localStorage.setItem(key, '1');
+        setTimeout(() => {
+          setEnergyCheckInTitle('How are you feeling about the rest of the day?');
+          setShowEnergyCheckIn(true);
+        }, 3000);
+      }
     }
+    // Evening (7pm+): only the end-of-day recap shows — no energy check-in
   }, []);
 
   // Android back button handler
@@ -794,41 +813,54 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 <span>App Guide</span>
               </Button>
 
-              <Button
-                variant="outline"
-                onClick={toggleTheme}
-                className={`w-full flex items-center justify-center gap-2 rounded-xl ${
-                  isSeasonalTheme()
-                    ? 'bg-white/60 hover:bg-white/80 text-gray-800 border-white/40'
-                    : theme === 'dark'
-                      ? 'border-gray-700 hover:bg-gray-800 text-gray-300 bg-transparent'
-                      : theme === 'spicybrains'
-                        ? 'bg-gradient-to-r from-yellow-300 to-pink-300 hover:from-yellow-400 hover:to-pink-400 text-gray-900 font-bold border-2 border-cyan-400'
-                        : ''
-                }`}
-              >
-                {theme === 'minimalist' ? (
-                  <>
-                    <Sun className="w-4 h-4" />
-                    <span>Light Theme</span>
-                  </>
-                ) : theme === 'dark' ? (
-                  <>
-                    <Moon className="w-4 h-4" />
-                    <span>Dark Theme</span>
-                  </>
-                ) : theme === 'spicybrains' ? (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    <span>Spicy Brains → Seasonal</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    <span>Colorful Theme</span>
-                  </>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={toggleTheme}
+                  className={`flex-1 flex items-center justify-center gap-2 rounded-xl ${
+                    isSeasonalTheme()
+                      ? 'bg-white/60 hover:bg-white/80 text-gray-800 border-white/40'
+                      : theme === 'dark'
+                        ? 'border-gray-700 hover:bg-gray-800 text-gray-300 bg-transparent'
+                        : theme === 'spicybrains'
+                          ? 'bg-gradient-to-r from-yellow-300 to-pink-300 hover:from-yellow-400 hover:to-pink-400 text-gray-900 font-bold border-2 border-cyan-400'
+                          : ''
+                  }`}
+                >
+                  {theme === 'minimalist' ? (
+                    <>
+                      <Sun className="w-4 h-4" />
+                      <span>Light Theme</span>
+                    </>
+                  ) : theme === 'dark' ? (
+                    <>
+                      <Moon className="w-4 h-4" />
+                      <span>Dark Theme</span>
+                    </>
+                  ) : theme === 'spicybrains' ? (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Spicy Brains ✨</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Colorful Theme</span>
+                    </>
+                  )}
+                </Button>
+                {theme === 'spicybrains' && (
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setShowSpicyBrainsExplanation(true)}
+                    title="Why these colors?"
+                    className="flex-shrink-0 rounded-xl border-2 border-cyan-400 bg-gradient-to-r from-yellow-300 to-pink-300 hover:from-yellow-400 hover:to-pink-400 text-gray-900"
+                  >
+                    <HelpCircle className="w-4 h-4" />
+                  </Button>
                 )}
-              </Button>
+              </div>
 
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -902,7 +934,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                     ? 'bg-gradient-to-r from-pink-400/80 to-cyan-400/80 border-yellow-400'
                     : 'bg-white/60 border-gray-200/50'
             }`} style={{
-              paddingTop: 'max(3.5rem, calc(2rem + env(safe-area-inset-top, 0px)))',
+              paddingTop: 'max(1rem, calc(0.5rem + env(safe-area-inset-top, 0px)))',
               paddingBottom: '1rem'
             }}>
               <div className="flex items-center gap-4">
@@ -960,10 +992,12 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             )}
           </main>
 
+          <MiniPomodoroBar theme={theme} />
           <EnergyCheckInModal
             isOpen={showEnergyCheckIn}
             onClose={() => setShowEnergyCheckIn(false)}
             theme={theme}
+            title={energyCheckInTitle}
           />
           <UniversalVoiceAssistant theme={theme} currentPageName={currentPageName} />
           <MicrophonePermissionCheck theme={theme} />

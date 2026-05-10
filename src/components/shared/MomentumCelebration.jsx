@@ -26,30 +26,24 @@ export default function MomentumCelebration({ completedCount, remainingCount, th
   });
 
   useEffect(() => {
-    console.log('🎉 [MOMENTUM] Checking celebration:', { completedCount, lastShownCount });
-    
-    // CRITICAL FIX: Only show if count is valid and increased
-    if (completedCount === 0) {
-      console.log('🎉 [MOMENTUM] No tasks completed yet');
-      return;
-    }
-    
-    if (completedCount <= lastShownCount) {
-      console.log('🎉 [MOMENTUM] Count did not increase:', completedCount, 'vs', lastShownCount);
-      return;
-    }
-    
-    if (completedCount > 50) {
-      console.log('🎉 [MOMENTUM] Count suspiciously high, skipping');
-      return;
-    }
+    // Don't show at or after 5pm
+    if (new Date().getHours() >= 17) return;
+
+    // Only show twice per day max
+    const today = new Date().toISOString().split('T')[0];
+    const shownTodayKey = 'momentum_shown_today';
+    const shownData = (() => { try { return JSON.parse(localStorage.getItem(shownTodayKey) || '{}'); } catch { return {}; } })();
+    const shownTodayCount = shownData.date === today ? (shownData.shownCount || 0) : 0;
+    if (shownTodayCount >= 2) return;
+
+    // Only show if count is valid and increased
+    if (completedCount === 0) return;
+    if (completedCount <= lastShownCount) return;
+    if (completedCount > 50) return;
     
     // Only show on milestones: 1, 3, 5, 8, 10, etc.
     const milestones = [1, 3, 5, 8, 10, 15, 20];
-    if (!milestones.includes(completedCount) && completedCount % 5 !== 0) {
-      console.log('🎉 [MOMENTUM] Not a milestone, skipping');
-      return;
-    }
+    if (!milestones.includes(completedCount) && completedCount % 5 !== 0) return;
 
     console.log('🎉 [MOMENTUM] SHOWING CELEBRATION!', completedCount);
 
@@ -76,12 +70,12 @@ export default function MomentumCelebration({ completedCount, remainingCount, th
       setIcon(newIcon);
       setShow(true);
       
-      // Save to localStorage with today's date
+      // Save milestone count
       const today = new Date().toISOString().split('T')[0];
-      localStorage.setItem('last_momentum_celebration', JSON.stringify({
-        count: completedCount,
-        date: today
-      }));
+      localStorage.setItem('last_momentum_celebration', JSON.stringify({ count: completedCount, date: today }));
+      
+      // Increment shown-today counter
+      localStorage.setItem('momentum_shown_today', JSON.stringify({ date: today, shownCount: shownTodayCount + 1 }));
       
       setLastShownCount(completedCount);
     }

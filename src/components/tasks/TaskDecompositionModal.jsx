@@ -176,7 +176,7 @@ Return JSON with this structure:
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className={`max-w-2xl max-h-[90vh] overflow-y-auto ${theme === 'dark' ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="w-5 h-5 text-purple-600" />
@@ -188,7 +188,7 @@ Return JSON with this structure:
           {isLoading && suggestions.length === 0 ? (
             <div className="text-center py-12">
               <Loader2 className="w-12 h-12 animate-spin text-purple-600 mx-auto mb-4" />
-              <p className="text-gray-600">
+              <p className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
                 Analyzing your task and creating ADHD-friendly steps...
               </p>
             </div>

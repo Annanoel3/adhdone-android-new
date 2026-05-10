@@ -858,9 +858,9 @@ Return JSON:
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className="max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto">
+        <DialogContent className={`max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto ${theme === 'dark' ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
           {isUpdating && (
-            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center z-50 rounded-lg">
+            <div className={`absolute inset-0 backdrop-blur-sm flex items-center justify-center z-50 rounded-lg ${theme === 'dark' ? 'bg-gray-900/80' : 'bg-white/80'}`}>
               <div className="flex flex-col items-center gap-3">
                 <div className="w-8 h-8 border-4 border-gray-300 border-t-purple-600 rounded-full animate-spin"></div>
                 <p className="text-sm font-medium text-gray-700">Updating...</p>
@@ -869,7 +869,7 @@ Return JSON:
           )}
           
           <DialogHeader>
-            <DialogTitle className="text-2xl font-bold pt-6 pb-2">
+            <DialogTitle className={`text-2xl font-bold pt-6 pb-2 ${theme === 'dark' ? 'text-white' : ''}`}>
               {isEditingTitle ? (
                 <div className="flex items-center gap-2">
                   <Input
@@ -924,8 +924,8 @@ Return JSON:
           <div className="space-y-6 py-4">
             {task.description && (
               <div>
-                <h4 className="text-sm font-medium text-gray-500 mb-2">Description</h4>
-                <p className="text-gray-700">{task.description}</p>
+                <h4 className={`text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Description</h4>
+                <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>{task.description}</p>
               </div>
             )}
 
@@ -1190,7 +1190,7 @@ Return JSON:
             {/* Pictures Section */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <label className={`text-sm font-medium flex items-center gap-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                   <ImageIcon className="w-4 h-4" />
                   Pictures
                 </label>
@@ -1251,7 +1251,7 @@ Return JSON:
 
             {/* Notes Section */}
             <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <label className={`text-sm font-medium flex items-center gap-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                 <FileText className="w-4 h-4" />
                 Notes
               </label>
@@ -1360,7 +1360,7 @@ Return JSON:
                       <span className="w-full border-t border-gray-300" />
                     </div>
                     <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-white px-2 text-gray-500">Or</span>
+                      <span className={`px-2 text-gray-500 ${theme === 'dark' ? 'bg-gray-900' : 'bg-white'}`}>Or</span>
                     </div>
                   </div>
 
@@ -1396,7 +1396,7 @@ Return JSON:
               {subTasks.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
-                    <h4 className="text-sm font-medium text-gray-700">Sub-tasks</h4>
+                    <h4 className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Sub-tasks</h4>
                     <div className="flex items-center gap-2">
                       {subTasks.length < 3 && (
                         <Button
