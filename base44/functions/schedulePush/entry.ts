@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
 
         // Step 3: Validate payload
         console.log('[schedulePush] Step 3: Validating payload...');
-        const { toUserExternalId, title, body: messageBody, sendAtISO, minutesFromNow, data, android_channel_id } = payload;
+        const { toUserExternalId, title, body: messageBody, sendAtISO, minutesFromNow, data, android_channel_id, sound } = payload;
         
         if (!toUserExternalId) {
             console.error('[schedulePush] Missing toUserExternalId');
@@ -84,6 +84,15 @@ Deno.serve(async (req) => {
         
         if (android_channel_id) {
             notificationPayload.android_channel_id = android_channel_id;
+        }
+
+        // Custom notification sound (filename without extension for Android, with extension for iOS)
+        if (sound) {
+            const ext = sound.endsWith('.mp3') || sound.endsWith('.wav') ? '' : '.mp3';
+            const soundWithExt = sound.includes('.') ? sound : `${sound}${ext}`;
+            notificationPayload.ios_sound = soundWithExt;         // iOS: filename with extension
+            notificationPayload.android_sound = sound.replace(/\.(mp3|wav)$/, ''); // Android: no extension
+            console.log('[schedulePush] Custom sound:', notificationPayload.android_sound);
         }
 
         console.log('[schedulePush] Final OneSignal payload:', JSON.stringify(notificationPayload, null, 2));

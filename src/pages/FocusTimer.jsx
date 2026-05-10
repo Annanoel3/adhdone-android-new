@@ -18,6 +18,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { DialogTrigger } from "@radix-ui/react-dialog";
+import { scheduleReminder, cancelScheduledReminder } from "@/components/utils/reminderScheduler";
+import { useAuth } from "@/lib/AuthContext";
 
 export default function FocusTimer() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
@@ -34,6 +36,10 @@ export default function FocusTimer() {
   const intervalRef = useRef(null);
   const audioRef = useRef(null);
   const wakeLockRef = useRef(null);
+  const scheduledNotificationIdRef = useRef(null);
+  const completionSoundRef = useRef(completionSound);
+
+  const { user } = useAuth();
 
   const playlists = {
     none: { name: "No Music", embed: null },
@@ -175,6 +181,30 @@ export default function FocusTimer() {
     };
   }, [isActive]);
 
+  useEffect(() => { completionSoundRef.current = completionSound; }, [completionSound]);
+
+  const cancelPendingNotification = useCallback(() => {
+    if (scheduledNotificationIdRef.current) {
+      cancelScheduledReminder(scheduledNotificationIdRef.current).catch(() => {});
+      scheduledNotificationIdRef.current = null;
+    }
+  }, []);
+
+  const scheduleCompletionNotification = useCallback((secondsFromNow, currentMode) => {
+    const email = user?.email;
+    if (!email || secondsFromNow <= 0) return;
+    const isWorkMode = currentMode === 'work';
+    scheduleReminder({
+      email,
+      title: isWorkMode ? "Focus session complete! 🎯" : "Break's over!",
+      body: isWorkMode ? "Great work! Time for a break." : "Ready to focus again?",
+      minutesFromNow: secondsFromNow / 60,
+      sound: completionSoundRef.current,
+    }).then(id => {
+      if (id) scheduledNotificationIdRef.current = id;
+    }).catch(err => console.warn('[FocusTimer] Failed to schedule notification:', err));
+  }, [user]);
+
   const playCompletionSound = (isBreakEnd = false) => {
     const audio = audioRef.current || new Audio();
     audio.src = isBreakEnd ? breakEndSound : completionSounds[completionSound].url;
@@ -187,34 +217,32 @@ export default function FocusTimer() {
 
   const handleTimerComplete = useCallback(() => {
     setIsActive(false);
+    scheduledNotificationIdRef.current = null; // notification fired naturally, clear ref
 
     if (mode === 'work') {
       playCompletionSound(false);
       const newSessionCount = sessionCount + 1;
       setSessionCount(newSessionCount);
 
-      // Switch to break mode
       setMode('break');
       setTimeLeft(breakDuration * 60);
 
-      // Auto-start break timer
       setTimeout(() => {
         setIsActive(true);
+        scheduleCompletionNotification(breakDuration * 60, 'break');
       }, 1000);
-    } else { // mode === 'break'
-      // Break is over
+    } else {
       playCompletionSound(true);
 
-      // Switch back to work mode
       setMode('work');
       setTimeLeft(workDuration * 60);
 
-      // Auto-start work timer
       setTimeout(() => {
         setIsActive(true);
+        scheduleCompletionNotification(workDuration * 60, 'work');
       }, 1000);
     }
-  }, [mode, sessionCount, workDuration, breakDuration, completionSound]);
+  }, [mode, sessionCount, workDuration, breakDuration, completionSound, scheduleCompletionNotification]);
 
   useEffect(() => {
     if (isActive && timeLeft > 0) {
@@ -228,9 +256,17 @@ export default function FocusTimer() {
     return () => clearInterval(intervalRef.current);
   }, [isActive, timeLeft, handleTimerComplete]);
 
-  const toggleTimer = () => setIsActive(!isActive);
+  const toggleTimer = () => {
+    if (isActive) {
+      cancelPendingNotification();
+    } else {
+      scheduleCompletionNotification(timeLeft, mode);
+    }
+    setIsActive(!isActive);
+  };
 
   const resetTimer = () => {
+    cancelPendingNotification();
     setIsActive(false);
     setMode('work');
     setTimeLeft(workDuration * 60);

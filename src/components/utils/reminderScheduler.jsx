@@ -16,7 +16,8 @@ export async function scheduleReminder({
   sendAtISO,
   taskId,
   data,
-  android_channel_id
+  android_channel_id,
+  sound
 }) {
   console.log('[scheduleReminder] Called with:', { email, title, body, sendAtISO, minutesFromNow, taskId });
   
@@ -48,6 +49,10 @@ export async function scheduleReminder({
 
   if (android_channel_id) {
     payload.android_channel_id = android_channel_id;
+  }
+
+  if (sound) {
+    payload.sound = sound;
   }
 
   console.log('[scheduleReminder] Full payload to schedulePush:', JSON.stringify(payload, null, 2));
