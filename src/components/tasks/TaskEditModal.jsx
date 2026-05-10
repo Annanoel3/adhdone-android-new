@@ -53,14 +53,14 @@ export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-lg w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto">
+      <DialogContent className={`max-w-lg w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto ${theme === 'dark' ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
         <DialogHeader>
-          <DialogTitle>Edit Task</DialogTitle>
+          <DialogTitle className={theme === 'dark' ? 'text-white' : ''}>Edit Task</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div>
-            <Label>Task Title</Label>
+            <Label className={theme === 'dark' ? 'text-gray-200' : ''}>Task Title</Label>
             <Input
               value={formData.title}
               onChange={(e) => setFormData({...formData, title: e.target.value})}
@@ -70,7 +70,7 @@ export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }
           </div>
 
           <div>
-            <Label>Description (Optional)</Label>
+            <Label className={theme === 'dark' ? 'text-gray-200' : ''}>Description (Optional)</Label>
             <Textarea
               value={formData.description}
               onChange={(e) => setFormData({...formData, description: e.target.value})}
@@ -81,7 +81,7 @@ export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Priority</Label>
+              <Label className={theme === 'dark' ? 'text-gray-200' : ''}>Priority</Label>
               <Select
                 value={formData.urgency}
                 onValueChange={(value) => setFormData({...formData, urgency: value})}
@@ -99,7 +99,7 @@ export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }
             </div>
 
             <div>
-              <Label>Energy Required</Label>
+              <Label className={theme === 'dark' ? 'text-gray-200' : ''}>Energy Required</Label>
               <Select
                 value={formData.energy_required}
                 onValueChange={(value) => setFormData({...formData, energy_required: value})}
@@ -117,7 +117,7 @@ export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }
           </div>
 
           <div>
-            <Label>Reminder (Optional)</Label>
+            <Label className={theme === 'dark' ? 'text-gray-200' : ''}>Reminder (Optional)</Label>
             <Select
               value={formData.reminder_interval}
               onValueChange={(value) => setFormData({...formData, reminder_interval: value})}

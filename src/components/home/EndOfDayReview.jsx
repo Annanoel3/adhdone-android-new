@@ -204,7 +204,7 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className={`max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto flex flex-col items-center justify-center p-8 ${theme === 'dark' ? 'bg-gray-900 text-white border-gray-700' : 'bg-white'}`}>
           <Sparkles className="w-12 h-12 text-purple-600 animate-pulse" />
-          <p className="mt-4 text-lg font-semibold text-gray-700">Generating your day's review...</p>
+          <p className={`mt-4 text-lg font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Generating your day's review...</p>
         </DialogContent>
       </Dialog>
     );

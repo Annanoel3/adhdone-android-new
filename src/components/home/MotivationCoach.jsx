@@ -97,22 +97,24 @@ DO NOT:
         className="fixed bottom-6 right-6 max-w-md z-50"
       >
         <Card className={`border-none shadow-2xl ${
-          theme === 'minimalist' 
-            ? 'bg-white' 
-            : 'bg-gradient-to-br from-purple-100 via-pink-100 to-orange-100'
+          theme === 'dark'
+            ? 'bg-gray-800 border border-gray-700'
+            : theme === 'minimalist' 
+              ? 'bg-white' 
+              : 'bg-gradient-to-br from-purple-100 via-pink-100 to-orange-100'
         }`}>
           <CardContent className="p-6">
             <div className="flex items-start gap-4">
               <div className={`p-3 rounded-xl ${
-                theme === 'minimalist' ? 'bg-purple-100' : 'bg-white/80'
+                theme === 'dark' ? 'bg-purple-900/40' : theme === 'minimalist' ? 'bg-purple-100' : 'bg-white/80'
               }`}>
                 <Sparkles className={`w-6 h-6 ${
-                  theme === 'minimalist' ? 'text-purple-600' : 'text-purple-700'
+                  theme === 'dark' ? 'text-purple-400' : theme === 'minimalist' ? 'text-purple-600' : 'text-purple-700'
                 }`} />
               </div>
               <div className="flex-1">
-                <h3 className="font-semibold text-gray-900 mb-2">Your Coach</h3>
-                <p className="text-gray-700 leading-relaxed">{message}</p>
+                <h3 className={`font-semibold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Your Coach</h3>
+                <p className={`leading-relaxed ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{message}</p>
               </div>
               <Button
                 variant="ghost"
