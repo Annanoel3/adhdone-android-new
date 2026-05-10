@@ -4,7 +4,7 @@ import { Lightbulb, Sparkles, Loader2, RefreshCw } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 
-const CURRENT_PROMPT_VERSION = 6; // Increment this when you update the prompt
+const CURRENT_PROMPT_VERSION = 7; // Increment this when you update the prompt
 
 const isEvening = () => new Date().getHours() >= 17;
 
@@ -147,13 +147,25 @@ export default function DailyTipCard({ theme }) {
         const moodLabel = { not_great: 'not great', feeling_ok: 'okay', good: 'good', lets_go: 'energized' }[todayMood] || 'unknown';
         const moodSummary = todayMood ? `They said they were feeling ${moodLabel} about the day.` : 'No mood check-in today.';
         contextualGuidance = `
-CONTEXT: It's evening. This is "Tonight's Tip" — a wind-down, reflective tip, not a productivity push.
+CONTEXT: It's evening. This is "Tonight's Tip" — a warm, celebratory wind-down. NOT a productivity push.
 MOOD CHECK-IN: ${moodSummary}
 DAY SUMMARY: They created ${createdToday.length} task(s) today and completed ${effectiveCompleted.length} of them.
-TONE: Warm and reflective. Acknowledge how their day actually went. If they had a rough mood but still got things done, celebrate that. If they struggled, be kind and help them close out the day with self-compassion. No pressure to do more tonight — just help them wind down well.
-Examples:
-"You made it through the day — that counts for something. Take a few minutes to jot down anything still on your mind so your brain can actually rest tonight."
-"${effectiveCompleted.length > 0 ? `You finished ${effectiveCompleted.length} thing(s) today — that's real progress.` : "Even if today felt like a wash, tomorrow is a clean slate."} Before you close out, write down your one priority for tomorrow so you don't have to think about it tonight."`;
+
+CRITICAL TONE RULE: Always lead with a celebration of what they DID, no matter how small. Opening the app and creating a task IS a win. Showing up IS a win. Never frame the day as tough or failed. If they completed 0 tasks but created some, celebrate that they planned. If they completed tasks, celebrate that. Tomorrow is always a fresh start — end on hope, not guilt.
+
+NEVER say things like "today was tough" or "even though you struggled." Always find the win first.
+
+Examples when 0 tasks completed but tasks were created:
+"You showed up today — you opened the app, you made a plan. That's not nothing, that's actually the hardest part. Tomorrow those tasks are ready and waiting. Fresh start incoming. 🌅"
+"Planning IS doing. You mapped out what matters. Tomorrow, pick just one of those and start there. You've already done the thinking."
+
+Examples when tasks were completed:
+"${effectiveCompleted.length} thing(s) done today — that's real. Rest up, you earned it. Tomorrow's a fresh slate."
+"Look at that — you got ${effectiveCompleted.length} done. Wind down, let your brain rest, and tomorrow you pick up right where you left off."
+
+Examples when nothing was created or completed:
+"You came back to check in — that matters more than you think. Tomorrow, just pick ONE tiny thing to start with. That's it. One thing."
+`;
       } else if (todayMood === 'not_great') {
         contextualGuidance = `
 MOOD: The user said they're not feeling great about the day ahead. This is the most important thing to address.
