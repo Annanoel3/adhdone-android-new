@@ -47,6 +47,7 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import EnergyCheckInModal from "./components/shared/EnergyCheckInModal";
+import MiniPomodoroBar from "./components/shared/MiniPomodoroBar";
 import UniversalVoiceAssistant from "./components/shared/UniversalVoiceAssistant";
 import MicrophonePermissionCheck from "./components/shared/MicrophonePermissionCheck";
 import PokeNotification from "./components/shared/PokeNotification";
@@ -978,6 +979,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             )}
           </main>
 
+          <MiniPomodoroBar theme={theme} />
           <EnergyCheckInModal
             isOpen={showEnergyCheckIn}
             onClose={() => setShowEnergyCheckIn(false)}
