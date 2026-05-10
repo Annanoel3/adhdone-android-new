@@ -39,7 +39,7 @@ const MOODS = [
   },
 ];
 
-export default function EnergyCheckInModal({ isOpen, onClose, theme }) {
+export default function EnergyCheckInModal({ isOpen, onClose, theme, title }) {
   const [selected, setSelected] = useState(null);
   const [submitted, setSubmitted] = useState(false);
 
@@ -76,7 +76,7 @@ export default function EnergyCheckInModal({ isOpen, onClose, theme }) {
       <DialogContent className={`max-w-sm w-[calc(100vw-2rem)] ${isDark ? 'bg-gray-900 border-gray-700' : ''}`}>
         <DialogHeader>
           <DialogTitle className={`text-xl text-center ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            How are you feeling about the day ahead?
+            {title || 'How are you feeling about the day ahead?'}
           </DialogTitle>
         </DialogHeader>
 

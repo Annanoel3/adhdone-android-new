@@ -93,6 +93,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     return localStorage.getItem('adhd_theme') || 'minimalist';
   });
   const [showEnergyCheckIn, setShowEnergyCheckIn] = useState(false);
+  const [energyCheckInTitle, setEnergyCheckInTitle] = useState('');
   const [communityOpen, setCommunityOpen] = useState(false);
   const [accountabilityNotifications, setAccountabilityNotifications] = useState(0);
   const getDateBasedMode = () => {
@@ -183,20 +184,31 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   useEffect(() => {
     const now = new Date();
     const today = now.toISOString().split('T')[0];
-    const lastCheckInDate = localStorage.getItem('last_energy_checkin_date');
     const currentHour = now.getHours(); // local time
 
-    if (lastCheckInDate !== today) {
-      // Mark immediately so re-mounts don't trigger it again
-      localStorage.setItem('last_energy_checkin_date', today);
-
-      if (currentHour < 12) {
-        // Only show the popup if it's before noon
+    // Three time windows, each with their own localStorage key
+    if (currentHour < 12) {
+      // Morning: before noon
+      const key = `energy_checkin_morning_${today}`;
+      if (!localStorage.getItem(key)) {
+        localStorage.setItem(key, '1');
         setTimeout(() => {
+          setEnergyCheckInTitle('How are you feeling about the day ahead?');
+          setShowEnergyCheckIn(true);
+        }, 3000);
+      }
+    } else if (currentHour < 19) {
+      // Afternoon: noon–7pm
+      const key = `energy_checkin_afternoon_${today}`;
+      if (!localStorage.getItem(key)) {
+        localStorage.setItem(key, '1');
+        setTimeout(() => {
+          setEnergyCheckInTitle('How are you feeling about the rest of the day?');
           setShowEnergyCheckIn(true);
         }, 3000);
       }
     }
+    // Evening (7pm+): only the end-of-day recap shows — no energy check-in
   }, []);
 
   // Android back button handler
@@ -970,6 +982,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             isOpen={showEnergyCheckIn}
             onClose={() => setShowEnergyCheckIn(false)}
             theme={theme}
+            title={energyCheckInTitle}
           />
           <UniversalVoiceAssistant theme={theme} currentPageName={currentPageName} />
           <MicrophonePermissionCheck theme={theme} />
