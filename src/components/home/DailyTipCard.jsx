@@ -4,7 +4,7 @@ import { Lightbulb, Sparkles, Loader2, RefreshCw } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 
-const CURRENT_PROMPT_VERSION = 7; // Increment this when you update the prompt
+const CURRENT_PROMPT_VERSION = 8; // Increment this when you update the prompt
 
 const isEvening = () => new Date().getHours() >= 17;
 
@@ -110,8 +110,10 @@ export default function DailyTipCard({ theme }) {
       const snoozedTasks = tasks.filter(t => t.status === 'snoozed' && !t.parent_task_id);
       const completedToday = tasks.filter(t => {
         if (t.status !== 'completed' || !t.completed_at) return false;
-        const completedDate = new Date(t.completed_at).toISOString().split('T')[0];
-        return completedDate === today;
+        // Compare using local date, not UTC
+        const d = new Date(t.completed_at);
+        const localDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        return localDate === today;
       });
 
       const currentStreak = summaries.length > 0 ? summaries[0].streak_days || 0 : 0;
@@ -128,13 +130,15 @@ export default function DailyTipCard({ theme }) {
       });
 
       // For evening: completed today excludes tasks whose next_reminder is set for a future date
-      // (i.e. tasks that were "completed" but actually have a future reminder — treat as not done today)
-      const todayStr = todayDate;
       const completedTodayFiltered = completedToday.filter(t => {
         if (!t.next_reminder) return true;
-        const reminderDate = new Date(t.next_reminder).toISOString().split('T')[0];
-        return reminderDate <= todayStr;
+        const d = new Date(t.next_reminder);
+        const reminderDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        return reminderDate <= todayDate;
       });
+
+      // Task titles for personalization
+      const completedTitles = completedTodayFiltered.map(t => `"${t.title}"`).join(', ');
 
       const evening = isEvening();
 
@@ -150,18 +154,18 @@ export default function DailyTipCard({ theme }) {
 CONTEXT: It's evening. This is "Tonight's Tip" — a warm, celebratory wind-down. NOT a productivity push.
 MOOD CHECK-IN: ${moodSummary}
 DAY SUMMARY: They created ${createdToday.length} task(s) today and completed ${effectiveCompleted.length} of them.
+${effectiveCompleted.length > 0 ? `COMPLETED TASK TITLES: ${completedTitles}` : ''}
 
-CRITICAL TONE RULE: Always lead with a celebration of what they DID, no matter how small. Opening the app and creating a task IS a win. Showing up IS a win. Never frame the day as tough or failed. If they completed 0 tasks but created some, celebrate that they planned. If they completed tasks, celebrate that. Tomorrow is always a fresh start — end on hope, not guilt.
+CRITICAL TONE RULE: Always lead with a celebration of what they DID, no matter how small. Opening the app and creating a task IS a win. Showing up IS a win. Never frame the day as tough or failed. If they completed 0 tasks but created some, celebrate that they planned. If they completed tasks, celebrate that with a SPECIFIC reference to what they actually did (use the real task titles in a natural, warm way — e.g. if they completed "feed dogs", say something like "You fed the pups today!" or "The dogs are fed and you can rest easy."). Tomorrow is always a fresh start — end on hope, not guilt.
 
-NEVER say things like "today was tough" or "even though you struggled." Always find the win first.
+NEVER say things like "today was tough" or "even though you struggled." Always find the win first. NEVER be vague when you have task titles — be specific and personal.
+
+Examples when tasks were completed (use actual titles!):
+If tasks are "feed dogs" and "check on cat food": "The pets are taken care of and dinner happened — you did real things today. Rest up. 🐾"
+If task is "walk the dog": "You got the pup out today — that's a win for both of you. Wind down and enjoy the rest of your evening."
 
 Examples when 0 tasks completed but tasks were created:
 "You showed up today — you opened the app, you made a plan. That's not nothing, that's actually the hardest part. Tomorrow those tasks are ready and waiting. Fresh start incoming. 🌅"
-"Planning IS doing. You mapped out what matters. Tomorrow, pick just one of those and start there. You've already done the thinking."
-
-Examples when tasks were completed:
-"${effectiveCompleted.length} thing(s) done today — that's real. Rest up, you earned it. Tomorrow's a fresh slate."
-"Look at that — you got ${effectiveCompleted.length} done. Wind down, let your brain rest, and tomorrow you pick up right where you left off."
 
 Examples when nothing was created or completed:
 "You came back to check in — that matters more than you think. Tomorrow, just pick ONE tiny thing to start with. That's it. One thing."
