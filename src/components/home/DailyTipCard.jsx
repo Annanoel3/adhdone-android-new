@@ -4,9 +4,14 @@ import { Lightbulb, Sparkles, Loader2, RefreshCw } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 
-const CURRENT_PROMPT_VERSION = 8; // Increment this when you update the prompt
+const CURRENT_PROMPT_VERSION = 9; // Increment this when you update the prompt
 
 const isEvening = () => new Date().getHours() >= 17;
+
+const getLocalDateString = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+};
 
 export default function DailyTipCard({ theme }) {
   const [todaysTip, setTodaysTip] = useState(null);
@@ -19,17 +24,18 @@ export default function DailyTipCard({ theme }) {
   }, []);
 
   const loadTodaysTip = async () => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     
     // Check if we already have a tip for today
     const existingTips = await base44.entities.DailyTip.filter({ shown_date: today });
     
-    // Get current task completion count
-    const tasks = await base44.entities.Task.list('-created_date', 20);
+    // Get current task completion count using local date comparison
+    const tasks = await base44.entities.Task.list('-created_date', 50);
     const completedToday = tasks.filter(t => {
       if (t.status !== 'completed' || !t.completed_at) return false;
-      const completedDate = new Date(t.completed_at).toISOString().split('T')[0];
-      return completedDate === today;
+      const d = new Date(t.completed_at);
+      const localDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+      return localDate === today;
     }).length;
     
     // If we have a tip but it's an old version OR context changed significantly, regenerate
@@ -65,7 +71,7 @@ export default function DailyTipCard({ theme }) {
     // Regenerate when it's evening and we haven't generated an evening tip yet
     const eveningKey = 'dailyTip_eveningGenerated';
     const eveningDate = localStorage.getItem(eveningKey);
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     if (isEvening() && eveningDate !== today) {
       localStorage.setItem(eveningKey, today);
       return true; // Switch to "Tonight's Tip"
@@ -80,7 +86,7 @@ export default function DailyTipCard({ theme }) {
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
-    const today = new Date().toISOString().split('T')[0];
+    const today = getLocalDateString();
     
     // Delete today's tip
     const existingTips = await base44.entities.DailyTip.filter({ shown_date: today });
@@ -96,7 +102,7 @@ export default function DailyTipCard({ theme }) {
   const generateSmartTip = async (today) => {
     try {
       const user = await base44.auth.me();
-      const tasks = await base44.entities.Task.list('-created_date', 20);
+      const tasks = await base44.entities.Task.list('-created_date', 50);
 
       const summaries = await (async () => {
         try {
@@ -119,14 +125,16 @@ export default function DailyTipCard({ theme }) {
       const currentStreak = summaries.length > 0 ? summaries[0].streak_days || 0 : 0;
 
       // Read today's mood from check-in
-      const todayDate = new Date().toISOString().split('T')[0];
+      const todayDate = getLocalDateString();
       const moodDate = localStorage.getItem('today_mood_date');
       const todayMood = moodDate === todayDate ? localStorage.getItem('today_mood') : null;
 
-      // Tasks created today (for evening context)
+      // Tasks created today (for evening context) — use local date
       const createdToday = tasks.filter(t => {
         if (!t.created_date) return false;
-        return new Date(t.created_date).toISOString().split('T')[0] === todayDate;
+        const d = new Date(t.created_date);
+        const localDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        return localDate === todayDate;
       });
 
       // For evening: completed today excludes tasks whose next_reminder is set for a future date
