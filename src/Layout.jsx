@@ -181,15 +181,20 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   }, [user, authCheckComplete]);
 
   useEffect(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
     const lastCheckInDate = localStorage.getItem('last_energy_checkin_date');
+    const currentHour = now.getHours(); // local time
 
-    if (lastCheckInDate !== today) {
-      // First open of the day — show after a short delay
+    if (lastCheckInDate !== today && currentHour < 12) {
+      // First open of the day before noon — show after a short delay
       setTimeout(() => {
         setShowEnergyCheckIn(true);
         localStorage.setItem('last_energy_checkin_date', today);
       }, 3000);
+    } else if (lastCheckInDate !== today) {
+      // After noon — skip the popup but still mark today so it won't show later
+      localStorage.setItem('last_energy_checkin_date', today);
     }
   }, []);
 
