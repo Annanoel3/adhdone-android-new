@@ -1,9 +1,30 @@
 import React, { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Shield, Eye, Lock, Database, UserCheck, Mail } from "lucide-react";
+import { ArrowLeft, Shield, Mail } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+
+const Section = ({ title, children, theme }) => (
+  <div className="space-y-3">
+    <h2 className={`text-lg font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>{title}</h2>
+    {children}
+  </div>
+);
+
+const P = ({ children, theme }) => (
+  <p className={`text-sm leading-relaxed ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>{children}</p>
+);
+
+const List = ({ items, theme }) => (
+  <ul className={`text-sm space-y-1 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+    {items.map((item, i) => (
+      <li key={i} className="flex items-start gap-2">
+        <span className="mt-1 text-green-500 flex-shrink-0">•</span>
+        <span>{item}</span>
+      </li>
+    ))}
+  </ul>
+);
 
 export default function PrivacyPolicy() {
   const navigate = useNavigate();
@@ -11,540 +32,143 @@ export default function PrivacyPolicy() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      const newTheme = localStorage.getItem('adhd_theme') || 'minimalist';
-      setTheme(newTheme);
-    }, 100);
+      setTheme(localStorage.getItem('adhd_theme') || 'minimalist');
+    }, 500);
     return () => clearInterval(interval);
   }, []);
 
+  const bg = theme === 'dark' ? 'bg-gray-900 text-white' : 'bg-gray-50 text-gray-900';
+  const cardBg = theme === 'dark' ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-200';
+  const divider = theme === 'dark' ? 'border-gray-700' : 'border-gray-100';
+
   return (
-    <div className="min-h-screen p-4 md:p-8" style={{
+    <div className={`min-h-screen ${bg}`} style={{
       paddingTop: 'max(1rem, calc(1rem + env(safe-area-inset-top)))',
-      paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))'
+      paddingBottom: 'max(3rem, calc(3rem + env(safe-area-inset-bottom)))'
     }}>
-      <div className="max-w-4xl mx-auto">
-        <Button
-          variant="ghost"
-          onClick={() => navigate(-1)}
-          className="mb-4"
-        >
+      <div className="max-w-2xl mx-auto px-4 py-6">
+        <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6 -ml-2">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
         </Button>
 
-        <Card className={`border-none shadow-lg mb-6 ${
-          theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-        }`}>
-          <CardHeader>
-            <CardTitle className={`text-3xl flex items-center gap-3 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-              <Shield className="w-8 h-8" />
-              Privacy Policy
-            </CardTitle>
-            <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-              Last updated: {new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
-            </p>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            
-            {/* Introduction */}
-            <section>
-              <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-                Welcome to ADHDone. We respect your privacy and are committed to protecting your personal data. This privacy policy explains how we collect, use, store, and protect your information when you use our mobile application.
-              </p>
-            </section>
+        <div className="flex items-center gap-3 mb-2">
+          <Shield className="w-7 h-7 text-green-600" />
+          <h1 className="text-2xl font-bold">Privacy Policy</h1>
+        </div>
+        <p className={`text-xs mb-8 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+          Last updated: May 2026 · ADHDone
+        </p>
 
-            {/* Information We Collect */}
-            <section>
-              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 ${
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              }`}>
-                <Database className="w-6 h-6" />
-                Information We Collect
-              </h2>
+        <div className={`rounded-2xl border divide-y ${cardBg} ${divider}`}>
 
-              <div className="space-y-4">
-                <div className={`p-4 rounded-lg border ${
-                  theme === 'dark' 
-                    ? 'bg-gray-900/50 border-gray-700' 
-                    : 'bg-gray-50 border-gray-200'
-                }`}>
-                  <h3 className={`font-semibold mb-2 ${
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    Account Information
-                  </h3>
-                  <ul className={`list-disc list-inside space-y-1 text-sm ${
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    <li>Name and email address</li>
-                    <li>Profile picture (optional)</li>
-                    <li>Bio and preferences</li>
-                  </ul>
-                </div>
+          <div className="p-5 space-y-3">
+            <P theme={theme}>ADHDone is a productivity and task management app designed for people with ADHD. This policy explains what data we collect, how we use it, and how we protect it.</P>
+          </div>
 
-                <div className={`p-4 rounded-lg border ${
-                  theme === 'dark' 
-                    ? 'bg-gray-900/50 border-gray-700' 
-                    : 'bg-gray-50 border-gray-200'
-                }`}>
-                  <h3 className={`font-semibold mb-2 ${
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    Usage Data
-                  </h3>
-                  <ul className={`list-disc list-inside space-y-1 text-sm ${
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    <li>Tasks and reminders you create</li>
-                    <li>Parking lot ideas and notes</li>
-                    <li>Energy logs and mood check-ins</li>
-                    <li>Progress tracking data (achievements, streaks)</li>
-                    <li>Focus room participation</li>
-                    <li>Messages with accountability partners</li>
-                    <li>Support space conversations</li>
-                  </ul>
-                </div>
+          <div className="p-5">
+            <Section title="What We Collect" theme={theme}>
+              <List theme={theme} items={[
+                "Name and email address",
+                "Profile picture and bio (optional)",
+                "Tasks, reminders, notes, and parking lot ideas you create",
+                "Energy logs and mood check-ins",
+                "Achievements, streaks, and progress data",
+                "Messages with accountability partners",
+                "Support Space conversations",
+                "Focus room participation",
+                "Device type and push notification tokens (for reminders)",
+                "Subscription status via Apple App Store or Google Play (we never store card details)",
+              ]} />
+            </Section>
+          </div>
 
-                <div className={`p-4 rounded-lg border ${
-                  theme === 'dark' 
-                    ? 'bg-gray-900/50 border-gray-700' 
-                    : 'bg-gray-50 border-gray-200'
-                }`}>
-                  <h3 className={`font-semibold mb-2 ${
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    Device Information
-                  </h3>
-                  <ul className={`list-disc list-inside space-y-1 text-sm ${
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    <li>Device type and operating system</li>
-                    <li>Push notification tokens (for reminders)</li>
-                    <li>App version and performance data</li>
-                  </ul>
-                </div>
+          <div className="p-5">
+            <Section title="How We Use Your Data" theme={theme}>
+              <List theme={theme} items={[
+                "To run the app and manage your tasks and reminders",
+                "To send push notifications for reminders you've set",
+                "To enable accountability partner features and chat",
+                "To track your streaks and progress",
+                "To provide AI-powered support in the Support Space",
+                "To moderate community content for safety",
+                "To process your subscription and verify purchases",
+              ]} />
+            </Section>
+          </div>
 
-                <div className={`p-4 rounded-lg border ${
-                  theme === 'dark' 
-                    ? 'bg-gray-900/50 border-gray-700' 
-                    : 'bg-gray-50 border-gray-200'
-                }`}>
-                  <h3 className={`font-semibold mb-2 ${
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    Payment Information
-                  </h3>
-                  <p className={`text-sm ${
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    Payment processing is handled by Apple App Store and Google Play Store. We do not store your credit card information. We only receive transaction confirmations and subscription status.
-                  </p>
-                </div>
-              </div>
-            </section>
+          <div className="p-5">
+            <Section title="Community Safety" theme={theme}>
+              <P theme={theme}>
+                All messages in chat are scanned by AI for inappropriate content and personal information sharing. Messages are not manually read unless reported. Users can report and block others at any time. We take reports seriously and review them promptly.
+              </P>
+              <P theme={theme}>
+                ADHDone cannot guarantee the actions of other users. If you encounter suspicious behavior, block and report the user immediately.
+              </P>
+            </Section>
+          </div>
 
-            {/* How We Use Your Information */}
-            <section>
-              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 ${
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              }`}>
-                <Eye className="w-6 h-6" />
-                How We Use Your Information
-              </h2>
+          <div className="p-5">
+            <Section title="Data Sharing" theme={theme}>
+              <P theme={theme}>We do not sell your data. We only share it in these cases:</P>
+              <List theme={theme} items={[
+                "With accountability partners — when you connect with someone, they can see your shared check-ins and messages",
+                "With service providers — cloud hosting, push notifications (OneSignal), and payment processors, solely to operate the app",
+                "When legally required — court orders or to protect user safety",
+              ]} />
+            </Section>
+          </div>
 
-              <ul className={`space-y-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-600 mt-1">✓</span>
-                  <span><strong>Provide app functionality:</strong> Store and manage your tasks, reminders, and productivity data</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-600 mt-1">✓</span>
-                  <span><strong>Send notifications:</strong> Deliver task reminders and updates you've requested</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-600 mt-1">✓</span>
-                  <span><strong>Enable social features:</strong> Facilitate connections with accountability partners and chat functionality</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-600 mt-1">✓</span>
-                  <span><strong>Improve our services:</strong> Analyze usage patterns to enhance app features (anonymized data only)</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-600 mt-1">✓</span>
-                  <span><strong>Provide support:</strong> Respond to your questions and resolve technical issues</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-green-600 mt-1">✓</span>
-                  <span><strong>Ensure safety:</strong> Moderate content using AI to prevent abuse, protect users from predatory behavior, and maintain a safe community environment</span>
-                </li>
-              </ul>
-            </section>
-
-            {/* Community Safety */}
-            <section>
-              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 ${
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              }`}>
-                <Shield className="w-6 h-6" />
-                Community Safety
-              </h2>
-
-              <div className={`p-4 rounded-lg border mb-4 ${
-                theme === 'dark' 
-                  ? 'bg-amber-900/20 border-amber-700' 
-                  : 'bg-amber-50 border-amber-200'
-              }`}>
-                <p className={`font-semibold mb-2 ${
-                  theme === 'dark' ? 'text-amber-400' : 'text-amber-900'
-                }`}>
-                  AI-Powered Content Moderation
-                </p>
-                <p className={`text-sm ${
-                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                }`}>
-                  All messages in chat and public spaces are analyzed by AI for inappropriate content, personal information sharing, and predatory behavior patterns. This helps protect all users, especially those who may be underage.
-                </p>
-              </div>
-
-              <p className={`mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                <strong>We strive to ensure safe interactions within ADHDone:</strong>
-              </p>
-
-              <ul className={`space-y-2 mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-600 mt-1">✓</span>
-                  <span>Messages are monitored by AI for safety violations but are not manually reviewed unless reported</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-600 mt-1">✓</span>
-                  <span>Sharing of phone numbers, email addresses, and locations is automatically blocked</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-600 mt-1">✓</span>
-                  <span>Users can report and block others for inappropriate behavior</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-600 mt-1">✓</span>
-                  <span>Reports are taken seriously and reviewed promptly</span>
-                </li>
-              </ul>
-
-              <div className={`p-4 rounded-lg border ${
-                theme === 'dark' 
-                  ? 'bg-red-900/20 border-red-700' 
-                  : 'bg-red-50 border-red-200'
-              }`}>
-                <p className={`font-semibold mb-2 ${
-                  theme === 'dark' ? 'text-red-400' : 'text-red-900'
-                }`}>
-                  Important Notice
-                </p>
-                <p className={`text-sm ${
-                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                }`}>
-                  While we implement safety measures and work diligently to protect our users, ADHDone cannot guarantee the actions or intentions of other users. We are not responsible for interactions between users outside of our moderation systems. <strong>If you encounter suspicious activity, please block the user immediately and report them to us.</strong> Your safety is our priority.
-                </p>
-              </div>
-            </section>
-
-            {/* Data Security */}
-            <section>
-              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 ${
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              }`}>
-                <Lock className="w-6 h-6" />
-                Data Security & Storage
-              </h2>
-
-              <p className={`mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                We implement industry-standard security measures to protect your data:
-              </p>
-
-              <ul className={`space-y-2 mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-600 mt-1">🔒</span>
-                  <span><strong>Encryption in transit:</strong> All data is encrypted using HTTPS/TLS when transmitted between your device and our servers</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-600 mt-1">🔒</span>
-                  <span><strong>Secure storage:</strong> Your data is stored on secure, enterprise-grade cloud infrastructure</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-600 mt-1">🔒</span>
-                  <span><strong>Access controls:</strong> Strict authentication and authorization mechanisms protect your account</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-blue-600 mt-1">🔒</span>
-                  <span><strong>Regular backups:</strong> Your data is backed up regularly to prevent loss</span>
-                </li>
-              </ul>
-
-              <div className={`p-4 rounded-lg border ${
-                theme === 'dark' 
-                  ? 'bg-gray-900/50 border-gray-700' 
-                  : 'bg-blue-50 border-blue-200'
-              }`}>
-                <p className={`font-semibold mb-2 ${
-                  theme === 'dark' ? 'text-blue-400' : 'text-blue-900'
-                }`}>
-                  Message Storage
-                </p>
-                <p className={`text-sm ${
-                  theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                }`}>
-                  Chat messages are stored in our database to provide conversation history. While messages are analyzed by AI for safety, they are not manually reviewed unless reported by users. You can delete your messages or entire conversations at any time.
-                </p>
-              </div>
-            </section>
-
-            {/* Data Sharing */}
-            <section>
-              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 ${
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              }`}>
-                <UserCheck className="w-6 h-6" />
-                Data Sharing and Disclosure
-              </h2>
-
-              <p className={`mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                We do not sell your personal data. We may share your information only in the following circumstances:
-              </p>
-
-              <div className="space-y-3">
-                <div className={`p-4 rounded-lg border ${
-                  theme === 'dark' 
-                    ? 'bg-gray-900/50 border-gray-700' 
-                    : 'bg-blue-50 border-blue-200'
-                }`}>
-                  <h4 className={`font-semibold mb-2 ${
-                    theme === 'dark' ? 'text-blue-400' : 'text-blue-900'
-                  }`}>
-                    With Your Consent
-                  </h4>
-                  <p className={`text-sm ${
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    When you connect with accountability partners, your profile information and shared data (mood check-ins, messages) are visible to those partners.
-                  </p>
-                </div>
-
-                <div className={`p-4 rounded-lg border ${
-                  theme === 'dark' 
-                    ? 'bg-gray-900/50 border-gray-700' 
-                    : 'bg-blue-50 border-blue-200'
-                }`}>
-                  <h4 className={`font-semibold mb-2 ${
-                    theme === 'dark' ? 'text-blue-400' : 'text-blue-900'
-                  }`}>
-                    Service Providers
-                  </h4>
-                  <p className={`text-sm ${
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    We use trusted third-party services (cloud hosting, push notifications, payment processing) that may have access to your data only to perform services on our behalf.
-                  </p>
-                </div>
-
-                <div className={`p-4 rounded-lg border ${
-                  theme === 'dark' 
-                    ? 'bg-gray-900/50 border-gray-700' 
-                    : 'bg-blue-50 border-blue-200'
-                }`}>
-                  <h4 className={`font-semibold mb-2 ${
-                    theme === 'dark' ? 'text-blue-400' : 'text-blue-900'
-                  }`}>
-                    Legal Requirements
-                  </h4>
-                  <p className={`text-sm ${
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    We may disclose your information if required by law, court order, or to protect the rights, property, or safety of ADHDone, our users, or others.
-                  </p>
-                </div>
-              </div>
-            </section>
-
-            {/* Your Rights */}
-            <section>
-              <h2 className={`text-2xl font-bold mb-4 ${
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              }`}>
-                Your Rights and Choices
-              </h2>
-
-              <p className={`mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                You have the following rights regarding your personal data:
-              </p>
-
-              <ul className={`space-y-2 mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                <li className="flex items-start gap-2">
-                  <span className="text-purple-600 mt-1">▸</span>
-                  <span><strong>Access:</strong> You can view your data at any time within the app</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-purple-600 mt-1">▸</span>
-                  <span><strong>Correction:</strong> You can edit your profile information and data directly in the app</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-purple-600 mt-1">▸</span>
-                  <span><strong>Deletion:</strong> You can request deletion of specific data or your entire account</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-purple-600 mt-1">▸</span>
-                  <span><strong>Export:</strong> You can request a copy of your data</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-purple-600 mt-1">▸</span>
-                  <span><strong>Opt-out:</strong> You can disable push notifications in your device settings</span>
-                </li>
-              </ul>
-
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  onClick={() => navigate(createPageUrl("DeleteData"))}
-                  variant="outline"
-                  className="text-blue-600 border-blue-600 hover:bg-blue-50"
-                >
-                  Request Data Deletion
+          <div className="p-5">
+            <Section title="Your Rights" theme={theme}>
+              <List theme={theme} items={[
+                "Access and edit your data anytime in the app",
+                "Disable push notifications in your device settings",
+                "Request deletion of your data or account",
+              ]} />
+              <div className="flex flex-wrap gap-2 mt-4">
+                <Button onClick={() => navigate(createPageUrl("DeleteData"))} variant="outline" size="sm" className="text-blue-600 border-blue-600 hover:bg-blue-50">
+                  Delete My Data
                 </Button>
-                <Button
-                  onClick={() => navigate(createPageUrl("DeleteAccount"))}
-                  variant="outline"
-                  className="text-red-600 border-red-600 hover:bg-red-50"
-                >
-                  Request Account Deletion
+                <Button onClick={() => navigate(createPageUrl("DeleteAccount"))} variant="outline" size="sm" className="text-red-600 border-red-600 hover:bg-red-50">
+                  Delete My Account
                 </Button>
               </div>
-            </section>
+            </Section>
+          </div>
 
-            {/* Children's Privacy */}
-            <section>
-              <h2 className={`text-2xl font-bold mb-4 ${
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              }`}>
-                Children's Privacy
-              </h2>
+          <div className="p-5">
+            <Section title="Children" theme={theme}>
+              <P theme={theme}>ADHDone is not intended for children under 13. We do not knowingly collect data from children under 13. Contact us immediately if you believe this has occurred.</P>
+            </Section>
+          </div>
 
-              <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-                ADHDone is not intended for children under 13 years of age. We do not knowingly collect personal information from children under 13. If you believe we have inadvertently collected information from a child under 13, please contact us immediately.
-              </p>
-            </section>
+          <div className="p-5">
+            <Section title="Your Content" theme={theme}>
+              <P theme={theme}>You own everything you create in ADHDone. By using the app, you grant us a limited license to store and process your content solely to provide the service to you.</P>
+            </Section>
+          </div>
 
-            {/* Changes to Policy */}
-            <section>
-              <h2 className={`text-2xl font-bold mb-4 ${
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              }`}>
-                Changes to This Privacy Policy
-              </h2>
+          <div className="p-5">
+            <Section title="Policy Updates" theme={theme}>
+              <P theme={theme}>We may update this policy occasionally. We'll notify you of material changes in the app. Continued use after changes means you accept the updated policy.</P>
+            </Section>
+          </div>
 
-              <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-                We may update this privacy policy from time to time. We will notify you of any material changes by posting the new policy in the app and updating the "Last updated" date. Your continued use of ADHDone after changes are posted constitutes your acceptance of the updated policy.
-              </p>
-            </section>
+          <div className="p-5">
+            <div className="flex items-center gap-2 mb-2">
+              <Mail className="w-4 h-4 text-blue-500" />
+              <span className={`text-sm font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Contact</span>
+            </div>
+            <P theme={theme}>Questions about this policy? Email us at{' '}
+              <a href="mailto:mediocreatbestdev@outlook.com" className="text-blue-500 hover:underline">
+                mediocreatbestdev@outlook.com
+              </a>
+            </P>
+            <p className={`text-xs mt-3 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>© 2026 ADHDone. All rights reserved.</p>
+          </div>
 
-            {/* Contact */}
-            <section className={`p-6 rounded-lg border ${
-              theme === 'dark' 
-                ? 'bg-gray-900/50 border-gray-700' 
-                : 'bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200'
-            }`}>
-              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 ${
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              }`}>
-                <Mail className="w-6 h-6" />
-                Contact Us
-              </h2>
-
-              <p className={`mb-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                If you have any questions about this Privacy Policy or our data practices, please contact us:
-              </p>
-
-              <div className={`flex items-center gap-2 p-3 rounded-lg ${
-                theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-              }`}>
-                <Mail className={`w-5 h-5 ${
-                  theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
-                }`} />
-                <a 
-                  href="mailto:mediocreatbestdev@outlook.com"
-                  className={`font-medium ${
-                    theme === 'dark' 
-                      ? 'text-blue-400 hover:text-blue-300' 
-                      : 'text-blue-600 hover:text-blue-700'
-                  }`}
-                >
-                  mediocreatbestdev@outlook.com
-                </a>
-              </div>
-            </section>
-
-            {/* Copyright & Intellectual Property */}
-            <section>
-              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 ${
-                theme === 'dark' ? 'text-white' : 'text-gray-900'
-              }`}>
-                <span>©</span>
-                Copyright & Intellectual Property
-              </h2>
-
-              <p className={`font-semibold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                © 2026 ADHDone. All rights reserved.
-              </p>
-
-              <p className={`mb-6 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                The ADHDone application, including its design, code, branding, and user interface, is the intellectual property of ADHDone and is protected by applicable copyright, trademark, and intellectual property laws.
-              </p>
-
-              <div className="space-y-6">
-                <div>
-                  <h3 className={`font-semibold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                    Your Content
-                  </h3>
-                  <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-                    You retain full ownership of all content you upload to ADHDone, including photos and task descriptions. By using the app, you grant ADHDone a limited, non-exclusive license to store, display, and process your content solely for the purpose of providing the service to you.
-                  </p>
-                </div>
-
-                <div>
-                  <h3 className={`font-semibold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                    Third-Party Content
-                  </h3>
-                  <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-                    Third-party names, brand names, trademarks, and product identifiers referenced within ADHDone are the property of their respective owners. ADHDone is not affiliated with, endorsed by, or sponsored by any third-party manufacturer or brand. References are made solely for identification purposes.
-                  </p>
-                </div>
-
-                <div>
-                  <h3 className={`font-semibold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                    Restrictions
-                  </h3>
-                  <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-                    You may not copy, reproduce, distribute, modify, or create derivative works from any part of the ADHDone application without prior written consent. Unauthorized use of ADHDone's proprietary materials may violate copyright, trademark, and other applicable laws.
-                  </p>
-                </div>
-
-                <div>
-                  <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
-                    For licensing inquiries, please contact us at{' '}
-                    <a
-                      href="mailto:mediocreatbestdev@outlook.com"
-                      className={`font-medium ${
-                        theme === 'dark'
-                          ? 'text-blue-400 hover:text-blue-300'
-                          : 'text-blue-600 hover:text-blue-700'
-                      }`}
-                    >
-                      mediocreatbestdev@outlook.com
-                    </a>
-                    .
-                  </p>
-                </div>
-              </div>
-            </section>
-
-          </CardContent>
-        </Card>
+        </div>
       </div>
     </div>
   );
