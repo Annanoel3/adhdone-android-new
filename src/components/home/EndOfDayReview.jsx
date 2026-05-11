@@ -47,8 +47,9 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
 
     const completed = todayTasks.filter(t => {
       if (t.status !== 'completed') return false;
-      const completedDate = new Date(t.completed_at || t.updated_date).toISOString().split('T')[0];
-      return completedDate === today;
+      // Use completed_at if it exists, otherwise fall back to updated_date
+      const dateToCheck = t.completed_at ? new Date(t.completed_at).toISOString().split('T')[0] : new Date(t.updated_date).toISOString().split('T')[0];
+      return dateToCheck === today;
     });
 
     const remaining = todayTasks.filter(t => t.status === 'active');
