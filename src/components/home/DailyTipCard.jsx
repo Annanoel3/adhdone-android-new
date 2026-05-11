@@ -4,7 +4,7 @@ import { Lightbulb, Sparkles, Loader2, RefreshCw } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 
-const CURRENT_PROMPT_VERSION = 9; // Increment this when you update the prompt
+const CURRENT_PROMPT_VERSION = 10; // Increment this when you update the prompt
 
 const isEvening = () => new Date().getHours() >= 17;
 
@@ -221,6 +221,55 @@ Examples:
 TONE: They haven't completed anything yet today. Gentle, no-judgment nudge to get started.
 Examples:
 "Start with just one small win - pick something that takes less than 5 minutes. Once you complete it, you'll feel ready to tackle the next one!"`;
+      }
+
+      // Build task context for morning tips (not evening)
+      if (!evening && activeTasks.length > 0) {
+        const today = getLocalDateString();
+        const todayDate = new Date(today);
+
+        // Sort tasks: urgent first, then by next_reminder date if set
+        const sortedTasks = [...activeTasks].sort((a, b) => {
+          const urgencyOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
+          return (urgencyOrder[a.urgency] ?? 2) - (urgencyOrder[b.urgency] ?? 2);
+        });
+
+        const taskDescriptions = sortedTasks.slice(0, 8).map(t => {
+          let desc = `"${t.title}" (${t.urgency || 'medium'} urgency, ${t.energy_required || 'medium'} energy)`;
+          if (t.next_reminder) {
+            const reminderDate = new Date(t.next_reminder);
+            const reminderLocal = `${reminderDate.getFullYear()}-${String(reminderDate.getMonth()+1).padStart(2,'0')}-${String(reminderDate.getDate()).padStart(2,'0')}`;
+            const daysUntil = Math.round((reminderDate - todayDate) / (1000 * 60 * 60 * 24));
+            if (reminderLocal === today) desc += ` — reminder TODAY`;
+            else if (daysUntil === 1) desc += ` — reminder TOMORROW`;
+            else if (daysUntil < 0) desc += ` — OVERDUE reminder`;
+            else if (daysUntil <= 3) desc += ` — reminder in ${daysUntil} days`;
+          }
+          return desc;
+        }).join('\n- ');
+
+        // Find easiest task to suggest (low energy + low/medium urgency)
+        const easyTask = activeTasks.find(t => t.energy_required === 'low') 
+          || activeTasks.find(t => t.urgency === 'low')
+          || activeTasks[activeTasks.length - 1];
+
+        const overdueCount = activeTasks.filter(t => {
+          if (!t.next_reminder) return false;
+          const r = new Date(t.next_reminder);
+          const rLocal = `${r.getFullYear()}-${String(r.getMonth()+1).padStart(2,'0')}-${String(r.getDate()).padStart(2,'0')}`;
+          return rLocal < today;
+        }).length;
+
+        contextualGuidance += `
+
+THEIR ACTUAL TASKS RIGHT NOW:
+- ${taskDescriptions}
+
+${activeTasks.length > 5 ? `They have ${activeTasks.length} active tasks — that's a lot. Suggest starting with the easiest one to build momentum.` : ''}
+${overdueCount > 0 ? `${overdueCount} task(s) have overdue reminders — gently nudge them to address at least one.` : ''}
+${easyTask ? `Easiest task to start with: "${easyTask.title}" (${easyTask.energy_required || 'medium'} energy)` : ''}
+
+CRITICAL: Reference specific task titles by name in your tip. Make it personal and actionable — e.g. "How about starting with '${easyTask?.title || activeTasks[0]?.title}'?" Don't just give generic advice.`;
       }
 
       // Use Base44's InvokeLLM for smart tips
