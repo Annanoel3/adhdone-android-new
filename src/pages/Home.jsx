@@ -253,6 +253,16 @@ export default function Home() {
           </div>
         </div>
 
+        {/* TEMP TEST BUTTON - REMOVE LATER */}
+        <div className="fixed bottom-24 left-4 z-50">
+          <button
+            onClick={() => setShowEndOfDayReview(true)}
+            className="bg-purple-600 text-white text-xs px-3 py-1 rounded-full opacity-60 hover:opacity-100"
+          >
+            Test EOD Review
+          </button>
+        </div>
+
         <EndOfDayReview
           isOpen={showEndOfDayReview}
           onClose={handleReviewDismiss}
