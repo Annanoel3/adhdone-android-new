@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -477,6 +476,70 @@ export default function PrivacyPolicy() {
                 >
                   adhdone.space@gmail.com
                 </a>
+              </div>
+            </section>
+
+            {/* Copyright & Intellectual Property */}
+            <section>
+              <h2 className={`text-2xl font-bold mb-4 flex items-center gap-2 ${
+                theme === 'dark' ? 'text-white' : 'text-gray-900'
+              }`}>
+                <span>©</span>
+                Copyright & Intellectual Property
+              </h2>
+
+              <p className={`font-semibold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                © 2026 ADHDone. All rights reserved.
+              </p>
+
+              <p className={`mb-6 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                The ADHDone application, including its design, code, branding, and user interface, is the intellectual property of ADHDone and is protected by applicable copyright, trademark, and intellectual property laws.
+              </p>
+
+              <div className="space-y-6">
+                <div>
+                  <h3 className={`font-semibold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                    Your Content
+                  </h3>
+                  <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
+                    You retain full ownership of all content you upload to ADHDone, including photos and task descriptions. By using the app, you grant ADHDone a limited, non-exclusive license to store, display, and process your content solely for the purpose of providing the service to you.
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className={`font-semibold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                    Third-Party Content
+                  </h3>
+                  <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
+                    Third-party names, brand names, trademarks, and product identifiers referenced within ADHDone are the property of their respective owners. ADHDone is not affiliated with, endorsed by, or sponsored by any third-party manufacturer or brand. References are made solely for identification purposes.
+                  </p>
+                </div>
+
+                <div>
+                  <h3 className={`font-semibold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                    Restrictions
+                  </h3>
+                  <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
+                    You may not copy, reproduce, distribute, modify, or create derivative works from any part of the ADHDone application without prior written consent. Unauthorized use of ADHDone's proprietary materials may violate copyright, trademark, and other applicable laws.
+                  </p>
+                </div>
+
+                <div>
+                  <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
+                    For licensing inquiries, please contact us at{' '}
+                    <a
+                      href="mailto:adhdone.space@gmail.com"
+                      className={`font-medium ${
+                        theme === 'dark'
+                          ? 'text-blue-400 hover:text-blue-300'
+                          : 'text-blue-600 hover:text-blue-700'
+                      }`}
+                    >
+                      adhdone.space@gmail.com
+                    </a>
+                    .
+                  </p>
+                </div>
               </div>
             </section>
 
