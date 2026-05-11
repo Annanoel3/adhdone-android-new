@@ -35,7 +35,7 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
   const generateSummary = async () => {
     setIsLoading(true);
 
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toLocaleDateString('en-CA'); // local YYYY-MM-DD
     const startOfDay = new Date(today).toISOString();
 
     // Get all tasks

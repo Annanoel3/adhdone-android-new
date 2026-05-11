@@ -21,13 +21,9 @@ export default function Home() {
   const navigate = useNavigate();
   const specialMode = localStorage.getItem('special_mode') || 'normal';
 
-  // Helper function to get local date string (not UTC)
+  // Helper function to get local date string using toLocaleDateString
   const getLocalDateString = (date) => {
-    const d = new Date(date);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
+    return new Date(date).toLocaleDateString('en-CA'); // returns YYYY-MM-DD in local time
   };
 
   useEffect(() => {
