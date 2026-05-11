@@ -180,6 +180,15 @@ export default function PrivacyPolicy() {
             <p className={`text-xs mt-3 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>© 2026 ADHDone. All rights reserved.</p>
           </div>
 
+          <div className="p-5">
+            <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+              Also see our{' '}
+              <button onClick={() => navigate(createPageUrl("TermsAndConditions"))} className="text-blue-500 hover:underline">
+                Terms & Conditions
+              </button>
+            </p>
+          </div>
+
         </div>
       </div>
     </div>
