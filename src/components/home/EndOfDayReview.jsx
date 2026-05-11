@@ -38,21 +38,23 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
     const today = new Date().toISOString().split('T')[0];
     const startOfDay = new Date(today).toISOString();
 
-    // Get today's tasks
+    // Get all tasks
     const allTasks = await base44.entities.Task.list();
-    const todayTasks = allTasks.filter(t => {
-      const createdDate = new Date(t.created_date).toISOString().split('T')[0];
-      return createdDate === today || t.status === 'active' || t.status === 'snoozed'; // Include snoozed tasks for analysis
-    });
 
-    const completed = todayTasks.filter(t => {
-      if (t.status !== 'completed') return false;
-      // Use completed_at if it exists, otherwise fall back to updated_date
-      const dateToCheck = t.completed_at ? new Date(t.completed_at).toISOString().split('T')[0] : new Date(t.updated_date).toISOString().split('T')[0];
+    // Completed today = any task completed today (regardless of when it was created)
+    const completed = allTasks.filter(t => {
+      if (t.status !== 'completed' || t.parent_task_id) return false;
+      const dateToCheck = t.completed_at
+        ? new Date(t.completed_at).toISOString().split('T')[0]
+        : new Date(t.updated_date).toISOString().split('T')[0];
       return dateToCheck === today;
     });
 
-    const remaining = todayTasks.filter(t => t.status === 'active');
+    // Remaining = all active parent tasks
+    const remaining = allTasks.filter(t => t.status === 'active' && !t.parent_task_id);
+
+    // todayTasks for completion rate = completed today + currently active/snoozed parent tasks
+    const todayTasks = [...completed, ...remaining, ...allTasks.filter(t => t.status === 'snoozed' && !t.parent_task_id)];
     
     // SMART SNOOZE DETECTION: Only flag problematic snoozes
     const snoozedTasks = todayTasks.filter(t => {

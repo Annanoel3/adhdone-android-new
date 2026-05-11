@@ -467,14 +467,14 @@ export default function PrivacyPolicy() {
                   theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
                 }`} />
                 <a 
-                  href="mailto:adhdone.space@gmail.com"
+                  href="mailto:mediocreatbestdev@outlook.com"
                   className={`font-medium ${
                     theme === 'dark' 
                       ? 'text-blue-400 hover:text-blue-300' 
                       : 'text-blue-600 hover:text-blue-700'
                   }`}
                 >
-                  adhdone.space@gmail.com
+                  mediocreatbestdev@outlook.com
                 </a>
               </div>
             </section>
@@ -528,14 +528,14 @@ export default function PrivacyPolicy() {
                   <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>
                     For licensing inquiries, please contact us at{' '}
                     <a
-                      href="mailto:adhdone.space@gmail.com"
+                      href="mailto:mediocreatbestdev@outlook.com"
                       className={`font-medium ${
                         theme === 'dark'
                           ? 'text-blue-400 hover:text-blue-300'
                           : 'text-blue-600 hover:text-blue-700'
                       }`}
                     >
-                      adhdone.space@gmail.com
+                      mediocreatbestdev@outlook.com
                     </a>
                     .
                   </p>
