@@ -150,6 +150,18 @@ export default function PrivacyPolicy() {
           </div>
 
           <div className="p-5">
+            <Section title="Copyright & Intellectual Property" theme={theme}>
+              <P theme={theme}>© 2026 ADHDone. All rights reserved. The ADHDone application, including its design, code, branding, and user interface, is protected by applicable copyright, trademark, and intellectual property laws.</P>
+              <List theme={theme} items={[
+                "You retain full ownership of all content you upload to ADHDone, including photos and task descriptions. By using the app, you grant ADHDone a limited, non-exclusive license to store and process your content solely to provide the service.",
+                "Third-party names, trademarks, and brand names referenced in ADHDone are the property of their respective owners. ADHDone is not affiliated with or endorsed by any third party.",
+                "You may not copy, reproduce, distribute, or create derivative works from any part of ADHDone without prior written consent.",
+              ]} />
+              <P theme={theme}>For licensing inquiries, contact us at <a href="mailto:mediocreatbestdev@outlook.com" className="text-blue-500 hover:underline">mediocreatbestdev@outlook.com</a>.</P>
+            </Section>
+          </div>
+
+          <div className="p-5">
             <Section title="Policy Updates" theme={theme}>
               <P theme={theme}>We may update this policy occasionally. We'll notify you of material changes in the app. Continued use after changes means you accept the updated policy.</P>
             </Section>
