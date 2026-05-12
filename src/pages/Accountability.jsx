@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Search, Mail, MessageCircle, Info } from "lucide-react";
+import { Users, Search, Mail, MessageCircle, Info, ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 import {
   Popover,
   PopoverContent,
@@ -16,6 +18,7 @@ import PartnerMoodFeed from "../components/accountability/PartnerMoodFeed";
 import MoodCheckInCard from "../components/accountability/MoodCheckInCard";
 
 export default function Accountability() {
+  const navigate = useNavigate();
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [specialMode, setSpecialMode] = useState(() => localStorage.getItem('special_mode') || 'normal');
   const [user, setUser] = useState(null);
@@ -102,6 +105,15 @@ export default function Accountability() {
           : ''
     }`} style={{ paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
       <div className="max-w-6xl mx-auto">
+        <Button
+          variant="ghost"
+          onClick={() => navigate('/')}
+          className="gap-2 p-3 h-12 text-base rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 mb-4"
+        >
+          <ArrowLeft className="w-5 h-5" />
+          Back
+        </Button>
+
         <Card className={`${specialMode !== 'normal' ? `${specialMode}-card` : ''} border-none shadow-lg mb-6 ${
           specialMode === 'normal' ? (
             theme === 'minimalist'

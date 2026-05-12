@@ -153,10 +153,10 @@ export default function FocusRooms() {
       <div className="max-w-6xl mx-auto">
         <Button
             variant="ghost"
-            onClick={() => navigate(-1)}
-            className="mb-4"
+            onClick={() => navigate('/')}
+            className="gap-2 p-3 h-12 text-base rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 mb-4"
           >
-            <ArrowLeft className="w-4 h-4 mr-2" />
+            <ArrowLeft className="w-5 h-5" />
             Back
         </Button>
         <Card className={`border-none shadow-lg mb-6 cursor-pointer transition-all ${

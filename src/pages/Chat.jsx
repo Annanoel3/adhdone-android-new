@@ -288,6 +288,15 @@ export default function Chat() {
     return (
       <div className="p-4 md:p-8 w-full" style={{ paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
         <div className="max-w-6xl mx-auto">
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/')}
+            className="gap-2 p-3 h-12 text-base rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 mb-4"
+          >
+            <ArrowLeft className="w-5 h-5" />
+            Back
+          </Button>
+
           <Card className={`${specialMode !== 'normal' ? `${specialMode}-card` : ''} border-none shadow-lg mb-6 ${
             specialMode === 'normal' ? (
               theme === 'minimalist'
