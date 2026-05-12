@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Task } from "@/entities/Task";
 import {
   CheckCircle2,
+  Circle,
   Clock,
   Zap,
   ListChecks,
@@ -14,6 +15,8 @@ import {
   Trash2,
   Calendar,
   Pencil,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import {
   Popover,
@@ -33,10 +36,12 @@ export default function TaskCard({
   onShowDetails,
   onDelete,
   subtaskCount,
-  completedSubtaskCount
+  completedSubtaskCount,
+  subtasks,
 }) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(task.title);
+  const [subtasksExpanded, setSubtasksExpanded] = useState(false);
 
   const specialMode = localStorage.getItem('special_mode') || 'normal';
 
@@ -558,17 +563,23 @@ export default function TaskCard({
               </Popover>
             )}
 
-            {/* Subtask Badge */}
+            {/* Subtask Badge - clickable to toggle */}
             {subtaskCount > 0 && (
-              <Badge
-                variant="secondary"
-                className={`flex items-center gap-1 text-xs font-medium ${
-                  theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600' : 'bg-gray-100 text-gray-700 border-gray-200'
+              <button
+                onClick={(e) => { e.stopPropagation(); setSubtasksExpanded(v => !v); }}
+                className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded border transition-colors ${
+                  theme === 'dark'
+                    ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600'
+                    : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
                 }`}
               >
                 <ListChecks className="w-3 h-3" />
                 {completedSubtaskCount}/{subtaskCount} Subtasks
-              </Badge>
+                {subtasksExpanded
+                  ? <ChevronDown className="w-3 h-3 ml-0.5" />
+                  : <ChevronRight className="w-3 h-3 ml-0.5" />
+                }
+              </button>
             )}
           </div>
 
@@ -646,6 +657,41 @@ export default function TaskCard({
                 <BellOff className="w-4 h-4" />
                 1 hour
               </Button>
+            </div>
+          )}
+
+          {/* Collapsible subtasks — inside the same card */}
+          {subtasksExpanded && subtasks && subtasks.length > 0 && (
+            <div className={`pt-2 border-t space-y-1 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
+              {subtasks.map(subtask => (
+                <div
+                  key={subtask.id}
+                  className={`flex items-center gap-2 px-1 py-1.5 rounded text-sm ${
+                    theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <button
+                    onClick={(e) => { e.stopPropagation(); subtask.status === 'completed' ? onUncomplete(subtask) : onComplete(subtask); }}
+                    className={`flex-shrink-0 transition-colors ${
+                      subtask.status === 'completed'
+                        ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                        : theme === 'dark' ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    {subtask.status === 'completed'
+                      ? <CheckCircle2 className="w-4 h-4" />
+                      : <Circle className="w-4 h-4" />
+                    }
+                  </button>
+                  <span className={`flex-1 ${
+                    subtask.status === 'completed'
+                      ? 'line-through opacity-50'
+                      : theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    {subtask.title}
+                  </span>
+                </div>
+              ))}
             </div>
           )}
         </div>

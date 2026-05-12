@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Task } from "@/entities/Task";
 import { Button } from "@/components/ui/button";
-import { Plus, Filter, Download, Loader2, Zap, Clock, CheckCircle2 } from "lucide-react";
+import { Plus, Filter, Download, Loader2 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
@@ -283,67 +283,31 @@ export default function Tasks() {
           {filteredTasks.map((task) => {
             const subtasks = allTasks.filter(t => t.parent_task_id === task.id);
             return (
-              <div key={task.id} className="space-y-2">
-                <TaskCard
-                  task={task}
-                  theme={theme}
-                  onRefreshTasks={loadTasks}
-                  onEditTitle={async (taskId, newTitle) => {
-                    await Task.update(taskId, { title: newTitle });
-                    loadTasks();
-                  }}
-                  onEdit={(taskToEdit) => {
-                    setSelectedTask(taskToEdit);
-                    setIsEditModalOpen(true);
-                  }}
-                  onComplete={handleComplete}
-                  onUncomplete={handleUncomplete}
-                  onSnooze={handleSnooze}
-                  onShowDetails={(taskToShow) => {
-                    setSelectedTask(taskToShow);
-                    setIsDetailsModalOpen(true);
-                  }}
-                  onDelete={handleDelete}
-                  subtaskCount={getSubtaskCount(task.id)}
-                  completedSubtaskCount={getCompletedSubtaskCount(task.id)}
-                />
-                
-                {/* Subtask checklist */}
-                {subtasks.length > 0 && (
-                  <Card className={`ml-4 border ${
-                    theme === 'dark' ? 'bg-gray-900/50 border-gray-700' : 'bg-gray-50 border-gray-200'
-                  }`}>
-                    <CardContent className="p-3 space-y-1">
-                      {subtasks.map(subtask => (
-                        <div
-                          key={subtask.id}
-                          className={`flex items-center gap-2 p-2 rounded text-sm ${
-                            theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-white'
-                          }`}
-                        >
-                          <button
-                            onClick={() => subtask.status === 'completed' ? handleUncomplete(subtask) : handleComplete(subtask)}
-                            className={`flex-shrink-0 ${
-                              subtask.status === 'completed'
-                                ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
-                                : theme === 'dark' ? 'text-gray-600' : 'text-gray-400'
-                            }`}
-                          >
-                            <CheckCircle2 className="w-4 h-4" />
-                          </button>
-                          <span className={`flex-1 ${
-                            subtask.status === 'completed'
-                              ? 'line-through opacity-50'
-                              : theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                          }`}>
-                            {subtask.title}
-                          </span>
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
+              <TaskCard
+                key={task.id}
+                task={task}
+                theme={theme}
+                onRefreshTasks={loadTasks}
+                onEditTitle={async (taskId, newTitle) => {
+                  await Task.update(taskId, { title: newTitle });
+                  loadTasks();
+                }}
+                onEdit={(taskToEdit) => {
+                  setSelectedTask(taskToEdit);
+                  setIsEditModalOpen(true);
+                }}
+                onComplete={handleComplete}
+                onUncomplete={handleUncomplete}
+                onSnooze={handleSnooze}
+                onShowDetails={(taskToShow) => {
+                  setSelectedTask(taskToShow);
+                  setIsDetailsModalOpen(true);
+                }}
+                onDelete={handleDelete}
+                subtaskCount={getSubtaskCount(task.id)}
+                completedSubtaskCount={getCompletedSubtaskCount(task.id)}
+                subtasks={subtasks}
+              />
             );
           })}
         </div>
