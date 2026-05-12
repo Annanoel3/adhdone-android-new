@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { MessageCircle, Send, Loader2, CheckCircle2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { SendEmail } from "@/integrations/Core";
 import { User } from "@/entities/User";
 import { Task } from "@/entities/Task";
@@ -94,7 +95,19 @@ ${tasks.length > 0 ? tasks.map(t => `- ${t.title} (${t.status})`).join('\n') : '
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-3xl mx-auto">
+    <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-6">
+      <button
+        onClick={() => {
+          if (window.history.length > 1) {
+            navigate(-1);
+          } else {
+            navigate('/settings');
+          }
+        }}
+        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '16px', padding: '12px 16px', minHeight: '44px', background: 'none', border: 'none', cursor: 'pointer', color: theme === 'dark' ? '#e5e7eb' : '#1f2937' }}
+      >
+        ← Back
+      </button>
       <div className="text-center mb-8">
         <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${
           theme === 'minimalist' 

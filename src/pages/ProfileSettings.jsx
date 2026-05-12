@@ -6,10 +6,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { User as UserIcon, Upload, Loader2, Save, Camera } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { User } from "@/entities/User";
 import { UploadFile } from "@/integrations/Core";
 
 export default function ProfileSettings() {
+  const navigate = useNavigate();
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [user, setUser] = useState(null);
   const [displayName, setDisplayName] = useState("");
@@ -82,7 +84,19 @@ export default function ProfileSettings() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto">
+    <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
+      <button
+        onClick={() => {
+          if (window.history.length > 1) {
+            navigate(-1);
+          } else {
+            navigate('/settings');
+          }
+        }}
+        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '16px', padding: '12px 16px', minHeight: '44px', background: 'none', border: 'none', cursor: 'pointer', color: theme === 'dark' ? '#e5e7eb' : '#1f2937' }}
+      >
+        ← Back
+      </button>
       <div className="mb-8">
         <h1 className={`text-3xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
           Profile Settings

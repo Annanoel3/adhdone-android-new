@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -118,7 +117,19 @@ export default function Profile() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto">
+    <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
+      <button
+        onClick={() => {
+          if (window.history.length > 1) {
+            navigate(-1);
+          } else {
+            navigate('/');
+          }
+        }}
+        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '16px', padding: '12px 16px', minHeight: '44px', background: 'none', border: 'none', cursor: 'pointer', color: theme === 'dark' ? '#e5e7eb' : '#1f2937' }}
+      >
+        ← Back
+      </button>
       <div className="mb-6 flex items-center justify-between">
         <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
           My Profile
