@@ -21,6 +21,11 @@ export default function OneSignalInit({ user }) {
 
   // Handle notification-open deep links on app launch (native: from cold start data)
   useEffect(() => {
+    // Skip if listener already set up
+    if (window._notifyBridgeListenerSetup) {
+      return;
+    }
+
     // Check if app was opened via a notification (Capacitor)
     if (isRunningInCapacitor()) {
       const NotifyBridge = window.Capacitor?.Plugins?.NotifyBridge;
@@ -35,6 +40,8 @@ export default function OneSignalInit({ user }) {
             handleNotificationData(result.notification.data, navigate);
           }
         }).catch(() => {});
+        
+        window._notifyBridgeListenerSetup = true;
       }
     }
   }, [navigate]);
