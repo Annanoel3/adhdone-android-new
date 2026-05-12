@@ -375,23 +375,74 @@ Return ONLY the category name, nothing else.`;
       setIsRecording(false);
     } else {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        let mimeType = 'audio/webm;codecs=opus';
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/webm';
+        }
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/mp4';
+        }
+        if (!MediaRecorder.isTypeSupported(mimeType)) {
+          mimeType = 'audio/ogg;codecs=opus';
+        }
+
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            sampleRate: 44100
+          }
+        });
         setMicrophoneAccessGranted(true);
         setIsRecording(true);
         
-        const mediaRecorder = new MediaRecorder(stream);
+        const mediaRecorder = new MediaRecorder(stream, { 
+          mimeType: mimeType,
+          audioBitsPerSecond: 128000
+        });
         const chunks = [];
         
-        mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            chunks.push(e.data);
+          }
+        };
         mediaRecorder.onstop = async () => {
           stream.getTracks().forEach(track => track.stop());
-          const blob = new Blob(chunks, { type: 'audio/wav' });
+          const audioBlob = new Blob(chunks, { type: mimeType });
+          
+          if (audioBlob.size === 0) {
+            alert("No audio was recorded. Please try again.");
+            setIsRecording(false);
+            return;
+          }
           
           try {
-            const result = await base44.functions.invoke('transcribeAudioNew', { audio_blob: blob });
-            const transcribedText = result?.data?.text || '';
-            if (transcribedText) {
-              setTextInput(prev => prev + (prev ? ' ' : '') + transcribedText);
+            let extension = 'webm';
+            if (mimeType.includes('mp4')) extension = 'mp4';
+            if (mimeType.includes('ogg')) extension = 'ogg';
+            
+            const audioFile = new File([audioBlob], `recording.${extension}`, { type: mimeType });
+            
+            const uploadResult = await base44.integrations.Core.UploadFile({
+              file: audioFile
+            });
+
+            if (!uploadResult?.file_url) {
+              throw new Error('Failed to upload audio file');
+            }
+
+            const result = await base44.functions.invoke('transcribeAudio', {
+              file_url: uploadResult.file_url
+            });
+
+            const responseData = result?.data || result;
+            
+            if (responseData?.success && responseData?.transcription) {
+              setTextInput(prev => prev + (prev ? ' ' : '') + responseData.transcription);
+            } else {
+              const errorMsg = responseData?.error || "Failed to transcribe audio. Please try again.";
+              alert(errorMsg);
             }
           } catch (error) {
             console.error('Error transcribing audio:', error);
