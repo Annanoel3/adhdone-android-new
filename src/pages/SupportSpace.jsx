@@ -10,6 +10,8 @@ export default function SupportSpace() {
   const [messages, setMessages] = useState([]);
   const [currentInput, setCurrentInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
   const [conversationId, setConversationId] = useState(null);
   const messagesEndRef = useRef(null);
   const specialMode = localStorage.getItem('special_mode') || 'normal';
@@ -168,27 +170,91 @@ Respond naturally, warmly, and like you genuinely care about understanding them.
     await sendMessage(userMessage);
   };
 
-  const handleVoiceInput = async (file) => {
-    if (!file) return;
-
-    setIsLoading(true); // Indicate loading while transcribing
+  const startVoiceRecording = async () => {
     try {
-      const audioBase64 = await new Promise((resolve) => {
-       const reader = new FileReader();
-       reader.onloadend = () => resolve(reader.result.split(',')[1]);
-       reader.readAsDataURL(file);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 44100
+        }
       });
-      const sttResult = await base44.functions.invoke('transcribeAudio', { audio_base64: audioBase64, filename: file.name || 'audio.webm' });
-      const transcription = sttResult?.data;
-      if (transcription && transcription.text) {
-        await sendMessage(transcription.text);
+
+      let mimeType = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/webm';
+      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) {
+        mimeType = 'audio/mp4';
+      }
+
+      const recorder = new MediaRecorder(stream, {
+        mimeType: mimeType,
+        audioBitsPerSecond: 128000
+      });
+      const chunks = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        const audioBlob = new Blob(chunks, { type: mimeType });
+        stream.getTracks().forEach(track => track.stop());
+
+        if (audioBlob.size === 0) {
+          setIsRecording(false);
+          return;
+        }
+
+        setIsLoading(true);
+        await handleVoiceTranscription(audioBlob);
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+    } catch (error) {
+      console.error("Microphone error:", error);
+      setMessages(prev => [...prev, { role: "assistant", content: "Could not access microphone. Please try typing instead." }]);
+    }
+  };
+
+  const stopVoiceRecording = () => {
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      mediaRecorder.stop();
+      setIsRecording(false);
+    }
+  };
+
+  const handleVoiceTranscription = async (audioBlob) => {
+    try {
+      const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, {
+        type: audioBlob.type
+      });
+
+      const uploadResult = await base44.integrations.Core.UploadFile({
+        file: audioFile
+      });
+
+      if (!uploadResult?.file_url) {
+        throw new Error('Failed to upload audio file');
+      }
+
+      const response = await base44.functions.invoke('transcribeAudio', {
+        file_url: uploadResult.file_url
+      });
+
+      if (response?.data?.success && response?.data?.transcription) {
+        await sendMessage(response.data.transcription);
       } else {
-        console.warn("No transcription received or transcription was empty.");
-        setMessages(prev => [...prev, { role: "assistant", content: "I couldn't understand that. Could you please try again or type your message?" }]);
+        throw new Error('Failed to transcribe audio');
       }
     } catch (error) {
-      console.error("Error during speech-to-text:", error);
-      setMessages(prev => [...prev, { role: "assistant", content: "There was an error processing your voice. Please try typing instead." }]);
+      console.error("Voice processing error:", error);
+      setMessages(prev => [...prev, { role: "assistant", content: "I couldn't understand that. Could you please try again or type your message?" }]);
     } finally {
       setIsLoading(false);
     }
@@ -279,22 +345,14 @@ Respond naturally, warmly, and like you genuinely care about understanding them.
 
               <div className="flex flex-col items-center gap-6">
                 <button
-                  onClick={() => {
-                    const input = document.createElement('input');
-                    input.type = 'file';
-                    input.accept = 'audio/*';
-                    input.onchange = async (e) => {
-                      const file = e.target.files[0];
-                      if (!file) return;
-                      await handleVoiceInput(file);
-                    };
-                    input.click();
-                  }}
+                  onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
                   disabled={isLoading}
                   className={`w-32 h-32 rounded-full flex items-center justify-center transition-all ${
-                    theme === 'minimalist'
-                      ? 'bg-purple-600 hover:bg-purple-700'
-                      : 'bg-gradient-to-br from-purple-600 to-pink-600'
+                    isRecording
+                      ? 'bg-red-500 animate-pulse'
+                      : theme === 'minimalist'
+                        ? 'bg-purple-600 hover:bg-purple-700'
+                        : 'bg-gradient-to-br from-purple-600 to-pink-600'
                   } shadow-2xl hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed`}
                 >
                   {isLoading ? (
@@ -460,22 +518,14 @@ Respond naturally, warmly, and like you genuinely care about understanding them.
               <CardContent className="p-4 space-y-3">
                 <div className="flex justify-center">
                   <button
-                    onClick={() => {
-                       const input = document.createElement('input');
-                       input.type = 'file';
-                       input.accept = 'audio/*';
-                       input.onchange = async (e) => {
-                         const file = e.target.files[0];
-                         if (!file) return;
-                         await handleVoiceInput(file);
-                       };
-                       input.click();
-                     }}
+                    onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
                     disabled={isLoading}
                     className={`w-20 h-20 rounded-full flex items-center justify-center transition-all ${
-                      theme === 'minimalist'
-                        ? 'bg-purple-600 hover:bg-purple-700'
-                        : 'bg-gradient-to-br from-purple-600 to-pink-600'
+                      isRecording
+                        ? 'bg-red-500 animate-pulse'
+                        : theme === 'minimalist'
+                          ? 'bg-purple-600 hover:bg-purple-700'
+                          : 'bg-gradient-to-br from-purple-600 to-pink-600'
                     } shadow-lg hover:scale-110 disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     {isLoading ? (
