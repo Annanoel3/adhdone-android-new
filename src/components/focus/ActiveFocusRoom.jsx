@@ -844,9 +844,9 @@ export default function ActiveFocusRoom({ room, onLeave }) {
           </div>
 
           {/* Music - Spotify Web Playback */}
-          {currentRoom.selected_playlist && currentRoom.selected_playlist !== 'none' && (
+          {playlistEmbed && (
             <SpotifyWebPlayback 
-              playlistId={currentRoom.selected_playlist.replace('spotify:', '')} 
+              playlistId={playlists[currentRoom.selected_playlist] || currentRoom.selected_playlist.replace('spotify:', '')} 
               theme={theme}
             />
           )}
