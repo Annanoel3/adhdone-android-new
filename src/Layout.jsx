@@ -25,6 +25,7 @@ import {
   Mic,
   HelpCircle,
   Shield,
+  ArrowLeft,
 } from "lucide-react";
 import {
   Sidebar,
@@ -939,19 +940,38 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               paddingBottom: '1rem'
             }}>
               <div className="flex items-center gap-4">
-                <SidebarTrigger asChild>
-                  <Button variant="ghost" className={`p-3 rounded-xl transition-colors duration-200 ${
-                    isSeasonalTheme()
-                      ? 'hover:bg-white/50 text-gray-800'
-                      : theme === 'dark'
-                        ? 'hover:bg-gray-800 text-white'
-                        : theme === 'spicybrains'
-                          ? 'hover:bg-yellow-300 text-gray-900'
-                          : 'hover:bg-gray-100'
-                  }`}>
-                    <LayoutDashboard className="w-6 h-6" />
+                {location.pathname !== createPageUrl("Home") && location.pathname !== "/" ? (
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => navigate(-1)}
+                    className={`p-3 rounded-xl transition-colors duration-200 ${
+                      isSeasonalTheme()
+                        ? 'hover:bg-white/50 text-gray-800'
+                        : theme === 'dark'
+                          ? 'hover:bg-gray-800 text-white'
+                          : theme === 'spicybrains'
+                            ? 'hover:bg-yellow-300 text-gray-900'
+                            : 'hover:bg-gray-100'
+                    }`}
+                  >
+                    <ArrowLeft className="w-6 h-6" />
                   </Button>
-                </SidebarTrigger>
+                ) : (
+                  <SidebarTrigger asChild>
+                    <Button variant="ghost" className={`p-3 rounded-xl transition-colors duration-200 ${
+                      isSeasonalTheme()
+                        ? 'hover:bg-white/50 text-gray-800'
+                        : theme === 'dark'
+                          ? 'hover:bg-gray-800 text-white'
+                          : theme === 'spicybrains'
+                            ? 'hover:bg-yellow-300 text-gray-900'
+                            : 'hover:bg-gray-100'
+                    }`}>
+                      <LayoutDashboard className="w-6 h-6" />
+                    </Button>
+                  </SidebarTrigger>
+                )}
                 <h1 className={`text-xl font-bold ${
                   isSeasonalTheme()
                     ? 'text-gray-900'
