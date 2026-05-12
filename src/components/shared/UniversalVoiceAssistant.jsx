@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -234,21 +233,8 @@ Return JSON:
   "energy_required": "low" | "medium" | "high"
 }`;
 
-        const taskData = await base44.integrations.Core.InvokeLLM({
-          prompt,
-          response_json_schema: {
-            type: "object",
-            properties: {
-              title: { type: "string" },
-              relative_minutes: { type: "number" },
-              reminder_interval: { type: "string" },
-              reminder_time: { type: "string" },
-              specific_date: { type: "string" },
-              urgency: { type: "string" },
-              energy_required: { type: "string" }
-            }
-          }
-        });
+        const result = await base44.functions.invoke('extractTaskFromVoice', { prompt });
+        const taskData = result?.data?.taskData;
 
         let nextReminderTime = null;
 
