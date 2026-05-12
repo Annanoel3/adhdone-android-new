@@ -15,7 +15,8 @@ import {
   Moon,
   Palette,
   Trash2,
-  UserPlus
+  UserPlus,
+  MessageSquare
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -50,6 +51,7 @@ import { AccountabilityConnection } from "@/entities/AccountabilityConnection";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { validateContent } from "../utils/contentModeration";
+import ParticipantCard from "./ParticipantCard";
 
 export default function ActiveFocusRoom({ room, onLeave }) {
   const navigate = useNavigate();
@@ -597,52 +599,17 @@ export default function ActiveFocusRoom({ room, onLeave }) {
                   )}
 
                   {/* Other participants */}
-                  {participants.map((participant) => {
-                    const isCurrentUser = participant.user_email === user?.email;
-                    return (
-                      <div
-                        key={participant.id}
-                        className={`p-3 rounded-lg border transition-colors ${
-                          theme === 'dark'
-                            ? 'bg-gray-700 border-gray-600'
-                            : 'bg-gray-50 border-gray-200'
-                        }`}
-                      >
-                        <button
-                          onClick={() => handleViewProfile(participant)}
-                          className="w-full text-left"
-                        >
-                          <div className="flex items-center gap-3 mb-2">
-                            <Avatar className="w-10 h-10">
-                              <AvatarImage src={participant.profile_picture_url} />
-                              <AvatarFallback>{participant.display_name[0].toUpperCase()}</AvatarFallback>
-                            </Avatar>
-
-                            <div className="flex-1 min-w-0">
-                              <p className={`font-medium truncate ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                                {participant.display_name}
-                                {participant.user_email === currentRoom.host_email && ' 👑'}
-                              </p>
-                              {participant.current_task && (
-                                <p className={`text-sm truncate ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                                  {participant.current_task}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                        </button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleRequestConnect(participant.user_email)}
-                          className="w-full text-xs"
-                        >
-                          <UserPlus className="w-3 h-3 mr-1" />
-                          Request to Connect
-                        </Button>
-                      </div>
-                    );
-                  })}
+                  {participants.map((participant) => (
+                    <ParticipantCard
+                      key={participant.id}
+                      participant={participant}
+                      user={user}
+                      currentRoom={currentRoom}
+                      theme={theme}
+                      onConnect={handleRequestConnect}
+                      onViewProfile={handleViewProfile}
+                    />
+                  ))}
                 </div>
               </SheetContent>
             </Sheet>
