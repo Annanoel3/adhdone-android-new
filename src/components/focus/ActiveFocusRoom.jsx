@@ -283,19 +283,20 @@ export default function ActiveFocusRoom({ room, onLeave }) {
   const handleTimerComplete = async () => {
     if (!isHost || timerCompleteHandledRef.current) return;
     timerCompleteHandledRef.current = true;
-    
+
     try {
       const newMode = mode === 'work' ? 'break' : 'work';
-      
+
       // Play completion sound immediately
       const soundUrl = mode === 'work' 
         ? completionSounds[currentRoom.completion_sound || 'joyful_melody']?.url || completionSounds['joyful_melody'].url
         : breakEndSound;
-      
+
       const audio = new Audio(soundUrl);
       audio.volume = 0.8;
       audio.play().catch(err => console.log("Audio play failed:", err));
-      
+
+      // Update room: switch mode and restart timer
       await FocusRoom.update(currentRoom.id, {
         timer_mode: newMode,
         timer_started_at: new Date().toISOString()
@@ -313,7 +314,9 @@ export default function ActiveFocusRoom({ room, onLeave }) {
         timestamp: new Date().toISOString()
       });
 
+      // Reload data to refresh timer display
       setTimeout(() => {
+        timerCompleteHandledRef.current = false;
         loadData();
       }, 500);
     } catch (error) {
