@@ -561,32 +561,44 @@ Return JSON:
       }
 
       // Reschedule the notification
+      let newNotificationIds = [];
       try {
         const currentUser = await User.me();
-        await scheduleReminder({
+        const notificationId = await scheduleReminder({
           email: currentUser.email,
           title: "Task Reminder 📋",
-          body: task.title,
+          body: `${task.title}\n\nTap to mark as complete!`,
           sendAtISO: nextReminder.toISOString(),
           taskId: task.id,
           data: {
-            screen: "/Tasks",
+            screen: "/TaskNotification",
             taskId: task.id,
             urgency: task.urgency,
             type: 'task_reminder'
-          }
+          },
+          buttons: [
+            { id: "snooze_15", text: "Snooze 15 min" },
+            { id: "snooze_60", text: "Snooze 1 hour" },
+            { id: "complete", text: "✅ Done" }
+          ]
         });
+        if (notificationId) {
+          newNotificationIds = [notificationId];
+        }
       } catch (error) {
         console.error("Failed to schedule reminder:", error);
       }
 
-      // Update in background
-      Task.update(task.id, { next_reminder: nextReminder.toISOString() }).catch(error => {
+      // Update in background — save new reminder time AND new notification ID
+      Task.update(task.id, {
+        next_reminder: nextReminder.toISOString(),
+        onesignal_notification_ids: newNotificationIds
+      }).catch(error => {
         console.error("Error updating reminder time:", error);
       });
       
       // Optimistically update parent immediately
-      onUpdate({ ...task, next_reminder: nextReminder.toISOString() });
+      onUpdate({ ...task, next_reminder: nextReminder.toISOString(), onesignal_notification_ids: newNotificationIds });
     } finally {
       setIsUpdating(false);
     }
