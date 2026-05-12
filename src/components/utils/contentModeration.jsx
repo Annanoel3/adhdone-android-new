@@ -240,11 +240,49 @@ Respond ONLY with a JSON object:
 }
 
 /**
+ * AI-based check for negative tone that needs encouragement
+ */
+async function checkNegativeTone(text) {
+  try {
+    const prompt = `You are a supportive productivity assistant for people with ADHD.
+
+Analyze this message for overly negative tone that could be improved with positivity. Ignore factual statements about problems - look for pessimistic language, self-criticism, or discouragement that isn't necessary.
+
+Examples of what to flag:
+- "I'll never be able to do this"
+- "I'm so stupid, I can't focus"
+- "This is impossible"
+- "Everyone's better than me"
+
+Examples of what NOT to flag:
+- "I failed this task" (stating a fact)
+- "I'm struggling with focus today" (honest acknowledgment)
+- "This project is difficult" (stating difficulty)
+
+Message: "${text}"
+
+Respond ONLY with a JSON object:
+{
+  "hasNegativeTone": true/false,
+  "suggestion": "brief encouragement suggestion if negative, otherwise empty string"
+}`;
+
+    const result = await base44.functions.invoke('checkPredatoryBehavior', { prompt });
+    const response = result?.data?.response;
+
+    return response;
+  } catch (error) {
+    console.error("Tone check error:", error);
+    return { hasNegativeTone: false, suggestion: "" };
+  }
+}
+
+/**
  * Checks if text contains inappropriate content
  */
 export async function moderateContent(text) {
   if (!text || typeof text !== 'string') {
-    return { isClean: true, flaggedWords: [], violations: [], predatoryPatterns: [], politicalPatterns: [], scamPatterns: [], censoredText: text, aiCheck: null };
+    return { isClean: true, hasWarning: false, flaggedWords: [], violations: [], predatoryPatterns: [], politicalPatterns: [], scamPatterns: [], censoredText: text, aiCheck: null, toneCheck: null };
   }
 
   const normalizedText = normalizeText(text);
@@ -279,6 +317,14 @@ export async function moderateContent(text) {
   // Run AI check for predatory behavior
   const aiCheck = await checkPredatoryBehavior(text);
 
+  // Run AI check for negative tone (only if content is otherwise clean)
+  let toneCheck = { hasNegativeTone: false, suggestion: "" };
+  if (flaggedWords.length === 0 && personalInfoViolations.length === 0 && 
+      predatoryPatterns.length === 0 && politicalPatterns.length === 0 && 
+      scamPatterns.length === 0 && aiCheck.isSafe) {
+    toneCheck = await checkNegativeTone(text);
+  }
+
   const isClean = flaggedWords.length === 0 && 
                   personalInfoViolations.length === 0 && 
                   predatoryPatterns.length === 0 &&
@@ -287,15 +333,19 @@ export async function moderateContent(text) {
                   aiCheck.isSafe &&
                   aiCheck.severity === 'none';
 
+  const hasWarning = toneCheck.hasNegativeTone;
+
   return {
     isClean: isClean,
+    hasWarning: hasWarning,
     flaggedWords: flaggedWords,
     violations: personalInfoViolations,
     predatoryPatterns: predatoryPatterns,
     politicalPatterns: politicalPatterns,
     scamPatterns: scamPatterns,
     censoredText: censorContent(text),
-    aiCheck: aiCheck
+    aiCheck: aiCheck,
+    toneCheck: toneCheck
   };
 }
 
@@ -325,13 +375,30 @@ export async function validateContent(text, fieldName = 'Message') {
     return {
       valid: false,
       message: message,
-      censoredText: result.censoredText
+      censoredText: result.censoredText,
+      requiresBlock: true,
+      needsWarning: false
+    };
+  }
+
+  // If content is clean but has negative tone, return a warning (not a block)
+  if (result.hasWarning && result.toneCheck?.suggestion) {
+    return {
+      valid: true,
+      message: null,
+      censoredText: text,
+      requiresBlock: false,
+      needsWarning: true,
+      warningMessage: 'You might want to edit this for positivity',
+      toneSuggestion: result.toneCheck.suggestion
     };
   }
   
   return {
     valid: true,
     message: null,
-    censoredText: text
+    censoredText: text,
+    requiresBlock: false,
+    needsWarning: false
   };
 }
