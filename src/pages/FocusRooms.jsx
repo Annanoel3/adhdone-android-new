@@ -121,7 +121,13 @@ export default function FocusRooms() {
     setActiveRoom(null);
   };
 
-  const handleJoinFromBrowse = (roomCode) => {
+  const handleJoinFromBrowse = async (roomCode) => {
+    if (user) {
+      const room = await FocusRoom.filter({ room_code: roomCode });
+      if (room.length > 0) {
+        setActiveRoom(room[0]);
+      }
+    }
     setBrowseExpanded(false);
   };
 
