@@ -210,6 +210,47 @@ export function censorContent(text) {
 }
 
 /**
+ * AI-based check for harmful content (hate speech, discrimination, toxicity)
+ */
+async function checkHarmfulContent(text) {
+  try {
+    const prompt = `You are a content moderation AI protecting users in a supportive community app.
+
+Analyze this message for harmful content including:
+- Hate speech, slurs, or discrimination (based on race, religion, gender, sexual orientation, disability, etc.)
+- Dehumanizing or derogatory language toward any group
+- Violent or aggressive language toward individuals or groups
+- Sexual harassment or inappropriate sexual content
+- General toxicity, bullying, or harassment
+- Attempts to demean or belittle others
+
+Be intelligent and contextual. For example:
+- "I hate this feature" is fine
+- "I hate [group of people]" is harmful
+- "this app sucks sometimes" is venting, not hate speech
+- Derogatory slurs or calling groups subhuman is always harmful
+
+Message: "${text}"
+
+Respond ONLY with a JSON object:
+{
+  "isHarmful": true/false,
+  "category": "none/hate_speech/discrimination/harassment/sexual_content/violence/toxicity",
+  "reason": "brief explanation if harmful, otherwise empty string",
+  "severity": "none/low/medium/high"
+}`;
+
+    const result = await base44.functions.invoke('checkPredatoryBehavior', { prompt });
+    const response = result?.data?.response;
+
+    return response || { isHarmful: false, category: "none", reason: "", severity: "none" };
+  } catch (error) {
+    console.error("Harmful content check error:", error);
+    return { isHarmful: false, category: "none", reason: "", severity: "none" };
+  }
+}
+
+/**
  * AI-based check for predatory behavior patterns
  */
 async function checkPredatoryBehavior(text) {
@@ -321,24 +362,28 @@ export async function moderateContent(text) {
   // Check for personal information
   const personalInfoViolations = checkPersonalInfo(text);
 
-  // Run AI check for predatory behavior
-  const aiCheck = await checkPredatoryBehavior(text);
+  // Run AI check for harmful content (hate speech, discrimination, toxicity)
+   const harmfulCheck = await checkHarmfulContent(text);
 
-  // Run AI check for negative tone (only if content is otherwise clean)
-  let toneCheck = { hasNegativeTone: false, suggestion: "" };
-  if (flaggedWords.length === 0 && personalInfoViolations.length === 0 && 
-      predatoryPatterns.length === 0 && politicalPatterns.length === 0 && 
-      scamPatterns.length === 0 && aiCheck.isSafe) {
-    toneCheck = await checkNegativeTone(text);
-  }
+   // Run AI check for predatory behavior
+   const aiCheck = await checkPredatoryBehavior(text);
 
-  const isClean = flaggedWords.length === 0 && 
-                  personalInfoViolations.length === 0 && 
-                  predatoryPatterns.length === 0 &&
-                  politicalPatterns.length === 0 &&
-                  scamPatterns.length === 0 &&
-                  aiCheck.isSafe &&
-                  aiCheck.severity === 'none';
+   // Run AI check for negative tone (only if content is otherwise clean)
+   let toneCheck = { hasNegativeTone: false, suggestion: "" };
+   if (flaggedWords.length === 0 && personalInfoViolations.length === 0 && 
+       predatoryPatterns.length === 0 && politicalPatterns.length === 0 && 
+       scamPatterns.length === 0 && aiCheck.isSafe && !harmfulCheck.isHarmful) {
+     toneCheck = await checkNegativeTone(text);
+   }
+
+   const isClean = flaggedWords.length === 0 && 
+                   personalInfoViolations.length === 0 && 
+                   predatoryPatterns.length === 0 &&
+                   politicalPatterns.length === 0 &&
+                   scamPatterns.length === 0 &&
+                   aiCheck.isSafe &&
+                   aiCheck.severity === 'none' &&
+                   !harmfulCheck.isHarmful;
 
   const hasWarning = toneCheck.hasNegativeTone;
 
@@ -351,6 +396,7 @@ export async function moderateContent(text) {
     politicalPatterns: politicalPatterns,
     scamPatterns: scamPatterns,
     censoredText: censorContent(text),
+    harmfulCheck: harmfulCheck,
     aiCheck: aiCheck,
     toneCheck: toneCheck
   };
@@ -376,16 +422,18 @@ export async function validateContent(text, fieldName = 'Message') {
     } else if (result.violations.length > 0) {
       message = 'For your safety, please don\'t share personal information. Let\'s keep conversations focused on work and tasks. 🌟';
     } else if (!result.aiCheck.isSafe) {
-      message = 'Please keep conversations focused on work, tasks, and productivity. Let\'s maintain a safe and supportive environment for everyone. 🌟';
-    }
-    
-    return {
-      valid: false,
-      message: message,
-      censoredText: result.censoredText,
-      requiresBlock: true,
-      needsWarning: false
-    };
+       message = 'Please keep conversations focused on work, tasks, and productivity. Let\'s maintain a safe and supportive environment for everyone. 🌟';
+     } else if (result.harmfulCheck.isHarmful) {
+       message = 'Please keep conversations respectful and free from harmful language. Let\'s maintain a safe and supportive environment for everyone. 🌟';
+     }
+
+     return {
+       valid: false,
+       message: message,
+       censoredText: result.censoredText,
+       requiresBlock: true,
+       needsWarning: false
+     };
   }
 
   // If content is clean but has negative tone, return a warning (not a block)
