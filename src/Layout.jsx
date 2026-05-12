@@ -880,65 +880,22 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 )}
               </div>
 
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={`w-full flex items-center justify-center gap-2 rounded-xl ${
-                      isSeasonalTheme()
-                        ? 'bg-white/60 hover:bg-white/80 text-gray-800 border-white/40'
-                        : theme === 'dark'
-                          ? 'border-gray-700 hover:bg-gray-800 text-gray-300 bg-transparent'
-                          : theme === 'spicybrains'
-                            ? 'bg-gradient-to-r from-yellow-300 to-pink-300 hover:from-yellow-400 hover:to-pink-400 text-gray-900 font-bold border-2 border-cyan-400'
-                            : ''
-                    }`}
-                  >
-                    <Settings className="w-4 h-4" />
-                    <span>Settings</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className={`w-56 ${
+              <Button
+                variant="outline"
+                onClick={() => { navigate(createPageUrl("Settings")); handleNavClick(); }}
+                className={`w-full flex items-center justify-center gap-2 rounded-xl ${
                   isSeasonalTheme()
-                    ? 'bg-white/95 backdrop-blur-md border-white/40 text-gray-800'
+                    ? 'bg-white/60 hover:bg-white/80 text-gray-800 border-white/40'
                     : theme === 'dark'
-                      ? 'bg-[#1a1a1b] border-gray-800 text-gray-300'
+                      ? 'border-gray-700 hover:bg-gray-800 text-gray-300 bg-transparent'
                       : theme === 'spicybrains'
-                        ? 'bg-gradient-to-br from-pink-200 to-yellow-200 border-2 border-cyan-400 text-gray-900'
+                        ? 'bg-gradient-to-r from-yellow-300 to-pink-300 hover:from-yellow-400 hover:to-pink-400 text-gray-900 font-bold border-2 border-cyan-400'
                         : ''
-                }`}>
-                  <DropdownMenuItem onClick={() => { navigate(createPageUrl("Profile")); handleNavClick(); }}>
-                    <UserIcon className="w-4 h-4 mr-2" />
-                    My Profile
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { navigate(createPageUrl("MyAccount")); handleNavClick(); }}>
-                    <UserIcon className="w-4 h-4 mr-2" />
-                    My Account
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { navigate(createPageUrl("NotificationSettings")); handleNavClick(); }}>
-                    <Bell className="w-4 h-4 mr-2" />
-                    Notifications
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => { navigate(createPageUrl("PrivacyPolicy")); handleNavClick(); }}>
-                    <Shield className="w-4 h-4 mr-2" />
-                    Privacy Policy
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { navigate(createPageUrl("TermsAndConditions")); handleNavClick(); }}>
-                    <Shield className="w-4 h-4 mr-2" />
-                    Terms & Conditions
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => { navigate(createPageUrl("ReportBug")); handleNavClick(); }}>
-                    <Bug className="w-4 h-4 mr-2" />
-                    Feedback
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleLogout} className="text-red-600">
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Log Out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                }`}
+              >
+                <Settings className="w-4 h-4" />
+                <span>Settings</span>
+              </Button>
             </SidebarFooter>
           </Sidebar>
 
