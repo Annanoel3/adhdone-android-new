@@ -556,17 +556,7 @@ Return JSON:
       const [hours, minutes] = finalEffectiveTime.split(':');
       const [year, month, day] = finalEffectiveDate.split('-').map(Number); // YYYY-MM-DD
 
-      let nextReminder = new Date(year, month - 1, day, parseInt(hours), parseInt(minutes), 0, 0);
-      
-      const now = new Date();
-
-      // Only push to next day if the selected date is TODAY and the time is already past
-      // AND the user didn't explicitly pick a date (i.e. selectedDate was undefined).
-      const selectedDay = new Date(year, month - 1, day);
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      if (selectedDate === undefined && selectedDay.getTime() === today.getTime() && nextReminder <= now) {
-        nextReminder.setDate(nextReminder.getDate() + 1);
-      }
+      const nextReminder = new Date(year, month - 1, day, parseInt(hours), parseInt(minutes), 0, 0);
 
       console.log(`🕐 [REMINDER TIME] Setting reminder for ${nextReminder.toLocaleString()} (${nextReminder.toISOString()})`);
 
