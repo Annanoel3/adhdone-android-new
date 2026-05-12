@@ -66,9 +66,9 @@ DO NOT:
 - Use clichés like "you got this"
 - Be preachy or condescending`;
 
-      const response = await base44.integrations.Core.InvokeLLM({ prompt });
+      const response = await base44.functions.invoke('generateMotivationMessage', { prompt });
       
-      setMessage(response);
+      setMessage(response?.data?.message);
       setIsVisible(true);
       
       // Save that we showed a message today
