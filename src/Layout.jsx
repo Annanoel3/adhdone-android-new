@@ -349,6 +349,21 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     setOpenMobile(false);
   };
 
+  const mainMenuPages = [
+    createPageUrl("Home"),
+    "/",
+    createPageUrl("Tasks"),
+    createPageUrl("FocusTimer"),
+    createPageUrl("Progress"),
+    createPageUrl("SupportSpace"),
+    createPageUrl("ParkingLot"),
+    createPageUrl("Accountability"),
+    createPageUrl("Chat"),
+    createPageUrl("FocusRooms"),
+  ];
+
+  const isMainMenuPage = mainMenuPages.includes(location.pathname);
+
   const navigationItems = [
     {
       title: "Home",
@@ -940,7 +955,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               paddingBottom: '1rem'
             }}>
               <div className="flex items-center gap-4">
-                {location.pathname !== createPageUrl("Home") && location.pathname !== "/" ? (
+                {!isMainMenuPage ? (
                   <Button 
                     variant="ghost" 
                     onClick={() => navigate(-1)}
