@@ -73,7 +73,7 @@ DO NOT:
       
       // Save that we showed a message today
       await base44.auth.updateMe({ 
-        last_motivation_message: response,
+        last_motivation_message: response?.data?.message,
         last_motivation_date: today
       });
     };
