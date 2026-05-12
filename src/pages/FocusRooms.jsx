@@ -193,7 +193,7 @@ export default function FocusRooms() {
                 </p>
                 <div className="flex items-center justify-center mt-3 gap-2">
                   <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                    {browseExpanded ? "Hide" : "Browse"} public rooms
+                    {browseExpanded ? "Hide" : "Browse or search"} for a room
                   </span>
                   {browseExpanded ? (
                     <ChevronUp className="w-4 h-4 text-gray-400" />
@@ -220,12 +220,6 @@ export default function FocusRooms() {
             user={user} 
             theme={theme} 
             onRoomCreated={handleRoomCreated}
-          />
-          
-          <JoinFocusRoom 
-            user={user} 
-            theme={theme} 
-            onRoomJoined={handleRoomJoined}
           />
         </div>
         {/* Android Navigation Button Spacer */}
