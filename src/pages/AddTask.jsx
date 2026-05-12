@@ -108,29 +108,29 @@ export default function AddTask() {
       // FIRST: Check if user wants a task with subtasks
       const subtaskCheckPrompt = `Analyze this input: "${inputText}"
 
-Does the user want to create ONE task WITH subtasks/steps?
+Does the user want to create ONE main task WITH subtasks/steps?
 
-Look for phrases like:
-- "with subtasks"
-- "with steps"
-- "break it down into"
-- "and then", "then", "after that" (indicating sequential steps)
-- Lists within a single task context
+STRONG signals for ONE TASK WITH SUBTASKS:
+- User names a category/goal and then lists specific items under it
+- "I need to pay all my bills: electric, rent, insurance" → main: "Pay bills", subtasks: [electric, rent, insurance]
+- "I need to pay all my bills and then listed the bills [electric, rent, insurance]" → main: "Pay bills", subtasks: each bill
+- "grocery shopping: milk, eggs, bread" → main: "Grocery shopping", subtasks: each item
+- "clean the house: kitchen, bathroom, vacuum" → main: "Clean the house", subtasks: each room
+- "prepare for meeting with steps: review slides, print handouts" → main: "Prepare for meeting", subtasks: steps
+- "call dentist and then schedule appointment and then confirm insurance" → main task with sequential steps
+- ANY time items are listed as children of a main goal/action
 
-Examples of ONE TASK WITH SUBTASKS:
-- "remind me to clean the house with subtasks: clean kitchen, clean bathroom, vacuum"
-- "prepare for the meeting with steps: review slides, print handouts, set up room"
-- "grocery shopping: milk, eggs, bread, cheese"
-- "call dentist and then schedule the appointment and then confirm insurance"
+NOT subtasks (these are separate independent tasks):
+- "call dentist and also buy groceries" (two unrelated actions, neither is a parent of the other)
+- "clean dishes and take out trash" (two equal, unrelated chores)
 
-Examples of MULTIPLE SEPARATE TASKS (not subtasks):
-- "call dentist and also buy groceries" (two unrelated tasks)
-- "clean dishes and take out trash" (two separate chores)
+KEY RULE: If the items listed are all INSTANCES of the same category named first, they are subtasks.
+Example: "pay my bills" + list of bills = subtasks. "Buy groceries" + list of items = subtasks.
 
 Return JSON:
 {
   "has_subtasks": true/false,
-  "main_task": "main task title" (if has_subtasks),
+  "main_task": "concise main task title (e.g. 'Pay bills', not the full sentence)",
   "subtasks": ["subtask 1", "subtask 2", ...] (if has_subtasks, IN ORDER)
 }`;
 
@@ -164,7 +164,11 @@ CURRENT TIME: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-di
 Extract timing, urgency, and energy for the MAIN task (not subtasks):
 - Urgency based on context
 - Energy required
-- Reminder interval (suggest appropriate default)
+- reminder_interval: choose a SENSIBLE default (do NOT pick a time equal to right now)
+  - Bill payment, errands, admin tasks → "daily" (remind once a day until done)
+  - Important but flexible → "daily"
+  - Routines → "daily"
+  - Only use short intervals (30min, 1hour) if it's truly urgent or time-sensitive
 
 JSON:
 {
@@ -320,11 +324,12 @@ JSON:
       - "every other day" → reminder_interval="every_other_day"
 
       SMART SUGGESTIONS (if NO time interval specified by user):
-      - Quick household tasks → "1hour" or "2hours"
-      - Important appointments/calls → "1hour"
+      - Quick household tasks (pay bills, clean, errands) → "once", target_date=TODAY, target_time="21:00" (tonight)
+      - Important appointments/calls → "once", target_date=TOMORROW, target_time="09:00"
       - Daily routines (medicine, walk dog) → "daily"
-      - Less urgent errands → "2hours" or "daily"
-      - One-time events → "daily"
+      - Less urgent errands → "once", target_date=TOMORROW, target_time="09:00"
+      - One-time events with no time → "once", target_date=TOMORROW, target_time="09:00"
+      - NEVER set target_time to the current moment unless the user explicitly said "now" or "right now"
 
       SMART PRIORITY SUGGESTIONS:
       - Time-sensitive or deadline-based → "urgent" or "high"
@@ -479,7 +484,23 @@ JSON:
         const [year, month, day] = parsed.target_date.split('-').map(n => parseInt(n, 10));
         const [hours, minutes] = parsed.target_time.split(':').map(n => parseInt(n, 10));
         const targetDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
-        nextReminder = targetDate;
+
+        // Safety: if the calculated time is within 5 minutes of now (LLM hallucinated current time),
+        // push it to tonight 9pm or tomorrow 9am instead
+        const fiveMinFromNow = new Date(now.getTime() + 5 * 60 * 1000);
+        if (targetDate <= fiveMinFromNow) {
+          console.log('🔄 [PROCESS] ⚠️ Target time too close to now, pushing to tonight 9pm');
+          const fallback = new Date(now);
+          fallback.setHours(21, 0, 0, 0);
+          if (fallback <= fiveMinFromNow) {
+            // Already past 9pm — use tomorrow 9am
+            fallback.setDate(fallback.getDate() + 1);
+            fallback.setHours(9, 0, 0, 0);
+          }
+          nextReminder = fallback;
+        } else {
+          nextReminder = targetDate;
+        }
         actualReminderInterval = 'once';
 
         // Check if at least 1 day away
