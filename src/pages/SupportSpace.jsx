@@ -231,30 +231,24 @@ Respond naturally, warmly, and like you genuinely care about understanding them.
 
   const handleVoiceTranscription = async (audioBlob) => {
     try {
-      const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, {
-        type: audioBlob.type
+      const audioBase64 = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.readAsDataURL(audioBlob);
       });
 
-      const uploadResult = await base44.integrations.Core.UploadFile({
-        file: audioFile
-      });
-
-      if (!uploadResult?.file_url) {
-        throw new Error('Failed to upload audio file');
-      }
-
-      const response = await base44.functions.invoke('transcribeAudio', {
-        file_url: uploadResult.file_url
-      });
-
-      if (response?.data?.success && response?.data?.transcription) {
-        await sendMessage(response.data.transcription);
+      const sttResult = await base44.functions.invoke('transcribeAudio', { audio_base64: audioBase64, filename: `voice-${Date.now()}.webm` });
+      const transcription = sttResult?.data;
+      
+      if (transcription && transcription.text) {
+        await sendMessage(transcription.text);
       } else {
-        throw new Error('Failed to transcribe audio');
+        console.warn("No transcription received or transcription was empty.");
+        setMessages(prev => [...prev, { role: "assistant", content: "I couldn't understand that. Could you please try again or type your message?" }]);
       }
     } catch (error) {
-      console.error("Voice processing error:", error);
-      setMessages(prev => [...prev, { role: "assistant", content: "I couldn't understand that. Could you please try again or type your message?" }]);
+      console.error("Error during speech-to-text:", error);
+      setMessages(prev => [...prev, { role: "assistant", content: "There was an error processing your voice. Please try typing instead." }]);
     } finally {
       setIsLoading(false);
     }
