@@ -551,15 +551,6 @@ Return JSON:
         nextReminder.setDate(nextReminder.getDate() + 1);
       }
 
-      // Sync local controlled state to match what we're actually saving
-      const yr = nextReminder.getFullYear();
-      const mo = String(nextReminder.getMonth()+1).padStart(2,'0');
-      const dy = String(nextReminder.getDate()).padStart(2,'0');
-      const hr = String(nextReminder.getHours()).padStart(2,'0');
-      const mn = String(nextReminder.getMinutes()).padStart(2,'0');
-      setReminderDate(`${yr}-${mo}-${dy}`);
-      setReminderTime(`${hr}:${mn}`);
-
       console.log(`🕐 [REMINDER TIME] Setting reminder for ${nextReminder.toLocaleString()} (${nextReminder.toISOString()})`);
 
       // Cancel existing reminders before scheduling a new one
@@ -608,6 +599,10 @@ Return JSON:
         console.error("Error updating reminder time:", error);
       });
       
+      // Sync local state to the actual saved date (post any auto-adjustment)
+      setReminderDate(`${nextReminder.getFullYear()}-${String(nextReminder.getMonth()+1).padStart(2,'0')}-${String(nextReminder.getDate()).padStart(2,'0')}`);
+      setReminderTime(`${String(nextReminder.getHours()).padStart(2,'0')}:${String(nextReminder.getMinutes()).padStart(2,'0')}`);
+
       // Optimistically update parent immediately
       onUpdate({ ...task, next_reminder: nextReminder.toISOString(), onesignal_notification_ids: newNotificationIds });
     } finally {
@@ -1048,8 +1043,9 @@ Return JSON:
                             First Reminder Date:
                           </label>
                           <input
+                           key={`date-recurring-${reminderDate}`}
                            type="date"
-                           value={reminderDate}
+                           defaultValue={reminderDate}
                            onChange={(e) => {
                              setReminderDate(e.target.value);
                              handleUpdateReminderTime(reminderTime || '09:00', e.target.value);
@@ -1066,8 +1062,9 @@ Return JSON:
                            Reminder Time:
                           </label>
                           <input
+                           key={`time-recurring-${reminderTime}`}
                            type="time"
-                           value={reminderTime}
+                           defaultValue={reminderTime}
                            onChange={(e) => {
                              setReminderTime(e.target.value);
                              handleUpdateReminderTime(e.target.value, reminderDate || new Date().toISOString().split('T')[0]);
@@ -1124,8 +1121,9 @@ Return JSON:
                           Reminder Date:
                         </label>
                         <input
+                          key={`date-once-${reminderDate}`}
                           type="date"
-                          value={reminderDate}
+                          defaultValue={reminderDate}
                           onChange={(e) => {
                             setReminderDate(e.target.value);
                             handleUpdateReminderTime(reminderTime || '09:00', e.target.value);
@@ -1142,8 +1140,9 @@ Return JSON:
                           Reminder Time:
                         </label>
                         <input
+                          key={`time-once-${reminderTime}`}
                           type="time"
-                          value={reminderTime}
+                          defaultValue={reminderTime}
                           onChange={(e) => {
                             setReminderTime(e.target.value);
                             handleUpdateReminderTime(e.target.value, reminderDate || new Date().toISOString().split('T')[0]);
