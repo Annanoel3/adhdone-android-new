@@ -26,15 +26,19 @@ Deno.serve(async (req) => {
         const searchLower = searchQuery.toLowerCase();
         
         // Filter users matching search and with appropriate visibility
-        const matchingUsers = allUsers.filter(u => {
-            if (u.email === user.email) return false; // Exclude current user
-            if (u.profile_visibility === 'private') return false; // Exclude private profiles
-            
-            const emailMatch = u.email.toLowerCase().includes(searchLower);
-            const nameMatch = (u.display_name || u.full_name || '').toLowerCase().includes(searchLower);
-            
-            return emailMatch || nameMatch;
-        });
+         const matchingUsers = allUsers.filter(u => {
+             if (u.email === user.email) return false; // Exclude current user
+
+             const emailMatch = u.email.toLowerCase().includes(searchLower);
+
+             // If searching by email, allow finding anyone (private or public)
+             if (emailMatch) return true;
+
+             // If searching by name, only show public profiles
+             if (u.profile_visibility === 'private') return false;
+             const nameMatch = (u.display_name || u.full_name || '').toLowerCase().includes(searchLower);
+             return nameMatch;
+         });
 
         console.log('[searchUsers] Matching users:', matchingUsers.length);
 
