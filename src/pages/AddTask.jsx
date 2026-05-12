@@ -284,51 +284,56 @@ JSON:
       TOMORROW IS: ${tomorrowStr}
       CURRENT TIME: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
 
-      CRITICAL DISTINCTION - READ CAREFULLY:
+      TITLE EXTRACTION RULES (CRITICAL):
+      - ALWAYS strip the outer "remind me to" or "remind me" wrapper from the title.
+      - The title should be the actual action the user needs to do, not the meta-instruction.
+      - Examples:
+        "remind me to call dentist tomorrow" → title: "Call dentist"
+        "remind me to remind my dad to check the door tomorrow" → title: "Remind dad to check the door"
+        "remind me to take my medicine" → title: "Take medicine"
+      - Keep the inner action intact; only strip the outermost "remind me to" phrase.
+      - Capitalize the first word. Remove time/date references from the title.
+
+      TIMING RULES:
 
       "in X" vs "every X":
-      - If user says "in 10 minutes" or "in 1 hour" → This is ONE-TIME ONLY
-      Set: reminder_interval="once", target_date=TODAY, target_time=CALCULATED_TIME
+      - If user says "in 10 minutes" or "in 1 hour" → ONE-TIME ONLY
+        Set: reminder_interval="once", target_date=TODAY, target_time=CALCULATED_TIME
+      - If user says "every 10 minutes" or "every hour" → RECURRING
+        Set: reminder_interval="10min" or "1hour", no target_date/target_time
 
-      - If user says "every 10 minutes" or "every hour" → This is RECURRING
-      Set: reminder_interval="10min" or "1hour", no target_date/target_time
+      "tomorrow" with NO specific time:
+      - Set: reminder_interval="once", target_date=TOMORROW, target_time="09:00"
+      - This is a one-time reminder at 9am tomorrow, NOT a daily recurring task.
 
-      Examples:
-      ❌ WRONG: "in 10 minutes" → reminder_interval="10min" 
-      ✅ CORRECT: "in 10 minutes" → reminder_interval="once", target_time="14:35" (if now is 14:25)
-
-      ❌ WRONG: "every hour" → reminder_interval="once", target_time="15:25"
-      ✅ CORRECT: "every hour" → reminder_interval="1hour"
+      "tomorrow at X":
+      - Set: reminder_interval="once", target_date=TOMORROW, target_time=<specified time>
 
       Other rules:
       - "at 2pm" → ONE-TIME, reminder_interval="once", target_time="14:00"
-      - "tomorrow at 2pm" → ONE-TIME, reminder_interval="once", target_date=TOMORROW, target_time="14:00"
       - "daily"/"every day" → reminder_interval="daily"
       - "every other day" → reminder_interval="every_other_day"
 
       SMART SUGGESTIONS (if NO time interval specified by user):
-      You MUST suggest an appropriate reminder_interval based on task type:
-      - Quick household tasks (clean Legos, dishes, laundry) → "1hour" or "2hours"
-      - Important appointments/calls (dentist, doctor, important calls) → "1hour" 
-      - Daily routines (take medicine, walk dog, water plants) → "daily"
-      - Self-care tasks (shower, exercise) → "daily"
-      - Less urgent errands (schedule appointment, pay bill) → "2hours" or "daily"
-      - One-time events with no urgency → "daily"
+      - Quick household tasks → "1hour" or "2hours"
+      - Important appointments/calls → "1hour"
+      - Daily routines (medicine, walk dog) → "daily"
+      - Less urgent errands → "2hours" or "daily"
+      - One-time events → "daily"
 
       SMART PRIORITY SUGGESTIONS:
-      Analyze the task and suggest urgency:
       - Time-sensitive or deadline-based → "urgent" or "high"
-      - Important but flexible (appointments, health) → "high" or "medium"
+      - Important but flexible → "high" or "medium"
       - Routine maintenance → "medium"
-      - Nice-to-have or can wait → "low"
+      - Nice-to-have → "low"
 
       Extract:
-      1. Clean title (remove "remind me", "I need to", "in X minutes/hours", etc)
-      2. Urgency: ALWAYS suggest based on task (low/medium/high/urgent)
-      3. Energy: ALWAYS suggest based on task (low/medium/high)
-      4. target_date: ONLY for "in X" (TODAY) or "tomorrow" or specific dates
-      5. target_time: ONLY for "in X" (calculate) or "at 2pm" (specific time) - format HH:MM 24-hour
-      6. reminder_interval: ALWAYS suggest if not specified by user (10min/20min/30min/1hour/2hours/daily/every_other_day/once)
+      1. Clean title (strip "remind me to/I need to/in X minutes" — keep inner action)
+      2. Urgency: ALWAYS suggest (low/medium/high/urgent)
+      3. Energy: ALWAYS suggest (low/medium/high)
+      4. target_date: for "in X" (TODAY), "tomorrow", or specific dates — format YYYY-MM-DD
+      5. target_time: for "in X" (calculate), "at X" (specific), or "tomorrow" with no time → "09:00"
+      6. reminder_interval: ALWAYS provide (10min/20min/30min/1hour/2hours/daily/every_other_day/once)
 
       JSON:
       {
