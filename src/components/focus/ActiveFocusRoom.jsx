@@ -518,19 +518,8 @@ export default function ActiveFocusRoom({ room, onLeave }) {
           : 'bg-white/80 backdrop-blur-sm border-gray-200'
       }`}>
         <div className="max-w-7xl mx-auto">
-          {/* Back button and room name */}
+          {/* Room name */}
           <div className="flex items-center gap-3 mb-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate(createPageUrl('FocusRooms') + '?from=room')}
-              className={theme === 'dark' ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-100 text-gray-600'}
-            >
-              ← Back
-            </Button>
-            
-            <div className="border-l h-6 border-gray-300 dark:border-gray-600"></div>
-            
             <h1 className={`font-bold text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
               {currentRoom.room_name}
             </h1>
