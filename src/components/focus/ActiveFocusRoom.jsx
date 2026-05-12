@@ -108,7 +108,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
     }
   };
 
-  const breakEndSound = "https://audio-previews.elements.envatousercontent.com/files/200532414/preview.mp3?response-content-disposition=attachment%3B+filename%3D%22TX6WF5K-reveal-asia.mp3%22";
+  const breakEndSound = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/three_dings.mp3";
 
   const playlists = {
     study: "37i9dQZF1DWZeKCadgRdKQ",
