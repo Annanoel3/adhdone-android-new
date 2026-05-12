@@ -49,13 +49,7 @@ export default function PrivacyPolicy() {
       <div className="max-w-2xl mx-auto px-4 py-6">
         <Button 
           variant="ghost" 
-          onClick={() => {
-            if (window.history.length > 1) {
-              navigate(-1);
-            } else {
-              navigate('/settings');
-            }
-          }} 
+          onClick={() => navigate('/settings')}
           className="mb-6 p-3 h-12 text-base rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
         >
           <ArrowLeft className="w-5 h-5 mr-2" />

@@ -10,6 +10,7 @@ import { User } from "@/entities/User";
 import { Task } from "@/entities/Task";
 
 export default function ReportBug() {
+  const navigate = useNavigate();
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [bugDescription, setBugDescription] = useState("");
   const [stepsToReproduce, setStepsToReproduce] = useState("");
@@ -97,13 +98,7 @@ ${tasks.length > 0 ? tasks.map(t => `- ${t.title} (${t.status})`).join('\n') : '
   return (
     <div className="p-4 md:p-8 max-w-3xl mx-auto space-y-6">
       <button
-        onClick={() => {
-          if (window.history.length > 1) {
-            navigate(-1);
-          } else {
-            navigate('/settings');
-          }
-        }}
+        onClick={() => navigate('/settings')}
         style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '16px', padding: '12px 16px', minHeight: '44px', background: 'none', border: 'none', cursor: 'pointer', color: theme === 'dark' ? '#e5e7eb' : '#1f2937' }}
       >
         ← Back

@@ -119,13 +119,7 @@ export default function Profile() {
   return (
     <div className="p-4 md:p-8 max-w-4xl mx-auto space-y-6">
       <button
-        onClick={() => {
-          if (window.history.length > 1) {
-            navigate(-1);
-          } else {
-            navigate('/');
-          }
-        }}
+        onClick={() => navigate('/settings')}
         style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '16px', padding: '12px 16px', minHeight: '44px', background: 'none', border: 'none', cursor: 'pointer', color: theme === 'dark' ? '#e5e7eb' : '#1f2937' }}
       >
         ← Back

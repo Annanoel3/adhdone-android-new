@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { appParams } from '@/lib/app-params';
 import { createAxiosClient } from '@base44/sdk/dist/utils/axios-client';
@@ -12,6 +12,8 @@ export const AuthProvider = ({ children }) => {
   const [isLoadingPublicSettings, setIsLoadingPublicSettings] = useState(true);
   const [authError, setAuthError] = useState(null);
   const [appPublicSettings, setAppPublicSettings] = useState(null); // Contains only { id, public_settings }
+  
+  const lastUserRef = useRef(null);
 
   useEffect(() => {
     checkAppState();
@@ -67,19 +69,21 @@ export const AuthProvider = ({ children }) => {
               message: 'User not registered for this app'
             });
           } else {
-            setAuthError({
-              type: reason,
-              message: appError.message
-            });
-          }
-        } else {
-          setAuthError({
-            type: 'unknown',
-            message: appError.message || 'Failed to load app'
-          });
-        }
-        setIsLoadingPublicSettings(false);
-        setIsLoadingAuth(false);
+             setAuthError({
+               type: reason,
+               message: appError.message
+             });
+           }
+          } else {
+             setAuthError({
+               type: 'unknown',
+               message: appError.message || 'Failed to load app'
+             });
+           }
+           if (isInitialLoad) {
+             setIsLoadingPublicSettings(false);
+             setIsLoadingAuth(false);
+           }
       }
     } catch (error) {
       console.error('Unexpected error:', error);
@@ -87,8 +91,10 @@ export const AuthProvider = ({ children }) => {
         type: 'unknown',
         message: error.message || 'An unexpected error occurred'
       });
-      setIsLoadingPublicSettings(false);
-      setIsLoadingAuth(false);
+      if (isInitialLoad) {
+        setIsLoadingPublicSettings(false);
+        setIsLoadingAuth(false);
+      }
     }
   };
 
@@ -99,9 +105,10 @@ export const AuthProvider = ({ children }) => {
         setIsLoadingAuth(true);
       }
       const currentUser = await base44.auth.me();
-      const userChanged = JSON.stringify(currentUser) !== JSON.stringify(user);
-      if (isInitialLoad || userChanged) {
+      const userChanged = JSON.stringify(currentUser) !== JSON.stringify(lastUserRef.current);
+      if (userChanged) {
         setUser(currentUser);
+        lastUserRef.current = currentUser;
         setIsAuthenticated(true);
       }
       if (isInitialLoad) {
