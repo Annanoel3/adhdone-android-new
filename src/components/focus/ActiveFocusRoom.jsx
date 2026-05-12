@@ -244,17 +244,13 @@ export default function ActiveFocusRoom({ room, onLeave }) {
   const loadData = async () => {
     try {
       const allParticipants = await FocusRoomParticipant.filter({ room_id: currentRoom.id });
+      // Get all active participants (include current user regardless of last_seen)
       const activeParticipants = allParticipants.filter(p => {
+        if (user && p.user_email === user.email) return true; // Always include current user
         const lastSeen = new Date(p.last_seen);
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
         return lastSeen > fiveMinutesAgo;
       });
-      
-      // Ensure host is included even if they're the only participant
-      const hostExists = activeParticipants.some(p => p.user_email === currentRoom.host_email);
-      if (!hostExists && user && user.email === currentRoom.host_email) {
-        // Host is the current user, they should see themselves
-      }
       
       setParticipants(activeParticipants);
       
@@ -268,7 +264,9 @@ export default function ActiveFocusRoom({ room, onLeave }) {
       }
 
       const allMessages = await FocusRoomEmoji.filter({ room_id: currentRoom.id }, '-timestamp', 100);
-      setMessages(allMessages);
+      // Deduplicate messages by ID
+      const uniqueMessages = Array.from(new Map(allMessages.map(msg => [msg.id, msg])).values());
+      setMessages(uniqueMessages);
 
       const rooms = await FocusRoom.filter({ id: currentRoom.id });
       if (rooms.length > 0) {
@@ -519,10 +517,10 @@ export default function ActiveFocusRoom({ room, onLeave }) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => navigate(createPageUrl("Accountability"))}
+              onClick={() => navigate(createPageUrl("FocusRooms"))}
               className={theme === 'dark' ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-100 text-gray-600'}
             >
-              ← Community
+              ← Back
             </Button>
             
             <div className="border-l h-6 border-gray-300 dark:border-gray-600"></div>

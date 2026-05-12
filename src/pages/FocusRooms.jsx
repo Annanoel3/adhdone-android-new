@@ -151,11 +151,11 @@ export default function FocusRooms() {
       <div className="max-w-6xl mx-auto">
         <Button
             variant="ghost"
-            onClick={() => navigate(createPageUrl("Accountability"))}
+            onClick={() => navigate(-1)}
             className="mb-4"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Community
+            Back
         </Button>
         <Card className={`border-none shadow-lg mb-6 cursor-pointer transition-all ${
           theme === 'minimalist'
