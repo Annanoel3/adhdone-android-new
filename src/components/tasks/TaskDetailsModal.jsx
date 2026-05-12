@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -69,6 +69,8 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
   const [viewingImage, setViewingImage] = useState(null);
   const [reminderDate, setReminderDate] = useState('');
   const [reminderTime, setReminderTime] = useState('');
+  const reminderDateRef = useRef('');
+  const reminderTimeRef = useRef('');
 
   useEffect(() => {
     if (task && isOpen) {
@@ -82,11 +84,17 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
       // Initialize controlled date/time inputs from task
       if (task.next_reminder) {
         const d = new Date(task.next_reminder);
-        setReminderDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
-        setReminderTime(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`);
+        const rd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        const rt = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        setReminderDate(rd);
+        setReminderTime(rt);
+        reminderDateRef.current = rd;
+        reminderTimeRef.current = rt;
       } else {
         setReminderDate('');
         setReminderTime('');
+        reminderDateRef.current = '';
+        reminderTimeRef.current = '';
       }
     }
   }, [task?.id, isOpen]);
@@ -602,8 +610,12 @@ Return JSON:
       });
       
       // Sync local state to the actual saved date (post any auto-adjustment)
-      setReminderDate(`${nextReminder.getFullYear()}-${String(nextReminder.getMonth()+1).padStart(2,'0')}-${String(nextReminder.getDate()).padStart(2,'0')}`);
-      setReminderTime(`${String(nextReminder.getHours()).padStart(2,'0')}:${String(nextReminder.getMinutes()).padStart(2,'0')}`);
+      const savedRd = `${nextReminder.getFullYear()}-${String(nextReminder.getMonth()+1).padStart(2,'0')}-${String(nextReminder.getDate()).padStart(2,'0')}`;
+      const savedRt = `${String(nextReminder.getHours()).padStart(2,'0')}:${String(nextReminder.getMinutes()).padStart(2,'0')}`;
+      setReminderDate(savedRd);
+      setReminderTime(savedRt);
+      reminderDateRef.current = savedRd;
+      reminderTimeRef.current = savedRt;
 
       // Optimistically update parent immediately
       onUpdate({ ...task, next_reminder: nextReminder.toISOString(), onesignal_notification_ids: newNotificationIds });
@@ -1047,9 +1059,10 @@ Return JSON:
                           <input
                            type="date"
                            value={reminderDate}
-                           onChange={(e) => setReminderDate(e.target.value)}
-                           onBlur={(e) => {
-                             if (e.target.value && reminderTime) handleUpdateReminderTime(reminderTime, e.target.value);
+                           onChange={(e) => {
+                             setReminderDate(e.target.value);
+                             reminderDateRef.current = e.target.value;
+                             if (e.target.value && reminderTimeRef.current) handleUpdateReminderTime(reminderTimeRef.current, e.target.value);
                            }}
                            className={`w-full border rounded px-3 py-2 ${
                              theme === 'dark'
@@ -1065,9 +1078,10 @@ Return JSON:
                           <input
                            type="time"
                            value={reminderTime}
-                           onChange={(e) => setReminderTime(e.target.value)}
-                           onBlur={(e) => {
-                             if (reminderDate && e.target.value) handleUpdateReminderTime(e.target.value, reminderDate);
+                           onChange={(e) => {
+                             setReminderTime(e.target.value);
+                             reminderTimeRef.current = e.target.value;
+                             if (reminderDateRef.current && e.target.value) handleUpdateReminderTime(e.target.value, reminderDateRef.current);
                            }}
                            className={`w-full border rounded px-3 py-2 ${
                              theme === 'dark'
@@ -1123,9 +1137,10 @@ Return JSON:
                         <input
                           type="date"
                           value={reminderDate}
-                          onChange={(e) => setReminderDate(e.target.value)}
-                          onBlur={(e) => {
-                            if (e.target.value && reminderTime) handleUpdateReminderTime(reminderTime, e.target.value);
+                          onChange={(e) => {
+                            setReminderDate(e.target.value);
+                            reminderDateRef.current = e.target.value;
+                            if (e.target.value && reminderTimeRef.current) handleUpdateReminderTime(reminderTimeRef.current, e.target.value);
                           }}
                           className={`w-full border rounded px-3 py-2 ${
                             theme === 'dark'
@@ -1141,9 +1156,10 @@ Return JSON:
                         <input
                           type="time"
                           value={reminderTime}
-                          onChange={(e) => setReminderTime(e.target.value)}
-                          onBlur={(e) => {
-                            if (reminderDate && e.target.value) handleUpdateReminderTime(e.target.value, reminderDate);
+                          onChange={(e) => {
+                            setReminderTime(e.target.value);
+                            reminderTimeRef.current = e.target.value;
+                            if (reminderDateRef.current && e.target.value) handleUpdateReminderTime(e.target.value, reminderDateRef.current);
                           }}
                           className={`w-full border rounded px-3 py-2 ${
                             theme === 'dark'

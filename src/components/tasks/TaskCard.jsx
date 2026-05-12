@@ -264,20 +264,17 @@ export default function TaskCard({
       let nextReminder;
       
       if (newDate) {
-        nextReminder = new Date(newDate);
-        if (newTime) {
-          const [hours, minutes] = newTime.split(':');
-          nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-        } else {
-          const currentReminder = task.next_reminder ? new Date(task.next_reminder) : new Date();
-          nextReminder.setHours(currentReminder.getHours(), currentReminder.getMinutes(), 0, 0);
-        }
+        // Parse date as LOCAL time by splitting components (avoid UTC midnight parse bug)
+        const [year, month, day] = newDate.split('-').map(Number);
+        const timeStr = newTime || (task.next_reminder ? getCurrentReminderTime(task) : '09:00');
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        nextReminder = new Date(year, month - 1, day, hours, minutes, 0, 0);
       } else if (newTime) {
         nextReminder = task.next_reminder ? new Date(task.next_reminder) : new Date();
-        const [hours, minutes] = newTime.split(':');
-        nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+        const [hours, minutes] = newTime.split(':').map(Number);
+        nextReminder.setHours(hours, minutes, 0, 0);
       } else {
-          return;
+        return;
       }
 
       if (nextReminder < new Date() && task.reminder_interval === 'once') {
