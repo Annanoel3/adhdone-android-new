@@ -14,12 +14,15 @@ const INAPPROPRIATE_WORDS = [
   'orgasm', 'horny', 'erotic', 'bdsm', 'dildo', 'cum', 'cumming',
   
   // Severe violence/threats
-  'rape', 'molest', 'kill', 'murder',
-  
-  // Hate speech/slurs (the worst ones)
-  'nigger', 'nigga', 'faggot', 'fag', 'tranny', 'retard', 'retarded', 
-  'chink', 'gook', 'kike', 'wetback', 'beaner', 'towelhead', 'raghead',
-  'cunt', 'whore', 'slut',
+   'rape', 'molest', 'kill', 'murder',
+
+   // Hate speech/slurs (the worst ones)
+   'nigger', 'nigga', 'faggot', 'fag', 'tranny', 'retard', 'retarded', 
+   'chink', 'gook', 'kike', 'wetback', 'beaner', 'towelhead', 'raghead',
+   'cunt', 'whore', 'slut',
+
+   // General hate speech patterns
+   'i hate', 'i hate you', 'you suck',
   
   // Scam/phishing attempts
   'cashapp me', 'venmo me', 'paypal me', 'send money', 'wire transfer',
@@ -207,14 +210,13 @@ export function censorContent(text) {
 }
 
 /**
- * AI-based check for predatory behavior patterns and hate speech
+ * AI-based check for predatory behavior patterns
  */
 async function checkPredatoryBehavior(text) {
   try {
     const prompt = `You are a content moderation AI protecting users in a productivity/ADHD support app.
 
-Analyze this message for predatory behavior, grooming, hate speech, or inappropriate contact attempts. Look for:
-- Hate speech, slurs, or discriminatory language targeting race, gender, sexual orientation, religion, disability
+Analyze this message for predatory behavior, grooming, or inappropriate contact attempts. Look for:
 - Requests to move conversation off-platform
 - Age-related questions or comments
 - Attempts to establish private contact (phone, social media, other apps)
