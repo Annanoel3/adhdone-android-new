@@ -747,9 +747,9 @@ export default function ActiveFocusRoom({ room, onLeave }) {
               💬 Chat
             </h2>
             
-            <div className="h-40 overflow-y-auto mb-2 space-y-2 flex flex-col">
+            <div className="h-40 overflow-y-auto mb-2 space-y-2 flex flex-col-reverse">
               <AnimatePresence>
-                {messages.map((message) => {
+                {[...messages].reverse().map((message) => {
                    const isMe = message.sender_email === user?.email;
                    const isAI = message.sender_email === "ai@adhdone.app";
                    const participant = participants.find(p => p.user_email === message.sender_email);
@@ -859,13 +859,13 @@ export default function ActiveFocusRoom({ room, onLeave }) {
                 🎵 Music
               </h2>
               <iframe
-                src={playlistEmbed}
-                width="100%"
-                height="100"
-                frameBorder="0"
-                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-                loading="lazy"
-                className="rounded-lg"
+               src={playlistEmbed}
+               width="100%"
+               height="200"
+               frameBorder="0"
+               allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+               loading="lazy"
+               className="rounded-lg"
               ></iframe>
             </div>
           )}
