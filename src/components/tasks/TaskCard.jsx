@@ -258,24 +258,76 @@ export default function TaskCard({
   const handleReminderDateChange = async (newDate, newTime) => {
     try {
       let nextReminder;
-      
+
       if (newDate) {
-        // Parse date as LOCAL time by splitting components (avoid UTC midnight parse bug)
-        const [year, month, day] = newDate.split('-').map(Number);
+        // Parse date components explicitly to avoid UTC midnight crossing (same as task creation)
+        const [year, month, day] = newDate.split('-').map(n => parseInt(n, 10));
         const timeStr = newTime || (task.next_reminder ? getCurrentReminderTime(task) : '09:00');
-        const [hours, minutes] = timeStr.split(':').map(Number);
+        const [hours, minutes] = timeStr.split(':').map(n => parseInt(n, 10));
         nextReminder = new Date(year, month - 1, day, hours, minutes, 0, 0);
       } else if (newTime) {
-        nextReminder = task.next_reminder ? new Date(task.next_reminder) : new Date();
-        const [hours, minutes] = newTime.split(':').map(Number);
-        nextReminder.setHours(hours, minutes, 0, 0);
+        const existingDate = task.next_reminder ? new Date(task.next_reminder) : new Date();
+        const [hours, minutes] = newTime.split(':').map(n => parseInt(n, 10));
+        nextReminder = new Date(existingDate.getFullYear(), existingDate.getMonth(), existingDate.getDate(), hours, minutes, 0, 0);
       } else {
         return;
       }
 
-      await Task.update(task.id, {
-        next_reminder: nextReminder.toISOString()
-      });
+      // Cancel existing notifications
+      if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+        const { cancelScheduledReminder } = await import('../utils/reminderScheduler');
+        await cancelScheduledReminder(task.onesignal_notification_ids).catch(e => console.error("Cancel failed:", e));
+      }
+
+      // Reschedule via OneSignal (same pattern as task creation)
+      let newNotificationIds = [];
+      const intervalMs = {
+        '10min': 10 * 60 * 1000, '20min': 20 * 60 * 1000, '30min': 30 * 60 * 1000,
+        '1hour': 60 * 60 * 1000, '2hours': 2 * 60 * 60 * 1000,
+        'daily': 24 * 60 * 60 * 1000, 'every_other_day': 2 * 24 * 60 * 60 * 1000,
+      };
+
+      const { base44 } = await import('@/api/base44Client');
+      const currentUser = await base44.auth.me();
+      const interval = task.reminder_interval;
+
+      if (interval && interval !== 'once' && intervalMs[interval]) {
+        const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
+        const { notificationIds, lastScheduledUntil } = await scheduleRecurringReminders({
+          email: currentUser.email,
+          title: "Task Reminder 📋",
+          body: `${task.title}\n\nTap to mark as complete!`,
+          startTime: nextReminder.toISOString(),
+          intervalMs: intervalMs[interval],
+          count: 10,
+          taskId: task.id,
+          data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency, type: 'task_reminder' },
+          buttons: [{ id: "snooze_15", text: "Snooze 15 min" }, { id: "snooze_60", text: "Snooze 1 hour" }, { id: "complete", text: "✅ Done" }]
+        });
+        newNotificationIds = notificationIds || [];
+        await Task.update(task.id, {
+          next_reminder: nextReminder.toISOString(),
+          onesignal_notification_ids: newNotificationIds,
+          ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
+        });
+      } else {
+        const { scheduleReminder } = await import('../utils/reminderScheduler');
+        const notificationId = await scheduleReminder({
+          email: currentUser.email,
+          title: "Task Reminder 📋",
+          body: `${task.title}\n\nTap to mark as complete!`,
+          sendAtISO: nextReminder.toISOString(),
+          taskId: task.id,
+          data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency, type: 'task_reminder' },
+          buttons: [{ id: "snooze_15", text: "Snooze 15 min" }, { id: "snooze_60", text: "Snooze 1 hour" }, { id: "complete", text: "✅ Done" }]
+        });
+        if (notificationId) newNotificationIds = [notificationId];
+        await Task.update(task.id, {
+          next_reminder: nextReminder.toISOString(),
+          onesignal_notification_ids: newNotificationIds
+        });
+      }
+
       onRefreshTasks();
     } catch (error) {
       console.error("Error updating reminder date/time:", error);
