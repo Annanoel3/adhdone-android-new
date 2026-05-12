@@ -532,21 +532,12 @@ Return JSON:
       
       const now = new Date();
 
-      // If the constructed reminder date/time is in the past, adjust it to the future.
-      // If the selected date is today, and the selected time is in the past, make it tomorrow.
-      // Otherwise, if the selected date itself was in the past, assume user meant 'today' for that date.
-      if (nextReminder <= now) {
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        // If the selected date is before today, assume they meant today
-        if (new Date(year, month - 1, day) < today) {
-          nextReminder.setFullYear(now.getFullYear());
-          nextReminder.setMonth(now.getMonth());
-          nextReminder.setDate(now.getDate());
-        }
-        // If even after date adjustment (or if selected date was today), time is in past, push to next day
-        if (nextReminder <= now) {
-          nextReminder.setDate(nextReminder.getDate() + 1);
-        }
+      // Only push to next day if the selected date is TODAY and the time is already past.
+      // Never auto-adjust when the user explicitly picked a future date.
+      const selectedDay = new Date(year, month - 1, day);
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if (selectedDay.getTime() === today.getTime() && nextReminder <= now) {
+        nextReminder.setDate(nextReminder.getDate() + 1);
       }
 
       console.log(`🕐 [REMINDER TIME] Setting reminder for ${nextReminder.toLocaleString()} (${nextReminder.toISOString()})`);
