@@ -271,7 +271,8 @@ export default function ActiveFocusRoom({ room, onLeave }) {
   };
 
   const handleTimerComplete = async () => {
-    if (!isHost) return;
+    if (!isHost || timerCompleteHandledRef.current) return;
+    timerCompleteHandledRef.current = true;
     
     try {
       const newMode = mode === 'work' ? 'break' : 'work';
@@ -304,8 +305,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
 
       setTimeout(() => {
         loadData();
-        timerCompleteHandledRef.current = false;
-      }, 1000);
+      }, 500);
     } catch (error) {
       console.error("Error completing timer:", error);
       timerCompleteHandledRef.current = false;
