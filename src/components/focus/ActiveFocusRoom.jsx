@@ -52,6 +52,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { validateContent } from "../utils/contentModeration";
 import ParticipantCard from "./ParticipantCard";
+import SpotifyWebPlayback from "./SpotifyWebPlayback";
 
 export default function ActiveFocusRoom({ room, onLeave }) {
   const navigate = useNavigate();
@@ -842,28 +843,12 @@ export default function ActiveFocusRoom({ room, onLeave }) {
             </form>
           </div>
 
-          {/* Music - Compact */}
-          {playlistEmbed && (
-            <div className={`rounded-xl p-3 shadow-lg ${
-              theme === 'minimalist'
-                ? 'bg-white'
-                : theme === 'dark'
-                  ? 'bg-gray-800'
-                  : 'bg-white/80'
-            }`}>
-              <h2 className={`text-sm font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                🎵 Music
-              </h2>
-              <iframe
-               src={playlistEmbed}
-               width="100%"
-               height="200"
-               frameBorder="0"
-               allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
-               loading="lazy"
-               className="rounded-lg"
-              ></iframe>
-            </div>
+          {/* Music - Spotify Web Playback */}
+          {currentRoom.selected_playlist && currentRoom.selected_playlist !== 'none' && (
+            <SpotifyWebPlayback 
+              playlistId={currentRoom.selected_playlist.replace('spotify:', '')} 
+              theme={theme}
+            />
           )}
         </div>
       </div>
