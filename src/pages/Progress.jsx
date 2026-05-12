@@ -101,11 +101,21 @@ export default function Progress() {
     });
   }
 
-  // Compute avg daily completion rate: days where at least 1 task was completed / total days with any task activity
-  const daysWithActivity = Object.values(completionsByDate).filter(c => c > 0).length;
-  const totalDaysChecked = 30;
-  const avgCompletionRate = daysWithActivity > 0
-    ? Math.min(100, Math.round((daysWithActivity / totalDaysChecked) * 100))
+  // Avg completion rate: completed / (completed + active tasks due today or earlier, or with no due date)
+  // Excludes tasks with a future next_reminder / due date so they don't drag the rate down
+  const today = new Date();
+  today.setHours(23, 59, 59, 999);
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+
+  const relevantActiveTasks = activeTasks.filter(t => {
+    if (!t.next_reminder) return true; // no due date — count it
+    const dueDate = t.next_reminder.split('T')[0];
+    return dueDate <= todayStr;
+  });
+
+  const relevantTotal = completedTasks.length + relevantActiveTasks.length;
+  const avgCompletionRate = relevantTotal > 0
+    ? Math.round((completedTasks.length / relevantTotal) * 100)
     : 0;
 
   const currentStreak = todaysSummary?.streak_days || 0;
