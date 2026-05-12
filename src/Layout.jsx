@@ -360,6 +360,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     createPageUrl("Accountability"),
     createPageUrl("Chat"),
     createPageUrl("FocusRooms"),
+    createPageUrl("ProfileSettings"),
   ];
 
   const isMainMenuPage = mainMenuPages.includes(location.pathname);
