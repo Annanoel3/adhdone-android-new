@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -700,72 +699,102 @@ export default function ActiveFocusRoom({ room, onLeave }) {
               💬 Chat
             </h2>
             
-            <div className="h-48 overflow-y-auto mb-3 space-y-2">
+            <div className="h-40 overflow-y-auto mb-2 space-y-2">
               <AnimatePresence>
                 {messages.map((message) => {
-                  const isMe = message.sender_email === user?.email;
-                  const isAI = message.sender_email === "ai@adhdone.app";
-                  const participant = participants.find(p => p.user_email === message.sender_email);
-                  
-                  return (
-                    <motion.div
-                      key={message.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className={`flex gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
-                    >
-                      <Avatar className="w-6 h-6 flex-shrink-0">
-                        {isAI ? (
-                          <AvatarFallback className="bg-amber-100">
-                            <Sparkles className="w-3 h-3 text-amber-600" />
-                          </AvatarFallback>
-                        ) : (
-                          <>
-                            <AvatarImage src={participant?.profile_picture_url} />
-                            <AvatarFallback className="text-xs">{message.sender_name[0].toUpperCase()}</AvatarFallback>
-                          </>
-                        )}
-                      </Avatar>
-                      
-                      <div className={`max-w-[70%] px-2 py-1 rounded-lg text-xs ${
-                        isAI
-                          ? 'bg-amber-50 border border-amber-200 text-amber-800'
-                          : isMe 
-                            ? theme === 'minimalist'
-                              ? 'bg-green-600 text-white'
-                              : theme === 'dark'
-                                ? 'bg-green-700 text-white'
-                                : 'bg-purple-600 text-white'
-                            : theme === 'dark'
-                              ? 'bg-gray-700 text-white'
-                              : 'bg-gray-100'
-                      }`}>
-                        <p className="font-medium opacity-80">{message.sender_name}</p>
-                        <p>{message.emoji}</p>
-                      </div>
-                    </motion.div>
-                  );
-                })}
+                   const isMe = message.sender_email === user?.email;
+                   const isAI = message.sender_email === "ai@adhdone.app";
+                   const participant = participants.find(p => p.user_email === message.sender_email);
+
+                   return (
+                     <motion.div
+                       key={message.id}
+                       initial={{ opacity: 0, y: 10 }}
+                       animate={{ opacity: 1, y: 0 }}
+                       exit={{ opacity: 0, y: -10 }}
+                       className={`flex gap-2 ${isMe ? 'flex-row-reverse' : 'flex-row'}`}
+                     >
+                       <Avatar className="w-6 h-6 flex-shrink-0">
+                         {isAI ? (
+                           <AvatarFallback className="bg-amber-100">
+                             <Sparkles className="w-3 h-3 text-amber-600" />
+                           </AvatarFallback>
+                         ) : (
+                           <>
+                             <AvatarImage src={participant?.profile_picture_url} />
+                             <AvatarFallback className="text-xs">{message.sender_name[0].toUpperCase()}</AvatarFallback>
+                           </>
+                         )}
+                       </Avatar>
+
+                       <div className={`max-w-[70%] px-2 py-1 rounded-lg text-xs ${
+                         isAI
+                           ? 'bg-amber-50 border border-amber-200 text-amber-800'
+                           : isMe 
+                             ? theme === 'minimalist'
+                               ? 'bg-green-600 text-white'
+                               : theme === 'dark'
+                                 ? 'bg-green-700 text-white'
+                                 : 'bg-purple-600 text-white'
+                             : theme === 'dark'
+                               ? 'bg-gray-700 text-white'
+                               : 'bg-gray-100'
+                       }`}>
+                         <p className="font-medium opacity-80">{message.sender_name}</p>
+                         <p>{message.emoji}</p>
+                       </div>
+                     </motion.div>
+                   );
+                 })}
               </AnimatePresence>
               <div ref={messagesEndRef} />
             </div>
 
-            <form onSubmit={handleSendMessage} className="flex gap-2">
-              <Input
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                placeholder="Message..."
-                className={`text-sm ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : ''}`}
-              />
-              <Button 
-                type="submit" 
-                size="sm"
-                disabled={!newMessage.trim()}
-                className={theme === 'minimalist' ? 'bg-green-600 hover:bg-green-700' : ''}
-              >
-                <Send className="w-4 h-4" />
-              </Button>
+            {/* Quick prompts */}
+            <div className="mb-2 flex gap-1 flex-wrap text-xs">
+              {["Everyone's doing so good!", "Not long to go!", "Let's do this together!", "You got this! 💪"].map((prompt) => (
+                <Button
+                  key={prompt}
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setNewMessage(prompt);
+                  }}
+                  className={`py-1 px-2 h-auto text-xs ${
+                    theme === 'minimalist'
+                      ? 'border-green-300 hover:bg-green-50'
+                      : theme === 'dark'
+                        ? 'border-gray-600 hover:bg-gray-700'
+                        : 'border-purple-200 hover:bg-purple-50'
+                  }`}
+                >
+                  {prompt}
+                </Button>
+              ))}
+            </div>
+
+            <form onSubmit={handleSendMessage} className="flex flex-col gap-1">
+              <div className="flex gap-2">
+                <Input
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value.slice(0, 60))}
+                  maxLength="60"
+                  placeholder="Message (60 chars)..."
+                  className={`text-sm ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : ''}`}
+                />
+                <Button 
+                  type="submit" 
+                  size="sm"
+                  disabled={!newMessage.trim()}
+                  className={theme === 'minimalist' ? 'bg-green-600 hover:bg-green-700' : ''}
+                >
+                  <Send className="w-4 h-4" />
+                </Button>
+              </div>
+              <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                {newMessage.length}/60
+              </p>
             </form>
           </div>
 
