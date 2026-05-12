@@ -47,8 +47,18 @@ export default function PrivacyPolicy() {
       paddingBottom: 'max(3rem, calc(3rem + env(safe-area-inset-bottom)))'
     }}>
       <div className="max-w-2xl mx-auto px-4 py-6">
-        <Button variant="ghost" onClick={() => navigate(-1)} className="mb-6 -ml-2">
-          <ArrowLeft className="w-4 h-4 mr-2" />
+        <Button 
+          variant="ghost" 
+          onClick={() => {
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              navigate('/settings');
+            }
+          }} 
+          className="mb-6 p-3 h-12 text-base rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+        >
+          <ArrowLeft className="w-5 h-5 mr-2" />
           Back
         </Button>
 

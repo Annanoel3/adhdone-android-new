@@ -126,10 +126,16 @@ export default function NotificationSettings() {
       <div className="max-w-2xl mx-auto space-y-6">
         <Button
           variant="ghost"
-          onClick={() => navigate(createPageUrl("Home"))}
-          className="gap-2"
+          onClick={() => {
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              navigate('/settings');
+            }
+          }}
+          className="gap-2 p-3 h-12 text-base rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
         >
-          <ArrowLeft className="w-4 h-4" />
+          <ArrowLeft className="w-5 h-5" />
           Back
         </Button>
 

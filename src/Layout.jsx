@@ -956,43 +956,19 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               paddingBottom: '1rem'
             }}>
               <div className="flex items-center gap-4">
-                {!isMainMenuPage ? (
-                  <Button 
-                    variant="ghost" 
-                    onClick={() => {
-                      if (window.history.length > 1) {
-                        navigate(-1);
-                      } else {
-                        navigate(createPageUrl("Home"));
-                      }
-                    }}
-                    className={`h-14 w-14 p-0 rounded-xl transition-colors duration-200 flex items-center justify-center ${
-                      isSeasonalTheme()
-                        ? 'hover:bg-white/50 text-gray-800'
-                        : theme === 'dark'
-                          ? 'hover:bg-gray-800 text-white'
-                          : theme === 'spicybrains'
-                            ? 'hover:bg-yellow-300 text-gray-900'
-                            : 'hover:bg-gray-100'
-                    }`}
-                  >
-                    <ArrowLeft className="w-7 h-7" />
+                <SidebarTrigger asChild>
+                  <Button variant="ghost" className={`h-14 w-14 p-0 rounded-xl transition-colors duration-200 flex items-center justify-center ${
+                    isSeasonalTheme()
+                      ? 'hover:bg-white/50 text-gray-800'
+                      : theme === 'dark'
+                        ? 'hover:bg-gray-800 text-white'
+                        : theme === 'spicybrains'
+                          ? 'hover:bg-yellow-300 text-gray-900'
+                          : 'hover:bg-gray-100'
+                  }`}>
+                    <LayoutDashboard className="w-7 h-7" />
                   </Button>
-                ) : (
-                  <SidebarTrigger asChild>
-                    <Button variant="ghost" className={`h-14 w-14 p-0 rounded-xl transition-colors duration-200 flex items-center justify-center ${
-                      isSeasonalTheme()
-                        ? 'hover:bg-white/50 text-gray-800'
-                        : theme === 'dark'
-                          ? 'hover:bg-gray-800 text-white'
-                          : theme === 'spicybrains'
-                            ? 'hover:bg-yellow-300 text-gray-900'
-                            : 'hover:bg-gray-100'
-                    }`}>
-                      <LayoutDashboard className="w-7 h-7" />
-                    </Button>
-                  </SidebarTrigger>
-                )}
+                </SidebarTrigger>
                 <h1 className={`text-xl font-bold ${
                   isSeasonalTheme()
                     ? 'text-gray-900'

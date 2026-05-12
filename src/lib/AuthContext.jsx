@@ -99,12 +99,19 @@ export const AuthProvider = ({ children }) => {
         setIsLoadingAuth(true);
       }
       const currentUser = await base44.auth.me();
-      setUser(currentUser);
-      setIsAuthenticated(true);
-      setIsLoadingAuth(false);
+      const userChanged = JSON.stringify(currentUser) !== JSON.stringify(user);
+      if (isInitialLoad || userChanged) {
+        setUser(currentUser);
+        setIsAuthenticated(true);
+      }
+      if (isInitialLoad) {
+        setIsLoadingAuth(false);
+      }
     } catch (error) {
       console.error('User auth check failed:', error);
-      setIsLoadingAuth(false);
+      if (isInitialLoad) {
+        setIsLoadingAuth(false);
+      }
       setIsAuthenticated(false);
       
       // If user auth fails, it might be an expired token
