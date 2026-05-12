@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -160,7 +159,7 @@ export default function ProfileSettings() {
               maxLength={50}
             />
             <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-              This is how you'll appear on the leaderboard and to accountability partners
+              This is how you'll appear to accountability partners
             </p>
           </div>
 

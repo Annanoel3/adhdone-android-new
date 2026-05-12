@@ -940,7 +940,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             }}>
               <div className="flex items-center gap-4">
                 <SidebarTrigger asChild>
-                  <Button variant="ghost" className={`p-2 rounded-xl transition-colors duration-200 ${
+                  <Button variant="ghost" className={`p-3 rounded-xl transition-colors duration-200 ${
                     isSeasonalTheme()
                       ? 'hover:bg-white/50 text-gray-800'
                       : theme === 'dark'
@@ -949,7 +949,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                           ? 'hover:bg-yellow-300 text-gray-900'
                           : 'hover:bg-gray-100'
                   }`}>
-                    <LayoutDashboard className="w-5 h-5" />
+                    <LayoutDashboard className="w-6 h-6" />
                   </Button>
                 </SidebarTrigger>
                 <h1 className={`text-xl font-bold ${

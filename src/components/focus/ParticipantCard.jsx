@@ -14,27 +14,39 @@ export default function ParticipantCard({ participant, user, currentRoom, theme,
   useEffect(() => {
     const checkConnectionStatus = async () => {
       try {
-        // Check if they're connected (accepted)
-        const accepted = await AccountabilityConnection.filter({
+        // Check if they're connected (accepted) in either direction
+        const accepted1 = await AccountabilityConnection.filter({
           requester_email: user.email,
           recipient_email: participant.user_email,
           status: 'accepted'
         });
         
-        if (accepted.length > 0) {
+        const accepted2 = await AccountabilityConnection.filter({
+          requester_email: participant.user_email,
+          recipient_email: user.email,
+          status: 'accepted'
+        });
+        
+        if (accepted1.length > 0 || accepted2.length > 0) {
           setConnectionStatus('connected');
           setLoading(false);
           return;
         }
 
-        // Check if there's a pending request
-        const pending = await AccountabilityConnection.filter({
+        // Check if there's a pending request (either direction)
+        const pending1 = await AccountabilityConnection.filter({
           requester_email: user.email,
           recipient_email: participant.user_email,
           status: 'pending'
         });
+
+        const pending2 = await AccountabilityConnection.filter({
+          requester_email: participant.user_email,
+          recipient_email: user.email,
+          status: 'pending'
+        });
         
-        if (pending.length > 0) {
+        if (pending1.length > 0 || pending2.length > 0) {
           setConnectionStatus('pending');
           setLoading(false);
           return;
