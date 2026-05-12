@@ -1,4 +1,3 @@
-
 // Content moderation utility - blocks inappropriate language, personal info, and predatory behavior
 // Used only in public spaces (Chat, profiles) - NOT in private Support Space
 
@@ -229,18 +228,8 @@ Respond ONLY with a JSON object:
   "severity": "none/low/medium/high"
 }`;
 
-    const response = await base44.integrations.Core.InvokeLLM({
-      prompt: prompt,
-      response_json_schema: {
-        type: "object",
-        properties: {
-          isSafe: { type: "boolean" },
-          reason: { type: "string" },
-          severity: { type: "string", enum: ["none", "low", "medium", "high"] }
-        },
-        required: ["isSafe", "reason", "severity"]
-      }
-    });
+    const result = await base44.functions.invoke('checkPredatoryBehavior', { prompt });
+    const response = result?.data?.response;
 
     return response;
   } catch (error) {
