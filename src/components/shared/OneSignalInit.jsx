@@ -1,11 +1,44 @@
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 // Helper function to detect if running in Capacitor mobile app
 function isRunningInCapacitor() {
     return window.Capacitor?.isNativePlatform?.() ?? false;
 }
 
+// Handle incoming notification data and route to the correct in-app screen
+function handleNotificationData(data, navigate) {
+  if (!data) return;
+  const taskId = data.taskId || data.task_id;
+  const screen = data.screen;
+  if (taskId && (screen === '/TaskNotification' || screen === 'TaskNotification')) {
+    navigate(`/TaskNotification?taskId=${taskId}`);
+  }
+}
+
 export default function OneSignalInit({ user }) {
+  const navigate = useNavigate();
+
+  // Handle notification-open deep links on app launch (native: from cold start data)
+  useEffect(() => {
+    // Check if app was opened via a notification (Capacitor)
+    if (isRunningInCapacitor()) {
+      const NotifyBridge = window.Capacitor?.Plugins?.NotifyBridge;
+      if (NotifyBridge) {
+        NotifyBridge.addListener?.('notificationOpened', (event) => {
+          const data = event?.notification?.data || event?.data;
+          handleNotificationData(data, navigate);
+        });
+        // Also check for launch notification
+        NotifyBridge.getLaunchNotification?.().then((result) => {
+          if (result?.notification?.data) {
+            handleNotificationData(result.notification.data, navigate);
+          }
+        }).catch(() => {});
+      }
+    }
+  }, [navigate]);
+
   useEffect(() => {
     const syncOneSignal = async () => {
       if (!user) {
@@ -62,6 +95,12 @@ export default function OneSignalInit({ user }) {
 
             console.log('[OneSignal] ✅ Web SDK using login() with:', externalId);
             window.OneSignal.login(externalId);
+
+            // Handle notification clicks in web
+            window.OneSignal.Notifications.addEventListener('click', (event) => {
+              const data = event?.notification?.data;
+              handleNotificationData(data, navigate);
+            });
           });
         } else {
           // FIXED: Use SDK 5.x logout() method instead of deprecated removeExternalUserId()
