@@ -600,7 +600,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
                   )}
 
                   {/* Other participants */}
-                  {participants.map((participant) => (
+                  {participants.filter(p => p.user_email !== user?.email).map((participant) => (
                     <ParticipantCard
                       key={participant.id}
                       participant={participant}
