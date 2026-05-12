@@ -67,6 +67,8 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
   const [taskPictures, setTaskPictures] = useState([]);
   const [taskNotes, setTaskNotes] = useState('');
   const [viewingImage, setViewingImage] = useState(null);
+  const [reminderDate, setReminderDate] = useState('');
+  const [reminderTime, setReminderTime] = useState('');
 
   useEffect(() => {
     if (task && isOpen) {
@@ -77,8 +79,17 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
       setIsEditingTitle(false);
       setTaskPictures(task.pictures || []);
       setTaskNotes(task.notes || '');
+      // Initialize controlled date/time inputs from task
+      if (task.next_reminder) {
+        const d = new Date(task.next_reminder);
+        setReminderDate(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`);
+        setReminderTime(`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`);
+      } else {
+        setReminderDate('');
+        setReminderTime('');
+      }
     }
-  }, [task, isOpen]);
+  }, [task?.id, isOpen]);
 
   const fetchSubTasks = async (taskId) => {
     const fetchedSubTasks = await Task.filter({ parent_task_id: taskId }, '-created_date');
@@ -539,6 +550,15 @@ Return JSON:
       if (selectedDay.getTime() === today.getTime() && nextReminder <= now) {
         nextReminder.setDate(nextReminder.getDate() + 1);
       }
+
+      // Sync local controlled state to match what we're actually saving
+      const yr = nextReminder.getFullYear();
+      const mo = String(nextReminder.getMonth()+1).padStart(2,'0');
+      const dy = String(nextReminder.getDate()).padStart(2,'0');
+      const hr = String(nextReminder.getHours()).padStart(2,'0');
+      const mn = String(nextReminder.getMinutes()).padStart(2,'0');
+      setReminderDate(`${yr}-${mo}-${dy}`);
+      setReminderTime(`${hr}:${mn}`);
 
       console.log(`🕐 [REMINDER TIME] Setting reminder for ${nextReminder.toLocaleString()} (${nextReminder.toISOString()})`);
 
@@ -1028,40 +1048,40 @@ Return JSON:
                             First Reminder Date:
                           </label>
                           <input
-                            type="date"
-                            defaultValue={getCurrentReminderDate(task) || new Date().toISOString().split('T')[0]}
-                            onChange={(e) => {
-                              const currentTime = getCurrentReminderTime(task) || '09:00';
-                              handleUpdateReminderTime(currentTime, e.target.value);
-                            }}
-                            className={`w-full border rounded px-3 py-2 ${
-                              theme === 'dark'
-                                ? 'bg-gray-900 border-gray-600 text-gray-100'
-                                : 'bg-white border-gray-300 text-gray-900'
-                            }`}
+                           type="date"
+                           value={reminderDate}
+                           onChange={(e) => {
+                             setReminderDate(e.target.value);
+                             handleUpdateReminderTime(reminderTime || '09:00', e.target.value);
+                           }}
+                           className={`w-full border rounded px-3 py-2 ${
+                             theme === 'dark'
+                               ? 'bg-gray-900 border-gray-600 text-gray-100'
+                               : 'bg-white border-gray-300 text-gray-900'
+                           }`}
                           />
-                        </div>
-                        <div>
+                          </div>
+                          <div>
                           <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
-                            Reminder Time:
+                           Reminder Time:
                           </label>
                           <input
-                            type="time"
-                            defaultValue={getCurrentReminderTime(task) || '09:00'}
-                            onChange={(e) => {
-                              const currentDate = getCurrentReminderDate(task) || new Date().toISOString().split('T')[0];
-                              handleUpdateReminderTime(e.target.value, currentDate);
-                            }}
-                            className={`w-full border rounded px-3 py-2 ${
-                              theme === 'dark'
-                                ? 'bg-gray-900 border-gray-600 text-gray-100'
-                                : 'bg-white border-gray-300 text-gray-900'
-                            }`}
+                           type="time"
+                           value={reminderTime}
+                           onChange={(e) => {
+                             setReminderTime(e.target.value);
+                             handleUpdateReminderTime(e.target.value, reminderDate || new Date().toISOString().split('T')[0]);
+                           }}
+                           className={`w-full border rounded px-3 py-2 ${
+                             theme === 'dark'
+                               ? 'bg-gray-900 border-gray-600 text-gray-100'
+                               : 'bg-white border-gray-300 text-gray-900'
+                           }`}
                           />
-                        </div>
-                      </div>
-                      
-                      {/* Interval options */}
+                          </div>
+                          </div>
+
+                          {/* Interval options */}
                       <div className="space-y-1">
                         <button onClick={() => handleUpdateField('reminder_interval', '10min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 10 minutes</button>
                         <button onClick={() => handleUpdateField('reminder_interval', '20min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 20 minutes</button>
@@ -1105,10 +1125,10 @@ Return JSON:
                         </label>
                         <input
                           type="date"
-                          defaultValue={getCurrentReminderDate(task) || new Date().toISOString().split('T')[0]}
+                          value={reminderDate}
                           onChange={(e) => {
-                            const currentTime = getCurrentReminderTime(task) || '09:00';
-                            handleUpdateReminderTime(currentTime, e.target.value);
+                            setReminderDate(e.target.value);
+                            handleUpdateReminderTime(reminderTime || '09:00', e.target.value);
                           }}
                           className={`w-full border rounded px-3 py-2 ${
                             theme === 'dark'
@@ -1123,10 +1143,10 @@ Return JSON:
                         </label>
                         <input
                           type="time"
-                          defaultValue={getCurrentReminderTime(task) || '09:00'}
+                          value={reminderTime}
                           onChange={(e) => {
-                            const currentDate = getCurrentReminderDate(task) || new Date().toISOString().split('T')[0];
-                            handleUpdateReminderTime(e.target.value, currentDate);
+                            setReminderTime(e.target.value);
+                            handleUpdateReminderTime(e.target.value, reminderDate || new Date().toISOString().split('T')[0]);
                           }}
                           className={`w-full border rounded px-3 py-2 ${
                             theme === 'dark'
