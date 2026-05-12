@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { User } from "@/entities/User";
 import { FocusRoom } from "@/entities/FocusRoom";
@@ -6,7 +5,8 @@ import { FocusRoomParticipant } from "@/entities/FocusRoomParticipant";
 import CreateFocusRoom from "../components/focus/CreateFocusRoom";
 import JoinFocusRoom from "../components/focus/JoinFocusRoom";
 import ActiveFocusRoom from "../components/focus/ActiveFocusRoom";
-import { Loader2, ArrowLeft, Info } from "lucide-react";
+import BrowsePublicRooms from "../components/focus/BrowsePublicRooms";
+import { Loader2, ArrowLeft, Info, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card"; // Import Card and CardContent
 import { useNavigate } from "react-router-dom";
@@ -23,6 +23,7 @@ export default function FocusRooms() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [activeRoom, setActiveRoom] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [browseExpanded, setBrowseExpanded] = useState(false);
 
   useEffect(() => {
     loadUser();
@@ -120,6 +121,10 @@ export default function FocusRooms() {
     setActiveRoom(null);
   };
 
+  const handleJoinFromBrowse = (roomCode) => {
+    setBrowseExpanded(false);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -146,7 +151,7 @@ export default function FocusRooms() {
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Community
         </Button>
-        <Card className={`border-none shadow-lg mb-6 ${
+        <Card className={`border-none shadow-lg mb-6 cursor-pointer transition-all ${
           theme === 'minimalist'
             ? 'bg-white/90 backdrop-blur-sm'
             : theme === 'dark'
@@ -154,35 +159,59 @@ export default function FocusRooms() {
               : 'bg-gradient-to-br from-blue-50 to-purple-50'
         }`}>
           <CardContent className="p-6">
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                  Focus Rooms
-                </h1>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className={`p-1 rounded-full hover:bg-gray-100 transition-colors ${
-                      theme === 'dark' ? 'hover:bg-gray-700' : ''
-                    }`}>
-                      <Info className={`w-5 h-5 ${
-                        theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                      }`} />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-80">
-                    <div className="space-y-2">
-                      <h4 className="font-semibold">About Focus Rooms</h4>
-                      <p className="text-sm text-gray-600">
-                        Join virtual co-working sessions with others. Create or join a focus room to work alongside people, stay motivated, and keep each other accountable in real-time.
-                      </p>
-                    </div>
-                  </PopoverContent>
-                </Popover>
+            <button
+              onClick={() => setBrowseExpanded(!browseExpanded)}
+              className="w-full text-left"
+            >
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <h1 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                    Focus Rooms
+                  </h1>
+                  <Popover>
+                    <PopoverTrigger asChild onClick={(e) => e.stopPropagation()}>
+                      <button className={`p-1 rounded-full hover:bg-gray-100 transition-colors ${
+                        theme === 'dark' ? 'hover:bg-gray-700' : ''
+                      }`}>
+                        <Info className={`w-5 h-5 ${
+                          theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                        }`} />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-80">
+                      <div className="space-y-2">
+                        <h4 className="font-semibold">About Focus Rooms</h4>
+                        <p className="text-sm text-gray-600">
+                          Join virtual co-working sessions with others. Create or join a focus room to work alongside people, stay motivated, and keep each other accountable in real-time.
+                        </p>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <p className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+                  Work together, stay accountable
+                </p>
+                <div className="flex items-center justify-center mt-3 gap-2">
+                  <span className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {browseExpanded ? "Hide" : "Browse"} public rooms
+                  </span>
+                  {browseExpanded ? (
+                    <ChevronUp className="w-4 h-4 text-gray-400" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-gray-400" />
+                  )}
+                </div>
               </div>
-              <p className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
-                Work together, stay accountable
-              </p>
-            </div>
+            </button>
+
+            {browseExpanded && (
+              <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <BrowsePublicRooms 
+                  theme={theme} 
+                  onJoinRoom={handleJoinFromBrowse}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
 
