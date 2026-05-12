@@ -625,7 +625,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Timer - Compact */}
           <div className={`rounded-xl p-6 shadow-lg ${
             theme === 'minimalist'
@@ -798,9 +798,9 @@ export default function ActiveFocusRoom({ room, onLeave }) {
             </form>
           </div>
 
-          {/* Music - Compact */}
+          {/* Music - Hidden on mobile, show on lg+ */}
           {playlistEmbed && (
-            <div className={`rounded-xl p-4 shadow-lg ${
+            <div className={`hidden lg:block rounded-xl p-4 shadow-lg ${
               theme === 'minimalist'
                 ? 'bg-white'
                 : theme === 'dark'

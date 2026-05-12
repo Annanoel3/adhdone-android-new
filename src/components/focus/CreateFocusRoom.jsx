@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -217,25 +216,16 @@ export default function CreateFocusRoom({ user, theme, onRoomCreated }) {
             <Bell className="w-4 h-4" />
             Completion Sound
           </Label>
-          <div className="flex gap-2">
-            <Select value={completionSound} onValueChange={setCompletionSound}>
-              <SelectTrigger className={`flex-1 ${theme === 'dark' ? 'bg-gray-700 text-gray-100 border-gray-600' : ''}`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Object.entries(completionSounds).map(([key, sound]) => (
-                  <SelectItem key={key} value={key}>{sound.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleTestSound}
-            >
-              Test
-            </Button>
-          </div>
+          <Select value={completionSound} onValueChange={setCompletionSound}>
+            <SelectTrigger className={theme === 'dark' ? 'bg-gray-700 text-gray-100 border-gray-600' : ''}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(completionSounds).map(([key, sound]) => (
+                <SelectItem key={key} value={key}>{sound.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex items-center space-x-2">
