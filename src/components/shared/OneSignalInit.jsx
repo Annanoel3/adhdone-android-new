@@ -21,11 +21,6 @@ export default function OneSignalInit({ user }) {
 
   // Handle notification-open deep links on app launch (native: from cold start data)
   useEffect(() => {
-    // Skip if listener already set up
-    if (window._notifyBridgeListenerSetup) {
-      return;
-    }
-
     // Check if app was opened via a notification (Capacitor)
     if (isRunningInCapacitor()) {
       const NotifyBridge = window.Capacitor?.Plugins?.NotifyBridge;
@@ -40,8 +35,6 @@ export default function OneSignalInit({ user }) {
             handleNotificationData(result.notification.data, navigate);
           }
         }).catch(() => {});
-        
-        window._notifyBridgeListenerSetup = true;
       }
     }
   }, [navigate]);
@@ -50,12 +43,6 @@ export default function OneSignalInit({ user }) {
     const syncOneSignal = async () => {
       if (!user) {
         console.log('[OneSignal] No user provided to OneSignalInit');
-        return;
-      }
-
-      // Skip if already initialized for this user
-      if (window._oneSignalInitialized === user.email) {
-        console.log('[OneSignal] Already initialized for this user, skipping');
         return;
       }
 
@@ -89,11 +76,9 @@ export default function OneSignalInit({ user }) {
           console.log('[OneSignal] ✅ Calling NotifyBridge.login() with:', externalId);
           await NotifyBridge.requestPermission();
           await NotifyBridge.login({ externalId: externalId });
-          window._oneSignalInitialized = user.email;
         } else {
           console.log('[OneSignal] Calling NotifyBridge.logout()');
           await NotifyBridge.logout();
-          window._oneSignalInitialized = null;
         }
       } else {
         // Running in web browser - use web SDK
@@ -117,7 +102,6 @@ export default function OneSignalInit({ user }) {
               handleNotificationData(data, navigate);
             });
           });
-          window._oneSignalInitialized = user.email;
         } else {
           // FIXED: Use SDK 5.x logout() method instead of deprecated removeExternalUserId()
           if (window.OneSignal) {
@@ -126,13 +110,12 @@ export default function OneSignalInit({ user }) {
               console.log('[OneSignal] Web SDK logged out');
             });
           }
-          window._oneSignalInitialized = null;
         }
       }
     };
 
     syncOneSignal();
-  }, [user?.email]);
+  }, [user]);
 
   return null;
 }
