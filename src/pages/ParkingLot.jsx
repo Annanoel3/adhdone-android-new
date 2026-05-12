@@ -422,28 +422,28 @@ Return ONLY the category name, nothing else.`;
             if (mimeType.includes('mp4')) extension = 'mp4';
             if (mimeType.includes('ogg')) extension = 'ogg';
             
-            const audioFile = new File([audioBlob], `recording.${extension}`, { type: mimeType });
-            
-            const uploadResult = await base44.integrations.Core.UploadFile({
-              file: audioFile
-            });
+            const reader = new FileReader();
+            reader.onload = async () => {
+              const base64Audio = reader.result.split(',')[1];
+              
+              try {
+                const result = await base44.functions.invoke('transcribeAudioNew', {
+                  audio_base64: base64Audio,
+                  filename: `recording.${extension}`
+                });
 
-            if (!uploadResult?.file_url) {
-              throw new Error('Failed to upload audio file');
-            }
-
-            const result = await base44.functions.invoke('transcribeAudio', {
-              file_url: uploadResult.file_url
-            });
-
-            const responseData = result?.data || result;
-            
-            if (responseData?.success && responseData?.transcription) {
-              setTextInput(prev => prev + (prev ? ' ' : '') + responseData.transcription);
-            } else {
-              const errorMsg = responseData?.error || "Failed to transcribe audio. Please try again.";
-              alert(errorMsg);
-            }
+                const transcribedText = result?.data?.text || '';
+                if (transcribedText) {
+                  setTextInput(prev => prev + (prev ? ' ' : '') + transcribedText);
+                } else {
+                  alert("Failed to transcribe audio. Please try again.");
+                }
+              } catch (error) {
+                console.error('Error transcribing audio:', error);
+                alert('Failed to transcribe audio. Please try again.');
+              }
+            };
+            reader.readAsDataURL(audioBlob);
           } catch (error) {
             console.error('Error transcribing audio:', error);
             alert('Failed to transcribe audio. Please try again.');
