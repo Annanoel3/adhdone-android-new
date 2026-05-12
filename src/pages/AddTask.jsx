@@ -278,15 +278,15 @@ JSON:
       }
       
       const now = new Date();
-      const today = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       const tomorrow = new Date(now);
       tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = tomorrow.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+      const tomorrowISO = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
 
       const prompt = `Parse task: "${inputText}"
 
-      TODAY IS: ${today}
-      TOMORROW IS: ${tomorrowStr}
+      TODAY IS: ${todayISO} (YYYY-MM-DD)
+      TOMORROW IS: ${tomorrowISO} (YYYY-MM-DD)
       CURRENT TIME: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
 
       TITLE EXTRACTION RULES (CRITICAL):
