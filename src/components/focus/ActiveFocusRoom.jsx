@@ -459,7 +459,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
       await FocusRoom.delete(currentRoom.id);
       
       // Navigate back
-      navigate(createPageUrl("FocusRooms"));
+      window.location.href = '/focusrooms';
     } catch (error) {
       console.error("Error deleting room:", error);
       alert("Failed to delete room. Please try again.");
