@@ -943,9 +943,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 {location.pathname !== createPageUrl("Home") && location.pathname !== "/" ? (
                   <Button 
                     variant="ghost" 
-                    size="icon"
                     onClick={() => navigate(-1)}
-                    className={`p-3 rounded-xl transition-colors duration-200 ${
+                    className={`h-12 w-12 p-0 rounded-xl transition-colors duration-200 flex items-center justify-center ${
                       isSeasonalTheme()
                         ? 'hover:bg-white/50 text-gray-800'
                         : theme === 'dark'
@@ -959,7 +958,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                   </Button>
                 ) : (
                   <SidebarTrigger asChild>
-                    <Button variant="ghost" className={`p-3 rounded-xl transition-colors duration-200 ${
+                    <Button variant="ghost" className={`h-12 w-12 p-0 rounded-xl transition-colors duration-200 flex items-center justify-center ${
                       isSeasonalTheme()
                         ? 'hover:bg-white/50 text-gray-800'
                         : theme === 'dark'
