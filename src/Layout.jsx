@@ -958,7 +958,13 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 {!isMainMenuPage ? (
                   <Button 
                     variant="ghost" 
-                    onClick={() => navigate(-1)}
+                    onClick={() => {
+                      if (window.history.length > 1) {
+                        navigate(-1);
+                      } else {
+                        navigate(createPageUrl("Home"));
+                      }
+                    }}
                     className={`h-14 w-14 p-0 rounded-xl transition-colors duration-200 flex items-center justify-center ${
                       isSeasonalTheme()
                         ? 'hover:bg-white/50 text-gray-800'
