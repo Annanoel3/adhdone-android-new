@@ -5,6 +5,7 @@ const SHOW_EVERY_N_OPENS = 3;  // Show ad every 3rd app open
 const AD_DELAY_MS = 10000;     // Wait 10 seconds before showing
 
 let AdMob = null;
+let hasShownAdThisLaunch = false;
 
 export async function initAdMob() {
   if (!Capacitor.isNativePlatform()) return;
@@ -31,6 +32,9 @@ export async function showInterstitialAd() {
 }
 
 export async function maybeShowAdOnOpen() {
+  if (hasShownAdThisLaunch) return;
+  hasShownAdThisLaunch = true;
+
   const count = parseInt(localStorage.getItem('appOpenCount') || '0') + 1;
   localStorage.setItem('appOpenCount', String(count));
 
