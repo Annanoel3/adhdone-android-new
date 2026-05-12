@@ -798,22 +798,22 @@ export default function ActiveFocusRoom({ room, onLeave }) {
             </form>
           </div>
 
-          {/* Music - Hidden on mobile, show on lg+ */}
+          {/* Music - Compact */}
           {playlistEmbed && (
-            <div className={`hidden lg:block rounded-xl p-4 shadow-lg ${
+            <div className={`rounded-xl p-3 shadow-lg ${
               theme === 'minimalist'
                 ? 'bg-white'
                 : theme === 'dark'
                   ? 'bg-gray-800'
                   : 'bg-white/80'
             }`}>
-              <h2 className={`text-sm font-bold mb-3 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+              <h2 className={`text-sm font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                 🎵 Music
               </h2>
               <iframe
                 src={playlistEmbed}
                 width="100%"
-                height="240"
+                height="100"
                 frameBorder="0"
                 allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
                 loading="lazy"
