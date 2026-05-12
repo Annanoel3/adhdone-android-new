@@ -46,6 +46,12 @@ export default function OneSignalInit({ user }) {
         return;
       }
 
+      // Skip if already initialized for this user
+      if (window._oneSignalInitialized === user.email) {
+        console.log('[OneSignal] Already initialized for this user, skipping');
+        return;
+      }
+
       const userEmail = user?.email;
 
       // Use real email if available, otherwise construct a fake one from user.id
@@ -76,9 +82,11 @@ export default function OneSignalInit({ user }) {
           console.log('[OneSignal] ✅ Calling NotifyBridge.login() with:', externalId);
           await NotifyBridge.requestPermission();
           await NotifyBridge.login({ externalId: externalId });
+          window._oneSignalInitialized = user.email;
         } else {
           console.log('[OneSignal] Calling NotifyBridge.logout()');
           await NotifyBridge.logout();
+          window._oneSignalInitialized = null;
         }
       } else {
         // Running in web browser - use web SDK
@@ -102,6 +110,7 @@ export default function OneSignalInit({ user }) {
               handleNotificationData(data, navigate);
             });
           });
+          window._oneSignalInitialized = user.email;
         } else {
           // FIXED: Use SDK 5.x logout() method instead of deprecated removeExternalUserId()
           if (window.OneSignal) {
@@ -110,12 +119,13 @@ export default function OneSignalInit({ user }) {
               console.log('[OneSignal] Web SDK logged out');
             });
           }
+          window._oneSignalInitialized = null;
         }
       }
     };
 
     syncOneSignal();
-  }, [user]);
+  }, [user?.email, navigate]);
 
   return null;
 }
