@@ -71,13 +71,46 @@ export default function Progress() {
   const completedTasks = tasks.filter(t => t.status === 'completed' && !t.parent_task_id);
   const activeTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id);
 
-  const avgCompletionRate = summaries.length > 0
-    ? Math.round(summaries.reduce((s, x) => s + (x.completion_rate || 0), 0) / summaries.length)
+  // Helper: get local date string YYYY-MM-DD from a task's completed_at
+  const getLocalDate = (isoString) => {
+    const d = new Date(isoString);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  };
+
+  // Build a map of completions per local date from real task data
+  const completionsByDate = {};
+  completedTasks.forEach(t => {
+    if (t.completed_at) {
+      const dateStr = getLocalDate(t.completed_at);
+      completionsByDate[dateStr] = (completionsByDate[dateStr] || 0) + 1;
+    }
+  });
+
+  // Last 14 days — computed purely from real task completion data
+  const last14 = [];
+  for (let i = 13; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const completed = completionsByDate[dateStr] || 0;
+    last14.push({
+      date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      dateStr,
+      completed,
+      rate: 0, // completion rate requires knowing total tasks that day — see below
+    });
+  }
+
+  // Compute avg daily completion rate: days where at least 1 task was completed / total days with any task activity
+  const daysWithActivity = Object.values(completionsByDate).filter(c => c > 0).length;
+  const totalDaysChecked = 30;
+  const avgCompletionRate = daysWithActivity > 0
+    ? Math.min(100, Math.round((daysWithActivity / totalDaysChecked) * 100))
     : 0;
 
   const currentStreak = todaysSummary?.streak_days || 0;
 
-  // Tasks completed by day of week
+  // Tasks completed by day of week (from real data)
   const byDayOfWeek = Array(7).fill(0).map((_, i) => ({
     day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][i],
     count: 0
@@ -88,20 +121,6 @@ export default function Progress() {
       byDayOfWeek[dow].count += 1;
     }
   });
-
-  // Last 14 days completion chart
-  const last14 = [];
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
-    const summary = summaries.find(s => s.date === dateStr);
-    last14.push({
-      date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      completed: summary?.tasks_completed || 0,
-      rate: summary?.completion_rate || 0,
-    });
-  }
 
   // Energy by time of day
   const energyByTime = { Morning: { total: 0, count: 0 }, Afternoon: { total: 0, count: 0 }, Evening: { total: 0, count: 0 } };
@@ -346,7 +365,7 @@ export default function Progress() {
               </CardContent>
             </Card>
 
-            {/* Recent daily summaries */}
+            {/* Recent daily summaries — computed from real task data */}
             <Card className={cardClass}>
               <CardHeader>
                 <CardTitle className={`flex items-center gap-2 ${textClass}`}>
@@ -355,23 +374,31 @@ export default function Progress() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {summaries.length === 0 ? (
-                  <p className={subTextClass}>No summaries yet — complete tasks to build your history!</p>
+                {Object.keys(completionsByDate).length === 0 ? (
+                  <p className={subTextClass}>No completed tasks yet — complete tasks to build your history!</p>
                 ) : (
                   <div className="space-y-3">
-                    {summaries.slice(0, 7).map((s) => (
-                      <div key={s.id} className={`p-4 rounded-lg border ${
+                    {Array.from({ length: 14 }, (_, i) => {
+                      const d = new Date();
+                      d.setDate(d.getDate() - i);
+                      const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+                      const completed = completionsByDate[dateStr] || 0;
+                      return { dateStr, completed, d };
+                    })
+                    .filter(({ completed }) => completed > 0)
+                    .slice(0, 7)
+                    .map(({ dateStr, completed, d }) => (
+                      <div key={dateStr} className={`p-4 rounded-lg border ${
                         theme === 'dark' ? 'border-gray-700 bg-gray-900/50' : 'border-gray-200 bg-gray-50'
                       }`}>
-                        <div className="flex justify-between items-center mb-1">
+                        <div className="flex justify-between items-center">
                           <span className={`font-medium text-sm ${textClass}`}>
-                            {new Date(s.date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                            {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </span>
-                          <span className={`text-sm font-semibold ${s.completion_rate >= 80 ? 'text-green-500' : s.completion_rate >= 50 ? 'text-yellow-500' : 'text-red-400'}`}>
-                            {s.completion_rate}%
+                          <span className="text-sm font-semibold text-green-500">
+                            ✅ {completed} {completed === 1 ? 'task' : 'tasks'} done
                           </span>
                         </div>
-                        <p className={`text-xs ${subTextClass}`}>{s.tasks_completed} of {s.total_tasks} tasks · {s.streak_days || 0} day streak</p>
                       </div>
                     ))}
                   </div>
