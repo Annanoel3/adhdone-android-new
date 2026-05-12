@@ -423,7 +423,9 @@ Return JSON:
           // If changing to 'once', keep current next_reminder if it exists,
           // otherwise set a default future date (e.g., tomorrow 9 AM)
           if (task.next_reminder) {
-            nextReminderDate = new Date(task.next_reminder);
+            // Parse preserving local time — avoid UTC midnight crossing
+            const d = new Date(task.next_reminder);
+            nextReminderDate = new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), 0, 0);
           } else {
             nextReminderDate = new Date();
             nextReminderDate.setDate(nextReminderDate.getDate() + 1);
@@ -462,7 +464,9 @@ Return JSON:
           // FIXED: Preserve existing next_reminder when switching to recurring
           // This allows setting a specific date THEN making it recurring
           if (task.next_reminder) {
-            nextReminderDate = new Date(task.next_reminder);
+            // Parse preserving local time — avoid UTC midnight crossing
+            const d = new Date(task.next_reminder);
+            nextReminderDate = new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), 0, 0);
             // Only adjust if in the past
             if (nextReminderDate <= now) {
               nextReminderDate = new Date(now.getTime());
@@ -663,9 +667,10 @@ Return JSON:
         const currentUser = await base44.auth.me();
         let nextReminder;
 
-        // If task has a specific reminder time, use that as the base
+        // If task has a specific reminder time, use that as the base (local time, no UTC shift)
         if (task.next_reminder) {
-          nextReminder = new Date(task.next_reminder);
+          const d = new Date(task.next_reminder);
+          nextReminder = new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), 0, 0);
         } else {
           nextReminder = new Date();
         }
