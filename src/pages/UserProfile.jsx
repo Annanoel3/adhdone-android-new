@@ -5,9 +5,6 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { 
   ArrowLeft, 
-  TrendingUp, 
-  Trophy, 
-  Target, 
   UserPlus,
   MessageCircle,
   Lock
@@ -221,21 +218,13 @@ export default function UserProfile() {
                 </p>
               )}
 
-              <div className="flex flex-wrap gap-2 mb-4">
-                <Badge variant="outline" className="flex items-center gap-1">
-                  <TrendingUp className="w-3 h-3" />
-                  Level {profile.level || 1}
-                </Badge>
-                <Badge variant="outline" className="flex items-center gap-1">
-                  <Target className="w-3 h-3" />
-                  {profile.total_points || 0} points
-                </Badge>
-                {profile.looking_for_accountability && (
+              {profile.looking_for_accountability && (
+                <div className="flex flex-wrap gap-2 mb-4">
                   <Badge className="bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300">
                     Looking for partners
                   </Badge>
-                )}
-              </div>
+                </div>
+              )}
 
               <div className="flex gap-2">
                 {connectionStatus === 'none' && currentUser?.email !== profile.email && (
