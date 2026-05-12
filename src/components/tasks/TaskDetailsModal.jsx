@@ -533,7 +533,9 @@ Return JSON:
 
       // Ensure effectiveDate and effectiveTime are valid strings before splitting
       // Provide a fallback to today for date and 09:00 for time if they are empty
-      const finalEffectiveDate = effectiveDate || new Date().toISOString().split('T')[0];
+      const _now = new Date();
+      const localToday = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
+      const finalEffectiveDate = effectiveDate || localToday;
       const finalEffectiveTime = effectiveTime || '09:00';
 
       const [hours, minutes] = finalEffectiveTime.split(':');
@@ -1067,18 +1069,19 @@ Return JSON:
                            defaultValue={reminderTime}
                            onChange={(e) => {
                              setReminderTime(e.target.value);
-                             handleUpdateReminderTime(e.target.value, reminderDate || new Date().toISOString().split('T')[0]);
-                           }}
-                           className={`w-full border rounded px-3 py-2 ${
-                             theme === 'dark'
-                               ? 'bg-gray-900 border-gray-600 text-gray-100'
-                               : 'bg-white border-gray-300 text-gray-900'
-                           }`}
-                          />
-                          </div>
-                          </div>
+                             const n = new Date(); const ld = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+                             handleUpdateReminderTime(e.target.value, reminderDate || ld);
+                                           }}
+                                           className={`w-full border rounded px-3 py-2 ${
+                                             theme === 'dark'
+                                               ? 'bg-gray-900 border-gray-600 text-gray-100'
+                                               : 'bg-white border-gray-300 text-gray-900'
+                                           }`}
+                                          />
+                                          </div>
+                                          </div>
 
-                          {/* Interval options */}
+                                          {/* Interval options */}
                       <div className="space-y-1">
                         <button onClick={() => handleUpdateField('reminder_interval', '10min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 10 minutes</button>
                         <button onClick={() => handleUpdateField('reminder_interval', '20min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 20 minutes</button>
@@ -1145,14 +1148,15 @@ Return JSON:
                           defaultValue={reminderTime}
                           onChange={(e) => {
                             setReminderTime(e.target.value);
-                            handleUpdateReminderTime(e.target.value, reminderDate || new Date().toISOString().split('T')[0]);
-                          }}
-                          className={`w-full border rounded px-3 py-2 ${
-                            theme === 'dark'
-                              ? 'bg-gray-900 border-gray-600 text-gray-100'
-                              : 'bg-white border-gray-300 text-gray-900'
-                          }`}
-                        />
+                            const n2 = new Date(); const ld2 = `${n2.getFullYear()}-${String(n2.getMonth()+1).padStart(2,'0')}-${String(n2.getDate()).padStart(2,'0')}`;
+                            handleUpdateReminderTime(e.target.value, reminderDate || ld2);
+                                         }}
+                                         className={`w-full border rounded px-3 py-2 ${
+                                           theme === 'dark'
+                                             ? 'bg-gray-900 border-gray-600 text-gray-100'
+                                             : 'bg-white border-gray-300 text-gray-900'
+                                         }`}
+                                       />
                       </div>
                       <div className={`border-t pt-3 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
                         <button 
