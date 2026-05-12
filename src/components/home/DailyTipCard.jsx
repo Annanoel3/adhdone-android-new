@@ -261,7 +261,7 @@ Always make the first step tiny, concrete, and something they can do RIGHT NOW i
         }
       }
 
-      // Use Base44's InvokeLLM for smart tips
+      // Call backend function to generate tip with OpenAI
       const prompt = `You're giving quick, practical advice to someone who needs help getting stuff done. Be warm and real - like texting a friend who's stuck.
 
       CRITICAL RULES:
@@ -296,20 +296,19 @@ Always make the first step tiny, concrete, and something they can do RIGHT NOW i
 
       Return ONLY the tip text, nothing else.`;
 
-      const tipText = await base44.integrations.Core.InvokeLLM({
-        prompt: prompt
-      });
-
-      // Categorize the tip
-      const categoryPrompt = `Categorize this tip into ONE category: "${tipText}"
+      const categoryPrompt = `Categorize this tip into ONE category: "[tip_text_placeholder]"
 
 Categories: focus, motivation, organization, self_care, time_management
 
 Return ONLY the category name.`;
 
-      const category = (await base44.integrations.Core.InvokeLLM({
-        prompt: categoryPrompt
-      })).trim().toLowerCase();
+      const response = await base44.functions.invoke('generateDailyTip', {
+        prompt,
+        categoryPrompt
+      });
+
+      const tipText = response?.data?.tipText;
+      const category = response?.data?.category;
 
       const newTip = await base44.entities.DailyTip.create({
         tip_text: tipText,
