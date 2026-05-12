@@ -750,7 +750,6 @@ export default function ActiveFocusRoom({ room, onLeave }) {
                 {messages.map((message) => {
                    const isMe = message.sender_email === user?.email;
                    const isAI = message.sender_email === "ai@adhdone.app";
-                   const participant = participants.find(p => p.user_email === message.sender_email);
 
                    return (
                      <motion.div
@@ -766,10 +765,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
                              <Sparkles className="w-3 h-3 text-amber-600" />
                            </AvatarFallback>
                          ) : (
-                           <>
-                             <AvatarImage src={participant?.profile_picture_url} />
-                             <AvatarFallback className="text-xs">{message.sender_name[0].toUpperCase()}</AvatarFallback>
-                           </>
+                           <AvatarFallback className="text-xs">{message.sender_name[0].toUpperCase()}</AvatarFallback>
                          )}
                        </Avatar>
 
