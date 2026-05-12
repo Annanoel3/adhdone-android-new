@@ -4,13 +4,17 @@
 import { base44 } from "@/api/base44Client";
 
 const INAPPROPRIATE_WORDS = [
+  // Common profanity (4-letter+ words and variations)
+  'fuck', 'shit', 'damn', 'hell', 'crap', 'ass', 'bitch',
+  'bastard', 'dammit', 'asshole', 'prick', 'dick', 'cock',
+  
   // Explicit sexual content
-  'porn', 'xxx', 'nude', 'naked', 'nsfw', 'dick', 'cock', 'pussy', 
-  'penis', 'boobs', 'tits', 'ass', 'anal', 'blowjob', 'handjob', 
+  'porn', 'xxx', 'nude', 'naked', 'nsfw', 'pussy', 
+  'penis', 'boobs', 'tits', 'anal', 'blowjob', 'handjob', 
   'orgasm', 'horny', 'erotic', 'bdsm', 'dildo', 'cum', 'cumming',
   
   // Severe violence/threats
-  'rape', 'molest', 
+  'rape', 'molest', 'kill', 'murder',
   
   // Hate speech/slurs (the worst ones)
   'nigger', 'nigga', 'faggot', 'fag', 'tranny', 'retard', 'retarded', 

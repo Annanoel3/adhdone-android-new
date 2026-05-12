@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { MessageCircle, Send, Loader2, ArrowLeft, Info, Flag, MoreVertical } from "lucide-react";
+import { MessageCircle, Send, Loader2, ArrowLeft, Info, Flag, MoreVertical, AlertCircle } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { User } from "@/entities/User";
 import { AccountabilityConnection } from "@/entities/AccountabilityConnection";
 import { ChatMessage } from "@/entities/ChatMessage";
@@ -41,6 +41,8 @@ export default function Chat() {
   const [reportingUser, setReportingUser] = useState(null);
   const [showReportUserDialog, setShowReportUserDialog] = useState(false);
   const [reportingChatMessage, setReportingChatMessage] = useState(null);
+  const [moderationWarning, setModerationWarning] = useState(null);
+  const [pendingMessage, setPendingMessage] = useState(null);
 
   const pollingIntervalRef = useRef(null);
   const messagesEndRef = useRef(null);
@@ -192,14 +194,35 @@ export default function Chat() {
 
     // MODERATION: Check for inappropriate content
     const validationResult = await validateContent(newMessage.trim(), 'message');
-    if (!validationResult.valid) {
+    
+    // Block inappropriate content (profanity, personal info, predatory behavior, etc.)
+    if (!validationResult.valid && validationResult.requiresBlock) {
       alert(validationResult.message);
       setIsSending(false);
       return;
     }
 
-    const messageText = newMessage.trim();
+    // Show warning for negative tone (but let user send anyway)
+    if (validationResult.needsWarning && validationResult.warningMessage) {
+      setPendingMessage(newMessage.trim());
+      setModerationWarning({
+        type: 'tone',
+        message: validationResult.warningMessage,
+        suggestion: validationResult.toneSuggestion
+      });
+      setIsSending(false);
+      return;
+    }
+
+    // Send the message
+    await sendChatMessage(newMessage.trim());
+  };
+
+  const sendChatMessage = async (messageText) => {
+    setIsSending(true);
     setNewMessage("");
+    setModerationWarning(null);
+    setPendingMessage(null);
 
     try {
       const newMsg = await ChatMessage.create({
@@ -584,6 +607,51 @@ export default function Chat() {
         contentText={reportingChatMessage?.message_text}
         theme={theme}
       />
+
+      {/* Moderation Warning Dialog */}
+      <Dialog open={!!moderationWarning} onOpenChange={() => setModerationWarning(null)}>
+        <DialogContent className={`${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`}>
+          <DialogHeader>
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-amber-600" />
+              <DialogTitle>Quick suggestion</DialogTitle>
+            </div>
+            <DialogDescription>
+              You might want to edit this for positivity
+            </DialogDescription>
+          </DialogHeader>
+          <div className={`p-4 rounded-lg ${theme === 'dark' ? 'bg-gray-700' : 'bg-amber-50'} border ${theme === 'dark' ? 'border-gray-600' : 'border-amber-200'}`}>
+            <p className={`text-sm ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
+              {moderationWarning?.suggestion}
+            </p>
+          </div>
+          <DialogFooter className="flex gap-2 justify-end">
+            <Button
+              variant="outline"
+              onClick={() => setModerationWarning(null)}
+              className={theme === 'dark' ? 'border-gray-600 hover:bg-gray-700' : ''}
+            >
+              Edit
+            </Button>
+            <Button
+              onClick={() => {
+                if (pendingMessage) {
+                  sendChatMessage(pendingMessage);
+                }
+              }}
+              className={`${
+                theme === 'minimalist'
+                  ? 'bg-green-600 hover:bg-green-700'
+                  : theme === 'dark'
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
+              }`}
+            >
+              Send Anyway
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div style={{ height: '120px' }} aria-hidden="true"></div>
     </div>
