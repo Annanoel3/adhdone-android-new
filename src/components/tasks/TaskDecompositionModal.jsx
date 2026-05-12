@@ -8,8 +8,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Loader2, Plus } from "lucide-react";
-import { InvokeLLM } from "@/integrations/Core";
 import { Task } from "@/entities/Task";
+import { base44 } from "@/api/base44Client";
 import { Checkbox } from "@/components/ui/checkbox";
 
 export default function TaskDecompositionModal({ task, isOpen, onClose, onUpdate, theme }) {
@@ -101,26 +101,8 @@ Return JSON with this structure:
   ]
 }`;
 
-      const response = await InvokeLLM({
-        prompt,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            sub_tasks: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  title: { type: "string" },
-                  reasoning: { type: "string" },
-                  reminder_interval: { type: "string" },
-                  energy_required: { type: "string" }
-                }
-              }
-            }
-          }
-        }
-      });
+      const result = await base44.functions.invoke('decomposeTask', { prompt });
+      const response = result?.data?.response;
 
       if (response.sub_tasks && response.sub_tasks.length > 0) {
         setSuggestions(response.sub_tasks);
