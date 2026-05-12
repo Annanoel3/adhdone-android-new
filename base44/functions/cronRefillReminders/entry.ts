@@ -32,9 +32,11 @@ Deno.serve(async (req) => {
 
     const base44 = createClientFromRequest(req);
 
-    const allTasks = await base44.asServiceRole.entities.Task.filter({ status: 'active' });
+    const allTasks = await base44.asServiceRole.entities.Task.list('-updated_date', 500);
+    console.log(`📦 [REFILL] Total tasks fetched: ${allTasks.length}`);
 
     const recurringTasks = allTasks.filter(t =>
+      t.status === 'active' &&
       t.reminder_interval &&
       t.reminder_interval !== 'once' &&
       intervalMsMap[t.reminder_interval] &&
