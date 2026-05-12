@@ -38,8 +38,8 @@ Return JSON:
   "energy_required": "low" | "medium" | "high"
 }`;
 
-      const response = await base44.functions.invoke('generateQuickAddTask', { prompt });
-      const taskData = response?.data?.taskData;
+      const result = await base44.functions.invoke('extractTaskFromVoice', { prompt });
+      const taskData = result?.data?.taskData;
 
       let nextReminderTime = null;
       
