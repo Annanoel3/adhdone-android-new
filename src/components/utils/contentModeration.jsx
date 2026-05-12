@@ -207,13 +207,14 @@ export function censorContent(text) {
 }
 
 /**
- * AI-based check for predatory behavior patterns
+ * AI-based check for predatory behavior patterns and hate speech
  */
 async function checkPredatoryBehavior(text) {
   try {
     const prompt = `You are a content moderation AI protecting users in a productivity/ADHD support app.
 
-Analyze this message for predatory behavior, grooming, or inappropriate contact attempts. Look for:
+Analyze this message for predatory behavior, grooming, hate speech, or inappropriate contact attempts. Look for:
+- Hate speech, slurs, or discriminatory language targeting race, gender, sexual orientation, religion, disability
 - Requests to move conversation off-platform
 - Age-related questions or comments
 - Attempts to establish private contact (phone, social media, other apps)

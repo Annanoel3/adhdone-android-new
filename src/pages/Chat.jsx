@@ -161,9 +161,14 @@ export default function Chat() {
         connection_id: connectionId
       }, 'created_date', 100);
 
-      setMessages(allMessages);
+      // Sort messages chronologically (oldest first)
+      const sortedMessages = allMessages.sort((a, b) =>
+        new Date(a.created_date) - new Date(b.created_date)
+      );
+      
+      setMessages(sortedMessages);
 
-      const unreadMessages = allMessages.filter(m =>
+      const unreadMessages = sortedMessages.filter(m =>
         m.sender_email !== user?.email && !m.read_by_recipient
       );
 
@@ -233,7 +238,9 @@ export default function Chat() {
         read_by_recipient: false
       });
 
-      setMessages(prev => [...prev, newMsg]);
+      // Don't add to state here—let polling fetch it to avoid duplicates
+      // Just reload messages after a short delay
+      setTimeout(() => loadMessages(currentConversation.id, false), 500);
 
       try {
         await base44.functions.invoke('notifySend', {
