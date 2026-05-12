@@ -14,7 +14,8 @@ import {
   Sun,
   Moon,
   Palette,
-  Trash2
+  Trash2,
+  UserPlus
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -45,6 +46,7 @@ import { FocusRoom } from "@/entities/FocusRoom";
 import { FocusRoomParticipant } from "@/entities/FocusRoomParticipant";
 import { FocusRoomEmoji } from "@/entities/FocusRoomEmoji";
 import { User } from "@/entities/User";
+import { AccountabilityConnection } from "@/entities/AccountabilityConnection";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { validateContent } from "../utils/contentModeration";
@@ -245,6 +247,13 @@ export default function ActiveFocusRoom({ room, onLeave }) {
         const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
         return lastSeen > fiveMinutesAgo;
       });
+      
+      // Ensure host is included even if they're the only participant
+      const hostExists = activeParticipants.some(p => p.user_email === currentRoom.host_email);
+      if (!hostExists && user && user.email === currentRoom.host_email) {
+        // Host is the current user, they should see themselves
+      }
+      
       setParticipants(activeParticipants);
       
       if (user) {
@@ -385,6 +394,37 @@ export default function ActiveFocusRoom({ room, onLeave }) {
 
   const handleViewProfile = (participant) => {
     navigate(createPageUrl("UserProfile") + `?email=${participant.user_email}`);
+  };
+
+  const handleRequestConnect = async (participantEmail) => {
+    if (!user) return;
+    
+    try {
+      // Check if connection already exists
+      const existing = await AccountabilityConnection.filter({
+        requester_email: user.email,
+        recipient_email: participantEmail
+      });
+      
+      if (existing.length > 0) {
+        alert("You've already sent a request to this person");
+        return;
+      }
+      
+      // Create connection request
+      await AccountabilityConnection.create({
+        requester_email: user.email,
+        requester_name: user.full_name,
+        requester_picture: user.profile_picture_url || "",
+        recipient_email: participantEmail,
+        status: 'pending'
+      });
+      
+      alert("Connection request sent! They'll see it in their notifications.");
+    } catch (error) {
+      console.error("Error sending connection request:", error);
+      alert("Failed to send request. Please try again.");
+    }
   };
 
   const toggleTheme = () => {
@@ -534,36 +574,54 @@ export default function ActiveFocusRoom({ room, onLeave }) {
                    </SheetTitle>
                  </SheetHeader>
                 <div className="mt-6 space-y-3">
-                  {participants.map((participant) => (
-                    <button
-                      key={participant.id}
-                      onClick={() => handleViewProfile(participant)}
-                      className={`w-full p-3 rounded-lg border transition-colors text-left ${
-                        theme === 'dark'
-                          ? 'bg-gray-700 border-gray-600 hover:bg-gray-600'
-                          : 'bg-gray-50 hover:bg-gray-100'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Avatar className="w-10 h-10">
-                          <AvatarImage src={participant.profile_picture_url} />
-                          <AvatarFallback>{participant.display_name[0].toUpperCase()}</AvatarFallback>
-                        </Avatar>
-                        
-                        <div className="flex-1 min-w-0">
-                          <p className={`font-medium truncate ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                            {participant.display_name}
-                            {participant.user_email === currentRoom.host_email && ' 👑'}
-                          </p>
-                          {participant.current_task && (
-                            <p className={`text-sm truncate ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                              {participant.current_task}
-                            </p>
-                          )}
-                        </div>
+                  {participants.map((participant) => {
+                    const isCurrentUser = participant.user_email === user?.email;
+                    return (
+                      <div
+                        key={participant.id}
+                        className={`p-3 rounded-lg border transition-colors ${
+                          theme === 'dark'
+                            ? 'bg-gray-700 border-gray-600'
+                            : 'bg-gray-50 border-gray-200'
+                        }`}
+                      >
+                        <button
+                          onClick={() => handleViewProfile(participant)}
+                          className="w-full text-left"
+                        >
+                          <div className="flex items-center gap-3 mb-2">
+                            <Avatar className="w-10 h-10">
+                              <AvatarImage src={participant.profile_picture_url} />
+                              <AvatarFallback>{participant.display_name[0].toUpperCase()}</AvatarFallback>
+                            </Avatar>
+
+                            <div className="flex-1 min-w-0">
+                              <p className={`font-medium truncate ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                                {participant.display_name}
+                                {participant.user_email === currentRoom.host_email && ' 👑'}
+                              </p>
+                              {participant.current_task && (
+                                <p className={`text-sm truncate ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                                  {participant.current_task}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                        {!isCurrentUser && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleRequestConnect(participant.user_email)}
+                            className="w-full text-xs"
+                          >
+                            <UserPlus className="w-3 h-3 mr-1" />
+                            Request to Connect
+                          </Button>
+                        )}
                       </div>
-                    </button>
-                  ))}
+                    );
+                  })}
                 </div>
               </SheetContent>
             </Sheet>
