@@ -8,26 +8,44 @@ export default function SpotifyWebPlayback({ playlistId, theme }) {
   const [currentTrack, setCurrentTrack] = useState(null);
   const [accessToken, setAccessToken] = useState(null);
   const [deviceId, setDeviceId] = useState(null);
-  const [needsAuth, setNeedsAuth] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Load Spotify SDK
+  // Load Spotify SDK and get access token
   useEffect(() => {
-    const script = document.createElement("script");
-    script.src = "https://sdk.scdn.co/spotify-player.js";
-    script.async = true;
-    document.body.appendChild(script);
+    const loadPlayer = async () => {
+      try {
+        // Fetch token from backend
+        const tokenResponse = await fetch('/api/getSpotifyAccessToken');
+        if (!tokenResponse.ok) throw new Error('Failed to get Spotify token');
+        
+        const { access_token } = await tokenResponse.json();
+        setAccessToken(access_token);
 
-    window.onSpotifyWebPlaybackSDKReady = () => {
-      const token = localStorage.getItem("spotify_access_token");
-      if (token) {
-        setAccessToken(token);
-        initializePlayer(token);
-      } else {
-        setNeedsAuth(true);
+        // Load SDK
+        const script = document.createElement("script");
+        script.src = "https://sdk.scdn.co/spotify-player.js";
+        script.async = true;
+        script.onload = () => {
+          window.onSpotifyWebPlaybackSDKReady = () => {
+            initializePlayer(access_token);
+          };
+        };
+        document.body.appendChild(script);
+
+        return () => {
+          if (document.body.contains(script)) {
+            document.body.removeChild(script);
+          }
+        };
+      } catch (err) {
+        console.error('Error loading Spotify:', err);
+        setError(err.message);
+        setLoading(false);
       }
     };
 
-    return () => document.body.removeChild(script);
+    loadPlayer();
   }, []);
 
   const initializePlayer = (token) => {
@@ -48,6 +66,7 @@ export default function SpotifyWebPlayback({ playlistId, theme }) {
 
     newPlayer.addListener("ready", ({ device_id }) => {
       setDeviceId(device_id);
+      setLoading(false);
     });
 
     newPlayer.connect();
@@ -92,39 +111,7 @@ export default function SpotifyWebPlayback({ playlistId, theme }) {
     if (player) player.nextTrack();
   };
 
-  const handleAuth = () => {
-    const clientId = import.meta.env.VITE_SPOTIFY_CLIENT_ID || "YOUR_CLIENT_ID";
-    const redirectUri = `${window.location.origin}/spotify-auth`;
-    const scopes = [
-      "streaming",
-      "user-read-email",
-      "user-read-private",
-    ].join("%20");
-    const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=code&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scopes}`;
-    window.location.href = authUrl;
-  };
-
-  if (needsAuth) {
-    return (
-      <div
-        className={`rounded-xl p-4 shadow-lg ${
-          theme === "minimalist" ? "bg-white" : theme === "dark" ? "bg-gray-800" : "bg-white/80"
-        }`}
-      >
-        <h2 className={`text-sm font-bold mb-3 ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
-          🎵 Music
-        </h2>
-        <p className={`text-xs mb-3 ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
-          Connect Spotify to play full songs
-        </p>
-        <Button size="sm" onClick={handleAuth} className="w-full bg-green-600 hover:bg-green-700">
-          Connect Spotify
-        </Button>
-      </div>
-    );
-  }
-
-  if (!player || !deviceId) {
+  if (error) {
     return (
       <div
         className={`rounded-xl p-4 shadow-lg ${
@@ -132,7 +119,21 @@ export default function SpotifyWebPlayback({ playlistId, theme }) {
         }`}
       >
         <p className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
-          Loading Spotify player...
+          Error loading Spotify
+        </p>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div
+        className={`rounded-xl p-4 shadow-lg ${
+          theme === "minimalist" ? "bg-white" : theme === "dark" ? "bg-gray-800" : "bg-white/80"
+        }`}
+      >
+        <p className={`text-xs ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>
+          Loading music player...
         </p>
       </div>
     );
