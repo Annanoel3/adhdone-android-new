@@ -283,7 +283,6 @@ Respond naturally, warmly, and like you genuinely care about understanding them.
                     const input = document.createElement('input');
                     input.type = 'file';
                     input.accept = 'audio/*';
-                    input.capture = 'microphone';
                     input.onchange = async (e) => {
                       const file = e.target.files[0];
                       if (!file) return;
@@ -462,17 +461,16 @@ Respond naturally, warmly, and like you genuinely care about understanding them.
                 <div className="flex justify-center">
                   <button
                     onClick={() => {
-                      const input = document.createElement('input');
-                      input.type = 'file';
-                      input.accept = 'audio/*';
-                      input.capture = 'microphone';
-                      input.onchange = async (e) => {
-                        const file = e.target.files[0];
-                        if (!file) return;
-                        await handleVoiceInput(file);
-                      };
-                      input.click();
-                    }}
+                       const input = document.createElement('input');
+                       input.type = 'file';
+                       input.accept = 'audio/*';
+                       input.onchange = async (e) => {
+                         const file = e.target.files[0];
+                         if (!file) return;
+                         await handleVoiceInput(file);
+                       };
+                       input.click();
+                     }}
                     disabled={isLoading}
                     className={`w-20 h-20 rounded-full flex items-center justify-center transition-all ${
                       theme === 'minimalist'
