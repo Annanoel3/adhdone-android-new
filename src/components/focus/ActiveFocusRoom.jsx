@@ -574,6 +574,29 @@ export default function ActiveFocusRoom({ room, onLeave }) {
                    </SheetTitle>
                  </SheetHeader>
                 <div className="mt-6 space-y-3">
+                  {/* Current user */}
+                  {user && (
+                    <div className={`p-3 rounded-lg border transition-colors ${
+                      theme === 'dark'
+                        ? 'bg-gray-700 border-gray-600'
+                        : 'bg-blue-50 border-blue-200'
+                    }`}>
+                      <div className="flex items-center gap-3">
+                        <Avatar className="w-10 h-10">
+                          <AvatarImage src={user.profile_picture_url} />
+                          <AvatarFallback>{user.full_name?.[0]?.toUpperCase()}</AvatarFallback>
+                        </Avatar>
+
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-medium truncate ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                            {user.full_name} (Me)
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Other participants */}
                   {participants.map((participant) => {
                     const isCurrentUser = participant.user_email === user?.email;
                     return (
@@ -608,17 +631,15 @@ export default function ActiveFocusRoom({ room, onLeave }) {
                             </div>
                           </div>
                         </button>
-                        {!isCurrentUser && (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => handleRequestConnect(participant.user_email)}
-                            className="w-full text-xs"
-                          >
-                            <UserPlus className="w-3 h-3 mr-1" />
-                            Request to Connect
-                          </Button>
-                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleRequestConnect(participant.user_email)}
+                          className="w-full text-xs"
+                        >
+                          <UserPlus className="w-3 h-3 mr-1" />
+                          Request to Connect
+                        </Button>
                       </div>
                     );
                   })}
@@ -759,7 +780,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
               💬 Chat
             </h2>
             
-            <div className="h-40 overflow-y-auto mb-2 space-y-2">
+            <div className="h-40 overflow-y-auto mb-2 space-y-2 flex flex-col">
               <AnimatePresence>
                 {messages.map((message) => {
                    const isMe = message.sender_email === user?.email;
