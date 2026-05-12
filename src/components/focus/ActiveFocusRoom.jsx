@@ -16,7 +16,8 @@ import {
   Palette,
   Trash2,
   UserPlus,
-  MessageSquare
+  MessageSquare,
+  ArrowLeft
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -518,8 +519,17 @@ export default function ActiveFocusRoom({ room, onLeave }) {
           : 'bg-white/80 backdrop-blur-sm border-gray-200'
       }`}>
         <div className="max-w-7xl mx-auto">
-          {/* Room name */}
+          {/* Back button and room name */}
           <div className="flex items-center gap-3 mb-3">
+            <Button
+              variant="ghost"
+              onClick={() => navigate(createPageUrl('FocusRooms'))}
+              className="gap-2 p-3 h-12 text-base rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Back
+            </Button>
+            
             <h1 className={`font-bold text-sm ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
               {currentRoom.room_name}
             </h1>
