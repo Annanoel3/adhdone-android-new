@@ -45,8 +45,8 @@ Deno.serve(async (req) => {
             profile_picture_url: targetUser.profile_picture_url,
             bio: targetUser.bio,
             level: targetUser.level,
-            total_points: targetUser.total_points,
-            looking_for_accountability: targetUser.looking_for_accountability
+            points: targetUser.points,
+            is_accountability_partner: targetUser.is_accountability_partner
         };
 
         return Response.json({ profile });
