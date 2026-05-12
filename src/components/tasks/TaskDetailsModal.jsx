@@ -34,7 +34,6 @@ import {
 import { Task } from "@/entities/Task";
 import TaskDecompositionModal from "./TaskDecompositionModal";
 import VoiceTaskInput from "./VoiceTaskInput";
-import { InvokeLLM } from "@/integrations/Core";
 import { scheduleReminder, cancelScheduledReminder } from "../utils/reminderScheduler";
 import { User } from "@/entities/User";
 import { base44 } from "@/api/base44Client";
@@ -210,18 +209,8 @@ Return JSON:
   "subtasks": ["subtask 1", "subtask 2", ...] (IN THE ORDER SPOKEN)
 }`;
 
-      const response = await base44.integrations.Core.InvokeLLM({
-        prompt,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            subtasks: {
-              type: "array",
-              items: { type: "string" }
-            }
-          }
-        }
-      });
+      const result = await base44.functions.invoke('extractSubtasks', { prompt });
+      const response = result?.data?.response;
 
       const currentUser = await base44.auth.me();
       const now = new Date();
