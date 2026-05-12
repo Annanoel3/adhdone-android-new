@@ -71,6 +71,7 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
   const [reminderTime, setReminderTime] = useState('');
   const reminderDateRef = useRef('');
   const reminderTimeRef = useRef('');
+  const isInitializingRef = useRef(false);
 
   useEffect(() => {
     if (task && isOpen) {
@@ -82,6 +83,7 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
       setTaskPictures(task.pictures || []);
       setTaskNotes(task.notes || '');
       // Initialize controlled date/time inputs from task
+      isInitializingRef.current = true;
       if (task.next_reminder) {
         const d = new Date(task.next_reminder);
         const rd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -96,6 +98,7 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
         reminderDateRef.current = '';
         reminderTimeRef.current = '';
       }
+      setTimeout(() => { isInitializingRef.current = false; }, 100);
     }
   }, [task?.id, isOpen]);
 
@@ -553,11 +556,11 @@ Return JSON:
       
       const now = new Date();
 
-      // Only push to next day if the selected date is TODAY and the time is already past.
-      // Never auto-adjust when the user explicitly picked a future date.
+      // Only push to next day if the selected date is TODAY and the time is already past
+      // AND the user didn't explicitly pick a date (i.e. selectedDate was undefined).
       const selectedDay = new Date(year, month - 1, day);
       const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      if (selectedDay.getTime() === today.getTime() && nextReminder <= now) {
+      if (selectedDate === undefined && selectedDay.getTime() === today.getTime() && nextReminder <= now) {
         nextReminder.setDate(nextReminder.getDate() + 1);
       }
 
@@ -1057,18 +1060,18 @@ Return JSON:
                             First Reminder Date:
                           </label>
                           <input
-                           type="date"
-                           value={reminderDate}
-                           onChange={(e) => {
-                             setReminderDate(e.target.value);
-                             reminderDateRef.current = e.target.value;
-                             if (e.target.value && reminderTimeRef.current) handleUpdateReminderTime(reminderTimeRef.current, e.target.value);
-                           }}
-                           className={`w-full border rounded px-3 py-2 ${
-                             theme === 'dark'
-                               ? 'bg-gray-900 border-gray-600 text-gray-100'
-                               : 'bg-white border-gray-300 text-gray-900'
-                           }`}
+                          type="date"
+                          value={reminderDate}
+                          onChange={(e) => {
+                            setReminderDate(e.target.value);
+                            reminderDateRef.current = e.target.value;
+                            if (!isInitializingRef.current && e.target.value && reminderTimeRef.current) handleUpdateReminderTime(reminderTimeRef.current, e.target.value);
+                          }}
+                          className={`w-full border rounded px-3 py-2 ${
+                            theme === 'dark'
+                              ? 'bg-gray-900 border-gray-600 text-gray-100'
+                              : 'bg-white border-gray-300 text-gray-900'
+                          }`}
                           />
                           </div>
                           <div>
@@ -1076,18 +1079,18 @@ Return JSON:
                            Reminder Time:
                           </label>
                           <input
-                           type="time"
-                           value={reminderTime}
-                           onChange={(e) => {
-                             setReminderTime(e.target.value);
-                             reminderTimeRef.current = e.target.value;
-                             if (reminderDateRef.current && e.target.value) handleUpdateReminderTime(e.target.value, reminderDateRef.current);
-                           }}
-                           className={`w-full border rounded px-3 py-2 ${
-                             theme === 'dark'
-                               ? 'bg-gray-900 border-gray-600 text-gray-100'
-                               : 'bg-white border-gray-300 text-gray-900'
-                           }`}
+                          type="time"
+                          value={reminderTime}
+                          onChange={(e) => {
+                            setReminderTime(e.target.value);
+                            reminderTimeRef.current = e.target.value;
+                            if (!isInitializingRef.current && reminderDateRef.current && e.target.value) handleUpdateReminderTime(e.target.value, reminderDateRef.current);
+                          }}
+                          className={`w-full border rounded px-3 py-2 ${
+                            theme === 'dark'
+                              ? 'bg-gray-900 border-gray-600 text-gray-100'
+                              : 'bg-white border-gray-300 text-gray-900'
+                          }`}
                           />
                                           </div>
                                           </div>
@@ -1135,37 +1138,37 @@ Return JSON:
                           Reminder Date:
                         </label>
                         <input
-                          type="date"
-                          value={reminderDate}
-                          onChange={(e) => {
-                            setReminderDate(e.target.value);
-                            reminderDateRef.current = e.target.value;
-                            if (e.target.value && reminderTimeRef.current) handleUpdateReminderTime(reminderTimeRef.current, e.target.value);
-                          }}
-                          className={`w-full border rounded px-3 py-2 ${
-                            theme === 'dark'
-                              ? 'bg-gray-900 border-gray-600 text-gray-100'
-                              : 'bg-white border-gray-300 text-gray-900'
-                          }`}
+                         type="date"
+                         value={reminderDate}
+                         onChange={(e) => {
+                           setReminderDate(e.target.value);
+                           reminderDateRef.current = e.target.value;
+                           if (!isInitializingRef.current && e.target.value && reminderTimeRef.current) handleUpdateReminderTime(reminderTimeRef.current, e.target.value);
+                         }}
+                         className={`w-full border rounded px-3 py-2 ${
+                           theme === 'dark'
+                             ? 'bg-gray-900 border-gray-600 text-gray-100'
+                             : 'bg-white border-gray-300 text-gray-900'
+                         }`}
                         />
                         </div>
                         <div>
                         <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
-                          Reminder Time:
+                         Reminder Time:
                         </label>
                         <input
-                          type="time"
-                          value={reminderTime}
-                          onChange={(e) => {
-                            setReminderTime(e.target.value);
-                            reminderTimeRef.current = e.target.value;
-                            if (reminderDateRef.current && e.target.value) handleUpdateReminderTime(e.target.value, reminderDateRef.current);
-                          }}
-                          className={`w-full border rounded px-3 py-2 ${
-                            theme === 'dark'
-                              ? 'bg-gray-900 border-gray-600 text-gray-100'
-                              : 'bg-white border-gray-300 text-gray-900'
-                          }`}
+                         type="time"
+                         value={reminderTime}
+                         onChange={(e) => {
+                           setReminderTime(e.target.value);
+                           reminderTimeRef.current = e.target.value;
+                           if (!isInitializingRef.current && reminderDateRef.current && e.target.value) handleUpdateReminderTime(e.target.value, reminderDateRef.current);
+                         }}
+                         className={`w-full border rounded px-3 py-2 ${
+                           theme === 'dark'
+                             ? 'bg-gray-900 border-gray-600 text-gray-100'
+                             : 'bg-white border-gray-300 text-gray-900'
+                         }`}
                         />
                       </div>
                       <div className={`border-t pt-3 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
