@@ -6,9 +6,16 @@ Deno.serve(async (req) => {
   const { prompt } = await req.json();
   const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [{ role: "user", content: prompt }],
-    response_format: { type: "json_object" }
+    model: "gpt-4o",
+    messages: [
+      {
+        role: "system",
+        content: "You are a task categorization assistant for an ADHD productivity app. Always respond with valid JSON and populate all required fields. Determine whether the input is a task, parking lot idea, or other category based on the instructions given."
+      },
+      { role: "user", content: prompt }
+    ],
+    response_format: { type: "json_object" },
+    temperature: 0.1
   });
   const response = JSON.parse(completion.choices[0].message.content);
   return Response.json({ response });
