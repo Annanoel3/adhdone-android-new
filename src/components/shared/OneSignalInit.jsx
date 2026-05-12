@@ -125,7 +125,7 @@ export default function OneSignalInit({ user }) {
     };
 
     syncOneSignal();
-  }, [user?.email, navigate]);
+  }, [user?.email]);
 
   return null;
 }
