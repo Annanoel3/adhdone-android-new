@@ -16,13 +16,15 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     checkAppState();
     // Re-check auth every 30 seconds to keep session fresh
-    const interval = setInterval(checkAppState, 30000);
+    const interval = setInterval(() => checkAppState(false), 30000);
     return () => clearInterval(interval);
   }, []);
 
-  const checkAppState = async () => {
+  const checkAppState = async (isInitialLoad = true) => {
     try {
-      setIsLoadingPublicSettings(true);
+      if (isInitialLoad) {
+        setIsLoadingPublicSettings(true);
+      }
       setAuthError(null);
       
       // First, check app public settings (with token if available)
@@ -41,12 +43,12 @@ export const AuthProvider = ({ children }) => {
         setAppPublicSettings(publicSettings);
         
         // If we got the app public settings successfully, check if user is authenticated
-        if (appParams.token) {
-          await checkUserAuth();
-        } else {
-          setIsLoadingAuth(false);
-          setIsAuthenticated(false);
-        }
+         if (appParams.token) {
+           await checkUserAuth(isInitialLoad);
+         } else {
+           setIsLoadingAuth(false);
+           setIsAuthenticated(false);
+         }
         setIsLoadingPublicSettings(false);
       } catch (appError) {
         console.error('App state check failed:', appError);
@@ -90,10 +92,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const checkUserAuth = async () => {
+  const checkUserAuth = async (isInitialLoad = true) => {
     try {
       // Now check if the user is authenticated
-      setIsLoadingAuth(true);
+      if (isInitialLoad) {
+        setIsLoadingAuth(true);
+      }
       const currentUser = await base44.auth.me();
       setUser(currentUser);
       setIsAuthenticated(true);
