@@ -92,6 +92,12 @@ export default function FindPartners({ theme, user, onUpdate }) {
   };
 
   const handleSendRequest = async (targetUser) => {
+    // Prevent self-connection
+    if (targetUser.email === user.email) {
+      alert("You cannot send a connection request to yourself.");
+      return;
+    }
+
     try {
       await base44.entities.AccountabilityConnection.create({
         requester_email: user.email,
