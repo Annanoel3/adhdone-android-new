@@ -188,8 +188,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     const currentHour = now.getHours(); // local time
 
     // Three time windows, each with their own localStorage key
-    if (currentHour < 12) {
-      // Morning: before noon
+    if (currentHour >= 8 && currentHour < 12) {
+      // Morning: 8am to noon
       const key = `energy_checkin_morning_${today}`;
       if (!localStorage.getItem(key)) {
         localStorage.setItem(key, '1');
@@ -198,7 +198,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           setShowEnergyCheckIn(true);
         }, 3000);
       }
-    } else if (currentHour < 19) {
+    } else if (currentHour >= 12 && currentHour < 19) {
       // Afternoon: noon–7pm
       const key = `energy_checkin_afternoon_${today}`;
       if (!localStorage.getItem(key)) {

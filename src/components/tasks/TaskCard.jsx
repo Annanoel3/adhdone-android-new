@@ -201,10 +201,6 @@ export default function TaskCard({
       const nextReminder = new Date(task.next_reminder || new Date());
       nextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
 
-      if (nextReminder < new Date() && task.reminder_interval === 'once') {
-        nextReminder.setDate(nextReminder.getDate() + 1);
-      }
-
       await Task.update(task.id, {
         next_reminder: nextReminder.toISOString()
       });
@@ -275,10 +271,6 @@ export default function TaskCard({
         nextReminder.setHours(hours, minutes, 0, 0);
       } else {
         return;
-      }
-
-      if (nextReminder < new Date() && task.reminder_interval === 'once') {
-        nextReminder.setDate(nextReminder.getDate() + 1);
       }
 
       await Task.update(task.id, {
