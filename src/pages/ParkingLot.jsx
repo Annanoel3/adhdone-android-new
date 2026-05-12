@@ -372,19 +372,40 @@ Return ONLY the category name, nothing else.`;
 
   const handleVoiceRecord = async () => {
     if (isRecording) {
-      // Stop recording logic here
-      alert("Stopped recording.");
       setIsRecording(false);
-      // In a real implementation, you'd stop the media recorder and process the audio
     } else {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         setMicrophoneAccessGranted(true);
-        // Start recording logic here
-        alert("Started recording. (Voice recording will be implemented here)");
         setIsRecording(true);
-        // In a real implementation, you'd initialize a MediaRecorder
-        stream.getTracks().forEach(track => track.stop()); // Stop immediately for this placeholder
+        
+        const mediaRecorder = new MediaRecorder(stream);
+        const chunks = [];
+        
+        mediaRecorder.ondataavailable = (e) => chunks.push(e.data);
+        mediaRecorder.onstop = async () => {
+          stream.getTracks().forEach(track => track.stop());
+          const blob = new Blob(chunks, { type: 'audio/wav' });
+          
+          try {
+            const result = await base44.functions.invoke('transcribeAudioNew', { audio_blob: blob });
+            const transcribedText = result?.data?.text || '';
+            if (transcribedText) {
+              setTextInput(prev => prev + (prev ? ' ' : '') + transcribedText);
+            }
+          } catch (error) {
+            console.error('Error transcribing audio:', error);
+            alert('Failed to transcribe audio. Please try again.');
+          }
+          setIsRecording(false);
+        };
+        
+        mediaRecorder.start();
+        setTimeout(() => {
+          if (mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+          }
+        }, 10000);
       } catch (error) {
         setMicrophoneAccessGranted(false);
         if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
