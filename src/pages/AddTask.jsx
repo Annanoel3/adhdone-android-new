@@ -72,16 +72,7 @@ export default function AddTask() {
   }`;
 
     try {
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt: multiTaskPrompt,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            is_multiple: { type: "boolean" },
-            tasks: { type: "array", items: { type: "string" } }
-          }
-        }
-      });
+      const result = (await base44.functions.invoke('detectMultipleTasks', { prompt: multiTaskPrompt }))?.data?.response;
 
       console.log('🔍 [DETECT] Result:', result);
       return result.tasks || [inputText];
@@ -134,17 +125,7 @@ Return JSON:
   "subtasks": ["subtask 1", "subtask 2", ...] (if has_subtasks, IN ORDER)
 }`;
 
-      const subtaskCheck = await base44.integrations.Core.InvokeLLM({
-        prompt: subtaskCheckPrompt,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            has_subtasks: { type: "boolean" },
-            main_task: { type: "string" },
-            subtasks: { type: "array", items: { type: "string" } }
-          }
-        }
-      });
+      const subtaskCheck = (await base44.functions.invoke('checkSubtasks', { prompt: subtaskCheckPrompt }))?.data?.response;
 
       console.log('🔄 [PROCESS] Subtask check:', subtaskCheck);
 
@@ -178,17 +159,7 @@ JSON:
   "reminder_interval": "1hour|2hours|daily|every_other_day|once"
 }`;
 
-        const mainTaskParsed = await base44.integrations.Core.InvokeLLM({
-          prompt: mainTaskPrompt,
-          response_json_schema: {
-            type: "object",
-            properties: {
-              urgency: { type: "string" },
-              energy_required: { type: "string" },
-              reminder_interval: { type: "string" }
-            }
-          }
-        });
+        const mainTaskParsed = (await base44.functions.invoke('parseMainTask', { prompt: mainTaskPrompt }))?.data?.response;
 
         // Calculate next_reminder for parent task
         let nextReminder = null;
@@ -422,18 +393,7 @@ JSON:
       "items": ["item 1", "item 2", ...] or []
       }`;
 
-      const categoryCheck = await base44.integrations.Core.InvokeLLM({
-        prompt: categoryCheckPrompt,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            category: { type: "string" },
-            is_list: { type: "boolean" },
-            main_idea: { type: "string" },
-            items: { type: "array", items: { type: "string" } }
-          }
-        }
-      });
+      const categoryCheck = (await base44.functions.invoke('checkTaskCategory', { prompt: categoryCheckPrompt }))?.data?.response;
 
       console.log('🔄 [PROCESS] Category check result:', categoryCheck);
 
@@ -484,20 +444,7 @@ JSON:
 
       // Otherwise, continue with normal task creation
       console.log('🔄 [PROCESS] Calling LLM for task parsing...');
-      const parsed = await base44.integrations.Core.InvokeLLM({
-        prompt,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            title: { type: "string" },
-            urgency: { type: "string" },
-            energy_required: { type: "string" },
-            target_date: { type: "string" },
-            target_time: { type: "string" },
-            reminder_interval: { type: "string" }
-          }
-        }
-      });
+      const parsed = (await base44.functions.invoke('parseTask', { prompt }))?.data?.response;
       console.log('🔄 [PROCESS] ✅ LLM parsed:', parsed);
 
       console.log('🔄 [PROCESS] Calculating reminder times...');
