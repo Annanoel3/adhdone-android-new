@@ -161,20 +161,21 @@ Return JSON:
 TODAY IS: ${today}
 CURRENT TIME: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
 
-Extract timing, urgency, and energy for the MAIN task (not subtasks):
-- Urgency based on context
-- Energy required
-- reminder_interval: choose a SENSIBLE default (do NOT pick a time equal to right now)
-  - Bill payment, errands, admin tasks → "daily" (remind once a day until done)
-  - Important but flexible → "daily"
-  - Routines → "daily"
-  - Only use short intervals (30min, 1hour) if it's truly urgent or time-sensitive
+Extract urgency, energy, and reminder strategy for the MAIN task (not subtasks).
+
+REMINDER STRATEGY:
+- Important obligations (pay bills, submit work, call someone important) → reminder_interval="2hours" (keep reminding until done)
+- Hard deadlines or work tasks → reminder_interval="1hour" or "2hours"
+- Daily habits/routines → reminder_interval="daily"
+- Low-stakes one-time things → reminder_interval="once" (but prefer recurring for important tasks)
+
+Bills, financial tasks, work obligations = ALWAYS recurring at "2hours".
 
 JSON:
 {
   "urgency": "low|medium|high|urgent",
   "energy_required": "low|medium|high",
-  "reminder_interval": "30min|1hour|2hours|daily|every_other_day|once"
+  "reminder_interval": "1hour|2hours|daily|every_other_day|once"
 }`;
 
         const mainTaskParsed = await base44.integrations.Core.InvokeLLM({
@@ -323,13 +324,41 @@ JSON:
       - "daily"/"every day" → reminder_interval="daily"
       - "every other day" → reminder_interval="every_other_day"
 
-      SMART SUGGESTIONS (if NO time interval specified by user):
-      - Quick household tasks (pay bills, clean, errands) → "once", target_date=TODAY, target_time="21:00" (tonight)
-      - Important appointments/calls → "once", target_date=TOMORROW, target_time="09:00"
-      - Daily routines (medicine, walk dog) → "daily"
-      - Less urgent errands → "once", target_date=TOMORROW, target_time="09:00"
-      - One-time events with no time → "once", target_date=TOMORROW, target_time="09:00"
-      - NEVER set target_time to the current moment unless the user explicitly said "now" or "right now"
+      REMINDER STRATEGY (when user does NOT specify a time):
+
+      STEP 1 — Decide: is this RECURRING or ONE-TIME?
+
+      RECURRING (keep reminding until done):
+      - Important obligations that need to get done: paying bills, submitting reports, calling someone important, taking medicine, deadlines
+      - Anything where forgetting has real consequences
+      - Habits or routines: "walk the dog every day", "take vitamins"
+      - Use: reminder_interval = "2hours", "daily", or "every_other_day" (NO target_date/target_time)
+      - Examples:
+        "pay my electric bill" → reminder_interval="2hours" (important, needs doing today)
+        "pay rent" → reminder_interval="2hours" (urgent financial obligation)
+        "submit the report" → reminder_interval="1hour" (work deadline, high stakes)
+        "call the doctor" → reminder_interval="2hours" (health-related, important)
+        "take my medication" → reminder_interval="daily"
+        "finish project by Friday" → reminder_interval="2hours"
+
+      ONE-TIME (single notification, then done):
+      - User explicitly mentions a time: "at 3pm", "tomorrow morning", "in 2 hours"
+      - Low-stakes reminders where one nudge is enough: "pick up cookies", "find the pasta", "check the mail"
+      - Things tied to a specific moment: "make lunch tomorrow", "reminder for my dentist at 2pm"
+      - Use: reminder_interval="once", target_date=YYYY-MM-DD, target_time=HH:MM
+      - Examples:
+        "remind me to make lunch tomorrow" → once, target_date=TOMORROW, target_time="11:00"
+        "pick up cookies" → once, target_date=TODAY, target_time="18:00" (end of day nudge)
+        "remind me at 5pm to call John" → once, target_date=TODAY, target_time="17:00"
+        "find the pasta" → once, target_date=TODAY, target_time="17:00" (low stakes, one nudge)
+
+      STEP 2 — Pick the right interval for recurring tasks:
+      - "2hours" → important tasks needing to be done today (bills, deadlines, work tasks)
+      - "1hour" → very urgent/time-sensitive work tasks with hard deadlines
+      - "daily" → habits, routines, or things due in a few days
+      - "every_other_day" → lower-importance ongoing things
+
+      NEVER set target_time to the current moment unless user said "now" or "right now".
 
       SMART PRIORITY SUGGESTIONS:
       - Time-sensitive or deadline-based → "urgent" or "high"
