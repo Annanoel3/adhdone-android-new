@@ -91,7 +91,12 @@ Deno.serve(async (req) => {
                 taskId: task.id,
                 urgency: task.urgency || 'medium',
                 type: 'task_reminder'
-              }
+              },
+              buttons: [
+                { id: "snooze_15", text: "Snooze 15 min" },
+                { id: "snooze_60", text: "Snooze 1 hour" },
+                { id: "complete", text: "✅ Done" }
+              ]
             });
             const result = res?.data || res;
             if (result?.notificationId) {

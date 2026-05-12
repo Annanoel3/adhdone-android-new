@@ -254,7 +254,12 @@ JSON:
                 taskId: parentTask.id,
                 urgency: parentTask.urgency,
                 type: 'task_reminder'
-              }
+              },
+              buttons: [
+                { id: "snooze_15", text: "Snooze 15 min" },
+                { id: "snooze_60", text: "Snooze 1 hour" },
+                { id: "complete", text: "✅ Done" }
+              ]
             });
           }).then(({ notificationIds, lastScheduledUntil }) => {
             if (notificationIds && notificationIds.length > 0) {
@@ -584,7 +589,12 @@ JSON:
               taskId: createdTask.id,
               urgency: createdTask.urgency,
               type: 'task_reminder'
-            }
+            },
+            buttons: [
+              { id: "snooze_15", text: "Snooze 15 min" },
+              { id: "snooze_60", text: "Snooze 1 hour" },
+              { id: "complete", text: "✅ Done" }
+            ]
           }).then(notificationId => {
             if (notificationId) {
               base44.entities.Task.update(createdTask.id, {
@@ -611,7 +621,12 @@ JSON:
                 taskId: createdTask.id,
                 urgency: createdTask.urgency,
                 type: 'task_reminder'
-              }
+              },
+              buttons: [
+                { id: "snooze_15", text: "Snooze 15 min" },
+                { id: "snooze_60", text: "Snooze 1 hour" },
+                { id: "complete", text: "✅ Done" }
+              ]
             });
           }).then(({ notificationIds, lastScheduledUntil }) => {
             if (notificationIds && notificationIds.length > 0) {
@@ -666,7 +681,12 @@ JSON:
             taskId: createdTask.id,
             urgency: createdTask.urgency,
             type: 'task_reminder'
-          }
+          },
+          buttons: [
+            { id: "snooze_15", text: "Snooze 15 min" },
+            { id: "snooze_60", text: "Snooze 1 hour" },
+            { id: "complete", text: "✅ Done" }
+          ]
         }),
         minutesBefore > 0 ? (async () => {
           const advanceTime = new Date(mainReminderTime.getTime() - (minutesBefore * 60 * 1000));

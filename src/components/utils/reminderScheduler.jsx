@@ -16,7 +16,8 @@ export async function scheduleReminder({
   sendAtISO,
   taskId,
   data,
-  android_channel_id
+  android_channel_id,
+  buttons
 }) {
   console.log('[scheduleReminder] Called with:', { email, title, body, sendAtISO, minutesFromNow, taskId });
   
@@ -48,6 +49,10 @@ export async function scheduleReminder({
 
   if (android_channel_id) {
     payload.android_channel_id = android_channel_id;
+  }
+
+  if (buttons && buttons.length > 0) {
+    payload.buttons = buttons;
   }
 
   console.log('[scheduleReminder] Full payload to schedulePush:', JSON.stringify(payload, null, 2));
@@ -120,7 +125,8 @@ export async function scheduleRecurringReminders({
   count = 10, // Schedule next 10 occurrences
   taskId,
   data,
-  android_channel_id
+  android_channel_id,
+  buttons
 }) {
   console.log('[scheduleRecurringReminders] Scheduling', count, 'notifications starting at', startTime);
   
@@ -144,7 +150,8 @@ export async function scheduleRecurringReminders({
         sendAtISO: sendAt.toISOString(),
         taskId,
         data: baseData,
-        android_channel_id
+        android_channel_id,
+        buttons
       }).then(notificationId => {
         if (notificationId) {
           console.log(`[scheduleRecurringReminders] Scheduled #${i + 1} for ${sendAt.toISOString()}: ${notificationId}`);
