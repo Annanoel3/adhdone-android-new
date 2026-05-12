@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Lightbulb, ArrowRight, Trash2, ChevronsDown, ChevronsUp, Search, Sparkles, Loader2, Filter, Mic, MoreVertical, CheckCircle2, Pencil, Image as ImageIcon, FileText, X } from "lucide-react";
+import { Plus, Lightbulb, ArrowRight, Trash2, ChevronsDown, ChevronsUp, Search, Sparkles, Loader2, Filter, MoreVertical, CheckCircle2, Pencil, Image as ImageIcon, FileText, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -27,6 +27,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import ImageViewer from "../components/shared/ImageViewer";
+import VoiceTaskInput from "../components/tasks/VoiceTaskInput";
 
 // IdeaCard component is kept as per instruction to preserve existing code,
 // though it is no longer directly used in the ParkingLot's main rendering loop
@@ -182,10 +183,8 @@ export default function ParkingLot() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [isCategorizingAll, setIsCategorizingAll] = useState(false);
   const [showCategoryFilter, setShowCategoryFilter] = useState(false);
-  const [showQuickAdd, setShowQuickAdd] = useState(false); // Renamed from setShowAddModal for consistency
+  const [showQuickAdd, setShowQuickAdd] = useState(false);
   const [textInput, setTextInput] = useState("");
-  const [isRecording, setIsRecording] = useState(false);
-  const [microphoneAccessGranted, setMicrophoneAccessGranted] = useState(null); // null, true, false
   const [editingIdea, setEditingIdea] = useState(null);
   const [editText, setEditText] = useState("");
   const [editCategory, setEditCategory] = useState("misc");
@@ -370,30 +369,8 @@ Return ONLY the category name, nothing else.`;
 
   const hasUncategorized = topLevelIdeas.some(i => !i.category);
 
-  const handleVoiceRecord = async () => {
-    if (isRecording) {
-      // Stop recording logic here
-      alert("Stopped recording.");
-      setIsRecording(false);
-      // In a real implementation, you'd stop the media recorder and process the audio
-    } else {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        setMicrophoneAccessGranted(true);
-        // Start recording logic here
-        alert("Started recording. (Voice recording will be implemented here)");
-        setIsRecording(true);
-        // In a real implementation, you'd initialize a MediaRecorder
-        stream.getTracks().forEach(track => track.stop()); // Stop immediately for this placeholder
-      } catch (error) {
-        setMicrophoneAccessGranted(false);
-        if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-            alert("Microphone access denied. Please enable it in your browser settings.");
-        } else {
-            alert("Could not access microphone: " + error.message);
-        }
-      }
-    }
+  const handleVoiceTranscription = async (transcription) => {
+    setTextInput(transcription);
   };
 
   const categoryColors = {
@@ -449,17 +426,11 @@ Return ONLY the category name, nothing else.`;
               Type or speak your idea
             </p>
 
-            <div className="flex gap-3">
-              <Button
-                onClick={handleVoiceRecord}
-                variant="outline"
-                className={`flex-1 ${isRecording ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse' : ''}`}
-                disabled={microphoneAccessGranted === false}
-              >
-                <Mic className="w-4 h-4 mr-2" />
-                {isRecording ? "Stop Recording" : (microphoneAccessGranted === false ? "Mic Access Denied" : "Record Voice")}
-              </Button>
-            </div>
+            <VoiceTaskInput
+              onTranscription={handleVoiceTranscription}
+              theme={theme}
+              inline={false}
+            />
 
             <div className="relative">
               <div className="absolute inset-0 flex items-center">
@@ -475,7 +446,7 @@ Return ONLY the category name, nothing else.`;
             <Textarea
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
-              placeholder="What's on your mind? (Try: 'Add milk to my shopping list')"
+              placeholder="What's on your mind?"
               className={`min-h-[120px] ${theme === 'dark' ? 'bg-gray-800 text-gray-100 border-gray-700' : ''}`}
               autoFocus
             />
@@ -518,8 +489,6 @@ Return ONLY the category name, nothing else.`;
                   queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
                   setTextInput("");
                   setShowQuickAdd(false);
-                  setIsRecording(false);
-                  setMicrophoneAccessGranted(null);
                 }}
                 disabled={!textInput.trim()}
                 className={`flex-1 ${theme === 'minimalist'
@@ -531,13 +500,11 @@ Return ONLY the category name, nothing else.`;
                 Add Idea
               </Button>
               <Button
-                onClick={() => {
+               onClick={() => {
                   setTextInput("");
                   setShowQuickAdd(false);
-                  setIsRecording(false);
-                  setMicrophoneAccessGranted(null);
-                }}
-                variant="outline"
+               }}
+               variant="outline"
               >
                 Cancel
               </Button>
