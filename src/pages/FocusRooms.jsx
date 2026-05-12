@@ -9,7 +9,7 @@ import BrowsePublicRooms from "../components/focus/BrowsePublicRooms";
 import { Loader2, ArrowLeft, Info, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card"; // Import Card and CardContent
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
   Popover,
@@ -19,6 +19,7 @@ import {
 
 export default function FocusRooms() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [user, setUser] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [activeRoom, setActiveRoom] = useState(null);
@@ -26,6 +27,8 @@ export default function FocusRooms() {
   const [browseExpanded, setBrowseExpanded] = useState(false);
   const [searchActive, setSearchActive] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+
+  const fromRoomParam = new URLSearchParams(location.search).get('from') === 'room';
 
   useEffect(() => {
     loadUser();
@@ -72,6 +75,12 @@ export default function FocusRooms() {
       
       // Clean up empty rooms first
       await timeoutEmptyRooms();
+      
+      // Skip auto-redirect if coming back from an active room
+      if (fromRoomParam) {
+        setLoading(false);
+        return;
+      }
       
       // Check if user is in any active room
       const myParticipations = await FocusRoomParticipant.filter({ 

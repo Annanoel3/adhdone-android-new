@@ -523,7 +523,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => window.location.href = 'https://adhdone.space/focusrooms'}
+              onClick={() => navigate(createPageUrl('FocusRooms') + '?from=room')}
               className={theme === 'dark' ? 'hover:bg-gray-700 text-gray-300' : 'hover:bg-gray-100 text-gray-600'}
             >
               ← Back

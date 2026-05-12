@@ -6,8 +6,12 @@ const AD_DELAY_MS = 10000;     // Wait 10 seconds before showing
 
 let AdMob = null;
 let hasShownAdThisLaunch = false;
+let hasInitializedAdMob = false;
 
 export async function initAdMob() {
+  if (hasInitializedAdMob) return;
+  hasInitializedAdMob = true;
+
   if (!Capacitor.isNativePlatform()) return;
   try {
     AdMob = registerPlugin('AdMob');
