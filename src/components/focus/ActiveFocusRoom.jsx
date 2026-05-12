@@ -263,8 +263,8 @@ export default function ActiveFocusRoom({ room, onLeave }) {
         }
       }
 
-      const allMessages = await FocusRoomEmoji.filter({ room_id: currentRoom.id }, '-timestamp', 100);
-      // Deduplicate messages by ID
+      const allMessages = await FocusRoomEmoji.filter({ room_id: currentRoom.id }, 'timestamp', 100);
+      // Deduplicate messages by ID to prevent duplicates
       const uniqueMessages = Array.from(new Map(allMessages.map(msg => [msg.id, msg])).values());
       setMessages(uniqueMessages);
 
@@ -745,9 +745,9 @@ export default function ActiveFocusRoom({ room, onLeave }) {
               💬 Chat
             </h2>
             
-            <div className="h-40 overflow-y-auto mb-2 space-y-2 flex flex-col-reverse">
+            <div className="h-40 overflow-y-auto mb-2 space-y-2 flex flex-col">
               <AnimatePresence>
-                {[...messages].reverse().map((message) => {
+                {messages.map((message) => {
                    const isMe = message.sender_email === user?.email;
                    const isAI = message.sender_email === "ai@adhdone.app";
                    const participant = participants.find(p => p.user_email === message.sender_email);
