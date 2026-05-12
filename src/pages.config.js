@@ -18,7 +18,6 @@ import Profile from './pages/Profile';
 import ProfileSettings from './pages/ProfileSettings';
 import Progress from './pages/Progress';
 import ReportBug from './pages/ReportBug';
-import Settings from './pages/Settings';
 import SpotifyCallback from './pages/SpotifyCallback';
 import Subscribe from './pages/Subscribe';
 import SupportSpace from './pages/SupportSpace';
@@ -51,7 +50,6 @@ export const PAGES = {
     "ProfileSettings": ProfileSettings,
     "Progress": Progress,
     "ReportBug": ReportBug,
-    "Settings": Settings,
     "SpotifyCallback": SpotifyCallback,
     "Subscribe": Subscribe,
     "SupportSpace": SupportSpace,
