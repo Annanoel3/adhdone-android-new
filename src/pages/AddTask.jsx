@@ -790,25 +790,22 @@ JSON:
 
   const handleVoiceTranscription = async (audioBlob) => {
     try {
-      const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, {
-        type: audioBlob.type
-      });
+    // Convert audio to base64 for transcription
+    const audioBase64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(audioBlob);
+    });
 
-      const uploadResult = await base44.integrations.Core.UploadFile({
-        file: audioFile
-      });
+    const response = await base44.functions.invoke('transcribeAudio', {
+      audio_base64: audioBase64,
+      filename: `voice-${Date.now()}.webm`
+    });
 
-      if (!uploadResult?.file_url) {
-        throw new Error('Failed to upload audio file');
-      }
-
-      const response = await base44.functions.invoke('transcribeAudio', {
-        file_url: uploadResult.file_url
-      });
-
-      if (response?.data?.success && response?.data?.transcription) {
+    if (response?.data?.text) {
         // Detect if multiple tasks
-        const taskList = await detectMultipleTasks(response.data.transcription);
+        const taskList = await detectMultipleTasks(response.data.text);
         console.log('🎤 [VOICE] Detected', taskList.length, 'task(s)');
 
         // Process each task
