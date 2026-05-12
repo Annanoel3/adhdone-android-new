@@ -334,10 +334,12 @@ export default function ActiveFocusRoom({ room, onLeave }) {
     }
     
     try {
+      // Get fresh user data to ensure correct name
+      const currentUser = await User.me();
       await FocusRoomEmoji.create({
         room_id: currentRoom.id,
-        sender_email: user.email,
-        sender_name: user.display_name || user.full_name,
+        sender_email: currentUser.email,
+        sender_name: currentUser.full_name,
         emoji: newMessage,
         timestamp: new Date().toISOString()
       });
