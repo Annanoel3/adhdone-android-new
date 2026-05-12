@@ -42,12 +42,12 @@ Deno.serve(async (req) => {
         const safeUsers = matchingUsers.map(u => ({
             email: u.email,
             display_name: u.display_name,
-            full_name: u.full_name,
+            
             profile_picture_url: u.profile_picture_url,
             bio: u.bio,
             level: u.level,
-            total_points: u.total_points,
-            looking_for_accountability: u.looking_for_accountability
+            points: u.points,
+            is_accountability_partner: u.is_accountability_partner
         }));
 
         return Response.json({ users: safeUsers });
