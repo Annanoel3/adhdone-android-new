@@ -336,7 +336,8 @@ Categories:
 Return ONLY the category name, nothing else.`;
 
       try {
-        const response = await base44.integrations.Core.InvokeLLM({ prompt });
+        const result = await base44.functions.invoke('categorizeIdea', { prompt });
+        const response = result?.data?.message;
         const category = response.trim().toLowerCase();
         
         if (['work', 'personal', 'creative', 'learning', 'health', 'finance', 'home', 'misc'].includes(category)) {
