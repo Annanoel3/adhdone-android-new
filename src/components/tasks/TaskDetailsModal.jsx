@@ -338,7 +338,7 @@ Return JSON:
 
           if (intervalMs[task.reminder_interval] && task.next_reminder) {
             const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
-            const newNotificationIds = await scheduleRecurringReminders({
+            const { notificationIds: newNotificationIds } = await scheduleRecurringReminders({
               email: currentUser.email,
               title: "Task Reminder 📋",
               body: `${editedTitle.trim()}\n\nTap to mark as complete!`,
@@ -492,7 +492,7 @@ Return JSON:
           // Schedule recurring reminders (10 at a time)
           try {
             const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
-            const newNotificationIds = await scheduleRecurringReminders({
+            const { notificationIds: newNotificationIds } = await scheduleRecurringReminders({
               email: currentUser.email,
               title: "Task Reminder 📋",
               body: `${task.title}\n\nTap to mark as complete!`,
@@ -710,7 +710,7 @@ Return JSON:
         if (task.reminder_interval && task.reminder_interval !== 'once' && intervalMs[task.reminder_interval]) {
           try {
             const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
-            const notificationIds = await scheduleRecurringReminders({
+            const { notificationIds } = await scheduleRecurringReminders({
               email: currentUser.email,
               title: "Task Reminder 📋",
               body: `${task.title}\n\nTap to mark as complete!`,
