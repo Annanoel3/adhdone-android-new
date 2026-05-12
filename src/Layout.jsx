@@ -400,11 +400,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           url: createPageUrl("FocusRooms"),
           icon: Users,
         },
-        {
-          title: "Leaderboard",
-          url: createPageUrl("Leaderboard"),
-          icon: Trophy,
-        },
+
       ]
     },
   ];

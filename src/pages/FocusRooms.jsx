@@ -6,7 +6,7 @@ import CreateFocusRoom from "../components/focus/CreateFocusRoom";
 import JoinFocusRoom from "../components/focus/JoinFocusRoom";
 import ActiveFocusRoom from "../components/focus/ActiveFocusRoom";
 import BrowsePublicRooms from "../components/focus/BrowsePublicRooms";
-import { Loader2, ArrowLeft, Info, ChevronDown, ChevronUp } from "lucide-react";
+import { Loader2, ArrowLeft, Info, ChevronDown, ChevronUp, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card"; // Import Card and CardContent
 import { useNavigate } from "react-router-dom";
@@ -24,6 +24,8 @@ export default function FocusRooms() {
   const [activeRoom, setActiveRoom] = useState(null);
   const [loading, setLoading] = useState(true);
   const [browseExpanded, setBrowseExpanded] = useState(false);
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     loadUser();
@@ -221,12 +223,30 @@ export default function FocusRooms() {
           </CardContent>
         </Card>
 
+        <div className="grid lg:grid-cols-2 gap-8 mb-8">
+          <div>
+            <h2 className={`text-xl font-bold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+              Join by Room Code
+            </h2>
+            <JoinFocusRoom 
+              user={user} 
+              theme={theme} 
+              onRoomJoined={handleRoomJoined}
+            />
+          </div>
+        </div>
+
         <div className="grid lg:grid-cols-2 gap-8">
-          <CreateFocusRoom 
-            user={user} 
-            theme={theme} 
-            onRoomCreated={handleRoomCreated}
-          />
+          <div>
+            <h2 className={`text-xl font-bold mb-4 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+              Create a New Room
+            </h2>
+            <CreateFocusRoom 
+              user={user} 
+              theme={theme} 
+              onRoomCreated={handleRoomCreated}
+            />
+          </div>
         </div>
         {/* Android Navigation Button Spacer */}
         <div style={{ height: '120px' }} aria-hidden="true"></div>
