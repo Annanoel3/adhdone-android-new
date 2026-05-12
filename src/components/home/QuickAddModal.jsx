@@ -38,20 +38,8 @@ Return JSON:
   "energy_required": "low" | "medium" | "high"
 }`;
 
-      const taskData = await base44.integrations.Core.InvokeLLM({
-        prompt,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            title: { type: "string" },
-            reminder_interval: { type: "string" },
-            reminder_time: { type: "string" },
-            specific_date: { type: "string" },
-            urgency: { type: "string" },
-            energy_required: { type: "string" }
-          }
-        }
-      });
+      const response = await base44.functions.invoke('generateQuickAddTask', { prompt });
+      const taskData = response?.data?.taskData;
 
       let nextReminderTime = null;
       
