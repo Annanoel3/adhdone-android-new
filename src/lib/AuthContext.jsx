@@ -15,6 +15,9 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     checkAppState();
+    // Re-check auth every 30 seconds to keep session fresh
+    const interval = setInterval(checkAppState, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const checkAppState = async () => {
