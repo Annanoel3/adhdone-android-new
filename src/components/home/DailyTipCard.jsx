@@ -228,48 +228,37 @@ Examples:
         const today = getLocalDateString();
         const todayDate = new Date(today);
 
-        // Sort tasks: urgent first, then by next_reminder date if set
-        const sortedTasks = [...activeTasks].sort((a, b) => {
-          const urgencyOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
-          return (urgencyOrder[a.urgency] ?? 2) - (urgencyOrder[b.urgency] ?? 2);
+        // Filter tasks that can have a small first step (exclude things like "plan entire month")
+        const tasksWithFirstSteps = activeTasks.filter(t => {
+          const title = t.title.toLowerCase();
+          // Exclude vague/massive tasks
+          const avoidWords = ['plan', 'organize', 'restructure', 'rebuild', 'overhaul', 'redo entire'];
+          return !avoidWords.some(word => title.includes(word));
         });
 
-        const taskDescriptions = sortedTasks.slice(0, 8).map(t => {
-          let desc = `"${t.title}" (${t.urgency || 'medium'} urgency, ${t.energy_required || 'medium'} energy)`;
-          if (t.next_reminder) {
-            const reminderDate = new Date(t.next_reminder);
-            const reminderLocal = `${reminderDate.getFullYear()}-${String(reminderDate.getMonth()+1).padStart(2,'0')}-${String(reminderDate.getDate()).padStart(2,'0')}`;
-            const daysUntil = Math.round((reminderDate - todayDate) / (1000 * 60 * 60 * 24));
-            if (reminderLocal === today) desc += ` — reminder TODAY`;
-            else if (daysUntil === 1) desc += ` — reminder TOMORROW`;
-            else if (daysUntil < 0) desc += ` — OVERDUE reminder`;
-            else if (daysUntil <= 3) desc += ` — reminder in ${daysUntil} days`;
-          }
-          return desc;
-        }).join('\n- ');
+        // Find easiest actionable task (low energy first, then medium)
+        const easyTask = tasksWithFirstSteps.find(t => t.energy_required === 'low') 
+          || tasksWithFirstSteps.find(t => t.energy_required === 'medium' && t.urgency === 'low')
+          || tasksWithFirstSteps[0];
 
-        // Find easiest task to suggest (low energy + low/medium urgency)
-        const easyTask = activeTasks.find(t => t.energy_required === 'low') 
-          || activeTasks.find(t => t.urgency === 'low')
-          || activeTasks[activeTasks.length - 1];
+        if (easyTask) {
+          contextualGuidance += `
 
-        const overdueCount = activeTasks.filter(t => {
-          if (!t.next_reminder) return false;
-          const r = new Date(t.next_reminder);
-          const rLocal = `${r.getFullYear()}-${String(r.getMonth()+1).padStart(2,'0')}-${String(r.getDate()).padStart(2,'0')}`;
-          return rLocal < today;
-        }).length;
+ACTIONABLE TASK SUGGESTION:
+Suggest starting with: "${easyTask.title}" (${easyTask.energy_required || 'medium'} energy)
 
-        contextualGuidance += `
+CRITICAL INSTRUCTION: Do NOT just say "start with [task name]". Instead, SUGGEST A SPECIFIC FIRST STEP for this task.
 
-THEIR ACTUAL TASKS RIGHT NOW:
-- ${taskDescriptions}
+Examples of first steps:
+- For "remind dad about door": The first step is "send him a quick text"
+- For "go through subscriptions": The first step is "open your email and search for 'subscribe confirmation'"
+- For "write email": The first step is "open a blank email and write the subject line"
+- For "call dentist": The first step is "pull up their phone number"
+- For "clean kitchen": The first step is "fill the sink with water"
+- For "organize photos": The first step is "open your photo library"
 
-${activeTasks.length > 5 ? `They have ${activeTasks.length} active tasks — that's a lot. Suggest starting with the easiest one to build momentum.` : ''}
-${overdueCount > 0 ? `${overdueCount} task(s) have overdue reminders — gently nudge them to address at least one.` : ''}
-${easyTask ? `Easiest task to start with: "${easyTask.title}" (${easyTask.energy_required || 'medium'} energy)` : ''}
-
-CRITICAL: Reference specific task titles by name in your tip. Make it personal and actionable — e.g. "How about starting with '${easyTask?.title || activeTasks[0]?.title}'?" Don't just give generic advice.`;
+Always make the first step tiny, concrete, and something they can do RIGHT NOW in under 2 minutes. Format: "The first step is to [specific action]"`;
+        }
       }
 
       // Use Base44's InvokeLLM for smart tips
@@ -278,10 +267,11 @@ CRITICAL: Reference specific task titles by name in your tip. Make it personal a
       CRITICAL RULES:
       1. Keep it SHORT - 1-2 sentences max
       2. Be conversational and understanding (not clinical or diagnostic)
-      3. One specific action they can take right now
+      3. ONE SPECIFIC FIRST STEP they can take right now (under 2 minutes)
       4. A touch of humor is good, but stay practical
       5. No "your ADHD brain" or othering language - just helpful tips anyone could use
       6. Make them feel understood, not analyzed
+      7. IF YOU MENTION A TASK, ALWAYS INCLUDE THE EXACT FIRST STEP, NOT JUST THE TASK ITSELF
 
       ${contextualGuidance}
 
@@ -292,17 +282,17 @@ CRITICAL: Reference specific task titles by name in your tip. Make it personal a
       - Completed today: ${effectiveCompleted.length}
       - Streak: ${currentStreak} days
 
-      EXAMPLES OF THE VIBE:
+      EXAMPLES OF FIRST-STEP TIPS:
 
-      "Procrastinating until the last minute? Create fake urgency - tell a friend you'll send them your work by tomorrow. Sometimes you just need an audience to get moving."
+      "Procrastinating on that email? Open a blank one and type just the subject line. That tiny start breaks the ice."
 
-      "Task too boring to start? Change the environment - move to a different spot, put on upbeat music, make a fancy drink. Sometimes your brain needs novelty more than motivation."
+      "That subscription task on your list? Open your email and search 'subscribe' — you'll spot all the receipts in seconds."
 
-      "Drowning in your to-do list? Write everything down somewhere safe, then pick ONE thing. You can't hold it all in your head and actually do stuff at the same time."
+      "Task feels overwhelming? Just do the first tiny step - open the document, grab the spray bottle, or pull out your phone. Once you start, continuing is easier."
 
-      "Can't find the energy to start? Set a timer for 2 minutes and do the easiest possible version. Starting creates momentum - waiting for motivation doesn't."
+      "Can't find the energy to start? Grab a timer, set it for 2 minutes, and do the easiest possible version. Starting creates momentum - waiting for motivation doesn't."
 
-      "Task feels overwhelming? Just do the first tiny step - open the document, grab the cleaning spray, pull out your phone. Once you start, continuing is easier."
+      "Movement gets the blood flowing: stand up, do 5 jumping jacks, then immediately dive into your first step. Your brain needs the reset."
 
       Return ONLY the tip text, nothing else.`;
 
