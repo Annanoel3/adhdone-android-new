@@ -959,7 +959,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                   <Button 
                     variant="ghost" 
                     onClick={() => navigate(-1)}
-                    className={`h-12 w-12 p-0 rounded-xl transition-colors duration-200 flex items-center justify-center ${
+                    className={`h-14 w-14 p-0 rounded-xl transition-colors duration-200 flex items-center justify-center ${
                       isSeasonalTheme()
                         ? 'hover:bg-white/50 text-gray-800'
                         : theme === 'dark'
@@ -969,11 +969,11 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                             : 'hover:bg-gray-100'
                     }`}
                   >
-                    <ArrowLeft className="w-6 h-6" />
+                    <ArrowLeft className="w-7 h-7" />
                   </Button>
                 ) : (
                   <SidebarTrigger asChild>
-                    <Button variant="ghost" className={`h-12 w-12 p-0 rounded-xl transition-colors duration-200 flex items-center justify-center ${
+                    <Button variant="ghost" className={`h-14 w-14 p-0 rounded-xl transition-colors duration-200 flex items-center justify-center ${
                       isSeasonalTheme()
                         ? 'hover:bg-white/50 text-gray-800'
                         : theme === 'dark'
@@ -982,7 +982,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                             ? 'hover:bg-yellow-300 text-gray-900'
                             : 'hover:bg-gray-100'
                     }`}>
-                      <LayoutDashboard className="w-6 h-6" />
+                      <LayoutDashboard className="w-7 h-7" />
                     </Button>
                   </SidebarTrigger>
                 )}
