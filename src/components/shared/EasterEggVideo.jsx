@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -8,9 +8,11 @@ export default function EasterEggVideo() {
   const [videoUrl, setVideoUrl] = useState('');
   const [title, setTitle] = useState('');
   const [subtitle, setSubtitle] = useState('');
+  const [ideasGifs, setIdeasGifs] = useState([]);
+  const [awesomeGifs, setAwesomeGifs] = useState([]);
 
-  // Curated lists of working, non-political GIFs
-  const ideasGifs = [
+  // Default fallback GIFs
+  const defaultIdeasGifs = [
     "https://media.giphy.com/media/l0IylOPCNkiqOgMyA/giphy.gif", // Mind blown
     "https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif", // Head exploding
     "https://media.giphy.com/media/3o7btPCcdNniyf0ArS/giphy.gif", // Brain on fire
@@ -23,7 +25,7 @@ export default function EasterEggVideo() {
     "https://media.giphy.com/media/26xBI73gWquCBBCDe/giphy.gif", // Brain freeze
   ];
 
-  const awesomeGifs = [
+  const defaultAwesomeGifs = [
     "https://media.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif", // Applause
     "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif", // You're amazing
     "https://media.giphy.com/media/g9582DNuQppxC/giphy.gif", // Clapping
@@ -50,11 +52,49 @@ export default function EasterEggVideo() {
     awesome: -1
   });
 
+  // Track current week to know when to refresh
+  const weekRef = React.useRef(getWeekNumber());
+
+  function getWeekNumber() {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), 0, 1);
+    const diff = now - start;
+    const oneWeek = 1000 * 60 * 60 * 24 * 7;
+    return Math.floor(diff / oneWeek);
+  }
+
+  // Initialize GIFs on mount and refresh weekly
+  useEffect(() => {
+    const initializeGifs = () => {
+      const currentWeek = getWeekNumber();
+      
+      // Check if week has changed
+      if (currentWeek !== weekRef.current) {
+        weekRef.current = currentWeek;
+        // Reset GIF tracking when week changes
+        lastGifIndexRef.current = { ideas: -1, awesome: -1 };
+        localStorage.setItem('lastGifWeek', currentWeek.toString());
+      }
+
+      // Use default GIFs (could be extended to fetch from API)
+      setIdeasGifs(defaultIdeasGifs);
+      setAwesomeGifs(defaultAwesomeGifs);
+    };
+
+    initializeGifs();
+  }, []);
+
   // Expose function globally so buttons can trigger it
-  React.useEffect(() => {
+  useEffect(() => {
     window.triggerEasterEgg = (type = 'ideas') => {
       let selectedGif, selectedTitle, selectedSubtitle;
       let gifList = type === 'ideas' ? ideasGifs : awesomeGifs;
+      
+      // Use fallbacks if state not yet loaded
+      if (!gifList || gifList.length === 0) {
+        gifList = type === 'ideas' ? defaultIdeasGifs : defaultAwesomeGifs;
+      }
+      
       let lastIndex = lastGifIndexRef.current[type];
       
       // Pick a random GIF that's different from the last one
@@ -63,7 +103,7 @@ export default function EasterEggVideo() {
         randomIndex = Math.floor(Math.random() * gifList.length);
       } while (randomIndex === lastIndex && gifList.length > 1);
       
-      // Update the ref directly (no state update needed)
+      // Update the ref directly
       lastGifIndexRef.current[type] = randomIndex;
       
       if (type === 'ideas') {
@@ -89,7 +129,7 @@ export default function EasterEggVideo() {
     return () => {
       delete window.triggerEasterEgg;
     };
-  }, []); // Empty dependency array - only set up once
+  }, [ideasGifs, awesomeGifs]);
 
   return (
     <AnimatePresence>
