@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
         
         // Filter to only users with public profiles who are looking for accountability
         const publicUsers = allUsers.filter(u => 
-            u.looking_for_accountability === true &&
+            u.is_accountability_partner === true &&
             u.profile_visibility !== 'private' &&
             u.email !== user.email // Exclude current user
         );
@@ -23,11 +23,11 @@ Deno.serve(async (req) => {
         const safeUsers = publicUsers.map(u => ({
             email: u.email,
             display_name: u.display_name,
-            full_name: u.full_name,
+            
             profile_picture_url: u.profile_picture_url,
             bio: u.bio,
             level: u.level,
-            total_points: u.total_points
+            points: u.points
         }));
 
         return Response.json({ users: safeUsers });
