@@ -8,6 +8,7 @@ import { Search, UserPlus, Loader2, Ban, ShieldAlert } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -94,7 +95,7 @@ export default function FindPartners({ theme, user, onUpdate }) {
   const handleSendRequest = async (targetUser) => {
     // Prevent self-connection
     if (targetUser.email === user.email) {
-      alert("You cannot send a connection request to yourself.");
+      toast.error("You cannot send a connection request to yourself.");
       return;
     }
 
@@ -123,11 +124,11 @@ export default function FindPartners({ theme, user, onUpdate }) {
 
       setSentRequests(prev => new Set([...prev, targetUser.email]));
       if (onUpdate) onUpdate();
-    } catch (error) {
+      } catch (error) {
       console.error("Error sending connection request:", error);
-      alert("Failed to send request. Please try again.");
-    }
-  };
+      toast.error("Failed to send request. Please try again.");
+      }
+      };
 
   const handleBlockUser = async () => {
     if (!blockingUser) return;
@@ -159,11 +160,11 @@ export default function FindPartners({ theme, user, onUpdate }) {
       setBlockingUser(null);
       setBlockReason("");
       if (onUpdate) onUpdate();
-    } catch (error) {
+      } catch (error) {
       console.error("Error blocking user:", error);
-      alert("Failed to block user. Please try again.");
-    }
-  };
+      toast.error("Failed to block user. Please try again.");
+      }
+      };
 
   const hasConnection = (targetEmail) => {
     return myConnections.some(c =>
@@ -337,10 +338,9 @@ export default function FindPartners({ theme, user, onUpdate }) {
                     size="sm"
                     variant="outline"
                     onClick={async () => {
-                      if (confirm(`Unblock ${blocked.blocked_name}?`)) {
-                        await base44.entities.BlockedUser.delete(blocked.id);
-                        await loadBlockedUsers();
-                      }
+                      await base44.entities.BlockedUser.delete(blocked.id);
+                      await loadBlockedUsers();
+                      toast.success(`Unblocked ${blocked.blocked_name}`);
                     }}
                   >
                     Unblock
