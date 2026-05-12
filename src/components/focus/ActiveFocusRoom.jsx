@@ -276,17 +276,19 @@ export default function ActiveFocusRoom({ room, onLeave }) {
     try {
       const newMode = mode === 'work' ? 'break' : 'work';
       
+      // Play completion sound immediately
+      const soundUrl = mode === 'work' 
+        ? completionSounds[currentRoom.completion_sound || 'joyful_melody']?.url || completionSounds['joyful_melody'].url
+        : breakEndSound;
+      
+      const audio = new Audio(soundUrl);
+      audio.volume = 0.8;
+      audio.play().catch(err => console.log("Audio play failed:", err));
+      
       await FocusRoom.update(currentRoom.id, {
         timer_mode: newMode,
         timer_started_at: new Date().toISOString()
       });
-
-      if (audioRef.current) {
-        audioRef.current.src = mode === 'work' 
-          ? completionSounds[currentRoom.completion_sound || 'joyful_melody']?.url || completionSounds['joyful_melody'].url
-          : breakEndSound;
-        audioRef.current.play().catch(err => console.log("Audio play failed:", err));
-      }
 
       const encouragement = newMode === 'break' 
         ? "Great work! Time for a break! ☕"
