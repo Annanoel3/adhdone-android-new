@@ -1045,12 +1045,11 @@ Return JSON:
                             First Reminder Date:
                           </label>
                           <input
-                           key={`date-recurring-${reminderDate}`}
                            type="date"
-                           defaultValue={reminderDate}
-                           onChange={(e) => {
-                             setReminderDate(e.target.value);
-                             handleUpdateReminderTime(reminderTime || '09:00', e.target.value);
+                           value={reminderDate}
+                           onChange={(e) => setReminderDate(e.target.value)}
+                           onBlur={(e) => {
+                             if (e.target.value && reminderTime) handleUpdateReminderTime(reminderTime, e.target.value);
                            }}
                            className={`w-full border rounded px-3 py-2 ${
                              theme === 'dark'
@@ -1064,20 +1063,18 @@ Return JSON:
                            Reminder Time:
                           </label>
                           <input
-                           key={`time-recurring-${reminderTime}`}
                            type="time"
-                           defaultValue={reminderTime}
-                           onChange={(e) => {
-                             setReminderTime(e.target.value);
-                             const n = new Date(); const ld = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
-                             handleUpdateReminderTime(e.target.value, reminderDate || ld);
-                                           }}
-                                           className={`w-full border rounded px-3 py-2 ${
-                                             theme === 'dark'
-                                               ? 'bg-gray-900 border-gray-600 text-gray-100'
-                                               : 'bg-white border-gray-300 text-gray-900'
-                                           }`}
-                                          />
+                           value={reminderTime}
+                           onChange={(e) => setReminderTime(e.target.value)}
+                           onBlur={(e) => {
+                             if (reminderDate && e.target.value) handleUpdateReminderTime(e.target.value, reminderDate);
+                           }}
+                           className={`w-full border rounded px-3 py-2 ${
+                             theme === 'dark'
+                               ? 'bg-gray-900 border-gray-600 text-gray-100'
+                               : 'bg-white border-gray-300 text-gray-900'
+                           }`}
+                          />
                                           </div>
                                           </div>
 
@@ -1124,12 +1121,11 @@ Return JSON:
                           Reminder Date:
                         </label>
                         <input
-                          key={`date-once-${reminderDate}`}
                           type="date"
-                          defaultValue={reminderDate}
-                          onChange={(e) => {
-                            setReminderDate(e.target.value);
-                            handleUpdateReminderTime(reminderTime || '09:00', e.target.value);
+                          value={reminderDate}
+                          onChange={(e) => setReminderDate(e.target.value)}
+                          onBlur={(e) => {
+                            if (e.target.value && reminderTime) handleUpdateReminderTime(reminderTime, e.target.value);
                           }}
                           className={`w-full border rounded px-3 py-2 ${
                             theme === 'dark'
@@ -1137,26 +1133,24 @@ Return JSON:
                               : 'bg-white border-gray-300 text-gray-900'
                           }`}
                         />
-                      </div>
-                      <div>
+                        </div>
+                        <div>
                         <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
                           Reminder Time:
                         </label>
                         <input
-                          key={`time-once-${reminderTime}`}
                           type="time"
-                          defaultValue={reminderTime}
-                          onChange={(e) => {
-                            setReminderTime(e.target.value);
-                            const n2 = new Date(); const ld2 = `${n2.getFullYear()}-${String(n2.getMonth()+1).padStart(2,'0')}-${String(n2.getDate()).padStart(2,'0')}`;
-                            handleUpdateReminderTime(e.target.value, reminderDate || ld2);
-                                         }}
-                                         className={`w-full border rounded px-3 py-2 ${
-                                           theme === 'dark'
-                                             ? 'bg-gray-900 border-gray-600 text-gray-100'
-                                             : 'bg-white border-gray-300 text-gray-900'
-                                         }`}
-                                       />
+                          value={reminderTime}
+                          onChange={(e) => setReminderTime(e.target.value)}
+                          onBlur={(e) => {
+                            if (reminderDate && e.target.value) handleUpdateReminderTime(e.target.value, reminderDate);
+                          }}
+                          className={`w-full border rounded px-3 py-2 ${
+                            theme === 'dark'
+                              ? 'bg-gray-900 border-gray-600 text-gray-100'
+                              : 'bg-white border-gray-300 text-gray-900'
+                          }`}
+                        />
                       </div>
                       <div className={`border-t pt-3 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
                         <button 
