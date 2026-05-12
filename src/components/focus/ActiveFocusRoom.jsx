@@ -523,7 +523,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
           <div className="flex items-center gap-3 mb-3">
             <Button
               variant="ghost"
-              onClick={() => navigate(createPageUrl('FocusRooms'))}
+              onClick={() => navigate('/')}
               className="gap-2 p-3 h-12 text-base rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
             >
               <ArrowLeft className="w-5 h-5" />
