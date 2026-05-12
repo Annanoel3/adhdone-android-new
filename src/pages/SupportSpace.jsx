@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -128,7 +127,8 @@ YOUR RESPONSE GUIDELINES:
 
 Respond naturally, warmly, and like you genuinely care about understanding them. Most importantly: READ what they actually said and respond to THAT.`;
 
-      const response = await base44.integrations.Core.InvokeLLM({ prompt });
+      const result = await base44.functions.invoke('supportSpaceChat', { prompt });
+      const response = result?.data?.message;
       
       // Add AI response to chat
       setMessages(prev => [...prev, { role: "assistant", content: response }]);
@@ -173,7 +173,13 @@ Respond naturally, warmly, and like you genuinely care about understanding them.
 
     setIsLoading(true); // Indicate loading while transcribing
     try {
-      const transcription = await base44.integrations.Core.SpeechToText({ audio_file: file });
+      const audioBase64 = await new Promise((resolve) => {
+       const reader = new FileReader();
+       reader.onloadend = () => resolve(reader.result.split(',')[1]);
+       reader.readAsDataURL(file);
+      });
+      const sttResult = await base44.functions.invoke('transcribeAudio', { audio_base64: audioBase64, filename: file.name || 'audio.webm' });
+      const transcription = sttResult?.data;
       if (transcription && transcription.text) {
         await sendMessage(transcription.text);
       } else {
