@@ -29,6 +29,11 @@ export default function Home() {
   useEffect(() => {
     loadData();
     checkEndOfDayReview();
+    const interval = setInterval(() => {
+      const newTheme = localStorage.getItem('adhd_theme') || 'minimalist';
+      setTheme(newTheme);
+    }, 100);
+    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -38,12 +43,12 @@ export default function Home() {
     }
   }, [location.state, navigate, location.pathname]);
 
-  // CRITICAL FIX: Refresh tasks every 2 minutes to pick up reminder updates from cron
+  // CRITICAL FIX: Refresh tasks every 30 seconds to pick up reminder updates from cron
   useEffect(() => {
     const refreshInterval = setInterval(() => {
       console.log('🔄 [HOME] Auto-refreshing tasks to update reminder times...');
       loadData();
-    }, 120000); // Every 2 minutes
+    }, 30000); // Every 30 seconds
 
     return () => clearInterval(refreshInterval);
   }, []);
