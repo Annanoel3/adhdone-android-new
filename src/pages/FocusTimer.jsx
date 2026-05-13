@@ -35,9 +35,9 @@ export default function FocusTimer() {
   } = usePomodoro();
 
   const playlists = {
+    none: { name: "No Music" },
     lofi_bossa: { name: "Lofi Bossa Nova Jazz Mix" },
     ghibli: { name: "Ghibli Inspired Piano Music" },
-    none: { name: "No Music" },
     lofi: { name: "Lo-Fi Beats" },
     jazz: { name: "Jazz & Smooth" },
     ambient: { name: "Ambient Sounds" },
