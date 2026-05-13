@@ -61,7 +61,7 @@ export default function RoyaltyFreeMusicPlayer({ selectedPlaylist, theme }) {
           <iframe
             width="100%"
             height="200"
-            src={`${primarySource.url}&modestbranding=1`}
+            src={`${primarySource.url}?modestbranding=1`}
             frameBorder="0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
