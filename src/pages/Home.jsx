@@ -19,7 +19,7 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const specialMode = localStorage.getItem('special_mode') || 'normal';
+  const specialMode = localStorage.getItem('special_mode') || 'normal'; // v2
 
   // Helper function to get local date string using toLocaleDateString
   const getLocalDateString = (date) => {
