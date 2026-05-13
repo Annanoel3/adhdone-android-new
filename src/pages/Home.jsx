@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import { Button } from "@/components/ui/button";
 import WelcomeCard from "../components/home/WelcomeCard";
 import DailyTipCard from "../components/home/DailyTipCard";
 import QuickActions from "../components/home/QuickActions";
@@ -230,6 +231,15 @@ export default function Home() {
           remainingCount={activeTasks.length}
           theme={theme}
         />
+
+        {/* TEMP TEST BUTTON */}
+        <Button
+          onClick={() => setShowEndOfDayReview(true)}
+          className="mb-2 bg-orange-500 hover:bg-orange-600 text-white text-xs"
+          size="sm"
+        >
+          🧪 Test End of Day Review
+        </Button>
 
         <div className="space-y-6">
           <WelcomeCard userName={user?.full_name} theme={theme} specialMode={specialMode} />
