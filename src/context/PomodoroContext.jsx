@@ -36,7 +36,7 @@ export function PomodoroProvider({ children }) {
   const [mode, setMode] = useState(saved?.mode ?? 'work');
   const [sessionCount, setSessionCount] = useState(saved?.sessionCount ?? 0);
   const [completionSound, setCompletionSound] = useState(saved?.completionSound ?? 'joyful_melody');
-  const [selectedPlaylist, setSelectedPlaylist] = useState('none');
+  const [selectedPlaylist, setSelectedPlaylist] = useState(saved?.selectedPlaylist ?? 'none');
 
   const intervalRef = useRef(null);
   const audioRef = useRef(null);
