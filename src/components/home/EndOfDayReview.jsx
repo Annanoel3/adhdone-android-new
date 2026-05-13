@@ -38,15 +38,15 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
     const today = new Date().toLocaleDateString('en-CA'); // local YYYY-MM-DD
     const startOfDay = new Date(today).toISOString();
 
-    // Get all tasks
-    const allTasks = await base44.entities.Task.list();
+    // Get all tasks - use a high limit to ensure we get all tasks including completed ones
+    const allTasks = await base44.entities.Task.list('-updated_date', 500);
 
     // Completed today = any task completed today (regardless of when it was created)
     const completed = allTasks.filter(t => {
       if (t.status !== 'completed' || t.parent_task_id) return false;
       const dateToCheck = t.completed_at
-        ? new Date(t.completed_at).toLocaleDateString('en-CA')
-        : new Date(t.updated_date).toLocaleDateString('en-CA');
+        ? new Date(t.completed_at).toISOString().split('T')[0]
+        : new Date(t.updated_date).toISOString().split('T')[0];
       return dateToCheck === today;
     });
 
