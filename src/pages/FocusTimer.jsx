@@ -309,14 +309,12 @@ export default function FocusTimer() {
             </svg>
 
             <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-              <AnimatePresence mode="wait">
-                <motion.div key={`${minutes}-${seconds}`} initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 1.1, opacity: 0 }}
-                  className={`text-6xl md:text-7xl font-bold mb-4 ${theme === 'dark' || theme === 'spicybrains' ? 'text-white' : 'text-gray-900'}`}
-                  style={{ textShadow: theme === 'colorful' || theme === 'spicybrains' ? '0 2px 20px rgba(255,255,255,0.5)' : 'none' }}
-                >
-                  {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
-                </motion.div>
-              </AnimatePresence>
+              <div
+                className={`text-6xl md:text-7xl font-bold mb-4 ${theme === 'dark' || theme === 'spicybrains' ? 'text-white' : 'text-gray-900'}`}
+                style={{ textShadow: theme === 'colorful' || theme === 'spicybrains' ? '0 2px 20px rgba(255,255,255,0.5)' : 'none' }}
+              >
+                {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+              </div>
 
               <motion.div animate={isActive ? { scale: [1, 1.05, 1] } : {}} transition={{ duration: 2, repeat: Infinity }}
                 className={`text-lg font-medium flex items-center gap-2 ${
