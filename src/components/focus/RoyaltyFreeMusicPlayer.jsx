@@ -9,33 +9,31 @@ export default function RoyaltyFreeMusicPlayer({ selectedPlaylist, theme }) {
     lofi: {
       name: "Lo-Fi Beats",
       sources: [
-        { title: "Lo-Fi Study Mix", url: "https://www.youtube.com/embed/jfKfPfyJRdk?si=WwI8NKNLq" },
-        { title: "Peaceful Piano", url: "https://www.youtube.com/embed/T9F2Q8xP4Ik?si=VjLZKnzq" },
+        { title: "Lo-Fi Study Mix", url: "https://www.youtube.com/embed/H-Meqjg9cxA" },
       ]
     },
     jazz: {
       name: "Jazz & Smooth",
       sources: [
-        { title: "Soft Jazz Collection", url: "https://www.youtube.com/embed/jfKfPfyJRdk?si=WwI8NKNLq" },
+        { title: "Smooth Jazz", url: "https://www.youtube.com/embed/DZpPhCGoPLg" },
       ]
     },
     ambient: {
       name: "Ambient Sounds",
       sources: [
-        { title: "Ambient Meditation", url: "https://www.youtube.com/embed/yd8jh9QYvQc?si=tq8fqVzq" },
-        { title: "Nature Sounds", url: "https://www.youtube.com/embed/KxNZjXnBrU4?si=kwDqB9zq" },
+        { title: "Ambient Chill Music", url: "https://www.youtube.com/embed/DZpPhCGoPLg" },
       ]
     },
     lofi_bossa: {
       name: "Lofi Bossa Nova Jazz Mix",
       sources: [
-        { title: "Lofi Bossa Nova Jazz Mix", url: "https://www.youtube.com/embed/Cz-j53kiiKY" },
+        { title: "Lofi Bossa Nova Jazz Mix", url: "https://www.youtube.com/embed/mwsCCweq3sw" },
       ]
     },
     ghibli: {
       name: "Ghibli Inspired Piano Music",
       sources: [
-        { title: "Ghibli Inspired Piano Music", url: "https://www.youtube.com/embed/qte40ow045U" },
+        { title: "Ghibli Piano Collection", url: "https://www.youtube.com/embed/HGl75kurxok" },
       ]
     },
   };
