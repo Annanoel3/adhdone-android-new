@@ -899,7 +899,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             </SidebarFooter>
           </Sidebar>
 
-          <main className="flex-1 flex flex-col min-w-0 min-h-screen relative z-10" style={{ pointerEvents: 'auto' }}>
+          <main className="flex-1 flex flex-col min-w-0 min-h-screen relative z-10">
             <header className={`backdrop-blur-md border-b px-6 md:hidden sticky top-0 z-10 ${
               isSeasonalTheme()
                 ? 'bg-white/60 border-white/30'
