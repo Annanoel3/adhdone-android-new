@@ -45,8 +45,8 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
     const completed = allTasks.filter(t => {
       if (t.status !== 'completed' || t.parent_task_id) return false;
       const dateToCheck = t.completed_at
-        ? new Date(t.completed_at).toISOString().split('T')[0]
-        : new Date(t.updated_date).toISOString().split('T')[0];
+        ? new Date(t.completed_at).toLocaleDateString('en-CA')
+        : new Date(t.updated_date).toLocaleDateString('en-CA');
       return dateToCheck === today;
     });
 
