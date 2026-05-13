@@ -550,17 +550,17 @@ export default function ActiveFocusRoom({ room, onLeave }) {
 
             <Sheet>
                <SheetTrigger asChild>
-                 <Button variant="outline" size="sm">
-                   <UsersIcon className="w-4 h-4 mr-2" />
-                   {participants.length + 1}
-                 </Button>
-               </SheetTrigger>
-               <SheetContent className={theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}>
-                 <SheetHeader>
-                   <SheetTitle className={theme === 'dark' ? 'text-white' : ''}>
-                     Participants ({participants.length + 1})
-                   </SheetTitle>
-                 </SheetHeader>
+                  <Button variant="outline" size="sm">
+                    <UsersIcon className="w-4 h-4 mr-2" />
+                    {participants.length}
+                  </Button>
+                </SheetTrigger>
+                <SheetContent className={theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}>
+                  <SheetHeader>
+                    <SheetTitle className={theme === 'dark' ? 'text-white' : ''}>
+                      Participants ({participants.length})
+                    </SheetTitle>
+                  </SheetHeader>
                 <div className="mt-6 space-y-3">
                   {/* Current user */}
                   {user && (
