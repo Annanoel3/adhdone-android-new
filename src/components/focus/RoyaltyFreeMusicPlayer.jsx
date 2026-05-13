@@ -6,6 +6,30 @@ export default function RoyaltyFreeMusicPlayer({ selectedPlaylist, theme }) {
 
   // Royalty-free music sources
   const playlists = {
+    ghibli: {
+      name: "Ghibli Music",
+      sources: [
+        { title: "Ghibli Music", url: "https://www.youtube-nocookie.com/embed/qte40ow045U?autoplay=1&origin=https://adhdone.space" },
+      ]
+    },
+    lofi_bossa: {
+      name: "Lofi Bossa Nova Jazz Mix",
+      sources: [
+        { title: "Lofi Bossa Nova Jazz Mix", url: "https://www.youtube-nocookie.com/embed/Cz-j53kiiKY?autoplay=1&origin=https://adhdone.space" },
+      ]
+    },
+    dark_ocean_house: {
+      name: "Dark Ocean House Hustle",
+      sources: [
+        { title: "Dark Ocean House Hustle", url: "https://www.youtube-nocookie.com/embed/pHuKEK1YBFs?autoplay=1&origin=https://adhdone.space" },
+      ]
+    },
+    dark_jungle_house: {
+      name: "Dark Jungle House Hustle",
+      sources: [
+        { title: "Dark Jungle House Hustle", url: "https://www.youtube-nocookie.com/embed/Gp0qjHo8zDw?autoplay=1&origin=https://adhdone.space" },
+      ]
+    },
     lofi: {
       name: "Lo-Fi Beats",
       sources: [
@@ -22,18 +46,6 @@ export default function RoyaltyFreeMusicPlayer({ selectedPlaylist, theme }) {
       name: "Ambient Sounds",
       sources: [
         { title: "Ambient Chill Music", url: "https://www.youtube-nocookie.com/embed/DZpPhCGoPLg?autoplay=1&origin=https://adhdone.space" },
-      ]
-    },
-    lofi_bossa: {
-      name: "Lofi Bossa Nova Jazz Mix",
-      sources: [
-        { title: "Lofi Bossa Nova Jazz Mix", url: "https://www.youtube-nocookie.com/embed/mwsCCweq3sw?autoplay=1&origin=https://adhdone.space" },
-      ]
-    },
-    ghibli: {
-      name: "Ghibli Inspired Piano Music",
-      sources: [
-        { title: "Ghibli Piano Collection", url: "https://www.youtube-nocookie.com/embed/HGl75kurxok?autoplay=1&origin=https://adhdone.space" },
       ]
     },
   };

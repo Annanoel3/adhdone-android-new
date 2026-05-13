@@ -36,8 +36,10 @@ export default function FocusTimer() {
 
   const playlists = {
     none: { name: "No Music" },
+    ghibli: { name: "Ghibli Music" },
     lofi_bossa: { name: "Lofi Bossa Nova Jazz Mix" },
-    ghibli: { name: "Ghibli Inspired Piano Music" },
+    dark_ocean_house: { name: "Dark Ocean House Hustle" },
+    dark_jungle_house: { name: "Dark Jungle House Hustle" },
     lofi: { name: "Lo-Fi Beats" },
     jazz: { name: "Jazz & Smooth" },
     ambient: { name: "Ambient Sounds" },
