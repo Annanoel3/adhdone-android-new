@@ -9,31 +9,31 @@ export default function RoyaltyFreeMusicPlayer({ selectedPlaylist, theme }) {
     lofi: {
       name: "Lo-Fi Beats",
       sources: [
-        { title: "Lo-Fi Study Mix", url: "https://www.youtube.com/embed/H-Meqjg9cxA" },
+        { title: "Lo-Fi Study Mix", url: "https://www.youtube-nocookie.com/embed/H-Meqjg9cxA?autoplay=1&origin=https://adhdone.space" },
       ]
     },
     jazz: {
       name: "Jazz & Smooth",
       sources: [
-        { title: "Smooth Jazz", url: "https://www.youtube.com/embed/DZpPhCGoPLg" },
+        { title: "Smooth Jazz", url: "https://www.youtube-nocookie.com/embed/DZpPhCGoPLg?autoplay=1&origin=https://adhdone.space" },
       ]
     },
     ambient: {
       name: "Ambient Sounds",
       sources: [
-        { title: "Ambient Chill Music", url: "https://www.youtube.com/embed/DZpPhCGoPLg" },
+        { title: "Ambient Chill Music", url: "https://www.youtube-nocookie.com/embed/DZpPhCGoPLg?autoplay=1&origin=https://adhdone.space" },
       ]
     },
     lofi_bossa: {
       name: "Lofi Bossa Nova Jazz Mix",
       sources: [
-        { title: "Lofi Bossa Nova Jazz Mix", url: "https://www.youtube.com/embed/mwsCCweq3sw" },
+        { title: "Lofi Bossa Nova Jazz Mix", url: "https://www.youtube-nocookie.com/embed/mwsCCweq3sw?autoplay=1&origin=https://adhdone.space" },
       ]
     },
     ghibli: {
       name: "Ghibli Inspired Piano Music",
       sources: [
-        { title: "Ghibli Piano Collection", url: "https://www.youtube.com/embed/HGl75kurxok" },
+        { title: "Ghibli Piano Collection", url: "https://www.youtube-nocookie.com/embed/HGl75kurxok?autoplay=1&origin=https://adhdone.space" },
       ]
     },
   };
@@ -61,7 +61,7 @@ export default function RoyaltyFreeMusicPlayer({ selectedPlaylist, theme }) {
           <iframe
             width="100%"
             height="200"
-            src={`${primarySource.url}?modestbranding=1`}
+            src={primarySource.url}
             frameBorder="0"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
             allowFullScreen
