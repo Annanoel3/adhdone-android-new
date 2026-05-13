@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import { DialogTrigger } from "@radix-ui/react-dialog";
 import { usePomodoro } from "@/context/PomodoroContext";
+import RoyaltyFreeMusicPlayer from "@/components/focus/RoyaltyFreeMusicPlayer";
 
 export default function FocusTimer() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
@@ -34,13 +35,10 @@ export default function FocusTimer() {
   } = usePomodoro();
 
   const playlists = {
-    none: { name: "No Music", embed: null },
-    study: { name: "Deep Focus Study", embed: "https://open.spotify.com/embed/playlist/37i9dQZF1DWZeKCadgRdKQ?utm_source=generator" },
-    lofi: { name: "Lo-Fi Beats", embed: "https://open.spotify.com/embed/playlist/37i9dQZF1DWWQRwui0ExPn?utm_source=generator" },
-    slowjazz: { name: "Slow Jazz", embed: "https://open.spotify.com/embed/playlist/37i9dQZF1DWV7EzJMK2FUI?utm_source=generator" },
-    cleaning: { name: "Cleaning Energy", embed: "https://open.spotify.com/embed/playlist/37i9dQZF1DX3rxVfibe1L0?utm_source=generator" },
-    ambient: { name: "Ambient Sounds", embed: "https://open.spotify.com/embed/playlist/37i9dQZF1DX3Ogo9pFvBkY?utm_source=generator" },
-    classical: { name: "Classical Focus", embed: "https://open.spotify.com/embed/playlist/37i9dQZF1DWWEJlAGA9gs0?utm_source=generator" },
+    none: { name: "No Music" },
+    lofi: { name: "Lo-Fi Beats" },
+    jazz: { name: "Jazz & Smooth" },
+    ambient: { name: "Ambient Sounds" },
   };
 
   useEffect(() => {
@@ -275,11 +273,8 @@ export default function FocusTimer() {
             </Select>
           </div>
           <AnimatePresence>
-            {showMusicPlayer && playlists[selectedPlaylist]?.embed && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.3 }}>
-                <iframe src={playlists[selectedPlaylist].embed} width="100%" height="152" frameBorder="0" allowFullScreen allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" loading="lazy" className="rounded-lg"></iframe>
-                <p className={`text-xs mt-2 text-center ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>💡 Click play on the Spotify player above to start music</p>
-              </motion.div>
+            {showMusicPlayer && (
+              <RoyaltyFreeMusicPlayer selectedPlaylist={selectedPlaylist} theme={theme} />
             )}
           </AnimatePresence>
         </CardContent>

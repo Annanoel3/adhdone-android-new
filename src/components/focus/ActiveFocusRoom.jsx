@@ -53,7 +53,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { validateContent } from "../utils/contentModeration";
 import ParticipantCard from "./ParticipantCard";
-import SpotifyWebPlayback from "./SpotifyWebPlayback";
+import RoyaltyFreeMusicPlayer from "./RoyaltyFreeMusicPlayer";
 
 export default function ActiveFocusRoom({ room, onLeave }) {
   const navigate = useNavigate();
@@ -116,13 +116,11 @@ export default function ActiveFocusRoom({ room, onLeave }) {
 
   const breakEndSound = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/three_dings.mp3";
 
-  const playlists = {
-    study: "37i9dQZF1DWZeKCadgRdKQ",
-    lofi: "37i9dQZF1DWWQRwui0ExPn",
-    slowjazz: "37i9dQZF1DWV7EzJMK2FUI",
-    cleaning: "37i9dQZF1DX3rxVfibe1L0",
-    ambient: "37i9dQZF1DX3Ogo9pFvBkY",
-    classical: "37i9dQZF1DWWEJlAGA9gs0"
+  const musicPlaylists = {
+    none: "No Music",
+    lofi: "Lo-Fi Beats",
+    jazz: "Jazz & Smooth",
+    ambient: "Ambient Sounds"
   };
 
   useEffect(() => {
@@ -477,23 +475,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
     return 'bg-gradient-to-br from-purple-50 via-pink-50 to-orange-50';
   };
 
-  const getPlaylistEmbed = () => {
-    if (currentRoom.selected_playlist === 'none') return null;
-    
-    // Check if it's a Spotify playlist ID
-    let playlistId = currentRoom.selected_playlist;
-    if (currentRoom.selected_playlist && currentRoom.selected_playlist.startsWith('spotify:')) {
-      playlistId = currentRoom.selected_playlist.replace('spotify:', '');
-    } else if (playlists[currentRoom.selected_playlist]) {
-      playlistId = playlists[currentRoom.selected_playlist];
-    } else {
-        // If it's neither a spotify: URI nor a known key, assume it's a raw playlist ID
-        // Or handle cases where it's an invalid ID
-        // For robustness, could validate the playlistId format (e.g., regex for Spotify IDs)
-    }
-    
-    return `https://open.spotify.com/embed/playlist/${playlistId}?utm_source=generator&theme=0`;
-  };
+
 
   if (!user) {
     return (
@@ -505,8 +487,6 @@ export default function ActiveFocusRoom({ room, onLeave }) {
       </div>
     );
   }
-
-  const playlistEmbed = getPlaylistEmbed();
 
   return (
     <div className={`min-h-screen ${getBackgroundClass()}`}>
@@ -848,10 +828,10 @@ export default function ActiveFocusRoom({ room, onLeave }) {
             </form>
           </div>
 
-          {/* Music - Spotify Web Playback */}
-          {playlistEmbed && (
-            <SpotifyWebPlayback 
-              playlistId={playlists[currentRoom.selected_playlist] || currentRoom.selected_playlist.replace('spotify:', '')} 
+          {/* Music Player */}
+          {currentRoom.selected_playlist && currentRoom.selected_playlist !== 'none' && (
+            <RoyaltyFreeMusicPlayer 
+              selectedPlaylist={currentRoom.selected_playlist}
               theme={theme}
             />
           )}

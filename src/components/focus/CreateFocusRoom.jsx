@@ -22,12 +22,9 @@ export default function CreateFocusRoom({ user, theme, onRoomCreated }) {
 
   const playlists = {
     none: { name: "No Music" },
-    study: { name: "Deep Focus Study" },
     lofi: { name: "Lo-Fi Beats" },
-    slowjazz: { name: "Slow Jazz" },
-    cleaning: { name: "Cleaning Energy" },
-    ambient: { name: "Ambient Sounds" },
-    classical: { name: "Classical Focus" }
+    jazz: { name: "Jazz & Smooth" },
+    ambient: { name: "Ambient Sounds" }
   };
 
   const completionSounds = {
