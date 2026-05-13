@@ -26,6 +26,18 @@ export default function RoyaltyFreeMusicPlayer({ selectedPlaylist, theme }) {
         { title: "Nature Sounds", url: "https://www.youtube.com/embed/KxNZjXnBrU4?si=kwDqB9zq" },
       ]
     },
+    lofi_bossa: {
+      name: "Lofi Bossa Nova Jazz Mix",
+      sources: [
+        { title: "Lofi Bossa Nova Jazz Mix", url: "https://www.youtube.com/embed/Cz-j53kiiKY" },
+      ]
+    },
+    ghibli: {
+      name: "Ghibli Inspired Piano Music",
+      sources: [
+        { title: "Ghibli Inspired Piano Music", url: "https://www.youtube.com/embed/qte40ow045U" },
+      ]
+    },
   };
 
   const playlist = playlists[selectedPlaylist];

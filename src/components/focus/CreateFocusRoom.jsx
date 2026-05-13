@@ -24,7 +24,9 @@ export default function CreateFocusRoom({ user, theme, onRoomCreated }) {
     none: { name: "No Music" },
     lofi: { name: "Lo-Fi Beats" },
     jazz: { name: "Jazz & Smooth" },
-    ambient: { name: "Ambient Sounds" }
+    ambient: { name: "Ambient Sounds" },
+    lofi_bossa: { name: "Lofi Bossa Nova Jazz Mix" },
+    ghibli: { name: "Ghibli Inspired Piano Music" }
   };
 
   const completionSounds = {
