@@ -16,12 +16,16 @@ import {
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { base44 } from '@/api/base44Client';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 export default function Settings() {
   const navigate = useNavigate();
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [specialMode, setSpecialMode] = useState(() => localStorage.getItem('special_mode') || 'normal');
   const [user, setUser] = useState(null);
+  const [quietHoursStart, setQuietHoursStart] = useState(() => localStorage.getItem('quiet_hours_start') || '20:00');
+  const [quietHoursEnd, setQuietHoursEnd] = useState(() => localStorage.getItem('quiet_hours_end') || '08:00');
 
   useEffect(() => {
     loadUser();
@@ -100,6 +104,13 @@ export default function Settings() {
     }
   };
 
+  const handleQuietHoursChange = (startTime, endTime) => {
+    setQuietHoursStart(startTime);
+    setQuietHoursEnd(endTime);
+    localStorage.setItem('quiet_hours_start', startTime);
+    localStorage.setItem('quiet_hours_end', endTime);
+  };
+
   const settingsItems = [
     {
       icon: UserIcon,
@@ -157,6 +168,45 @@ export default function Settings() {
             Customize your ADHDone experience
           </p>
         </div>
+
+        {/* Quiet Hours Section */}
+        <Card className={`mb-6 border-none shadow-lg ${
+          theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+        }`}>
+          <CardHeader>
+            <CardTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-white' : ''}`}>
+              <Moon className="w-5 h-5" />
+              Quiet Hours
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+              Set the hours when you don't want to receive notifications. For example, 8 PM to 8 AM.
+            </p>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="quiet-start" className={theme === 'dark' ? 'text-gray-200' : ''}>Start Time</Label>
+                <Input
+                  id="quiet-start"
+                  type="time"
+                  value={quietHoursStart}
+                  onChange={(e) => handleQuietHoursChange(e.target.value, quietHoursEnd)}
+                  className={theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : ''}
+                />
+              </div>
+              <div>
+                <Label htmlFor="quiet-end" className={theme === 'dark' ? 'text-gray-200' : ''}>End Time</Label>
+                <Input
+                  id="quiet-end"
+                  type="time"
+                  value={quietHoursEnd}
+                  onChange={(e) => handleQuietHoursChange(quietHoursStart, e.target.value)}
+                  className={theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : ''}
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Theme Section */}
         <Card className={`mb-6 border-none shadow-lg ${

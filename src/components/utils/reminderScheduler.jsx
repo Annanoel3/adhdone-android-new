@@ -6,6 +6,53 @@
 import { base44 } from "@/api/base44Client";
 
 /**
+ * Checks if a given time is within quiet hours
+ */
+function isInQuietHours(dateTime) {
+  const quietStart = localStorage.getItem('quiet_hours_start') || '20:00';
+  const quietEnd = localStorage.getItem('quiet_hours_end') || '08:00';
+  
+  const date = new Date(dateTime);
+  const hours = date.getHours();
+  const minutes = date.getMinutes();
+  const currentTime = hours * 100 + minutes; // Convert to HHMM format for easy comparison
+  
+  const [startHour, startMin] = quietStart.split(':').map(Number);
+  const [endHour, endMin] = quietEnd.split(':').map(Number);
+  const startTime = startHour * 100 + startMin;
+  const endTime = endHour * 100 + endMin;
+  
+  // Handle case where quiet hours span midnight (e.g., 8 PM to 8 AM)
+  if (startTime > endTime) {
+    return currentTime >= startTime || currentTime < endTime;
+  } else {
+    return currentTime >= startTime && currentTime < endTime;
+  }
+}
+
+/**
+ * Adjusts send time to avoid quiet hours
+ */
+function adjustForQuietHours(dateTime) {
+  let adjustedTime = new Date(dateTime);
+  
+  while (isInQuietHours(adjustedTime)) {
+    const quietEnd = localStorage.getItem('quiet_hours_end') || '08:00';
+    const [endHour, endMin] = quietEnd.split(':').map(Number);
+    
+    // Jump to the end of quiet hours
+    adjustedTime.setHours(endHour, endMin, 0, 0);
+    
+    // If adjusted time is now in the past, move to tomorrow
+    if (adjustedTime < new Date()) {
+      adjustedTime.setDate(adjustedTime.getDate() + 1);
+    }
+  }
+  
+  return adjustedTime;
+}
+
+/**
  * Schedules push notifications and returns OneSignal notification ID
  */
 export async function scheduleReminder({
@@ -32,7 +79,13 @@ export async function scheduleReminder({
   };
 
   if (sendAtISO) {
-    payload.sendAtISO = new Date(sendAtISO).toISOString();
+    let scheduleTime = new Date(sendAtISO);
+    // Adjust for quiet hours
+    if (isInQuietHours(scheduleTime)) {
+      scheduleTime = adjustForQuietHours(scheduleTime);
+      console.log('[scheduleReminder] Adjusted time to avoid quiet hours:', scheduleTime.toISOString());
+    }
+    payload.sendAtISO = scheduleTime.toISOString();
     console.log('[scheduleReminder] Using absolute time:', payload.sendAtISO);
   } else if (typeof minutesFromNow === "number") {
     payload.minutesFromNow = minutesFromNow;
@@ -140,7 +193,12 @@ export async function scheduleRecurringReminders({
   // Schedule all reminders in parallel
   const schedulePromises = [];
   for (let i = 0; i < count; i++) {
-    const sendAt = new Date(new Date(startTime).getTime() + (intervalMs * i));
+    let sendAt = new Date(new Date(startTime).getTime() + (intervalMs * i));
+    
+    // Adjust for quiet hours
+    if (isInQuietHours(sendAt)) {
+      sendAt = adjustForQuietHours(sendAt);
+    }
     
     schedulePromises.push(
       scheduleReminder({

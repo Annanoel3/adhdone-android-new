@@ -34,6 +34,7 @@ export default function Tasks() {
   const [activeTasks, setActiveTasks] = useState([]);
   const [completedThisWeek, setCompletedThisWeek] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
+  const [sortBy, setSortBy] = useState('created_date');
 
   useEffect(() => {
     loadTasks();
@@ -57,7 +58,7 @@ export default function Tasks() {
 
   // Effect to update active and completed tasks whenever allTasks changes
   useEffect(() => {
-    setActiveTasks(allTasks.filter(t => t.status === 'active' || t.status === 'snoozed'));
+    setActiveTasks(allTasks.filter(t => t.status === 'active' && !t.parent_task_id));
     
     // Calculate tasks completed this week
     const now = new Date();
@@ -81,8 +82,28 @@ export default function Tasks() {
     if (urgencyFilter !== 'all') {
       filtered = filtered.filter(t => t.urgency === urgencyFilter);
     }
+
+    // Sort tasks
+    filtered.sort((a, b) => {
+      switch (sortBy) {
+        case 'priority':
+          const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
+          return (priorityOrder[a.urgency] || 2) - (priorityOrder[b.urgency] || 2);
+        case 'due_date':
+          const aDate = a.next_reminder ? new Date(a.next_reminder).getTime() : Infinity;
+          const bDate = b.next_reminder ? new Date(b.next_reminder).getTime() : Infinity;
+          return aDate - bDate;
+        case 'energy':
+          const energyOrder = { low: 0, medium: 1, high: 2 };
+          return (energyOrder[a.energy_required] || 1) - (energyOrder[b.energy_required] || 1);
+        case 'created_date':
+        default:
+          return new Date(b.created_date).getTime() - new Date(a.created_date).getTime();
+      }
+    });
+
     setFilteredTasks(filtered);
-  }, [allTasks, statusFilter, urgencyFilter]);
+  }, [allTasks, statusFilter, urgencyFilter, sortBy]);
 
   useEffect(() => {
     applyFilters();
@@ -275,6 +296,18 @@ export default function Tasks() {
               <SelectItem value="high">High</SelectItem>
               <SelectItem value="medium">Medium</SelectItem>
               <SelectItem value="low">Low</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="created_date">Newest First</SelectItem>
+              <SelectItem value="priority">By Priority</SelectItem>
+              <SelectItem value="due_date">By Due Date</SelectItem>
+              <SelectItem value="energy">By Energy</SelectItem>
             </SelectContent>
           </Select>
         </div>
