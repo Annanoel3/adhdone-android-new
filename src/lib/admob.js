@@ -1,12 +1,24 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 
 const AD_UNIT_ID = 'ca-app-pub-7979856440890193/4453371625';
-const SHOW_EVERY_N_OPENS = 3;  // Show ad every 3rd app open
-const AD_DELAY_MS = 10000;     // Wait 10 seconds before showing
+const SHOW_EVERY_N_OPENS = 4;  // Show ad every 4th app open
+const AD_DELAY_MS = 15000;     // Wait 15 seconds before showing
 
 let AdMob = null;
 let hasShownAdThisLaunch = false;
 let hasInitializedAdMob = false;
+
+/**
+ * Check if an input field is currently focused (user is typing)
+ */
+function isInputFocused() {
+  const activeElement = document.activeElement;
+  return activeElement && (
+    activeElement.tagName === 'INPUT' || 
+    activeElement.tagName === 'TEXTAREA' || 
+    activeElement.contentEditable === 'true'
+  );
+}
 
 export async function initAdMob() {
   if (hasInitializedAdMob) return;
@@ -43,7 +55,23 @@ export async function maybeShowAdOnOpen() {
   localStorage.setItem('appOpenCount', String(count));
 
   if (count % SHOW_EVERY_N_OPENS === 0) {
+    // Wait 15 seconds before attempting to show the ad
     await new Promise(resolve => setTimeout(resolve, AD_DELAY_MS));
+    
+    // Check if an input is currently focused - if so, wait until it's unfocused
+    if (isInputFocused()) {
+      await new Promise(resolve => {
+        const checkInput = () => {
+          if (!isInputFocused()) {
+            resolve();
+          } else {
+            setTimeout(checkInput, 100);
+          }
+        };
+        checkInput();
+      });
+    }
+    
     await showInterstitialAd();
   }
 }
