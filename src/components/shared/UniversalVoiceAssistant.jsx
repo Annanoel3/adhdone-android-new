@@ -9,8 +9,7 @@ import { Task } from "@/entities/Task";
 import { ParkingLotIdea } from "@/entities/ParkingLotIdea";
 import { User } from "@/entities/User";
 import { scheduleReminder } from "../utils/reminderScheduler";
-// Access VoiceRecorder via Capacitor bridge at runtime (native only)
-const getVoiceRecorder = () => window?.Capacitor?.Plugins?.VoiceRecorder ?? null;
+import { VoiceRecorder } from 'capacitor-voice-recorder';
 
 export default function UniversalVoiceAssistant({ theme, currentPageName }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -32,11 +31,6 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
 
   const startRecording = async () => {
     try {
-      const VoiceRecorder = getVoiceRecorder();
-      if (!VoiceRecorder) {
-        alert("Voice recording is only available on the mobile app.");
-        return;
-      }
       const { value: hasPermission } = await VoiceRecorder.hasAudioRecordingPermission();
       if (!hasPermission) {
         const { value: granted } = await VoiceRecorder.requestAudioRecordingPermission();
@@ -56,7 +50,6 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
 
   const stopRecording = async () => {
     try {
-      const VoiceRecorder = getVoiceRecorder();
       const result = await VoiceRecorder.stopRecording();
       window.__microphoneActive = false;
       setIsRecording(false);

@@ -7,8 +7,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Mic, CheckCircle } from "lucide-react";
-// Access VoiceRecorder via Capacitor bridge at runtime (native only)
-const getVoiceRecorder = () => window?.Capacitor?.Plugins?.VoiceRecorder ?? null;
+import { VoiceRecorder } from 'capacitor-voice-recorder';
 
 export default function MicrophonePermissionCheck({ theme }) {
   const [showPrompt, setShowPrompt] = useState(false);
@@ -23,8 +22,6 @@ export default function MicrophonePermissionCheck({ theme }) {
     if (hasAsked) return;
 
     try {
-      const VoiceRecorder = getVoiceRecorder();
-      if (!VoiceRecorder) return; // web preview, skip
       const { value: hasPermission } = await VoiceRecorder.hasAudioRecordingPermission();
       if (hasPermission) {
         localStorage.setItem('microphone_permission_asked', 'granted');
@@ -42,8 +39,6 @@ export default function MicrophonePermissionCheck({ theme }) {
 
   const requestPermission = async () => {
     try {
-      const VoiceRecorder = getVoiceRecorder();
-      if (!VoiceRecorder) { setShowPrompt(false); return; }
       const { value: granted } = await VoiceRecorder.requestAudioRecordingPermission();
       if (granted) {
         localStorage.setItem('microphone_permission_asked', 'granted');
