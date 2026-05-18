@@ -66,6 +66,7 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
       recorder.start();
       setMediaRecorder(recorder);
       setIsRecording(true);
+      window.__microphoneActive = true;
     } catch (error) {
       console.error("Microphone error:", error);
       alert("Could not access microphone");
@@ -76,6 +77,7 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
       mediaRecorder.stop();
     }
+    window.__microphoneActive = false;
   };
 
   const handleTranscription = async (audioBlob) => {
@@ -379,6 +381,7 @@ Return JSON:
     if (isRecording) {
       stopRecording();
     }
+    window.__microphoneActive = false;
     setIsOpen(false);
     setFeedbackMessage("");
     setProcessingMessage("");
