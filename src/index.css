@@ -74,6 +74,10 @@ button:focus-visible {
 
 
 
+html, body {
+  overscroll-behavior-y: contain;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
