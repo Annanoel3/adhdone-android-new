@@ -9,6 +9,7 @@ import { Task } from "@/entities/Task";
 import { ParkingLotIdea } from "@/entities/ParkingLotIdea";
 import { User } from "@/entities/User";
 import { scheduleReminder } from "../utils/reminderScheduler";
+import { VoiceRecorder } from 'capacitor-voice-recorder';
 
 export default function UniversalVoiceAssistant({ theme, currentPageName }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -16,7 +17,6 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingMessage, setProcessingMessage] = useState("");
   const [feedbackMessage, setFeedbackMessage] = useState("");
-  const [mediaRecorder, setMediaRecorder] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -31,40 +31,15 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-
-      let mimeType = 'audio/webm;codecs=opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/webm';
-      }
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/mp4';
-      }
-
-      const recorder = new MediaRecorder(stream, { mimeType });
-      const chunks = [];
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.push(e.data);
-        }
-      };
-
-      recorder.onstop = async () => {
-        const audioBlob = new Blob(chunks, { type: mimeType });
-        stream.getTracks().forEach(track => track.stop());
-
-        if (audioBlob.size === 0) {
-          setIsRecording(false);
+      const { value: hasPermission } = await VoiceRecorder.hasAudioRecordingPermission();
+      if (!hasPermission) {
+        const { value: granted } = await VoiceRecorder.requestAudioRecordingPermission();
+        if (!granted) {
+          alert("Microphone permission is required to use voice features.");
           return;
         }
-
-        setIsRecording(false);
-        await handleTranscription(audioBlob);
-      };
-
-      recorder.start();
-      setMediaRecorder(recorder);
+      }
+      await VoiceRecorder.startRecording();
       setIsRecording(true);
       window.__microphoneActive = true;
     } catch (error) {
@@ -73,21 +48,33 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
     }
   };
 
-  const stopRecording = () => {
-    if (mediaRecorder && mediaRecorder.state !== "inactive") {
-      mediaRecorder.stop();
+  const stopRecording = async () => {
+    try {
+      const result = await VoiceRecorder.stopRecording();
+      window.__microphoneActive = false;
+      setIsRecording(false);
+      const { recordDataBase64, mimeType } = result.value;
+      const byteString = atob(recordDataBase64);
+      const ab = new ArrayBuffer(byteString.length);
+      const ia = new Uint8Array(ab);
+      for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+      const audioBlob = new Blob([ab], { type: mimeType });
+      await handleTranscription(audioBlob, mimeType);
+    } catch (error) {
+      console.error("Stop recording error:", error);
+      window.__microphoneActive = false;
+      setIsRecording(false);
     }
-    window.__microphoneActive = false;
   };
 
-  const handleTranscription = async (audioBlob) => {
+  const handleTranscription = async (audioBlob, mimeType) => {
     setIsProcessing(true);
     setProcessingMessage("Transcribing...");
 
     try {
-      // CRITICAL FIX: Convert Blob to File object
-      const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, {
-        type: audioBlob.type
+      const ext = (mimeType || audioBlob.type || 'audio/aac').includes('webm') ? 'webm' : 'm4a';
+      const audioFile = new File([audioBlob], `voice-${Date.now()}.${ext}`, {
+        type: mimeType || audioBlob.type
       });
 
       console.log('🎤 [VOICE ASSISTANT] Uploading audio:', {

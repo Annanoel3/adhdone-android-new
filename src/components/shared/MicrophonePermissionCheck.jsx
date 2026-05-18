@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Mic, CheckCircle } from "lucide-react";
+import { VoiceRecorder } from 'capacitor-voice-recorder';
 
 export default function MicrophonePermissionCheck({ theme }) {
   const [showPrompt, setShowPrompt] = useState(false);
@@ -18,34 +19,37 @@ export default function MicrophonePermissionCheck({ theme }) {
 
   const checkMicrophonePermission = async () => {
     const hasAsked = localStorage.getItem('microphone_permission_asked');
-    
-    if (hasAsked) {
-      return; // Already asked, don't show again
+    if (hasAsked) return;
+
+    try {
+      const { value: hasPermission } = await VoiceRecorder.hasAudioRecordingPermission();
+      if (hasPermission) {
+        localStorage.setItem('microphone_permission_asked', 'granted');
+        return;
+      }
+    } catch (e) {
+      // Plugin not available (web preview), skip
+      return;
     }
 
-    // Show prompt after app loads
     setTimeout(() => {
       setPermissionStatus('prompt');
       setShowPrompt(true);
-    }, 5000); // Wait 5 seconds before showing
+    }, 5000);
   };
 
   const requestPermission = async () => {
     try {
-      // This will trigger the native Android permission dialog
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      
-      // Permission granted
-      stream.getTracks().forEach(track => track.stop());
-      localStorage.setItem('microphone_permission_asked', 'granted');
-      setPermissionStatus('granted');
-      
-      setTimeout(() => {
+      const { value: granted } = await VoiceRecorder.requestAudioRecordingPermission();
+      if (granted) {
+        localStorage.setItem('microphone_permission_asked', 'granted');
+        setPermissionStatus('granted');
+        setTimeout(() => setShowPrompt(false), 1500);
+      } else {
+        localStorage.setItem('microphone_permission_asked', 'denied');
         setShowPrompt(false);
-      }, 1500);
-      
+      }
     } catch (error) {
-      // Permission denied or error
       console.error("Microphone permission error:", error);
       localStorage.setItem('microphone_permission_asked', 'denied');
       setShowPrompt(false);
