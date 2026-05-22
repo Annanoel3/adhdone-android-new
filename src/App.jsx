@@ -15,6 +15,15 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Settings from '@/pages/Settings';
 
+// Sentry loaded via CDN in index.html
+const Sentry = window.Sentry;
+if (Sentry) {
+  Sentry.init({
+    dsn: "https://d1d855ea4513af56c59c98e1a1dbb3ed@o4511434142580736.ingest.us.sentry.io/4511434182361088",
+    environment: "production",
+  });
+}
+
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
 const MainPage = mainPageKey ? Pages[mainPageKey] : <></>;
