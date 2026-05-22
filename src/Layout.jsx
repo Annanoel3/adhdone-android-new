@@ -424,12 +424,14 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 
   return (
     <div
-      className={`min-h-screen flex w-full overflow-x-hidden ${
+      className={`min-h-screen flex w-full overflow-hidden ${
         specialMode === 'normal' ? getBackgroundClass() : ''
       }`}
       style={{
         ...(isSeasonalTheme() ? getSeasonalBackgroundStyle() : {}),
-        paddingTop: 'env(safe-area-inset-top)'
+        paddingTop: 'env(safe-area-inset-top)',
+        height: '100vh',
+        maxHeight: '100vh'
       }}
     >
       {user && <OneSignalInit user={user} />}
@@ -938,7 +940,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               </div>
             </header>
 
-            <div className="flex-1 overflow-auto">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden">
               {children}
             </div>
 
