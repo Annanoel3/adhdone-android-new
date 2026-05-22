@@ -110,8 +110,18 @@ export default function TaskCard({
     onComplete(task);
   };
 
-  const handleDeleteTask = () => {
+  const handleDeleteTask = async () => {
     if (confirm(`Delete "${task.title}"?`)) {
+      // Cancel any pending OneSignal notifications before deleting
+      if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+        try {
+          const { base44 } = await import('@/api/base44Client');
+          await base44.functions.invoke('cancelTaskNotifications', { taskId: task.id });
+          console.log('Cancelled pending notifications for task:', task.id);
+        } catch (error) {
+          console.error('Error canceling notifications:', error);
+        }
+      }
       onDelete(task);
     }
   };
@@ -145,6 +155,17 @@ export default function TaskCard({
 
   const handleIntervalChange = async (newInterval) => {
     try {
+      // Cancel any pending OneSignal notifications before changing interval
+      if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+        try {
+          const { base44 } = await import('@/api/base44Client');
+          await base44.functions.invoke('cancelTaskNotifications', { taskId: task.id });
+          console.log('Cancelled pending notifications for task:', task.id);
+        } catch (error) {
+          console.error('Error canceling notifications:', error);
+        }
+      }
+
       const now = new Date();
       let nextReminder = new Date();
 

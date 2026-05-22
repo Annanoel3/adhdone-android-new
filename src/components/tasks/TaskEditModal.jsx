@@ -44,6 +44,17 @@ export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }
   const handleSave = async () => {
     if (!task) return;
     
+    // Cancel any pending OneSignal notifications before updating reminder settings
+    if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+      try {
+        const { base44 } = await import('@/api/base44Client');
+        await base44.functions.invoke('cancelTaskNotifications', { taskId: task.id });
+        console.log('Cancelled pending notifications for task:', task.id);
+      } catch (error) {
+        console.error('Error canceling notifications:', error);
+      }
+    }
+    
     await Task.update(task.id, formData);
     onUpdate();
     onClose();

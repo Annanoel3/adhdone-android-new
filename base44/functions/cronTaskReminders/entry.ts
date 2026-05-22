@@ -1,6 +1,8 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.4';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
+const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID');
+const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY');
 
 const intervalMs = {
   '10min': 10 * 60 * 1000,
@@ -20,24 +22,68 @@ function parseWhen(v) {
 }
 
 function isInQuietHours(user) {
-  if (!user.quiet_hours_enabled || !user.quiet_hours_start || !user.quiet_hours_end) {
-    return false;
+   if (!user.quiet_hours_enabled || !user.quiet_hours_start || !user.quiet_hours_end) {
+     return false;
+   }
+
+   const now = new Date();
+   const currentTime = now.getHours() * 60 + now.getMinutes();
+
+   const [startHour, startMin] = user.quiet_hours_start.split(':').map(Number);
+   const [endHour, endMin] = user.quiet_hours_end.split(':').map(Number);
+
+   const startTime = startHour * 60 + startMin;
+   const endTime = endHour * 60 + endMin;
+
+   if (startTime > endTime) {
+     return currentTime >= startTime || currentTime <= endTime;
+   }
+
+   return currentTime >= startTime && currentTime <= endTime;
+}
+
+async function scheduleOneSignalNotification(email, title, body, sendAfterSeconds, taskId) {
+  if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
+    console.error('[cronTaskReminders] OneSignal credentials missing');
+    return null;
   }
 
-  const now = new Date();
-  const currentTime = now.getHours() * 60 + now.getMinutes();
+  try {
+    const payload = {
+      app_id: ONESIGNAL_APP_ID,
+      headings: { en: title },
+      contents: { en: body },
+      include_external_user_ids: [email],
+      send_after: sendAfterSeconds,
+      data: {
+        screen: '/TaskNotification',
+        taskId: taskId,
+        type: 'task_reminder'
+      }
+    };
 
-  const [startHour, startMin] = user.quiet_hours_start.split(':').map(Number);
-  const [endHour, endMin] = user.quiet_hours_end.split(':').map(Number);
-  
-  const startTime = startHour * 60 + startMin;
-  const endTime = endHour * 60 + endMin;
+    const response = await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Authorization': `Basic ${ONESIGNAL_REST_API_KEY}`
+      },
+      body: JSON.stringify(payload)
+    });
 
-  if (startTime > endTime) {
-    return currentTime >= startTime || currentTime <= endTime;
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      console.error(`[cronTaskReminders] OneSignal API error (${response.status}):`, error);
+      return null;
+    }
+
+    const result = await response.json();
+    console.log(`[cronTaskReminders] Scheduled OneSignal notification for ${email}, ID: ${result.id}`);
+    return result.id;
+  } catch (error) {
+    console.error('[cronTaskReminders] Error scheduling OneSignal notification:', error);
+    return null;
   }
-  
-  return currentTime >= startTime && currentTime <= endTime;
 }
 
 Deno.serve(async (req) => {
@@ -104,11 +150,11 @@ Deno.serve(async (req) => {
 
         for (const t of activeTasks) {
           if (!t.next_reminder) continue;
-          
+
           const when = parseWhen(t.next_reminder);
-          
+
           console.log(`🔍 [TASK REMINDERS] Task "${t.title}" (ID: ${t.id}): interval=${t.reminder_interval}, next_reminder=${t.next_reminder}, parsed=${new Date(when).toISOString()}, now=${new Date(now).toISOString()}`);
-          
+
           if (when && when <= now) {
             console.log(`🔔 [TASK REMINDERS] Sending reminder to ${user.email}: "${t.title}" (ID: ${t.id})`);
 
@@ -122,39 +168,76 @@ Deno.serve(async (req) => {
             if (r?.data?.success) {
               let next = null;
               const ms = t.reminder_interval ? intervalMs[t.reminder_interval] : 0;
-              
+
               console.log(`📊 [TASK REMINDERS] Task has interval: ${t.reminder_interval}, ms: ${ms}`);
-              
-              // For recurring reminders, calculate next time
+
+              // For recurring reminders, calculate next time and pre-schedule future notifications
               if (ms && ms > 0) {
                 const lastReminderTime = parseWhen(t.next_reminder);
                 let nextTime = lastReminderTime + ms;
-                
+
                 // If we're multiple intervals behind, catch up to the next future one
                 const nowTime = Date.now();
                 while (nextTime <= nowTime) {
                   nextTime += ms;
                 }
-                
+
                 next = new Date(nextTime).toISOString();
                 console.log(`✅ [TASK REMINDERS] Calculated next reminder: ${next} (in ${Math.round((nextTime - nowTime) / 60000)} minutes)`);
+
+                // Pre-schedule future OneSignal notifications (batch of 10)
+                const notificationIds = [];
+                let scheduleTime = nextTime;
+                const scheduleCount = 10;
+                let lastScheduledUntil = null;
+
+                for (let i = 0; i < scheduleCount; i++) {
+                  const sendAfterSeconds = Math.round((scheduleTime - nowTime) / 1000);
+                  const notificationId = await scheduleOneSignalNotification(
+                    user.email,
+                    'Task Reminder 📋',
+                    t.title || 'You have a task due',
+                    sendAfterSeconds,
+                    t.id
+                  );
+
+                  if (notificationId) {
+                    notificationIds.push(notificationId);
+                    lastScheduledUntil = new Date(scheduleTime).toISOString();
+                  }
+
+                  scheduleTime += ms;
+                }
+
+                console.log(`📌 [TASK REMINDERS] Scheduled ${notificationIds.length} OneSignal notifications for task ${t.id}`);
+
+                // Update task with notification IDs
+                try {
+                  const updateResult = await base44.asServiceRole.entities.Task.update(t.id, {
+                    reminder_count: (t.reminder_count || 0) + 1,
+                    next_reminder: next,
+                    onesignal_notification_ids: notificationIds,
+                    last_scheduled_until: lastScheduledUntil
+                  });
+
+                  console.log(`💾 [TASK REMINDERS] ✅ Update successful for task ${t.id}`);
+                } catch (updateError) {
+                  console.error(`💾 [TASK REMINDERS] ❌ Update FAILED for task ${t.id}:`, updateError);
+                  throw updateError;
+                }
               } else {
                 console.log(`⚠️ [TASK REMINDERS] No recurring interval, next_reminder will be null`);
-              }
+                try {
+                  const updateResult = await base44.asServiceRole.entities.Task.update(t.id, {
+                    reminder_count: (t.reminder_count || 0) + 1,
+                    next_reminder: next
+                  });
 
-              // Update task with new next_reminder
-              console.log(`💾 [TASK REMINDERS] Updating task ${t.id} with reminder_count: ${(t.reminder_count || 0) + 1}, next_reminder: ${next}`);
-              
-              try {
-                const updateResult = await base44.asServiceRole.entities.Task.update(t.id, {
-                  reminder_count: (t.reminder_count || 0) + 1,
-                  next_reminder: next
-                });
-                
-                console.log(`💾 [TASK REMINDERS] ✅ Update successful for task ${t.id}:`, JSON.stringify(updateResult));
-              } catch (updateError) {
-                console.error(`💾 [TASK REMINDERS] ❌ Update FAILED for task ${t.id}:`, updateError);
-                throw updateError;
+                  console.log(`💾 [TASK REMINDERS] ✅ Update successful for task ${t.id}`);
+                } catch (updateError) {
+                  console.error(`💾 [TASK REMINDERS] ❌ Update FAILED for task ${t.id}:`, updateError);
+                  throw updateError;
+                }
               }
 
               ok++;
