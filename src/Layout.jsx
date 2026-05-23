@@ -903,7 +903,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           </Sidebar>
 
           <main className="flex-1 flex flex-col min-w-0 min-h-screen relative z-10">
-            <header className={`backdrop-blur-md border-b px-6 md:hidden sticky top-0 z-10 pointer-events-auto ${
+            <header className={`backdrop-blur-md border-b px-6 sticky top-0 z-10 pointer-events-auto ${
               isSeasonalTheme()
                 ? 'bg-white/60 border-white/30'
                 : theme === 'dark'
