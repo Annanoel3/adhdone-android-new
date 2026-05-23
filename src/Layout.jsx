@@ -185,7 +185,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 
   useEffect(() => {
     const now = new Date();
-    const today = now.toISOString().split('T')[0];
+    // Use local date (not UTC) so the key is correct in all timezones
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const currentHour = now.getHours(); // local time
 
     // Three time windows, each with their own localStorage key
