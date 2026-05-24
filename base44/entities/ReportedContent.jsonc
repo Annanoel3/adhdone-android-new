@@ -1,0 +1,101 @@
+{
+  "name": "ReportedContent",
+  "type": "object",
+  "properties": {
+    "reporter_email": {
+      "type": "string",
+      "description": "Email of the user who reported"
+    },
+    "reporter_name": {
+      "type": "string",
+      "description": "Name of the user who reported"
+    },
+    "content_type": {
+      "type": "string",
+      "enum": [
+        "user",
+        "message",
+        "profile",
+        "other"
+      ],
+      "description": "Type of content being reported"
+    },
+    "reported_user_email": {
+      "type": "string",
+      "description": "Email of the reported user (if applicable)"
+    },
+    "reported_user_name": {
+      "type": "string",
+      "description": "Name of the reported user (if applicable)"
+    },
+    "content_id": {
+      "type": "string",
+      "description": "ID of the specific content (message ID, etc.)"
+    },
+    "content_text": {
+      "type": "string",
+      "description": "Text of the reported content"
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "harassment",
+        "spam",
+        "inappropriate",
+        "other"
+      ],
+      "description": "Reason for report"
+    },
+    "details": {
+      "type": "string",
+      "description": "Additional details about the report"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "reviewed",
+        "resolved",
+        "dismissed"
+      ],
+      "default": "pending",
+      "description": "Status of the report"
+    },
+    "admin_notes": {
+      "type": "string",
+      "description": "Notes from admin review"
+    }
+  },
+  "required": [
+    "reporter_email",
+    "content_type",
+    "reason"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.reporter_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
