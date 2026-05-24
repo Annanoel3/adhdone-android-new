@@ -1,0 +1,50 @@
+{
+  "name": "DailyTip",
+  "type": "object",
+  "properties": {
+    "tip_text": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "focus",
+        "motivation",
+        "organization",
+        "self_care",
+        "time_management"
+      ]
+    },
+    "shown_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "prompt_version": {
+      "type": "number",
+      "default": 1,
+      "description": "Version of the prompt used to generate this tip"
+    }
+  },
+  "required": [
+    "tip_text",
+    "category"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": true,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
