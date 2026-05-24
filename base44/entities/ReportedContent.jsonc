@@ -73,12 +73,12 @@
   ],
   "rls": {
     "create": {
-      "created_by": "{{user.email}}"
+      "reporter_email": "{{user.email}}"
     },
     "read": {
       "$or": [
         {
-          "data.reporter_email": "{{user.email}}"
+          "reporter_email": "{{user.email}}"
         },
         {
           "user_condition": {
