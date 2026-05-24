@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@base44/sdk": "^0.8.30",
-    "@base44/vite-plugin": "^1.0.18",
+    "@base44/vite-plugin": "^1.0.20",
     "@capacitor-community/admob": "^8.0.0",
     "@capacitor/android": "^8.3.2",
     "@capacitor/camera": "^8.2.0",
