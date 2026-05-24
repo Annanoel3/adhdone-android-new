@@ -1,0 +1,102 @@
+{
+  "name": "AccountabilityConnection",
+  "type": "object",
+  "properties": {
+    "requester_email": {
+      "type": "string",
+      "description": "Email of user who sent request"
+    },
+    "requester_name": {
+      "type": "string",
+      "description": "Display name of requester"
+    },
+    "requester_picture": {
+      "type": "string",
+      "description": "Profile picture URL of requester"
+    },
+    "recipient_email": {
+      "type": "string",
+      "description": "Email of user who received request"
+    },
+    "recipient_name": {
+      "type": "string",
+      "description": "Display name of recipient"
+    },
+    "recipient_picture": {
+      "type": "string",
+      "description": "Profile picture URL of recipient"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "accepted",
+        "declined"
+      ],
+      "default": "pending"
+    },
+    "message": {
+      "type": "string",
+      "description": "Optional message with request"
+    },
+    "partner_streak": {
+      "type": "number",
+      "default": 0,
+      "description": "Partner's current streak for double streak tracking"
+    }
+  },
+  "required": [
+    "requester_email",
+    "recipient_email"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.requester_email": "{{user.email}}"
+        },
+        {
+          "data.recipient_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.requester_email": "{{user.email}}"
+        },
+        {
+          "data.recipient_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.requester_email": "{{user.email}}"
+        },
+        {
+          "data.recipient_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}
