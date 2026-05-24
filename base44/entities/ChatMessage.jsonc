@@ -31,12 +31,15 @@
   ],
   "rls": {
     "create": {
-      "created_by": "{{user.email}}"
+      "sender_email": "{{user.email}}"
     },
     "read": {
       "$or": [
         {
-          "created_by": "{{user.email}}"
+          "sender_email": "{{user.email}}"
+        },
+        {
+          "recipient_email": "{{user.email}}"
         },
         {
           "user_condition": {
@@ -48,7 +51,7 @@
     "update": {
       "$or": [
         {
-          "created_by": "{{user.email}}"
+          "sender_email": "{{user.email}}"
         },
         {
           "user_condition": {
@@ -60,7 +63,7 @@
     "delete": {
       "$or": [
         {
-          "created_by": "{{user.email}}"
+          "sender_email": "{{user.email}}"
         },
         {
           "user_condition": {
