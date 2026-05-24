@@ -26,13 +26,12 @@
   ],
   "rls": {
     "create": {
-      "data.reactor_email": "{{user.email}}"
+      "reactor_email": "{{user.email}}"
     },
-    "read": true,
-    "update": {
+    "read": {
       "$or": [
         {
-          "data.reactor_email": "{{user.email}}"
+          "reactor_email": "{{user.email}}"
         },
         {
           "user_condition": {
@@ -40,18 +39,12 @@
           }
         }
       ]
+    },
+    "update": {
+      "reactor_email": "{{user.email}}"
     },
     "delete": {
-      "$or": [
-        {
-          "data.reactor_email": "{{user.email}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
+      "reactor_email": "{{user.email}}"
     }
   }
 }
