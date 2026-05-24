@@ -38,12 +38,20 @@
   ],
   "rls": {
     "create": {
-      "created_by": "{{user.email}}"
+      "data.user_email": "{{user.email}}"
     },
     "read": {
       "$or": [
         {
           "data.user_email": "{{user.email}}"
+        },
+        {
+          "data.room_id": {
+            "$in": [
+              "{{user.id}}",
+              "{{user.email}}"
+            ]
+          }
         },
         {
           "user_condition": {
