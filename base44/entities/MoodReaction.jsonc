@@ -1,0 +1,57 @@
+{
+  "name": "MoodReaction",
+  "type": "object",
+  "properties": {
+    "mood_check_in_id": {
+      "type": "string",
+      "description": "ID of the mood check-in"
+    },
+    "reactor_email": {
+      "type": "string",
+      "description": "Who reacted"
+    },
+    "reactor_name": {
+      "type": "string",
+      "description": "Reactor's display name"
+    },
+    "emoji": {
+      "type": "string",
+      "description": "Reaction emoji"
+    }
+  },
+  "required": [
+    "mood_check_in_id",
+    "reactor_email",
+    "emoji"
+  ],
+  "rls": {
+    "create": {
+      "data.reactor_email": "{{user.email}}"
+    },
+    "read": true,
+    "update": {
+      "$or": [
+        {
+          "data.reactor_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.reactor_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}
