@@ -1,0 +1,80 @@
+{
+  "name": "FocusRoomParticipant",
+  "type": "object",
+  "properties": {
+    "room_id": {
+      "type": "string",
+      "description": "ID of the focus room"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Participant's email"
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Display name in room"
+    },
+    "profile_picture_url": {
+      "type": "string",
+      "description": "Profile picture URL"
+    },
+    "current_task": {
+      "type": "string",
+      "description": "What they're working on"
+    },
+    "last_seen": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last activity timestamp"
+    },
+    "emoji_status": {
+      "type": "string",
+      "description": "Current emoji status"
+    }
+  },
+  "required": [
+    "room_id",
+    "user_email"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.user_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.user_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}
