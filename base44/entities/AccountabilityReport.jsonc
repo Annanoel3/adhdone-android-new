@@ -1,0 +1,82 @@
+{
+  "name": "AccountabilityReport",
+  "type": "object",
+  "properties": {
+    "report_type": {
+      "type": "string",
+      "enum": [
+        "daily",
+        "weekly"
+      ],
+      "default": "weekly"
+    },
+    "start_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "end_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "tasks_completed": {
+      "type": "number"
+    },
+    "completion_rate": {
+      "type": "number"
+    },
+    "streak_days": {
+      "type": "number"
+    },
+    "top_achievements": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "areas_for_improvement": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "shared_with": {
+      "type": "string",
+      "description": "Email of accountability partner"
+    },
+    "share_token": {
+      "type": "string",
+      "description": "Shareable link token"
+    }
+  },
+  "required": [
+    "report_type",
+    "start_date",
+    "end_date"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "data.shared_with": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}
