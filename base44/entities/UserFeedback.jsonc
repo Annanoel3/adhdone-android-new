@@ -1,0 +1,60 @@
+{
+  "name": "UserFeedback",
+  "type": "object",
+  "properties": {
+    "feedback_type": {
+      "type": "string",
+      "enum": [
+        "cancellation",
+        "feature_request",
+        "bug_report",
+        "general"
+      ],
+      "default": "general"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Primary reason for feedback"
+    },
+    "detailed_feedback": {
+      "type": "string",
+      "description": "Detailed user feedback"
+    },
+    "rating": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "User rating (1-5 stars)"
+    }
+  },
+  "required": [
+    "feedback_type"
+  ],
+  "rls": {
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
