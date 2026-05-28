@@ -30,27 +30,9 @@
     "emoji"
   ],
   "rls": {
+    "read": true,
     "create": {
       "sender_email": "{{user.email}}"
-    },
-    "read": {
-      "$or": [
-        {
-          "data.room_id": {
-            "$in": [
-              "{{user.id}}",
-              "{{user.email}}"
-            ]
-          }
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
-    },
-    "update": false,
-    "delete": false
+    }
   }
 }
