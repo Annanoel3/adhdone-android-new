@@ -31,7 +31,8 @@
   ],
   "rls": {
     "read": true,
-    "create": {
+    "create": true,
+    "delete": {
       "sender_email": "{{user.email}}"
     }
   }

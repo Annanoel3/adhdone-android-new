@@ -341,31 +341,48 @@ export default function ActiveFocusRoom({ room, onLeave }) {
     }
     
     try {
-      // Get fresh user data to ensure correct name
+      const messageText = newMessage.trim();
+      setNewMessage("");
+      
+      // Optimistic UI: add message immediately
+      const optimisticMessage = {
+        id: 'temp-' + Date.now(),
+        room_id: currentRoom.id,
+        sender_email: user.email,
+        sender_name: user.full_name,
+        emoji: messageText,
+        timestamp: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, optimisticMessage]);
+      
+      // Scroll to bottom immediately
+      setTimeout(() => {
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
+      }, 0);
+      
+      // Get fresh user data and send to API
       const currentUser = await User.me();
       console.log('Creating message for:', currentUser.email);
       await FocusRoomEmoji.create({
         room_id: currentRoom.id,
         sender_email: currentUser.email,
         sender_name: currentUser.full_name,
-        emoji: newMessage,
+        emoji: messageText,
         timestamp: new Date().toISOString()
       });
       
       console.log('Message created successfully');
-      setNewMessage("");
+      // Refresh messages to get the real ID and remove optimistic version
       setTimeout(() => {
         loadData();
-        // Scroll to bottom only when YOU send a message
-        setTimeout(() => {
-          if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-          }
-        }, 100);
-      }, 500);
+      }, 200);
     } catch (error) {
       console.error("Error sending message:", error);
       alert('Failed to send message: ' + error.message);
+      // Reload to remove optimistic message on error
+      loadData();
     }
   };
 
