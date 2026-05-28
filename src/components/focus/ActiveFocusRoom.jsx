@@ -326,7 +326,11 @@ export default function ActiveFocusRoom({ room, onLeave }) {
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !user) return;
+    console.log('Sending message:', newMessage, 'User:', user?.email);
+    if (!newMessage.trim() || !user) {
+      console.log('Message empty or no user');
+      return;
+    }
     
     // MODERATION: Check for inappropriate content
     const validationResult = await validateContent(newMessage.trim(), 'message');
@@ -339,6 +343,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
     try {
       // Get fresh user data to ensure correct name
       const currentUser = await User.me();
+      console.log('Creating message for:', currentUser.email);
       await FocusRoomEmoji.create({
         room_id: currentRoom.id,
         sender_email: currentUser.email,
@@ -347,6 +352,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
         timestamp: new Date().toISOString()
       });
       
+      console.log('Message created successfully');
       setNewMessage("");
       setTimeout(() => {
         loadData();
@@ -359,6 +365,7 @@ export default function ActiveFocusRoom({ room, onLeave }) {
       }, 500);
     } catch (error) {
       console.error("Error sending message:", error);
+      alert('Failed to send message: ' + error.message);
     }
   };
 
