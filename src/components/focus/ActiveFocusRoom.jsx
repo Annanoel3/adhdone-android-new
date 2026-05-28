@@ -814,13 +814,19 @@ export default function ActiveFocusRoom({ room, onLeave }) {
                   className={`text-sm ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-white' : ''}`}
                 />
                 <Button 
-                  type="submit" 
-                  size="sm"
-                  disabled={!newMessage.trim()}
-                  className={theme === 'minimalist' ? 'bg-green-600 hover:bg-green-700' : ''}
-                >
-                  <Send className="w-4 h-4" />
-                </Button>
+                   type="submit" 
+                   size="sm"
+                   disabled={!newMessage.trim()}
+                   className={`${
+                     !newMessage.trim() 
+                       ? 'opacity-50 cursor-not-allowed' 
+                       : theme === 'minimalist' 
+                         ? 'bg-green-600 hover:bg-green-700' 
+                         : 'bg-pink-500 hover:bg-pink-600'
+                   }`}
+                 >
+                   <Send className="w-4 h-4" />
+                 </Button>
               </div>
               <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                 {newMessage.length}/60
