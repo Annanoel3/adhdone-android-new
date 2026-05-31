@@ -1312,13 +1312,21 @@ Return JSON:
                 <FileText className="w-4 h-4" />
                 Notes
               </label>
-              <Textarea
-                value={taskNotes}
-                onChange={(e) => setTaskNotes(e.target.value)}
-                onBlur={handleNotesUpdate}
-                placeholder="Add any additional notes..."
-                className="min-h-[80px]"
-              />
+              <div className="relative">
+                <Textarea
+                  value={taskNotes}
+                  onChange={(e) => setTaskNotes(e.target.value)}
+                  placeholder="Add any additional notes..."
+                  className="min-h-[80px] pr-10"
+                />
+                <button
+                  onClick={handleNotesUpdate}
+                  title="Save notes"
+                  className="absolute bottom-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
+                >
+                  <Check className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             <div className="space-y-4">
