@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
     const { prompt } = await req.json();
 
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4-turbo',
       messages: [
         {
           role: 'user',
