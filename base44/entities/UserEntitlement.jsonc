@@ -1,0 +1,78 @@
+{
+  "name": "UserEntitlement",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string",
+      "description": "User ID this entitlement belongs to"
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "apple",
+        "google"
+      ],
+      "description": "Purchase platform"
+    },
+    "product_id": {
+      "type": "string",
+      "description": "Product ID (monthly or yearly)"
+    },
+    "original_transaction_id": {
+      "type": "string",
+      "description": "Apple's original transaction ID (durable)"
+    },
+    "purchase_token": {
+      "type": "string",
+      "description": "Google's purchase token (durable)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "trial",
+        "active",
+        "grace",
+        "paused",
+        "expired",
+        "refunded",
+        "revoked"
+      ],
+      "description": "Current subscription status"
+    },
+    "trial_end": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When trial ends (nullable)"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When subscription expires"
+    },
+    "auto_renew_status": {
+      "type": "boolean",
+      "description": "Whether subscription will auto-renew"
+    },
+    "last_sync_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last time we synced with store"
+    },
+    "raw_payload": {
+      "type": "object",
+      "description": "Raw response from store API"
+    }
+  },
+  "required": [
+    "user_id",
+    "platform",
+    "product_id",
+    "status"
+  ],
+  "rls": {
+    "read": {
+      "user_id": "{{user.id}}"
+    },
+    "write": false
+  }
+}

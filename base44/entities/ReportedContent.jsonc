@@ -72,30 +72,11 @@
     "reason"
   ],
   "rls": {
-    "create": {
+    "read": {
       "reporter_email": "{{user.email}}"
     },
-    "read": {
-      "$or": [
-        {
-          "reporter_email": "{{user.email}}"
-        },
-        {
-          "user_condition": {
-            "role": "admin"
-          }
-        }
-      ]
-    },
-    "update": {
-      "user_condition": {
-        "role": "admin"
-      }
-    },
-    "delete": {
-      "user_condition": {
-        "role": "admin"
-      }
+    "write": {
+      "reporter_email": "{{user.email}}"
     }
   }
 }

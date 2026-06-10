@@ -1,0 +1,72 @@
+{
+  "name": "ParkingLotIdea",
+  "type": "object",
+  "properties": {
+    "idea": {
+      "type": "string"
+    },
+    "converted_to_task": {
+      "type": "boolean",
+      "default": false
+    },
+    "parent_idea_id": {
+      "type": "string",
+      "description": "The ID of the parent idea, if this is a sub-idea"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "work",
+        "personal",
+        "creative",
+        "learning",
+        "health",
+        "finance",
+        "home",
+        "misc"
+      ],
+      "description": "AI-categorized type of idea"
+    },
+    "list_format": {
+      "type": "string",
+      "enum": [
+        "plain",
+        "checkbox",
+        "numbered"
+      ],
+      "default": "plain",
+      "description": "Format of the idea (plain text, checkbox list, or numbered list)"
+    },
+    "checked_items": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "default": [],
+      "description": "Indices of checked items for checkbox format"
+    },
+    "pictures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Array of image URLs attached to this idea",
+      "default": []
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional notes for this idea"
+    }
+  },
+  "required": [
+    "idea"
+  ],
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

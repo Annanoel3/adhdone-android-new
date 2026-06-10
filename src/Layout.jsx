@@ -73,6 +73,7 @@ import FourthJulyMode from "./components/shared/FourthJulyMode";
 import SummerMode from "./components/shared/SummerMode";
 import SpringMode from "./components/shared/SpringMode";
 import OneSignalInit from "./components/shared/OneSignalInit";
+import AdManager from './components/shared/AdManager';
 import {
   Tooltip,
   TooltipProvider,
@@ -436,6 +437,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       }}
     >
       {user && <OneSignalInit user={user} />}
+      <AdManager />
       {specialMode === 'kawaii' && <KawaiiMode />}
       {specialMode === 'halloween' && <HalloweenMode />}
       {specialMode === 'fall' && <FallMode />}

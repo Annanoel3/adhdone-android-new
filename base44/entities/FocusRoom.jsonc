@@ -1,0 +1,78 @@
+{
+  "name": "FocusRoom",
+  "type": "object",
+  "properties": {
+    "room_name": {
+      "type": "string",
+      "description": "Name of the focus room"
+    },
+    "room_code": {
+      "type": "string",
+      "description": "Unique code to join room"
+    },
+    "host_email": {
+      "type": "string",
+      "description": "Email of room creator"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether room is currently active"
+    },
+    "is_private": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether room is private (only accessible via code)"
+    },
+    "timer_duration": {
+      "type": "number",
+      "default": 25,
+      "description": "Work timer duration in minutes"
+    },
+    "break_duration": {
+      "type": "number",
+      "default": 5,
+      "description": "Break timer duration in minutes"
+    },
+    "timer_started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When current timer started"
+    },
+    "timer_mode": {
+      "type": "string",
+      "enum": [
+        "work",
+        "break"
+      ],
+      "default": "work",
+      "description": "Current timer mode"
+    },
+    "max_participants": {
+      "type": "number",
+      "default": 10,
+      "description": "Maximum number of participants"
+    },
+    "selected_playlist": {
+      "type": "string",
+      "default": "none",
+      "description": "Selected background music playlist"
+    },
+    "completion_sound": {
+      "type": "string",
+      "default": "chime",
+      "description": "Sound to play when work timer completes"
+    }
+  },
+  "required": [
+    "room_name",
+    "room_code",
+    "host_email"
+  ],
+  "rls": {
+    "read": true,
+    "write": {
+      "data.host_email": "{{user.email}}"
+    }
+  }
+}

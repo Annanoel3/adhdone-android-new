@@ -1,0 +1,68 @@
+{
+  "name": "WeeklyChallenge",
+  "type": "object",
+  "properties": {
+    "challenge_type": {
+      "type": "string",
+      "enum": [
+        "tasks_before_noon",
+        "daily_focus_sprint",
+        "daily_brain_dump",
+        "complete_5_tasks",
+        "maintain_streak"
+      ],
+      "description": "Type of weekly challenge"
+    },
+    "title": {
+      "type": "string",
+      "description": "Challenge title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Challenge description"
+    },
+    "target_count": {
+      "type": "number",
+      "description": "Number of times to complete this week (e.g., 5 for 5 days)"
+    },
+    "current_progress": {
+      "type": "number",
+      "default": 0,
+      "description": "Current progress count"
+    },
+    "week_start": {
+      "type": "string",
+      "format": "date",
+      "description": "Start of the challenge week"
+    },
+    "completed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether challenge was completed"
+    },
+    "shared_with_partners": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether completion was shared with accountability partners"
+    },
+    "completion_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When challenge was completed"
+    }
+  },
+  "required": [
+    "challenge_type",
+    "title",
+    "target_count",
+    "week_start"
+  ],
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

@@ -1,7 +1,6 @@
 import './App.css'
 import { PomodoroProvider } from '@/context/PomodoroContext'
-import { initAdMob, maybeShowAdOnOpen } from '@/lib/admob';
-import { useEffect } from 'react';
+
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
@@ -74,18 +73,6 @@ const AuthenticatedApp = () => {
 
 
 function App() {
-  useEffect(() => {
-    // Track app opens and suppress ads on first launch
-    const openCount = parseInt(localStorage.getItem('app_open_count') || '0', 10);
-    const newOpenCount = openCount + 1;
-    localStorage.setItem('app_open_count', newOpenCount.toString());
-
-    // Only initialize ads if count >= 2 (not first launch)
-    if (newOpenCount >= 2) {
-      initAdMob().then(() => maybeShowAdOnOpen());
-    }
-  }, []);
-
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>

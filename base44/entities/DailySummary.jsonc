@@ -1,0 +1,63 @@
+{
+  "name": "DailySummary",
+  "type": "object",
+  "properties": {
+    "date": {
+      "type": "string",
+      "format": "date"
+    },
+    "tasks_completed": {
+      "type": "number",
+      "default": 0
+    },
+    "tasks_remaining": {
+      "type": "number",
+      "default": 0
+    },
+    "total_tasks": {
+      "type": "number",
+      "default": 0
+    },
+    "completion_rate": {
+      "type": "number",
+      "description": "Percentage of tasks completed"
+    },
+    "streak_days": {
+      "type": "number",
+      "default": 0,
+      "description": "Current streak of productive days"
+    },
+    "energy_levels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "time": {
+            "type": "string"
+          },
+          "level": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "highlights": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Notable achievements or patterns"
+    }
+  },
+  "required": [
+    "date"
+  ],
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

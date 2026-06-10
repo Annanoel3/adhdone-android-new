@@ -1,0 +1,66 @@
+{
+  "name": "Entitlement",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "description": "User's email"
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "ios",
+        "android"
+      ],
+      "description": "Purchase platform"
+    },
+    "product_id": {
+      "type": "string",
+      "description": "App Store or Play Store product ID"
+    },
+    "transaction_id": {
+      "type": "string",
+      "description": "Unique transaction/order ID from store"
+    },
+    "purchase_token": {
+      "type": "string",
+      "description": "Purchase token (Android) or transaction ID (iOS)"
+    },
+    "purchase_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When purchase was made"
+    },
+    "expires_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When subscription expires (null for lifetime)"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether entitlement is currently active"
+    },
+    "auto_renew": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether subscription auto-renews"
+    },
+    "original_transaction_id": {
+      "type": "string",
+      "description": "Original transaction ID for subscription tracking"
+    }
+  },
+  "required": [
+    "user_email",
+    "platform",
+    "product_id",
+    "transaction_id"
+  ],
+  "rls": {
+    "read": {
+      "user_email": "{{user.email}}"
+    },
+    "write": false
+  }
+}

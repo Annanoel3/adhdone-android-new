@@ -1,0 +1,38 @@
+{
+  "name": "BlockedUser",
+  "type": "object",
+  "properties": {
+    "blocker_email": {
+      "type": "string",
+      "description": "Email of the user who blocked"
+    },
+    "blocked_email": {
+      "type": "string",
+      "description": "Email of the user who is blocked"
+    },
+    "blocked_name": {
+      "type": "string",
+      "description": "Display name of the blocked user"
+    },
+    "blocked_picture": {
+      "type": "string",
+      "description": "Profile picture URL of the blocked user"
+    },
+    "reason": {
+      "type": "string",
+      "description": "Optional reason for blocking"
+    }
+  },
+  "required": [
+    "blocker_email",
+    "blocked_email"
+  ],
+  "rls": {
+    "read": {
+      "blocker_email": "{{user.email}}"
+    },
+    "write": {
+      "blocker_email": "{{user.email}}"
+    }
+  }
+}

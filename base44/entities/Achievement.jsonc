@@ -1,0 +1,43 @@
+{
+  "name": "Achievement",
+  "type": "object",
+  "properties": {
+    "achievement_type": {
+      "type": "string",
+      "description": "Type of achievement unlocked"
+    },
+    "title": {
+      "type": "string",
+      "description": "Achievement title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Achievement description"
+    },
+    "unlocked_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "icon": {
+      "type": "string",
+      "description": "Icon name for the achievement"
+    },
+    "points": {
+      "type": "number",
+      "default": 10,
+      "description": "Points earned for this achievement"
+    }
+  },
+  "required": [
+    "achievement_type",
+    "title"
+  ],
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}

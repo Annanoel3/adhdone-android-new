@@ -1,0 +1,38 @@
+{
+  "name": "SupportConversation",
+  "type": "object",
+  "properties": {
+    "user_message": {
+      "type": "string",
+      "description": "What the user shared"
+    },
+    "ai_response": {
+      "type": "string",
+      "description": "AI's response"
+    },
+    "conversation_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this conversation happened"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "AI-generated tags for topics discussed (e.g., 'relationship issues', 'work stress', 'feeling overwhelmed')"
+    }
+  },
+  "required": [
+    "user_message",
+    "ai_response"
+  ],
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}
