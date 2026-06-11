@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import './App.css'
 import { PomodoroProvider } from '@/context/PomodoroContext'
 
@@ -73,6 +74,21 @@ const AuthenticatedApp = () => {
 
 
 function App() {
+  useEffect(() => {
+    if (!window.Capacitor?.isNativePlatform?.()) return;
+    const CapApp = window.Capacitor?.Plugins?.App;
+    if (!CapApp) return;
+    let listenerHandle;
+    CapApp.addListener('backButton', ({ canGoBack }) => {
+      if (canGoBack) {
+        window.history.back();
+      } else {
+        CapApp.exitApp();
+      }
+    }).then(handle => { listenerHandle = handle; });
+    return () => { listenerHandle?.remove(); };
+  }, []);
+
   return (
     <AuthProvider>
       <QueryClientProvider client={queryClientInstance}>
