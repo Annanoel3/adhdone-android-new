@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, Clock, Zap, Pencil, Calendar, ListChecks } from "lucide-react";
+import { CheckCircle2, Clock, Zap, Pencil, Calendar, ListChecks, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
@@ -566,6 +566,18 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
                             </div>
                           </PopoverContent>
                         </Popover>
+                      )}
+
+                      {/* Recurrence badge */}
+                      {task.recurrence_pattern && task.recurrence_pattern !== 'none' && (
+                        <span className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                          theme === 'dark' ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                        }`}>
+                          <RefreshCw className="w-3 h-3" />
+                          {task.recurrence_pattern === 'yearly' && task.birthday_person
+                            ? `🎂 ${task.birthday_person}'s birthday`
+                            : task.recurrence_pattern}
+                        </span>
                       )}
 
                       {/* Show "Add Reminder" button if no reminder is set */}

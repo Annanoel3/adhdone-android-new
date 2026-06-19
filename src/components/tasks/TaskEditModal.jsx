@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Task } from "@/entities/Task";
-import { Save } from "lucide-react";
+import { Save, RefreshCw } from "lucide-react";
 
 export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }) {
   const [formData, setFormData] = useState({
@@ -26,7 +26,9 @@ export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }
     description: '',
     urgency: 'medium',
     energy_required: 'medium',
-    reminder_interval: ''
+    reminder_interval: '',
+    recurrence_pattern: 'none',
+    birthday_person: ''
   });
 
   useEffect(() => {
@@ -36,7 +38,9 @@ export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }
         description: task.description || '',
         urgency: task.urgency || 'medium',
         energy_required: task.energy_required || 'medium',
-        reminder_interval: task.reminder_interval || ''
+        reminder_interval: task.reminder_interval || '',
+        recurrence_pattern: task.recurrence_pattern || 'none',
+        birthday_person: task.birthday_person || ''
       });
     }
   }, [task, isOpen]);
@@ -148,6 +152,44 @@ export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }
               </SelectContent>
             </Select>
           </div>
+
+          <div>
+            <Label className={`flex items-center gap-1 ${theme === 'dark' ? 'text-gray-200' : ''}`}>
+              <RefreshCw className="w-3 h-3" />
+              Repeats After Completion
+            </Label>
+            <Select
+              value={formData.recurrence_pattern}
+              onValueChange={(value) => setFormData({...formData, recurrence_pattern: value})}
+            >
+              <SelectTrigger className={theme === 'dark' ? 'bg-gray-800 text-gray-100 border-gray-700' : ''}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Does not repeat</SelectItem>
+                <SelectItem value="weekly">Weekly (same day next week)</SelectItem>
+                <SelectItem value="monthly">Monthly (same day next month)</SelectItem>
+                <SelectItem value="yearly">Yearly (e.g. birthday)</SelectItem>
+              </SelectContent>
+            </Select>
+            {formData.recurrence_pattern !== 'none' && (
+              <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                When you check this off, a new copy will automatically appear for {formData.recurrence_pattern === 'weekly' ? 'next week' : formData.recurrence_pattern === 'monthly' ? 'next month' : 'next year'}.
+              </p>
+            )}
+          </div>
+
+          {formData.recurrence_pattern === 'yearly' && (
+            <div>
+              <Label className={theme === 'dark' ? 'text-gray-200' : ''}>Person's Name (for birthday)</Label>
+              <Input
+                value={formData.birthday_person}
+                onChange={(e) => setFormData({...formData, birthday_person: e.target.value})}
+                placeholder="e.g. Mom, John, Sarah..."
+                className={theme === 'dark' ? 'bg-gray-800 text-gray-100 border-gray-700' : ''}
+              />
+            </div>
+          )}
         </div>
 
         <DialogFooter>

@@ -118,10 +118,15 @@
         "none",
         "daily",
         "weekly",
-        "monthly"
+        "monthly",
+        "yearly"
       ],
       "default": "none",
       "description": "How often this task should recur after completion"
+    },
+    "birthday_person": {
+      "type": "string",
+      "description": "Name of the person whose birthday this is (for yearly birthday reminders)"
     }
   },
   "required": [

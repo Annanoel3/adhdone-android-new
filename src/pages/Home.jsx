@@ -116,24 +116,17 @@ export default function Home() {
   };
 
   const handleTaskComplete = async (task) => {
-    // CRITICAL FIX: Store local date/time, not UTC
     const now = new Date();
     const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
-    
-    console.log('✅ [COMPLETE] Marking task complete with local time:', localISOString);
     
     // Cancel all scheduled reminders when task is completed
     if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
       try {
-        console.log('🔕 [COMPLETE] Cancelling reminders:', task.onesignal_notification_ids);
         const { cancelScheduledReminder } = await import('../components/utils/reminderScheduler');
         await cancelScheduledReminder(task.onesignal_notification_ids);
-        console.log('✅ [COMPLETE] Successfully cancelled reminders');
       } catch (error) {
-        console.error("❌ [COMPLETE] Failed to cancel reminders:", error);
+        console.error("Failed to cancel reminders:", error);
       }
-    } else {
-      console.log('ℹ️ [COMPLETE] No reminders to cancel for this task');
     }
     
     // Optimistically update UI
@@ -145,16 +138,23 @@ export default function Home() {
       )
     );
 
-    // Update in background
     try {
       await base44.entities.Task.update(task.id, { 
         status: 'completed',
         completed_at: localISOString,
         onesignal_notification_ids: []
       });
+
+      // Create next recurrence if needed
+      if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
+        const { createNextRecurrence } = await import('../components/utils/taskRecurrence');
+        const result = await createNextRecurrence(task);
+        if (result) {
+          loadData();
+        }
+      }
     } catch (error) {
       console.error("Failed to complete task:", error);
-      // Revert on error
       loadData();
     }
   };
