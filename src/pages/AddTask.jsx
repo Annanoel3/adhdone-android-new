@@ -538,8 +538,16 @@ JSON:
             nextReminder.setDate(nextReminder.getDate() + 2);
             break;
         }
+      } else if (actualReminderInterval === 'once' && !parsed.target_date && !parsed.target_time) {
+        // LLM said "once" but gave no date/time — default to tonight 6pm or +2h if already evening
+        console.log('🔄 [PROCESS] once with no date/time, defaulting to tonight 6pm');
+        nextReminder = new Date(now);
+        nextReminder.setHours(18, 0, 0, 0);
+        if (nextReminder <= new Date(now.getTime() + 5 * 60 * 1000)) {
+          nextReminder = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+        }
       } else if (!parsed.reminder_interval && !parsed.target_time && !parsed.target_date) {
-        // No timing specified - default to once in 2 hours
+        // No timing specified at all - default to once in 2 hours
         console.log('🔄 [PROCESS] No timing, defaulting to 2 hours');
         actualReminderInterval = 'once';
         nextReminder = new Date();
