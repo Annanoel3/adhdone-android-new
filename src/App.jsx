@@ -15,6 +15,8 @@ import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Settings from '@/pages/Settings';
 import Calendar from '@/pages/Calendar';
+import PrivacyPolicyPublic from '@/pages/PrivacyPolicy';
+import TermsPublic from '@/pages/Terms';
 
 // Sentry loaded via CDN in index.html
 const Sentry = window.Sentry;
@@ -68,6 +70,8 @@ const AuthenticatedApp = () => {
         ))}
         <Route path="/settings" element={<Settings />} />
         <Route path="/Calendar" element={<LayoutWrapper currentPageName="Calendar"><Calendar /></LayoutWrapper>} />
+        <Route path="/privacypolicy" element={<PrivacyPolicyPublic />} />
+        <Route path="/Terms" element={<TermsPublic />} />
         <Route path="*" element={<PageNotFound />} />
       </Routes>
     </LayoutWrapper>

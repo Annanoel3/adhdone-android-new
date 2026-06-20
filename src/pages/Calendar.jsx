@@ -3,6 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Link } from 'react-router-dom';
 import {
   CalendarDays,
   RefreshCw,
@@ -14,6 +15,7 @@ import {
   Loader2,
   Cake,
   Zap,
+  Lock,
 } from 'lucide-react';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
@@ -249,22 +251,33 @@ export default function Calendar() {
               </div>
             )}
 
-            {/* Connect button */}
+            {/* Connect button + privacy notice */}
             {!connected && (
-              <Button
-                onClick={handleConnect}
-                className="mt-5 gap-3 px-6 py-3 h-auto bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 shadow-sm font-medium rounded-xl"
-                variant="outline"
-              >
-                {/* Google G logo */}
-                <svg width="18" height="18" viewBox="0 0 18 18">
-                  <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
-                  <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/>
-                  <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
-                  <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
-                </svg>
-                Connect Google Calendar
-              </Button>
+              <div className="mt-5 space-y-3">
+                <Button
+                  onClick={handleConnect}
+                  className="gap-3 px-6 py-3 h-auto bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 shadow-sm font-medium rounded-xl"
+                  variant="outline"
+                >
+                  {/* Google G logo */}
+                  <svg width="18" height="18" viewBox="0 0 18 18">
+                    <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
+                    <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/>
+                    <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
+                    <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+                  </svg>
+                  Connect Google Calendar
+                </Button>
+                <div className={`flex items-start gap-2 p-3 rounded-xl border text-xs ${isDark ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
+                  <Lock className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-gray-400" />
+                  <span>
+                    ADHDone requests <strong>read-only</strong> access to your Google Calendar to set smart reminders. Your data is never sold or used for ads.{' '}
+                    <Link to="/privacypolicy" className="text-blue-500 hover:underline">Privacy Policy</Link>
+                    {' '}·{' '}
+                    <Link to="/Terms" className="text-blue-500 hover:underline">Terms</Link>
+                  </span>
+                </div>
+              </div>
             )}
           </CardContent>
         </Card>
