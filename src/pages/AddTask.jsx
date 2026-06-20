@@ -290,6 +290,14 @@ JSON:
       "tomorrow at X":
       - Set: reminder_interval="once", target_date=TOMORROW, target_time=<specified time>
 
+      SPECIFIC DAY-OF-MONTH (CRITICAL — this is commonly missed):
+      - "on the 28th", "by the 28th", "the 28th" → ONE-TIME, reminder_interval="once"
+        → target_date = current month + that day number, format YYYY-MM-DD
+        → If that day has already passed this month, use next month
+        → target_time = "09:00" unless a time is also specified
+        → Example: today is ${todayISO}, "pay zx4rr on the 28th" → target_date="${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-28", reminder_interval="once", target_time="09:00"
+      - "on the 1st", "by the 15th" → same logic
+
       Other rules:
       - "at 2pm" → ONE-TIME, reminder_interval="once", target_time="14:00"
       - "daily"/"every day" → reminder_interval="daily"
