@@ -1,0 +1,85 @@
+{
+  "name": "CalendarSyncedEvent",
+  "type": "object",
+  "properties": {
+    "google_event_id": {
+      "type": "string",
+      "description": "Google Calendar event ID \u2014 used for deduplication"
+    },
+    "title": {
+      "type": "string",
+      "description": "Event title"
+    },
+    "start_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Event start time"
+    },
+    "end_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Event end time"
+    },
+    "is_all_day": {
+      "type": "boolean",
+      "default": false
+    },
+    "attendee_count": {
+      "type": "number",
+      "default": 0
+    },
+    "recurrence_rule": {
+      "type": "string",
+      "description": "Google recurrence rule string (e.g. RRULE:FREQ=YEARLY)"
+    },
+    "ai_importance": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium",
+      "description": "AI-assigned importance level"
+    },
+    "ai_reminder_interval": {
+      "type": "string",
+      "description": "AI-chosen reminder interval"
+    },
+    "routed_as": {
+      "type": "string",
+      "enum": [
+        "task",
+        "birthday"
+      ],
+      "default": "task",
+      "description": "Whether this was routed to a task or the birthday flow"
+    },
+    "adhd_task_id": {
+      "type": "string",
+      "description": "ID of the ADHDone Task record created from this event"
+    },
+    "last_synced_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this event was last synced"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Owner's email for RLS"
+    }
+  },
+  "required": [
+    "google_event_id",
+    "title",
+    "user_email"
+  ],
+  "rls": {
+    "read": {
+      "user_email": "{{user.email}}"
+    },
+    "write": {
+      "user_email": "{{user.email}}"
+    }
+  }
+}

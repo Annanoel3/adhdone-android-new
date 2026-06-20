@@ -11,6 +11,7 @@ import {
   Moon,
   TrendingUp,
   Share2,
+  CalendarDays,
   Bug,
   LogOut,
   User as UserIcon,
@@ -397,6 +398,11 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       title: "Parking Lot",
       url: createPageUrl("ParkingLot"),
       icon: Lightbulb,
+    },
+    {
+      title: "Calendar",
+      url: createPageUrl("Calendar"),
+      icon: CalendarDays,
     },
     {
       title: "Community",

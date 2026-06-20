@@ -1,4 +1,5 @@
 import Accountability from './pages/Accountability';
+import Calendar from './pages/Calendar';
 import AddTask from './pages/AddTask';
 import AuthCallback from './pages/AuthCallback';
 import Chat from './pages/Chat';
@@ -31,6 +32,7 @@ import __Layout from './Layout.jsx';
 
 export const PAGES = {
     "Accountability": Accountability,
+    "Calendar": Calendar,
     "AddTask": AddTask,
     "AuthCallback": AuthCallback,
     "Chat": Chat,
