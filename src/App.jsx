@@ -17,6 +17,8 @@ import Settings from '@/pages/Settings';
 import Calendar from '@/pages/Calendar';
 import PrivacyPolicyPublic from '@/pages/PrivacyPolicy';
 import TermsPublic from '@/pages/Terms';
+import LandingPage from '@/pages/LandingPage';
+import Home from '@/pages/Home';
 
 // Sentry loaded via CDN in index.html
 const Sentry = window.Sentry;
@@ -54,8 +56,7 @@ const AuthenticatedApp = () => {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
-      // Allow "/" to render (LandingPage shown by Home for logged-out users)
-      // and public pages; redirect everything else to login
+      // Public paths never redirect to login — everything else does
       const publicPaths = ['/', '/privacypolicy', '/Terms'];
       if (!publicPaths.includes(window.location.pathname)) {
         navigateToLogin();
@@ -66,19 +67,21 @@ const AuthenticatedApp = () => {
 
   // Render the main app
   return (
-    <LayoutWrapper currentPageName={mainPageKey}>
-      <Routes>
-        <Route path="/" element={<MainPage />} />
-        {Object.entries(Pages).map(([path, Page]) => (
-          <Route key={path} path={`/${path}`} element={<Page />} />
-        ))}
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/Calendar" element={<LayoutWrapper currentPageName="Calendar"><Calendar /></LayoutWrapper>} />
-        <Route path="/privacypolicy" element={<PrivacyPolicyPublic />} />
-        <Route path="/Terms" element={<TermsPublic />} />
-        <Route path="*" element={<PageNotFound />} />
-      </Routes>
-    </LayoutWrapper>
+    <Routes>
+      {/* Fully public — no layout wrapper, no auth */}
+      <Route path="/" element={<LandingPage />} />
+      <Route path="/privacypolicy" element={<PrivacyPolicyPublic />} />
+      <Route path="/Terms" element={<TermsPublic />} />
+
+      {/* Authenticated app with layout */}
+      <Route path="/Home" element={<LayoutWrapper currentPageName="Home"><Home /></LayoutWrapper>} />
+      {Object.entries(Pages).map(([path, Page]) => (
+        <Route key={path} path={`/${path}`} element={<LayoutWrapper currentPageName={path}><Page /></LayoutWrapper>} />
+      ))}
+      <Route path="/settings" element={<LayoutWrapper currentPageName="Settings"><Settings /></LayoutWrapper>} />
+      <Route path="/Calendar" element={<LayoutWrapper currentPageName="Calendar"><Calendar /></LayoutWrapper>} />
+      <Route path="*" element={<PageNotFound />} />
+    </Routes>
   );
 };
 

@@ -1,5 +1,5 @@
-import React from "react";
-import { Link } from "react-router-dom";
+import React, { useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Brain, Bell, CalendarDays, Timer, Palette, CheckCircle2, Sparkles } from "lucide-react";
@@ -38,8 +38,16 @@ const features = [
 ];
 
 export default function LandingPage() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    base44.auth.isAuthenticated().then((authed) => {
+      if (authed) navigate("/Home", { replace: true });
+    });
+  }, [navigate]);
+
   const handleSignIn = () => {
-    base44.auth.redirectToLogin(window.location.origin);
+    base44.auth.redirectToLogin(window.location.origin + "/Home");
   };
 
   return (

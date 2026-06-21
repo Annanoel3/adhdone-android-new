@@ -1,3 +1,4 @@
+import LandingPage from './pages/LandingPage';
 import Accountability from './pages/Accountability';
 import Calendar from './pages/Calendar';
 import AddTask from './pages/AddTask';
@@ -31,6 +32,7 @@ import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
+    "LandingPage": LandingPage,
     "Accountability": Accountability,
     "Calendar": Calendar,
     "AddTask": AddTask,
@@ -63,7 +65,7 @@ export const PAGES = {
 }
 
 export const pagesConfig = {
-    mainPage: "Home",
+    mainPage: "LandingPage",
     Pages: PAGES,
     Layout: __Layout,
 };
