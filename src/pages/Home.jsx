@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import LandingPage from "./LandingPage";
 import WelcomeCard from "../components/home/WelcomeCard";
 import DailyTipCard from "../components/home/DailyTipCard";
 import QuickActions from "../components/home/QuickActions";
@@ -13,6 +14,7 @@ import MomentumCelebration from "../components/shared/MomentumCelebration";
 export default function Home() {
   const [tasks, setTasks] = useState([]);
   const [user, setUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [showEndOfDayReview, setShowEndOfDayReview] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
@@ -75,6 +77,9 @@ export default function Home() {
     } catch (error) {
       console.error("Error loading user:", error);
       console.log("User not logged in");
+      setUser(false); // explicitly mark as logged out
+    } finally {
+      setAuthChecked(true);
     }
     
     try {
@@ -215,6 +220,14 @@ export default function Home() {
     console.log('🔍 [HOME DEBUG] Today date:', today);
     console.log('🔍 [HOME DEBUG] =====================================');
   }, [tasks, todayCompleted, activeTasks]);
+
+  // Wait for auth check to avoid flash
+  if (!authChecked) return null;
+
+  // Show landing page for logged-out visitors
+  if (!user) {
+    return <LandingPage />;
+  }
 
   return (
     <div className={`min-h-screen p-4 md:p-8 w-full ${
