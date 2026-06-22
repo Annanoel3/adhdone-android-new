@@ -124,6 +124,16 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
       ai = { importance: 'medium', reminder_interval: 'daily' };
     }
 
+    // Re-check if this event was already synced (race condition guard)
+    const recheck = await base44.asServiceRole.entities.CalendarSyncedEvent.filter({ 
+      google_event_id: googleId, 
+      user_email: user.email 
+    });
+    if (recheck.length > 0) {
+      skipped++;
+      continue;
+    }
+
     const isBirthday = isBirthdayEvent(title, recurrenceRule);
     const routedAs = isBirthday ? 'birthday' : 'task';
 
