@@ -92,8 +92,8 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
   const existingByGoogleId = {};
   for (const s of existingSynced) existingByGoogleId[s.google_event_id] = s;
 
-  // Load existing tasks to check if adhd_task_id still exists
-  const existingTasks = await base44.asServiceRole.entities.Task.list();
+  // Load existing tasks to check if adhd_task_id still exists (user-scoped so RLS applies)
+  const existingTasks = await base44.entities.Task.list();
   const existingTaskIds = new Set(existingTasks.map(t => t.id));
 
   let created = 0, updated = 0, skipped = 0;
@@ -177,7 +177,8 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
       };
     }
 
-    const createdTask = await base44.asServiceRole.entities.Task.create(taskRecord);
+    // Use user-scoped create so created_by is set to the current user (making the task visible in the app)
+    const createdTask = await base44.entities.Task.create(taskRecord);
 
     const syncRecord = {
       google_event_id: googleId,
@@ -215,11 +216,11 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Get the user's Google Calendar token
+    // Get the user's Google Calendar token (must use user-scoped connectors, not service role)
     let accessToken;
     let connectedEmail = user.email;
     try {
-      const conn = await base44.asServiceRole.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
+      const conn = await base44.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
       accessToken = conn.accessToken;
     } catch {
       return Response.json({ error: 'not_connected', message: 'Google Calendar not connected' }, { status: 400 });
