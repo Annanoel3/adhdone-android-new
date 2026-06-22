@@ -177,7 +177,7 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
       };
     }
 
-    const createdTask = await base44.asServiceRole.entities.Task.create(taskRecord);
+    const createdTask = await base44.entities.Task.create(taskRecord);
 
     const syncRecord = {
       google_event_id: googleId,
