@@ -170,10 +170,10 @@ export default function Calendar() {
     if (result?.synced_at) setLastSyncedAt(result.synced_at);
     await loadSyncedEvents();
 
-    // If new tasks were created, show the reminder picker
+    // If new tasks were created, show the reminder picker — only for actual time-bound events
     if (result?.created > 0 && result?.results?.length > 0) {
       const newEvents = result.results
-        .filter(r => r.routedAs !== 'birthday' && r.taskId)
+        .filter(r => r.routedAs !== 'birthday' && r.taskId && r.is_event !== false)
         .map(r => ({
           taskId: r.taskId,
           title: r.title,

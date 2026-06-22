@@ -28,9 +28,11 @@ async function classifyEventWithAI(openai, event) {
   const titleLower = (event.summary || '').toLowerCase();
 
   // Hard-code urgent detection from title keywords — don't let AI downgrade these
-  const isUrgentKeyword = /urgent|asap|critical|emergency|deadline|due today|important|!!/.test(titleLower);
+  const isUrgentKeyword = /urgent|asap|critical|emergency|deadline|due today|!!/.test(titleLower);
 
-  const prompt = `You are an ADHD productivity assistant. Analyze this Google Calendar event and decide how to route it.
+  const prompt = `You are an ADHD productivity assistant. Analyze this Google Calendar event and assign its importance and reminder frequency.
+
+Use REAL-WORLD STAKES to judge importance — not just wording. Think: "what actually happens if this is missed or forgotten?"
 
 Event title: "${event.summary || 'Untitled'}"
 Start: ${eventStart}
@@ -40,22 +42,28 @@ Recurrence rule: ${recurrence || 'none'}
 Description snippet: "${(event.description || '').substring(0, 200)}"
 Location: "${event.location || 'none'}"
 
-Decide:
-1. importance: "low" | "medium" | "high" | "urgent"
-   - urgent: title contains words like urgent/asap/critical/emergency/deadline, OR <6h away
-   - high: work deadlines, meetings with many people, exams, appointments <24h away
-   - medium: personal appointments, meetings with 1-3 people, events 1-7 days away
-   - low: casual reminders, social events, recurring low-stakes events
+IMPORTANCE RULES — use real-world consequences:
+- "urgent": explicit urgency keywords (urgent/asap/critical/emergency/deadline), OR event is <6h away
+- "high": anything with serious real-world consequences if missed
+  Examples: doctor/dentist/therapist/vet appointments, medication reminders, job interviews, court dates, flights, surgeries, school exams, work presentations, feeding or caring for a pet or child, paying bills, picking someone up
+- "medium": personally meaningful but recoverable if missed once
+  Examples: friend meetups, gym classes, haircuts, hobby events, work check-ins, moderate errands
+- "low": low stakes, can easily be rescheduled or forgotten without real harm
+  Examples: finding/buying a low-priority item (e.g. "find that shirt"), casual browsing tasks, generic reminders with no time pressure, low-stakes shopping
 
-2. reminder_interval: choose ONE from this list:
-   - urgent: "1hour" (remind every hour)
-   - high importance: "2hours" if <24h away, "daily" if 1-7 days away
-   - medium importance: "daily" if <3 days, "every_other_day" if >3 days
-   - low importance: "once"
-   Valid values ONLY: "10min","20min","30min","1hour","2hours","daily","every_other_day","once"
+REMINDER INTERVAL — based on importance:
+- "urgent" → "1hour"
+- "high" → "2hours" if <24h away, "daily" if further out
+- "medium" → "daily" if <3 days, "every_other_day" if further
+- "low" → "once"
+Valid values ONLY: "10min","20min","30min","1hour","2hours","daily","every_other_day","once"
+
+Also decide: is this a real scheduled EVENT (appointment, meeting, class — something happening at a specific time that the user attends) or a TASK/REMINDER (something to do, buy, find, check)?
+- is_event: true if it's a time-bound appointment/meeting/class/flight/etc.
+- is_event: false if it's a to-do, errand, or reminder not tied to attending something
 
 Return ONLY valid JSON, no markdown:
-{"importance":"medium","reminder_interval":"daily","reasoning":"brief 1-sentence reason"}`;
+{"importance":"medium","reminder_interval":"daily","is_event":true,"reasoning":"brief 1-sentence reason"}`;
 
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
@@ -72,7 +80,7 @@ Return ONLY valid JSON, no markdown:
     result.reminder_interval = '1hour';
   }
 
-  return result;
+  return result; // result may include is_event: true/false
 }
 
 async function syncCalendarAccount(base44, openai, user, accessToken, calendarEmail) {
@@ -218,7 +226,7 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
       created++;
     }
 
-    results.push({ googleId, title, routedAs, importance: ai.importance, taskId: createdTask.id, start_time: startRaw || null, is_all_day: isAllDay, reminder_interval: ai.reminder_interval || 'daily' });
+    results.push({ googleId, title, routedAs, importance: ai.importance, taskId: createdTask.id, start_time: startRaw || null, is_all_day: isAllDay, reminder_interval: ai.reminder_interval || 'daily', is_event: ai.is_event !== false });
   }
 
   return { created, updated, skipped, total_events: events.length, results, connectedEmail };
