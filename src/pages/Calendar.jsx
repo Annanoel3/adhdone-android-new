@@ -5,28 +5,29 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
 import {
-  CalendarDays,
-  RefreshCw,
-  Unlink,
-  Clock,
-  Users,
-  AlertCircle,
-  CheckCircle2,
-  Loader2,
-  Cake,
-  Zap,
-  Lock,
-  Plus,
-  Mail,
+  CalendarDays, RefreshCw, Unlink, Clock, Users, AlertCircle,
+  CheckCircle2, Loader2, Cake, Zap, Lock, Plus, Mail, Bell,
 } from 'lucide-react';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
 
 const URGENCY_COLORS = {
-  high: 'bg-red-100 text-red-700 border-red-200',
+  urgent: 'bg-red-100 text-red-700 border-red-200',
+  high: 'bg-orange-100 text-orange-700 border-orange-200',
   medium: 'bg-yellow-100 text-yellow-700 border-yellow-200',
   low: 'bg-green-100 text-green-700 border-green-200',
 };
+
+const REMINDER_OPTIONS = [
+  { value: '10min',         label: 'Every 10 min',    desc: 'Super urgent' },
+  { value: '20min',         label: 'Every 20 min',    desc: 'Very high priority' },
+  { value: '30min',         label: 'Every 30 min',    desc: 'High priority' },
+  { value: '1hour',         label: 'Every hour',      desc: 'Urgent' },
+  { value: '2hours',        label: 'Every 2 hours',   desc: 'Important' },
+  { value: 'daily',         label: 'Once a day',      desc: 'Medium priority' },
+  { value: 'every_other_day', label: 'Every other day', desc: 'Low priority' },
+  { value: 'once',          label: 'Just once',       desc: 'One-time reminder' },
+];
 
 function formatDateTime(iso, isAllDay) {
   if (!iso) return null;
@@ -46,6 +47,90 @@ function formatLastSynced(iso) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+// Modal for setting reminders on newly imported events
+function ReminderPickerModal({ events, onSave, onDismiss, isDark }) {
+  const [choices, setChoices] = useState(() => {
+    const init = {};
+    events.forEach(ev => { init[ev.taskId] = ev.suggestedInterval; });
+    return init;
+  });
+  const [saving, setSaving] = useState(false);
+
+  const textPrimary = isDark ? 'text-white' : 'text-gray-900';
+  const textSecondary = isDark ? 'text-gray-400' : 'text-gray-500';
+  const cardBg = isDark ? 'bg-gray-700 border-gray-600' : 'bg-gray-50 border-gray-200';
+
+  const handleSave = async () => {
+    setSaving(true);
+    for (const ev of events) {
+      const interval = choices[ev.taskId];
+      if (interval && interval !== ev.suggestedInterval) {
+        await base44.entities.Task.update(ev.taskId, { reminder_interval: interval });
+      }
+    }
+    setSaving(false);
+    onSave();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/50 p-4">
+      <div className={`w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
+        <div className="p-5 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-500 flex items-center justify-center">
+              <Bell className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <h2 className={`font-bold text-lg ${textPrimary}`}>Set reminders for new events</h2>
+              <p className={`text-sm ${textSecondary}`}>How often should ADHDone remind you?</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-4 space-y-4 max-h-[60vh] overflow-y-auto">
+          {events.map(ev => (
+            <div key={ev.taskId} className={`rounded-xl border p-3 ${cardBg}`}>
+              <div className="flex items-start justify-between gap-2 mb-2">
+                <span className={`font-medium text-sm ${textPrimary}`}>{ev.title}</span>
+                {ev.start_time && (
+                  <span className={`text-xs ${textSecondary} flex-shrink-0`}>
+                    {formatDateTime(ev.start_time, ev.is_all_day)}
+                  </span>
+                )}
+              </div>
+              <p className={`text-xs mb-2 ${textSecondary}`}>AI suggested: <strong>{REMINDER_OPTIONS.find(r => r.value === ev.suggestedInterval)?.label || ev.suggestedInterval}</strong></p>
+              <div className="flex flex-wrap gap-1.5">
+                {REMINDER_OPTIONS.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setChoices(c => ({ ...c, [ev.taskId]: opt.value }))}
+                    className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
+                      choices[ev.taskId] === opt.value
+                        ? 'bg-blue-500 text-white border-blue-500 font-medium'
+                        : isDark
+                          ? 'bg-gray-600 border-gray-500 text-gray-300 hover:bg-gray-500'
+                          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="p-4 flex gap-3 border-t border-gray-100">
+          <Button variant="outline" onClick={onDismiss} className="flex-1">Keep AI suggestions</Button>
+          <Button onClick={handleSave} disabled={saving} className="flex-1 bg-blue-500 hover:bg-blue-600 text-white">
+            {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Save reminders'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Calendar() {
   const [theme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [user, setUser] = useState(null);
@@ -57,6 +142,7 @@ export default function Calendar() {
   const [syncError, setSyncError] = useState(null);
   const [syncedEvents, setSyncedEvents] = useState([]);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
+  const [reminderPickerEvents, setReminderPickerEvents] = useState(null);
 
   const loadSyncedEvents = useCallback(async () => {
     try {
@@ -78,7 +164,27 @@ export default function Calendar() {
     return res.data;
   }, []);
 
-  // On mount: check auth, load events, probe connection
+  const handleSyncResult = useCallback(async (result) => {
+    if (result?.connected_email) setConnectedEmail(result.connected_email);
+    setSyncResult(result);
+    if (result?.synced_at) setLastSyncedAt(result.synced_at);
+    await loadSyncedEvents();
+
+    // If new tasks were created, show the reminder picker
+    if (result?.created > 0 && result?.results?.length > 0) {
+      const newEvents = result.results
+        .filter(r => r.routedAs !== 'birthday' && r.taskId)
+        .map(r => ({
+          taskId: r.taskId,
+          title: r.title,
+          start_time: r.start_time,
+          is_all_day: r.is_all_day,
+          suggestedInterval: r.reminder_interval || 'daily',
+        }));
+      if (newEvents.length > 0) setReminderPickerEvents(newEvents);
+    }
+  }, [loadSyncedEvents]);
+
   useEffect(() => {
     base44.auth.isAuthenticated().then(async (authed) => {
       if (authed) {
@@ -91,9 +197,7 @@ export default function Calendar() {
             setConnected(false);
           } else {
             setConnected(true);
-            if (conn?.data?.connected_email) {
-              setConnectedEmail(conn.data.connected_email);
-            }
+            if (conn?.data?.connected_email) setConnectedEmail(conn.data.connected_email);
           }
         } catch {
           setConnected(false);
@@ -103,7 +207,6 @@ export default function Calendar() {
     });
   }, [loadSyncedEvents]);
 
-  // Opens OAuth popup for connecting (or adding another account)
   const handleConnect = async () => {
     const url = await base44.connectors.connectAppUser(CONNECTOR_ID);
     const popup = window.open(url, '_blank', 'width=600,height=700');
@@ -118,10 +221,7 @@ export default function Calendar() {
             setConnected(false);
           } else {
             setConnected(true);
-            if (result?.connected_email) setConnectedEmail(result.connected_email);
-            setSyncResult(result);
-            if (result?.synced_at) setLastSyncedAt(result.synced_at);
-            await loadSyncedEvents();
+            await handleSyncResult(result);
           }
         } catch (e) {
           setSyncError(e.message);
@@ -151,10 +251,7 @@ export default function Calendar() {
         setConnected(false);
         setSyncError('Google Calendar disconnected. Please reconnect.');
       } else {
-        if (result?.connected_email) setConnectedEmail(result.connected_email);
-        setSyncResult(result);
-        if (result?.synced_at) setLastSyncedAt(result.synced_at);
-        await loadSyncedEvents();
+        await handleSyncResult(result);
       }
     } catch (e) {
       setSyncError(e.message || 'Sync failed');
@@ -199,7 +296,6 @@ export default function Calendar() {
       style={{ paddingBottom: 'max(8rem, calc(8rem + env(safe-area-inset-bottom)))' }}>
       <div className="max-w-3xl mx-auto space-y-6">
 
-        {/* Header card */}
         <Card className={`border-none shadow-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
           <CardContent className="p-6">
             <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -210,31 +306,20 @@ export default function Calendar() {
                 <div>
                   <h1 className={`text-2xl font-bold ${textPrimary}`}>Google Calendar</h1>
                   <p className={`text-sm ${textSecondary}`}>
-                    {connected
-                      ? 'Syncing your calendar events as smart tasks'
-                      : 'Connect to import events as smart tasks'}
+                    {connected ? 'Syncing your calendar events as smart tasks' : 'Connect to import events as smart tasks'}
                   </p>
                 </div>
               </div>
 
               {connected && (
                 <div className="flex items-center gap-2 flex-wrap">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSync}
-                    disabled={syncing}
-                    className={`gap-2 ${isDark ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : ''}`}
-                  >
+                  <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing}
+                    className={`gap-2 ${isDark ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : ''}`}>
                     {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                     {syncing ? 'Syncing…' : 'Sync now'}
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleDisconnect}
-                    className="gap-2 text-red-500 hover:text-red-600 hover:bg-red-50"
-                  >
+                  <Button variant="ghost" size="sm" onClick={handleDisconnect}
+                    className="gap-2 text-red-500 hover:text-red-600 hover:bg-red-50">
                     <Unlink className="w-4 h-4" />
                     Disconnect
                   </Button>
@@ -242,7 +327,6 @@ export default function Calendar() {
               )}
             </div>
 
-            {/* Connected account pill */}
             {connected && connectedEmail && (
               <div className={`mt-4 flex items-center gap-2 p-2.5 rounded-xl border text-sm ${isDark ? 'bg-gray-700 border-gray-600' : 'bg-blue-50 border-blue-100'}`}>
                 <Mail className="w-4 h-4 text-blue-500 flex-shrink-0" />
@@ -251,18 +335,14 @@ export default function Calendar() {
               </div>
             )}
 
-            {/* Add another account button */}
             {connected && (
-              <button
-                onClick={handleConnect}
-                className={`mt-2 flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-colors ${isDark ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-200' : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
-              >
+              <button onClick={handleConnect}
+                className={`mt-2 flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-colors ${isDark ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-200' : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}>
                 <Plus className="w-3.5 h-3.5" />
                 Switch / reconnect Google account
               </button>
             )}
 
-            {/* Last synced */}
             {connected && (
               <div className={`mt-3 flex items-center gap-2 text-sm ${textSecondary}`}>
                 <Clock className="w-3.5 h-3.5" />
@@ -270,13 +350,11 @@ export default function Calendar() {
               </div>
             )}
 
-            {/* Sync result banner */}
             {syncResult && !syncError && (
               <div className="mt-4 flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
                 <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
                 <span>
-                  Synced {syncResult.total_events} events —{' '}
-                  {syncResult.created} new tasks created, {syncResult.updated} tasks refreshed, {syncResult.skipped} unchanged.
+                  Synced {syncResult.total_events} events — {syncResult.created} new tasks created, {syncResult.updated} tasks refreshed, {syncResult.skipped} unchanged.
                 </span>
               </div>
             )}
@@ -287,14 +365,11 @@ export default function Calendar() {
               </div>
             )}
 
-            {/* Connect button + privacy notice */}
             {!connected && (
               <div className="mt-5 space-y-3">
-                <Button
-                  onClick={handleConnect}
+                <Button onClick={handleConnect}
                   className="gap-3 px-6 py-3 h-auto bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 shadow-sm font-medium rounded-xl"
-                  variant="outline"
-                >
+                  variant="outline">
                   <GoogleLogo />
                   Connect Google Calendar
                 </Button>
@@ -312,22 +387,20 @@ export default function Calendar() {
           </CardContent>
         </Card>
 
-        {/* How it works — shown only when not connected */}
         {!connected && (
           <Card className={`border-none shadow-sm ${isDark ? 'bg-gray-800' : 'bg-blue-50/50 border border-blue-100'}`}>
             <CardContent className="p-5 space-y-3">
               <h3 className={`font-semibold ${textPrimary}`}>How it works</h3>
               <ul className={`space-y-2 text-sm ${textSecondary}`}>
-                <li className="flex gap-2"><Zap className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" /> AI reads each event and decides importance (low / medium / high) from the title, timing, and attendees.</li>
-                <li className="flex gap-2"><CalendarDays className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" /> Events become ADHDone tasks with smart reminders scaled to importance, including notes, location, and attendees.</li>
-                <li className="flex gap-2"><Cake className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" /> Yearly birthday events (e.g. "John's Birthday") go into the Birthday tracker automatically.</li>
+                <li className="flex gap-2"><Zap className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" /> AI reads each event and decides urgency. Titles with "urgent", "ASAP", etc. automatically get hourly reminders.</li>
+                <li className="flex gap-2"><CalendarDays className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" /> Events become ADHDone tasks. After syncing you can customize the reminder frequency for each event.</li>
+                <li className="flex gap-2"><Cake className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" /> Yearly birthday events go into the Birthday tracker automatically.</li>
                 <li className="flex gap-2"><RefreshCw className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" /> Syncs daily in the background. Re-syncing never duplicates existing tasks.</li>
               </ul>
             </CardContent>
           </Card>
         )}
 
-        {/* Synced events list */}
         {connected && syncedEvents.length > 0 && (
           <div className="space-y-3">
             <h2 className={`font-semibold text-sm uppercase tracking-wide ${textSecondary}`}>
@@ -353,6 +426,12 @@ export default function Calendar() {
                           <span className="flex items-center gap-1">
                             <Users className="w-3 h-3" />
                             {ev.attendee_count} attendee{ev.attendee_count !== 1 ? 's' : ''}
+                          </span>
+                        )}
+                        {ev.ai_reminder_interval && (
+                          <span className="flex items-center gap-1">
+                            <Bell className="w-3 h-3" />
+                            {REMINDER_OPTIONS.find(r => r.value === ev.ai_reminder_interval)?.label || ev.ai_reminder_interval}
                           </span>
                         )}
                       </div>
@@ -382,6 +461,15 @@ export default function Calendar() {
           </div>
         )}
       </div>
+
+      {reminderPickerEvents && (
+        <ReminderPickerModal
+          events={reminderPickerEvents}
+          isDark={isDark}
+          onSave={() => { setReminderPickerEvents(null); loadSyncedEvents(); }}
+          onDismiss={() => setReminderPickerEvents(null)}
+        />
+      )}
     </div>
   );
 }

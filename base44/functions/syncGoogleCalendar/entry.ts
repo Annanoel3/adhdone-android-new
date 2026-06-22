@@ -25,6 +25,10 @@ async function classifyEventWithAI(openai, event) {
     : 999;
   const attendeeCount = (event.attendees || []).length;
   const recurrence = (event.recurrence || []).join(', ');
+  const titleLower = (event.summary || '').toLowerCase();
+
+  // Hard-code urgent detection from title keywords — don't let AI downgrade these
+  const isUrgentKeyword = /urgent|asap|critical|emergency|deadline|due today|important|!!/.test(titleLower);
 
   const prompt = `You are an ADHD productivity assistant. Analyze this Google Calendar event and decide how to route it.
 
@@ -37,15 +41,18 @@ Description snippet: "${(event.description || '').substring(0, 200)}"
 Location: "${event.location || 'none'}"
 
 Decide:
-1. importance: "low" | "medium" | "high"
-   - high: work deadlines, meetings with many people, exams, urgent appointments, <24h away
+1. importance: "low" | "medium" | "high" | "urgent"
+   - urgent: title contains words like urgent/asap/critical/emergency/deadline, OR <6h away
+   - high: work deadlines, meetings with many people, exams, appointments <24h away
    - medium: personal appointments, meetings with 1-3 people, events 1-7 days away
    - low: casual reminders, social events, recurring low-stakes events
 
-2. reminder_interval: choose ONE from this list based on importance and lead time:
+2. reminder_interval: choose ONE from this list:
+   - urgent: "1hour" (remind every hour)
    - high importance: "2hours" if <24h away, "daily" if 1-7 days away
    - medium importance: "daily" if <3 days, "every_other_day" if >3 days
    - low importance: "once"
+   Valid values ONLY: "10min","20min","30min","1hour","2hours","daily","every_other_day","once"
 
 Return ONLY valid JSON, no markdown:
 {"importance":"medium","reminder_interval":"daily","reasoning":"brief 1-sentence reason"}`;
@@ -57,7 +64,15 @@ Return ONLY valid JSON, no markdown:
     max_tokens: 150
   });
 
-  return JSON.parse(completion.choices[0].message.content);
+  const result = JSON.parse(completion.choices[0].message.content);
+
+  // Override: if title has urgent keywords, force urgent+1hour regardless of AI
+  if (isUrgentKeyword) {
+    result.importance = 'urgent';
+    result.reminder_interval = '1hour';
+  }
+
+  return result;
 }
 
 async function syncCalendarAccount(base44, openai, user, accessToken, calendarEmail) {
@@ -162,13 +177,13 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
         notification_recipient_email: user.email
       };
     } else {
-      const urgencyMap = { low: 'low', medium: 'medium', high: 'high' };
+      const urgencyMap = { low: 'low', medium: 'medium', high: 'high', urgent: 'urgent' };
       taskRecord = {
         title: title,
         description: richDescription,
         notes: event.location ? `📍 ${event.location}` : (event.description ? event.description.substring(0, 200) : ''),
         urgency: urgencyMap[ai.importance] || 'medium',
-        energy_required: ai.importance === 'high' ? 'high' : ai.importance === 'low' ? 'low' : 'medium',
+        energy_required: (ai.importance === 'high' || ai.importance === 'urgent') ? 'high' : ai.importance === 'low' ? 'low' : 'medium',
         status: 'active',
         reminder_interval: ai.reminder_interval || 'daily',
         next_reminder: nextReminderDate.toISOString(),
@@ -203,7 +218,7 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
       created++;
     }
 
-    results.push({ googleId, title, routedAs, importance: ai.importance });
+    results.push({ googleId, title, routedAs, importance: ai.importance, taskId: createdTask.id, start_time: startRaw || null, is_all_day: isAllDay, reminder_interval: ai.reminder_interval || 'daily' });
   }
 
   return { created, updated, skipped, total_events: events.length, results, connectedEmail };
