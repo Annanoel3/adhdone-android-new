@@ -12,7 +12,6 @@ function isBirthdayEvent(title, recurrenceRule) {
 }
 
 function extractBirthdayPerson(title) {
-  // "John's Birthday" → "John", "Birthday - Sarah" → "Sarah", "bday john" → "john"
   let t = title.replace(/birthday|bday/gi, '').replace(/['s\-:,]/g, ' ').trim();
   t = t.replace(/\s+/g, ' ').trim();
   return t || title;
@@ -35,6 +34,7 @@ Hours until event: ${Math.round(hoursUntilEvent)}
 Attendee count: ${attendeeCount}
 Recurrence rule: ${recurrence || 'none'}
 Description snippet: "${(event.description || '').substring(0, 200)}"
+Location: "${event.location || 'none'}"
 
 Decide:
 1. importance: "low" | "medium" | "high"
@@ -60,6 +60,155 @@ Return ONLY valid JSON, no markdown:
   return JSON.parse(completion.choices[0].message.content);
 }
 
+async function syncCalendarAccount(base44, openai, user, accessToken, calendarEmail) {
+  const authHeader = { Authorization: `Bearer ${accessToken}` };
+
+  // Fetch the connected Gmail account info
+  let connectedEmail = calendarEmail;
+  try {
+    const profileRes = await fetch('https://www.googleapis.com/oauth2/v1/userinfo?alt=json', { headers: authHeader });
+    if (profileRes.ok) {
+      const profile = await profileRes.json();
+      connectedEmail = profile.email || calendarEmail;
+    }
+  } catch { /* use fallback */ }
+
+  // Fetch upcoming events (next 60 days)
+  const timeMin = new Date().toISOString();
+  const timeMax = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
+  const calUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=100&singleEvents=false&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&fields=items(id,summary,start,end,attendees,recurrence,description,location,status,organizer,conferenceData)`;
+
+  const calRes = await fetch(calUrl, { headers: authHeader });
+  if (!calRes.ok) {
+    const err = await calRes.json().catch(() => ({}));
+    return { error: 'calendar_api_error', details: err, connectedEmail };
+  }
+
+  const calData = await calRes.json();
+  const events = (calData.items || []).filter(e => e.status !== 'cancelled');
+
+  // Load all existing synced events for this user
+  const existingSynced = await base44.asServiceRole.entities.CalendarSyncedEvent.filter({ user_email: user.email });
+  const existingByGoogleId = {};
+  for (const s of existingSynced) existingByGoogleId[s.google_event_id] = s;
+
+  // Load existing tasks to check if adhd_task_id still exists
+  const existingTasks = await base44.asServiceRole.entities.Task.list();
+  const existingTaskIds = new Set(existingTasks.map(t => t.id));
+
+  let created = 0, updated = 0, skipped = 0;
+  const results = [];
+
+  for (const event of events) {
+    const googleId = event.id;
+    const title = event.summary || 'Untitled event';
+    const recurrenceRule = (event.recurrence || []).join(';');
+    const startRaw = event.start?.dateTime || event.start?.date;
+    const endRaw = event.end?.dateTime || event.end?.date;
+    const isAllDay = !event.start?.dateTime;
+    const attendeeCount = (event.attendees || []).length;
+
+    const existing = existingByGoogleId[googleId];
+
+    // If already synced and task still exists → skip
+    if (existing && existing.adhd_task_id && existingTaskIds.has(existing.adhd_task_id)) {
+      skipped++;
+      continue;
+    }
+
+    // Run AI classification
+    let ai;
+    try {
+      ai = await classifyEventWithAI(openai, event);
+    } catch {
+      ai = { importance: 'medium', reminder_interval: 'daily' };
+    }
+
+    const isBirthday = isBirthdayEvent(title, recurrenceRule);
+    const routedAs = isBirthday ? 'birthday' : 'task';
+
+    // Build rich description including location, meeting link, notes
+    const descParts = [];
+    if (event.description) descParts.push(event.description.substring(0, 500));
+    if (event.location) descParts.push(`📍 Location: ${event.location}`);
+    if (event.organizer?.email && event.organizer.email !== user.email) {
+      descParts.push(`👤 Organizer: ${event.organizer.displayName || event.organizer.email}`);
+    }
+    if (attendeeCount > 0) {
+      const names = (event.attendees || []).slice(0, 5).map(a => a.displayName || a.email).join(', ');
+      descParts.push(`👥 Attendees: ${names}${attendeeCount > 5 ? ` +${attendeeCount - 5} more` : ''}`);
+    }
+    // Meeting link from conferenceData
+    const meetLink = event.conferenceData?.entryPoints?.find(e => e.entryPointType === 'video')?.uri;
+    if (meetLink) descParts.push(`🎥 Meeting link: ${meetLink}`);
+
+    const richDescription = descParts.join('\n\n');
+    const nextReminderDate = startRaw ? new Date(startRaw) : new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    let taskRecord;
+    if (isBirthday) {
+      const birthdayPerson = extractBirthdayPerson(title);
+      taskRecord = {
+        title: `🎂 ${birthdayPerson}'s Birthday`,
+        description: richDescription || `Imported from Google Calendar (${connectedEmail})`,
+        notes: event.description || '',
+        urgency: 'medium',
+        energy_required: 'low',
+        status: 'active',
+        reminder_interval: 'once',
+        recurrence_pattern: 'yearly',
+        birthday_person: birthdayPerson,
+        next_reminder: nextReminderDate.toISOString(),
+        notification_recipient_email: user.email
+      };
+    } else {
+      const urgencyMap = { low: 'low', medium: 'medium', high: 'high' };
+      taskRecord = {
+        title: title,
+        description: richDescription,
+        notes: event.location ? `📍 ${event.location}` : (event.description ? event.description.substring(0, 200) : ''),
+        urgency: urgencyMap[ai.importance] || 'medium',
+        energy_required: ai.importance === 'high' ? 'high' : ai.importance === 'low' ? 'low' : 'medium',
+        status: 'active',
+        reminder_interval: ai.reminder_interval || 'daily',
+        next_reminder: nextReminderDate.toISOString(),
+        notification_recipient_email: user.email,
+        recurrence_pattern: recurrenceRule ? (recurrenceRule.includes('FREQ=DAILY') ? 'daily' : recurrenceRule.includes('FREQ=WEEKLY') ? 'weekly' : recurrenceRule.includes('FREQ=MONTHLY') ? 'monthly' : recurrenceRule.includes('FREQ=YEARLY') ? 'yearly' : 'none') : 'none'
+      };
+    }
+
+    const createdTask = await base44.asServiceRole.entities.Task.create(taskRecord);
+
+    const syncRecord = {
+      google_event_id: googleId,
+      title,
+      start_time: startRaw || null,
+      end_time: endRaw || null,
+      is_all_day: isAllDay,
+      attendee_count: attendeeCount,
+      recurrence_rule: recurrenceRule || null,
+      ai_importance: ai.importance || 'medium',
+      ai_reminder_interval: ai.reminder_interval || 'daily',
+      routed_as: routedAs,
+      adhd_task_id: createdTask.id,
+      last_synced_at: new Date().toISOString(),
+      user_email: user.email
+    };
+
+    if (existing) {
+      await base44.asServiceRole.entities.CalendarSyncedEvent.update(existing.id, syncRecord);
+      updated++;
+    } else {
+      await base44.asServiceRole.entities.CalendarSyncedEvent.create(syncRecord);
+      created++;
+    }
+
+    results.push({ googleId, title, routedAs, importance: ai.importance });
+  }
+
+  return { created, updated, skipped, total_events: events.length, results, connectedEmail };
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -68,6 +217,7 @@ Deno.serve(async (req) => {
 
     // Get the user's Google Calendar token
     let accessToken;
+    let connectedEmail = user.email;
     try {
       const conn = await base44.asServiceRole.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
       accessToken = conn.accessToken;
@@ -75,134 +225,40 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'not_connected', message: 'Google Calendar not connected' }, { status: 400 });
     }
 
-    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
-    const authHeader = { Authorization: `Bearer ${accessToken}` };
+    const body = await req.json().catch(() => ({}));
 
-    // Fetch upcoming events (next 60 days)
-    const timeMin = new Date().toISOString();
-    const timeMax = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
-    const calUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=100&singleEvents=false&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&fields=items(id,summary,start,end,attendees,recurrence,description,status)`;
-
-    const calRes = await fetch(calUrl, { headers: authHeader });
-    if (!calRes.ok) {
-      const err = await calRes.json().catch(() => ({}));
-      return Response.json({ error: 'calendar_api_error', details: err }, { status: 502 });
+    // If just probing for connection status, return connected email without full sync
+    if (body.probe) {
+      // Fetch the actual Gmail account info
+      try {
+        const profileRes = await fetch('https://www.googleapis.com/oauth2/v1/userinfo?alt=json', {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        if (profileRes.ok) {
+          const profile = await profileRes.json();
+          connectedEmail = profile.email || user.email;
+        }
+      } catch { /* fallback to user.email */ }
+      return Response.json({ connected: true, connected_email: connectedEmail });
     }
 
-    const calData = await calRes.json();
-    const events = (calData.items || []).filter(e => e.status !== 'cancelled');
+    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 
-    // Load all existing synced events for this user to detect duplicates
-    const existingSynced = await base44.asServiceRole.entities.CalendarSyncedEvent.filter({ user_email: user.email });
-    const existingByGoogleId = {};
-    for (const s of existingSynced) existingByGoogleId[s.google_event_id] = s;
+    const result = await syncCalendarAccount(base44, openai, user, accessToken, user.email);
 
-    // Load existing tasks to check if adhd_task_id still exists
-    const existingTasks = await base44.asServiceRole.entities.Task.filter({ created_by: user.email });
-    const existingTaskIds = new Set(existingTasks.map(t => t.id));
-
-    let created = 0, updated = 0, skipped = 0;
-    const results = [];
-
-    for (const event of events) {
-      const googleId = event.id;
-      const title = event.summary || 'Untitled event';
-      const recurrenceRule = (event.recurrence || []).join(';');
-      const startRaw = event.start?.dateTime || event.start?.date;
-      const endRaw = event.end?.dateTime || event.end?.date;
-      const isAllDay = !event.start?.dateTime;
-      const attendeeCount = (event.attendees || []).length;
-
-      const existing = existingByGoogleId[googleId];
-
-      // If already synced and task still exists → skip (no AI re-classification needed)
-      if (existing && existing.adhd_task_id && existingTaskIds.has(existing.adhd_task_id)) {
-        skipped++;
-        continue;
-      }
-
-      // Run AI classification
-      let ai;
-      try {
-        ai = await classifyEventWithAI(openai, event);
-      } catch {
-        ai = { importance: 'medium', reminder_interval: 'daily' };
-      }
-
-      const isBirthday = isBirthdayEvent(title, recurrenceRule);
-      const routedAs = isBirthday ? 'birthday' : 'task';
-
-      // Build the ADHDone task record
-      let taskRecord;
-      const nextReminderDate = startRaw ? new Date(startRaw) : new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-      if (isBirthday) {
-        const birthdayPerson = extractBirthdayPerson(title);
-        taskRecord = {
-          title: `🎂 ${birthdayPerson}'s Birthday`,
-          description: `Imported from Google Calendar`,
-          urgency: 'medium',
-          energy_required: 'low',
-          status: 'active',
-          reminder_interval: 'once',
-          recurrence_pattern: 'yearly',
-          birthday_person: birthdayPerson,
-          next_reminder: nextReminderDate.toISOString(),
-          notification_recipient_email: user.email
-        };
-      } else {
-        const urgencyMap = { low: 'low', medium: 'medium', high: 'high' };
-        taskRecord = {
-          title: title,
-          description: event.description ? event.description.substring(0, 300) : '',
-          urgency: urgencyMap[ai.importance] || 'medium',
-          energy_required: ai.importance === 'high' ? 'high' : ai.importance === 'low' ? 'low' : 'medium',
-          status: 'active',
-          reminder_interval: ai.reminder_interval || 'daily',
-          next_reminder: nextReminderDate.toISOString(),
-          notification_recipient_email: user.email,
-          recurrence_pattern: 'none'
-        };
-      }
-
-      // Create or re-create the ADHDone task (service role so we can set created_by implicitly via user context — use asServiceRole with user_email)
-      const createdTask = await base44.asServiceRole.entities.Task.create(taskRecord);
-
-      const syncRecord = {
-        google_event_id: googleId,
-        title,
-        start_time: startRaw || null,
-        end_time: endRaw || null,
-        is_all_day: isAllDay,
-        attendee_count: attendeeCount,
-        recurrence_rule: recurrenceRule || null,
-        ai_importance: ai.importance || 'medium',
-        ai_reminder_interval: ai.reminder_interval || 'daily',
-        routed_as: routedAs,
-        adhd_task_id: createdTask.id,
-        last_synced_at: new Date().toISOString(),
-        user_email: user.email
-      };
-
-      if (existing) {
-        await base44.asServiceRole.entities.CalendarSyncedEvent.update(existing.id, syncRecord);
-        updated++;
-      } else {
-        await base44.asServiceRole.entities.CalendarSyncedEvent.create(syncRecord);
-        created++;
-      }
-
-      results.push({ googleId, title, routedAs, importance: ai.importance });
+    if (result.error) {
+      return Response.json({ error: result.error, details: result.details }, { status: 502 });
     }
 
     return Response.json({
       success: true,
       synced_at: new Date().toISOString(),
-      total_events: events.length,
-      created,
-      updated,
-      skipped,
-      results
+      total_events: result.total_events,
+      created: result.created,
+      updated: result.updated,
+      skipped: result.skipped,
+      connected_email: result.connectedEmail,
+      results: result.results
     });
 
   } catch (error) {

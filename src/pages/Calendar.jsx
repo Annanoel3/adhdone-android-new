@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
 import {
@@ -16,6 +16,8 @@ import {
   Cake,
   Zap,
   Lock,
+  Plus,
+  Mail,
 } from 'lucide-react';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
@@ -48,6 +50,7 @@ export default function Calendar() {
   const [theme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [user, setUser] = useState(null);
   const [connected, setConnected] = useState(false);
+  const [connectedEmail, setConnectedEmail] = useState(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
@@ -70,27 +73,27 @@ export default function Calendar() {
     }
   }, []);
 
-  // Rule 2: reusable fetch — detects connection by calling the backend function
   const attemptSync = useCallback(async () => {
     const res = await base44.functions.invoke('syncGoogleCalendar', {});
     return res.data;
   }, []);
 
-  // Rule 1+2: auth gate + connection check on mount
+  // On mount: check auth, load events, probe connection
   useEffect(() => {
     base44.auth.isAuthenticated().then(async (authed) => {
       if (authed) {
         const me = await base44.auth.me();
         setUser(me);
         await loadSyncedEvents();
-        // Probe connection by checking if any synced events exist; if none try a lightweight ping
         try {
           const conn = await base44.functions.invoke('syncGoogleCalendar', { probe: true });
-          // If it returns not_connected error, mark disconnected; otherwise connected
           if (conn?.data?.error === 'not_connected') {
             setConnected(false);
           } else {
             setConnected(true);
+            if (conn?.data?.connected_email) {
+              setConnectedEmail(conn.data.connected_email);
+            }
           }
         } catch {
           setConnected(false);
@@ -100,14 +103,13 @@ export default function Calendar() {
     });
   }, [loadSyncedEvents]);
 
-  // Rule 3: OAuth popup + poll for close
+  // Opens OAuth popup for connecting (or adding another account)
   const handleConnect = async () => {
     const url = await base44.connectors.connectAppUser(CONNECTOR_ID);
     const popup = window.open(url, '_blank', 'width=600,height=700');
     const timer = setInterval(async () => {
       if (!popup || popup.closed) {
         clearInterval(timer);
-        // After connecting, run the first sync automatically
         setSyncing(true);
         setSyncError(null);
         try {
@@ -116,7 +118,9 @@ export default function Calendar() {
             setConnected(false);
           } else {
             setConnected(true);
+            if (result?.connected_email) setConnectedEmail(result.connected_email);
             setSyncResult(result);
+            if (result?.synced_at) setLastSyncedAt(result.synced_at);
             await loadSyncedEvents();
           }
         } catch (e) {
@@ -131,6 +135,7 @@ export default function Calendar() {
   const handleDisconnect = async () => {
     await base44.connectors.disconnectAppUser(CONNECTOR_ID);
     setConnected(false);
+    setConnectedEmail(null);
     setSyncResult(null);
     setSyncedEvents([]);
     setLastSyncedAt(null);
@@ -146,7 +151,9 @@ export default function Calendar() {
         setConnected(false);
         setSyncError('Google Calendar disconnected. Please reconnect.');
       } else {
+        if (result?.connected_email) setConnectedEmail(result.connected_email);
         setSyncResult(result);
+        if (result?.synced_at) setLastSyncedAt(result.synced_at);
         await loadSyncedEvents();
       }
     } catch (e) {
@@ -178,6 +185,15 @@ export default function Calendar() {
     );
   }
 
+  const GoogleLogo = () => (
+    <svg width="18" height="18" viewBox="0 0 18 18">
+      <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
+      <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/>
+      <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
+      <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+    </svg>
+  );
+
   return (
     <div className={`min-h-screen p-4 md:p-8 ${isDark ? 'bg-gray-900' : ''}`}
       style={{ paddingBottom: 'max(8rem, calc(8rem + env(safe-area-inset-bottom)))' }}>
@@ -195,7 +211,7 @@ export default function Calendar() {
                   <h1 className={`text-2xl font-bold ${textPrimary}`}>Google Calendar</h1>
                   <p className={`text-sm ${textSecondary}`}>
                     {connected
-                      ? `Connected as ${user.email}`
+                      ? 'Syncing your calendar events as smart tasks'
                       : 'Connect to import events as smart tasks'}
                   </p>
                 </div>
@@ -226,9 +242,29 @@ export default function Calendar() {
               )}
             </div>
 
+            {/* Connected account pill */}
+            {connected && connectedEmail && (
+              <div className={`mt-4 flex items-center gap-2 p-2.5 rounded-xl border text-sm ${isDark ? 'bg-gray-700 border-gray-600' : 'bg-blue-50 border-blue-100'}`}>
+                <Mail className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                <span className={`font-medium ${isDark ? 'text-gray-200' : 'text-blue-800'}`}>{connectedEmail}</span>
+                <Badge className="ml-auto text-xs bg-blue-100 text-blue-700 border-blue-200 border">Connected</Badge>
+              </div>
+            )}
+
+            {/* Add another account button */}
+            {connected && (
+              <button
+                onClick={handleConnect}
+                className={`mt-2 flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-colors ${isDark ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-200' : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Switch / reconnect Google account
+              </button>
+            )}
+
             {/* Last synced */}
             {connected && (
-              <div className={`mt-4 flex items-center gap-2 text-sm ${textSecondary}`}>
+              <div className={`mt-3 flex items-center gap-2 text-sm ${textSecondary}`}>
                 <Clock className="w-3.5 h-3.5" />
                 Last synced: {formatLastSynced(lastSyncedAt)}
               </div>
@@ -240,7 +276,7 @@ export default function Calendar() {
                 <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
                 <span>
                   Synced {syncResult.total_events} events —{' '}
-                  {syncResult.created} new tasks created, {syncResult.updated} updated, {syncResult.skipped} unchanged.
+                  {syncResult.created} new tasks created, {syncResult.updated} tasks refreshed, {syncResult.skipped} unchanged.
                 </span>
               </div>
             )}
@@ -259,13 +295,7 @@ export default function Calendar() {
                   className="gap-3 px-6 py-3 h-auto bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 shadow-sm font-medium rounded-xl"
                   variant="outline"
                 >
-                  {/* Google G logo */}
-                  <svg width="18" height="18" viewBox="0 0 18 18">
-                    <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
-                    <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/>
-                    <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
-                    <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
-                  </svg>
+                  <GoogleLogo />
                   Connect Google Calendar
                 </Button>
                 <div className={`flex items-start gap-2 p-3 rounded-xl border text-xs ${isDark ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
@@ -289,7 +319,7 @@ export default function Calendar() {
               <h3 className={`font-semibold ${textPrimary}`}>How it works</h3>
               <ul className={`space-y-2 text-sm ${textSecondary}`}>
                 <li className="flex gap-2"><Zap className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" /> AI reads each event and decides importance (low / medium / high) from the title, timing, and attendees.</li>
-                <li className="flex gap-2"><CalendarDays className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" /> Events become ADHDone tasks with smart reminders scaled to importance.</li>
+                <li className="flex gap-2"><CalendarDays className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" /> Events become ADHDone tasks with smart reminders scaled to importance, including notes, location, and attendees.</li>
                 <li className="flex gap-2"><Cake className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" /> Yearly birthday events (e.g. "John's Birthday") go into the Birthday tracker automatically.</li>
                 <li className="flex gap-2"><RefreshCw className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" /> Syncs daily in the background. Re-syncing never duplicates existing tasks.</li>
               </ul>
