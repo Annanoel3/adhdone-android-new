@@ -223,7 +223,7 @@ Deno.serve(async (req) => {
     let conn;
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
-        conn = await base44.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
+        conn = await base44.connectors.getAppUserConnection(CONNECTOR_ID);
         accessToken = conn.accessToken;
         break;
       } catch {
