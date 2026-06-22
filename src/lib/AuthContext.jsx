@@ -142,9 +142,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const navigateToLogin = () => {
-    // Use the SDK's redirectToLogin method, redirecting to Home after login
-    const homeUrl = `${window.location.origin}/`;
-    base44.auth.redirectToLogin(homeUrl);
+    base44.auth.redirectToLogin(`${window.location.origin}/Home`);
   };
 
   return (
