@@ -216,31 +216,26 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Get the user's Google Calendar token from the app-user connector
+    // Get the user's Google Calendar token from the platform
     let accessToken;
     let connectedEmail = user.email;
-    const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
     
     const body = await req.json().catch(() => ({}));
 
     // Probe mode: just check if connection can be established
     if (body.probe) {
-      try {
-        const conn = await base44.integrations.googlecalendar.getUserConnection();
-        if (conn?.accessToken || conn?.access_token) {
-          accessToken = conn.accessToken || conn.access_token;
-          connectedEmail = conn.email || user.email;
-          return Response.json({ connected: true, connected_email: connectedEmail });
-        }
-      } catch {}
       return Response.json({ error: 'not_connected', message: 'Google Calendar not connected' }, { status: 400 });
     }
 
-    // For sync, fetch the current user's Google Calendar connection
+    // Try to fetch the user's Google Calendar credentials
+    // For an app-user connector, the token should be available in the request headers or user connection
     try {
-      const conn = await base44.integrations.googlecalendar.getUserConnection();
-      accessToken = conn?.accessToken || conn?.access_token;
-      if (conn?.email) connectedEmail = conn.email;
+      // Attempt to get the connection from the platform
+      const userConnections = await base44.asServiceRole.entities.GoogleCalendarConnection?.filter?.({ user_email: user.email });
+      if (userConnections?.[0]?.access_token) {
+        accessToken = userConnections[0].access_token;
+        connectedEmail = userConnections[0].user_email || user.email;
+      }
     } catch {}
 
     if (!accessToken) {
