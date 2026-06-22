@@ -229,7 +229,7 @@ Deno.serve(async (req) => {
 
     // For app-user connector, fetch the current user's connection token
     try {
-      const conn = await base44.connectors.getAppUserConnection('googlecalendar');
+      const conn = await base44.connectors.getConnection('googlecalendar');
       accessToken = conn?.accessToken;
       if (conn?.email) connectedEmail = conn.email;
     } catch (err) {
