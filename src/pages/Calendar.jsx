@@ -102,7 +102,7 @@ export default function Calendar() {
 
   // Rule 3: OAuth popup + poll for close
   const handleConnect = async () => {
-    const url = await base44.connectors.connectAppUser(CONNECTOR_ID);
+    const url = await base44.connectors.connectAppUser(CONNECTOR_ID, { redirectUrl: window.location.href });
     const popup = window.open(url, '_blank', 'width=600,height=700');
     const timer = setInterval(async () => {
       if (!popup || popup.closed) {
