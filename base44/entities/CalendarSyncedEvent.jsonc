@@ -66,11 +66,7 @@
     },
     "user_email": {
       "type": "string",
-      "description": "App user's email (for RLS)"
-    },
-    "calendar_account_email": {
-      "type": "string",
-      "description": "The Google account email that was synced (may differ from app login)"
+      "description": "Owner's email for RLS"
     }
   },
   "required": [

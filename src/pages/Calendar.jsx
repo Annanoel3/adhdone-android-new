@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Link } from 'react-router-dom';
 import {
@@ -16,8 +16,6 @@ import {
   Cake,
   Zap,
   Lock,
-  Mail,
-  PlusCircle,
 } from 'lucide-react';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
@@ -46,20 +44,10 @@ function formatLastSynced(iso) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-const GoogleLogo = () => (
-  <svg width="18" height="18" viewBox="0 0 18 18">
-    <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
-    <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/>
-    <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
-    <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
-  </svg>
-);
-
 export default function Calendar() {
   const [theme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [user, setUser] = useState(null);
   const [connected, setConnected] = useState(false);
-  const [googleEmail, setGoogleEmail] = useState(null); // actual Google account email
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
@@ -69,91 +57,80 @@ export default function Calendar() {
 
   const loadSyncedEvents = useCallback(async () => {
     try {
-      // Use filter with user_email so RLS matches correctly
-      const events = await base44.entities.CalendarSyncedEvent.list('-last_synced_at', 100);
+      const events = await base44.entities.CalendarSyncedEvent.list('-last_synced_at', 50);
       setSyncedEvents(events);
       if (events.length > 0) {
         const latest = events.reduce((a, b) =>
           new Date(a.last_synced_at) > new Date(b.last_synced_at) ? a : b
         );
         setLastSyncedAt(latest.last_synced_at);
-      } else {
-        setLastSyncedAt(null);
       }
     } catch {
       setSyncedEvents([]);
-      setLastSyncedAt(null);
     }
   }, []);
 
+  // Rule 2: reusable fetch — detects connection by calling the backend function
   const attemptSync = useCallback(async () => {
     const res = await base44.functions.invoke('syncGoogleCalendar', {});
     return res.data;
   }, []);
 
-  // On mount: check connection status via probe (gets real Google email too)
+  // Rule 1+2: auth gate + connection check on mount
   useEffect(() => {
     base44.auth.isAuthenticated().then(async (authed) => {
       if (authed) {
         const me = await base44.auth.me();
         setUser(me);
         await loadSyncedEvents();
+        // Probe connection by checking if any synced events exist; if none try a lightweight ping
         try {
-          const res = await base44.functions.invoke('syncGoogleCalendar', { probe: true });
-          setConnected(true);
-          setGoogleEmail(res?.data?.google_email || null);
+          const conn = await base44.functions.invoke('syncGoogleCalendar', { probe: true });
+          // If it returns not_connected error, mark disconnected; otherwise connected
+          if (conn?.data?.error === 'not_connected') {
+            setConnected(false);
+          } else {
+            setConnected(true);
+          }
         } catch {
-          // 400 = not connected, that's fine
           setConnected(false);
-          setGoogleEmail(null);
         }
       }
       setLoading(false);
     });
   }, [loadSyncedEvents]);
 
-  const openOAuthPopup = () => {
-    return new Promise(async (resolve) => {
-      const url = await base44.connectors.connectAppUser(CONNECTOR_ID);
-      const popup = window.open(url, '_blank', 'width=600,height=700');
-      const timer = setInterval(() => {
-        if (!popup || popup.closed) {
-          clearInterval(timer);
-          resolve();
-        }
-      }, 500);
-    });
-  };
-
+  // Rule 3: OAuth popup + poll for close
   const handleConnect = async () => {
-    setSyncError(null);
-    await openOAuthPopup();
-    setSyncing(true);
-    try {
-      const result = await attemptSync();
-      setConnected(true);
-      setGoogleEmail(result?.google_email || null);
-      setSyncResult(result);
-      await loadSyncedEvents();
-    } catch (e) {
-      setSyncError(e.message || 'Sync failed after connecting');
-    } finally {
-      setSyncing(false);
-    }
-  };
-
-  const handleSwitchAccount = async () => {
-    // Disconnect current, then reconnect with a new account
-    try {
-      await base44.connectors.disconnectAppUser(CONNECTOR_ID);
-    } catch {}
-    await handleConnect();
+    const url = await base44.connectors.connectAppUser(CONNECTOR_ID);
+    const popup = window.open(url, '_blank', 'width=600,height=700');
+    const timer = setInterval(async () => {
+      if (!popup || popup.closed) {
+        clearInterval(timer);
+        // After connecting, run the first sync automatically
+        setSyncing(true);
+        setSyncError(null);
+        try {
+          const result = await attemptSync();
+          if (result?.error === 'not_connected') {
+            setConnected(false);
+          } else {
+            setConnected(true);
+            setSyncResult(result);
+            await loadSyncedEvents();
+          }
+        } catch (e) {
+          setSyncError(e.message);
+        } finally {
+          setSyncing(false);
+        }
+      }
+    }, 500);
   };
 
   const handleDisconnect = async () => {
     await base44.connectors.disconnectAppUser(CONNECTOR_ID);
     setConnected(false);
-    setGoogleEmail(null);
     setSyncResult(null);
     setSyncedEvents([]);
     setLastSyncedAt(null);
@@ -167,10 +144,8 @@ export default function Calendar() {
       const result = await attemptSync();
       if (result?.error === 'not_connected') {
         setConnected(false);
-        setGoogleEmail(null);
         setSyncError('Google Calendar disconnected. Please reconnect.');
       } else {
-        setGoogleEmail(result?.google_email || googleEmail);
         setSyncResult(result);
         await loadSyncedEvents();
       }
@@ -220,7 +195,7 @@ export default function Calendar() {
                   <h1 className={`text-2xl font-bold ${textPrimary}`}>Google Calendar</h1>
                   <p className={`text-sm ${textSecondary}`}>
                     {connected
-                      ? <span className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5" />{googleEmail || 'Connected'}</span>
+                      ? `Connected as ${user.email}`
                       : 'Connect to import events as smart tasks'}
                   </p>
                 </div>
@@ -237,16 +212,6 @@ export default function Calendar() {
                   >
                     {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                     {syncing ? 'Syncing…' : 'Sync now'}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSwitchAccount}
-                    disabled={syncing}
-                    className={`gap-2 ${isDark ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : ''}`}
-                  >
-                    <PlusCircle className="w-4 h-4" />
-                    Switch account
                   </Button>
                   <Button
                     variant="ghost"
@@ -291,12 +256,17 @@ export default function Calendar() {
               <div className="mt-5 space-y-3">
                 <Button
                   onClick={handleConnect}
-                  disabled={syncing}
                   className="gap-3 px-6 py-3 h-auto bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 shadow-sm font-medium rounded-xl"
                   variant="outline"
                 >
-                  {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <GoogleLogo />}
-                  {syncing ? 'Connecting…' : 'Connect Google Calendar'}
+                  {/* Google G logo */}
+                  <svg width="18" height="18" viewBox="0 0 18 18">
+                    <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
+                    <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/>
+                    <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
+                    <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+                  </svg>
+                  Connect Google Calendar
                 </Button>
                 <div className={`flex items-start gap-2 p-3 rounded-xl border text-xs ${isDark ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
                   <Lock className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-gray-400" />
@@ -353,12 +323,6 @@ export default function Calendar() {
                           <span className="flex items-center gap-1">
                             <Users className="w-3 h-3" />
                             {ev.attendee_count} attendee{ev.attendee_count !== 1 ? 's' : ''}
-                          </span>
-                        )}
-                        {ev.calendar_account_email && (
-                          <span className="flex items-center gap-1">
-                            <Mail className="w-3 h-3" />
-                            {ev.calendar_account_email}
                           </span>
                         )}
                       </div>
