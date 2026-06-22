@@ -25,36 +25,34 @@ async function classifyEventWithAI(openai, event) {
     : 999;
   const attendeeCount = (event.attendees || []).length;
   const recurrence = (event.recurrence || []).join(', ');
+  
+  // Quick heuristic: if <2 hours away, it's urgent regardless
+  const isImminentDeadline = hoursUntilEvent < 2 && hoursUntilEvent > 0;
 
-  const prompt = `You are an ADHD productivity assistant. Analyze this Google Calendar event and decide how to route it.
+  const prompt = `You are an ADHD productivity assistant. Analyze this Google Calendar event and decide importance level.
 
 Event title: "${event.summary || 'Untitled'}"
 Start: ${eventStart}
 Hours until event: ${Math.round(hoursUntilEvent)}
 Attendee count: ${attendeeCount}
 Recurrence rule: ${recurrence || 'none'}
-Description snippet: "${(event.description || '').substring(0, 200)}"
 Location: "${event.location || 'none'}"
+Description: "${(event.description || '').substring(0, 200)}"
+Imminent (<2h): ${isImminentDeadline}
 
-Decide:
-1. importance: "low" | "medium" | "high"
-   - high: work deadlines, meetings with many people, exams, urgent appointments, <24h away
-   - medium: personal appointments, meetings with 1-3 people, events 1-7 days away
-   - low: casual reminders, social events, recurring low-stakes events
+URGENCY RULES (strict):
+- HIGH: Imminent (<2h away) OR meetings with 3+ attendees OR mentions "deadline/exam/urgent/meeting" AND <7 days away
+- MEDIUM: Personal appointments 1-7 days away OR 1-2 attendee meetings
+- LOW: Recurring events, social/casual, >7 days away, or birthdays
 
-2. reminder_interval: choose ONE from this list based on importance and lead time:
-   - high importance: "2hours" if <24h away, "daily" if 1-7 days away
-   - medium importance: "daily" if <3 days, "every_other_day" if >3 days
-   - low importance: "once"
-
-Return ONLY valid JSON, no markdown:
-{"importance":"medium","reminder_interval":"daily","reasoning":"brief 1-sentence reason"}`;
+Return ONLY valid JSON:
+{"importance":"medium","reminder_interval":"daily"}`;
 
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
     response_format: { type: 'json_object' },
     messages: [{ role: 'user', content: prompt }],
-    max_tokens: 150
+    max_tokens: 100
   });
 
   return JSON.parse(completion.choices[0].message.content);
