@@ -229,7 +229,7 @@ Deno.serve(async (req) => {
 
     // For app-user connector, fetch the current user's connection token
     try {
-      const conn = await base44.asServiceRole.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
+      const conn = await base44.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
       accessToken = conn?.accessToken;
       if (conn?.email) connectedEmail = conn.email;
     } catch (err) {
