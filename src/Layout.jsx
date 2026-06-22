@@ -187,33 +187,28 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 
   useEffect(() => {
     const now = new Date();
-    // Use local date (not UTC) so the key is correct in all timezones
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-    const currentHour = now.getHours(); // local time
+    const currentHour = now.getHours();
 
-    // Three time windows, each with their own localStorage key
+    let key = null;
+    let title = null;
+
     if (currentHour >= 8 && currentHour < 12) {
-      // Morning: 8am to noon
-      const key = `energy_checkin_morning_${today}`;
-      if (!localStorage.getItem(key)) {
-        localStorage.setItem(key, '1');
-        setTimeout(() => {
-          setEnergyCheckInTitle('How are you feeling about the day ahead?');
-          setShowEnergyCheckIn(true);
-        }, 3000);
-      }
+      key = `energy_checkin_morning_${today}`;
+      title = 'How are you feeling about the day ahead?';
     } else if (currentHour >= 12 && currentHour < 19) {
-      // Afternoon: noon–7pm
-      const key = `energy_checkin_afternoon_${today}`;
-      if (!localStorage.getItem(key)) {
-        localStorage.setItem(key, '1');
-        setTimeout(() => {
-          setEnergyCheckInTitle('How are you feeling about the rest of the day?');
-          setShowEnergyCheckIn(true);
-        }, 3000);
-      }
+      key = `energy_checkin_afternoon_${today}`;
+      title = 'How are you feeling about the rest of the day?';
     }
-    // Evening (7pm+): only the end-of-day recap shows — no energy check-in
+
+    if (key && !localStorage.getItem(key)) {
+      localStorage.setItem(key, '1');
+      const timer = setTimeout(() => {
+        setEnergyCheckInTitle(title);
+        setShowEnergyCheckIn(true);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
   }, []);
 
   // Android back button handler
