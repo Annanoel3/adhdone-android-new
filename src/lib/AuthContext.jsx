@@ -142,7 +142,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   const navigateToLogin = () => {
-    base44.auth.redirectToLogin('/Home');
+    base44.auth.redirectToLogin(`${window.location.origin}/Home`);
   };
 
   return (
