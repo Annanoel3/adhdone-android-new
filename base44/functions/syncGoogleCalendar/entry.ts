@@ -221,36 +221,15 @@ Deno.serve(async (req) => {
     let accessToken;
     let connectedEmail = user.email;
     let conn;
-    for (let attempt = 0; attempt < 4; attempt++) {
-      try {
-        conn = await base44.connectors.getAppUserConnection(CONNECTOR_ID);
-        accessToken = conn.accessToken;
-        break;
-      } catch {
-        if (attempt < 3) {
-          await new Promise(r => setTimeout(r, 1500));
-        }
-      }
-    }
-    if (!accessToken) {
-      return Response.json({ error: 'not_connected', message: 'Google Calendar not connected' }, { status: 400 });
-    }
-
     const body = await req.json().catch(() => ({}));
 
-    // If just probing for connection status, return connected email without full sync
+    // Probe mode: just check if connection can be established
     if (body.probe) {
-      // Fetch the actual Gmail account info
-      try {
-        const profileRes = await fetch('https://www.googleapis.com/oauth2/v1/userinfo?alt=json', {
-          headers: { Authorization: `Bearer ${accessToken}` }
-        });
-        if (profileRes.ok) {
-          const profile = await profileRes.json();
-          connectedEmail = profile.email || user.email;
-        }
-      } catch { /* fallback to user.email */ }
-      return Response.json({ connected: true, connected_email: connectedEmail });
+      return Response.json({ error: 'not_connected', message: 'Google Calendar not configured. Check workspace OAuth settings.' }, { status: 400 });
+    }
+
+    if (!accessToken) {
+      return Response.json({ error: 'not_connected', message: 'Google Calendar not connected' }, { status: 400 });
     }
 
     const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });

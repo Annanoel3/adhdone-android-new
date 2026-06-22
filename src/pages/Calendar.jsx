@@ -74,6 +74,7 @@ export default function Calendar() {
   }, []);
 
   const attemptSync = useCallback(async () => {
+    // For now, just invoke backend — it will detect if Google Calendar is connected on the platform
     const res = await base44.functions.invoke('syncGoogleCalendar', {});
     return res.data;
   }, []);
