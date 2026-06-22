@@ -81,28 +81,42 @@ export default function Calendar() {
 
   // On mount: check auth, load events, probe connection
   useEffect(() => {
-    base44.auth.isAuthenticated().then(async (authed) => {
+    const checkConnection = async () => {
+      const authed = await base44.auth.isAuthenticated();
       if (authed) {
         const me = await base44.auth.me();
         setUser(me);
         await loadSyncedEvents();
-        try {
-          const conn = await base44.functions.invoke('syncGoogleCalendar', { probe: true });
-          if (conn?.data?.error === 'not_connected') {
-            setConnected(false);
-          } else {
-            setConnected(true);
-            if (conn?.data?.connected_email) {
-              setConnectedEmail(conn.data.connected_email);
-            }
-          }
-        } catch {
-          setConnected(false);
-        }
       }
       setLoading(false);
-    });
+    };
+    checkConnection();
   }, [loadSyncedEvents]);
+
+  // Re-check connection status every time the page becomes visible
+  useEffect(() => {
+    const checkConn = async () => {
+      try {
+        const result = await attemptSync();
+        if (result?.error === 'not_connected') {
+          setConnected(false);
+          setConnectedEmail(null);
+        } else {
+          setConnected(true);
+          if (result?.connected_email) setConnectedEmail(result.connected_email);
+        }
+      } catch {
+        setConnected(false);
+      }
+    };
+
+    checkConn();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkConn();
+    });
+
+    return () => document.removeEventListener('visibilitychange', checkConn);
+  }, [attemptSync]);
 
   // Opens OAuth popup for connecting (or adding another account)
   const handleConnect = async () => {
