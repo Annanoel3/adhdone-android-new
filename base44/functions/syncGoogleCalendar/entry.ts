@@ -25,30 +25,37 @@ async function classifyEventWithAI(openai, event) {
     : 999;
   const attendeeCount = (event.attendees || []).length;
   const recurrence = (event.recurrence || []).join(', ');
+  const isTimedEvent = !!event.start?.dateTime; // has a specific time, not all-day
 
-  const prompt = `You are an ADHD productivity assistant. Analyze this Google Calendar event and decide how to route it.
+  const prompt = `You are an ADHD productivity assistant. Analyze this Google Calendar event and classify it smartly.
 
 Event title: "${event.summary || 'Untitled'}"
 Start: ${eventStart}
 Hours until event: ${Math.round(hoursUntilEvent)}
+Has specific time (not all-day): ${isTimedEvent}
 Attendee count: ${attendeeCount}
 Recurrence rule: ${recurrence || 'none'}
-Description snippet: "${(event.description || '').substring(0, 200)}"
+Description: "${(event.description || '').substring(0, 200)}"
 Location: "${event.location || 'none'}"
 
-Decide:
-1. importance: "low" | "medium" | "high"
-   - high: work deadlines, meetings with many people, exams, urgent appointments, <24h away
-   - medium: personal appointments, meetings with 1-3 people, events 1-7 days away
-   - low: casual reminders, social events, recurring low-stakes events
+IMPORTANCE RULES (use common sense, be smart):
+- "urgent": title contains words like "urgent", "emergency", "asap", "critical", "deadline", "due today", OR it's a medical/health appointment, OR it involves keeping something/someone alive (feeding pets, medication), OR it's <6 hours away
+- "high": doctor/dentist/vet appointments, job interviews, exams, important work meetings (3+ attendees), flights/travel, legal appointments, medication reminders, events <24h away
+- "medium": personal appointments, social plans with 1-2 people, exercise classes, events 1-7 days away, recurring personal tasks
+- "low": casual reminders, entertainment, hobbies, events >7 days away, low-stakes recurring tasks, vague personal tasks like "find shirt" or "check something"
 
-2. reminder_interval: choose ONE from this list based on importance and lead time:
-   - high importance: "2hours" if <24h away, "daily" if 1-7 days away
-   - medium importance: "daily" if <3 days, "every_other_day" if >3 days
-   - low importance: "once"
+REMINDER INTERVAL RULES based on importance AND lead time:
+- "urgent": "1hour" always
+- "high" + <24h away: "2hours"
+- "high" + 1-7 days: "daily"
+- "medium" + <3 days: "daily"
+- "medium" + >3 days: "every_other_day"
+- "low": "once"
+
+Also determine if this is a TIMED EVENT (a real appointment/meeting/event at a specific time that the user should be reminded about before it happens), vs a TASK (something to do, not a specific appointment). Timed events: meetings, appointments, flights, classes. Tasks: "find shirt", "call someone", recurring habits.
 
 Return ONLY valid JSON, no markdown:
-{"importance":"medium","reminder_interval":"daily","reasoning":"brief 1-sentence reason"}`;
+{"importance":"medium","reminder_interval":"daily","is_timed_event":true,"reasoning":"brief 1-sentence reason"}`;
 
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
@@ -162,13 +169,13 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
         notification_recipient_email: user.email
       };
     } else {
-      const urgencyMap = { low: 'low', medium: 'medium', high: 'high' };
+      const urgencyMap = { low: 'low', medium: 'medium', high: 'high', urgent: 'urgent' };
       taskRecord = {
         title: title,
         description: richDescription,
         notes: event.location ? `📍 ${event.location}` : (event.description ? event.description.substring(0, 200) : ''),
         urgency: urgencyMap[ai.importance] || 'medium',
-        energy_required: ai.importance === 'high' ? 'high' : ai.importance === 'low' ? 'low' : 'medium',
+        energy_required: (ai.importance === 'high' || ai.importance === 'urgent') ? 'high' : ai.importance === 'low' ? 'low' : 'medium',
         status: 'active',
         reminder_interval: ai.reminder_interval || 'daily',
         next_reminder: nextReminderDate.toISOString(),
@@ -194,6 +201,7 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
       last_synced_at: new Date().toISOString(),
       user_email: user.email
     };
+    const isTimedEventResult = ai.is_timed_event !== false && !isAllDay;
 
     if (existing) {
       await base44.asServiceRole.entities.CalendarSyncedEvent.update(existing.id, syncRecord);
@@ -203,7 +211,7 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
       created++;
     }
 
-    results.push({ googleId, title, routedAs, importance: ai.importance });
+    results.push({ googleId, title, routedAs, importance: ai.importance, is_timed_event: isTimedEventResult, task_id: createdTask.id, reminder_interval: ai.reminder_interval });
   }
 
   return { created, updated, skipped, total_events: events.length, results, connectedEmail };

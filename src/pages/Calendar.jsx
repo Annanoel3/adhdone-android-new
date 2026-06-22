@@ -19,6 +19,7 @@ import {
   Plus,
   Mail,
 } from 'lucide-react';
+import ReminderPreferenceModal from '@/components/calendar/ReminderPreferenceModal';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
 
@@ -57,6 +58,7 @@ export default function Calendar() {
   const [syncError, setSyncError] = useState(null);
   const [syncedEvents, setSyncedEvents] = useState([]);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
+  const [pendingReminderEvents, setPendingReminderEvents] = useState([]);
 
   const loadSyncedEvents = useCallback(async () => {
     try {
@@ -122,6 +124,9 @@ export default function Calendar() {
             setSyncResult(result);
             if (result?.synced_at) setLastSyncedAt(result.synced_at);
             await loadSyncedEvents();
+            // Show reminder modal for newly created timed events
+            const timedNew = (result?.results || []).filter(r => r.is_timed_event && r.task_id);
+            if (timedNew.length > 0) setPendingReminderEvents(timedNew);
           }
         } catch (e) {
           setSyncError(e.message);
@@ -155,6 +160,9 @@ export default function Calendar() {
         setSyncResult(result);
         if (result?.synced_at) setLastSyncedAt(result.synced_at);
         await loadSyncedEvents();
+        // Show reminder modal for newly created timed events
+        const timedNew = (result?.results || []).filter(r => r.is_timed_event && r.task_id);
+        if (timedNew.length > 0) setPendingReminderEvents(timedNew);
       }
     } catch (e) {
       setSyncError(e.message || 'Sync failed');
@@ -382,6 +390,14 @@ export default function Calendar() {
           </div>
         )}
       </div>
+
+      {pendingReminderEvents.length > 0 && (
+        <ReminderPreferenceModal
+          events={pendingReminderEvents}
+          isDark={isDark}
+          onDone={() => setPendingReminderEvents([])}
+        />
+      )}
     </div>
   );
 }
