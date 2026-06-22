@@ -76,7 +76,7 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
   // Fetch upcoming events (next 60 days)
   const timeMin = new Date().toISOString();
   const timeMax = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
-  const calUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=100&singleEvents=false&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&fields=items(id,summary,start,end,attendees,recurrence,description,location,status,organizer,conferenceData)`;
+  const calUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=100&singleEvents=true&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&fields=items(id,summary,start,end,attendees,description,location,status,organizer,conferenceData)`;
 
   const calRes = await fetch(calUrl, { headers: authHeader });
   if (!calRes.ok) {
