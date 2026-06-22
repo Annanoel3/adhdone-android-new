@@ -110,34 +110,19 @@ export default function Calendar() {
     const timer = setInterval(async () => {
       if (!popup || popup.closed) {
         clearInterval(timer);
-        // Wait for the platform to finish saving the OAuth token before probing/syncing
-        await new Promise(resolve => setTimeout(resolve, 3000));
         setSyncing(true);
         setSyncError(null);
-        // First probe to confirm connection before attempting full sync
-        try {
-          const probe = await base44.functions.invoke('syncGoogleCalendar', { probe: true });
-          if (probe?.data?.error === 'not_connected') {
-            setConnected(false);
-            setSyncError('Connection failed. Please try again.');
-            setSyncing(false);
-            return;
-          }
-          setConnected(true);
-          if (probe?.data?.connected_email) setConnectedEmail(probe.data.connected_email);
-        } catch {
-          setConnected(false);
-          setSyncError('Connection failed. Please try again.');
-          setSyncing(false);
-          return;
-        }
-        // Now do the full sync
         try {
           const result = await attemptSync();
-          if (result?.connected_email) setConnectedEmail(result.connected_email);
-          setSyncResult(result);
-          if (result?.synced_at) setLastSyncedAt(result.synced_at);
-          await loadSyncedEvents();
+          if (result?.error === 'not_connected') {
+            setConnected(false);
+          } else {
+            setConnected(true);
+            if (result?.connected_email) setConnectedEmail(result.connected_email);
+            setSyncResult(result);
+            if (result?.synced_at) setLastSyncedAt(result.synced_at);
+            await loadSyncedEvents();
+          }
         } catch (e) {
           setSyncError(e.message);
         } finally {
