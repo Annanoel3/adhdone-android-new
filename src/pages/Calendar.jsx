@@ -116,6 +116,7 @@ export default function Calendar() {
           const result = await attemptSync();
           if (result?.error === 'not_connected') {
             setConnected(false);
+            setSyncError('Failed to connect. Please try again.');
           } else {
             setConnected(true);
             if (result?.connected_email) setConnectedEmail(result.connected_email);
