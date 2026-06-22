@@ -123,6 +123,43 @@ export default function LandingPage() {
         </Button>
       </section>
 
+      {/* Google Account Usage Disclosure */}
+      <section className="bg-stone-50 border-t border-stone-200 py-12 px-6">
+        <div className="max-w-2xl mx-auto">
+          <h2 className="text-lg font-bold text-gray-900 mb-4">How ADHDone uses your Google account:</h2>
+          <ul className="space-y-4 text-sm text-gray-700">
+            <li className="flex gap-2">
+              <span className="text-green-600 font-bold flex-shrink-0">•</span>
+              <span><strong>Google Sign-In:</strong> We use Google OAuth solely to securely authenticate your identity. We do not access your Gmail, Google Drive, or any other Google services through sign-in.</span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-green-600 font-bold flex-shrink-0">•</span>
+              <span><strong>Google Calendar (optional):</strong> If you choose to connect Google Calendar, we request read-only access to import your existing events into ADHDone as smart tasks with AI-assigned reminders. This connection is entirely optional and can be disconnected at any time.</span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-green-600 font-bold flex-shrink-0">•</span>
+              <span><strong>No data sharing:</strong> We never sell, share, or use your Google data for advertising. Your data is encrypted and used solely to power your ADHDone experience.</span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-green-600 font-bold flex-shrink-0">•</span>
+              <span><strong>Revoke access anytime:</strong> You can disconnect Google Calendar or revoke app permissions at any time from your Google account settings or within ADHDone settings.</span>
+            </li>
+          </ul>
+          <p className="mt-5 text-xs text-gray-500">
+            ADHDone's use of Google user data complies with the{" "}
+            <a
+              href="https://developers.google.com/terms/api-services-user-data-policy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-green-600 hover:underline"
+            >
+              Google API Services User Data Policy
+            </a>
+            , including the Limited Use requirements.
+          </p>
+        </div>
+      </section>
+
       {/* Footer */}
       <footer className="border-t border-stone-200 py-6 px-6 text-center text-sm text-gray-500">
         <div className="flex items-center justify-center gap-4">
