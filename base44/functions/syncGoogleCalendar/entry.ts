@@ -251,7 +251,7 @@ Deno.serve(async (req) => {
     // --- probe: just check if connected, return account info ---
     if (body.probe) {
       try {
-        const conn = await base44.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
+        const conn = await base44.asServiceRole.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
         if (!conn || !conn.accessToken) {
           return Response.json({ error: 'not_connected' }, { status: 400 });
         }
@@ -266,7 +266,7 @@ Deno.serve(async (req) => {
     let accessToken;
     let googleEmail;
     try {
-      const conn = await base44.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
+      const conn = await base44.asServiceRole.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
       accessToken = conn.accessToken;
       googleEmail = await getGoogleAccountEmail(accessToken);
     } catch {
