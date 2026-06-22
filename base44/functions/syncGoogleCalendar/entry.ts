@@ -227,16 +227,14 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'not_connected', message: 'Google Calendar not connected' }, { status: 400 });
     }
 
-    // Try to fetch the user's Google Calendar credentials
-    // For an app-user connector, the token should be available in the request headers or user connection
+    // For app-user connector, fetch the current user's connection token
     try {
-      // Attempt to get the connection from the platform
-      const userConnections = await base44.asServiceRole.entities.GoogleCalendarConnection?.filter?.({ user_email: user.email });
-      if (userConnections?.[0]?.access_token) {
-        accessToken = userConnections[0].access_token;
-        connectedEmail = userConnections[0].user_email || user.email;
-      }
-    } catch {}
+      const conn = await base44.connectors.getAppUserConnection('googlecalendar');
+      accessToken = conn?.accessToken;
+      if (conn?.email) connectedEmail = conn.email;
+    } catch (err) {
+      console.log('[syncGoogleCalendar] No connection available:', err.message);
+    }
 
     if (!accessToken) {
       return Response.json({ error: 'not_connected', message: 'Google Calendar not connected' }, { status: 400 });
