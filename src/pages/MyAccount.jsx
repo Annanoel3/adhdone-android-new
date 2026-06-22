@@ -16,9 +16,6 @@ import {
   Loader2,
   Heart,
   Star,
-  Bell,
-  Info,
-  Settings,
   Shield,
   Trash2
 } from "lucide-react";
@@ -103,34 +100,6 @@ ${detailedFeedback}
     }
 
     setIsSubmittingFeedback(false);
-  };
-
-  const testPushNotification = async () => {
-    try {
-      const response = await fetch('/api/sendOneSignalPush', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userEmail: user.email,
-          title: "Test Notification 🎉",
-          message: "Success! Your notifications are working perfectly.",
-          data: { type: 'test' }
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        alert("Test notification sent! Check your device in a few seconds.");
-      } else {
-        throw new Error(data.error || "Failed to send notification");
-      }
-    } catch (error) {
-      console.error("Error sending test notification:", error);
-      alert("Failed to send test notification. Error: " + error.message);
-    }
   };
 
   if (!user) {
@@ -265,66 +234,6 @@ ${detailedFeedback}
                 <span className="text-xs text-left text-red-600/80">
                   Permanently close account
                 </span>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Push Notifications Testing */}
-        <Card className={`border-none shadow-md ${
-          theme === 'dark' ? 'bg-gray-800' : 'bg-white/80 backdrop-blur-sm'
-        }`}>
-          <CardHeader>
-            <CardTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-white' : ''}`}>
-              <Bell className="w-5 h-5" />
-              Push Notifications
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-              Test your push notifications and manage your notification preferences.
-            </p>
-            
-            <div className={`p-4 rounded-lg ${
-              theme === 'minimalist' 
-                ? 'bg-blue-50 border border-blue-200' 
-                : theme === 'dark'
-                  ? 'bg-blue-900/20 border border-blue-800'
-                  : 'bg-gradient-to-r from-blue-100 to-purple-100 border border-blue-200'
-            }`}>
-              <div className="flex items-start gap-2 mb-3">
-                <Info className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-                <div className="text-sm">
-                  <p className={`font-medium mb-1 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
-                    Automatic Notifications:
-                  </p>
-                  <ul className={`space-y-1 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                    <li>• Task reminders (based on your reminder settings)</li>
-                    <li>• Achievement unlocked notifications</li>
-                    <li>• Accountability partner messages and pokes</li>
- 
-                  </ul>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <Button
-                onClick={testPushNotification}
-                variant="outline"
-                className="flex-1"
-              >
-                <Bell className="w-4 h-4 mr-2" />
-                Send Test Notification
-              </Button>
-              
-              <Button
-                onClick={() => navigate(createPageUrl("NotificationSettings"))}
-                variant="outline"
-                className="flex-1"
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                Manage Settings
               </Button>
             </div>
           </CardContent>
