@@ -910,7 +910,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             </SidebarFooter>
           </Sidebar>
 
-          <main className="flex-1 flex flex-col min-w-0 min-h-screen relative z-10">
+          <main className="flex-1 flex flex-col min-w-0 min-h-screen relative z-10 overflow-x-hidden">
             <header className={`backdrop-blur-md border-b px-6 sticky top-0 z-10 pointer-events-auto ${
               isSeasonalTheme()
                 ? 'bg-white/60 border-white/30'
@@ -949,7 +949,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               </div>
             </header>
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden w-0 min-w-0">
               {children}
             </div>
 
