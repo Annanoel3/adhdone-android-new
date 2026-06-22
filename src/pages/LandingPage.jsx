@@ -8,9 +8,6 @@ export default function LandingPage() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Don't auto-redirect in Base44 builder preview (inside iframe)
-    const isPreview = window.self !== window.top || new URLSearchParams(window.location.search).has('preview');
-    if (isPreview) return;
     base44.auth.isAuthenticated().then((authed) => {
       if (authed) navigate("/Home", { replace: true });
     });
