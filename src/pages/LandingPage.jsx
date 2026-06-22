@@ -17,7 +17,7 @@ export default function LandingPage() {
   }, [navigate]);
 
   const handleSignIn = () => {
-    base44.auth.redirectToLogin(window.location.origin + "/Home");
+    base44.auth.redirectToLogin("/Home");
   };
 
   return (
