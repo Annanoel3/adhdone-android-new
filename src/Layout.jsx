@@ -949,7 +949,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               </div>
             </header>
 
-            <div className="flex-1 overflow-y-auto overflow-x-hidden w-0 min-w-0">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden">
               {children}
             </div>
 
