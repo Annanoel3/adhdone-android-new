@@ -100,14 +100,10 @@ export default function Calendar() {
         await loadSyncedEvents();
         try {
           const res = await base44.functions.invoke('syncGoogleCalendar', { probe: true });
-          if (res?.data?.error === 'not_connected') {
-            setConnected(false);
-            setGoogleEmail(null);
-          } else {
-            setConnected(true);
-            setGoogleEmail(res?.data?.google_email || null);
-          }
+          setConnected(true);
+          setGoogleEmail(res?.data?.google_email || null);
         } catch {
+          // 400 = not connected, that's fine
           setConnected(false);
           setGoogleEmail(null);
         }
@@ -130,23 +126,19 @@ export default function Calendar() {
   };
 
   const handleConnect = async () => {
-    await openOAuthPopup();
-    // After OAuth, run sync and get the real Google email
-    setSyncing(true);
     setSyncError(null);
+    await openOAuthPopup();
+    // Small delay to let the token propagate, then sync
+    await new Promise(r => setTimeout(r, 1500));
+    setSyncing(true);
     try {
       const result = await attemptSync();
-      if (result?.error === 'not_connected') {
-        setConnected(false);
-        setGoogleEmail(null);
-      } else {
-        setConnected(true);
-        setGoogleEmail(result?.google_email || null);
-        setSyncResult(result);
-        await loadSyncedEvents();
-      }
+      setConnected(true);
+      setGoogleEmail(result?.google_email || null);
+      setSyncResult(result);
+      await loadSyncedEvents();
     } catch (e) {
-      setSyncError(e.message);
+      setSyncError(e.message || 'Sync failed after connecting');
     } finally {
       setSyncing(false);
     }
