@@ -29,11 +29,6 @@ export default function Home() {
   useEffect(() => {
     loadData();
     checkEndOfDayReview();
-    const interval = setInterval(() => {
-      const newTheme = localStorage.getItem('adhd_theme') || 'minimalist';
-      setTheme(newTheme);
-    }, 100);
-    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -43,64 +38,34 @@ export default function Home() {
     }
   }, [location.state, navigate, location.pathname]);
 
-  // CRITICAL FIX: Refresh tasks every 30 seconds to pick up reminder updates from cron
-  useEffect(() => {
-    const refreshInterval = setInterval(() => {
-      console.log('🔄 [HOME] Auto-refreshing tasks to update reminder times...');
-      loadData();
-    }, 30000); // Every 30 seconds
-
-    return () => clearInterval(refreshInterval);
-  }, []);
-
-  // CRITICAL FIX: Refresh tasks when page becomes visible
+  // Refresh tasks when page becomes visible (tab switch / screen wake)
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        console.log('👁️ [HOME] Page visible - refreshing tasks...');
-        loadData();
+        loadTasks();
       }
     };
-
     document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, []);
 
-  const loadData = async () => {
+  const loadTasks = async () => {
     try {
-      console.log('📥 [HOME] Loading data...');
-      const currentUser = await base44.auth.me();
-      setUser(currentUser);
-      console.log('👤 [HOME] User loaded:', currentUser?.email);
-    } catch (error) {
-      console.error("Error loading user:", error);
-      console.log("User not logged in");
-    }
-    
-    try {
-      console.log('📋 [HOME] Fetching tasks...');
       const allTasks = await base44.entities.Task.list('-updated_date');
-      console.log('✅ [HOME] Tasks fetched:', allTasks.length);
-      
-      // Log some task details
-      if (allTasks.length > 0) {
-        const completed = allTasks.filter(t => t.status === 'completed');
-        console.log('✅ [HOME] Completed tasks:', completed.length);
-        
-        // Show first 3 completed tasks with dates
-        if (completed.length > 0) {
-          console.log('📅 [HOME] Sample completed:', completed.slice(0, 3).map(t => ({
-            title: t.title.substring(0, 30),
-            completed_at: t.completed_at,
-            date_local: t.completed_at ? getLocalDateString(new Date(t.completed_at)) : 'no date'
-          })));
-        }
-      }
-      
       setTasks(allTasks);
     } catch (error) {
-      console.error('❌ [HOME] Error loading tasks:', error);
+      console.error('Error loading tasks:', error);
     }
+  };
+
+  const loadData = async () => {
+    try {
+      const currentUser = await base44.auth.me();
+      setUser(currentUser);
+    } catch (error) {
+      console.error("Error loading user:", error);
+    }
+    await loadTasks();
   };
 
   const checkEndOfDayReview = () => {
@@ -150,12 +115,12 @@ export default function Home() {
         const { createNextRecurrence } = await import('../components/utils/taskRecurrence');
         const result = await createNextRecurrence(task);
         if (result) {
-          loadData();
+          loadTasks();
         }
       }
     } catch (error) {
       console.error("Failed to complete task:", error);
-      loadData();
+      loadTasks();
     }
   };
 
@@ -194,27 +159,7 @@ export default function Home() {
 
   const activeTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id);
 
-  // Debug logging
-  useEffect(() => {
-    console.log('🔍 [HOME DEBUG] ========== TASK COUNT DEBUG ==========');
-    console.log('🔍 [HOME DEBUG] Total tasks loaded:', tasks.length);
-    console.log('🔍 [HOME DEBUG] Active tasks (all):', tasks.filter(t => t.status === 'active').length);
-    console.log('🔍 [HOME DEBUG] Active PARENT tasks:', activeTasks.length);
-    console.log('🔍 [HOME DEBUG] Active SUBTASKS:', tasks.filter(t => t.status === 'active' && t.parent_task_id).length);
-    console.log('🔍 [HOME DEBUG] Completed tasks (all):', tasks.filter(t => t.status === 'completed').length);
-    console.log('🔍 [HOME DEBUG] Completed today (parent only):', todayCompleted.length);
-    
-    // Show all active parent tasks
-    const activeParents = tasks.filter(t => t.status === 'active' && !t.parent_task_id);
-    console.log('🔍 [HOME DEBUG] Active parent tasks list:');
-    activeParents.forEach((t, i) => {
-      console.log(`  ${i+1}. "${t.title}" (id: ${t.id})`);
-    });
-    
-    const today = getLocalDateString(new Date());
-    console.log('🔍 [HOME DEBUG] Today date:', today);
-    console.log('🔍 [HOME DEBUG] =====================================');
-  }, [tasks, todayCompleted, activeTasks]);
+
 
   return (
     <div className={`min-h-screen p-4 md:p-8 w-full ${
