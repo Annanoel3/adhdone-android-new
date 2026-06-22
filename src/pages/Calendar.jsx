@@ -128,17 +128,35 @@ export default function Calendar() {
   const handleConnect = async () => {
     setSyncError(null);
     await openOAuthPopup();
-    // Small delay to let the token propagate, then sync
-    await new Promise(r => setTimeout(r, 1500));
     setSyncing(true);
+    // Poll probe until connected (up to ~10s), then sync
+    let probeOk = false;
+    for (let i = 0; i < 10; i++) {
+      await new Promise(r => setTimeout(r, 1000));
+      try {
+        const res = await base44.functions.invoke('syncGoogleCalendar', { probe: true });
+        if (res?.data?.connected) {
+          setConnected(true);
+          setGoogleEmail(res.data.google_email || null);
+          probeOk = true;
+          break;
+        }
+      } catch {
+        // not ready yet, keep polling
+      }
+    }
+    if (!probeOk) {
+      setSyncing(false);
+      setSyncError('Could not verify Google Calendar connection. Please try again.');
+      return;
+    }
     try {
       const result = await attemptSync();
-      setConnected(true);
-      setGoogleEmail(result?.google_email || null);
       setSyncResult(result);
       await loadSyncedEvents();
     } catch (e) {
-      setSyncError(e.message || 'Sync failed after connecting');
+      // Connected but sync failed — still show as connected, just no result
+      console.error('Sync after connect failed:', e);
     } finally {
       setSyncing(false);
     }
