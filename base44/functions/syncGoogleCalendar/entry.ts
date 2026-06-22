@@ -216,13 +216,23 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    // Get the user's Google Calendar token (must use user-scoped connectors, not service role)
+    // Get the user's Google Calendar token — retry a few times since the platform
+    // may take a moment to persist the token right after OAuth completes
     let accessToken;
     let connectedEmail = user.email;
-    try {
-      const conn = await base44.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
-      accessToken = conn.accessToken;
-    } catch {
+    let conn;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        conn = await base44.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
+        accessToken = conn.accessToken;
+        break;
+      } catch {
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, 1500));
+        }
+      }
+    }
+    if (!accessToken) {
       return Response.json({ error: 'not_connected', message: 'Google Calendar not connected' }, { status: 400 });
     }
 
