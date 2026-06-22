@@ -135,7 +135,7 @@ export default function Settings() {
     {
       icon: Shield,
       label: 'Terms & Conditions',
-      onClick: () => navigate('/termsandconditions')
+      onClick: () => navigate('/Terms')
     },
     {
       icon: Bug,
