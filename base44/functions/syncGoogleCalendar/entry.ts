@@ -26,6 +26,16 @@ async function classifyEventWithAI(openai, event) {
   const attendeeCount = (event.attendees || []).length;
   const recurrence = (event.recurrence || []).join(', ');
   
+  // Client-side urgency detection: check title/description for critical keywords
+  const fullText = `${event.summary || ''} ${event.description || ''}`.toLowerCase();
+  const urgentKeywords = ['urgent', 'deadline', 'asap', 'critical', 'exam', 'interview', 'presentation'];
+  const hasUrgentKeyword = urgentKeywords.some(kw => fullText.includes(kw));
+  
+  // If contains urgent keyword and within 7 days, immediately mark high
+  if (hasUrgentKeyword && hoursUntilEvent > 0 && hoursUntilEvent <= 168) {
+    return { importance: 'high', reminder_interval: hoursUntilEvent < 24 ? '2hours' : 'daily' };
+  }
+  
   // Quick heuristic: if <2 hours away, it's urgent regardless
   const isImminentDeadline = hoursUntilEvent < 2 && hoursUntilEvent > 0;
 
@@ -122,11 +132,19 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
       ai = { importance: 'medium', reminder_interval: 'daily' };
     }
 
-    // Re-check if this event was already synced (race condition guard)
-    const recheck = await base44.asServiceRole.entities.CalendarSyncedEvent.filter({ 
+    // Re-check if this event was already synced (race condition guard with retry)
+    let recheck = await base44.asServiceRole.entities.CalendarSyncedEvent.filter({ 
       google_event_id: googleId, 
       user_email: user.email 
     });
+    if (recheck.length === 0) {
+      // Sleep briefly and retry to catch concurrent writes
+      await new Promise(r => setTimeout(r, 150));
+      recheck = await base44.asServiceRole.entities.CalendarSyncedEvent.filter({ 
+        google_event_id: googleId, 
+        user_email: user.email 
+      });
+    }
     if (recheck.length > 0) {
       skipped++;
       continue;
