@@ -68,18 +68,26 @@ export default function Progress() {
   const subTextClass = theme === 'dark' ? 'text-gray-400' : 'text-gray-500';
 
   // ── Stats ──────────────────────────────────────────────────────────────────
-  const completedTasks = tasks.filter(t => t.status === 'completed' && !t.parent_task_id);
-  const activeTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id);
-
-  // Helper: get local date string YYYY-MM-DD from a task's completed_at
+  // Helper: get local date string YYYY-MM-DD
   const getLocalDate = (isoString) => {
     const d = new Date(isoString);
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
   };
 
-  // Build a map of completions per local date from real task data
+  const todayStr = getLocalDate(new Date().toISOString());
+
+  const allCompletedTasks = tasks.filter(t => t.status === 'completed' && !t.parent_task_id);
+  const activeTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id);
+
+  // Today-only completed tasks (for "Today" tab stats)
+  const todayCompletedTasks = allCompletedTasks.filter(t => {
+    const dateStr = t.completed_at ? getLocalDate(t.completed_at) : getLocalDate(t.updated_date);
+    return dateStr === todayStr;
+  });
+
+  // Build a map of completions per local date from real task data (all time, for charts)
   const completionsByDate = {};
-  completedTasks.forEach(t => {
+  allCompletedTasks.forEach(t => {
     if (t.completed_at) {
       const dateStr = getLocalDate(t.completed_at);
       completionsByDate[dateStr] = (completionsByDate[dateStr] || 0) + 1;
@@ -91,41 +99,37 @@ export default function Progress() {
   for (let i = 13; i >= 0; i--) {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    const dateStr = getLocalDate(d.toISOString());
     const completed = completionsByDate[dateStr] || 0;
     last14.push({
       date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       dateStr,
       completed,
-      rate: 0, // completion rate requires knowing total tasks that day — see below
+      rate: 0,
     });
   }
 
-  // Avg completion rate: completed / (completed + active tasks due today or earlier, or with no due date)
-  // Excludes tasks with a future next_reminder / due date so they don't drag the rate down
-  const today = new Date();
-  today.setHours(23, 59, 59, 999);
-  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
-
-  const relevantActiveTasks = activeTasks.filter(t => {
-    if (!t.next_reminder) return true; // no due date — count it
-    const dueDate = t.next_reminder.split('T')[0];
-    return dueDate <= todayStr;
-  });
-
-  const relevantTotal = completedTasks.length + relevantActiveTasks.length;
-  const avgCompletionRate = relevantTotal > 0
-    ? Math.round((completedTasks.length / relevantTotal) * 100)
+  // Avg daily completion rate: average of each of the last 30 days that had any tasks
+  const last30Rates = [];
+  for (let i = 0; i < 30; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = getLocalDate(d.toISOString());
+    const doneCount = completionsByDate[dateStr] || 0;
+    if (doneCount > 0) last30Rates.push(doneCount);
+  }
+  const avgCompletionRate = last30Rates.length > 0
+    ? Math.round(last30Rates.reduce((a, b) => a + b, 0) / last30Rates.length)
     : 0;
 
   const currentStreak = todaysSummary?.streak_days || 0;
 
-  // Tasks completed by day of week (from real data)
+  // Tasks completed by day of week (from real data — all time for pattern insights)
   const byDayOfWeek = Array(7).fill(0).map((_, i) => ({
     day: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][i],
     count: 0
   }));
-  completedTasks.forEach(t => {
+  allCompletedTasks.forEach(t => {
     if (t.completed_at) {
       const dow = new Date(t.completed_at).getDay();
       byDayOfWeek[dow].count += 1;
@@ -148,10 +152,10 @@ export default function Progress() {
 
   const bestEnergyTime = energyChartData.reduce((best, cur) => cur.avg > best.avg ? cur : best, { label: 'N/A', avg: 0 }).label;
 
-  // Urgency breakdown
+  // Urgency breakdown (all time — shows overall patterns)
   const urgencyBreakdown = ['urgent', 'high', 'medium', 'low'].map(u => ({
     label: u.charAt(0).toUpperCase() + u.slice(1),
-    count: completedTasks.filter(t => t.urgency === u).length,
+    count: allCompletedTasks.filter(t => t.urgency === u).length,
   }));
 
   const chartColors = theme === 'dark'
@@ -199,10 +203,10 @@ export default function Progress() {
             {/* Quick stats row */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
-                { label: 'Completed today', value: todaysSummary?.tasks_completed ?? 0, icon: CheckCircle2 },
+                { label: 'Completed today', value: todayCompletedTasks.length, icon: CheckCircle2 },
                 { label: 'Still active', value: activeTasks.length, icon: Clock },
                 { label: 'Current streak', value: `${currentStreak}d`, icon: Flame },
-                { label: 'Avg completion', value: `${avgCompletionRate}%`, icon: Target },
+                { label: 'Avg per day (30d)', value: `${avgCompletionRate}`, icon: Target },
               ].map(({ label, value, icon: Icon }) => (
                 <Card key={label} className={cardClass}>
                   <CardContent className="p-4">
@@ -227,14 +231,14 @@ export default function Progress() {
               <Card className={cardClass}>
                 <CardContent className="p-5">
                   <p className={`text-xs mb-1 ${subTextClass}`}>Tasks completed (all time)</p>
-                  <p className={`text-4xl font-bold ${textClass}`}>{completedTasks.length}</p>
+                  <p className={`text-4xl font-bold ${textClass}`}>{allCompletedTasks.length}</p>
                 </CardContent>
               </Card>
               <Card className={cardClass}>
                 <CardContent className="p-5">
-                  <p className={`text-xs mb-1 ${subTextClass}`}>Avg daily completion rate</p>
-                  <p className={`text-4xl font-bold ${textClass}`}>{avgCompletionRate}%</p>
-                  <p className={`text-xs mt-1 ${subTextClass}`}>over last 30 days</p>
+                  <p className={`text-xs mb-1 ${subTextClass}`}>Avg tasks/day</p>
+                  <p className={`text-4xl font-bold ${textClass}`}>{avgCompletionRate}</p>
+                  <p className={`text-xs mt-1 ${subTextClass}`}>on active days (last 30d)</p>
                 </CardContent>
               </Card>
               <Card className={cardClass}>
