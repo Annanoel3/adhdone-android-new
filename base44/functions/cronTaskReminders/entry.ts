@@ -171,73 +171,27 @@ Deno.serve(async (req) => {
 
               console.log(`📊 [TASK REMINDERS] Task has interval: ${t.reminder_interval}, ms: ${ms}`);
 
-              // For recurring reminders, calculate next time and pre-schedule future notifications
+              // Advance next_reminder — cronRefillReminders owns all future batch scheduling
               if (ms && ms > 0) {
                 const lastReminderTime = parseWhen(t.next_reminder);
                 let nextTime = lastReminderTime + ms;
-
-                // If we're multiple intervals behind, catch up to the next future one
                 const nowTime = Date.now();
                 while (nextTime <= nowTime) {
                   nextTime += ms;
                 }
-
                 next = new Date(nextTime).toISOString();
-                console.log(`✅ [TASK REMINDERS] Calculated next reminder: ${next} (in ${Math.round((nextTime - nowTime) / 60000)} minutes)`);
+                console.log(`✅ [TASK REMINDERS] Next reminder: ${next}`);
+              }
 
-                // Pre-schedule future OneSignal notifications (batch of 10)
-                const notificationIds = [];
-                let scheduleTime = nextTime;
-                const scheduleCount = 10;
-                let lastScheduledUntil = null;
-
-                for (let i = 0; i < scheduleCount; i++) {
-                  const sendAfterSeconds = Math.round((scheduleTime - nowTime) / 1000);
-                  const notificationId = await scheduleOneSignalNotification(
-                    user.email,
-                    'Task Reminder 📋',
-                    t.title || 'You have a task due',
-                    sendAfterSeconds,
-                    t.id
-                  );
-
-                  if (notificationId) {
-                    notificationIds.push(notificationId);
-                    lastScheduledUntil = new Date(scheduleTime).toISOString();
-                  }
-
-                  scheduleTime += ms;
-                }
-
-                console.log(`📌 [TASK REMINDERS] Scheduled ${notificationIds.length} OneSignal notifications for task ${t.id}`);
-
-                // Update task with notification IDs
-                try {
-                  const updateResult = await base44.asServiceRole.entities.Task.update(t.id, {
-                    reminder_count: (t.reminder_count || 0) + 1,
-                    next_reminder: next,
-                    onesignal_notification_ids: notificationIds,
-                    last_scheduled_until: lastScheduledUntil
-                  });
-
-                  console.log(`💾 [TASK REMINDERS] ✅ Update successful for task ${t.id}`);
-                } catch (updateError) {
-                  console.error(`💾 [TASK REMINDERS] ❌ Update FAILED for task ${t.id}:`, updateError);
-                  throw updateError;
-                }
-              } else {
-                console.log(`⚠️ [TASK REMINDERS] No recurring interval, next_reminder will be null`);
-                try {
-                  const updateResult = await base44.asServiceRole.entities.Task.update(t.id, {
-                    reminder_count: (t.reminder_count || 0) + 1,
-                    next_reminder: next
-                  });
-
-                  console.log(`💾 [TASK REMINDERS] ✅ Update successful for task ${t.id}`);
-                } catch (updateError) {
-                  console.error(`💾 [TASK REMINDERS] ❌ Update FAILED for task ${t.id}:`, updateError);
-                  throw updateError;
-                }
+              try {
+                await base44.asServiceRole.entities.Task.update(t.id, {
+                  reminder_count: (t.reminder_count || 0) + 1,
+                  next_reminder: next
+                });
+                console.log(`💾 [TASK REMINDERS] ✅ Updated next_reminder for task ${t.id}`);
+              } catch (updateError) {
+                console.error(`💾 [TASK REMINDERS] ❌ Update FAILED for task ${t.id}:`, updateError);
+                throw updateError;
               }
 
               ok++;

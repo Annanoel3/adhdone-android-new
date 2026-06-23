@@ -113,8 +113,8 @@ Deno.serve(async (req) => {
       await cancelOneSignalNotification(notificationId);
     }
 
-    // Reschedule with new title if task details changed
-    if (old_data.title !== data.title || old_data.next_reminder !== data.next_reminder) {
+    // Only reschedule if title or reminder_interval changed (not cron-driven next_reminder bumps)
+    if (old_data.title !== data.title || old_data.reminder_interval !== data.reminder_interval) {
       console.log('[onTaskUpdate] Task details changed, rescheduling notifications');
       
       // Get the task to get next_reminder and other details

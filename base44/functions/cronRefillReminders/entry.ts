@@ -114,7 +114,7 @@ Deno.serve(async (req) => {
           const existingIds = Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : [];
 
           await base44.asServiceRole.entities.Task.update(task.id, {
-            onesignal_notification_ids: [...existingIds, ...notificationIds],
+            onesignal_notification_ids: notificationIds,
             last_scheduled_until: newLastScheduledUntil.toISOString(),
             ...(!task.next_reminder || new Date(task.next_reminder) <= now
               ? { next_reminder: batchStart.toISOString() }
