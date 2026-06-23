@@ -73,6 +73,20 @@ Deno.serve(async (req) => {
       console.log(`🔋 [REFILL] Task "${task.title}" (${task.id}) needs refill — scheduled until: ${scheduledUntil.toISOString()}`);
 
       try {
+        // Cancel any existing scheduled OneSignal notifications for this task first
+        const oldIds = Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : [];
+        if (oldIds.length > 0) {
+          const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+          const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+          await Promise.allSettled(oldIds.map(id =>
+            fetch(`https://onesignal.com/api/v1/notifications/${id}?app_id=${appId}`, {
+              method: 'DELETE',
+              headers: { Authorization: `Basic ${restApiKey}` }
+            })
+          ));
+          console.log(`🗑 [REFILL] Cancelled ${oldIds.length} old notifications for "${task.title}"`);
+        }
+
         const batchStart = scheduledUntil > now
           ? new Date(scheduledUntil.getTime() + interval)
           : new Date(now.getTime() + interval);
