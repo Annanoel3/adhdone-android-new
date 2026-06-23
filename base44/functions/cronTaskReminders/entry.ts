@@ -1,8 +1,9 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
+// cronTaskReminders: bookkeeping only — advances next_reminder so cronRefillReminders
+// knows when to schedule the next batch. Does NOT send any notifications itself.
+
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
-const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID');
-const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY');
 
 const intervalMs = {
   '10min': 10 * 60 * 1000,
@@ -21,208 +22,57 @@ function parseWhen(v) {
   return Number.isNaN(d.getTime()) ? 0 : d.getTime();
 }
 
-function isInQuietHours(user) {
-   if (!user.quiet_hours_enabled || !user.quiet_hours_start || !user.quiet_hours_end) {
-     return false;
-   }
-
-   const now = new Date();
-   const currentTime = now.getHours() * 60 + now.getMinutes();
-
-   const [startHour, startMin] = user.quiet_hours_start.split(':').map(Number);
-   const [endHour, endMin] = user.quiet_hours_end.split(':').map(Number);
-
-   const startTime = startHour * 60 + startMin;
-   const endTime = endHour * 60 + endMin;
-
-   if (startTime > endTime) {
-     return currentTime >= startTime || currentTime <= endTime;
-   }
-
-   return currentTime >= startTime && currentTime <= endTime;
-}
-
-async function scheduleOneSignalNotification(email, title, body, sendAfterSeconds, taskId) {
-  if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
-    console.error('[cronTaskReminders] OneSignal credentials missing');
-    return null;
-  }
-
-  try {
-    const payload = {
-      app_id: ONESIGNAL_APP_ID,
-      headings: { en: title },
-      contents: { en: body },
-      include_external_user_ids: [email],
-      send_after: sendAfterSeconds,
-      data: {
-        screen: '/TaskNotification',
-        taskId: taskId,
-        type: 'task_reminder'
-      }
-    };
-
-    const response = await fetch('https://onesignal.com/api/v1/notifications', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json; charset=utf-8',
-        'Authorization': `Basic ${ONESIGNAL_REST_API_KEY}`
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      console.error(`[cronTaskReminders] OneSignal API error (${response.status}):`, error);
-      return null;
-    }
-
-    const result = await response.json();
-    console.log(`[cronTaskReminders] Scheduled OneSignal notification for ${email}, ID: ${result.id}`);
-    return result.id;
-  } catch (error) {
-    console.error('[cronTaskReminders] Error scheduling OneSignal notification:', error);
-    return null;
-  }
-}
-
 Deno.serve(async (req) => {
   try {
-    console.log('⏰ [TASK REMINDERS] Starting task reminder check...');
-    
     if (req.method !== 'POST') {
       return Response.json({ error: 'Method not allowed' }, { status: 405 });
     }
 
     const url = new URL(req.url);
-    
     let providedSecret = req.headers.get('X-Secret') || url.searchParams.get('secret') || '';
-    
     if (!providedSecret) {
-      try {
-        const body = await req.json();
-        providedSecret = body.secret || '';
-      } catch (e) {
-        // Body not JSON or empty, that's ok
-      }
+      try { providedSecret = (await req.clone().json()).secret || ''; } catch (_) {}
     }
-    
     if (!CRON_SECRET || providedSecret !== CRON_SECRET) {
-      console.log('❌ [TASK REMINDERS] Unauthorized - invalid secret');
       return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
     }
 
     const base44 = createClientFromRequest(req);
-
     const now = Date.now();
-    const cutoff = now + 5 * 60 * 1000; // Check tasks due in next 5 minutes
 
-    console.log('👥 [TASK REMINDERS] Getting all users...');
     const allUsers = await base44.asServiceRole.entities.User.list();
-    console.log(`📊 [TASK REMINDERS] Found ${allUsers.length} users`);
-    console.log(`🕐 [TASK REMINDERS] Current time: ${new Date(now).toISOString()}`);
-    console.log(`🕐 [TASK REMINDERS] Cutoff time: ${new Date(cutoff).toISOString()}`);
-
-    let totalScanned = 0;
-    let ok = 0, fail = 0, skippedQuietHours = 0;
+    let advanced = 0;
 
     for (const user of allUsers) {
-      try {
-        if (user.notification_settings?.task_reminders === false) {
-          console.log(`⏭️  [TASK REMINDERS] Skipping ${user.email} - notifications disabled`);
-          continue;
+      const tasks = await base44.asServiceRole.entities.Task.filter({ created_by: user.email });
+      const activeTasks = tasks.filter(t => t.status === 'active' && t.next_reminder);
+
+      for (const t of activeTasks) {
+        const when = parseWhen(t.next_reminder);
+        if (!when || when > now) continue;
+
+        const ms = t.reminder_interval ? intervalMs[t.reminder_interval] : 0;
+        let next = null;
+
+        if (ms && ms > 0) {
+          let nextTime = when + ms;
+          while (nextTime <= now) nextTime += ms;
+          next = new Date(nextTime).toISOString();
         }
 
-        if (isInQuietHours(user)) {
-          console.log(`🌙 [TASK REMINDERS] Skipping ${user.email} - in quiet hours (${user.quiet_hours_start} - ${user.quiet_hours_end})`);
-          skippedQuietHours++;
-          continue;
-        }
-
-        const tasks = await base44.asServiceRole.entities.Task.filter({
-          created_by: user.email
+        await base44.asServiceRole.entities.Task.update(t.id, {
+          reminder_count: (t.reminder_count || 0) + 1,
+          next_reminder: next
         });
 
-        const activeTasks = tasks.filter(t => t.status === 'active');
-        totalScanned += activeTasks.length;
-
-        console.log(`📋 [TASK REMINDERS] User ${user.email} has ${activeTasks.length} active tasks`);
-
-        for (const t of activeTasks) {
-          if (!t.next_reminder) continue;
-
-          const when = parseWhen(t.next_reminder);
-
-          console.log(`🔍 [TASK REMINDERS] Task "${t.title}" (ID: ${t.id}): interval=${t.reminder_interval}, next_reminder=${t.next_reminder}, parsed=${new Date(when).toISOString()}, now=${new Date(now).toISOString()}`);
-
-          if (when && when <= now) {
-            console.log(`🔔 [TASK REMINDERS] Sending reminder to ${user.email}: "${t.title}" (ID: ${t.id})`);
-
-            const r = await base44.asServiceRole.functions.invoke('notifySend', {
-              toUserId: user.email,
-              title: 'Task Reminder 📋',
-              body: t.title || 'You have a task due',
-              screen: '/Tasks',
-            });
-
-            if (r?.data?.success) {
-              let next = null;
-              const ms = t.reminder_interval ? intervalMs[t.reminder_interval] : 0;
-
-              console.log(`📊 [TASK REMINDERS] Task has interval: ${t.reminder_interval}, ms: ${ms}`);
-
-              // Advance next_reminder — cronRefillReminders owns all future batch scheduling
-              if (ms && ms > 0) {
-                const lastReminderTime = parseWhen(t.next_reminder);
-                let nextTime = lastReminderTime + ms;
-                const nowTime = Date.now();
-                while (nextTime <= nowTime) {
-                  nextTime += ms;
-                }
-                next = new Date(nextTime).toISOString();
-                console.log(`✅ [TASK REMINDERS] Next reminder: ${next}`);
-              }
-
-              try {
-                await base44.asServiceRole.entities.Task.update(t.id, {
-                  reminder_count: (t.reminder_count || 0) + 1,
-                  next_reminder: next
-                });
-                console.log(`💾 [TASK REMINDERS] ✅ Updated next_reminder for task ${t.id}`);
-              } catch (updateError) {
-                console.error(`💾 [TASK REMINDERS] ❌ Update FAILED for task ${t.id}:`, updateError);
-                throw updateError;
-              }
-
-              ok++;
-              console.log(`✅ [TASK REMINDERS] Complete for task ${t.id}`);
-            } else {
-              console.error('❌ [TASK REMINDERS] Notification send failed:', r?.data);
-              fail++;
-            }
-          } else if (when > now) {
-            console.log(`⏳ [TASK REMINDERS] Task "${t.title}" (ID: ${t.id}) not yet due: ${new Date(when).toISOString()} (in ${Math.round((when - now) / 60000)} minutes)`);
-          }
-        }
-      } catch (userError) {
-        console.error(`❌ [TASK REMINDERS] Error for user ${user.email}:`, userError);
+        console.log(`[cronTaskReminders] Advanced next_reminder for "${t.title}" → ${next}`);
+        advanced++;
       }
     }
 
-    const result = {
-      success: true,
-      users: allUsers.length,
-      scanned: totalScanned,
-      sent: ok,
-      errors: fail,
-      skippedQuietHours: skippedQuietHours,
-      at: new Date().toISOString(),
-    };
-    
-    console.log('✅ [TASK REMINDERS] Complete:', result);
-    return Response.json(result);
+    return Response.json({ success: true, advanced, at: new Date().toISOString() });
   } catch (err) {
-    console.error('❌ [TASK REMINDERS] Fatal:', err);
+    console.error('[cronTaskReminders] Fatal:', err);
     return Response.json({ success: false, error: String(err) }, { status: 500 });
   }
 });
