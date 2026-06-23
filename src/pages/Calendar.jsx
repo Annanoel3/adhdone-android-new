@@ -57,6 +57,9 @@ export default function Calendar() {
   const [syncError, setSyncError] = useState(null);
   const [syncedEvents, setSyncedEvents] = useState([]);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
+  const [autoSyncInterval, setAutoSyncInterval] = useState(() => 
+    localStorage.getItem('calendar_auto_sync_interval') || 'daily'
+  );
 
   const loadSyncedEvents = useCallback(async () => {
     try {
@@ -278,20 +281,39 @@ export default function Calendar() {
               </button>
             )}
 
-            {/* Last synced */}
-            {connected && (
-              <div className={`mt-3 flex items-center gap-2 text-sm ${textSecondary}`}>
-                <Clock className="w-3.5 h-3.5" />
-                Last synced: {formatLastSynced(lastSyncedAt)}
-              </div>
-            )}
+            {/* Last synced & auto-sync interval */}
+             {connected && (
+               <div className="mt-3 space-y-2">
+                 <div className={`flex items-center gap-2 text-sm ${textSecondary}`}>
+                   <Clock className="w-3.5 h-3.5" />
+                   Last synced: {formatLastSynced(lastSyncedAt)}
+                 </div>
+                 <div className={`flex items-center gap-2 text-sm`}>
+                   <label className={textSecondary}>Auto-sync:</label>
+                   <select
+                     value={autoSyncInterval}
+                     onChange={(e) => {
+                       const val = e.target.value;
+                       setAutoSyncInterval(val);
+                       localStorage.setItem('calendar_auto_sync_interval', val);
+                     }}
+                     className={`text-xs rounded px-2 py-1 border ${isDark ? 'bg-gray-700 border-gray-600 text-gray-200' : 'bg-white border-gray-300'}`}
+                   >
+                     <option value="never">Never</option>
+                     <option value="6hours">Every 6 hours</option>
+                     <option value="daily">Daily</option>
+                     <option value="weekly">Weekly</option>
+                   </select>
+                 </div>
+               </div>
+             )}
 
             {/* Sync result banner */}
             {syncResult && !syncError && (
               <div className="mt-4 flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
                 <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
                 <span>
-                  Synced {syncResult.total_events} events —{' '}
+                  Synced {syncResult.results?.length || syncResult.created || 0} events —{' '}
                   {syncResult.created} new tasks created, {syncResult.updated} tasks refreshed, {syncResult.skipped} unchanged.
                 </span>
               </div>
