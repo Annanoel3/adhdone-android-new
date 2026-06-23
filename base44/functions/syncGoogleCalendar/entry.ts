@@ -33,7 +33,8 @@ async function classifyEventWithAI(openai, event) {
   
   // If contains urgent keyword and within 7 days, immediately mark high
   if (hasUrgentKeyword && hoursUntilEvent > 0 && hoursUntilEvent <= 168) {
-    return { importance: 'high', reminder_interval: hoursUntilEvent < 24 ? '2hours' : 'daily' };
+    const interval = hoursUntilEvent < 2 ? '1hour' : hoursUntilEvent < 24 ? '2hours' : 'daily';
+    return { importance: 'high', reminder_interval: interval };
   }
   
   // Quick heuristic: if <2 hours away, it's urgent regardless
@@ -54,6 +55,12 @@ URGENCY RULES (strict):
 - HIGH: Imminent (<2h away) OR meetings with 3+ attendees OR mentions "deadline/exam/urgent/meeting" AND <7 days away
 - MEDIUM: Personal appointments 1-7 days away OR 1-2 attendee meetings
 - LOW: Recurring events, social/casual, >7 days away, or birthdays
+
+REMINDER INTERVALS:
+- Urgent (<2h): 1hour
+- High urgency (<24h): 2hours
+- High urgency (1-7d): daily
+- Medium/Low: daily
 
 Return ONLY valid JSON:
 {"importance":"medium","reminder_interval":"daily"}`;
@@ -189,6 +196,10 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
       };
     } else {
       const urgencyMap = { low: 'low', medium: 'medium', high: 'high' };
+      
+      // For urgent tasks, don't limit reminders—let them continue until completion
+      const reminderCount = (ai.importance === 'high' || ai.reminder_interval === '1hour') ? 0 : 0;
+      
       taskRecord = {
         title: title,
         description: richDescription,
@@ -197,6 +208,7 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
         energy_required: ai.importance === 'high' ? 'high' : ai.importance === 'low' ? 'low' : 'medium',
         status: 'active',
         reminder_interval: ai.reminder_interval || 'daily',
+        reminder_count: reminderCount,
         next_reminder: nextReminderDate.toISOString(),
         notification_recipient_email: user.email,
         recurrence_pattern: recurrenceRule ? (recurrenceRule.includes('FREQ=DAILY') ? 'daily' : recurrenceRule.includes('FREQ=WEEKLY') ? 'weekly' : recurrenceRule.includes('FREQ=MONTHLY') ? 'monthly' : recurrenceRule.includes('FREQ=YEARLY') ? 'yearly' : 'none') : 'none'
