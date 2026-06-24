@@ -400,28 +400,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       icon: CalendarDays,
     },
     {
-      title: "Community",
-      icon: Share2,
-      isCollapsible: true,
-      subItems: [
-        {
-          title: "Accountability",
-          url: createPageUrl("Accountability"),
-          icon: Share2,
-          badge: accountabilityNotifications > 0 ? accountabilityNotifications : null,
-        },
-        {
-          title: "Chat",
-          url: createPageUrl("Chat"),
-          icon: MessageCircle,
-        },
-        {
-          title: "Focus Rooms",
-          url: createPageUrl("FocusRooms"),
-          icon: Users,
-        },
-
-      ]
+      title: "Chat",
+      url: createPageUrl("Chat"),
+      icon: MessageCircle,
     },
   ];
 
