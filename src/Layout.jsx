@@ -400,9 +400,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       icon: CalendarDays,
     },
     {
-      title: "Chat",
-      url: createPageUrl("Chat"),
-      icon: MessageCircle,
+      title: "Community",
+      url: createPageUrl("Community"),
+      icon: Users,
     },
   ];
 

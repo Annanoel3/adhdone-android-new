@@ -19,6 +19,7 @@ import PrivacyPolicyPublic from '@/pages/PrivacyPolicy';
 import TermsPublic from '@/pages/Terms';
 import LandingPage from '@/pages/LandingPage';
 import Home from '@/pages/Home';
+import Community from '@/pages/Community';
 
 // Sentry loaded via CDN in index.html
 const Sentry = window.Sentry;
@@ -80,6 +81,7 @@ const AuthenticatedApp = () => {
       ))}
       <Route path="/settings" element={<LayoutWrapper currentPageName="Settings"><Settings /></LayoutWrapper>} />
       <Route path="/Calendar" element={<LayoutWrapper currentPageName="Calendar"><Calendar /></LayoutWrapper>} />
+      <Route path="/Community" element={<LayoutWrapper currentPageName="Community"><Community /></LayoutWrapper>} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
