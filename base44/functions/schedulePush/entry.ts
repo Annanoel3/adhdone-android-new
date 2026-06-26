@@ -29,23 +29,24 @@ Deno.serve(async (req) => {
             return Response.json({ success: false, error: 'Missing title or message body' }, { status: 400 });
         }
 
-        // --- Quiet hours enforcement (10 PM – 8 AM user-local time, stored as UTC) ---
-        // Default quiet window: 22:00 – 08:00
-        const QUIET_START_HOUR = 22; // 10 PM
-        const QUIET_END_HOUR   = 8;  // 8 AM
+        // --- Quiet hours enforcement ---
+        // US timezones range from UTC-4 (EDT) to UTC-8 (PST).
+        // To block 10 PM – 9 AM local for all US users, we use a UTC window of 03:00–14:00.
+        //   3 AM UTC  = 10 PM CDT / 11 PM EDT / 8 PM PDT
+        //  14 PM UTC  =  9 AM CDT / 10 AM EDT /  6 AM PDT
+        const QUIET_START_HOUR = 3;  // 3 AM UTC
+        const QUIET_END_HOUR   = 14; // 2 PM UTC
 
         function adjustForQuietHours(isoString) {
             const d = new Date(isoString);
-            const h = d.getUTCHours(); // OneSignal schedules in UTC; quiet hours in UTC too
-            const isQuiet = h >= QUIET_START_HOUR || h < QUIET_END_HOUR;
+            const h = d.getUTCHours();
+            // Quiet window does NOT cross midnight UTC, so simple range check
+            const isQuiet = h >= QUIET_START_HOUR && h < QUIET_END_HOUR;
             if (!isQuiet) return isoString;
-            // Push to next 8 AM UTC
+            // Push to QUIET_END_HOUR UTC same day (it's always ahead of current time in the window)
             const adjusted = new Date(d);
-            if (h >= QUIET_START_HOUR) {
-                // Same night → advance to next day 8 AM
-                adjusted.setUTCDate(adjusted.getUTCDate() + 1);
-            }
             adjusted.setUTCHours(QUIET_END_HOUR, 0, 0, 0);
+            if (adjusted <= d) adjusted.setUTCDate(adjusted.getUTCDate() + 1);
             return adjusted.toISOString();
         }
 
