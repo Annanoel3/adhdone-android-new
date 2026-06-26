@@ -10,4 +10,5 @@ export const base44 = createClient({
   token,
   functionsVersion,
   requiresAuth: false,
+  appUrl: 'https://adhdone-73056b9b.base44.app',
 });
