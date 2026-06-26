@@ -123,8 +123,7 @@ export default function Calendar() {
 
   // Opens OAuth popup for connecting (or adding another account)
   const handleConnect = async () => {
-    const redirectUri = `${window.location.origin}/api/external-auth/callback`;
-    const url = await base44.connectors.connectAppUser(CONNECTOR_ID, { redirectUri });
+    const url = await base44.connectors.connectAppUser(CONNECTOR_ID);
     const popup = window.open(url, '_blank', 'width=600,height=700');
     const timer = setInterval(async () => {
       if (!popup || popup.closed) {
@@ -221,93 +220,93 @@ export default function Calendar() {
 
         {/* Header card */}
         <Card className={`border-none shadow-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
-          <CardContent className="p-6">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-blue-500 flex items-center justify-center shadow">
-                  <CalendarDays className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h1 className={`text-2xl font-bold ${textPrimary}`}>Google Calendar</h1>
-                  <p className={`text-sm ${textSecondary}`}>
-                    {connected
-                      ? 'Syncing your calendar events as smart tasks'
-                      : 'Connect to import events as smart tasks'}
-                  </p>
-                </div>
+          <CardContent className="p-6 space-y-4">
+            {/* Header */}
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-blue-500 flex items-center justify-center shadow">
+                <CalendarDays className="w-6 h-6 text-white" />
               </div>
-
-              {connected && (
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleSync}
-                    disabled={syncing}
-                    className={`gap-2 ${isDark ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : ''}`}
-                  >
-                    {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                    {syncing ? 'Syncing…' : 'Sync now'}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleDisconnect}
-                    className="gap-2 text-red-500 hover:text-red-600 hover:bg-red-50"
-                  >
-                    <Unlink className="w-4 h-4" />
-                    Disconnect
-                  </Button>
-                </div>
-              )}
+              <div className="flex-1">
+                <h1 className={`text-2xl font-bold ${textPrimary}`}>Google Calendar</h1>
+                <p className={`text-sm ${textSecondary}`}>
+                  {connected
+                    ? 'Syncing your calendar events as smart tasks'
+                    : 'Connect to import events as smart tasks'}
+                </p>
+              </div>
             </div>
 
-            {/* Connected account pill */}
+            {/* Connected account info */}
             {connected && connectedEmail && (
-              <div className={`mt-4 flex items-center gap-2 p-2.5 rounded-xl border text-sm ${isDark ? 'bg-gray-700 border-gray-600' : 'bg-blue-50 border-blue-100'}`}>
-                <Mail className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                <span className={`font-medium ${isDark ? 'text-gray-200' : 'text-blue-800'}`}>{connectedEmail}</span>
-                <Badge className="ml-auto text-xs bg-blue-100 text-blue-700 border-blue-200 border">Connected</Badge>
+              <>
+                <div className={`flex items-center gap-2 p-2.5 rounded-xl border text-sm ${isDark ? 'bg-gray-700 border-gray-600' : 'bg-blue-50 border-blue-100'}`}>
+                  <Mail className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                  <span className={`font-medium ${isDark ? 'text-gray-200' : 'text-blue-800'}`}>{connectedEmail}</span>
+                  <Badge className="ml-auto text-xs bg-blue-100 text-blue-700 border-blue-200 border">Connected</Badge>
+                </div>
+                <div className={`flex items-center gap-2 text-sm ${textSecondary}`}>
+                  <Clock className="w-3.5 h-3.5" />
+                  Last synced: {formatLastSynced(lastSyncedAt)}
+                </div>
+              </>
+            )}
+
+            {/* Action buttons */}
+            {connected && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSync}
+                  disabled={syncing}
+                  className={`gap-2 ${isDark ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : ''}`}
+                >
+                  {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  {syncing ? 'Syncing…' : 'Sync now'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleDisconnect}
+                  className="gap-2 text-red-500 hover:text-red-600 hover:bg-red-50"
+                >
+                  <Unlink className="w-4 h-4" />
+                  Disconnect
+                </Button>
               </div>
             )}
 
-            {/* Add another account button */}
+            {/* Auto-sync setting */}
+            {connected && (
+              <div className={`flex items-center gap-2 text-sm`}>
+                <label className={textSecondary}>Auto-sync:</label>
+                <select
+                  value={autoSyncInterval}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setAutoSyncInterval(val);
+                    localStorage.setItem('calendar_auto_sync_interval', val);
+                  }}
+                  className={`text-xs rounded px-2 py-1 border ${isDark ? 'bg-gray-700 border-gray-600 text-gray-200' : 'bg-white border-gray-300'}`}
+                >
+                  <option value="never">Never</option>
+                  <option value="6hours">Every 6 hours</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                </select>
+              </div>
+            )}
+
+            {/* Switch account button */}
             {connected && (
               <button
                 onClick={handleConnect}
-                className={`mt-2 flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-colors ${isDark ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-200' : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
+                className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-colors ${isDark ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-200' : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
               >
                 <Plus className="w-3.5 h-3.5" />
                 Switch / reconnect Google account
               </button>
             )}
-
-            {/* Last synced & auto-sync interval */}
-             {connected && (
-               <div className="mt-3 space-y-2">
-                 <div className={`flex items-center gap-2 text-sm ${textSecondary}`}>
-                   <Clock className="w-3.5 h-3.5" />
-                   Last synced: {formatLastSynced(lastSyncedAt)}
-                 </div>
-                 <div className={`flex items-center gap-2 text-sm`}>
-                   <label className={textSecondary}>Auto-sync:</label>
-                   <select
-                     value={autoSyncInterval}
-                     onChange={(e) => {
-                       const val = e.target.value;
-                       setAutoSyncInterval(val);
-                       localStorage.setItem('calendar_auto_sync_interval', val);
-                     }}
-                     className={`text-xs rounded px-2 py-1 border ${isDark ? 'bg-gray-700 border-gray-600 text-gray-200' : 'bg-white border-gray-300'}`}
-                   >
-                     <option value="never">Never</option>
-                     <option value="6hours">Every 6 hours</option>
-                     <option value="daily">Daily</option>
-                     <option value="weekly">Weekly</option>
-                   </select>
-                 </div>
-               </div>
-             )}
 
             {/* Sync result banner */}
             {syncResult && !syncError && (
