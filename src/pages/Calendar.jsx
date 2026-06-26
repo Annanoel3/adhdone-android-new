@@ -123,7 +123,8 @@ export default function Calendar() {
 
   // Opens OAuth popup for connecting (or adding another account)
   const handleConnect = async () => {
-    const url = await base44.connectors.connectAppUser(CONNECTOR_ID);
+    const redirectUri = `${window.location.origin}/api/external-auth/callback`;
+    const url = await base44.connectors.connectAppUser(CONNECTOR_ID, { redirectUri });
     const popup = window.open(url, '_blank', 'width=600,height=700');
     const timer = setInterval(async () => {
       if (!popup || popup.closed) {
