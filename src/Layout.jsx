@@ -394,11 +394,11 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       url: createPageUrl("ParkingLot"),
       icon: Lightbulb,
     },
-    {
-      title: "Calendar",
-      url: createPageUrl("Calendar"),
-      icon: CalendarDays,
-    },
+    // {
+    //   title: "Calendar",
+    //   url: createPageUrl("Calendar"),
+    //   icon: CalendarDays,
+    // },
     {
       title: "Community",
       url: createPageUrl("Community"),
