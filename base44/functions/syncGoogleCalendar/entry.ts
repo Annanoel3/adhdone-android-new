@@ -17,90 +17,6 @@ function extractBirthdayPerson(title) {
   return t || title;
 }
 
-const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID');
-const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY');
-
-// Quiet hours: 3 AM – 2 PM UTC covers 10 PM – 9 AM for US timezones
-const QUIET_START_HOUR = 3;
-const QUIET_END_HOUR = 14;
-
-function adjustForQuietHours(isoString) {
-  const d = new Date(isoString);
-  const h = d.getUTCHours();
-  if (h < QUIET_START_HOUR || h >= QUIET_END_HOUR) return isoString;
-  const adjusted = new Date(d);
-  adjusted.setUTCHours(QUIET_END_HOUR, 0, 0, 0);
-  if (adjusted <= d) adjusted.setUTCDate(adjusted.getUTCDate() + 1);
-  return adjusted.toISOString();
-}
-
-async function scheduleOneSignalNotification(email, title, body, sendAfterISO, taskId, urgency) {
-  if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
-    console.log('[syncGoogleCalendar] OneSignal credentials missing, skipping schedule');
-    return null;
-  }
-  try {
-    const payload = {
-      app_id: ONESIGNAL_APP_ID,
-      headings: { en: title },
-      contents: { en: body },
-      include_external_user_ids: [email],
-      send_after: adjustForQuietHours(sendAfterISO),
-      data: { screen: '/TaskNotification', taskId, urgency, type: 'task_reminder' },
-      buttons: [
-        { id: 'snooze_15', text: 'Snooze 15 min' },
-        { id: 'snooze_60', text: 'Snooze 1 hour' },
-        { id: 'complete', text: '✅ Done' }
-      ]
-    };
-    const res = await fetch('https://onesignal.com/api/v1/notifications', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': `Basic ${ONESIGNAL_REST_API_KEY}` },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) {
-      console.error('[syncGoogleCalendar] OneSignal API error:', await res.json().catch(() => ({})));
-      return null;
-    }
-    const result = await res.json();
-    return result.id || null;
-  } catch (e) {
-    console.error('[syncGoogleCalendar] OneSignal schedule failed:', e);
-    return null;
-  }
-}
-
-async function scheduleTaskReminders(task, email) {
-  const intervalMs = {
-    '10min': 10 * 60 * 1000, '20min': 20 * 60 * 1000, '30min': 30 * 60 * 1000,
-    '1hour': 60 * 60 * 1000, '2hours': 2 * 60 * 60 * 1000,
-    'daily': 24 * 60 * 60 * 1000, 'every_other_day': 2 * 24 * 60 * 60 * 1000
-  };
-  const interval = task.reminder_interval;
-  const startTime = task.next_reminder ? new Date(task.next_reminder) : new Date(Date.now() + 60 * 60 * 1000);
-  const title = 'Task Reminder 📋';
-  const body = `${task.title}\n\nTap to mark as complete!`;
-
-  if (interval === 'once' || !intervalMs[interval]) {
-    const id = await scheduleOneSignalNotification(email, title, body, startTime.toISOString(), task.id, task.urgency);
-    return { ids: id ? [id] : [], lastScheduledUntil: id ? startTime.toISOString() : null };
-  }
-
-  const ms = intervalMs[interval];
-  const now = Date.now();
-  const ids = [];
-  let scheduleTime = startTime.getTime();
-  for (let i = 0; i < 10; i++) {
-    if (scheduleTime > now) {
-      const id = await scheduleOneSignalNotification(email, title, body, new Date(scheduleTime).toISOString(), task.id, task.urgency);
-      if (id) ids.push(id);
-    }
-    scheduleTime += ms;
-  }
-  const lastScheduledUntil = ids.length > 0 ? new Date(startTime.getTime() + ms * (ids.length - 1)).toISOString() : null;
-  return { ids, lastScheduledUntil };
-}
-
 async function classifyEventWithAI(openai, event) {
   const now = new Date();
   const eventStart = event.start?.dateTime || event.start?.date || '';
@@ -301,16 +217,6 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
 
     // Use user-scoped create so created_by is set to the current user (making the task visible in the app)
     const createdTask = await base44.entities.Task.create(taskRecord);
-
-    // Schedule OneSignal push notifications (calendar sync runs in the backend, so the
-    // frontend scheduling flow never runs — we must schedule directly here)
-    const { ids: notificationIds, lastScheduledUntil } = await scheduleTaskReminders(createdTask, user.email);
-    if (notificationIds.length > 0) {
-      await base44.entities.Task.update(createdTask.id, {
-        onesignal_notification_ids: notificationIds,
-        ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
-      });
-    }
 
     const syncRecord = {
       google_event_id: googleId,
