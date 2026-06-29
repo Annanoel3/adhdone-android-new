@@ -41,9 +41,6 @@ Return JSON:
       const result = await base44.functions.invoke('extractTaskFromVoice', { prompt });
       const taskData = result?.data?.taskData;
 
-      // Tasks must ALWAYS have a reminder — default to daily if the LLM returned none
-      const actualInterval = taskData.reminder_interval || 'daily';
-
       let nextReminderTime = null;
       
       if (taskData.reminder_time) {
@@ -60,11 +57,11 @@ Return JSON:
             nextReminderTime.setDate(nextReminderTime.getDate() + 1);
           }
         }
-      } else if (actualInterval !== 'once') {
+      } else if (taskData.reminder_interval && taskData.reminder_interval !== 'once') {
         const now = new Date();
         nextReminderTime = new Date(now.getTime());
         
-        switch (actualInterval) {
+        switch (taskData.reminder_interval) {
           case '10min':
             nextReminderTime.setMinutes(nextReminderTime.getMinutes() + 10);
             break;
@@ -93,7 +90,7 @@ Return JSON:
         title: taskData.title,
         urgency: taskData.urgency || 'medium',
         energy_required: taskData.energy_required || 'medium',
-        reminder_interval: actualInterval,
+        reminder_interval: taskData.reminder_interval || null,
         next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null
       });
 
@@ -102,7 +99,7 @@ Return JSON:
         urgency: taskData.urgency || 'medium',
         energy_required: taskData.energy_required || 'medium',
         status: 'active',
-        reminder_interval: actualInterval,
+        reminder_interval: taskData.reminder_interval || null,
         reminder_count: 0,
         next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null
       });
@@ -110,7 +107,7 @@ Return JSON:
       console.log('✅ [QUICK ADD] Task created successfully:', createdTask);
 
       // Schedule reminder in background (don't await)
-      if (nextReminderTime && actualInterval !== 'once') {
+      if (nextReminderTime && taskData.reminder_interval !== 'once') {
         scheduleReminder({
           email: user.email,
           title: "Task Reminder 📋",
