@@ -101,21 +101,21 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, skipped: true });
     }
 
-    // Check if there are scheduled notifications for this task
-    if (!data.onesignal_notification_ids || data.onesignal_notification_ids.length === 0) {
-      console.log('[onTaskUpdate] No scheduled notifications for this task');
-      return Response.json({ success: true, noNotifications: true });
-    }
-
-    // Cancel all old notifications
-    console.log('[onTaskUpdate] Cancelling', data.onesignal_notification_ids.length, 'scheduled notifications');
-    for (const notificationId of data.onesignal_notification_ids) {
-      await cancelOneSignalNotification(notificationId);
-    }
-
-    // Only reschedule if title or reminder_interval changed (not cron-driven next_reminder bumps)
+    // ONLY act when title or reminder_interval actually changed. This must NOT fire for
+    // other updates — especially when the frontend or cronRefill saves
+    // onesignal_notification_ids — because that update would otherwise cancel the very
+    // notifications that were just scheduled, leaving the task with zero reminders.
     if (old_data.title !== data.title || old_data.reminder_interval !== data.reminder_interval) {
       console.log('[onTaskUpdate] Task details changed, rescheduling notifications');
+
+      // Cancel all old notifications for this task (only when we're about to reschedule)
+      const oldIds = Array.isArray(data.onesignal_notification_ids) ? data.onesignal_notification_ids : [];
+      if (oldIds.length > 0) {
+        console.log('[onTaskUpdate] Cancelling', oldIds.length, 'scheduled notifications');
+        for (const notificationId of oldIds) {
+          await cancelOneSignalNotification(notificationId);
+        }
+      }
       
       // Get the task to get next_reminder and other details
       const task = await base44.asServiceRole.entities.Task.filter({ id: event.entity_id });
