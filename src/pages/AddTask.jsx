@@ -197,21 +197,18 @@ JSON:
 
         console.log('🔄 [PROCESS] ✅ Parent task created:', parentTask.id);
 
-        // Create subtasks IN ORDER — stagger each by 5 minutes so they don't all fire at once
+        // Create subtasks IN ORDER — no notifications on subtasks, only parent gets reminded
         for (let si = 0; si < subtaskCheck.subtasks.length; si++) {
-          const subtaskReminder = nextReminder
-            ? new Date(nextReminder.getTime() + (si + 1) * 5 * 60 * 1000)
-            : null;
           await base44.entities.Task.create({
             title: subtaskCheck.subtasks[si].trim(),
             parent_task_id: parentTask.id,
             urgency: mainTaskParsed.urgency || 'medium',
             energy_required: mainTaskParsed.energy_required || 'medium',
             status: 'active',
-            reminder_interval: mainTaskParsed.reminder_interval || '1hour',
+            reminder_interval: null,
             reminder_count: 0,
-            next_reminder: subtaskReminder ? subtaskReminder.toISOString() : null,
-            notification_recipient_email: currentUser.email
+            next_reminder: null,
+            notification_recipient_email: null
           });
         }
 
