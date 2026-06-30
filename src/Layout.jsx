@@ -1060,6 +1060,12 @@ export default function Layout({ children, currentPageName }) {
       const currentUser = await base44.auth.me();
       setUser(currentUser);
       setAuthCheckComplete(true);
+
+      // Set signed_up_at on first login; update last_active_at every session
+      const now = new Date().toISOString();
+      const updates = { last_active_at: now };
+      if (!currentUser.signed_up_at) updates.signed_up_at = now;
+      await base44.auth.updateMe(updates);
     } catch (error) {
       console.error("Error checking user status:", error);
       base44.auth.redirectToLogin(window.location.href);
