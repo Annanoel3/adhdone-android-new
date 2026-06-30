@@ -95,9 +95,21 @@ Deno.serve(async (req) => {
     console.log('[onTaskUpdate] Old data:', JSON.stringify(old_data, null, 2));
     console.log('[onTaskUpdate] New data:', JSON.stringify(data, null, 2));
 
-    // Only handle update events
+    // On delete: cancel any lingering OneSignal notifications using old_data
+    if (event.type === 'delete') {
+      const ids = old_data?.onesignal_notification_ids || [];
+      if (ids.length > 0) {
+        console.log(`[onTaskUpdate] Task deleted — cancelling ${ids.length} notifications`);
+        for (const notificationId of ids) {
+          await cancelOneSignalNotification(notificationId);
+        }
+      }
+      return Response.json({ success: true, cancelled: ids.length, reason: 'task_deleted' });
+    }
+
+    // Only handle update events beyond this point
     if (event.type !== 'update') {
-      console.log('[onTaskUpdate] Not an update event, skipping');
+      console.log('[onTaskUpdate] Not an update or delete event, skipping');
       return Response.json({ success: true, skipped: true });
     }
 
