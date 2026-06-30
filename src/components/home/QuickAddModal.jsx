@@ -101,7 +101,8 @@ Return JSON:
         status: 'active',
         reminder_interval: taskData.reminder_interval || null,
         reminder_count: 0,
-        next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null
+        next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null,
+        notification_recipient_email: user.email
       });
 
       console.log('✅ [QUICK ADD] Task created successfully:', createdTask);
