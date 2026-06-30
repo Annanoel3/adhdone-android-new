@@ -104,11 +104,26 @@ export default function Settings() {
     }
   };
 
+  const [quietHoursSaving, setQuietHoursSaving] = useState(false);
+
   const handleQuietHoursChange = (startTime, endTime) => {
     setQuietHoursStart(startTime);
     setQuietHoursEnd(endTime);
-    localStorage.setItem('quiet_hours_start', startTime);
-    localStorage.setItem('quiet_hours_end', endTime);
+  };
+
+  const handleQuietHoursSave = async () => {
+    setQuietHoursSaving(true);
+    localStorage.setItem('quiet_hours_start', quietHoursStart);
+    localStorage.setItem('quiet_hours_end', quietHoursEnd);
+    try {
+      await base44.functions.invoke('applyQuietHours', {
+        quietStart: quietHoursStart,
+        quietEnd: quietHoursEnd
+      });
+    } catch (e) {
+      console.error('Failed to apply quiet hours to queued notifications:', e);
+    }
+    setQuietHoursSaving(false);
   };
 
   const settingsItems = [
@@ -183,7 +198,7 @@ export default function Settings() {
             <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
               Set the hours when you don't want to receive notifications. For example, 8 PM to 8 AM.
             </p>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-4 mb-4">
               <div>
                 <Label htmlFor="quiet-start" className={theme === 'dark' ? 'text-gray-200' : ''}>Start Time</Label>
                 <Input
@@ -205,6 +220,13 @@ export default function Settings() {
                 />
               </div>
             </div>
+            <Button
+              onClick={handleQuietHoursSave}
+              disabled={quietHoursSaving}
+              className="w-full bg-green-600 hover:bg-green-700 text-white"
+            >
+              {quietHoursSaving ? 'Saving...' : 'Save Quiet Hours'}
+            </Button>
           </CardContent>
         </Card>
 
