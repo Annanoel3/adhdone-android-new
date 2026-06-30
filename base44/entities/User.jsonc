@@ -1,139 +1,16 @@
 {
-  "name": "User",
   "type": "object",
   "properties": {
-    "quiet_hours_enabled": {
-      "type": "boolean",
-      "default": false,
-      "description": "Whether quiet hours are enabled for notifications"
-    },
-    "quiet_hours_start": {
+    "signed_up_at": {
       "type": "string",
-      "default": "22:00",
-      "description": "Start time for quiet hours (HH:MM format)"
+      "format": "date-time",
+      "description": "When the user first signed up"
     },
-    "quiet_hours_end": {
+    "last_active_at": {
       "type": "string",
-      "default": "08:00",
-      "description": "End time for quiet hours (HH:MM format)"
-    },
-    "profile_picture_url": {
-      "type": "string",
-      "description": "URL to user's profile picture"
-    },
-    "bio": {
-      "type": "string",
-      "description": "User's bio"
-    },
-    "points": {
-      "type": "number",
-      "default": 0,
-      "description": "Gamification points"
-    },
-    "level": {
-      "type": "number",
-      "default": 1,
-      "description": "User level"
-    },
-    "current_streak": {
-      "type": "number",
-      "default": 0,
-      "description": "Current consecutive days streak"
-    },
-    "longest_streak": {
-      "type": "number",
-      "default": 0,
-      "description": "Longest streak achieved"
-    },
-    "last_active_date": {
-      "type": "string",
-      "format": "date",
-      "description": "Last date user was active"
-    },
-    "trial_start_date": {
-      "type": "string",
-      "format": "date",
-      "description": "When trial started (auto-set on first login)"
-    },
-    "trial_end_date": {
-      "type": "string",
-      "format": "date",
-      "description": "When trial ends (can be manually set for testers to extend trial)"
-    },
-    "has_paid": {
-      "type": "boolean",
-      "default": false,
-      "description": "Whether user has an active subscription"
-    },
-    "is_lifetime_access": {
-      "type": "boolean",
-      "default": false,
-      "description": "Whether user has lifetime access (for testers/special users)"
-    },
-    "notification_settings": {
-      "type": "object",
-      "properties": {
-        "task_reminders": {
-          "type": "boolean",
-          "default": true
-        },
-        "daily_tips": {
-          "type": "boolean",
-          "default": true
-        },
-        "achievements": {
-          "type": "boolean",
-          "default": true
-        },
-        "accountability": {
-          "type": "boolean",
-          "default": true
-        }
-      },
-      "description": "User notification preferences"
-    },
-    "onesignal_player_ids": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "default": [],
-      "description": "OneSignal player IDs for push notifications"
-    },
-    "last_motivation_sent": {
-      "type": "string",
-      "format": "date",
-      "description": "Last date motivation message was sent"
-    },
-    "profile_visibility": {
-      "type": "string",
-      "enum": [
-        "public",
-        "connections_only",
-        "private"
-      ],
-      "default": "connections_only",
-      "description": "Who can view this user's profile"
-    },
-    "show_on_leaderboard": {
-      "type": "boolean",
-      "default": true,
-      "description": "Whether to show this user on the leaderboard"
-    },
-    "leaderboard_anonymous": {
-      "type": "boolean",
-      "default": false,
-      "description": "Whether to display anonymously on leaderboard"
-    },
-    "is_accountability_partner": {
-      "type": "boolean",
-      "default": false,
-      "description": "Whether user is open to accountability partnerships"
-    },
-    "display_name": {
-      "type": "string",
-      "description": "Display name for accountability and social features"
+      "format": "date-time",
+      "description": "When the user was last active in the app"
     }
   },
-  "required": []
+  "name": "User"
 }
