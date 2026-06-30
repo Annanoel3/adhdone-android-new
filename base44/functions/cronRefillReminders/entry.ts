@@ -87,9 +87,14 @@ Deno.serve(async (req) => {
           console.log(`🗑 [REFILL] Cancelled ${oldIds.length} old notifications for "${task.title}"`);
         }
 
-        const batchStart = scheduledUntil > now
-          ? new Date(scheduledUntil.getTime() + interval)
-          : new Date(now.getTime() + interval);
+        // Add a deterministic stagger offset per task (based on task ID hash) so
+      // multiple tasks with the same interval don't all fire at the exact same minute.
+      const idHash = task.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+      const staggerMs = (idHash % 50) * 60 * 1000; // 0–49 minute stagger
+
+      const batchStart = scheduledUntil > now
+          ? new Date(scheduledUntil.getTime() + interval + staggerMs)
+          : new Date(now.getTime() + interval + staggerMs);
 
         const email = task.notification_recipient_email;
         const notificationIds = [];
