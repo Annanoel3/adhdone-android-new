@@ -78,7 +78,8 @@ Deno.serve(async (req) => {
         // Legacy fallback: estimate from next_reminder + 9 intervals
         scheduledUntil = new Date(new Date(task.next_reminder).getTime() + 9 * interval);
       } else {
-        scheduledUntil = new Date(0);
+        // No scheduling history — treat as needs initial schedule (use "now" as baseline)
+        scheduledUntil = new Date(now.getTime() - 1); // Force refill on first run
       }
 
       // Refill when within 2 intervals of the end of the window
