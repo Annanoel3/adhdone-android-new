@@ -48,9 +48,27 @@ Deno.serve(async (req) => {
     const now = new Date();
     let refilled = 0;
     let skipped = 0;
+    let staleStopped = 0;
+
+    // Short intervals that become spam if a task is never completed
+    const shortIntervals = new Set(['10min', '20min', '30min', '1hour', '2hours']);
+    const staleThresholdMs = 21 * 24 * 60 * 60 * 1000; // 21 days
 
     for (const task of recurringTasks) {
       const interval = intervalMsMap[task.reminder_interval];
+
+      // Skip and silence tasks that are old and on short intervals — they've become pure spam
+      const taskAge = now.getTime() - new Date(task.created_date).getTime();
+      if (shortIntervals.has(task.reminder_interval) && taskAge > staleThresholdMs) {
+        console.log(`🧹 [REFILL] Silencing stale short-interval task "${task.title}" (${Math.round(taskAge / 86400000)}d old)`);
+        await base44.asServiceRole.entities.Task.update(task.id, {
+          next_reminder: null,
+          onesignal_notification_ids: [],
+          last_scheduled_until: null
+        });
+        staleStopped++;
+        continue;
+      }
 
       // Determine end of currently-scheduled window
       let scheduledUntil;
@@ -148,7 +166,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, at: now.toISOString() };
+    const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, at: now.toISOString() };
     console.log('✅ [REFILL] Complete:', result);
     return Response.json(result);
   } catch (err) {
