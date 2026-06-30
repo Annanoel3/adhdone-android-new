@@ -107,15 +107,18 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, noNotifications: true });
     }
 
-    // CRITICAL: If task is completed or no longer active, cancel ALL notifications and stop
+    // CRITICAL: If task is completed or no longer active, cancel ALL notifications and wipe all scheduling fields
     if (data.status === 'completed' || data.status === 'snoozed') {
-      console.log(`[onTaskUpdate] Task status is "${data.status}" — cancelling all notifications`);
+      console.log(`[onTaskUpdate] Task status is "${data.status}" — cancelling all notifications and clearing scheduling fields`);
       for (const notificationId of data.onesignal_notification_ids) {
         await cancelOneSignalNotification(notificationId);
       }
       await base44.asServiceRole.entities.Task.update(event.entity_id, {
         onesignal_notification_ids: [],
-        last_scheduled_until: null
+        last_scheduled_until: null,
+        next_reminder: null,
+        reminder_interval: null,
+        notification_recipient_email: null
       });
       return Response.json({ success: true, cancelled: true, reason: 'task_completed_or_snoozed' });
     }
