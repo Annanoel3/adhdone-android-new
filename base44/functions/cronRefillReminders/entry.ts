@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
       t.reminder_interval &&
       t.reminder_interval !== 'once' &&
       intervalMsMap[t.reminder_interval] &&
-      (t.notification_recipient_email || t.created_by)
+      t.notification_recipient_email  // require explicit email — never fall back to created_by
     );
 
     console.log(`📊 [REFILL] Found ${recurringTasks.length} recurring tasks`);
@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
           ? new Date(scheduledUntil.getTime() + interval)
           : new Date(now.getTime() + interval);
 
-        const email = task.notification_recipient_email || task.created_by;
+        const email = task.notification_recipient_email;
         const notificationIds = [];
 
         for (let i = 0; i < BATCH_SIZE; i++) {
