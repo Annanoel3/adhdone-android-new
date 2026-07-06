@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, RotateCcw, Coffee, Sparkles, Music, Volume2, VolumeX, Info, Bell, PartyPopper } from "lucide-react";
+import { Play, Pause, RotateCcw, Coffee, Sparkles, Music, Volume2, VolumeX, Info, Bell, PartyPopper, Clock, Timer } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Select,
@@ -29,6 +29,10 @@ export default function FocusTimer() {
   const wakeLockRef = useRef(null);
   const [showSeasonalPopup, setShowSeasonalPopup] = useState(false);
   const [showKawaiiPopup, setShowKawaiiPopup] = useState(false);
+  const [viewMode, setViewMode] = useState('pomodoro');
+  const [stopwatchElapsed, setStopwatchElapsed] = useState(0);
+  const [stopwatchRunning, setStopwatchRunning] = useState(false);
+  const stopwatchRef = useRef(null);
 
   const {
     workDuration, breakDuration, timeLeft, isActive, mode, sessionCount,
@@ -55,6 +59,16 @@ export default function FocusTimer() {
     }, 100);
     return () => clearInterval(interval);
   }, []);
+
+  // Stopwatch interval
+  useEffect(() => {
+    if (stopwatchRunning) {
+      stopwatchRef.current = setInterval(() => {
+        setStopwatchElapsed(prev => prev + 100);
+      }, 100);
+      return () => clearInterval(stopwatchRef.current);
+    }
+  }, [stopwatchRunning]);
 
   // Wake Lock management
   useEffect(() => {
@@ -107,6 +121,27 @@ export default function FocusTimer() {
     if (month === 12 && day >= 26 && day <= 30) return 'winter';
     if (month === 12 && day === 31) return 'newyears';
     return 'spring';
+  };
+
+  const formatStopwatchTime = (ms) => {
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const centiseconds = Math.floor((ms % 1000) / 10);
+    if (hours > 0) {
+      return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+    return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(centiseconds).padStart(2, '0')}`;
+  };
+
+  const toggleStopwatch = () => {
+    setStopwatchRunning(prev => !prev);
+  };
+
+  const resetStopwatch = () => {
+    setStopwatchRunning(false);
+    setStopwatchElapsed(0);
   };
 
   const handleEasterEgg = async () => {
@@ -235,12 +270,32 @@ export default function FocusTimer() {
               </Dialog>
             </div>
             <p className={specialMode !== 'normal' ? `${specialMode}-text` : theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
-              {mode === 'work' ? 'Focus session - Time to work!' : 'Break time - Relax for a moment'}
+              {viewMode === 'stopwatch' ? 'Stopwatch - Track your time!' : mode === 'work' ? 'Focus session - Time to work!' : 'Break time - Relax for a moment'}
             </p>
+            <div className="flex justify-center gap-2 mt-4">
+              <Button
+                size="sm"
+                variant={viewMode === 'pomodoro' ? 'default' : 'outline'}
+                onClick={() => setViewMode('pomodoro')}
+                className={viewMode === 'pomodoro' ? 'bg-green-600 hover:bg-green-700 text-white' : ''}
+              >
+                <Timer className="w-4 h-4 mr-1" /> Pomodoro
+              </Button>
+              <Button
+                size="sm"
+                variant={viewMode === 'stopwatch' ? 'default' : 'outline'}
+                onClick={() => setViewMode('stopwatch')}
+                className={viewMode === 'stopwatch' ? 'bg-green-600 hover:bg-green-700 text-white' : ''}
+              >
+                <Clock className="w-4 h-4 mr-1" /> Stopwatch
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
+      {viewMode === 'pomodoro' ? (
+      <>
       {/* Timer Duration Settings */}
       <Card className={getCardBaseClasses(specialMode, theme, mode)}>
         <CardContent className="p-6">
@@ -390,6 +445,58 @@ export default function FocusTimer() {
           </div>
         </CardContent>
       </Card>
+      </>
+      ) : (
+      <Card className={getCardBaseClasses(specialMode, theme, mode, true)}>
+        <CardContent className="p-8 md:p-12">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center justify-center">
+              <motion.div
+                animate={stopwatchRunning ? { scale: [1, 1.05, 1] } : {}}
+                transition={{ duration: 2, repeat: Infinity }}
+                className={`w-48 h-48 rounded-full ${
+                  theme === 'minimalist' ? 'bg-green-100' :
+                  theme === 'dark' ? 'bg-gray-700' :
+                  theme === 'spicybrains' ? 'bg-yellow-200' :
+                  'bg-white/50 backdrop-blur-sm'
+                }`}
+              />
+            </div>
+
+            <div className="relative z-10 flex flex-col items-center justify-center py-12">
+              <div className={`text-6xl md:text-7xl font-bold mb-4 tabular-nums ${
+                theme === 'dark' || theme === 'spicybrains' ? 'text-white' : 'text-gray-900'
+              }`}>
+                {formatStopwatchTime(stopwatchElapsed)}
+              </div>
+
+              <div className={`text-lg font-medium flex items-center gap-2 ${
+                stopwatchRunning
+                  ? theme === 'minimalist' ? 'text-green-600' : theme === 'dark' ? 'text-green-400' : theme === 'spicybrains' ? 'text-yellow-300' : 'text-purple-900'
+                  : theme === 'dark' ? 'text-gray-400' : theme === 'spicybrains' ? 'text-blue-300' : 'text-gray-600'
+              }`}>
+                {stopwatchRunning ? <><Sparkles className="w-5 h-5" />Running</> : <><Clock className="w-5 h-5" />Ready</>}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex justify-center gap-4 mt-8">
+            <Button size="lg" onClick={toggleStopwatch} className={`w-36 ${
+              theme === 'minimalist' ? 'bg-green-600 hover:bg-green-700'
+              : theme === 'dark' ? 'bg-green-600 hover:bg-green-700'
+              : theme === 'spicybrains' ? 'bg-yellow-400 text-blue-900 hover:bg-yellow-300'
+              : 'bg-white/90 text-gray-900 hover:bg-white shadow-lg backdrop-blur-sm'
+            }`}>
+              {stopwatchRunning ? <><Pause className="w-5 h-5 mr-2" />Pause</> : <><Play className="w-5 h-5 mr-2" />Start</>}
+            </Button>
+            <Button size="lg" variant={theme === 'colorful' || theme === 'spicybrains' ? 'secondary' : 'outline'} onClick={resetStopwatch}
+              className={`w-36 ${theme === 'colorful' ? 'bg-white/70 hover:bg-white/90 backdrop-blur-sm' : theme === 'spicybrains' ? 'bg-blue-200 text-blue-800 hover:bg-blue-100 backdrop-blur-sm' : ''}`}>
+              <RotateCcw className="w-5 h-5 mr-2" />Reset
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+      )}
 
       {/* Easter Egg Button */}
       <div className="mt-6 text-center" style={{ marginBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
