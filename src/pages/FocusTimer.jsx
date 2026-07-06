@@ -20,12 +20,15 @@ import {
 import { DialogTrigger } from "@radix-ui/react-dialog";
 import { usePomodoro } from "@/context/PomodoroContext";
 import RoyaltyFreeMusicPlayer from "@/components/focus/RoyaltyFreeMusicPlayer";
+import { base44 } from "@/api/base44Client";
 
 export default function FocusTimer() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [showMusicPlayer, setShowMusicPlayer] = useState(false);
   const specialMode = localStorage.getItem('special_mode') || 'normal';
   const wakeLockRef = useRef(null);
+  const [showSeasonalPopup, setShowSeasonalPopup] = useState(false);
+  const [showKawaiiPopup, setShowKawaiiPopup] = useState(false);
 
   const {
     workDuration, breakDuration, timeLeft, isActive, mode, sessionCount,
@@ -106,17 +109,52 @@ export default function FocusTimer() {
     return 'spring';
   };
 
-  const handleEasterEgg = () => {
+  const handleEasterEgg = async () => {
     const currentMode = localStorage.getItem('special_mode') || 'normal';
     const seasonalTheme = getCurrentSeasonalTheme();
+
     if (currentMode === 'normal' || currentMode === 'kawaii') {
-      const nextMode = currentMode === 'kawaii' ? seasonalTheme : 'kawaii';
-      localStorage.setItem('special_mode', nextMode);
-      window.location.reload();
+      // Go to seasonal mode
+      localStorage.setItem('special_mode', seasonalTheme);
+      localStorage.setItem('seasonal_unlocked', 'true');
+      try {
+        await base44.auth.updateMe({ special_mode: seasonalTheme, seasonal_unlocked: true });
+      } catch (e) {
+        console.error('Failed to save theme to profile:', e);
+      }
+
+      if (!localStorage.getItem('seasonal_popup_shown')) {
+        setShowSeasonalPopup(true);
+        localStorage.setItem('seasonal_popup_shown', 'true');
+      } else {
+        window.location.reload();
+      }
     } else {
+      // From seasonal: go to kawaii
       localStorage.setItem('special_mode', 'kawaii');
-      window.location.reload();
+      try {
+        await base44.auth.updateMe({ special_mode: 'kawaii' });
+      } catch (e) {
+        console.error('Failed to save theme to profile:', e);
+      }
+
+      if (!localStorage.getItem('kawaii_popup_shown')) {
+        setShowKawaiiPopup(true);
+        localStorage.setItem('kawaii_popup_shown', 'true');
+      } else {
+        window.location.reload();
+      }
     }
+  };
+
+  const closeSeasonalPopup = () => {
+    setShowSeasonalPopup(false);
+    window.location.reload();
+  };
+
+  const closeKawaiiPopup = () => {
+    setShowKawaiiPopup(false);
+    window.location.reload();
   };
 
   const minutes = Math.floor(timeLeft / 60);
@@ -360,6 +398,34 @@ export default function FocusTimer() {
           what's this? 👀
         </Button>
       </div>
+
+      {/* Seasonal Discovery Popup */}
+      <Dialog open={showSeasonalPopup} onOpenChange={(open) => { if (!open) closeSeasonalPopup(); }}>
+        <DialogContent className="max-w-md text-center">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">🎉 You found a secret!</DialogTitle>
+            <DialogDescription className="text-base pt-4 space-y-3">
+              <p>You've unlocked the <strong>Seasonal Theme</strong>! 🍂❄️🌸</p>
+              <p>It changes with the seasons and has been added to your theme rotation. Cycle through your themes in Settings to find it again!</p>
+            </DialogDescription>
+          </DialogHeader>
+          <Button onClick={closeSeasonalPopup} className="w-full bg-green-600 hover:bg-green-700 text-white">Cool! 🎨</Button>
+        </DialogContent>
+      </Dialog>
+
+      {/* Kawaii Discovery Popup */}
+      <Dialog open={showKawaiiPopup} onOpenChange={(open) => { if (!open) closeKawaiiPopup(); }}>
+        <DialogContent className="max-w-md text-center">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">🌈 You found Kawaii Mode!</DialogTitle>
+            <DialogDescription className="text-base pt-4 space-y-3">
+              <p>Everything is now extra cute! ✨🧸💕</p>
+              <p>Kawaii Mode is a secret theme — click the easter egg again to switch back to seasonal. It won't appear in your normal theme rotation.</p>
+            </DialogDescription>
+          </DialogHeader>
+          <Button onClick={closeKawaiiPopup} className="w-full bg-pink-500 hover:bg-pink-600 text-white">So cute! 💕</Button>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

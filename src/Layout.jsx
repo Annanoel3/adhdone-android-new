@@ -270,54 +270,47 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   };
 
   const toggleTheme = () => {
-    const currentSpecialMode = specialMode;
-    if (currentSpecialMode !== 'normal') {
-      // Exit seasonal mode back to light
+    // If in seasonal/kawaii mode, exit back to light
+    if (specialMode !== 'normal') {
       setSpecialMode('normal');
       setTheme('minimalist');
       saveThemeToProfile('minimalist', 'normal', seasonalUnlocked);
-      setTimeout(() => {
-        window.location.reload();
-      }, 100);
-      return;
-    }
-
-    // Easter egg: cycling past spicybrains unlocks + enters seasonal themes
-    if (theme === 'spicybrains') {
-      const seasonal = getDateBasedMode();
-      const unlocked = true;
-      setSeasonalUnlocked(unlocked);
-      setSpecialMode(seasonal);
-      saveThemeToProfile('minimalist', seasonal, unlocked);
       setTimeout(() => window.location.reload(), 100);
       return;
     }
 
-    setTheme(prev => {
-      let nextTheme;
-      if (prev === 'minimalist') {
-        nextTheme = 'dark';
-      } else if (prev === 'dark') {
-        nextTheme = 'colorful';
-      } else if (prev === 'colorful') {
-        nextTheme = 'spicybrains';
-      } else {
-        nextTheme = 'minimalist';
-      }
+    // Cycle through the 4 main themes
+    const themeOrder = ['minimalist', 'dark', 'colorful', 'spicybrains'];
+    const currentIndex = themeOrder.indexOf(theme);
 
-      saveThemeToProfile(nextTheme, 'normal', seasonalUnlocked);
-
-      if (nextTheme === 'spicybrains') {
-        const hasSeenExplanation = localStorage.getItem('spicybrains_explanation_seen');
-        if (!hasSeenExplanation) {
-          setTimeout(() => {
-            setShowSpicyBrainsExplanation(true);
-            localStorage.setItem('spicybrains_explanation_seen', 'true');
-          }, 500);
-        }
+    // After spicybrains: go to seasonal if unlocked, otherwise back to minimalist
+    if (currentIndex === themeOrder.length - 1) {
+      if (seasonalUnlocked) {
+        const seasonal = getDateBasedMode();
+        setSpecialMode(seasonal);
+        saveThemeToProfile('minimalist', seasonal, seasonalUnlocked);
+        setTimeout(() => window.location.reload(), 100);
+        return;
       }
-      return nextTheme;
-    });
+      // Not unlocked — wrap to minimalist
+      setTheme('minimalist');
+      saveThemeToProfile('minimalist', 'normal', seasonalUnlocked);
+      return;
+    }
+
+    const nextTheme = themeOrder[(currentIndex + 1) % themeOrder.length];
+    setTheme(nextTheme);
+    saveThemeToProfile(nextTheme, 'normal', seasonalUnlocked);
+
+    if (nextTheme === 'spicybrains') {
+      const hasSeenExplanation = localStorage.getItem('spicybrains_explanation_seen');
+      if (!hasSeenExplanation) {
+        setTimeout(() => {
+          setShowSpicyBrainsExplanation(true);
+          localStorage.setItem('spicybrains_explanation_seen', 'true');
+        }, 500);
+      }
+    }
   };
 
   const handleLogout = async () => {

@@ -69,8 +69,8 @@ export default function Settings() {
   };
 
   const toggleTheme = () => {
-    const currentSpecialMode = specialMode;
-    if (currentSpecialMode !== 'normal') {
+    // If in seasonal/kawaii mode, exit back to light
+    if (specialMode !== 'normal') {
       setSpecialMode('normal');
       setTheme('minimalist');
       saveThemeToProfile('minimalist', 'normal', seasonalUnlocked);
@@ -78,31 +78,27 @@ export default function Settings() {
       return;
     }
 
-    // Easter egg: cycling past spicybrains unlocks + enters seasonal themes
-    if (theme === 'spicybrains') {
-      const seasonal = getDateBasedMode();
-      const unlocked = true;
-      setSeasonalUnlocked(unlocked);
-      setSpecialMode(seasonal);
-      saveThemeToProfile('minimalist', seasonal, unlocked);
-      setTimeout(() => window.location.reload(), 100);
+    // Cycle through the 4 main themes
+    const themeOrder = ['minimalist', 'dark', 'colorful', 'spicybrains'];
+    const currentIndex = themeOrder.indexOf(theme);
+
+    // After spicybrains: go to seasonal if unlocked, otherwise back to minimalist
+    if (currentIndex === themeOrder.length - 1) {
+      if (seasonalUnlocked) {
+        const seasonal = getDateBasedMode();
+        setSpecialMode(seasonal);
+        saveThemeToProfile('minimalist', seasonal, seasonalUnlocked);
+        setTimeout(() => window.location.reload(), 100);
+        return;
+      }
+      setTheme('minimalist');
+      saveThemeToProfile('minimalist', 'normal', seasonalUnlocked);
       return;
     }
 
-    setTheme(prev => {
-      let nextTheme;
-      if (prev === 'minimalist') {
-        nextTheme = 'dark';
-      } else if (prev === 'dark') {
-        nextTheme = 'colorful';
-      } else if (prev === 'colorful') {
-        nextTheme = 'spicybrains';
-      } else {
-        nextTheme = 'minimalist';
-      }
-      saveThemeToProfile(nextTheme, 'normal', seasonalUnlocked);
-      return nextTheme;
-    });
+    const nextTheme = themeOrder[(currentIndex + 1) % themeOrder.length];
+    setTheme(nextTheme);
+    saveThemeToProfile(nextTheme, 'normal', seasonalUnlocked);
   };
 
   const getDateBasedMode = () => {
