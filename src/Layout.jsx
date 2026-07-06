@@ -132,11 +132,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   };
 
   const [specialMode, setSpecialMode] = useState(() => {
-    const stored = localStorage.getItem('special_mode');
-    // If nothing stored yet, use date-based mode as default
-    if (!stored) return getDateBasedMode();
-    // If user explicitly set 'normal', respect that
-    return stored;
+    return localStorage.getItem('special_mode') || 'normal';
+  });
+  const [seasonalUnlocked, setSeasonalUnlocked] = useState(() => {
+    return localStorage.getItem('seasonal_unlocked') === 'true';
   });
   const [showAppGuide, setShowAppGuide] = useState(false);
   const [showSpicyBrainsExplanation, setShowSpicyBrainsExplanation] = useState(false);
@@ -146,12 +145,11 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   }, [theme]);
 
   useEffect(() => {
-    const mode = localStorage.getItem('special_mode') || 'normal';
-    localStorage.setItem('special_mode', mode);
-    document.documentElement.setAttribute('data-theme', mode);
+    localStorage.setItem('special_mode', specialMode);
+    document.documentElement.setAttribute('data-theme', specialMode);
     
     // Reset theme to minimalist when switching to a special mode
-    if (mode !== 'normal' && theme !== 'minimalist') {
+    if (specialMode !== 'normal' && theme !== 'minimalist') {
       setTheme('minimalist');
       localStorage.setItem('adhd_theme', 'minimalist');
     }
@@ -182,6 +180,23 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       return () => clearInterval(interval);
     } else {
       setAccountabilityNotifications(0);
+    }
+  }, [user, authCheckComplete]);
+
+  // Sync theme preferences from user profile (source of truth for cross-device persistence)
+  useEffect(() => {
+    if (user && user.email && authCheckComplete) {
+      if (user.adhd_theme) {
+        setTheme(user.adhd_theme);
+        localStorage.setItem('adhd_theme', user.adhd_theme);
+      }
+      const userSpecialMode = user.special_mode || 'normal';
+      setSpecialMode(userSpecialMode);
+      localStorage.setItem('special_mode', userSpecialMode);
+      if (user.seasonal_unlocked) {
+        setSeasonalUnlocked(true);
+        localStorage.setItem('seasonal_unlocked', 'true');
+      }
     }
   }, [user, authCheckComplete]);
 
@@ -239,24 +254,41 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     }
   }, [location.pathname, navigate]);
 
+  const saveThemeToProfile = async (newTheme, newSpecialMode, newSeasonalUnlocked) => {
+    localStorage.setItem('adhd_theme', newTheme);
+    localStorage.setItem('special_mode', newSpecialMode);
+    localStorage.setItem('seasonal_unlocked', newSeasonalUnlocked ? 'true' : 'false');
+    try {
+      await base44.auth.updateMe({
+        adhd_theme: newTheme,
+        special_mode: newSpecialMode,
+        seasonal_unlocked: newSeasonalUnlocked
+      });
+    } catch (e) {
+      console.error('Failed to save theme to profile:', e);
+    }
+  };
+
   const toggleTheme = () => {
     const currentSpecialMode = specialMode;
     if (currentSpecialMode !== 'normal') {
-      localStorage.setItem('special_mode', 'normal');
+      // Exit seasonal mode back to light
       setSpecialMode('normal');
       setTheme('minimalist');
-      localStorage.setItem('adhd_theme', 'minimalist');
+      saveThemeToProfile('minimalist', 'normal', seasonalUnlocked);
       setTimeout(() => {
         window.location.reload();
       }, 100);
       return;
     }
 
-    // If currently on spicybrains, next step is seasonal
+    // Easter egg: cycling past spicybrains unlocks + enters seasonal themes
     if (theme === 'spicybrains') {
       const seasonal = getDateBasedMode();
-      localStorage.setItem('special_mode', seasonal);
+      const unlocked = true;
+      setSeasonalUnlocked(unlocked);
       setSpecialMode(seasonal);
+      saveThemeToProfile('minimalist', seasonal, unlocked);
       setTimeout(() => window.location.reload(), 100);
       return;
     }
@@ -272,6 +304,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       } else {
         nextTheme = 'minimalist';
       }
+
+      saveThemeToProfile(nextTheme, 'normal', seasonalUnlocked);
 
       if (nextTheme === 'spicybrains') {
         const hasSeenExplanation = localStorage.getItem('spicybrains_explanation_seen');

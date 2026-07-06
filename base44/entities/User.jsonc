@@ -10,6 +10,19 @@
       "type": "string",
       "format": "date-time",
       "description": "When the user was last active in the app"
+    },
+    "adhd_theme": {
+      "type": "string",
+      "description": "User's chosen base theme (minimalist, dark, colorful, spicybrains)"
+    },
+    "special_mode": {
+      "type": "string",
+      "description": "Special seasonal mode (normal, christmas, halloween, etc.)"
+    },
+    "seasonal_unlocked": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the user has unlocked seasonal themes via the easter egg"
     }
   },
   "name": "User"

@@ -23,6 +23,7 @@ export default function Settings() {
   const navigate = useNavigate();
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [specialMode, setSpecialMode] = useState(() => localStorage.getItem('special_mode') || 'normal');
+  const [seasonalUnlocked, setSeasonalUnlocked] = useState(() => localStorage.getItem('seasonal_unlocked') === 'true');
   const [user, setUser] = useState(null);
   const [quietHoursStart, setQuietHoursStart] = useState(() => localStorage.getItem('quiet_hours_start') || '20:00');
   const [quietHoursEnd, setQuietHoursEnd] = useState(() => localStorage.getItem('quiet_hours_end') || '08:00');
@@ -35,26 +36,55 @@ export default function Settings() {
     try {
       const currentUser = await base44.auth.me();
       setUser(currentUser);
+      // Sync theme from user profile (source of truth for cross-device persistence)
+      if (currentUser.adhd_theme) {
+        setTheme(currentUser.adhd_theme);
+        localStorage.setItem('adhd_theme', currentUser.adhd_theme);
+      }
+      const userSpecialMode = currentUser.special_mode || 'normal';
+      setSpecialMode(userSpecialMode);
+      localStorage.setItem('special_mode', userSpecialMode);
+      if (currentUser.seasonal_unlocked) {
+        setSeasonalUnlocked(true);
+        localStorage.setItem('seasonal_unlocked', 'true');
+      }
     } catch (error) {
       console.error('Error loading user:', error);
+    }
+  };
+
+  const saveThemeToProfile = async (newTheme, newSpecialMode, newSeasonalUnlocked) => {
+    localStorage.setItem('adhd_theme', newTheme);
+    localStorage.setItem('special_mode', newSpecialMode);
+    localStorage.setItem('seasonal_unlocked', newSeasonalUnlocked ? 'true' : 'false');
+    try {
+      await base44.auth.updateMe({
+        adhd_theme: newTheme,
+        special_mode: newSpecialMode,
+        seasonal_unlocked: newSeasonalUnlocked
+      });
+    } catch (e) {
+      console.error('Failed to save theme to profile:', e);
     }
   };
 
   const toggleTheme = () => {
     const currentSpecialMode = specialMode;
     if (currentSpecialMode !== 'normal') {
-      localStorage.setItem('special_mode', 'normal');
       setSpecialMode('normal');
       setTheme('minimalist');
-      localStorage.setItem('adhd_theme', 'minimalist');
+      saveThemeToProfile('minimalist', 'normal', seasonalUnlocked);
       setTimeout(() => window.location.reload(), 100);
       return;
     }
 
+    // Easter egg: cycling past spicybrains unlocks + enters seasonal themes
     if (theme === 'spicybrains') {
       const seasonal = getDateBasedMode();
-      localStorage.setItem('special_mode', seasonal);
+      const unlocked = true;
+      setSeasonalUnlocked(unlocked);
       setSpecialMode(seasonal);
+      saveThemeToProfile('minimalist', seasonal, unlocked);
       setTimeout(() => window.location.reload(), 100);
       return;
     }
@@ -70,7 +100,7 @@ export default function Settings() {
       } else {
         nextTheme = 'minimalist';
       }
-      localStorage.setItem('adhd_theme', nextTheme);
+      saveThemeToProfile(nextTheme, 'normal', seasonalUnlocked);
       return nextTheme;
     });
   };
