@@ -6,13 +6,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Mic, Keyboard } from "lucide-react";
 import VoiceTaskInput from "../tasks/VoiceTaskInput";
+import PriorityPickerDialog from "../tasks/PriorityPickerDialog";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { base44 } from "@/api/base44Client";
-import { scheduleReminder } from "../utils/reminderScheduler";
+import { scheduleReminder, scheduleRecurringReminders } from "../utils/reminderScheduler";
 
 export default function QuickAddModal({ isOpen, onClose, theme }) {
   const [mode, setMode] = useState('voice');
+  const [showPriorityPicker, setShowPriorityPicker] = useState(false);
+  const [pendingPriorityTask, setPendingPriorityTask] = useState(null);
   const navigate = useNavigate();
 
   const handleVoiceInput = async (transcription) => {
@@ -46,18 +49,43 @@ Infer the best reminder_interval and urgency from the NATURE of the task:
 - General fallback (none of the above):
   → reminder_interval="2hours", urgency="medium"
 
+PRIORITY UNINFERRABLE & FLEXIBLE TASKS:
+If the task does NOT fit any SMART INFERENCE category above AND no specific time/date/frequency is mentioned:
+- Set priority_uninferrable=true
+- Set is_flexible=true (task can be done any day)
+- Set urgency=null and reminder_interval=null
+- The app will ask the user to pick a priority
+
+If the task DOES fit a SMART INFERENCE category, or has a specific time/date:
+- Set priority_uninferrable=false
+- Set is_flexible=false if a specific time/date/deadline is mentioned
+- Set is_flexible=true if no specific time/date is mentioned but the task fits an inference category
+
 Return JSON:
 {
   "title": "Clean task title",
-  "reminder_interval": "10min" | "20min" | "30min" | "1hour" | "2hours" | "daily" | "every_other_day" | "once" | null,
+  "reminder_interval": "10min" | "20min" | "30min" | "1hour" | "2hours" | "4hours" | "daily" | "every_other_day" | "once" | null,
   "reminder_time": "HH:MM" or null,
   "specific_date": "YYYY-MM-DD" or null,
   "urgency": "low" | "medium" | "high" | "urgent",
-  "energy_required": "low" | "medium" | "high"
+  "energy_required": "low" | "medium" | "high",
+  "priority_uninferrable": false,
+  "is_flexible": false
 }`;
 
       const result = await base44.functions.invoke('extractTaskFromVoice', { prompt });
       const taskData = result?.data?.taskData;
+
+      // If priority can't be inferred and task is flexible, ask the user
+      if (taskData.priority_uninferrable && taskData.is_flexible) {
+        setPendingPriorityTask({
+          title: taskData.title,
+          energy_required: taskData.energy_required || 'medium',
+          user
+        });
+        setShowPriorityPicker(true);
+        return;
+      }
 
       let nextReminderTime = null;
       
@@ -94,6 +122,9 @@ Return JSON:
             break;
           case '2hours':
             nextReminderTime.setHours(nextReminderTime.getHours() + 2);
+            break;
+          case '4hours':
+            nextReminderTime.setHours(nextReminderTime.getHours() + 4);
             break;
           case 'daily':
             nextReminderTime.setDate(nextReminderTime.getDate() + 1);
@@ -152,7 +183,84 @@ Return JSON:
     }
   };
 
+  const handlePriorityChoice = async (priority) => {
+    if (!pendingPriorityTask) return;
+
+    const { title, energy_required, user } = pendingPriorityTask;
+    setShowPriorityPicker(false);
+
+    try {
+      const priorityMap = {
+        high: { interval: '2hours', urgency: 'high', intervalMs: 2 * 60 * 60 * 1000 },
+        medium: { interval: '4hours', urgency: 'medium', intervalMs: 4 * 60 * 60 * 1000 },
+        low: { interval: 'daily', urgency: 'low', intervalMs: 24 * 60 * 60 * 1000 },
+      };
+
+      const { interval, urgency, intervalMs } = priorityMap[priority];
+      const now = new Date();
+      const nextReminderTime = new Date(now.getTime() + intervalMs);
+
+      const createdTask = await base44.entities.Task.create({
+        title,
+        urgency,
+        energy_required,
+        status: 'active',
+        reminder_interval: interval,
+        reminder_count: 0,
+        next_reminder: nextReminderTime.toISOString(),
+        notification_recipient_email: user.email
+      });
+
+      scheduleRecurringReminders({
+        email: user.email,
+        title: "Task Reminder 📋",
+        body: `${createdTask.title}\n\nTap to mark as complete!`,
+        startTime: nextReminderTime.toISOString(),
+        intervalMs,
+        count: 10,
+        taskId: createdTask.id,
+        data: {
+          screen: "/TaskNotification",
+          taskId: createdTask.id,
+          urgency,
+          type: 'task_reminder'
+        },
+        buttons: [
+          { id: "snooze_15", text: "Snooze 15 min" },
+          { id: "snooze_60", text: "Snooze 1 hour" },
+          { id: "complete", text: "✅ Done" }
+        ]
+      }).then(({ notificationIds, lastScheduledUntil }) => {
+        if (notificationIds && notificationIds.length > 0) {
+          base44.entities.Task.update(createdTask.id, {
+            onesignal_notification_ids: notificationIds,
+            ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
+          });
+        }
+      }).catch(error => {
+        console.error("Failed to schedule reminders:", error);
+      });
+
+      onClose();
+      navigate(createPageUrl("Home"), { state: { reload: true } });
+    } catch (error) {
+      console.error("❌ [QUICK ADD] Error creating task with priority:", error);
+      alert("Failed to create task. Please try again.");
+    } finally {
+      setPendingPriorityTask(null);
+    }
+  };
+
   return (
+    <>
+    <PriorityPickerDialog
+      isOpen={showPriorityPicker}
+      onClose={() => {
+        setShowPriorityPicker(false);
+        setPendingPriorityTask(null);
+      }}
+      onSelect={handlePriorityChoice}
+    />
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className={`max-w-md ${
         theme === 'dark' ? 'bg-gray-800' : 'bg-white'
@@ -222,5 +330,6 @@ Return JSON:
         </div>
       </DialogContent>
     </Dialog>
+    </>
   );
 }

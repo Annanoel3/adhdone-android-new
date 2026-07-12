@@ -9,6 +9,7 @@ const intervalMsMap = {
   '30min':           30 * 60 * 1000,
   '1hour':       60 * 60 * 1000,
   '2hours':   2 * 60 * 60 * 1000,
+  '4hours':   4 * 60 * 60 * 1000,
   'daily':   24 * 60 * 60 * 1000,
   'every_other_day': 2 * 24 * 60 * 60 * 1000,
 };
@@ -51,7 +52,7 @@ Deno.serve(async (req) => {
     let staleStopped = 0;
 
     // Short intervals that become spam if a task is never completed
-    const shortIntervals = new Set(['10min', '20min', '30min', '1hour', '2hours']);
+    const shortIntervals = new Set(['10min', '20min', '30min', '1hour', '2hours', '4hours']);
     const staleThresholdMs = 21 * 24 * 60 * 60 * 1000; // 21 days
 
     for (const task of recurringTasks) {

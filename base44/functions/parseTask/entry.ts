@@ -10,7 +10,7 @@ Deno.serve(async (req) => {
     messages: [
       {
         role: "system",
-        content: "You are a task parsing assistant for an ADHD productivity app. Always respond with valid JSON. Always populate EVERY field in the schema — never omit or return null for reminder_interval. If no time is specified and the task is a chore, habit, or routine, choose a recurring interval (daily or every_other_day). If it is a one-time obligation with no date given, use reminder_interval='2hours' so the user is reminded today."
+        content: "You are a task parsing assistant for an ADHD productivity app. Always respond with valid JSON. Populate every field in the schema. If priority_uninferrable is true and is_flexible is true, set urgency=null and reminder_interval=null. Otherwise, never return null for reminder_interval. If no time is specified and the task is a chore, habit, or routine, choose a recurring interval (daily or every_other_day). If it is a one-time obligation with no date given, use reminder_interval='2hours' so the user is reminded today."
       },
       { role: "user", content: prompt }
     ],

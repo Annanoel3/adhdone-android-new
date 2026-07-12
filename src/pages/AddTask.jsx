@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import PriorityPickerDialog from "../components/tasks/PriorityPickerDialog";
 
 export default function AddTask() {
   const navigate = useNavigate();
@@ -29,6 +30,8 @@ export default function AddTask() {
   const [optimisticTasks, setOptimisticTasks] = useState([]);
   const [showAdvanceReminderDialog, setShowAdvanceReminderDialog] = useState(false);
   const [pendingTask, setPendingTask] = useState(null);
+  const [showPriorityPicker, setShowPriorityPicker] = useState(false);
+  const [pendingPriorityTask, setPendingPriorityTask] = useState(null);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -173,6 +176,7 @@ JSON:
           '30min': 30 * 60 * 1000,
           '1hour': 60 * 60 * 1000,
           '2hours': 2 * 60 * 60 * 1000,
+          '4hours': 4 * 60 * 60 * 1000,
           'daily': 24 * 60 * 60 * 1000,
           'every_other_day': 2 * 24 * 60 * 60 * 1000,
         };
@@ -377,13 +381,25 @@ JSON:
       GENERAL FALLBACK (none of the above):
       - → reminder_interval="2hours", urgency="medium"
 
+      PRIORITY UNINFERRABLE & FLEXIBLE TASKS:
+      If the task does NOT fit any SMART INFERENCE category above (not perishable, not a hard deadline, not a routine/habit) AND no specific time/date/frequency is mentioned:
+      - Set priority_uninferrable=true
+      - Set is_flexible=true (task can be done any day)
+      - Set urgency=null and reminder_interval=null
+      - The app will ask the user to pick a priority
+
+      If the task DOES fit a SMART INFERENCE category, or has a specific time/date:
+      - Set priority_uninferrable=false
+      - Set is_flexible=false if a specific time/date/deadline is mentioned
+      - Set is_flexible=true if no specific time/date is mentioned but the task fits an inference category
+
       Extract:
       1. Clean title (strip "remind me to/I need to/in X minutes" — keep inner action)
       2. Urgency: ALWAYS suggest (low/medium/high/urgent)
       3. Energy: ALWAYS suggest (low/medium/high)
       4. target_date: for "in X" (TODAY), "tomorrow", or specific dates — format YYYY-MM-DD
       5. target_time: for "in X" (calculate), "at X" (specific), or "tomorrow" with no time → "09:00"
-      6. reminder_interval: ALWAYS provide (10min/20min/30min/1hour/2hours/daily/every_other_day/once)
+      6. reminder_interval: ALWAYS provide (10min/20min/30min/1hour/2hours/4hours/daily/every_other_day/once)
 
       JSON:
       {
@@ -392,7 +408,9 @@ JSON:
       "energy_required": "medium",
       "target_date": "YYYY-MM-DD or null",
       "target_time": "HH:MM or null",
-      "reminder_interval": "10min|20min|30min|1hour|2hours|daily|every_other_day|once"
+      "reminder_interval": "10min|20min|30min|1hour|2hours|4hours|daily|every_other_day|once",
+      "priority_uninferrable": false,
+      "is_flexible": false
       }`;
 
       // First, check if this belongs in parking lot vs task
@@ -487,11 +505,23 @@ JSON:
       const parsed = (await base44.functions.invoke('parseTask', { prompt }))?.data?.response;
       console.log('🔄 [PROCESS] ✅ LLM parsed:', parsed);
 
+      // If priority can't be inferred and task is flexible, ask the user
+      if (parsed.priority_uninferrable && parsed.is_flexible) {
+        console.log('🔄 [PROCESS] Priority uninferrable and flexible — showing priority picker');
+        setPendingPriorityTask({
+          title: parsed.title || inputText.trim(),
+          energy_required: parsed.energy_required || 'medium',
+          currentUser
+        });
+        setShowPriorityPicker(true);
+        return false;
+      }
+
       console.log('🔄 [PROCESS] Calculating reminder times...');
       let nextReminder = null;
       let actualReminderInterval = parsed.reminder_interval || null;
       
-      const recurringIntervals = ['10min', '20min', '30min', '1hour', '2hours', 'daily', 'every_other_day'];
+      const recurringIntervals = ['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day'];
 
       if (parsed.target_date && parsed.target_time && actualReminderInterval === 'once') {
         // One-time reminder with specific date/time
@@ -563,6 +593,9 @@ JSON:
           case '2hours':
             nextReminder.setHours(nextReminder.getHours() + 2);
             break;
+          case '4hours':
+            nextReminder.setHours(nextReminder.getHours() + 4);
+            break;
           case 'daily':
             nextReminder.setDate(nextReminder.getDate() + 1);
             break;
@@ -616,6 +649,7 @@ JSON:
           '30min': 30 * 60 * 1000,
           '1hour': 60 * 60 * 1000,
           '2hours': 2 * 60 * 60 * 1000,
+          '4hours': 4 * 60 * 60 * 1000,
           'daily': 24 * 60 * 60 * 1000,
           'every_other_day': 2 * 24 * 60 * 60 * 1000,
         };
@@ -768,6 +802,79 @@ JSON:
       alert("Failed to create task with advance reminder. Please try again.");
     } finally {
       setPendingTask(null);
+      setIsProcessing(false);
+    }
+  };
+
+  const handlePriorityChoice = async (priority) => {
+    if (!pendingPriorityTask) return;
+
+    const { title, energy_required, currentUser } = pendingPriorityTask;
+    setShowPriorityPicker(false);
+    setIsProcessing(true);
+
+    try {
+      const priorityMap = {
+        high: { interval: '2hours', urgency: 'high', intervalMs: 2 * 60 * 60 * 1000 },
+        medium: { interval: '4hours', urgency: 'medium', intervalMs: 4 * 60 * 60 * 1000 },
+        low: { interval: 'daily', urgency: 'low', intervalMs: 24 * 60 * 60 * 1000 },
+      };
+
+      const { interval, urgency, intervalMs } = priorityMap[priority];
+      const now = new Date();
+      const nextReminder = new Date(now.getTime() + intervalMs);
+
+      const createdTask = await base44.entities.Task.create({
+        title,
+        description: '',
+        reminder_interval: interval,
+        reminder_count: 0,
+        next_reminder: nextReminder.toISOString(),
+        urgency,
+        energy_required,
+        status: 'active',
+        notification_recipient_email: currentUser.email
+      });
+
+      // Schedule recurring reminders
+      import('../components/utils/reminderScheduler').then(module => {
+        return module.scheduleRecurringReminders({
+          email: currentUser.email,
+          title: "Task Reminder 📋",
+          body: `${createdTask.title}\n\nTap to mark as complete!`,
+          startTime: nextReminder.toISOString(),
+          intervalMs,
+          count: 10,
+          taskId: createdTask.id,
+          data: {
+            screen: "/TaskNotification",
+            taskId: createdTask.id,
+            urgency,
+            type: 'task_reminder'
+          },
+          buttons: [
+            { id: "snooze_15", text: "Snooze 15 min" },
+            { id: "snooze_60", text: "Snooze 1 hour" },
+            { id: "complete", text: "✅ Done" }
+          ]
+        });
+      }).then(({ notificationIds, lastScheduledUntil }) => {
+        if (notificationIds && notificationIds.length > 0) {
+          base44.entities.Task.update(createdTask.id, {
+            onesignal_notification_ids: notificationIds,
+            ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
+          });
+        }
+      }).catch(error => {
+        console.error("Failed to schedule reminders:", error);
+      });
+
+      navigate(createPageUrl("Home"), { state: { reload: true } });
+    } catch (error) {
+      console.error("Error creating task with priority:", error);
+      alert("Failed to create task. Please try again.");
+    } finally {
+      setPendingPriorityTask(null);
       setIsProcessing(false);
     }
   };
@@ -1160,6 +1267,16 @@ JSON:
           </CardContent>
         </Card>
       )}
+
+      <PriorityPickerDialog
+        isOpen={showPriorityPicker}
+        onClose={() => {
+          setShowPriorityPicker(false);
+          setPendingPriorityTask(null);
+          setIsProcessing(false);
+        }}
+        onSelect={handlePriorityChoice}
+      />
 
       <Dialog open={showAdvanceReminderDialog} onOpenChange={setShowAdvanceReminderDialog}>
         <DialogContent className="max-w-md w-[calc(100vw-2rem)]">
