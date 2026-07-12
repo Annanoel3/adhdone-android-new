@@ -60,6 +60,11 @@ Deno.serve(async (req) => {
             resolvedSendAt = adjustForQuietHours(resolvedSendAt);
         }
 
+        // Safety guard: never allow instant delivery by accident
+        if (!resolvedSendAt || new Date(resolvedSendAt).getTime() <= Date.now()) {
+            return Response.json({ success: false, error: 'Refusing to schedule: send time missing or in the past' }, { status: 400 });
+        }
+
         const notificationPayload = {
             app_id: appId,
             include_external_user_ids: [String(toUserExternalId)],
@@ -68,7 +73,7 @@ Deno.serve(async (req) => {
             data: data || {},
             channel_for_external_user_ids: "push",
             // Scheduling
-            ...(resolvedSendAt && { send_after: resolvedSendAt }),
+            send_after: resolvedSendAt,
             // Action buttons (Snooze / Complete)
             ...(buttons && buttons.length > 0 && { buttons: buttons }),
         };
