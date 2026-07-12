@@ -30,7 +30,7 @@ async function cancelOneSignalNotification(notificationId) {
   }
 }
 
-async function scheduleOneSignalNotification(email, title, body, sendAfterSeconds, taskId) {
+async function scheduleOneSignalNotification(email, title, body, sendAfterIsoString, taskId) {
   if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
     console.log('[onTaskUpdate] OneSignal credentials missing, skipping schedule');
     return null;
@@ -42,7 +42,7 @@ async function scheduleOneSignalNotification(email, title, body, sendAfterSecond
       headings: { en: title },
       contents: { en: body },
       include_external_user_ids: [email],
-      send_after: sendAfterSeconds,
+      send_after: sendAfterIsoString,
       data: {
         screen: '/TaskNotification',
         taskId: taskId,
@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
     }
 
     // Only reschedule if title or reminder_interval changed (not cron-driven next_reminder bumps)
-    if (old_data.title !== data.title || old_data.reminder_interval !== data.reminder_interval) {
+    if (old_data.title !== data.title || old_data.reminder_interval !== data.reminder_interval || old_data.next_reminder !== data.next_reminder) {
       console.log('[onTaskUpdate] Task details changed, rescheduling notifications');
       
       // Get the task to get next_reminder and other details
@@ -175,15 +175,13 @@ Deno.serve(async (req) => {
         let scheduleTime = nextReminderTime;
         
         for (let i = 0; i < 10; i++) {
-          const sendAfterSeconds = Math.round((scheduleTime - now) / 1000);
-          
           // Only schedule if it's in the future
-          if (sendAfterSeconds > 0) {
+          if (scheduleTime > now) {
             const notificationId = await scheduleOneSignalNotification(
               currentTask.notification_recipient_email || user.email,
               'Task Reminder 📋',
               currentTask.title || 'You have a task due',
-              sendAfterSeconds,
+              new Date(scheduleTime).toISOString(),
               currentTask.id
             );
 
