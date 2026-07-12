@@ -17,6 +17,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import PriorityPickerDialog from "../components/tasks/PriorityPickerDialog";
+import DatePickerDialog from "../components/tasks/DatePickerDialog";
 
 export default function AddTask() {
   const navigate = useNavigate();
@@ -32,6 +33,8 @@ export default function AddTask() {
   const [pendingTask, setPendingTask] = useState(null);
   const [showPriorityPicker, setShowPriorityPicker] = useState(false);
   const [pendingPriorityTask, setPendingPriorityTask] = useState(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [pendingDateTask, setPendingDateTask] = useState(null);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
@@ -294,8 +297,8 @@ JSON:
         Set: reminder_interval="10min" or "1hour", no target_date/target_time
 
       "tomorrow" with NO specific time:
-      - Set: reminder_interval="once", target_date=TOMORROW, target_time="09:00"
-      - This is a one-time reminder at 9am tomorrow, NOT a daily recurring task.
+      - Set: reminder_interval="once", target_date=TOMORROW, target_time=null, needs_date_pick=true
+      - The app will ask the user to pick a time.
 
       "tomorrow at X":
       - Set: reminder_interval="once", target_date=TOMORROW, target_time=<specified time>
@@ -304,8 +307,8 @@ JSON:
       - "on the 28th", "by the 28th", "the 28th" → ONE-TIME, reminder_interval="once"
         → target_date = current month + that day number, format YYYY-MM-DD
         → If that day has already passed this month, use next month
-        → target_time = "09:00" unless a time is also specified
-        → Example: today is ${todayISO}, "pay zx4rr on the 28th" → target_date="${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-28", reminder_interval="once", target_time="09:00"
+        → target_time = null unless a time is also specified; if no time, set needs_date_pick=true
+        → Example: today is ${todayISO}, "pay zx4rr on the 28th" → target_date="${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-28", reminder_interval="once", target_time=null, needs_date_pick=true
       - "on the 1st", "by the 15th" → same logic
 
       Other rules:
@@ -336,10 +339,10 @@ JSON:
       - Things tied to a specific moment: "make lunch tomorrow", "reminder for my dentist at 2pm"
       - Use: reminder_interval="once", target_date=YYYY-MM-DD, target_time=HH:MM
       - Examples:
-        "remind me to make lunch tomorrow" → once, target_date=TOMORROW, target_time="11:00"
-        "pick up cookies" → once, target_date=TODAY, target_time="18:00" (end of day nudge)
+        "remind me to make lunch tomorrow" → once, target_date=TOMORROW, target_time=null, needs_date_pick=true
+        "pick up cookies" → once, target_date=TODAY, target_time=null, needs_date_pick=true
         "remind me at 5pm to call John" → once, target_date=TODAY, target_time="17:00"
-        "find the pasta" → once, target_date=TODAY, target_time="17:00" (low stakes, one nudge)
+        "find the pasta" → once, target_date=TODAY, target_time=null, needs_date_pick=true
 
       STEP 2 — Pick the right interval for recurring tasks:
       - "2hours" → important tasks needing to be done today (bills, deadlines, work tasks)
@@ -393,6 +396,13 @@ JSON:
       - Set is_flexible=false if a specific time/date/deadline is mentioned
       - Set is_flexible=true if no specific time/date is mentioned but the task fits an inference category
 
+      NEEDS DATE PICK:
+      If the task is clearly a one-time/single-day thing but no specific date or time was given:
+      - Set needs_date_pick=true (even if priority was inferred)
+      - Still provide reminder_interval as a fallback (used if user picks "any day")
+      - Do NOT set target_date or target_time — let the user pick
+      - Do NOT set needs_date_pick=true if priority_uninferrable is true (priority picker handles it)
+
       Extract:
       1. Clean title (strip "remind me to/I need to/in X minutes" — keep inner action)
       2. Urgency: ALWAYS suggest (low/medium/high/urgent)
@@ -410,7 +420,8 @@ JSON:
       "target_time": "HH:MM or null",
       "reminder_interval": "10min|20min|30min|1hour|2hours|4hours|daily|every_other_day|once",
       "priority_uninferrable": false,
-      "is_flexible": false
+      "is_flexible": false,
+      "needs_date_pick": false
       }`;
 
       // First, check if this belongs in parking lot vs task
@@ -517,6 +528,21 @@ JSON:
         return false;
       }
 
+      // If the task is one-time but no date was given, ask the user
+      if (parsed.needs_date_pick) {
+        console.log('🔄 [PROCESS] needs_date_pick — showing date picker');
+        setPendingDateTask({
+          title: parsed.title || inputText.trim(),
+          energy_required: parsed.energy_required || 'medium',
+          urgency: parsed.urgency || 'medium',
+          fallbackInterval: parsed.reminder_interval || '2hours',
+          initialDate: parsed.target_date || null,
+          currentUser
+        });
+        setShowDatePicker(true);
+        return false;
+      }
+
       console.log('🔄 [PROCESS] Calculating reminder times...');
       let nextReminder = null;
       let actualReminderInterval = parsed.reminder_interval || null;
@@ -531,19 +557,11 @@ JSON:
         const [hours, minutes] = parsed.target_time.split(':').map(n => parseInt(n, 10));
         const targetDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
 
-        // Safety: if the calculated time is within 5 minutes of now (LLM hallucinated current time),
-        // push it to tonight 9pm or tomorrow 9am instead
-        const fiveMinFromNow = new Date(now.getTime() + 5 * 60 * 1000);
-        if (targetDate <= fiveMinFromNow) {
-          console.log('🔄 [PROCESS] ⚠️ Target time too close to now, pushing to tonight 9pm');
-          const fallback = new Date(now);
-          fallback.setHours(21, 0, 0, 0);
-          if (fallback <= fiveMinFromNow) {
-            // Already past 9pm — use tomorrow 9am
-            fallback.setDate(fallback.getDate() + 1);
-            fallback.setHours(9, 0, 0, 0);
-          }
-          nextReminder = fallback;
+        // Guard: if the target time is in the past or within 2 minutes, don't schedule
+        const twoMinFromNow = new Date(now.getTime() + 2 * 60 * 1000);
+        if (targetDate <= twoMinFromNow) {
+          console.log('🔄 [PROCESS] ⚠️ Target time in the past or immediate — not scheduling');
+          nextReminder = null;
         } else {
           nextReminder = targetDate;
         }
@@ -604,19 +622,13 @@ JSON:
             break;
         }
       } else if (actualReminderInterval === 'once' && !parsed.target_date && !parsed.target_time) {
-        // LLM said "once" but gave no date/time — default to tonight 6pm or +2h if already evening
-        console.log('🔄 [PROCESS] once with no date/time, defaulting to tonight 6pm');
-        nextReminder = new Date(now);
-        nextReminder.setHours(18, 0, 0, 0);
-        if (nextReminder <= new Date(now.getTime() + 5 * 60 * 1000)) {
-          nextReminder = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-        }
+        // LLM said "once" but gave no date/time — don't schedule (needs_date_pick should have caught this)
+        console.log('🔄 [PROCESS] once with no date/time — not scheduling');
+        nextReminder = null;
       } else if (!parsed.reminder_interval && !parsed.target_time && !parsed.target_date) {
-        // No timing specified at all - default to once in 2 hours
-        console.log('🔄 [PROCESS] No timing, defaulting to 2 hours');
-        actualReminderInterval = 'once';
-        nextReminder = new Date();
-        nextReminder.setHours(nextReminder.getHours() + 2);
+        // No timing specified at all — don't schedule (needs_date_pick should have caught this)
+        console.log('🔄 [PROCESS] No timing — not scheduling');
+        nextReminder = null;
       }
 
       console.log('🔄 [PROCESS] Creating task with data:', {
@@ -640,6 +652,27 @@ JSON:
       });
 
       console.log('🔄 [PROCESS] ✅ Task created:', createdTask.id);
+
+      // Future guard: never schedule a reminder in the past or immediate
+      if (nextReminder) {
+        const twoMinFromNow = new Date(now.getTime() + 2 * 60 * 1000);
+        if (nextReminder <= twoMinFromNow) {
+          if (actualReminderInterval && actualReminderInterval !== 'once') {
+            const guardIntervalMs = {
+              '10min': 10 * 60 * 1000, '20min': 20 * 60 * 1000, '30min': 30 * 60 * 1000,
+              '1hour': 60 * 60 * 1000, '2hours': 2 * 60 * 60 * 1000, '4hours': 4 * 60 * 60 * 1000,
+              'daily': 24 * 60 * 60 * 1000, 'every_other_day': 2 * 24 * 60 * 60 * 1000,
+            };
+            if (guardIntervalMs[actualReminderInterval]) {
+              nextReminder = new Date(now.getTime() + guardIntervalMs[actualReminderInterval]);
+            } else {
+              nextReminder = null;
+            }
+          } else {
+            nextReminder = null;
+          }
+        }
+      }
 
       // Schedule reminders
       if (nextReminder) {
@@ -875,6 +908,127 @@ JSON:
       alert("Failed to create task. Please try again.");
     } finally {
       setPendingPriorityTask(null);
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDateChoice = async (date, time) => {
+    if (!pendingDateTask) return;
+    const { title, energy_required, urgency, currentUser } = pendingDateTask;
+    setShowDatePicker(false);
+    setIsProcessing(true);
+
+    try {
+      const [year, month, day] = date.split('-').map(n => parseInt(n, 10));
+      const [hours, minutes] = time.split(':').map(n => parseInt(n, 10));
+      const nextReminder = new Date(year, month - 1, day, hours, minutes, 0, 0);
+      const now = new Date();
+      if (nextReminder <= new Date(now.getTime() + 2 * 60 * 1000)) {
+        alert('The selected time is in the past or too soon. Please pick a future time.');
+        setIsProcessing(false);
+        return;
+      }
+
+      const createdTask = await base44.entities.Task.create({
+        title,
+        description: '',
+        reminder_interval: 'once',
+        reminder_count: 0,
+        next_reminder: nextReminder.toISOString(),
+        urgency,
+        energy_required,
+        status: 'active',
+        notification_recipient_email: currentUser.email
+      });
+
+      scheduleReminder({
+        email: currentUser.email,
+        title: "Task Reminder 📋",
+        body: `${createdTask.title}\n\nTap to mark as complete!`,
+        sendAtISO: nextReminder.toISOString(),
+        taskId: createdTask.id,
+        data: { screen: "/TaskNotification", taskId: createdTask.id, urgency, type: 'task_reminder' },
+        buttons: [
+          { id: "snooze_15", text: "Snooze 15 min" },
+          { id: "snooze_60", text: "Snooze 1 hour" },
+          { id: "complete", text: "✅ Done" }
+        ]
+      }).then(notificationId => {
+        if (notificationId) {
+          base44.entities.Task.update(createdTask.id, { onesignal_notification_ids: [notificationId] });
+        }
+      }).catch(error => console.error("Failed to schedule reminder:", error));
+
+      navigate(createPageUrl("Home"), { state: { reload: true } });
+    } catch (error) {
+      console.error("Error creating task with date:", error);
+      alert("Failed to create task. Please try again.");
+    } finally {
+      setPendingDateTask(null);
+      setIsProcessing(false);
+    }
+  };
+
+  const handleDateAnyDay = async () => {
+    if (!pendingDateTask) return;
+    const { title, energy_required, urgency, fallbackInterval, currentUser } = pendingDateTask;
+    setShowDatePicker(false);
+    setIsProcessing(true);
+
+    try {
+      const intervalMs = {
+        '10min': 10 * 60 * 1000, '20min': 20 * 60 * 1000, '30min': 30 * 60 * 1000,
+        '1hour': 60 * 60 * 1000, '2hours': 2 * 60 * 60 * 1000, '4hours': 4 * 60 * 60 * 1000,
+        'daily': 24 * 60 * 60 * 1000, 'every_other_day': 2 * 24 * 60 * 60 * 1000,
+      };
+      const interval = fallbackInterval || '2hours';
+      const ms = intervalMs[interval] || intervalMs['2hours'];
+      const now = new Date();
+      const nextReminder = new Date(now.getTime() + ms);
+
+      const createdTask = await base44.entities.Task.create({
+        title,
+        description: '',
+        reminder_interval: interval,
+        reminder_count: 0,
+        next_reminder: nextReminder.toISOString(),
+        urgency,
+        energy_required,
+        status: 'active',
+        notification_recipient_email: currentUser.email
+      });
+
+      import('../components/utils/reminderScheduler').then(module => {
+        return module.scheduleRecurringReminders({
+          email: currentUser.email,
+          title: "Task Reminder 📋",
+          body: `${createdTask.title}\n\nTap to mark as complete!`,
+          startTime: nextReminder.toISOString(),
+          intervalMs: ms,
+          count: 10,
+          taskId: createdTask.id,
+          data: { screen: "/TaskNotification", taskId: createdTask.id, urgency, type: 'task_reminder' },
+          buttons: [
+            { id: "snooze_15", text: "Snooze 15 min" },
+            { id: "snooze_60", text: "Snooze 1 hour" },
+            { id: "complete", text: "✅ Done" }
+          ]
+        });
+      }).then(({ notificationIds, lastScheduledUntil }) => {
+        if (notificationIds && notificationIds.length > 0) {
+          base44.entities.Task.update(createdTask.id, {
+            onesignal_notification_ids: notificationIds,
+            ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
+          });
+        }
+      }).catch(error => console.error("Failed to schedule reminders:", error));
+
+      navigate(createPageUrl("Home"), { state: { reload: true } });
+    } catch (error) {
+      console.error("Error creating task with any day:", error);
+      alert("Failed to create task. Please try again.");
+    } finally {
+      setPendingDateTask(null);
       setIsProcessing(false);
     }
   };
@@ -1267,6 +1421,15 @@ JSON:
           </CardContent>
         </Card>
       )}
+
+      <DatePickerDialog
+        isOpen={showDatePicker}
+        onClose={() => { setShowDatePicker(false); setPendingDateTask(null); setIsProcessing(false); }}
+        onSelect={handleDateChoice}
+        onAnyDay={handleDateAnyDay}
+        taskTitle={pendingDateTask?.title}
+        initialDate={pendingDateTask?.initialDate}
+      />
 
       <PriorityPickerDialog
         isOpen={showPriorityPicker}

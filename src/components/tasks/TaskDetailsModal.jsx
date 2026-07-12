@@ -147,6 +147,9 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
         case '2hours':
           nextReminder.setHours(nextReminder.getHours() + 2);
           break;
+        case '4hours':
+          nextReminder.setHours(nextReminder.getHours() + 4);
+          break;
         case 'daily':
           nextReminder.setDate(nextReminder.getDate() + 1);
           break;
@@ -231,6 +234,9 @@ Return JSON:
           break;
         case '2hours':
           nextReminder.setHours(nextReminder.getHours() + 2);
+          break;
+        case '4hours':
+          nextReminder.setHours(nextReminder.getHours() + 4);
           break;
         case 'daily':
           nextReminder.setDate(nextReminder.getDate() + 1);
@@ -324,6 +330,7 @@ Return JSON:
             '30min': 30 * 60 * 1000,
             '1hour': 60 * 60 * 1000,
             '2hours': 2 * 60 * 60 * 1000,
+            '4hours': 4 * 60 * 60 * 1000,
             'daily': 24 * 60 * 60 * 1000,
             'every_other_day': 2 * 24 * 60 * 60 * 1000,
           };
@@ -404,6 +411,7 @@ Return JSON:
           '30min': 30 * 60 * 1000,
           '1hour': 60 * 60 * 1000,
           '2hours': 2 * 60 * 60 * 1000,
+          '4hours': 4 * 60 * 60 * 1000,
           'daily': 24 * 60 * 60 * 1000,
           'every_other_day': 2 * 24 * 60 * 60 * 1000,
         };
@@ -465,6 +473,7 @@ Return JSON:
                 case '30min': nextReminderDate.setMinutes(nextReminderDate.getMinutes() + 30); break;
                 case '1hour': nextReminderDate.setHours(nextReminderDate.getHours() + 1); break;
                 case '2hours': nextReminderDate.setHours(nextReminderDate.getHours() + 2); break;
+                case '4hours': nextReminderDate.setHours(nextReminderDate.getHours() + 4); break;
                 case 'daily': nextReminderDate.setDate(nextReminderDate.getDate() + 1); break;
                 case 'every_other_day': nextReminderDate.setDate(nextReminderDate.getDate() + 2); break;
               }
@@ -536,13 +545,14 @@ Return JSON:
 
       const _now = new Date();
       const localToday = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
+      if (!effectiveTime) return; // No hidden time default — require user to set time
       const finalEffectiveDate = effectiveDate || localToday;
-      const finalEffectiveTime = effectiveTime || '09:00';
+      const finalEffectiveTime = effectiveTime;
 
       // Parse date components explicitly to avoid UTC midnight crossing (same as task creation)
       const [year, month, day] = finalEffectiveDate.split('-').map(n => parseInt(n, 10));
       const [hours, minutes] = finalEffectiveTime.split(':').map(n => parseInt(n, 10));
-      const nextReminder = new Date(year, month - 1, day, hours, minutes, 0, 0);
+      let nextReminder = new Date(year, month - 1, day, hours, minutes, 0, 0);
 
       // Cancel existing reminders
       if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
@@ -561,6 +571,7 @@ Return JSON:
         '30min': 30 * 60 * 1000,
         '1hour': 60 * 60 * 1000,
         '2hours': 2 * 60 * 60 * 1000,
+        '4hours': 4 * 60 * 60 * 1000,
         'daily': 24 * 60 * 60 * 1000,
         'every_other_day': 2 * 24 * 60 * 60 * 1000,
       };
@@ -568,6 +579,18 @@ Return JSON:
       try {
         const currentUser = await base44.auth.me();
         const interval = task.reminder_interval;
+
+        // Future guard: never schedule a reminder in the past or immediate
+        const guardNow = new Date();
+        const guardTwoMin = new Date(guardNow.getTime() + 2 * 60 * 1000);
+        if (nextReminder <= guardTwoMin) {
+          if (interval && interval !== 'once' && intervalMs[interval]) {
+            nextReminder = new Date(guardNow.getTime() + intervalMs[interval]);
+          } else {
+            console.log('⚠️ [TASK DETAILS] Computed reminder time is in the past — skipping');
+            return;
+          }
+        }
 
         if (interval && interval !== 'once' && intervalMs[interval]) {
           // Recurring: schedule 10 future occurrences (same as creation)
@@ -724,6 +747,7 @@ Return JSON:
           '30min': 30 * 60 * 1000,
           '1hour': 60 * 60 * 1000,
           '2hours': 2 * 60 * 60 * 1000,
+          '4hours': 4 * 60 * 60 * 1000,
           'daily': 24 * 60 * 60 * 1000,
           'every_other_day': 2 * 24 * 60 * 60 * 1000,
         };
@@ -862,6 +886,7 @@ Return JSON:
       '30min': 'Every 30 minutes',
       '1hour': 'Every hour',
       '2hours': 'Every 2 hours',
+      '4hours': 'Every 4 hours',
       'daily': 'Daily',
       'every_other_day': 'Every other day',
       'once': 'One time'
@@ -1083,7 +1108,13 @@ Return JSON:
                           onChange={(e) => {
                             setReminderDate(e.target.value);
                             reminderDateRef.current = e.target.value;
-                            if (!isInitializingRef.current && e.target.value && reminderTimeRef.current) handleUpdateReminderTime(reminderTimeRef.current, e.target.value);
+                            if (!isInitializingRef.current && e.target.value) {
+                              if (!reminderTimeRef.current) {
+                                setReminderTime('09:00');
+                                reminderTimeRef.current = '09:00';
+                              }
+                              if (reminderTimeRef.current) handleUpdateReminderTime(reminderTimeRef.current, e.target.value);
+                            }
                           }}
                           className={`w-full border rounded px-3 py-2 ${
                             theme === 'dark'
@@ -1120,6 +1151,7 @@ Return JSON:
                         <button onClick={() => handleUpdateField('reminder_interval', '30min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 30 minutes</button>
                         <button onClick={() => handleUpdateField('reminder_interval', '1hour')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every hour</button>
                         <button onClick={() => handleUpdateField('reminder_interval', '2hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 2 hours</button>
+                        <button onClick={() => handleUpdateField('reminder_interval', '4hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 4 hours</button>
                         <button onClick={() => handleUpdateField('reminder_interval', 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
                         <button onClick={() => handleUpdateField('reminder_interval', 'every_other_day')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every other day</button>
                         <div className="border-t my-1"></div>
