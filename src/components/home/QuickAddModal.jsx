@@ -28,6 +28,24 @@ RULES:
 3. If "every X" mentioned, map to reminder_interval
 4. Keep title SHORT (2-8 words)
 
+SMART INFERENCE (when user does NOT specify a time, frequency, or date):
+Infer the best reminder_interval and urgency from the NATURE of the task:
+
+- PERISHABLE / TIME-SENSITIVE (food, laundry, meds, cooking, pets/plants):
+  e.g. "move food to freezer", "move laundry", "take meds", "feed the cat"
+  → reminder_interval="2hours", urgency="high"
+
+- HARD DEADLINE / IMPORTANT OBLIGATION (financial, legal, work, appointments):
+  e.g. "pay rent", "submit form", "call doctor", "send report"
+  → reminder_interval="1hour" (if deadline is today/tomorrow) or "2hours", urgency="high"
+
+- ROUTINE / HABIT (wellness, daily maintenance):
+  e.g. "stretch", "take vitamins", "drink water", "meditate"
+  → reminder_interval="daily", urgency="low" or "medium"
+
+- General fallback (none of the above):
+  → reminder_interval="2hours", urgency="medium"
+
 Return JSON:
 {
   "title": "Clean task title",

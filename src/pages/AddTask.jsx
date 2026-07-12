@@ -152,6 +152,12 @@ REMINDER STRATEGY:
 
 Bills, financial tasks, work obligations = ALWAYS recurring at "2hours".
 
+SMART INFERENCE (when user does NOT specify a time, frequency, or date):
+- PERISHABLE / TIME-SENSITIVE (food, laundry, meds, cooking, pets) → reminder_interval="2hours", urgency="high"
+- HARD DEADLINE / IMPORTANT OBLIGATION (pay rent, submit form, financial/legal) → reminder_interval="1hour" or "2hours", urgency="high"
+- ROUTINE / HABIT (stretch, vitamins, wellness, daily chores) → reminder_interval="daily", urgency="low" or "medium"
+- General fallback → reminder_interval="2hours", urgency="medium"
+
 JSON:
 {
   "urgency": "low|medium|high|urgent",
@@ -344,6 +350,32 @@ JSON:
       - Important but flexible → "high" or "medium"
       - Routine maintenance → "medium"
       - Nice-to-have → "low"
+
+      SMART INFERENCE (when user does NOT specify a time, frequency, or date):
+      Infer the best reminder_interval and urgency from the NATURE of the task:
+
+      PERISHABLE / TIME-SENSITIVE (degrades or has consequences if delayed):
+      - Food/perishables: "move food to freezer", "put leftovers in fridge", "defrost chicken"
+      - Laundry: "move laundry to dryer", "take clothes out of washer"
+      - Medication: "take meds", "take medicine", "take antibiotics"
+      - Cooking: "check on the oven", "stir the pot", "flip the food"
+      - Pets/plants: "feed the cat", "water the plants"
+      - → reminder_interval="2hours", urgency="high"
+
+      HARD DEADLINE / IMPORTANT OBLIGATION (serious consequences if missed):
+      - Financial: "pay rent", "pay electric bill", "transfer money", "pay credit card"
+      - Legal/admin: "submit form", "file taxes", "renew license", "submit application"
+      - Work: "submit report", "send email to boss", "turn in project"
+      - Appointments: "call doctor", "confirm appointment", "reschedule meeting"
+      - → reminder_interval="1hour" if deadline is today or tomorrow, otherwise "2hours", urgency="high"
+
+      ROUTINE / HABIT (recurring wellness or maintenance, low urgency):
+      - Wellness: "stretch", "take vitamins", "drink water", "meditate", "do pushups"
+      - Chores: "make bed", "water plants", "tidy desk"
+      - → reminder_interval="daily", urgency="low" or "medium"
+
+      GENERAL FALLBACK (none of the above):
+      - → reminder_interval="2hours", urgency="medium"
 
       Extract:
       1. Clean title (strip "remind me to/I need to/in X minutes" — keep inner action)
