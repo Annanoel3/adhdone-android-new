@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle2, Clock, Zap, Pencil, Calendar, ListChecks, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +24,8 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
   const [celebratingTaskId, setCelebratingTaskId] = React.useState(null);
   const [expandedTasks, setExpandedTasks] = React.useState({});
   const specialMode = localStorage.getItem('special_mode') || 'normal';
+  const dateInputRefs = useRef({});
+  const timeInputRefs = useRef({});
 
   const getUrgencyColor = (urgency) => {
     if (theme === 'minimalist') {
@@ -256,23 +258,20 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
   };
 
   const handleReminderDateChange = async (task, newDate, newTime) => {
-    const currentNextReminder = task.next_reminder ? new Date(task.next_reminder) : new Date();
-    let updatedNextReminder = new Date(currentNextReminder);
+    let updatedNextReminder;
 
     if (newDate) {
-        const selectedDate = new Date(newDate);
-        updatedNextReminder.setFullYear(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
-    }
-
-    if (newTime) {
-        const [hours, minutes] = newTime.split(':');
-        updatedNextReminder.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-    }
-
-    // CRITICAL FIX: If the new reminder date/time is in the past on the current day, adjust it to tomorrow.
-    const now = new Date();
-    if (updatedNextReminder <= now && updatedNextReminder.toDateString() === now.toDateString()) {
-      updatedNextReminder.setDate(updatedNextReminder.getDate() + 1);
+        // Parse date components explicitly to avoid UTC midnight crossing
+        const [year, month, day] = newDate.split('-').map(n => parseInt(n, 10));
+        const timeStr = newTime || (task.next_reminder ? getCurrentReminderTime(task) : '09:00');
+        const [hours, minutes] = timeStr.split(':').map(n => parseInt(n, 10));
+        updatedNextReminder = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    } else if (newTime) {
+        const existingDate = task.next_reminder ? new Date(task.next_reminder) : new Date();
+        const [hours, minutes] = newTime.split(':').map(n => parseInt(n, 10));
+        updatedNextReminder = new Date(existingDate.getFullYear(), existingDate.getMonth(), existingDate.getDate(), hours, minutes, 0, 0);
+    } else {
+        return;
     }
 
     console.log(`📅 [REMINDER DATE] Setting reminder for ${updatedNextReminder.toLocaleString()} (${updatedNextReminder.toISOString()})`);
@@ -525,9 +524,10 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
                                 </label>
                                 <input
                                   type="date"
+                                  ref={el => dateInputRefs.current[task.id] = el}
                                   defaultValue={getCurrentReminderDate(task)}
                                   onChange={(e) => {
-                                    const currentTime = getCurrentReminderTime(task);
+                                    const currentTime = timeInputRefs.current[task.id]?.value || '09:00';
                                     handleReminderDateChange(task, e.target.value, currentTime);
                                   }}
                                   className={`w-full border rounded px-3 py-2 ${
@@ -543,9 +543,10 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
                                 </label>
                                 <input
                                   type="time"
+                                  ref={el => timeInputRefs.current[task.id] = el}
                                   defaultValue={getCurrentReminderTime(task)}
                                   onChange={(e) => {
-                                    const currentDate = getCurrentReminderDate(task);
+                                    const currentDate = dateInputRefs.current[task.id]?.value;
                                     handleReminderDateChange(task, currentDate, e.target.value);
                                   }}
                                   className={`w-full border rounded px-3 py-2 ${
