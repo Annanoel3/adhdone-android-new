@@ -587,7 +587,7 @@ Return JSON:
           if (interval && interval !== 'once' && intervalMs[interval]) {
             nextReminder = new Date(guardNow.getTime() + intervalMs[interval]);
           } else {
-            console.log('⚠️ [TASK DETAILS] Computed reminder time is in the past — skipping');
+            alert("⚠️ The date and time you picked is in the past.\n\nPlease choose a future date and time, then tap Save again.");
             return;
           }
         }
