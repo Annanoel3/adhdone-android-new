@@ -7,12 +7,12 @@ function isRunningInCapacitor() {
 }
 
 // Handle incoming notification data and route to the correct in-app screen
-function handleNotificationData(data, navigate) {
+function handleNotificationData(data) {
   if (!data) return;
   const taskId = data.taskId || data.task_id;
-  const screen = data.screen;
-  if (taskId && (screen === '/TaskNotification' || screen === 'TaskNotification')) {
-    navigate(`/TaskNotification?taskId=${taskId}`);
+  if (taskId) {
+    sessionStorage.setItem('pending_task_followup', taskId);
+    window.dispatchEvent(new CustomEvent('show-task-followup', { detail: { taskId } }));
   }
 }
 

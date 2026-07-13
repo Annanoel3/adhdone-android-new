@@ -53,6 +53,7 @@ import MiniPomodoroBar from "./components/shared/MiniPomodoroBar";
 import UniversalVoiceAssistant from "./components/shared/UniversalVoiceAssistant";
 import MicrophonePermissionCheck from "./components/shared/MicrophonePermissionCheck";
 import PokeNotification from "./components/shared/PokeNotification";
+import NotificationFollowupModal from "./components/shared/NotificationFollowupModal";
 import AppGuideModal from "./components/shared/AppGuideModal";
 import { base44 } from "@/api/base44Client";
 import {
@@ -991,6 +992,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           <UniversalVoiceAssistant theme={theme} currentPageName={currentPageName} />
           <MicrophonePermissionCheck theme={theme} />
           <PokeNotification theme={theme} />
+          <NotificationFollowupModal user={user} theme={theme} />
 
         <AppGuideModal
           isOpen={showAppGuide}
