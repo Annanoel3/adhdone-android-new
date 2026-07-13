@@ -384,31 +384,46 @@ JSON:
       - Chores: "make bed", "water plants", "tidy desk"
       - → reminder_interval="daily", urgency="low" or "medium"
 
-      GENERAL FALLBACK (none of the above):
-      - → reminder_interval="2hours", urgency="medium"
+      GENERAL ACTIONABLE TASKS (not perishable, not a hard deadline, not a routine/habit):
+      Tasks that need to get done but have no specific deadline or schedule.
+      Examples: "post the Subaru parts on Marketplace", "sell the old laptop", "fix the leaky faucet",
+      "organize the garage", "research vacuum cleaners", "list items on eBay", "clean the car",
+      "Amazon returns", "drop off donation"
+      - These are RECURRING — remind until done. Do NOT ask for a date.
+      - Set priority_uninferrable=true, is_flexible=true (app asks for priority which determines interval)
 
       PRIORITY UNINFERRABLE & FLEXIBLE TASKS:
-      If the task does NOT fit any SMART INFERENCE category above (not perishable, not a hard deadline, not a routine/habit) AND no specific time/date/frequency is mentioned:
+      If the task does NOT fit PERISHABLE, HARD DEADLINE, or ROUTINE/HABIT categories
+      (this includes ALL general actionable tasks, errands, personal projects, selling/posting things,
+      one-off chores, organizing, fixing, researching) AND no specific time/date/frequency is mentioned:
       - Set priority_uninferrable=true
       - Set is_flexible=true (task can be done any day)
       - Set urgency=null and reminder_interval=null
-      - The app will ask the user to pick a priority
+      - The app will ask the user to pick a priority, which determines the reminder interval
+        (high=2hours, medium=4hours, low=daily)
 
       If the task DOES fit a SMART INFERENCE category, or has a specific time/date:
       - Set priority_uninferrable=false
       - Set is_flexible=false if a specific time/date/deadline is mentioned
       - Set is_flexible=true if no specific time/date is mentioned but the task fits an inference category
 
-      NEEDS DATE PICK:
-      If the task is clearly a one-time/single-day thing but no specific date or time was given:
-      - Set needs_date_pick=true (even if priority was inferred)
+      NEEDS DATE PICK (VERY RESTRICTIVE — only for scheduled events):
+      ONLY set needs_date_pick=true for tasks tied to a SPECIFIC calendar date/event that the user
+      explicitly referenced but didn't give a time for:
+      - Appointments: "dentist tomorrow", "doctor on Friday", "therapy at 12pm"
+      - Events: "concert on the 28th", "wedding Saturday", "Martin's party on the 30th"
+      - Scheduled activities: "make lunch tomorrow", "pick up cake Tuesday"
+
+      NEVER use needs_date_pick for:
+      - General actionable tasks (selling, posting, errands, chores, projects) → use priority_uninferrable
+      - PERISHABLE/TIME-SENSITIVE tasks → recurring (reminder_interval set)
+      - HARD DEADLINE tasks → recurring (reminder_interval set)
+      - Routine/habit tasks → recurring (reminder_interval="daily")
+      - Tasks where priority_uninferrable is true → priority picker handles it
+
+      If needs_date_pick=true:
       - Still provide reminder_interval as a fallback (used if user picks "any day")
       - Do NOT set target_date or target_time — let the user pick
-      - Do NOT set needs_date_pick=true if priority_uninferrable is true (priority picker handles it)
-      - Do NOT set needs_date_pick=true for PERISHABLE/TIME-SENSITIVE or HARD DEADLINE tasks.
-        Those are recurring (reminder_interval set) and must start reminding immediately.
-        Only use needs_date_pick for genuine one-time future events: appointments, flights,
-        scheduled meetings, "make lunch tomorrow", etc.
 
       Extract:
       1. Clean title (strip "remind me to/I need to/in X minutes" — keep inner action)
