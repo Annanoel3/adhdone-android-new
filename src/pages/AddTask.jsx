@@ -390,17 +390,17 @@ JSON:
       "organize the garage", "research vacuum cleaners", "list items on eBay", "clean the car",
       "Amazon returns", "drop off donation"
       - These are RECURRING — remind until done. Do NOT ask for a date.
-      - Set priority_uninferrable=true, is_flexible=true (app asks for priority which determines interval)
+      - ALWAYS infer urgency and reminder_interval yourself based on the task's nature:
+        * Involves money, selling valuables, important errands → urgency="high", reminder_interval="2hours"
+        * Typical tasks, moderate importance → urgency="medium", reminder_interval="4hours"
+        * Low-stakes, no rush → urgency="low", reminder_interval="daily"
+      - Set priority_uninferrable=false, is_flexible=true (task can be done any day)
 
-      PRIORITY UNINFERRABLE & FLEXIBLE TASKS:
-      If the task does NOT fit PERISHABLE, HARD DEADLINE, or ROUTINE/HABIT categories
-      (this includes ALL general actionable tasks, errands, personal projects, selling/posting things,
-      one-off chores, organizing, fixing, researching) AND no specific time/date/frequency is mentioned:
-      - Set priority_uninferrable=true
-      - Set is_flexible=true (task can be done any day)
-      - Set urgency=null and reminder_interval=null
-      - The app will ask the user to pick a priority, which determines the reminder interval
-        (high=2hours, medium=4hours, low=daily)
+      PRIORITY UNINFERRABLE (ABSOLUTE LAST RESORT — almost never use):
+      Only set priority_uninferrable=true if the task is SO VAGUE that you genuinely cannot
+      determine any reasonable urgency level. This should be extremely rare — almost every task
+      has enough context to infer at least a medium priority. When in doubt, default to
+      urgency="medium", reminder_interval="4hours" rather than asking the user.
 
       If the task DOES fit a SMART INFERENCE category, or has a specific time/date:
       - Set priority_uninferrable=false
@@ -415,11 +415,10 @@ JSON:
       - Scheduled activities: "make lunch tomorrow", "pick up cake Tuesday"
 
       NEVER use needs_date_pick for:
-      - General actionable tasks (selling, posting, errands, chores, projects) → use priority_uninferrable
+      - General actionable tasks (selling, posting, errands, chores, projects) → infer urgency and set recurring reminder_interval
       - PERISHABLE/TIME-SENSITIVE tasks → recurring (reminder_interval set)
       - HARD DEADLINE tasks → recurring (reminder_interval set)
       - Routine/habit tasks → recurring (reminder_interval="daily")
-      - Tasks where priority_uninferrable is true → priority picker handles it
 
       If needs_date_pick=true:
       - Still provide reminder_interval as a fallback (used if user picks "any day")
