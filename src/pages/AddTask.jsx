@@ -351,6 +351,7 @@ JSON:
       - "every_other_day" → lower-importance ongoing things
 
       NEVER set target_time to the current moment unless user said "now" or "right now".
+      CRITICAL: NEVER infer, guess, or hallucinate a target_time. Only set target_time when the user EXPLICITLY states a time (e.g., "at 5pm", "at 3:30", "by noon"). If the user did not mention a specific time, set target_time=null. Do not use domain knowledge to guess times (e.g., don't assume daycare pickup is 5pm, don't assume work starts at 9am).
 
       SMART PRIORITY SUGGESTIONS:
       - Time-sensitive or deadline-based → "urgent" or "high"

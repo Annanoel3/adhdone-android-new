@@ -33,6 +33,7 @@ RULES:
 2. If time mentioned (like "at 4 pm", "tomorrow at 8"), extract it
 3. If "every X" mentioned, map to reminder_interval
 4. Keep title SHORT (2-8 words)
+5. CRITICAL: NEVER infer, guess, or hallucinate a reminder_time. Only set reminder_time when the user EXPLICITLY states a time (e.g., "at 5pm", "at 3:30", "by noon"). If the user did not mention a specific time, set reminder_time=null. Do not use domain knowledge to guess times (e.g., don't assume daycare pickup is 5pm, don't assume work starts at 9am).
 
 SMART INFERENCE (when user does NOT specify a time, frequency, or date):
 Infer the best reminder_interval and urgency from the NATURE of the task:
