@@ -119,6 +119,12 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, noNotifications: true });
     }
 
+    // For one-time reminders, the frontend handles all scheduling — don't cancel or reschedule
+    if (data.reminder_interval === 'once') {
+      console.log('[onTaskUpdate] One-time reminder — frontend handles scheduling, skipping');
+      return Response.json({ success: true, skipped: true, reason: 'one_time_reminder' });
+    }
+
     // CRITICAL: If task is completed or no longer active, cancel ALL notifications and wipe all scheduling fields
     if (data.status === 'completed' || data.status === 'snoozed') {
       console.log(`[onTaskUpdate] Task status is "${data.status}" — cancelling all notifications and clearing scheduling fields`);

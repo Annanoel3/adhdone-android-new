@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,6 +42,8 @@ export default function TaskCard({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(task.title);
   const [subtasksExpanded, setSubtasksExpanded] = useState(false);
+  const dateInputRef = useRef(null);
+  const timeInputRef = useRef(null);
 
   const specialMode = localStorage.getItem('special_mode') || 'normal';
 
@@ -523,9 +525,10 @@ export default function TaskCard({
                       <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Reminder Date:</label>
                       <input
                         type="date"
+                        ref={dateInputRef}
                         defaultValue={getCurrentReminderDate(task)}
                         onChange={(e) => {
-                          const currentTime = getCurrentReminderTime(task);
+                          const currentTime = timeInputRef.current?.value || '09:00';
                           handleReminderDateChange(e.target.value, currentTime);
                         }}
                         className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
@@ -535,9 +538,10 @@ export default function TaskCard({
                       <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Reminder Time:</label>
                       <input
                         type="time"
+                        ref={timeInputRef}
                         defaultValue={getCurrentReminderTime(task)}
                         onChange={(e) => {
-                          const currentDate = getCurrentReminderDate(task);
+                          const currentDate = dateInputRef.current?.value;
                           handleReminderDateChange(currentDate, e.target.value);
                         }}
                         className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
