@@ -76,13 +76,18 @@ export default function TaskCard({
     }
   };
 
-  const taskDate = new Date(task.created_date).toLocaleDateString('en-US', {
+  const dueDate = task.next_reminder ? new Date(task.next_reminder) : new Date(task.created_date);
+
+  const taskDate = dueDate.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
-    year: new Date(task.created_date).getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
+    year: dueDate.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined
   });
 
-  const isToday = new Date(task.created_date).toISOString().split('T')[0] === new Date().toISOString().split('T')[0];
+  const today = new Date();
+  const isToday = dueDate.getFullYear() === today.getFullYear() &&
+    dueDate.getMonth() === today.getMonth() &&
+    dueDate.getDate() === today.getDate();
 
   const formatReminderInterval = (interval) => {
     const formats = {
