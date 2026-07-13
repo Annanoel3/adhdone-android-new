@@ -1139,11 +1139,12 @@ Return JSON:
                           />
                           </div>
                           <Button
-                            onClick={() => handleUpdateReminderTime(reminderTimeRef.current, reminderDateRef.current)}
-                            disabled={!reminderDateRef.current || !reminderTimeRef.current}
+                            type="button"
+                            onClick={() => handleUpdateReminderTime(reminderTime, reminderDate)}
+                            disabled={!reminderDate || !reminderTime || isUpdating}
                             className="w-full"
                           >
-                            <Check className="w-4 h-4 mr-1" /> Save Date & Time
+                            {isUpdating ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Date & Time</>}
                           </Button>
                           </div>
 
@@ -1223,11 +1224,12 @@ Return JSON:
                         />
                       </div>
                       <Button
-                        onClick={() => handleUpdateReminderTime(reminderTimeRef.current, reminderDateRef.current)}
-                        disabled={!reminderDateRef.current || !reminderTimeRef.current}
+                        type="button"
+                        onClick={() => handleUpdateReminderTime(reminderTime, reminderDate)}
+                        disabled={!reminderDate || !reminderTime || isUpdating}
                         className="w-full"
                       >
-                        <Check className="w-4 h-4 mr-1" /> Save Date & Time
+                        {isUpdating ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Date & Time</>}
                       </Button>
                       <div className={`border-t pt-3 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
                         <button 
