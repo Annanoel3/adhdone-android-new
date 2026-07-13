@@ -391,9 +391,10 @@ JSON:
       "Amazon returns", "drop off donation"
       - These are RECURRING — remind until done. Do NOT ask for a date.
       - ALWAYS infer urgency and reminder_interval yourself based on the task's nature:
-        * Involves money, selling valuables, important errands → urgency="high", reminder_interval="2hours"
-        * Typical tasks, moderate importance → urgency="medium", reminder_interval="4hours"
-        * Low-stakes, no rush → urgency="low", reminder_interval="daily"
+        * Real consequences if delayed (deadline today, someone waiting, time-sensitive) → urgency="high", reminder_interval="2hours"
+        * Important but flexible — no deadline pressure (selling items, errands, projects, organizing) → urgency="medium", reminder_interval="4hours"
+        * Low-stakes, nice-to-have, no rush → urgency="low", reminder_interval="daily"
+        * When in doubt, default to medium.
       - Set priority_uninferrable=false, is_flexible=true (task can be done any day)
 
       PRIORITY UNINFERRABLE (ABSOLUTE LAST RESORT — almost never use):
