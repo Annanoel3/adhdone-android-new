@@ -202,30 +202,34 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   }, [user, authCheckComplete]);
 
   useEffect(() => {
+    if (!user?.email) return;
+
     const now = new Date();
     const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const currentHour = now.getHours();
 
-    let key = null;
     let title = null;
-
     if (currentHour >= 8 && currentHour < 12) {
-      key = `energy_checkin_morning_${today}`;
       title = 'How are you feeling about the day ahead?';
     } else if (currentHour >= 12 && currentHour < 19) {
-      key = `energy_checkin_afternoon_${today}`;
       title = 'How are you feeling about the rest of the day?';
     }
 
-    if (key && !localStorage.getItem(key)) {
-      localStorage.setItem(key, '1');
-      const timer = setTimeout(() => {
-        setEnergyCheckInTitle(title);
-        setShowEnergyCheckIn(true);
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, []);
+    if (!title) return;
+
+    // Once per day — check localStorage (fast/sync) AND user profile (survives app reinstalls/data clears)
+    const dailyKey = `energy_checkin_${today}`;
+    if (localStorage.getItem(dailyKey) === '1' || user.last_energy_checkin_date === today) return;
+
+    localStorage.setItem(dailyKey, '1');
+    base44.auth.updateMe({ last_energy_checkin_date: today }).catch(() => {});
+
+    const timer = setTimeout(() => {
+      setEnergyCheckInTitle(title);
+      setShowEnergyCheckIn(true);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [user]);
 
   // Android back button handler
   useEffect(() => {

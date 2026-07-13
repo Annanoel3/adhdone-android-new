@@ -23,6 +23,11 @@
       "type": "boolean",
       "default": false,
       "description": "Whether the user has unlocked seasonal themes via the easter egg"
+    },
+    "last_energy_checkin_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date of last energy check-in (YYYY-MM-DD) \u2014 prevents showing the modal more than once per day"
     }
   },
   "name": "User"
