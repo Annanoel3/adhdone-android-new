@@ -1108,12 +1108,9 @@ Return JSON:
                           onChange={(e) => {
                             setReminderDate(e.target.value);
                             reminderDateRef.current = e.target.value;
-                            if (!isInitializingRef.current && e.target.value) {
-                              if (!reminderTimeRef.current) {
-                                setReminderTime('09:00');
-                                reminderTimeRef.current = '09:00';
-                              }
-                              if (reminderTimeRef.current) handleUpdateReminderTime(reminderTimeRef.current, e.target.value);
+                            if (!isInitializingRef.current && e.target.value && !reminderTimeRef.current) {
+                              setReminderTime('09:00');
+                              reminderTimeRef.current = '09:00';
                             }
                           }}
                           className={`w-full border rounded px-3 py-2 ${
@@ -1133,7 +1130,6 @@ Return JSON:
                           onChange={(e) => {
                             setReminderTime(e.target.value);
                             reminderTimeRef.current = e.target.value;
-                            if (!isInitializingRef.current && reminderDateRef.current && e.target.value) handleUpdateReminderTime(e.target.value, reminderDateRef.current);
                           }}
                           className={`w-full border rounded px-3 py-2 ${
                             theme === 'dark'
@@ -1141,8 +1137,15 @@ Return JSON:
                               : 'bg-white border-gray-300 text-gray-900'
                           }`}
                           />
-                                          </div>
-                                          </div>
+                          </div>
+                          <Button
+                            onClick={() => handleUpdateReminderTime(reminderTimeRef.current, reminderDateRef.current)}
+                            disabled={!reminderDateRef.current || !reminderTimeRef.current}
+                            className="w-full"
+                          >
+                            <Check className="w-4 h-4 mr-1" /> Save Date & Time
+                          </Button>
+                          </div>
 
                                           {/* Interval options */}
                       <div className="space-y-1">
@@ -1193,7 +1196,6 @@ Return JSON:
                          onChange={(e) => {
                            setReminderDate(e.target.value);
                            reminderDateRef.current = e.target.value;
-                           if (!isInitializingRef.current && e.target.value && reminderTimeRef.current) handleUpdateReminderTime(reminderTimeRef.current, e.target.value);
                          }}
                          className={`w-full border rounded px-3 py-2 ${
                            theme === 'dark'
@@ -1212,7 +1214,6 @@ Return JSON:
                          onChange={(e) => {
                            setReminderTime(e.target.value);
                            reminderTimeRef.current = e.target.value;
-                           if (!isInitializingRef.current && reminderDateRef.current && e.target.value) handleUpdateReminderTime(e.target.value, reminderDateRef.current);
                          }}
                          className={`w-full border rounded px-3 py-2 ${
                            theme === 'dark'
@@ -1221,6 +1222,13 @@ Return JSON:
                          }`}
                         />
                       </div>
+                      <Button
+                        onClick={() => handleUpdateReminderTime(reminderTimeRef.current, reminderDateRef.current)}
+                        disabled={!reminderDateRef.current || !reminderTimeRef.current}
+                        className="w-full"
+                      >
+                        <Check className="w-4 h-4 mr-1" /> Save Date & Time
+                      </Button>
                       <div className={`border-t pt-3 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
                         <button 
                           onClick={() => handleUpdateField('reminder_interval', 'daily')} 
