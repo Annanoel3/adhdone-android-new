@@ -617,11 +617,11 @@ Return JSON:
           });
           newNotificationIds = notificationIds || [];
 
-          Task.update(task.id, {
+          await Task.update(task.id, {
             next_reminder: nextReminder.toISOString(),
             onesignal_notification_ids: newNotificationIds,
             ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
-          }).catch(err => console.error("Error updating task:", err));
+          });
         } else {
           // One-time reminder (same as creation)
           const notificationId = await scheduleReminder({
@@ -644,10 +644,10 @@ Return JSON:
           });
           if (notificationId) newNotificationIds = [notificationId];
 
-          Task.update(task.id, {
+          await Task.update(task.id, {
             next_reminder: nextReminder.toISOString(),
             onesignal_notification_ids: newNotificationIds
-          }).catch(err => console.error("Error updating task:", err));
+          });
         }
       } catch (error) {
         console.error("Failed to reschedule reminder:", error);
