@@ -13,15 +13,28 @@ export default function DatePickerDialog({ isOpen, onClose, onSelect, onAnyDay, 
 
   useEffect(() => {
     if (isOpen) {
+      const now = new Date();
+      const defaultTime = '09:00';
+      let baseDate;
+
       if (initialDate) {
-        setDate(initialDate);
+        baseDate = new Date(initialDate + 'T00:00:00');
       } else {
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const td = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth()+1).padStart(2,'0')}-${String(tomorrow.getDate()).padStart(2,'0')}`;
-        setDate(td);
+        baseDate = new Date(now);
+        baseDate.setDate(baseDate.getDate() + 1); // tomorrow
       }
-      setTime('09:00');
+
+      // If 9:00 AM on the default date has already passed, roll forward to tomorrow
+      const [dh, dm] = defaultTime.split(':').map(n => parseInt(n, 10));
+      const testDateTime = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), dh, dm, 0, 0);
+      if (testDateTime <= now) {
+        baseDate = new Date(now);
+        baseDate.setDate(baseDate.getDate() + 1);
+      }
+
+      const td = `${baseDate.getFullYear()}-${String(baseDate.getMonth()+1).padStart(2,'0')}-${String(baseDate.getDate()).padStart(2,'0')}`;
+      setDate(td);
+      setTime(defaultTime);
     }
   }, [isOpen, initialDate]);
 

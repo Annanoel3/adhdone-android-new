@@ -40,6 +40,9 @@ Infer the best reminder_interval and urgency from the NATURE of the task:
 - PERISHABLE / TIME-SENSITIVE (food, laundry, meds, cooking, pets/plants):
   e.g. "move food to freezer", "move laundry", "take meds", "feed the cat"
   → reminder_interval="2hours", urgency="high"
+  → CRITICAL: These are RECURRING, not one-time. Set needs_date_pick=false.
+    They must start recurring reminders immediately — never show the date picker.
+    "move food to the freezer" → reminder_interval="2hours", urgency="high", needs_date_pick=false
 
 - HARD DEADLINE / IMPORTANT OBLIGATION (financial, legal, work, appointments):
   e.g. "pay rent", "submit form", "call doctor", "send report"
@@ -70,6 +73,9 @@ If the task is clearly a one-time/single-day thing but no specific date or time 
 - Still provide reminder_interval as a fallback (used if user picks "any day")
 - Do NOT set reminder_time or specific_date — let the user pick
 - Do NOT set needs_date_pick=true if priority_uninferrable is true
+- Do NOT set needs_date_pick=true for PERISHABLE/TIME-SENSITIVE tasks (food, meds, laundry).
+  Those are recurring and must start reminding immediately.
+  Only use needs_date_pick for genuine one-time future events: appointments, flights, scheduled meetings.
 
 Return JSON:
 {

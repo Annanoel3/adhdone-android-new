@@ -368,6 +368,9 @@ JSON:
       - Cooking: "check on the oven", "stir the pot", "flip the food"
       - Pets/plants: "feed the cat", "water the plants"
       - → reminder_interval="2hours", urgency="high"
+      - CRITICAL: These are RECURRING tasks, NOT one-time. Set needs_date_pick=false.
+        They must start recurring reminders immediately — never show the date picker for these.
+        "move food to the freezer" → reminder_interval="2hours", urgency="high", needs_date_pick=false
 
       HARD DEADLINE / IMPORTANT OBLIGATION (serious consequences if missed):
       - Financial: "pay rent", "pay electric bill", "transfer money", "pay credit card"
@@ -402,13 +405,17 @@ JSON:
       - Still provide reminder_interval as a fallback (used if user picks "any day")
       - Do NOT set target_date or target_time — let the user pick
       - Do NOT set needs_date_pick=true if priority_uninferrable is true (priority picker handles it)
+      - Do NOT set needs_date_pick=true for PERISHABLE/TIME-SENSITIVE or HARD DEADLINE tasks.
+        Those are recurring (reminder_interval set) and must start reminding immediately.
+        Only use needs_date_pick for genuine one-time future events: appointments, flights,
+        scheduled meetings, "make lunch tomorrow", etc.
 
       Extract:
       1. Clean title (strip "remind me to/I need to/in X minutes" — keep inner action)
       2. Urgency: ALWAYS suggest (low/medium/high/urgent)
       3. Energy: ALWAYS suggest (low/medium/high)
       4. target_date: for "in X" (TODAY), "tomorrow", or specific dates — format YYYY-MM-DD
-      5. target_time: for "in X" (calculate), "at X" (specific), or "tomorrow" with no time → "09:00"
+      5. target_time: for "in X" (calculate), "at X" (specific), or null if no time mentioned
       6. reminder_interval: ALWAYS provide (10min/20min/30min/1hour/2hours/4hours/daily/every_other_day/once)
 
       JSON:
