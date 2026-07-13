@@ -176,7 +176,18 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
     if (meetLink) descParts.push(`🎥 Meeting link: ${meetLink}`);
 
     const richDescription = descParts.join('\n\n');
-    const nextReminderDate = startRaw ? new Date(startRaw) : new Date(Date.now() + 24 * 60 * 60 * 1000);
+    // For all-day events, Google sends a plain date string (e.g. "2027-07-20").
+    // new Date("2027-07-20") parses as UTC midnight, which shifts to the prior day in US timezones.
+    // Parse date-only strings as local time to preserve the correct calendar day.
+    let nextReminderDate;
+    if (startRaw && /^\d{4}-\d{2}-\d{2}$/.test(startRaw)) {
+      const [y, m, d] = startRaw.split('-').map(n => parseInt(n, 10));
+      nextReminderDate = new Date(y, m - 1, d, 9, 0, 0, 0);
+    } else if (startRaw) {
+      nextReminderDate = new Date(startRaw);
+    } else {
+      nextReminderDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    }
 
     let taskRecord;
     if (isBirthday) {

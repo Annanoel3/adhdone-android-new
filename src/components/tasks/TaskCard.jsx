@@ -373,6 +373,7 @@ export default function TaskCard({
     >
       <CardContent className="p-4">
         <div className="flex flex-col gap-3">
+          {(!task.reminder_interval || task.reminder_interval === 'once') && (
           <div className="flex flex-wrap items-center gap-2 min-w-0">
             <Badge
               variant="outline"
@@ -386,6 +387,7 @@ export default function TaskCard({
               {isToday ? 'Today' : taskDate}
             </Badge>
           </div>
+          )}
 
           {isEditingTitle ? (
             <Input

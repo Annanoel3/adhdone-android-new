@@ -124,8 +124,8 @@ Return JSON:
         const [hours, minutes] = taskData.reminder_time.split(':');
         
         if (taskData.specific_date) {
-          nextReminderTime = new Date(taskData.specific_date);
-          nextReminderTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          const [sy, sm, sd] = taskData.specific_date.split('-').map(n => parseInt(n, 10));
+          nextReminderTime = new Date(sy, sm - 1, sd, parseInt(hours), parseInt(minutes), 0, 0);
         } else {
           nextReminderTime = new Date();
           nextReminderTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
