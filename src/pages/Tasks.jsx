@@ -18,6 +18,8 @@ import TaskEditModal from "../components/tasks/TaskEditModal";
 import HelpfulRemindersSuggestions from "../components/tasks/HelpfulRemindersSuggestions";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
+import TaskSortDropdown from "../components/tasks/TaskSortDropdown";
 
 export default function Tasks() {
   const navigate = useNavigate();
@@ -34,7 +36,7 @@ export default function Tasks() {
   const [activeTasks, setActiveTasks] = useState([]);
   const [completedThisWeek, setCompletedThisWeek] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
-  const [sortBy, setSortBy] = useState('created_date');
+  const { sortBy } = useTaskSort();
 
   useEffect(() => {
     loadTasks();
@@ -83,26 +85,8 @@ export default function Tasks() {
       filtered = filtered.filter(t => t.urgency === urgencyFilter);
     }
 
-    // Sort tasks
-    filtered.sort((a, b) => {
-      switch (sortBy) {
-        case 'priority':
-          const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
-          return (priorityOrder[a.urgency] || 2) - (priorityOrder[b.urgency] || 2);
-        case 'due_date':
-          const aDate = a.next_reminder ? new Date(a.next_reminder).getTime() : Infinity;
-          const bDate = b.next_reminder ? new Date(b.next_reminder).getTime() : Infinity;
-          return aDate - bDate;
-        case 'energy':
-          const energyOrder = { low: 0, medium: 1, high: 2 };
-          return (energyOrder[a.energy_required] || 1) - (energyOrder[b.energy_required] || 1);
-        case 'created_date':
-        default:
-          return new Date(b.created_date).getTime() - new Date(a.created_date).getTime();
-      }
-    });
-
-    setFilteredTasks(filtered);
+    // Sort tasks using the shared sort preference
+    setFilteredTasks(sortTasks(filtered, sortBy));
   }, [allTasks, statusFilter, urgencyFilter, sortBy]);
 
   useEffect(() => {
@@ -294,17 +278,7 @@ export default function Tasks() {
             </SelectContent>
           </Select>
 
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="created_date">Newest First</SelectItem>
-              <SelectItem value="priority">By Priority</SelectItem>
-              <SelectItem value="due_date">By Due Date</SelectItem>
-              <SelectItem value="energy">By Energy</SelectItem>
-            </SelectContent>
-          </Select>
+          <TaskSortDropdown />
         </div>
 
         <div className="grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

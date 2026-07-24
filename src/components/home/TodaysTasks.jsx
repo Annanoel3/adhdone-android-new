@@ -16,11 +16,17 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
+import TaskSortDropdown from "../tasks/TaskSortDropdown";
 
 export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails }) {
   const navigate = useNavigate();
-  // Filter out subtasks - only show parent tasks
-  const activeTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id).slice(0, 5);
+  const { sortBy } = useTaskSort();
+  // Filter out subtasks, sort by the shared preference, then take the top 5.
+  const activeTasks = sortTasks(
+    tasks.filter(t => t.status === 'active' && !t.parent_task_id),
+    sortBy
+  ).slice(0, 5);
   const [celebratingTaskId, setCelebratingTaskId] = React.useState(null);
   const [expandedTasks, setExpandedTasks] = React.useState({});
   const specialMode = localStorage.getItem('special_mode') || 'normal';
@@ -380,14 +386,17 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
             <Clock className="w-5 h-5" />
             Today's Focus
           </CardTitle>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => navigate(createPageUrl("Tasks"))}
-            className={`text-sm ${theme === 'dark' ? 'text-gray-300 hover:text-gray-100' : ''}`}
-          >
-            View All
-          </Button>
+          <div className="flex items-center gap-2">
+            <TaskSortDropdown />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(createPageUrl("Tasks"))}
+              className={`text-sm ${theme === 'dark' ? 'text-gray-300 hover:text-gray-100' : ''}`}
+            >
+              View All
+            </Button>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="p-6">
