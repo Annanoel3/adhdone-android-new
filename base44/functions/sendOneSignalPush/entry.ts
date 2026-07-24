@@ -37,27 +37,27 @@ Deno.serve(async (req) => {
         console.log('[sendOneSignalPush] 🔍 Fetching player IDs for user:', userEmail);
         const targetUsers = await base44.asServiceRole.entities.User.filter({ email: userEmail });
         const targetUser = targetUsers[0];
-        
-        if (!targetUser || !targetUser.onesignal_player_ids || targetUser.onesignal_player_ids.length === 0) {
-            console.error('[sendOneSignalPush] ❌ No player IDs found for user:', userEmail);
-            return Response.json({
-                success: false,
-                error: 'User has no registered devices'
-            });
-        }
+        const playerIds = targetUser?.onesignal_player_ids || [];
 
-        console.log('[sendOneSignalPush] ✅ Found', targetUser.onesignal_player_ids.length, 'device(s) for user:', userEmail);
-
-        // Send to specific player IDs
         const payload = {
             app_id: appId.trim(),
-            include_player_ids: targetUser.onesignal_player_ids,
             headings: { en: title },
             contents: { en: message },
             data: data || {}
         };
 
-        console.log('[sendOneSignalPush] 📤 Sending notification - Title:', title, '| Message:', message, '| Player IDs:', targetUser.onesignal_player_ids);
+        if (playerIds.length > 0) {
+            // Send to specific player IDs (preferred — per-device)
+            payload.include_player_ids = playerIds;
+            console.log('[sendOneSignalPush] ✅ Found', playerIds.length, 'device(s) for user:', userEmail);
+            console.log('[sendOneSignalPush] 📤 Sending by player IDs - Title:', title, '| Player IDs:', playerIds);
+        } else {
+            // Fallback: deliver via the external user ID (email) that the device
+            // was registered with through OneSignal.login(). This covers users
+            // whose player ID hasn't been synced to our DB yet.
+            payload.include_external_user_ids = [userEmail];
+            console.log('[sendOneSignalPush] ⚠️ No stored player IDs — sending by external user ID:', userEmail);
+        }
 
         const response = await fetch("https://onesignal.com/api/v1/notifications", {
             method: "POST",

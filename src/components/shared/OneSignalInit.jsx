@@ -1,5 +1,18 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { base44 } from '@/api/base44Client';
+
+// Persist the OneSignal subscription/player ID to the user record so the
+// backend can deliver pushes by include_player_ids (per-device, reliable).
+async function savePlayerId(playerId) {
+  if (!playerId) return;
+  try {
+    await base44.functions.invoke('saveMyPlayerId', { playerId });
+    console.log('[OneSignal] ✅ Saved player ID:', playerId);
+  } catch (err) {
+    console.error('[OneSignal] Failed to save player ID:', err);
+  }
+}
 
 // Helper function to detect if running in Capacitor mobile app
 function isRunningInCapacitor() {
@@ -75,7 +88,19 @@ export default function OneSignalInit({ user }) {
         if (externalId) {
           console.log('[OneSignal] ✅ Calling NotifyBridge.login() with:', externalId);
           await NotifyBridge.requestPermission();
-          await NotifyBridge.login({ externalId: externalId });
+          const loginResult = await NotifyBridge.login({ externalId: externalId });
+          // Native plugin returns the player ID synchronously — save it.
+          if (loginResult?.playerId) {
+            await savePlayerId(loginResult.playerId);
+          } else {
+            // Fallback: fetch it explicitly if login didn't return it.
+            try {
+              const idResult = await NotifyBridge.getPlayerId?.();
+              if (idResult?.playerId) await savePlayerId(idResult.playerId);
+            } catch (e) {
+              console.warn('[OneSignal] Could not retrieve native player ID:', e);
+            }
+          }
         } else {
           console.log('[OneSignal] Calling NotifyBridge.logout()');
           await NotifyBridge.logout();
@@ -95,6 +120,15 @@ export default function OneSignalInit({ user }) {
 
             console.log('[OneSignal] ✅ Web SDK using login() with:', externalId);
             window.OneSignal.login(externalId);
+
+            // Persist the push subscription ID to the backend so pushes
+            // can be delivered by include_player_ids (per-device).
+            const syncWebSubscriptionId = () => {
+              const subId = window.OneSignal.User?.PushSubscription?.id;
+              if (subId) savePlayerId(subId);
+            };
+            syncWebSubscriptionId();
+            window.OneSignal.User?.PushSubscription?.addEventListener?.('change', syncWebSubscriptionId);
 
             // Handle notification clicks in web
             window.OneSignal.Notifications.addEventListener('click', (event) => {

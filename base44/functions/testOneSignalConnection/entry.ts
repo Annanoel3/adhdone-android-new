@@ -12,16 +12,9 @@ Deno.serve(async (req) => {
             }, { status: 401 });
         }
 
-        // Check if user has player ID saved
-        if (!user.onesignal_player_id) {
-            return Response.json({
-                success: false,
-                error: 'No device registered yet. Please wait a few seconds and try again.',
-                hint: 'The app needs to save your device ID first.'
-            }, { status: 200 });
-        }
-
-        // Call sendOneSignalPush with current user's email
+        // Delegate to sendOneSignalPush, which delivers by stored player IDs if
+        // present, or falls back to the OneSignal external user ID (email) that
+        // the device was registered with. No need to gate on a local player ID.
         const response = await base44.functions.invoke('sendOneSignalPush', {
             userEmail: user.email,
             title: "Test Notification 🎉",
