@@ -15,6 +15,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   CheckCircle2,
   Clock,
+  CalendarClock,
   Zap,
   ListChecks,
   Sparkles,
@@ -667,6 +668,22 @@ Return JSON:
     }
   };
 
+  const handleDueDateChange = async (newDate) => {
+    if (!task) return;
+    let dueDateValue = null;
+    if (newDate) {
+      const [year, month, day] = newDate.split('-').map(n => parseInt(n, 10));
+      const existing = task.due_date ? new Date(task.due_date) : null;
+      const hours = existing ? existing.getHours() : 17;
+      const minutes = existing ? existing.getMinutes() : 0;
+      dueDateValue = new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString();
+    }
+    Task.update(task.id, { due_date: dueDateValue }).catch(error => {
+      console.error("Error updating due date:", error);
+    });
+    onUpdate({ ...task, due_date: dueDateValue });
+  };
+
   const handleComplete = async () => {
     if (!task) return;
 
@@ -1164,6 +1181,65 @@ Return JSON:
                     </div>
                   </PopoverContent>
                 </Popover>
+              )}
+
+              {/* Due date option for recurring (interval) reminders */}
+              {task.reminder_interval && task.reminder_interval !== 'once' && (
+                task.due_date ? (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
+                        new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
+                          ? theme === 'dark' ? 'bg-red-900 text-red-300' : 'bg-red-100 text-red-700'
+                          : theme === 'dark' ? 'bg-amber-900 text-amber-300' : 'bg-amber-100 text-amber-700'
+                      }`}>
+                        <CalendarClock className="w-3 h-3" />
+                        {new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
+                          ? 'Overdue'
+                          : `Due ${formatReminderDate(task.due_date)}`}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className={`w-56 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200'}`}>
+                      <div className="space-y-2">
+                        <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Due Date:</label>
+                        <input
+                          type="date"
+                          defaultValue={task.due_date ? task.due_date.split('T')[0] : ''}
+                          onChange={(e) => handleDueDateChange(e.target.value)}
+                          className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
+                        />
+                        <button
+                          onClick={() => handleDueDateChange(null)}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 rounded text-red-600 font-medium"
+                        >
+                          Remove due date
+                        </button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button className="cursor-pointer hover:opacity-80 transition-opacity border border-dashed border-gray-300 px-3 py-1 rounded-full text-sm font-medium text-gray-500 bg-white flex items-center gap-1">
+                        <CalendarClock className="w-3 h-3" />
+                        Add Due Date
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className={`w-56 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200'}`}>
+                      <div className="space-y-2">
+                        <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Due Date:</label>
+                        <input
+                          type="date"
+                          onChange={(e) => { if (e.target.value) handleDueDateChange(e.target.value); }}
+                          className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
+                        />
+                        <p className="text-xs text-gray-500">
+                          Reminders continue until this date, then switch to overdue reminders.
+                        </p>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )
               )}
 
               {/* Show date badge for one-time reminders - FIXED: Show even if next_reminder is null */}
