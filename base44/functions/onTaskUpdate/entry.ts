@@ -148,7 +148,7 @@ Deno.serve(async (req) => {
     }
 
     // Only reschedule if title or reminder_interval changed (not cron-driven next_reminder bumps)
-    if (old_data.title !== data.title || old_data.reminder_interval !== data.reminder_interval || old_data.next_reminder !== data.next_reminder) {
+    if (old_data.title !== data.title || old_data.reminder_interval !== data.reminder_interval || old_data.next_reminder !== data.next_reminder || old_data.due_date !== data.due_date) {
       console.log('[onTaskUpdate] Task details changed, rescheduling notifications');
       
       // Get the task to get next_reminder and other details
@@ -181,13 +181,20 @@ Deno.serve(async (req) => {
         const newNotificationIds = [];
         let scheduleTime = nextReminderTime;
         
+        const dueTime = currentTask.due_date ? new Date(currentTask.due_date).getTime() : null;
+
         for (let i = 0; i < 10; i++) {
           // Only schedule if it's in the future
           if (scheduleTime > now) {
+            const isOverdue = dueTime && scheduleTime >= dueTime;
+            const title = isOverdue ? '⚠️ Overdue Task' : 'Task Reminder 📋';
+            const body = isOverdue
+              ? `${currentTask.title} is overdue!\n\nTap to mark as complete!`
+              : `${currentTask.title || 'You have a task due'}\n\nTap to mark as complete!`;
             const notificationId = await scheduleOneSignalNotification(
               currentTask.notification_recipient_email || user.email,
-              'Task Reminder 📋',
-              currentTask.title || 'You have a task due',
+              title,
+              body,
               new Date(scheduleTime).toISOString(),
               currentTask.id
             );

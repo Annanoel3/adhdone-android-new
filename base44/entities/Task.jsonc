@@ -35,6 +35,11 @@
       "format": "date-time",
       "description": "When to send next reminder"
     },
+    "due_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Optional deadline for interval-reminder tasks. Interval reminders continue until this date, then switch to overdue reminders until the task is completed."
+    },
     "last_scheduled_until": {
       "type": "string",
       "format": "date-time",

@@ -119,13 +119,16 @@ Deno.serve(async (req) => {
         const email = task.notification_recipient_email;
         const notificationIds = [];
 
+        const dueTime = task.due_date ? new Date(task.due_date).getTime() : null;
+
         for (let i = 0; i < BATCH_SIZE; i++) {
           const sendAt = new Date(batchStart.getTime() + interval * i);
+          const isOverdue = dueTime && sendAt.getTime() >= dueTime;
           try {
             const res = await base44.asServiceRole.functions.invoke('schedulePush', {
               toUserExternalId: email,
-              title: 'Task Reminder 📋',
-              body: `${task.title}\n\nTap to mark as complete!`,
+              title: isOverdue ? '⚠️ Overdue Task' : 'Task Reminder 📋',
+              body: isOverdue ? `${task.title} is overdue!\n\nTap to mark as complete!` : `${task.title}\n\nTap to mark as complete!`,
               sendAtISO: sendAt.toISOString(),
               data: {
                 screen: '/TaskNotification',

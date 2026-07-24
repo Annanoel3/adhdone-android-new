@@ -20,11 +20,15 @@ export function sortTasks(tasks, sortBy) {
         return (priorityOrder[a.urgency] ?? 2) - (priorityOrder[b.urgency] ?? 2);
       }
       case "due_date": {
-        // Recurring tasks update next_reminder when they recreate, so this
-        // keeps them sorted by their freshly assigned date.
-        const aDate = a.next_reminder ? new Date(a.next_reminder).getTime() : Infinity;
-        const bDate = b.next_reminder ? new Date(b.next_reminder).getTime() : Infinity;
-        return aDate - bDate;
+        // Sort by due_date first (if set), then next_reminder. Tasks with no
+        // date at all are treated as "due now" so they sort to the top, and
+        // far-future dated items (e.g. a yearly birthday) fall to the bottom.
+        const dueSortKey = (t) => {
+          if (t.due_date) return new Date(t.due_date).getTime();
+          if (t.next_reminder) return new Date(t.next_reminder).getTime();
+          return Date.now();
+        };
+        return dueSortKey(a) - dueSortKey(b);
       }
       case "energy": {
         const energyOrder = { low: 0, medium: 1, high: 2 };
