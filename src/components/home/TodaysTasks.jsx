@@ -1,6 +1,6 @@
 import React, { useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, Clock, Zap, Pencil, Calendar, ListChecks, RefreshCw } from "lucide-react";
+import { CheckCircle2, Clock, Zap, Pencil, Calendar, CalendarClock, ListChecks, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
@@ -288,6 +288,19 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
     window.location.reload();
   };
 
+  const handleDueDateChange = async (task, newDate) => {
+    let dueDateValue = null;
+    if (newDate) {
+      const [year, month, day] = newDate.split('-').map(n => parseInt(n, 10));
+      const existing = task.due_date ? new Date(task.due_date) : null;
+      const hours = existing ? existing.getHours() : 17;
+      const minutes = existing ? existing.getMinutes() : 0;
+      dueDateValue = new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString();
+    }
+    await base44.entities.Task.update(task.id, { due_date: dueDateValue });
+    window.location.reload();
+  };
+
   const getCurrentReminderTime = (task) => {
     if (!task.next_reminder) return '';
     const date = new Date(task.next_reminder);
@@ -507,6 +520,75 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
                             </div>
                           </PopoverContent>
                         </Popover>
+                      )}
+
+                      {/* Due date option for recurring (interval) reminders */}
+                      {task.reminder_interval && task.reminder_interval !== 'once' && (
+                        task.due_date ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button 
+                                onClick={(e) => e.stopPropagation()}
+                                className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
+                                  new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
+                                    ? theme === 'dark'
+                                      ? 'bg-red-900 text-red-300 border-red-700 hover:bg-red-800'
+                                      : 'bg-red-50 text-red-700 border-red-300 hover:bg-red-100'
+                                    : theme === 'dark'
+                                      ? 'bg-amber-900 text-amber-300 border-amber-700 hover:bg-amber-800'
+                                      : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'
+                                }`}
+                              >
+                                <CalendarClock className="w-3 h-3" />
+                                {new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
+                                  ? 'Overdue'
+                                  : `Due ${formatReminderDate(task.due_date)}`}
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`} onClick={(e) => e.stopPropagation()}>
+                              <div className="space-y-2 p-1">
+                                <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : ''}`}>Due Date:</label>
+                                <input
+                                  type="date"
+                                  defaultValue={task.due_date ? task.due_date.split('T')[0] : ''}
+                                  onChange={(e) => handleDueDateChange(task, e.target.value)}
+                                  className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : ''}`}
+                                />
+                                <button
+                                  onClick={() => handleDueDateChange(task, null)}
+                                  className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-gray-700 text-red-400' : 'hover:bg-red-50 text-red-600'}`}
+                                >
+                                  Remove due date
+                                </button>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button 
+                                onClick={(e) => e.stopPropagation()}
+                                className="flex items-center gap-1 border border-dashed border-gray-300 px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors text-gray-500"
+                              >
+                                <CalendarClock className="w-3 h-3" />
+                                Add Due Date
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`} onClick={(e) => e.stopPropagation()}>
+                              <div className="space-y-2 p-1">
+                                <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : ''}`}>Due Date:</label>
+                                <input
+                                  type="date"
+                                  onChange={(e) => { if (e.target.value) handleDueDateChange(task, e.target.value); }}
+                                  className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : ''}`}
+                                />
+                                <p className="text-xs text-gray-500">
+                                  Reminders continue until this date, then switch to overdue reminders.
+                                </p>
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        )
                       )}
 
                       {/* Show date badge for one-time reminders with a date set */}
