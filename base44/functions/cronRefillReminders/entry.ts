@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { getReminderContent } from '../../shared/reminderTitle.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 const BATCH_SIZE = 10;
@@ -119,17 +120,16 @@ Deno.serve(async (req) => {
         const email = task.notification_recipient_email;
         const notificationIds = [];
 
-        const dueTime = task.due_date ? new Date(task.due_date).getTime() : null;
-
         for (let i = 0; i < BATCH_SIZE; i++) {
           const sendAt = new Date(batchStart.getTime() + interval * i);
-          const isOverdue = dueTime && sendAt.getTime() >= dueTime;
+          const sendAtISO = sendAt.toISOString();
+          const { title, body } = getReminderContent(task.title, task.due_date, sendAtISO);
           try {
             const res = await base44.asServiceRole.functions.invoke('schedulePush', {
               toUserExternalId: email,
-              title: isOverdue ? '⚠️ Overdue Task' : 'Task Reminder 📋',
-              body: isOverdue ? `${task.title} is overdue!\n\nTap to mark as complete!` : `${task.title}\n\nTap to mark as complete!`,
-              sendAtISO: sendAt.toISOString(),
+              title,
+              body,
+              sendAtISO,
               data: {
                 screen: '/TaskNotification',
                 taskId: task.id,

@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { getReminderContent } from '../../shared/reminderTitle.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID');
 const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY');
@@ -181,21 +182,16 @@ Deno.serve(async (req) => {
         const newNotificationIds = [];
         let scheduleTime = nextReminderTime;
         
-        const dueTime = currentTask.due_date ? new Date(currentTask.due_date).getTime() : null;
-
         for (let i = 0; i < 10; i++) {
           // Only schedule if it's in the future
           if (scheduleTime > now) {
-            const isOverdue = dueTime && scheduleTime >= dueTime;
-            const title = isOverdue ? '⚠️ Overdue Task' : 'Task Reminder 📋';
-            const body = isOverdue
-              ? `${currentTask.title} is overdue!\n\nTap to mark as complete!`
-              : `${currentTask.title || 'You have a task due'}\n\nTap to mark as complete!`;
+            const sendAtISO = new Date(scheduleTime).toISOString();
+            const { title, body } = getReminderContent(currentTask.title, currentTask.due_date, sendAtISO);
             const notificationId = await scheduleOneSignalNotification(
               currentTask.notification_recipient_email || user.email,
               title,
               body,
-              new Date(scheduleTime).toISOString(),
+              sendAtISO,
               currentTask.id
             );
 
