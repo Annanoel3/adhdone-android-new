@@ -6,6 +6,7 @@ import DailyTipCard from "../components/home/DailyTipCard";
 import QuickActions from "../components/home/QuickActions";
 import TodaysTasks from "../components/home/TodaysTasks";
 import EndOfDayReview from "../components/home/EndOfDayReview";
+import UpcomingBirthdayCard from "../components/home/UpcomingBirthdayCard";
 import MotivationCoach from "../components/home/MotivationCoach";
 import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import MomentumCelebration from "../components/shared/MomentumCelebration";
@@ -181,7 +182,15 @@ export default function Home() {
           <WelcomeCard userName={user?.full_name} theme={theme} specialMode={specialMode} />
           
           <QuickActions theme={theme} specialMode={specialMode} />
-          
+
+          <UpcomingBirthdayCard
+            tasks={tasks}
+            user={user}
+            theme={theme}
+            specialMode={specialMode}
+            onRefresh={loadTasks}
+          />
+
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2">
               <TodaysTasks 

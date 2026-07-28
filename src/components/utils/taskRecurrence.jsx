@@ -44,9 +44,23 @@ export async function createNextRecurrence(task) {
     recurrence_pattern: task.recurrence_pattern,
     notification_recipient_email: task.notification_recipient_email || null,
     birthday_person: task.birthday_person || null,
+    birthday_remind_week_before: task.birthday_remind_week_before,
+    birthday_remind_day_before: task.birthday_remind_day_before,
+    birthday_remind_day_of: task.birthday_remind_day_of,
     onesignal_notification_ids: [],
     reminder_count: 0
   });
+
+  // For yearly birthday reminders, schedule the 🎂 reminders (1 week before,
+  // 1 day before, day of) on the new occurrence so they keep firing every year.
+  if (task.birthday_person) {
+    try {
+      const { scheduleBirthdayReminders } = await import('./birthdayScheduler');
+      await scheduleBirthdayReminders(newTask);
+    } catch (e) {
+      console.error('Failed to schedule birthday reminders for recurrence', e);
+    }
+  }
 
   return { task: newTask, nextDate };
 }
