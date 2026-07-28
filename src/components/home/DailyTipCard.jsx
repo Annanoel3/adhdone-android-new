@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lightbulb, Sparkles, Loader2, RefreshCw } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
+import { isTodayTask, isUpcomingTask } from "../utils/todayTasks";
 
 const CURRENT_PROMPT_VERSION = 10; // Increment this when you update the prompt
 
@@ -112,8 +113,10 @@ export default function DailyTipCard({ theme }) {
         }
       })();
 
-      const activeTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id);
-      const snoozedTasks = tasks.filter(t => t.status === 'snoozed' && !t.parent_task_id);
+      const todayDateTip = getLocalDateString();
+      const activeTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id && isTodayTask(t, todayDateTip));
+      const snoozedTasks = tasks.filter(t => t.status === 'snoozed' && !t.parent_task_id && isTodayTask(t, todayDateTip));
+      const upcomingTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id && isUpcomingTask(t, todayDateTip));
       const completedToday = tasks.filter(t => {
         if (t.status !== 'completed' || !t.completed_at) return false;
         // Compare using local date, not UTC
@@ -276,8 +279,9 @@ Always make the first step tiny, concrete, and something they can do RIGHT NOW i
       ${contextualGuidance}
 
       CONTEXT:
-      - Active tasks: ${activeTasks.length}
-      - Snoozed tasks: ${snoozedTasks.length}
+      - Active tasks (due today or no due date): ${activeTasks.length}
+      - Snoozed tasks (due today or no due date): ${snoozedTasks.length}
+      - Upcoming tasks (due later): ${upcomingTasks.length}
       - Tasks created today: ${createdToday.length}
       - Completed today: ${effectiveCompleted.length}
       - Streak: ${currentStreak} days

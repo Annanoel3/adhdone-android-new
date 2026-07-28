@@ -9,6 +9,7 @@ import EndOfDayReview from "../components/home/EndOfDayReview";
 import MotivationCoach from "../components/home/MotivationCoach";
 import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import MomentumCelebration from "../components/shared/MomentumCelebration";
+import { isTodayTask } from "../components/utils/todayTasks";
 
 export default function Home() {
   const [tasks, setTasks] = useState([]);
@@ -157,7 +158,7 @@ export default function Home() {
     return completedDate === today;
   });
 
-  const activeTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id);
+  const activeTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id && isTodayTask(t));
 
 
 

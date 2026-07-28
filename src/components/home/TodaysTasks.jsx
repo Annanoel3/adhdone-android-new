@@ -11,6 +11,7 @@ import { base44 } from "@/api/base44Client";
 import { motion } from "framer-motion";
 import TaskCompletionCelebration from "../tasks/TaskCompletionCelebration";
 import { updateTodaysSummary } from "../utils/dailySummaryHelper";
+import { isTodayTask } from "../utils/todayTasks";
 import {
   Popover,
   PopoverContent,
@@ -24,7 +25,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
   const { sortBy } = useTaskSort();
   // Filter out subtasks, sort by the shared preference, then take the top 5.
   const activeTasks = sortTasks(
-    tasks.filter(t => t.status === 'active' && !t.parent_task_id),
+    tasks.filter(t => t.status === 'active' && !t.parent_task_id && isTodayTask(t)),
     sortBy
   ).slice(0, 5);
   const [celebratingTaskId, setCelebratingTaskId] = React.useState(null);

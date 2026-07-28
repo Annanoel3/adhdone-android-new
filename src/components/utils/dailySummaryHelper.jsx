@@ -1,4 +1,5 @@
 import { base44 } from "@/api/base44Client";
+import { isTodayTask } from "./todayTasks";
 
 /**
  * Updates or creates today's daily summary based on actual task data
@@ -16,7 +17,7 @@ export async function updateTodaysSummary() {
     });
 
     const completedCount = completedToday.length;
-    const remainingTasks = allTasks.filter(t => t.status === 'active').length;
+    const remainingTasks = allTasks.filter(t => t.status === 'active' && isTodayTask(t, today)).length;
     const totalTasks = completedCount + remainingTasks;
     const completionRate = totalTasks > 0
       ? Math.round((completedCount / totalTasks) * 100)

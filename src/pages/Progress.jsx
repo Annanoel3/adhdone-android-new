@@ -6,6 +6,7 @@ import StreakCard from "../components/home/StreakCard";
 import TodaysAccomplishments from "../components/home/TodaysAccomplishments";
 import { base44 } from "@/api/base44Client";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
+import { isTodayTask } from "../components/utils/todayTasks";
 import { Button } from "@/components/ui/button";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -78,6 +79,7 @@ export default function Progress() {
 
   const allCompletedTasks = tasks.filter(t => t.status === 'completed' && !t.parent_task_id);
   const activeTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id);
+  const todayActiveTasks = activeTasks.filter(t => isTodayTask(t, todayStr));
 
   // Today-only completed tasks (for "Today" tab stats)
   const todayCompletedTasks = allCompletedTasks.filter(t => {
@@ -204,7 +206,7 @@ export default function Progress() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
                 { label: 'Completed today', value: todayCompletedTasks.length, icon: CheckCircle2 },
-                { label: 'Still active', value: activeTasks.length, icon: Clock },
+                { label: 'Active today', value: todayActiveTasks.length, icon: Clock },
                 { label: 'Current streak', value: `${currentStreak}d`, icon: Flame },
                 { label: 'Avg per day (30d)', value: `${avgCompletionRate}`, icon: Target },
               ].map(({ label, value, icon: Icon }) => (

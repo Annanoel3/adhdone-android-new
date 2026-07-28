@@ -19,12 +19,14 @@ import { Task } from "@/entities/Task"; // Keep Task import as it might be used 
 import { DailySummary } from "@/entities/DailySummary";
 import { EnergyLog } from "@/entities/EnergyLog";
 import { base44 } from "@/api/base44Client";
+import { isTodayTask, isUpcomingTask } from "../utils/todayTasks";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 
 export default function EndOfDayReview({ isOpen, onClose, theme }) {
   const [summary, setSummary] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [upcomingCount, setUpcomingCount] = useState(0);
 
   useEffect(() => {
     if (isOpen) {
@@ -50,11 +52,15 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
       return dateToCheck === today;
     });
 
-    // Remaining = all active parent tasks
-    const remaining = allTasks.filter(t => t.status === 'active' && !t.parent_task_id);
+    // Remaining = active parent tasks that are due today (or have no due date).
+    // Future-dated tasks are "upcoming" and excluded from today's counts.
+    const remaining = allTasks.filter(t => t.status === 'active' && !t.parent_task_id && isTodayTask(t, today));
 
-    // todayTasks for completion rate = completed today + currently active/snoozed parent tasks
-    const todayTasks = [...completed, ...remaining, ...allTasks.filter(t => t.status === 'snoozed' && !t.parent_task_id)];
+    // Upcoming = active parent tasks with a due date in the future
+    const upcoming = allTasks.filter(t => t.status === 'active' && !t.parent_task_id && isUpcomingTask(t, today));
+
+    // todayTasks for completion rate = completed today + today's active/snoozed parent tasks
+    const todayTasks = [...completed, ...remaining, ...allTasks.filter(t => t.status === 'snoozed' && !t.parent_task_id && isTodayTask(t, today))];
     
     // SMART SNOOZE DETECTION: Only flag problematic snoozes
     const snoozedTasks = todayTasks.filter(t => {
@@ -140,6 +146,9 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
       const variation = highlightVariations.streak[Math.floor(Math.random() * highlightVariations.streak.length)];
       highlights.push(variation);
     }
+    if (upcoming.length > 0) {
+      highlights.push(`📅 ${upcoming.length} upcoming task${upcoming.length === 1 ? '' : 's'} on the horizon — saved for later, no rush`);
+    }
     // Assuming 'urgency' is a property of a Task object
     if (completed.some(t => t.urgency === 'urgent')) {
       const variation = highlightVariations.urgentDone[Math.floor(Math.random() * highlightVariations.urgentDone.length)];
@@ -198,6 +207,7 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
     // Save summary
     await DailySummary.create(summaryData);
 
+    setUpcomingCount(upcoming.length);
     setSummary(summaryData);
     setIsLoading(false);
   };
@@ -225,7 +235,7 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
 
         <div className="space-y-4 sm:space-y-6 py-4">
           {/* Main Stats */}
-          <div className="grid grid-cols-3 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
             <Card className={`border-none ${
               theme === 'dark' ? 'bg-green-900/40' : theme === 'minimalist' ? 'bg-green-50' : 'bg-gradient-to-br from-green-100 to-teal-100'
             }`}>
@@ -256,6 +266,17 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
                   {summary.completion_rate}%
                 </div>
                 <p className={`text-xs sm:text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Done</p>
+              </CardContent>
+            </Card>
+
+            <Card className={`border-none ${
+              theme === 'dark' ? 'bg-indigo-900/40' : theme === 'minimalist' ? 'bg-indigo-50' : 'bg-gradient-to-br from-indigo-100 to-purple-100'
+            }`}>
+              <CardContent className="p-3 sm:p-4 text-center">
+                <div className={`text-2xl sm:text-3xl font-bold mb-1 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                  {upcomingCount}
+                </div>
+                <p className={`text-xs sm:text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Upcoming</p>
               </CardContent>
             </Card>
           </div>
