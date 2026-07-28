@@ -1,25 +1,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { isInQuietHours, parseHHMM } from '../../shared/quietHours.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
 const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
-
-function isInQuietHours(dateTime, quietStart, quietEnd) {
-  const date = new Date(dateTime);
-  const hours = date.getUTCHours();
-  const minutes = date.getUTCMinutes();
-  const current = hours * 60 + minutes;
-
-  const [startH, startM] = quietStart.split(':').map(Number);
-  const [endH, endM] = quietEnd.split(':').map(Number);
-  const start = startH * 60 + startM;
-  const end = endH * 60 + endM;
-
-  // Spans midnight
-  if (start > end) {
-    return current >= start || current < end;
-  }
-  return current >= start && current < end;
-}
 
 async function cancelOneSignalNotification(id) {
   try {
@@ -39,8 +22,18 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { quietStart, quietEnd } = await req.json();
-    if (!quietStart || !quietEnd) {
-      return Response.json({ error: 'quietStart and quietEnd required' }, { status: 400 });
+
+    // Prefer the user's profile (source of truth) for the enabled flag + timezone;
+    // fall back to the values sent from the Settings page for start/end.
+    const timeZone = user.timezone || null;
+    const quietEnabled = user.quiet_hours_enabled !== false;
+    const startStr = user.quiet_hours_start || quietStart || '22:00';
+    const endStr = user.quiet_hours_end || quietEnd || '08:00';
+    const startMin = parseHHMM(startStr);
+    const endMin = parseHHMM(endStr);
+
+    if (!quietEnabled || !timeZone) {
+      return Response.json({ success: true, skipped: 'quiet hours disabled or no timezone on profile' });
     }
 
     // Fetch all active tasks for this user with queued notifications
@@ -71,8 +64,8 @@ Deno.serve(async (req) => {
       // Check if last_scheduled_until falls in quiet hours — a simple proxy for overlap
       // Also check next_reminder for any immediate conflict
       const hasConflict =
-        (task.next_reminder && isInQuietHours(task.next_reminder, quietStart, quietEnd)) ||
-        isInQuietHours(task.last_scheduled_until, quietStart, quietEnd);
+        (task.next_reminder && isInQuietHours(new Date(task.next_reminder), startMin, endMin, timeZone)) ||
+        isInQuietHours(new Date(task.last_scheduled_until), startMin, endMin, timeZone);
 
       if (hasConflict) {
         console.log(`[applyQuietHours] Task "${task.title}" has quiet-hour conflict, cancelling ${ids.length} notifications`);

@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent } from '../../shared/reminderTitle.ts';
+import { adjustForQuietHours, parseHHMM } from '../../shared/quietHours.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 const BATCH_SIZE = 10;
@@ -40,6 +41,12 @@ Deno.serve(async (req) => {
     );
 
     console.log(`📊 [REFILL] Found ${recurringTasks.length} recurring tasks`);
+
+    // Fetch all users once so we can apply each task owner's quiet hours in their
+    // local timezone (quiet hours are stored as local "HH:MM" on the user profile).
+    const allUsers = await base44.asServiceRole.entities.User.list();
+    const userMap: Record<string, any> = {};
+    for (const u of allUsers) if (u && u.email) userMap[u.email] = u;
 
     const now = new Date();
     let refilled = 0;
@@ -118,47 +125,72 @@ Deno.serve(async (req) => {
           ? new Date(scheduledUntil.getTime() + interval + staggerMs)
           : new Date(now.getTime() + interval + staggerMs);
 
-        const email = task.notification_recipient_email;
-        const notificationIds = [];
+      const email = task.notification_recipient_email;
 
-        for (let i = 0; i < BATCH_SIZE; i++) {
-          const sendAt = new Date(batchStart.getTime() + interval * i);
-          const sendAtISO = sendAt.toISOString();
-          const { title, body } = getReminderContent(task.title, task.due_date, sendAtISO);
-          try {
-            const res = await base44.asServiceRole.functions.invoke('schedulePush', {
-              toUserExternalId: email,
-              title,
-              body,
-              sendAtISO,
-              data: {
-                screen: '/TaskNotification',
-                taskId: task.id,
-                urgency: task.urgency || 'medium',
-                type: 'task_reminder'
-              },
-              buttons: [
-                { id: "snooze_15", text: "Snooze 15 min" },
-                { id: "snooze_60", text: "Snooze 1 hour" },
-                { id: "complete", text: "✅ Done" }
-              ]
-            });
-            const result = res?.data || res;
-            if (result?.notificationId) {
-              notificationIds.push(result.notificationId);
-            }
-          } catch (e) {
-            console.error(`[REFILL] Failed to schedule reminder #${i + 1} for task ${task.id}:`, e);
+      // Owner's quiet hours (local "HH:MM"). Apply only when enabled AND the owner
+      // has a recorded timezone — otherwise we can't convert local wall-time to UTC.
+      const owner = userMap[email];
+      const quietEnabled = !!(owner && owner.quiet_hours_enabled);
+      const timeZone = owner && owner.timezone ? owner.timezone : null;
+      const startMin = owner && owner.quiet_hours_start ? parseHHMM(owner.quiet_hours_start) : parseHHMM('22:00');
+      const endMin = owner && owner.quiet_hours_end ? parseHHMM(owner.quiet_hours_end) : parseHHMM('08:00');
+      const useQuiet = quietEnabled && !!timeZone;
+
+      const notificationIds = [];
+      let lastScheduledAt: Date | null = null; // de-dupe quiet-hour slots that collapse to the same time
+
+      for (let i = 0; i < BATCH_SIZE; i++) {
+        let sendAt = new Date(batchStart.getTime() + interval * i);
+        if (useQuiet) {
+          sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
+          // Quiet-hours can shift two consecutive night slots onto the same morning
+          // minute — skip duplicates rather than send two notifications at once.
+          if (lastScheduledAt && Math.abs(sendAt.getTime() - lastScheduledAt.getTime()) < 60000) {
+            continue;
           }
         }
+        if (sendAt.getTime() <= now.getTime()) continue;
+        const sendAtISO = sendAt.toISOString();
+        const { title, body } = getReminderContent(task.title, task.due_date, sendAtISO);
+        try {
+          const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+            toUserExternalId: email,
+            title,
+            body,
+            sendAtISO,
+            data: {
+              screen: '/TaskNotification',
+              taskId: task.id,
+              urgency: task.urgency || 'medium',
+              type: 'task_reminder'
+            },
+            buttons: [
+              { id: "snooze_15", text: "Snooze 15 min" },
+              { id: "snooze_60", text: "Snooze 1 hour" },
+              { id: "complete", text: "✅ Done" }
+            ]
+          });
+          const result = res?.data || res;
+          if (result?.notificationId) {
+            notificationIds.push(result.notificationId);
+            lastScheduledAt = sendAt;
+          }
+        } catch (e) {
+          console.error(`[REFILL] Failed to schedule reminder #${i + 1} for task ${task.id}:`, e);
+        }
+      }
 
-        if (notificationIds.length > 0) {
-          const newLastScheduledUntil = new Date(batchStart.getTime() + interval * (notificationIds.length - 1));
-          const existingIds = Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : [];
+      if (notificationIds.length > 0) {
+        // Use the last actually-scheduled time (may differ from batchStart math once
+        // quiet-hours shifting/skipping is applied) so the next refill window is correct.
+        const newLastScheduledUntil = lastScheduledAt
+          ? lastScheduledAt.toISOString()
+          : new Date(batchStart.getTime() + interval * (notificationIds.length - 1)).toISOString();
+        const existingIds = Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : [];
 
-          await base44.asServiceRole.entities.Task.update(task.id, {
-            onesignal_notification_ids: notificationIds,
-            last_scheduled_until: newLastScheduledUntil.toISOString(),
+        await base44.asServiceRole.entities.Task.update(task.id, {
+          onesignal_notification_ids: notificationIds,
+          last_scheduled_until: newLastScheduledUntil,
             ...(!task.next_reminder || new Date(task.next_reminder) <= now
               ? { next_reminder: batchStart.toISOString() }
               : {})

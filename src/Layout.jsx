@@ -1094,10 +1094,15 @@ export default function Layout({ children, currentPageName }) {
       setUser(currentUser);
       setAuthCheckComplete(true);
 
-      // Set signed_up_at on first login; update last_active_at every session
+      // Set signed_up_at on first login; update last_active_at every session.
+      // Persist the device timezone once so backend cron jobs (e.g. reminder refill)
+      // can apply quiet hours in the user's local time.
       const now = new Date().toISOString();
       const updates = { last_active_at: now };
       if (!currentUser.signed_up_at) updates.signed_up_at = now;
+      if (!currentUser.timezone) {
+        updates.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      }
       await base44.auth.updateMe(updates);
     } catch (error) {
       console.error("Error checking user status:", error);
