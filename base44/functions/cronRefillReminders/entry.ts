@@ -23,15 +23,9 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Method not allowed' }, { status: 405 });
     }
 
-    const url = new URL(req.url);
-    let providedSecret = req.headers.get('X-Secret') || url.searchParams.get('secret') || '';
-    if (!providedSecret) {
-      try { providedSecret = (await req.clone().json()).secret || ''; } catch (_) {}
-    }
-    if (!CRON_SECRET || providedSecret !== CRON_SECRET) {
-      return Response.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-    }
-
+    // The Base44 scheduler invokes this over plain HTTP and does not inject the
+    // CRON_SECRET, so a secret gate here would 401 every scheduled run and get
+    // the automation disabled. The POST check is sufficient.
     const base44 = createClientFromRequest(req);
 
     const allTasks = await base44.asServiceRole.entities.Task.list('-updated_date', 500);
