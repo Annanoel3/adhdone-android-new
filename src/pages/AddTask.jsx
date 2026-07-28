@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
 import { base44 } from "@/api/base44Client";
 import { scheduleReminder } from "../components/utils/reminderScheduler";
+import { createBirthdayFromInput } from "../components/utils/birthdayScheduler";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import {
@@ -101,7 +102,25 @@ export default function AddTask() {
       console.log('🔄 [PROCESS] Getting user...');
       const currentUser = await base44.auth.me();
       console.log('🔄 [PROCESS] ✅ User:', currentUser?.email);
-      
+
+      // Birthdays are tracked as their own thing (🎂 card), not as tasks.
+      // If the input looks like a birthday reminder, route it there and stop.
+      if (/birthday|bday|b-day/i.test(inputText)) {
+        try {
+          const birthday = await createBirthdayFromInput(inputText, currentUser.email);
+          if (birthday) {
+            toast.success(`🎂 Added ${birthday.person}'s birthday!`, {
+              description: "We'll remind you 1 week before, the day before, and the day of — every year.",
+              duration: 4000,
+            });
+            console.log('🎂 [PROCESS] Created birthday from input:', birthday.task.id);
+            return true;
+          }
+        } catch (e) {
+          console.error('🎂 [PROCESS] Birthday detection failed, continuing as task', e);
+        }
+      }
+
       // FIRST: Check if user wants a task with subtasks
       const subtaskCheckPrompt = `Analyze this input: "${inputText}"
 

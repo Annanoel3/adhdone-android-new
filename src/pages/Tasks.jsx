@@ -60,7 +60,7 @@ export default function Tasks() {
 
   // Effect to update active and completed tasks whenever allTasks changes
   useEffect(() => {
-    setActiveTasks(allTasks.filter(t => t.status === 'active' && !t.parent_task_id));
+    setActiveTasks(allTasks.filter(t => t.status === 'active' && !t.parent_task_id && !t.birthday_person));
     
     // Calculate tasks completed this week
     const now = new Date();
@@ -69,7 +69,7 @@ export default function Tasks() {
     startOfWeek.setHours(0, 0, 0, 0);
     
     const completedThisWeekCount = allTasks.filter(t => {
-      if (t.status !== 'completed' || !t.completed_at) return false;
+      if (t.status !== 'completed' || !t.completed_at || t.birthday_person) return false;
       const completedDate = new Date(t.completed_at);
       return completedDate >= startOfWeek;
     }).length;
@@ -78,7 +78,7 @@ export default function Tasks() {
   }, [allTasks]);
 
   const applyFilters = useCallback(() => {
-    let topLevelTasks = allTasks.filter(t => !t.parent_task_id);
+    let topLevelTasks = allTasks.filter(t => !t.parent_task_id && !t.birthday_person);
     let filtered = topLevelTasks.filter(t => t.status === statusFilter);
     
     if (urgencyFilter !== 'all') {

@@ -153,13 +153,13 @@ export default function Home() {
 
   // FIXED: Filter out subtasks from today's completed count
   const todayCompleted = tasks.filter(t => {
-    if (t.status !== 'completed' || !t.completed_at || t.parent_task_id) return false;
+    if (t.status !== 'completed' || !t.completed_at || t.parent_task_id || t.birthday_person) return false;
     const today = getLocalDateString(new Date());
     const completedDate = getLocalDateString(new Date(t.completed_at));
     return completedDate === today;
   });
 
-  const activeTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id && isTodayTask(t));
+  const activeTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id && isTodayTask(t) && !t.birthday_person);
 
 
 
