@@ -144,7 +144,11 @@ Deno.serve(async (req) => {
 
     // Only cancel + reschedule when a reminder-relevant field changed. Other updates
     // (urgency, energy, notes, subtasks, etc.) must NOT wipe scheduled notifications.
-    if (old_data.title !== data.title || old_data.reminder_interval !== data.reminder_interval || old_data.next_reminder !== data.next_reminder || old_data.due_date !== data.due_date) {
+    // NOTE: next_reminder is intentionally excluded — it's bumped by cron jobs (refill /
+    // bookkeeping), not user edits, so including it would make the refill cron trigger a
+    // redundant cancel+reschedule race (and risk wiping notifications if reschedule fails).
+    // The frontend reschedules via its reminder utilities whenever a user changes a time.
+    if (old_data.title !== data.title || old_data.reminder_interval !== data.reminder_interval || old_data.due_date !== data.due_date) {
       console.log('[onTaskUpdate] Reminder-relevant field changed, cancelling old notifications and rescheduling');
 
       // Cancel all old notifications
