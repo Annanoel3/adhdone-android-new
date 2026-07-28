@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
-import { Brain, CheckCircle2, Sparkles } from "lucide-react";
+import { Brain, CheckCircle2, Sparkles, Timer, Lightbulb, Bell, Gift } from "lucide-react";
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -35,13 +35,13 @@ export default function LandingPage() {
       {/* Hero */}
       <main className="flex-1 flex flex-col items-center text-center px-6 pt-16 pb-10 max-w-3xl mx-auto w-full">
         <span className="inline-flex items-center gap-2 bg-green-100 text-green-700 text-sm font-medium px-4 py-1.5 rounded-full mb-6">
-          <Sparkles className="w-4 h-4" /> Built for the ADHD brain
+          <Sparkles className="w-4 h-4" /> Not another checklist app
         </span>
         <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 leading-tight mb-5">
-          Stop losing track.<br />Start getting things done.
+          Built by someone with ADHD,<br />for people with ADHD.
         </h1>
         <p className="text-lg text-gray-600 mb-8 max-w-xl">
-          ADHDone is an AI-powered productivity app designed specifically for people with ADHD. Smart reminders, instant task breakdown, Google Calendar sync, and focus tools — all in one place.
+          Because we all know a reminder at 3pm doesn't guarantee anything actually gets done. ADHDone uses smart reminders that figure out what deserves your attention and when — adjusting priority and frequency so the important stuff doesn't get buried. Just throw your tasks in and let ADHDone be your "get it done" coach.
         </p>
         <Button
           onClick={handleSignIn}
@@ -55,6 +55,51 @@ export default function LandingPage() {
           No credit card required
         </div>
       </main>
+
+      {/* Feature blurbs in the brand voice */}
+      <section className="px-6 pb-14 max-w-3xl mx-auto w-full">
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-sm text-left">
+            <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center mb-4">
+              <Bell className="w-5 h-5 text-green-600" />
+            </div>
+            <h3 className="font-bold text-gray-900 mb-1.5">Smart reminders that actually work</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              ADHDone figures out what deserves your attention and when — adjusting priority and reminder frequency so the important stuff doesn't get buried.
+            </p>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-sm text-left">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center mb-4">
+              <Lightbulb className="w-5 h-5 text-amber-600" />
+            </div>
+            <h3 className="font-bold text-gray-900 mb-1.5">A parking lot for 2am ideas</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Got a random idea you don't want to lose? Toss it in the parking lot and come back to it when you're ready.
+            </p>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-sm text-left">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center mb-4">
+              <Timer className="w-5 h-5 text-purple-600" />
+            </div>
+            <h3 className="font-bold text-gray-900 mb-1.5">A Pomodoro timer when you need to focus</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Need to sit down and actually focus? The built-in Pomodoro timer has you covered.
+            </p>
+          </div>
+          <div className="bg-white border border-stone-200 rounded-2xl p-6 shadow-sm text-left">
+            <div className="w-10 h-10 rounded-xl bg-pink-50 flex items-center justify-center mb-4">
+              <Gift className="w-5 h-5 text-pink-600" />
+            </div>
+            <h3 className="font-bold text-gray-900 mb-1.5">Hidden Easter eggs</h3>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              Stick around long enough and you might find a hidden Easter egg or two.
+            </p>
+          </div>
+        </div>
+        <p className="text-center text-lg font-medium text-gray-700 mt-8">
+          Flexible, a little spicy, and always in your corner.
+        </p>
+      </section>
 
       {/* Google Account Usage Disclosure */}
       <section className="px-6 pb-12">
