@@ -20,6 +20,7 @@ import TermsPublic from '@/pages/Terms';
 import LandingPage from '@/pages/LandingPage';
 import Home from '@/pages/Home';
 import Community from '@/pages/Community';
+import BrandBook from '@/pages/BrandBook';
 
 // Sentry loaded via CDN in index.html
 const Sentry = window.Sentry;
@@ -58,7 +59,7 @@ const AuthenticatedApp = () => {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
       // Public paths never redirect to login — everything else does
-      const publicPaths = ['/', '/privacypolicy', '/Terms'];
+      const publicPaths = ['/', '/privacypolicy', '/Terms', '/BrandBook'];
       if (!publicPaths.includes(window.location.pathname)) {
         navigateToLogin();
         return null;
@@ -73,6 +74,7 @@ const AuthenticatedApp = () => {
       <Route path="/" element={<LandingPage />} />
       <Route path="/privacypolicy" element={<PrivacyPolicyPublic />} />
       <Route path="/Terms" element={<TermsPublic />} />
+      <Route path="/BrandBook" element={<BrandBook />} />
 
       {/* Authenticated app with layout */}
       <Route path="/Home" element={<LayoutWrapper currentPageName="Home"><Home /></LayoutWrapper>} />
