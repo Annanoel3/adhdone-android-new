@@ -53,10 +53,16 @@ Deno.serve(async (req) => {
     for (const task of recurringTasks) {
       const interval = intervalMsMap[task.reminder_interval];
 
-      // Skip and silence tasks that are old and on short intervals — they've become pure spam
-      const taskAge = now.getTime() - new Date(task.created_date).getTime();
-      if (shortIntervals.has(task.reminder_interval) && taskAge > staleThresholdMs) {
-        console.log(`🧹 [REFILL] Silencing stale short-interval task "${task.title}" (${Math.round(taskAge / 86400000)}d old)`);
+      // Skip and silence tasks that are old and on short intervals — they've become pure spam.
+      // Base staleness on last ACTIVITY (updated_date), not creation date, and only silence
+      // tasks that actually have a scheduling history. Orphaned tasks that never got scheduled
+      // (e.g. created during an outage) must be scheduled, not silenced — otherwise they're
+      // trapped forever. Basing age on updated_date also means a freshly repaired task won't be
+      // re-silenced on the next hourly run.
+      const taskAge = now.getTime() - new Date(task.updated_date || task.created_date).getTime();
+      const hasSchedulingHistory = (Array.isArray(task.onesignal_notification_ids) && task.onesignal_notification_ids.length > 0) || !!task.last_scheduled_until;
+      if (shortIntervals.has(task.reminder_interval) && taskAge > staleThresholdMs && hasSchedulingHistory) {
+        console.log(`🧹 [REFILL] Silencing stale short-interval task "${task.title}" (${Math.round(taskAge / 86400000)}d untouched)`);
         await base44.asServiceRole.entities.Task.update(task.id, {
           next_reminder: null,
           onesignal_notification_ids: [],
@@ -68,14 +74,15 @@ Deno.serve(async (req) => {
 
       // Determine end of currently-scheduled window
       let scheduledUntil;
+      const hasIds = Array.isArray(task.onesignal_notification_ids) && task.onesignal_notification_ids.length > 0;
       if (task.last_scheduled_until) {
         scheduledUntil = new Date(task.last_scheduled_until);
-      } else if (task.next_reminder) {
-        // Legacy fallback: estimate from next_reminder + 9 intervals
+      } else if (hasIds && task.next_reminder) {
+        // Legacy fallback: has REAL notification IDs but no last_scheduled_until — estimate window
         scheduledUntil = new Date(new Date(task.next_reminder).getTime() + 9 * interval);
       } else {
-        // No scheduling history — treat as needs initial schedule (use "now" as baseline)
-        scheduledUntil = new Date(now.getTime() - 1); // Force refill on first run
+        // No real notifications scheduled (orphaned / never scheduled) — force a fresh schedule
+        scheduledUntil = new Date(now.getTime() - 1);
       }
 
       // Refill when within 2 intervals of the end of the window
