@@ -118,23 +118,27 @@ const FEATURES = [
 ];
 
 const VOICE_PRINCIPLES = [
+  { title: "Built by one of us", desc: "ADHDone was built by someone with ADHD, for people with ADHD. The voice comes from lived experience, not a clinical textbook." },
+  { title: "Not another checklist app", desc: "We don't sell productivity — we sell getting it done. A reminder at 3pm doesn't guarantee anything, and we own that." },
   { title: "Warm, like a friend", desc: "We write like we're texting a friend who's stuck — never a clinician with a clipboard." },
-  { title: "Celebrate showing up", desc: "Opening the app, making a plan, doing one tiny thing — these are wins. We say so, specifically." },
+  { title: "A little spicy", desc: "Real, a touch of humor, a little attitude. Never clinical, never sterile." },
+  { title: "In your corner", desc: "Flexible and forgiving. We adjust to how your brain actually works — never the other way around." },
+  { title: "Tiny first steps", desc: "Every nudge includes one concrete, sub-2-minute action — not the whole task." },
   { title: "No guilt, ever", desc: "Tomorrow is always a fresh start. We never frame a day as failed or 'tough'." },
   { title: "No othering", desc: "We never say 'your ADHD brain' or diagnose. Just helpful tips anyone could use." },
-  { title: "Tiny first steps", desc: "Every nudge includes one concrete, sub-2-minute action — not the whole task." },
-  { title: "Honest + a little funny", desc: "Real, conversational, a touch of humor — but always practical." },
 ];
 
 const SIGNATURE_PHRASES = [
+  "Not another checklist app",
+  "Built by someone with ADHD, for people with ADHD",
+  "A reminder at 3pm doesn't guarantee anything gets done",
+  "Just throw your tasks in",
+  'Your "get it done" coach',
+  "A parking lot for 2am ideas",
+  "A little spicy",
+  "Always in your corner",
   "You've got this",
   "Showing up IS the win",
-  "Spicy brains 🌈",
-  "Fresh start incoming 🌅",
-  "One tiny thing",
-  "Every step counts",
-  "Momentum is your superpower",
-  "No rush — saved for later",
 ];
 
 function Swatch({ label, value, hex }) {
@@ -209,10 +213,12 @@ export default function BrandBook() {
 
         {/* ── Mission ── */}
         <section className="mb-20">
-          <SectionTitle kicker="The Mission" title="Make productivity feel kind.">
-            ADHD brains don't lack discipline — they struggle with executive function, dopamine, and
-            systems built for everyone else. ADHDone meets people where they are: tiny steps, forgiving
-            reminders, momentum over perfection, and celebration of effort.
+          <SectionTitle kicker="The Mission" title="Not another checklist app.">
+            ADHDone was built by someone with ADHD, for people with ADHD — because we all know a reminder
+            at 3pm doesn't guarantee anything actually gets done. The app works the way your brain
+            actually does: flexible, a little spicy, and always in your corner. It figures out what
+            deserves your attention and when, adjusting priority and reminder frequency so the important
+            stuff doesn't get buried under a pile of well-meaning reminders.
           </SectionTitle>
         </section>
 
