@@ -183,22 +183,22 @@ export default function Home() {
           
           <QuickActions theme={theme} specialMode={specialMode} />
 
-          <UpcomingBirthdayCard
-            tasks={tasks}
-            user={user}
-            theme={theme}
-            specialMode={specialMode}
-            onRefresh={loadTasks}
-          />
-
           <div className="grid lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <TodaysTasks 
-                tasks={tasks} 
+            <div className="lg:col-span-2 space-y-6">
+              <TodaysTasks
+                tasks={tasks}
                 theme={theme}
                 onTaskAction={handleTaskComplete}
                 onViewDetails={handleViewDetails}
                 specialMode={specialMode}
+              />
+
+              <UpcomingBirthdayCard
+                tasks={tasks}
+                user={user}
+                theme={theme}
+                specialMode={specialMode}
+                onRefresh={loadTasks}
               />
             </div>
             
