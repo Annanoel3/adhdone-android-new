@@ -187,13 +187,19 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   // Sync theme preferences from user profile (source of truth for cross-device persistence)
   useEffect(() => {
     if (user && user.email && authCheckComplete) {
-      if (user.adhd_theme) {
-        setTheme(user.adhd_theme);
-        localStorage.setItem('adhd_theme', user.adhd_theme);
-      }
       const userSpecialMode = user.special_mode || 'normal';
       setSpecialMode(userSpecialMode);
       localStorage.setItem('special_mode', userSpecialMode);
+      // A seasonal/special mode always uses the clean minimalist base — never
+      // mix in a previously chosen theme (e.g. spicybrains) that may still be
+      // sitting on the profile from before the seasonal switch was saved.
+      if (userSpecialMode !== 'normal') {
+        setTheme('minimalist');
+        localStorage.setItem('adhd_theme', 'minimalist');
+      } else if (user.adhd_theme) {
+        setTheme(user.adhd_theme);
+        localStorage.setItem('adhd_theme', user.adhd_theme);
+      }
       if (user.seasonal_unlocked) {
         setSeasonalUnlocked(true);
         localStorage.setItem('seasonal_unlocked', 'true');
@@ -279,8 +285,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     if (specialMode !== 'normal') {
       setSpecialMode('normal');
       setTheme('minimalist');
-      saveThemeToProfile('minimalist', 'normal', seasonalUnlocked);
-      setTimeout(() => window.location.reload(), 100);
+      saveThemeToProfile('minimalist', 'normal', seasonalUnlocked).finally(() => window.location.reload());
       return;
     }
 
@@ -293,8 +298,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       if (seasonalUnlocked) {
         const seasonal = getDateBasedMode();
         setSpecialMode(seasonal);
-        saveThemeToProfile('minimalist', seasonal, seasonalUnlocked);
-        setTimeout(() => window.location.reload(), 100);
+        setTheme('minimalist');
+        saveThemeToProfile('minimalist', seasonal, seasonalUnlocked).finally(() => window.location.reload());
         return;
       }
       // Not unlocked — wrap to minimalist
