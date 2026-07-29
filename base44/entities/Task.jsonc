@@ -56,6 +56,10 @@
       "type": "string",
       "description": "Email of the user who should receive notifications for this task"
     },
+    "reminder_schedule_summary": {
+      "type": "string",
+      "description": "Human-readable summary of LLM-decided reminder schedule (for one-time/event tasks). Null for recurring reminders."
+    },
     "status": {
       "type": "string",
       "enum": [

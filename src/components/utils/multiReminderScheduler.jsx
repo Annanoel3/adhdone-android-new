@@ -134,6 +134,23 @@ export async function scheduleMultiReminders({
     }
 
     console.log(`[multiReminderScheduler] Scheduled ${notificationIds.length}/${reminderTimes.length} reminders`);
+
+    // Persist a human-readable summary so the task detail popover can show
+    // exactly how many reminders the LLM decided and when they fire.
+    if (notificationIds.length > 0) {
+      const summary = `${notificationIds.length} smart reminder${notificationIds.length === 1 ? '' : 's'}:\n` +
+        reminderTimes
+          .map(r => {
+            const dt = new Date(r.sendAtISO);
+            const formatted = dt.toLocaleString('en-US', {
+              month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
+            });
+            return `• ${r.label} — ${formatted}`;
+          })
+          .join('\n');
+      base44.entities.Task.update(taskId, { reminder_schedule_summary: summary }).catch(() => {});
+    }
+
     return notificationIds.length > 0 ? notificationIds : null;
   } catch (error) {
     console.error('[multiReminderScheduler] Error:', error);

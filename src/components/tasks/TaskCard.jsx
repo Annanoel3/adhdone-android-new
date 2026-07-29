@@ -378,7 +378,8 @@ export default function TaskCard({
 
         await Task.update(task.id, {
           next_reminder: nextReminder.toISOString(),
-          onesignal_notification_ids: notificationIds
+          onesignal_notification_ids: notificationIds,
+          reminder_schedule_summary: multiIds ? undefined : null,
         });
       }
 
