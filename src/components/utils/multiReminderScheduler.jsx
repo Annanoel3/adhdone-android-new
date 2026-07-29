@@ -57,7 +57,7 @@ async function fetchReminderSchedule(title, scheduledDateISO) {
 // Supports two reminder types from the LLM:
 //   ABSOLUTE: { days_before, hour, minute } — a specific clock time on a day
 //   RELATIVE: { relative_minutes_before } — N minutes before the event time
-function resolveReminderTimes(reminders, scheduledDateISO) {
+function resolveReminderTimes(reminders, scheduledDateISO, title = '') {
   const scheduled = new Date(scheduledDateISO);
   const bufferMs = Date.now() + 2 * 60 * 1000;
 
@@ -76,6 +76,8 @@ function resolveReminderTimes(reminders, scheduledDateISO) {
       return {
         sendAtISO: reminderTime.toISOString(),
         label: r.label,
+        notification_title: r.notification_title || '📅 Upcoming',
+        notification_body: r.notification_body || title,
       };
     })
     .filter(r => new Date(r.sendAtISO).getTime() > bufferMs)
@@ -99,7 +101,7 @@ export async function scheduleMultiReminders({
     const reminders = await fetchReminderSchedule(title, scheduledDateISO);
     if (!reminders || reminders.length === 0) return null;
 
-    const reminderTimes = resolveReminderTimes(reminders, scheduledDateISO);
+    const reminderTimes = resolveReminderTimes(reminders, scheduledDateISO, title);
     if (reminderTimes.length === 0) return null;
 
     console.log(`[multiReminderScheduler] Scheduling ${reminderTimes.length} LLM-determined reminders for "${title}"`);
@@ -109,8 +111,8 @@ export async function scheduleMultiReminders({
       try {
         const id = await scheduleReminder({
           email,
-          title: '📅 Upcoming',
-          body: `${title}\n\n${reminder.label}\n\nTap to view details.`,
+          title: reminder.notification_title,
+          body: reminder.notification_body,
           sendAtISO: reminder.sendAtISO,
           taskId,
           data: {

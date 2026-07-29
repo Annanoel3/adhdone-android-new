@@ -280,7 +280,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
               reminderTime.setDate(reminderTime.getDate() - (r.days_before || 0));
               reminderTime.setHours(r.hour || 0, r.minute || 0, 0, 0);
             }
-            return { sendAtISO: reminderTime.toISOString(), label: r.label };
+            return { sendAtISO: reminderTime.toISOString(), label: r.label, notification_title: r.notification_title || '📅 Upcoming', notification_body: r.notification_body || title };
           })
           .filter(r => new Date(r.sendAtISO).getTime() > bufferMs)
           .sort((a, b) => new Date(a.sendAtISO).getTime() - new Date(b.sendAtISO).getTime());
@@ -290,8 +290,8 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
           try {
             const res = await base44.asServiceRole.functions.invoke('schedulePush', {
               toUserExternalId: user.email,
-              title: '📅 Upcoming',
-              body: `${title}\n\n${reminder.label}\n\nTap to view details.`,
+              title: reminder.notification_title,
+              body: reminder.notification_body,
               sendAtISO: reminder.sendAtISO,
               data: {
                 screen: '/TaskNotification',
@@ -318,8 +318,8 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
           if (sendAt.getTime() > Date.now() + 2 * 60 * 1000) {
             const res = await base44.asServiceRole.functions.invoke('schedulePush', {
               toUserExternalId: user.email,
-              title: '📅 Event Reminder',
-              body: `${title}\n\nTap to view details.`,
+              title: `📅 ${title}`,
+              body: `You've got this! ${title} is coming up.`,
               sendAtISO: sendAt.toISOString(),
               data: {
                 screen: '/TaskNotification',

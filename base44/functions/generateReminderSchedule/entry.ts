@@ -107,7 +107,20 @@ WORKED EXAMPLE: If the event is at 1:00 PM on July 31:
 RULES:
 - For clock-time reminders (morning, afternoon, evening, X days before at Y AM): use ABSOLUTE
 - For "N minutes/hours before" reminders: use RELATIVE with just the number of minutes
-- Only include reminders that would fire AFTER the current time (${nowStr})`;
+- Only include reminders that would fire AFTER the current time (${nowStr})
+
+NOTIFICATION TEXT:
+For each reminder, also write a personalized, friendly notification title and body.
+TONE: Warm, supportive, and encouraging — like a friend giving a gentle nudge. Never cold, dry, or demanding. Match the ADHD-friendly vibe of the app.
+- notification_title: Short (2-6 words), warm, include a relevant emoji. Use the task name or a friendly reference.
+- notification_body: Supportive and encouraging. Reference the RELATIVE timing (e.g. "due today", "coming up in 2 days", "in about an hour") — do NOT mention the specific calendar date.
+  - For advance reminders: be gentle and anticipatory ("Heads up!", "Don't forget", "Just a nudge")
+  - For day-of reminders: be motivating and confident ("You got this!", "You've got this!")
+  - For just-in-time reminders: be action-oriented ("Time to head out!", "Almost time!")
+Examples:
+  - notification_title: "Carmax payment 💰" / notification_body: "This is your morning reminder — your CarMax payment is due today. You got this! 💧"
+  - notification_title: "Therapist appointment 🏥" / notification_body: "Your appointment is coming up in about an hour. Time to head out! 🚗"
+  - notification_title: "Register microchips 🔬" / notification_body: "Heads up! You need to register those microchips today. You've got this! 💪"`;
 
     const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
       prompt,
@@ -138,9 +151,17 @@ RULES:
                 label: {
                   type: "string",
                   description: "Short description like '2 days before', '1 hour before', 'morning of'"
+                },
+                notification_title: {
+                  type: "string",
+                  description: "Short friendly title (2-6 words) with a relevant emoji"
+                },
+                notification_body: {
+                  type: "string",
+                  description: "Warm, supportive message referencing relative timing (not specific dates)"
                 }
               },
-              required: ["label"]
+              required: ["label", "notification_title", "notification_body"]
             }
           }
         },
@@ -153,7 +174,9 @@ RULES:
       hour: r.hour != null ? Number(r.hour) : null,
       minute: r.minute != null ? Number(r.minute) : null,
       relative_minutes_before: r.relative_minutes_before != null ? Number(r.relative_minutes_before) : null,
-      label: r.label
+      label: r.label,
+      notification_title: r.notification_title || title,
+      notification_body: r.notification_body || title,
     }));
 
     console.log(`[generateReminderSchedule] Generated ${reminders.length} reminders for "${title}"`);
