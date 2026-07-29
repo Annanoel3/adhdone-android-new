@@ -4,6 +4,11 @@
 // reminders to send and when, relative to the scheduled time.
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import OpenAI from 'npm:openai';
+
+const openai = new OpenAI({
+  apiKey: Deno.env.get('OPENAI_API_KEY')
+});
 
 // ── Deterministic task type classification & schedules ─────────────────────
 // Appointments, events, and payments use fixed, reliable schedules instead of
@@ -258,52 +263,32 @@ Examples:
   - notification_title: "Therapist appointment 🏥" / notification_body: "Your appointment is coming up in about an hour. Time to head out! 🚗"
   - notification_title: "Register microchips 🔬" / notification_body: "Heads up! You need to register those microchips today. You've got this! 💪"`;
 
-    const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
-      prompt,
-      response_json_schema: {
-        type: "object",
-        properties: {
-          reminders: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                days_before: {
-                  type: ["number", "null"],
-                  description: "0 = day of event, 1 = day before. Null for RELATIVE reminders."
-                },
-                hour: {
-                  type: ["number", "null"],
-                  description: "0-23. Null for RELATIVE reminders."
-                },
-                minute: {
-                  type: ["number", "null"],
-                  description: "0-59. Null for RELATIVE reminders."
-                },
-                relative_minutes_before: {
-                  type: ["number", "null"],
-                  description: "Minutes before event time (e.g. 60 = 1 hour before). Null for ABSOLUTE reminders."
-                },
-                label: {
-                  type: "string",
-                  description: "Short description like '2 days before', '1 hour before', 'morning of'"
-                },
-                notification_title: {
-                  type: "string",
-                  description: "Short friendly title (2-6 words) with a relevant emoji"
-                },
-                notification_body: {
-                  type: "string",
-                  description: "Warm, supportive message referencing relative timing (not specific dates)"
-                }
-              },
-              required: ["label", "notification_title", "notification_body"]
-            }
-          }
-        },
-        required: ["reminders"]
-      }
+    const schemaInstruction = `\n\nReturn ONLY valid JSON with this shape:
+{
+  "reminders": [
+    {
+      "days_before": number|null,
+      "hour": number|null,
+      "minute": number|null,
+      "relative_minutes_before": number|null,
+      "label": "string",
+      "notification_title": "string",
+      "notification_body": "string"
+    }
+  ]
+}`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: 'You are an ADHD productivity expert. Always respond with valid JSON only.' },
+        { role: 'user', content: prompt + schemaInstruction }
+      ],
+      response_format: { type: 'json_object' },
+      temperature: 0.3
     });
+
+    const result = JSON.parse(completion.choices[0].message.content);
 
     const reminders = (result.reminders || []).map(r => ({
       days_before: r.days_before != null ? Number(r.days_before) : null,

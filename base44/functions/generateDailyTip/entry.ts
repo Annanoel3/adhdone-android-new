@@ -16,15 +16,16 @@ Deno.serve(async (req) => {
 
     const { prompt } = await req.json();
 
-    // Use InvokeLLM with web search so the AI can research ambiguous task names
-    // (e.g. "cancel everyday dose" is a coffee subscription, not a pharmacy call).
-    const llmResponse = await base44.integrations.Core.InvokeLLM({
-      prompt,
-      add_context_from_internet: true,
-      model: 'gemini_3_flash'
+    const tipCompletion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: 'You are an ADHD productivity expert. Generate a helpful, motivating daily tip. Respond with just the tip text.' },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.7
     });
 
-    const tipText = (typeof llmResponse === 'string' ? llmResponse : (llmResponse?.tipText || String(llmResponse || ''))).trim();
+    const tipText = tipCompletion.choices[0].message.content.trim();
 
     // Categorize the tip
     const categoryPrompt = `Categorize this tip into ONE category: "${tipText}"\n\nCategories: focus, motivation, organization, self_care, time_management\n\nReturn ONLY the category name.`;
