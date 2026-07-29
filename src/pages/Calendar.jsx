@@ -277,8 +277,8 @@ export default function Calendar() {
               <>
                 <div className={`flex items-center gap-2 p-2.5 rounded-xl border text-sm ${isDark ? 'bg-gray-700 border-gray-600' : 'bg-blue-50 border-blue-100'}`}>
                   <Mail className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                  <span className={`font-medium ${isDark ? 'text-gray-200' : 'text-blue-800'}`}>{connectedEmail}</span>
-                  <Badge className="ml-auto text-xs bg-blue-100 text-blue-700 border-blue-200 border">Connected</Badge>
+                  <span className={`font-medium truncate min-w-0 ${isDark ? 'text-gray-200' : 'text-blue-800'}`}>{connectedEmail}</span>
+                  <Badge className="ml-auto text-xs bg-blue-100 text-blue-700 border-blue-200 border flex-shrink-0">Connected</Badge>
                 </div>
                 <div className={`flex items-center gap-2 text-sm ${textSecondary}`}>
                   <Clock className="w-3.5 h-3.5" />
