@@ -23,6 +23,12 @@ export default async function(req) {
     const scheduled = new Date(scheduledDateISO);
     const now = new Date();
 
+    // Determine if this is a same-day task (scheduled date is today).
+    // We compute this ourselves rather than trusting the LLM, since the LLM
+    // often misclassifies past-today scheduled times as "tomorrow."
+    const isSameDay = scheduled.toDateString() === now.toDateString();
+    const hoursRemainingToday = 23 - now.getHours();
+
     const scheduledStr = scheduled.toLocaleString('en-US', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
       hour: 'numeric', minute: '2-digit', hour12: true
@@ -38,6 +44,8 @@ TASK TITLE: "${title}"
 TASK PRIORITY: ${priority}
 SCHEDULED FOR: ${scheduledStr}
 CURRENT TIME: ${nowStr}
+TASK TIMING: ${isSameDay ? 'SAME-DAY TASK — this task is scheduled for TODAY. The scheduled time may have already passed, but the task is still owed today. Generate reminders for the remaining hours of today using days_before: 0.' : 'FUTURE TASK — this task is scheduled for a future date. Use days_before to schedule advance reminders.'}
+${isSameDay ? `HOURS REMAINING TODAY: ~${hoursRemainingToday} hours until end of day. Spread reminders across these remaining hours.` : ''}
 
 Based on ADHD research and behavioral psychology, determine the optimal reminder schedule for this specific task.
 
@@ -49,51 +57,53 @@ KEY ADHD REMINDER PRINCIPLES:
 - Externalizing future thoughts reduces cognitive load — a well-timed reminder is like a "body double"
 - People with ADHD benefit from reminders that create a gentle sense of urgency without overwhelming
 
-PRIORITY-BASED REMINDER PERSISTENCE:
-The task priority is: ${priority}
-- URGENT: Maximum persistence. Use 3-4 reminders spread across multiple days and times. Start further in advance (e.g. 3 days before) and escalate closer to the event. Spread reminders across different times of day to maximize completion odds. Include a just-in-time reminder close to the event.
-- HIGH: Strong persistence. Use 2-3 reminders. Start 1-2 days in advance with a morning reminder, include a day-of reminder, and a just-in-time reminder.
-- MEDIUM: Moderate persistence. Use 1-2 reminders at well-chosen times (typically a day-of morning reminder and/or a just-in-time reminder).
-- LOW: Minimal persistence. Use exactly 1 reminder, well-timed (usually a single just-in-time reminder shortly before the event). Do not over-remind for low priority tasks.
+FIRST, DETERMINE IF THIS IS A SAME-DAY TASK OR A FUTURE TASK:
+- SAME-DAY: The scheduled date is TODAY — the same calendar date as the current time. This includes tasks where the scheduled time has ALREADY PASSED today (e.g. it was scheduled for 9 AM but it's now 5 PM — the task is still owed today!). Same-day tasks are things like "drink water", "take medication", "call the doctor", "pick up groceries", "eat lunch", "cancel subscription", "pay a bill today", "drink coffee", "exercise", "check email", "take a shower".
+- FUTURE: The scheduled date is tomorrow or further out — appointments, deadlines, events on other days.
 
-REMINDER SCHEDULE GUIDELINES BY TASK TYPE:
+IMPORTANT: If the scheduled date is TODAY, even if the scheduled time has already passed, this is a SAME-DAY task. Do NOT push it to tomorrow. Generate reminders for the remaining hours of today.
 
-APPOINTMENTS (doctors, therapists, dentists, interviews, consultations):
-- These require travel time and mental preparation
-- Schedule: 2 days before (at 9 AM), 1 day before (at 9 AM), morning of (at 9 AM), 1 hour before
-- The early reminders help them prepare; the later ones are "just-in-time" for travel
+=== SAME-DAY TASKS (scheduled for today) ===
+For same-day tasks, do NOT use days_before. Spread reminders across the REMAINING hours of today using ABSOLUTE times with days_before: 0 and specific hours, OR use RELATIVE reminders tied to the scheduled time.
 
-SOCIAL EVENTS / MEETUPS (meets, concerts, parties, gatherings):
-- Need time to prepare and travel, but less advance prep than appointments
-- Schedule: morning of (at 9 AM), 1 hour before
+ADHD PRINCIPLE FOR SAME-DAY TASKS: People with ADHD lose track of time during the day. They need reminders spread across the day at different intervals — not just one at 9 AM. A reminder at 9 AM does NOT guarantee the task gets done by 5 PM. Spread reminders across morning, afternoon, and evening to maximize the chance of actually completing the task.
 
-PAYMENTS / BILLS (rent, utilities, subscriptions, loan payments):
-- Need to remember throughout the day to actually do it
-- Schedule: morning (9 AM), afternoon (1 PM), evening (6 PM) of the due date
-- Spreading reminders across the day increases the chance of completion
+SAME-DAY REMINDER SPACING BY PRIORITY:
+- URGENT (same-day): 3-4 reminders spread across the day. E.g. if it's 10 AM now: one soon (e.g. 11 AM), one midday (1 PM), one afternoon (4 PM), one evening (6 PM). Use ABSOLUTE times with days_before: 0.
+- HIGH (same-day): 2-3 reminders spread across the day. E.g. one soon, one midday, one evening.
+- MEDIUM (same-day): 1-2 reminders. One at a well-chosen time, and optionally a second later in the day.
+- LOW (same-day): Exactly 1 reminder at a single well-chosen time later today.
 
-DEADLINES (project submissions, reports, applications):
-- Start gentle a few days before, escalate as it gets closer
-- Schedule: 3 days before, 1 day before, morning of
+SAME-DAY TASK TYPE EXAMPLES:
+- SELF-CARE (drink water, take medication, exercise, shower, eat lunch): Spread 2-3 reminders across the day — these are easy to forget during a busy day.
+- QUICK ACTIONS (cancel subscription, call someone, send email, pay bill): 1-2 reminders; people often intend to do it "later" and forget.
+- PICKUP / DELIVERY (pick up groceries, fetch package): 1-2 reminders, one ahead of time and one just-in-time.
+- URGENT SAME-DAY (pay bill due today, call before closing): 3-4 reminders spread across remaining hours.
 
-ROUTINE / HABIT tasks (medication, stretching, daily chores):
-- 1-2 reminders at the right time is enough
-- Don't over-remind — these are familiar tasks
+=== FUTURE TASKS (scheduled for tomorrow or later) ===
 
-ONE-TIME SIMPLE tasks (pickup, delivery, call someone):
-- 1-2 reminders, usually just before the task time
+PRIORITY-BASED REMINDER PERSISTENCE (for future tasks):
+- URGENT: 3-4 reminders spread across multiple days. Start further in advance (e.g. 3 days before) and escalate closer to the event. Include a just-in-time reminder.
+- HIGH: 2-3 reminders. Start 1-2 days in advance, include a day-of morning reminder, and a just-in-time reminder.
+- MEDIUM: 1-2 reminders (day-of morning and/or just-in-time).
+- LOW: Exactly 1 reminder, well-timed shortly before the event.
 
-TIME-SENSITIVE / PERISHABLE tasks (food, laundry, medication timing):
-- 2-3 reminders within a few hours of the task
+FUTURE TASK TYPE GUIDELINES:
+- APPOINTMENTS (doctors, therapists, interviews): 2 days before (9 AM), 1 day before (9 AM), morning of (9 AM), 1 hour before
+- SOCIAL EVENTS (meets, concerts, parties): morning of (9 AM), 1 hour before
+- PAYMENTS / BILLS due on a future date: morning of, afternoon (1 PM), evening (6 PM) on the due date
+- DEADLINES (submissions, reports): 3 days before, 1 day before, morning of
+- ROUTINE / HABIT: 1-2 reminders at the right time
+- ONE-TIME SIMPLE (pickup, delivery, call): 1-2 reminders before the task time
+- TIME-SENSITIVE / PERISHABLE: 2-3 reminders within a few hours of the task
 
 GENERAL RULES:
 - Always include at least 1 reminder
 - Never schedule more than 4 reminders (overwhelming)
 - Scale reminder count by priority: URGENT=3-4, HIGH=2-3, MEDIUM=1-2, LOW=1
-- For "morning" = 9 (hour 9)
-- For "afternoon" = 13 (hour 13, i.e. 1 PM)
-- For "evening" = 18 (hour 18, i.e. 6 PM)
-- Only include reminders that would fire AFTER the current time (${nowStr})
+- For "morning" = 9 (hour 9), "afternoon" = 13 (hour 13, 1 PM), "evening" = 18 (hour 18, 6 PM)
+- CRITICAL: Only include reminders that would fire AFTER the current time (${nowStr}). If a reminder time would already be in the past, skip it or move it later.
+- For same-day tasks: if it's already past morning, start reminders from the next available hour — don't schedule a 9 AM reminder at 2 PM.
 
 Return a JSON object with a "reminders" array. Each reminder is either ABSOLUTE (tied to a specific clock time on a specific day) or RELATIVE (tied to the event time itself).
 
@@ -108,12 +118,19 @@ RELATIVE reminders use relative_minutes_before (minutes before the event time):
 - "days_before": null, "hour": null, "minute": null
 - Use this for "1 hour before", "30 minutes before", etc. — NO math needed, just the number of minutes.
 
-WORKED EXAMPLE: If the event is at 1:00 PM on July 31:
+WORKED EXAMPLE — FUTURE TASK: If the event is at 1:00 PM on July 31:
 - "2 days before at 9 AM" → ABSOLUTE: { days_before: 2, hour: 9, minute: 0, relative_minutes_before: null, label: "2 days before" }
 - "1 day before at 9 AM" → ABSOLUTE: { days_before: 1, hour: 9, minute: 0, relative_minutes_before: null, label: "1 day before" }
 - "morning of at 9 AM" → ABSOLUTE: { days_before: 0, hour: 9, minute: 0, relative_minutes_before: null, label: "morning of" }
 - "1 hour before" → RELATIVE: { days_before: null, hour: null, minute: null, relative_minutes_before: 60, label: "1 hour before" }
 - "evening at 6 PM" → ABSOLUTE: { days_before: 0, hour: 18, minute: 0, relative_minutes_before: null, label: "evening" }
+
+WORKED EXAMPLE — SAME-DAY TASK: If the task is "Drink water" scheduled for today at 9 AM, and current time is 10 AM:
+- "mid-morning" → ABSOLUTE: { days_before: 0, hour: 11, minute: 0, relative_minutes_before: null, label: "mid-morning nudge" }
+- "midday" → ABSOLUTE: { days_before: 0, hour: 13, minute: 0, relative_minutes_before: null, label: "midday reminder" }
+- "afternoon" → ABSOLUTE: { days_before: 0, hour: 16, minute: 0, relative_minutes_before: null, label: "afternoon reminder" }
+- "evening" → ABSOLUTE: { days_before: 0, hour: 18, minute: 0, relative_minutes_before: null, label: "evening nudge" }
+All with days_before: 0 because it's today.
 
 RULES:
 - For clock-time reminders (morning, afternoon, evening, X days before at Y AM): use ABSOLUTE
@@ -125,8 +142,8 @@ For each reminder, also write a personalized, friendly notification title and bo
 TONE: Warm, supportive, and encouraging — like a friend giving a gentle nudge. Never cold, dry, or demanding. Match the ADHD-friendly vibe of the app.
 - notification_title: Short (2-6 words), warm, include a relevant emoji. Use the task name or a friendly reference.
 - notification_body: Supportive and encouraging. Reference the RELATIVE timing (e.g. "due today", "coming up in 2 days", "in about an hour") — do NOT mention the specific calendar date.
-  - For advance reminders: be gentle and anticipatory ("Heads up!", "Don't forget", "Just a nudge")
-  - For day-of reminders: be motivating and confident ("You got this!", "You've got this!")
+  - For advance reminders (future task, days before): be gentle and anticipatory ("Heads up!", "Don't forget", "Just a nudge")
+  - For same-day reminders: be motivating and confident, as a supportive friend ("You got this!", "Hey, don't forget to...", "Quick nudge — time to...")
   - For just-in-time reminders: be action-oriented ("Time to head out!", "Almost time!")
 Examples:
   - notification_title: "Carmax payment 💰" / notification_body: "This is your morning reminder — your CarMax payment is due today. You got this! 💧"
