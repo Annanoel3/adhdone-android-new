@@ -52,7 +52,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete, theme }) {
+export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete, theme, itemClassification }) {
   const [subTasks, setSubTasks] = useState([]);
   const [newSubTask, setNewSubTask] = useState("");
   const [showDecomposition, setShowDecomposition] = useState(false);
@@ -950,6 +950,31 @@ Return JSON:
     });
   };
 
+  // Calendar classification (Event / Task / Birthday). A user-set value on the
+  // task overrides the auto-detected kind passed in from the calendar view.
+  const currentClassification = task.classification || itemClassification || (task.birthday_person ? 'birthday' : 'task');
+
+  const handleClassificationChange = async (newClass) => {
+    if (!task || newClass === currentClassification) return;
+    setIsUpdating(true);
+    try {
+      const updates = { classification: newClass };
+      // Keep birthday_person in sync so the Birthday tracker and calendar
+      // agree on what's a birthday.
+      if (newClass === 'birthday') {
+        if (!task.birthday_person) updates.birthday_person = task.title;
+      } else if (task.birthday_person) {
+        updates.birthday_person = null;
+      }
+      Task.update(task.id, updates).catch(error => {
+        console.error("Error updating classification:", error);
+      });
+      onUpdate({ ...task, ...updates });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -1025,6 +1050,27 @@ Return JSON:
             )}
 
             <div className="flex flex-wrap gap-2">
+              {/* Classification (Event / Task / Birthday) */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
+                    currentClassification === 'birthday' ? 'bg-pink-100 text-pink-700'
+                      : currentClassification === 'event' ? 'bg-indigo-100 text-indigo-700'
+                      : 'bg-emerald-100 text-emerald-700'
+                  }`}>
+                    {currentClassification === 'birthday' ? '🎂' : currentClassification === 'event' ? '📆' : '✅'}
+                    {currentClassification === 'birthday' ? 'Birthday' : currentClassification === 'event' ? 'Event' : 'Task'}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-48 p-2">
+                  <div className="space-y-1">
+                    <button onClick={() => handleClassificationChange('event')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-2"><span>📆</span> Event</button>
+                    <button onClick={() => handleClassificationChange('task')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-2"><span>✅</span> Task</button>
+                    <button onClick={() => handleClassificationChange('birthday')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-2"><span>🎂</span> Birthday</button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
               {/* Recurrence Badge - Clickable */}
               {task.recurrence_pattern && task.recurrence_pattern !== 'none' && (
                 <Popover>

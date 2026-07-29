@@ -148,6 +148,15 @@
       "type": "boolean",
       "default": true,
       "description": "Send a birthday reminder on the day of the birthday"
+    },
+    "classification": {
+      "type": "string",
+      "enum": [
+        "task",
+        "event",
+        "birthday"
+      ],
+      "description": "User-overridden calendar classification (Event / Task / Birthday). When set, overrides auto-detection in the calendar view."
     }
   },
   "required": [

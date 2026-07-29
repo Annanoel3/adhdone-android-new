@@ -72,7 +72,7 @@ function sameDayKey(a, b) {
   return dateKey(a) === dateKey(b);
 }
 
-export default function CalendarGrid({ tasks = [], events = [], isDark }) {
+export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOpen }) {
   const [cursor, setCursor] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
@@ -82,6 +82,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark }) {
 
   // Group all items by local-date key.
   const itemsByDate = useMemo(() => {
+    const taskById = new Map(tasks.map((t) => [t.id, t]));
     const map = new Map();
     const push = (d, item) => {
       if (!d || isNaN(d)) return;
@@ -90,19 +91,32 @@ export default function CalendarGrid({ tasks = [], events = [], isDark }) {
       map.get(k).push(item);
     };
 
+    // Map a user-set classification to a grid "kind".
+    const kindFromClassification = (c) =>
+      c === 'event' ? 'imported_event'
+        : c === 'birthday' ? 'birthday'
+        : c === 'task' ? 'task'
+        : null;
+
     tasks.forEach((t) => {
       const raw = t.due_date || t.next_reminder;
       if (!raw) return;
-      const kind = t.birthday_person ? 'birthday' : 'task';
-      push(new Date(raw), { kind, title: t.title, id: t.id });
+      const kind = kindFromClassification(t.classification) ||
+        (t.birthday_person ? 'birthday' : 'task');
+      push(new Date(raw), { kind, title: t.title, id: t.id, taskId: t.id, task: t });
     });
     events.forEach((e) => {
       if (!e.start_time) return;
-      const kind =
-        e.routed_as === 'birthday' ? 'birthday'
+      const linkedTask = e.adhd_task_id ? taskById.get(e.adhd_task_id) : null;
+      const kind = (linkedTask && kindFromClassification(linkedTask.classification)) ||
+        (e.routed_as === 'birthday' ? 'birthday'
           : e.item_type === 'task' ? 'imported_task'
-          : 'imported_event';
-      push(new Date(e.start_time), { kind, title: e.title, id: e.id });
+          : 'imported_event');
+      push(new Date(e.start_time), {
+        kind, title: e.title, id: e.id,
+        taskId: e.adhd_task_id || null,
+        task: linkedTask || null,
+      });
     });
     return map;
   }, [tasks, events]);
@@ -274,13 +288,26 @@ export default function CalendarGrid({ tasks = [], events = [], isDark }) {
           <p className={`text-sm ${textSecondary}`}>Nothing scheduled this day.</p>
         ) : (
           <ul className="space-y-2">
-            {selectedItems.map((it, i) => (
-              <li key={i} className="flex items-center gap-2">
-                <span className="text-base">{emojiFor(it)}</span>
-                <span className={`text-sm flex-1 truncate ${textPrimary}`}>{it.title}</span>
-                <Badge className={`text-xs border ${KIND_BADGE[it.kind]}`}>{KIND_LABEL[it.kind]}</Badge>
-              </li>
-            ))}
+            {selectedItems.map((it, i) => {
+              const clickable = !!(it.task || it.taskId);
+              return (
+                <li key={i}>
+                  <button
+                    onClick={() => clickable && onItemOpen?.(it)}
+                    disabled={!clickable}
+                    className={`flex items-center gap-2 w-full text-left rounded-lg p-2 transition-colors ${
+                      clickable
+                        ? isDark ? 'hover:bg-gray-700 cursor-pointer' : 'hover:bg-blue-50 cursor-pointer'
+                        : 'cursor-default opacity-70'
+                    }`}
+                  >
+                    <span className="text-base flex-shrink-0">{emojiFor(it)}</span>
+                    <span className={`text-sm flex-1 truncate ${textPrimary}`}>{it.title}</span>
+                    <Badge className={`text-xs border flex-shrink-0 ${KIND_BADGE[it.kind]}`}>{KIND_LABEL[it.kind]}</Badge>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

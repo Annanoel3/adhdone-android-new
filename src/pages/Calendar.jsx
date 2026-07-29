@@ -20,6 +20,7 @@ import {
   Mail,
 } from 'lucide-react';
 import CalendarGrid from '@/components/calendar/CalendarGrid';
+import TaskDetailsModal from '@/components/tasks/TaskDetailsModal';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
 
@@ -62,6 +63,9 @@ export default function Calendar() {
   const [autoSyncInterval, setAutoSyncInterval] = useState(() => 
     localStorage.getItem('calendar_auto_sync_interval') || 'daily'
   );
+  const [detailTask, setDetailTask] = useState(null);
+  const [detailItemClass, setDetailItemClass] = useState('task');
+  const [modalOpen, setModalOpen] = useState(false);
 
   const loadSyncedEvents = useCallback(async () => {
     try {
@@ -86,6 +90,26 @@ export default function Calendar() {
       setTasks([]);
     }
   }, []);
+
+  const handleItemOpen = async (item) => {
+    let t = item?.task;
+    if (!t && item?.taskId) {
+      try { t = await base44.entities.Task.get(item.taskId); } catch { return; }
+    }
+    if (!t) return;
+    const cls = item.kind === 'birthday' ? 'birthday'
+      : item.kind === 'imported_event' ? 'event'
+      : 'task';
+    setDetailTask(t);
+    setDetailItemClass(cls);
+    setModalOpen(true);
+  };
+
+  const handleModalUpdate = (updatedTask) => {
+    setDetailTask(updatedTask);
+    loadTasks();
+    loadSyncedEvents();
+  };
 
   const attemptSync = useCallback(async () => {
     const res = await base44.functions.invoke('syncGoogleCalendar', {});
@@ -386,7 +410,7 @@ export default function Calendar() {
         {/* Calendar view — in-app tasks + imported events */}
         <Card className={`border-none shadow-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
           <CardContent className="p-4 md:p-6">
-            <CalendarGrid tasks={tasks} events={syncedEvents} isDark={isDark} />
+            <CalendarGrid tasks={tasks} events={syncedEvents} isDark={isDark} onItemOpen={handleItemOpen} />
           </CardContent>
         </Card>
 
@@ -397,6 +421,15 @@ export default function Calendar() {
             <p className={`text-sm mt-1 ${textSecondary}`}>Add tasks in the app or sync Google Calendar to see them here.</p>
           </div>
         )}
+
+        <TaskDetailsModal
+          task={detailTask}
+          isOpen={modalOpen}
+          onClose={() => setModalOpen(false)}
+          onUpdate={handleModalUpdate}
+          theme={theme}
+          itemClassification={detailItemClass}
+        />
       </div>
     </div>
   );
