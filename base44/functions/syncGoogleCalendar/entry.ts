@@ -78,11 +78,20 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
   for (const s of existingSynced) existingByGoogleId[s.google_event_id] = s;
 
   // Load existing tasks to check if adhd_task_id still exists (user-scoped so RLS applies).
-  // Use a high limit to avoid missing tasks when the user has many records —
-  // the default limit would cause the sync to think a still-existing task was
-  // "deleted" and create duplicates, or conversely re-use a stale sync record.
-  const existingTasks = await base44.entities.Task.list('-created_date', 1000);
+  // Load existing tasks via service-role + email filter. The user-scoped
+  // base44.entities.Task.list call is unreliable inside a Deno backend
+  // function (auth context can be wrong), which made the sync think deleted
+  // tasks still existed and skip creating fresh ones. Filtering by
+  // notification_recipient_email (set on every sync-created task) is reliable
+  // and respects the cross-account setup (user.email = Base44 account, which
+  // may differ from the connected Google account).
+  const existingTasks = await base44.asServiceRole.entities.Task.filter(
+    { notification_recipient_email: user.email },
+    '-created_date',
+    1000
+  );
   const existingTaskIds = new Set(existingTasks.map(t => t.id));
+  console.log('[syncGoogleCalendar] loaded', existingTaskIds.size, 'existing tasks for', user.email);
 
   let created = 0, updated = 0, skipped = 0;
   const results = [];
@@ -381,9 +390,9 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
     };
 
     if (existing) {
-      // The previous task was deleted — start fresh: delete the stale sync
-      // record and create a brand-new one so there is no carry-over of old
-      // notification IDs or schedule data from the deleted task.
+      // The previous task was deleted — create a brand-new task so fresh
+      // scheduling (LLM reminders, OneSignal notifications) applies to it.
+      console.log('[syncGoogleCalendar] RE-CREATING (old task was deleted):', googleId, '| old task=', existing.adhd_task_id, '| new task=', createdTask.id);
       await base44.asServiceRole.entities.CalendarSyncedEvent.delete(existing.id);
       await base44.asServiceRole.entities.CalendarSyncedEvent.create(syncRecord);
       created++;
