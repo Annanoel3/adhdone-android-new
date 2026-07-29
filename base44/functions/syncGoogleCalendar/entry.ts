@@ -294,7 +294,20 @@ Deno.serve(async (req) => {
       try {
         const conn = await base44.asServiceRole.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
         if (conn?.accessToken) {
-          return Response.json({ connected: true, connected_email: conn.email || user.email });
+          // The platform often doesn't populate conn.email, so resolve the
+          // real connected account straight from the token via userinfo.
+          let realEmail = conn.email;
+          if (!realEmail) {
+            try {
+              const ui = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { Authorization: `Bearer ${conn.accessToken}` }
+              });
+              if (ui.ok) realEmail = (await ui.json()).email;
+            } catch (e) {
+              console.log('[syncGoogleCalendar] probe userinfo failed:', e.message);
+            }
+          }
+          return Response.json({ connected: true, connected_email: realEmail || user.email });
         }
       } catch (err) {
         console.log('[syncGoogleCalendar] probe: no connection', err.message);

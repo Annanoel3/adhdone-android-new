@@ -182,6 +182,7 @@ export default function Calendar() {
         const result = await attemptSync();
         setSyncResult(result);
         if (result?.synced_at) setLastSyncedAt(result.synced_at);
+        if (result?.connected_email) setConnectedEmail(result.connected_email);
         await loadSyncedEvents();
       }
     } catch (e) {
