@@ -46,6 +46,15 @@
       "type": "string",
       "description": "AI-chosen reminder interval"
     },
+    "item_type": {
+      "type": "string",
+      "enum": [
+        "event",
+        "task"
+      ],
+      "default": "event",
+      "description": "AI-detected nature of the calendar item: 'event' = a scheduled occurrence you attend (meeting, appointment, class, social, travel); 'task' = an actionable to-do with a deadline (pay rent, submit report, renew license)"
+    },
     "routed_as": {
       "type": "string",
       "enum": [

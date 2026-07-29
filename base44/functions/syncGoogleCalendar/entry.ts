@@ -62,8 +62,13 @@ REMINDER INTERVALS:
 - High urgency (1-7d): daily
 - Medium/Low: daily
 
+ITEM TYPE (classify what this calendar entry actually is):
+- "task": An actionable to-do the user must DO/complete by a deadline — e.g. "Pay rent", "Submit report", "Renew license", "File taxes", "Buy groceries". It has a due action, not just attendance.
+- "event": A scheduled occurrence the user attends or is present at — meetings, appointments, classes, doctor visits, social gatherings, travel, workouts, concerts.
+- Default to "event" unless the title clearly describes an actionable to-do with a deadline. Most calendar entries are events.
+
 Return ONLY valid JSON:
-{"importance":"medium","reminder_interval":"daily"}`;
+{"importance":"medium","reminder_interval":"daily","item_type":"event"}`;
 
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
@@ -249,6 +254,7 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
       recurrence_rule: recurrenceRule || null,
       ai_importance: ai.importance || 'medium',
       ai_reminder_interval: ai.reminder_interval || 'daily',
+      item_type: isBirthday ? 'event' : (ai.item_type === 'task' ? 'task' : 'event'),
       routed_as: routedAs,
       adhd_task_id: createdTask.id,
       last_synced_at: new Date().toISOString(),

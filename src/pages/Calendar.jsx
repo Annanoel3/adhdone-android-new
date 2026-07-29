@@ -411,8 +411,10 @@ export default function Calendar() {
                       </Badge>
                       {ev.routed_as === 'birthday' ? (
                         <Badge className="text-xs bg-pink-100 text-pink-700 border-pink-200 border">birthday</Badge>
-                      ) : (
+                      ) : ev.item_type === 'task' ? (
                         <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200 border">task</Badge>
+                      ) : (
+                        <Badge className="text-xs bg-indigo-100 text-indigo-700 border-indigo-200 border">event</Badge>
                       )}
                     </div>
                   </div>
