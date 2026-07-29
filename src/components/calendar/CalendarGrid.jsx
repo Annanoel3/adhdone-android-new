@@ -44,7 +44,11 @@ function emojiForTitle(title) {
   if (!title) return null;
   const t = String(title).toLowerCase();
   for (const { keys, emoji } of CONTEXT_EMOJIS) {
-    if (keys.some((k) => t.includes(k))) return emoji;
+    if (keys.some((k) => {
+      // Match whole words only so "care" never matches the "car" key.
+      const escaped = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`\\b${escaped}\\b`).test(t);
+    })) return emoji;
   }
   return null;
 }

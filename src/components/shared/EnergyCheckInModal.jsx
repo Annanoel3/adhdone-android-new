@@ -7,6 +7,8 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { base44 } from "@/api/base44Client";
+import { generateSmartTipForUser, clearTodaysTip } from "../utils/dailyTipGenerator";
+import { Loader2, Sparkles } from "lucide-react";
 
 const MOODS = [
   {
@@ -39,12 +41,19 @@ const MOODS = [
   },
 ];
 
+const getLocalDateString = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 export default function EnergyCheckInModal({ isOpen, onClose, theme, title }) {
   const [selected, setSelected] = useState(null);
-  const [submitted, setSubmitted] = useState(false);
+  const [stage, setStage] = useState('choose'); // choose | generating | done
+  const [tipText, setTipText] = useState(null);
 
   const handleSelect = async (mood) => {
     setSelected(mood.value);
+    setStage('generating');
 
     // Save to EnergyLog
     await base44.entities.EnergyLog.create({
@@ -53,34 +62,46 @@ export default function EnergyCheckInModal({ isOpen, onClose, theme, title }) {
       logged_at: new Date().toISOString(),
     });
 
-    // Store mood for DailyTipCard to use
+    // Store mood so the shared tip generator can use it
     localStorage.setItem('today_mood', mood.value);
-    localStorage.setItem('today_mood_date', new Date().toISOString().split('T')[0]);
+    localStorage.setItem('today_mood_date', getLocalDateString());
 
-    setSubmitted(true);
-    setTimeout(() => {
-      setSelected(null);
-      setSubmitted(false);
-      onClose();
-    }, 1200);
+    // Generate a fresh daily tip reflecting the new mood
+    try {
+      const today = getLocalDateString();
+      await clearTodaysTip(today);
+      const newTip = await generateSmartTipForUser(today);
+      setTipText(newTip?.tip_text || null);
+      // Tell the Home card to reload the newly-saved tip
+      window.dispatchEvent(new CustomEvent('daily-tip-regenerated'));
+    } catch (e) {
+      console.error('Error generating daily tip from check-in:', e);
+      setTipText(null);
+    }
+    setStage('done');
+  };
+
+  const handleClose = () => {
+    setSelected(null);
+    setStage('choose');
+    setTipText(null);
+    onClose();
   };
 
   const isDark = theme === 'dark';
 
   return (
-    <Dialog open={isOpen} onOpenChange={() => {
-      setSelected(null);
-      setSubmitted(false);
-      onClose();
-    }}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className={`max-w-sm w-[calc(100vw-2rem)] ${isDark ? 'bg-gray-900 border-gray-700' : ''}`}>
         <DialogHeader>
           <DialogTitle className={`text-xl text-center ${isDark ? 'text-white' : 'text-gray-900'}`}>
-            {title || 'How are you feeling about the day ahead?'}
+            {stage === 'done'
+              ? "Here's your tip ✨"
+              : title || 'How are you feeling about the day ahead?'}
           </DialogTitle>
         </DialogHeader>
 
-        {!submitted ? (
+        {stage === 'choose' && (
           <div className="grid grid-cols-2 gap-3 py-4">
             {MOODS.map((mood) => (
               <button
@@ -95,10 +116,34 @@ export default function EnergyCheckInModal({ isOpen, onClose, theme, title }) {
               </button>
             ))}
           </div>
-        ) : (
+        )}
+
+        {stage === 'generating' && (
           <div className="py-8 text-center">
             <div className="text-4xl mb-3">{MOODS.find(m => m.value === selected)?.emoji}</div>
-            <p className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>Got it! Your tip is ready ✨</p>
+            <Loader2 className="w-6 h-6 mx-auto animate-spin text-amber-500 mb-3" />
+            <p className={`font-medium ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>Generating your daily tip…</p>
+          </div>
+        )}
+
+        {stage === 'done' && (
+          <div className="py-4 space-y-4">
+            {tipText ? (
+              <div className={`rounded-xl p-4 ${isDark ? 'bg-amber-900/20 border border-amber-800' : 'bg-amber-50 border border-amber-200'}`}>
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className={`w-4 h-4 ${isDark ? 'text-amber-400' : 'text-amber-600'}`} />
+                  <span className={`text-xs font-semibold uppercase ${isDark ? 'text-amber-400' : 'text-amber-700'}`}>Today's Tip</span>
+                </div>
+                <p className={`text-sm leading-relaxed ${isDark ? 'text-gray-100' : 'text-gray-800'}`}>{tipText}</p>
+              </div>
+            ) : (
+              <p className={`text-sm text-center ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                Your tip is ready on the home screen ✨
+              </p>
+            )}
+            <Button onClick={handleClose} className="w-full">
+              {tipText ? 'Got it' : 'Close'}
+            </Button>
           </div>
         )}
       </DialogContent>
