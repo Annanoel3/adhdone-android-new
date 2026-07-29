@@ -78,21 +78,6 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
   for (const s of existingSynced) existingByGoogleId[s.google_event_id] = s;
 
   // Load existing tasks to check if adhd_task_id still exists (user-scoped so RLS applies).
-  // Load existing tasks via service-role + email filter. The user-scoped
-  // base44.entities.Task.list call is unreliable inside a Deno backend
-  // function (auth context can be wrong), which made the sync think deleted
-  // tasks still existed and skip creating fresh ones. Filtering by
-  // notification_recipient_email (set on every sync-created task) is reliable
-  // and respects the cross-account setup (user.email = Base44 account, which
-  // may differ from the connected Google account).
-  const existingTasks = await base44.asServiceRole.entities.Task.filter(
-    { notification_recipient_email: user.email },
-    '-created_date',
-    1000
-  );
-  const existingTaskIds = new Set(existingTasks.map(t => t.id));
-  console.log('[syncGoogleCalendar] loaded', existingTaskIds.size, 'existing tasks for', user.email);
-
   let created = 0, updated = 0, skipped = 0;
   const results = [];
 
@@ -107,10 +92,22 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
 
     let existing = existingByGoogleId[googleId];
 
-    // If already synced and task still exists → skip
-    if (existing && existing.adhd_task_id && existingTaskIds.has(existing.adhd_task_id)) {
-      skipped++;
-      continue;
+    // If already synced, directly verify the task still exists by fetching it
+    // by ID. This is reliable — a batch-loaded ID set (filtered by email) can
+    // miss tasks created with a different recipient email or from older sync
+    // runs, which would make the sync skip re-creating deleted tasks.
+    if (existing && existing.adhd_task_id) {
+      let taskStillExists = false;
+      try {
+        const task = await base44.asServiceRole.entities.Task.get(existing.adhd_task_id);
+        taskStillExists = !!task;
+      } catch (e) {
+        // Task.get throws when the record doesn't exist → was deleted
+      }
+      if (taskStillExists) {
+        skipped++;
+        continue;
+      }
     }
 
     // Run AI classification
@@ -139,12 +136,18 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
     }
     if (recheck.length > 0) {
       const rec = recheck[0];
-      // Skip only if the previously-synced task still exists. If the user
-      // deleted the imported task, fall through and re-create it (reusing
-      // the existing sync record so we update instead of duplicating).
-      if (rec.adhd_task_id && existingTaskIds.has(rec.adhd_task_id)) {
-        skipped++;
-        continue;
+      // Direct-existence check: only skip if the previously-synced task still
+      // exists. If the user deleted it, fall through and create a new one.
+      if (rec.adhd_task_id) {
+        let recTaskExists = false;
+        try {
+          const recTask = await base44.asServiceRole.entities.Task.get(rec.adhd_task_id);
+          recTaskExists = !!recTask;
+        } catch (e) { /* deleted */ }
+        if (recTaskExists) {
+          skipped++;
+          continue;
+        }
       }
       existing = rec;
     }

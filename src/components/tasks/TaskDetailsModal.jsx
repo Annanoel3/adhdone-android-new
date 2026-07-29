@@ -1166,6 +1166,13 @@ Return JSON:
                 </PopoverContent>
               </Popover>
 
+              {/* Intelligent notification schedule — visible directly, not buried in a popover */}
+              {task.reminder_schedule && task.reminder_schedule.length > 0 && (
+                <div className="w-full mt-2">
+                  <SmartReminderEditor task={task} theme={theme} onUpdate={onUpdate} />
+                </div>
+              )}
+
               {/* Show interval badge for recurring reminders */}
               {task.reminder_interval && task.reminder_interval !== 'once' && (
                 <Popover>
