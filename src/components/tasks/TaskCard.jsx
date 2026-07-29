@@ -761,15 +761,19 @@ export default function TaskCard({
 
             {/* Actions: details + delete + snooze */}
             <div className={`flex flex-wrap items-center justify-between gap-2 pt-2 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
-              <div className="flex gap-2 flex-shrink-0">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <Button
-                  variant="ghost"
-                  size="icon"
+                  variant="outline"
+                  size="sm"
                   onClick={() => onShowDetails(task)}
-                  className={`h-8 w-8 ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-100' : 'text-gray-500 hover:text-gray-900'}`}
-                  aria-label="View task details"
+                  className={`h-8 gap-1.5 font-medium ${
+                    theme === 'dark'
+                      ? 'bg-gray-700 text-gray-200 border-gray-600 hover:bg-gray-600'
+                      : 'bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100'
+                  }`}
                 >
                   <ListChecks className="w-4 h-4" />
+                  Task Details
                 </Button>
                 <Button
                   variant="ghost"
