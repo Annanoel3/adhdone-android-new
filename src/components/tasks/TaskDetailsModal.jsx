@@ -1381,9 +1381,7 @@ Return JSON:
                       </Button>
                       </PopoverClose>
 
-                      {task.reminder_schedule && task.reminder_schedule.length > 0 && (
-                        <SmartReminderEditor task={task} theme={theme} onUpdate={onUpdate} />
-                      )}
+                      <SmartReminderEditor task={task} theme={theme} onUpdate={onUpdate} />
 
                       <div className={`border-t pt-3 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
                         <button

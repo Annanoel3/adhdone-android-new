@@ -127,9 +127,17 @@ export default function SmartReminderEditor({ task, theme, onUpdate }) {
         Smart Reminder Schedule
       </p>
 
-      {schedule.length === 0 && (
+      {schedule.length === 0 && task.reminder_schedule_summary && (
+        <div className={`text-xs whitespace-pre-wrap p-2 rounded-md ${
+          isDark ? 'bg-gray-800/40 text-gray-300' : 'bg-white border border-purple-100 text-gray-600'
+        }`}>
+          {task.reminder_schedule_summary}
+        </div>
+      )}
+
+      {schedule.length === 0 && !task.reminder_schedule_summary && (
         <p className={`text-xs ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>
-          No reminders scheduled.
+          No reminders scheduled yet. Add one below, or save a new date &amp; time above to let the AI build a full schedule.
         </p>
       )}
 
