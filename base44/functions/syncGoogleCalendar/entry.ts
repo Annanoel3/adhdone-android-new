@@ -93,7 +93,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
     const isAllDay = !event.start?.dateTime;
     const attendeeCount = (event.attendees || []).length;
 
-    const existing = existingByGoogleId[googleId];
+    let existing = existingByGoogleId[googleId];
 
     // If already synced and task still exists → skip
     if (existing && existing.adhd_task_id && existingTaskIds.has(existing.adhd_task_id)) {
@@ -126,8 +126,15 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
       });
     }
     if (recheck.length > 0) {
-      skipped++;
-      continue;
+      const rec = recheck[0];
+      // Skip only if the previously-synced task still exists. If the user
+      // deleted the imported task, fall through and re-create it (reusing
+      // the existing sync record so we update instead of duplicating).
+      if (rec.adhd_task_id && existingTaskIds.has(rec.adhd_task_id)) {
+        skipped++;
+        continue;
+      }
+      existing = rec;
     }
 
     const isBirthday = isBirthdayEvent(title, recurrenceRule);

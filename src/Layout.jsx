@@ -412,6 +412,11 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       icon: ListTodo,
     },
     {
+      title: "Calendar",
+      url: createPageUrl("Calendar"),
+      icon: CalendarDays,
+    },
+    {
       title: "Focus Timer",
       url: createPageUrl("FocusTimer"),
       icon: Timer,
@@ -430,11 +435,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       title: "Parking Lot",
       url: createPageUrl("ParkingLot"),
       icon: Lightbulb,
-    },
-    {
-      title: "Calendar",
-      url: createPageUrl("Calendar"),
-      icon: CalendarDays,
     },
     {
       title: "Community",
