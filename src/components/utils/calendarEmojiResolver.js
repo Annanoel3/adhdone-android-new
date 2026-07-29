@@ -16,7 +16,7 @@ const CONTEXT_EMOJIS = [
   { keys: ['drink', 'bar', 'beer', 'wine', 'cocktail', 'happy hour'], emoji: '🥂' },
   { keys: ['walk', 'hike', 'park'], emoji: '🚶' },
   { keys: ['school', 'class', 'lecture', 'exam', 'study'], emoji: '🎓' },
-  { keys: ['tax', 'taxes', 'bill', 'bills', 'bank', 'mortgage', 'rent'], emoji: '💳' },
+  { keys: ['tax', 'taxes', 'bill', 'bills', 'bank', 'banking', 'mortgage', 'rent', 'payment', 'pay', 'paid', 'finance', 'financial', 'loan', 'credit', 'debit', 'invoice', 'salary', 'paycheck', 'deposit', 'withdraw', 'transfer', 'insurance', 'premium', 'progressive', 'carmax', 'tuition', 'subscription', 'due'], emoji: '💲' },
   { keys: ['haircut', 'salon', 'barber', 'nails'], emoji: '💇' },
   { keys: ['drive', 'car', 'uber', 'lyft', 'commute'], emoji: '🚗' },
 ];
@@ -67,7 +67,8 @@ Rules:
   Honda → 🚗 (automotive), CycleGear → 🏍 (motorcycle gear), a dance studio → 💃, a pottery studio → 🏺,
   Nike → 🏃 (running/fitness), Starbucks → ☕ (coffee), a book club → 📚, a gardening club → 🌱,
   a chess club → ♟, a skateboarding club → 🚴, a piano studio → 🎵, a fishing club →🎣
-- For common activities without a proper name, use the matching emoji: call → 📞, pay bill → 💳, gym → 🏃, email → 📧, doctor → 🩺, grocery → 🛒
+- For anything related to finance, money, payments, loans, taxes, bills, banking, or purchases — return 💲
+- For common activities without a proper name, use the matching emoji: call → 📞, gym → 🏃, email → 📧, doctor → 🩺, grocery → 🛒
 - Return ONLY a single emoji character.`,
         add_context_from_internet: true,
         response_json_schema: {
