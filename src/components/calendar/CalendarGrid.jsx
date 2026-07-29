@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { keywordEmojiForTitle, resolveEmojiWithAI, getCachedAiEmoji } from '@/components/utils/calendarEmojiResolver';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -17,42 +18,7 @@ const KIND_EMOJI = {
   task: '✅',
 };
 
-// Contextual emojis — when a title mentions a specific activity, show that
-// activity's emoji instead of the generic kind emoji (e.g. "Coffee with Sam"
-// → ☕, "Order pizza" → 🍕, "Gym" → 🏋️).
-const CONTEXT_EMOJIS = [
-  { keys: ['coffee', 'cafe', 'latte', 'espresso', 'starbucks', 'cappuccino', 'tea'], emoji: '☕' },
-  { keys: ['pizza'], emoji: '🍕' },
-  { keys: ['lunch', 'brunch'], emoji: '🥗' },
-  { keys: ['dinner', 'restaurant', 'reservation', 'dine'], emoji: '🍽️' },
-  { keys: ['gym', 'workout', 'exercise', 'training', 'run', 'running', 'yoga'], emoji: '🏋️' },
-  { keys: ['call', 'phone', 'zoom', 'teams'], emoji: '📞' },
-  { keys: ['meeting', 'meet', 'sync', 'standup', 'stand up', '1:1'], emoji: '👥' },
-  { keys: ['doctor', 'dentist', 'appointment', 'therapy', 'therapist', 'medical'], emoji: '🩺' },
-  { keys: ['flight', 'airport', 'travel', 'trip', 'vacation'], emoji: '✈️' },
-  { keys: ['grocery', 'groceries', 'shopping', 'shop', 'store', 'errand', 'costco'], emoji: '🛒' },
-  { keys: ['movie', 'cinema', 'film', 'theater', 'concert'], emoji: '🎬' },
-  { keys: ['drink', 'bar', 'beer', 'wine', 'cocktail', 'happy hour'], emoji: '🥂' },
-  { keys: ['walk', 'hike', 'park'], emoji: '🚶' },
-  { keys: ['school', 'class', 'lecture', 'exam', 'study'], emoji: '🎓' },
-  { keys: ['tax', 'taxes', 'bill', 'bills', 'bank', 'mortgage', 'rent'], emoji: '💳' },
-  { keys: ['haircut', 'salon', 'barber', 'nails'], emoji: '💇' },
-  { keys: ['drive', 'car', 'uber', 'lyft', 'commute'], emoji: '🚗' },
-];
 
-function emojiForTitle(title) {
-  if (!title) return null;
-  const t = String(title).toLowerCase();
-  for (const { keys, emoji } of CONTEXT_EMOJIS) {
-    if (keys.some((k) => {
-      // Match whole words only so "care" never matches the "car" key.
-      const escaped = k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      return new RegExp(`\\b${escaped}\\b`).test(t);
-    })) return emoji;
-  }
-  return null;
-}
-const emojiFor = (it) => emojiForTitle(it.title) || KIND_EMOJI[it.kind];
 
 const KIND_BADGE = {
   birthday: 'bg-pink-100 text-pink-700 border-pink-200',
@@ -124,6 +90,36 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
     });
     return map;
   }, [tasks, events]);
+
+  const [aiEmojis, setAiEmojis] = useState({});
+
+  // Resolve context-aware emojis via AI for titles that don't match the
+  // keyword list (e.g. brand names like "Honda" → 🚗, "CycleGear" → 🏃).
+  useEffect(() => {
+    const titlesNeedingResolution = new Set();
+    itemsByDate.forEach((items) => {
+      items.forEach((it) => {
+        if (!keywordEmojiForTitle(it.title) && !getCachedAiEmoji(it.title)) {
+          titlesNeedingResolution.add(it.title);
+        }
+      });
+    });
+    if (titlesNeedingResolution.size === 0) return;
+    let cancelled = false;
+    titlesNeedingResolution.forEach((title) => {
+      resolveEmojiWithAI(title).then((emoji) => {
+        if (cancelled || !emoji) return;
+        setAiEmojis((prev) => (prev[title] ? prev : { ...prev, [title]: emoji }));
+      });
+    });
+    return () => { cancelled = true; };
+  }, [itemsByDate]);
+
+  const emojiFor = (it) =>
+    keywordEmojiForTitle(it.title)
+    || aiEmojis[it.title]
+    || getCachedAiEmoji(it.title)
+    || KIND_EMOJI[it.kind];
 
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
