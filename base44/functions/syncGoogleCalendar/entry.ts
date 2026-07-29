@@ -254,49 +254,66 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
     // Use user-scoped create so created_by is set to the current user (making the task visible in the app)
     const createdTask = await base44.entities.Task.create(taskRecord);
 
-    // For one-time events, schedule reminders based on task category
-    // (appointments get multi-reminder schedules, others get a single reminder).
+    // For one-time events, use the LLM-powered reminder schedule generator
+    // to determine optimal reminder times based on ADHD principles.
     // Cron only handles recurring tasks, so events must be scheduled here.
     if (!isBirthday && reminderInterval === 'once' && createdTask.next_reminder) {
       try {
-        const { getMultiReminderTimes } = await import('../../shared/multiReminderRules.ts');
-        const reminders = getMultiReminderTimes(title, createdTask.next_reminder);
+        const scheduleRes = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
+          title,
+          scheduledDateISO: createdTask.next_reminder,
+        });
+        const scheduleData = scheduleRes?.data || scheduleRes || {};
+        const rawReminders = scheduleData.reminders || [];
 
-        if (reminders.length > 0) {
-          // Multi-reminder match (appointment/event/payment)
-          const notificationIds = [];
-          for (const reminder of reminders) {
-            try {
-              const res = await base44.asServiceRole.functions.invoke('schedulePush', {
-                toUserExternalId: user.email,
-                title: '📅 Upcoming',
-                body: `${title}\n\n${reminder.label}\n\nTap to view details.`,
-                sendAtISO: reminder.sendAtISO,
-                data: {
-                  screen: '/TaskNotification',
-                  taskId: createdTask.id,
-                  urgency: createdTask.urgency || 'medium',
-                  type: 'task_reminder',
-                },
-                buttons: [
-                  { id: 'snooze_15', text: 'Snooze 15 min' },
-                  { id: 'snooze_60', text: 'Snooze 1 hour' },
-                  { id: 'complete', text: '✅ Done' },
-                ],
-              });
-              const result = res?.data || res;
-              if (result?.notificationId) notificationIds.push(result.notificationId);
-            } catch (e) {
-              console.log('[syncGoogleCalendar] multi-reminder scheduling failed:', e.message);
+        // Convert reminder specs (ABSOLUTE: days_before/hour/minute or RELATIVE: relative_minutes_before)
+        // to ISO times and filter past reminders
+        const scheduledDate = new Date(createdTask.next_reminder);
+        const bufferMs = Date.now() + 2 * 60 * 1000;
+        const reminderTimes = rawReminders
+          .map(r => {
+            let reminderTime;
+            if (r.relative_minutes_before != null) {
+              reminderTime = new Date(scheduledDate.getTime() - r.relative_minutes_before * 60 * 1000);
+            } else {
+              reminderTime = new Date(scheduledDate);
+              reminderTime.setDate(reminderTime.getDate() - (r.days_before || 0));
+              reminderTime.setHours(r.hour || 0, r.minute || 0, 0, 0);
             }
-          }
-          if (notificationIds.length > 0) {
-            await base44.entities.Task.update(createdTask.id, {
-              onesignal_notification_ids: notificationIds,
+            return { sendAtISO: reminderTime.toISOString(), label: r.label };
+          })
+          .filter(r => new Date(r.sendAtISO).getTime() > bufferMs)
+          .sort((a, b) => new Date(a.sendAtISO).getTime() - new Date(b.sendAtISO).getTime());
+
+        const notificationIds = [];
+        for (const reminder of reminderTimes) {
+          try {
+            const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+              toUserExternalId: user.email,
+              title: '📅 Upcoming',
+              body: `${title}\n\n${reminder.label}\n\nTap to view details.`,
+              sendAtISO: reminder.sendAtISO,
+              data: {
+                screen: '/TaskNotification',
+                taskId: createdTask.id,
+                urgency: createdTask.urgency || 'medium',
+                type: 'task_reminder',
+              },
+              buttons: [
+                { id: 'snooze_15', text: 'Snooze 15 min' },
+                { id: 'snooze_60', text: 'Snooze 1 hour' },
+                { id: 'complete', text: '✅ Done' },
+              ],
             });
+            const result = res?.data || res;
+            if (result?.notificationId) notificationIds.push(result.notificationId);
+          } catch (e) {
+            console.log('[syncGoogleCalendar] reminder scheduling failed:', e.message);
           }
-        } else {
-          // No multi-reminder match — single reminder at event start
+        }
+
+        // Fallback: if no reminders were scheduled, send a single one at event start
+        if (notificationIds.length === 0) {
           const sendAt = new Date(createdTask.next_reminder);
           if (sendAt.getTime() > Date.now() + 2 * 60 * 1000) {
             const res = await base44.asServiceRole.functions.invoke('schedulePush', {
@@ -318,11 +335,15 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
             });
             const result = res?.data || res;
             if (result?.notificationId) {
-              await base44.entities.Task.update(createdTask.id, {
-                onesignal_notification_ids: [result.notificationId],
-              });
+              notificationIds.push(result.notificationId);
             }
           }
+        }
+
+        if (notificationIds.length > 0) {
+          await base44.entities.Task.update(createdTask.id, {
+            onesignal_notification_ids: notificationIds,
+          });
         }
       } catch (e) {
         console.log('[syncGoogleCalendar] event reminder scheduling failed:', e.message);
