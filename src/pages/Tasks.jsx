@@ -328,6 +328,11 @@ export default function Tasks() {
             setSelectedTask(null);
           }}
           onUpdate={loadTasks}
+          onDelete={() => {
+            loadTasks();
+            setIsDetailsModalOpen(false);
+            setSelectedTask(null);
+          }}
           theme={theme}
         />
 

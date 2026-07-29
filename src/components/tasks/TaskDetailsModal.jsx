@@ -864,6 +864,8 @@ Return JSON:
       if (onDelete) {
         onDelete();
       }
+      // Always close the dialog so the user returns to the task list
+      onClose();
     } finally {
       setIsUpdating(false);
     }
@@ -1816,6 +1818,7 @@ Return JSON:
                   if (onDelete) {
                     onDelete();
                   }
+                  onClose();
                 } finally {
                   setIsUpdating(false);
                 }
