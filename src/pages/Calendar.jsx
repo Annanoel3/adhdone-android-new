@@ -134,45 +134,23 @@ export default function Calendar() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [probeConnection]);
 
-  // Opens OAuth popup for connecting (or adding another account)
+  // Starts the OAuth flow with a full-page navigation. After the provider
+  // redirects back to the app (Home), a one-time flag bounces the user back to
+  // this Calendar page — see the bounce effect in App.jsx.
   const handleConnect = async () => {
     const rawUrl = await base44.connectors.connectAppUser(CONNECTOR_ID);
-    // Force Google's account chooser on every connect/reconnect so the user can
-    // pick which Google account to link (otherwise it silently reuses the
-    // currently-signed-in account).
     let url;
     try {
       url = new URL(rawUrl);
-      // select_account forces the account chooser; consent re-prompts so a
-      // previously-granted account isn't silently reused.
+      // select_account asks Google to show the account chooser; forwarded only
+      // if the platform passes it through, harmless otherwise.
       url.searchParams.set('prompt', 'select_account consent');
       url = url.toString();
     } catch {
       url = rawUrl;
     }
-    const popup = window.open(url, '_blank', 'width=600,height=700');
-    const timer = setInterval(async () => {
-      if (!popup || popup.closed) {
-        clearInterval(timer);
-        setSyncing(true);
-        setSyncError(null);
-        try {
-          const ok = await probeConnection();
-          if (!ok) {
-            setSyncError('Failed to connect. Please try again.');
-          } else {
-            const result = await attemptSync();
-            setSyncResult(result);
-            if (result?.synced_at) setLastSyncedAt(result.synced_at);
-            await loadSyncedEvents();
-          }
-        } catch (e) {
-          setSyncError(e.message);
-        } finally {
-          setSyncing(false);
-        }
-      }
-    }, 500);
+    sessionStorage.setItem('adhd_calendar_oauth_return', '1');
+    window.location.href = url;
   };
 
   const handleDisconnect = async () => {

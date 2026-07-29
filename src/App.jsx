@@ -8,7 +8,7 @@ import { queryClientInstance } from '@/lib/query-client'
 import VisualEditAgent from '@/lib/VisualEditAgent'
 import NavigationTracker from '@/lib/NavigationTracker'
 import { pagesConfig } from './pages.config'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-router-dom';
 import { setupIframeMessaging } from './lib/iframe-messaging';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
@@ -43,6 +43,16 @@ const LayoutWrapper = ({ children, currentPageName }) => Layout ?
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin } = useAuth();
+  const navigate = useNavigate();
+
+  // After a Google Calendar app-user OAuth flow, the platform redirects back to
+  // the app's default (Home). Bounce the user back to the Calendar page once.
+  useEffect(() => {
+    if (isAuthenticated && sessionStorage.getItem('adhd_calendar_oauth_return') === '1') {
+      sessionStorage.removeItem('adhd_calendar_oauth_return');
+      navigate('/Calendar', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
 
   // Show loading spinner while checking app public settings or auth
   if (isLoadingPublicSettings || isLoadingAuth) {
