@@ -12,10 +12,43 @@ const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 // Emoji per item kind — the "label" lives on the calendar itself.
 const KIND_EMOJI = {
   birthday: '🎂',
-  imported_event: '📅',
+  imported_event: '📆',
   imported_task: '✅',
-  task: '📌',
+  task: '✅',
 };
+
+// Contextual emojis — when a title mentions a specific activity, show that
+// activity's emoji instead of the generic kind emoji (e.g. "Coffee with Sam"
+// → ☕, "Order pizza" → 🍕, "Gym" → 🏋️).
+const CONTEXT_EMOJIS = [
+  { keys: ['coffee', 'cafe', 'latte', 'espresso', 'starbucks', 'cappuccino', 'tea'], emoji: '☕' },
+  { keys: ['pizza'], emoji: '🍕' },
+  { keys: ['lunch', 'brunch'], emoji: '🥗' },
+  { keys: ['dinner', 'restaurant', 'reservation', 'dine'], emoji: '🍽️' },
+  { keys: ['gym', 'workout', 'exercise', 'training', 'run', 'running', 'yoga'], emoji: '🏋️' },
+  { keys: ['call', 'phone', 'zoom', 'teams'], emoji: '📞' },
+  { keys: ['meeting', 'meet', 'sync', 'standup', 'stand up', '1:1'], emoji: '👥' },
+  { keys: ['doctor', 'dentist', 'appointment', 'therapy', 'therapist', 'medical'], emoji: '🩺' },
+  { keys: ['flight', 'airport', 'travel', 'trip', 'vacation'], emoji: '✈️' },
+  { keys: ['grocery', 'groceries', 'shopping', 'shop', 'store', 'errand', 'costco'], emoji: '🛒' },
+  { keys: ['movie', 'cinema', 'film', 'theater', 'concert'], emoji: '🎬' },
+  { keys: ['drink', 'bar', 'beer', 'wine', 'cocktail', 'happy hour'], emoji: '🥂' },
+  { keys: ['walk', 'hike', 'park'], emoji: '🚶' },
+  { keys: ['school', 'class', 'lecture', 'exam', 'study'], emoji: '🎓' },
+  { keys: ['tax', 'taxes', 'bill', 'bills', 'bank', 'mortgage', 'rent'], emoji: '💳' },
+  { keys: ['haircut', 'salon', 'barber', 'nails'], emoji: '💇' },
+  { keys: ['drive', 'car', 'uber', 'lyft', 'commute'], emoji: '🚗' },
+];
+
+function emojiForTitle(title) {
+  if (!title) return null;
+  const t = String(title).toLowerCase();
+  for (const { keys, emoji } of CONTEXT_EMOJIS) {
+    if (keys.some((k) => t.includes(k))) return emoji;
+  }
+  return null;
+}
+const emojiFor = (it) => emojiForTitle(it.title) || KIND_EMOJI[it.kind];
 
 const KIND_BADGE = {
   birthday: 'bg-pink-100 text-pink-700 border-pink-200',
@@ -45,6 +78,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark }) {
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [selected, setSelected] = useState(() => new Date());
+  const [useEmoji, setUseEmoji] = useState(true);
 
   // Group all items by local-date key.
   const itemsByDate = useMemo(() => {
@@ -98,7 +132,21 @@ export default function CalendarGrid({ tasks = [], events = [], isDark }) {
         <h2 className={`text-lg font-bold ${textPrimary}`}>
           {MONTH_NAMES[month]} {year}
         </h2>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
+          <div className={`flex items-center rounded-lg border overflow-hidden ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+            <button
+              onClick={() => setUseEmoji(true)}
+              className={`px-2 py-1 text-xs font-medium transition-colors ${useEmoji ? 'bg-blue-500 text-white' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              😀 Emoji
+            </button>
+            <button
+              onClick={() => setUseEmoji(false)}
+              className={`px-2 py-1 text-xs font-medium transition-colors ${!useEmoji ? 'bg-blue-500 text-white' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              Aa Text
+            </button>
+          </div>
           <Button
             variant="ghost"
             size="icon"
@@ -148,10 +196,8 @@ export default function CalendarGrid({ tasks = [], events = [], isDark }) {
           const isToday = sameDayKey(cell, today);
           const isSelected = sameDayKey(cell, selected);
 
-          // Collapse to unique kind emojis (max 3) + overflow count.
-          const kinds = [];
-          dayItems.forEach((it) => { if (!kinds.includes(it.kind)) kinds.push(it.kind); });
-          const shown = kinds.slice(0, 3);
+          // Show up to 3 items per cell.
+          const shown = dayItems.slice(0, 3);
           const overflow = dayItems.length - shown.length;
 
           return (
@@ -177,12 +223,27 @@ export default function CalendarGrid({ tasks = [], events = [], isDark }) {
                 )}
               </div>
               {dayItems.length > 0 && (
-                <div className="mt-1 flex flex-wrap gap-0.5 leading-none">
-                  {shown.map((kd, i) => (
-                    <span key={i} className="text-sm">{KIND_EMOJI[kd]}</span>
-                  ))}
-                  {overflow > 0 && (
-                    <span className={`text-[10px] ${textSecondary} self-end`}>+{overflow}</span>
+                <div className="mt-1 leading-none">
+                  {useEmoji ? (
+                    <div className="flex flex-wrap gap-0.5">
+                      {shown.map((it, i) => (
+                        <span key={i} className="text-sm">{emojiFor(it)}</span>
+                      ))}
+                      {overflow > 0 && (
+                        <span className={`text-[10px] ${textSecondary} self-end`}>+{overflow}</span>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {shown.map((it, i) => (
+                        <div key={i} className={`text-[10px] truncate ${textSecondary}`} title={it.title}>
+                          {it.title}
+                        </div>
+                      ))}
+                      {overflow > 0 && (
+                        <div className={`text-[10px] ${textSecondary}`}>+{overflow} more</div>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -194,9 +255,8 @@ export default function CalendarGrid({ tasks = [], events = [], isDark }) {
       {/* Legend */}
       <div className={`flex flex-wrap items-center gap-3 text-xs ${textSecondary}`}>
         <span className="flex items-center gap-1"><span>🎂</span> Birthday</span>
-        <span className="flex items-center gap-1"><span>📅</span> Imported event</span>
-        <span className="flex items-center gap-1"><span>✅</span> Imported task</span>
-        <span className="flex items-center gap-1"><span>📌</span> In-app task</span>
+        <span className="flex items-center gap-1"><span>📆</span> Event</span>
+        <span className="flex items-center gap-1"><span>✅</span> Task</span>
       </div>
 
       {/* Selected day detail */}
@@ -216,7 +276,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark }) {
           <ul className="space-y-2">
             {selectedItems.map((it, i) => (
               <li key={i} className="flex items-center gap-2">
-                <span className="text-base">{KIND_EMOJI[it.kind]}</span>
+                <span className="text-base">{emojiFor(it)}</span>
                 <span className={`text-sm flex-1 truncate ${textPrimary}`}>{it.title}</span>
                 <Badge className={`text-xs border ${KIND_BADGE[it.kind]}`}>{KIND_LABEL[it.kind]}</Badge>
               </li>
