@@ -138,12 +138,20 @@ export default function Calendar() {
   // redirects back to the app (Home), a one-time flag bounces the user back to
   // this Calendar page — see the bounce effect in App.jsx.
   const handleConnect = async () => {
+    // Clear any cached Google grant first so Google re-prompts the account
+    // chooser on the next authorize (the platform redirect strips the
+    // prompt=select_account param, so clearing consent is what forces the
+    // picker). Without this Google silently reuses the last account.
+    try {
+      await base44.connectors.disconnectAppUser(CONNECTOR_ID);
+      setConnected(false);
+      setConnectedEmail(null);
+    } catch {}
+
     const rawUrl = await base44.connectors.connectAppUser(CONNECTOR_ID);
     let url;
     try {
       url = new URL(rawUrl);
-      // select_account asks Google to show the account chooser; forwarded only
-      // if the platform passes it through, harmless otherwise.
       url.searchParams.set('prompt', 'select_account consent');
       url = url.toString();
     } catch {
