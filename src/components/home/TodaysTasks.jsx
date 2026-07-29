@@ -11,7 +11,7 @@ import { base44 } from "@/api/base44Client";
 import { motion } from "framer-motion";
 import TaskCompletionCelebration from "../tasks/TaskCompletionCelebration";
 import { updateTodaysSummary } from "../utils/dailySummaryHelper";
-import { isTodayTask } from "../utils/todayTasks";
+import { isTodayTask, isUpcomingTask } from "../utils/todayTasks";
 import {
   Popover,
   PopoverContent,
@@ -28,6 +28,10 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
     tasks.filter(t => t.status === 'active' && !t.parent_task_id && isTodayTask(t) && !t.birthday_person),
     sortBy
   ).slice(0, 5);
+  const upcomingTasks = tasks
+    .filter(t => t.status === 'active' && !t.parent_task_id && isUpcomingTask(t) && !t.birthday_person)
+    .sort((a, b) => new Date(a.due_date) - new Date(b.due_date))
+    .slice(0, 3);
   const [celebratingTaskId, setCelebratingTaskId] = React.useState(null);
   const [expandedTasks, setExpandedTasks] = React.useState({});
   const specialMode = localStorage.getItem('special_mode') || 'normal';
@@ -765,6 +769,55 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
           );
           })}
         </div>
+
+        {upcomingTasks.length > 0 && (
+          <div className={`mt-5 pt-4 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
+            <div className="flex items-center gap-2 mb-3">
+              <CalendarClock className={`w-4 h-4 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-500'}`} />
+              <h4 className={`text-sm font-semibold uppercase tracking-wide ${theme === 'dark' ? 'text-gray-200' : 'text-gray-600'}`}>
+                Coming up
+              </h4>
+            </div>
+            <div className="space-y-2">
+              {upcomingTasks.map((t) => (
+                <div
+                  key={t.id}
+                  className={`flex items-center justify-between gap-3 p-3 rounded-xl border ${
+                    theme === 'minimalist'
+                      ? 'bg-white border-gray-100'
+                      : theme === 'dark'
+                        ? 'bg-gray-900/40 border-gray-700'
+                        : 'bg-white/60 border-purple-100'
+                  }`}
+                >
+                  <span className={`text-sm font-medium truncate ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
+                    {t.title}
+                  </span>
+                  <span className={`flex items-center gap-1 text-xs flex-shrink-0 ${
+                    theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                  }`}>
+                    <Calendar className="w-3 h-3" />
+                    {formatReminderDate(t.due_date)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <Button
+          onClick={() => navigate(createPageUrl("Tasks"))}
+          variant="outline"
+          className={`w-full mt-5 ${
+            theme === 'minimalist'
+              ? 'border-gray-200 text-gray-700 hover:bg-gray-50'
+              : theme === 'dark'
+                ? 'border-gray-600 text-gray-200 hover:bg-gray-700'
+                : 'border-purple-200 text-purple-700 hover:bg-purple-50'
+          }`}
+        >
+          See all
+        </Button>
       </CardContent>
     </Card>
   );
