@@ -5,6 +5,93 @@
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 
+// ── Deterministic task type classification & schedules ─────────────────────
+// Appointments, events, and payments use fixed, reliable schedules instead of
+// LLM-generated ones. This ensures consistent timing and saves integration credits.
+
+function classifyTaskType(title) {
+  const lower = title.toLowerCase().trim();
+
+  // Payments — check first since "pay" is a common verb
+  if ([
+    /\bpayment\b/, /\bbill\b/, /\brent\b/, /\binvoice\b/, /\bsubscription\b/,
+    /\bfee\b/, /\bdues\b/, /\btuition\b/, /\bmortgage\b/, /\bpremium\b/,
+    /\bautopay\b/, /\bauto pay\b/, /\bpay \w/, /\belectric\b/, /\butility\b/,
+    /\btax\b/, /\binsurance\b/, /\bcredit card\b/,
+  ].some(p => p.test(lower))) return 'payment';
+
+  // Appointments — meeting a specific person for a scheduled visit
+  if ([
+    /\bappointment\b/, /\bdentist\b/, /\bdoctor\b/, /\bgastroenterologist\b/,
+    /\btherapist\b/, /\bconsultation\b/, /\bclinic\b/, /\bcheckup\b/,
+    /\bvisit\b/, /\bsession\b/, /\bcounseling\b/, /\bpsychologist\b/,
+    /\bpsychiatrist\b/, /\borthodontist\b/, /\bhygienist\b/, /\bexam\b/,
+    /\bphysical\b/, /\bcleaning\b/, /\binspection\b/, /\breunion\b/,
+    /\binterview\b/, /\bmeet up with\b/, /\bsee the\b/, /\bmeet with\b/,
+    /\bsurgery\b/, /\bfollow.?up\b/, /\bscreening\b/,
+  ].some(p => p.test(lower))) return 'appointment';
+
+  // Events — social gatherings, concerts, meetups
+  if ([
+    /\bconcert\b/, /\bmeetup\b/, /\bmeet up\b/, /\bparty\b/, /\bcelebration\b/,
+    /\bfestival\b/, /\bgathering\b/, /\bwebinar\b/, /\bconference\b/,
+    /\bretreat\b/, /\bworkshop\b/, /\bseminar\b/, /\bevent\b/, /\battend\b/,
+    /\brsvp\b/,
+  ].some(p => p.test(lower))) return 'event';
+
+  return null;
+}
+
+function getDeterministicSchedule(taskType) {
+  switch (taskType) {
+    case 'appointment':
+      return [
+        { days_before: 2, hour: 9, minute: 0, relative_minutes_before: null, label: '2 days before' },
+        { days_before: 1, hour: 9, minute: 0, relative_minutes_before: null, label: '1 day before' },
+        { days_before: 0, hour: 9, minute: 0, relative_minutes_before: null, label: 'morning of' },
+        { days_before: null, hour: null, minute: null, relative_minutes_before: 60, label: '1 hour before' },
+      ];
+    case 'event':
+      return [
+        { days_before: 0, hour: 9, minute: 0, relative_minutes_before: null, label: 'morning of' },
+        { days_before: null, hour: null, minute: null, relative_minutes_before: 60, label: '1 hour before' },
+      ];
+    case 'payment':
+      return [
+        { days_before: 0, hour: 9, minute: 0, relative_minutes_before: null, label: 'morning reminder' },
+        { days_before: 0, hour: 13, minute: 0, relative_minutes_before: null, label: 'afternoon reminder' },
+        { days_before: 0, hour: 18, minute: 0, relative_minutes_before: null, label: 'evening reminder' },
+      ];
+    default:
+      return null;
+  }
+}
+
+function getDeterministicNotificationText(taskType, label, title) {
+  const emoji = taskType === 'appointment' ? '📅' : taskType === 'event' ? '🎉' : '💲';
+  const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
+
+  const templates = {
+    appointment: {
+      '2 days before': { title: `${emoji} ${t}`, body: `Heads up! Your "${t}" is coming up in 2 days. You've got this! 🌟` },
+      '1 day before': { title: `${emoji} ${t}`, body: `Tomorrow's the day! Your "${t}" is tomorrow. Don't forget to prep! ✨` },
+      'morning of': { title: `${emoji} ${t}`, body: `Good morning! Your "${t}" is today. You got this! 🚀` },
+      '1 hour before': { title: `⏰ ${t}`, body: `Almost time! Your "${t}" is in about an hour. Time to head out! 🚗` },
+    },
+    event: {
+      'morning of': { title: `${emoji} ${t}`, body: `Good morning! Your "${t}" is today. You got this! ✨` },
+      '1 hour before': { title: `⏰ ${t}`, body: `Almost time! Your "${t}" is in about an hour. Time to head out! 🚗` },
+    },
+    payment: {
+      'morning reminder': { title: `${emoji} ${t}`, body: `Good morning! Your "${t}" is due today. You got this! ✨` },
+      'afternoon reminder': { title: `${emoji} ${t}`, body: `Hey! Just a nudge — your "${t}" is due today. Don't forget! 💪` },
+      'evening reminder': { title: `${emoji} ${t}`, body: `Final reminder! Your "${t}" is due today. Get it done before the day ends! 🌙` },
+    },
+  };
+
+  return (templates[taskType] && templates[taskType][label]) || { title: `${emoji} ${t}`, body: `Reminder: ${t}` };
+}
+
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
@@ -28,6 +115,27 @@ export default async function(req) {
     // often misclassifies past-today scheduled times as "tomorrow."
     const isSameDay = scheduled.toDateString() === now.toDateString();
     const hoursRemainingToday = 23 - now.getHours();
+
+    // ── Deterministic classification ──────────────────────────────────────
+    // Appointments, events, and payments use fixed schedules (no LLM needed).
+    const taskType = classifyTaskType(title);
+    if (taskType) {
+      const schedule = getDeterministicSchedule(taskType);
+      const reminders = schedule.map(r => {
+        const text = getDeterministicNotificationText(taskType, r.label, title);
+        return {
+          days_before: r.days_before,
+          hour: r.hour,
+          minute: r.minute,
+          relative_minutes_before: r.relative_minutes_before,
+          label: r.label,
+          notification_title: text.title,
+          notification_body: text.body,
+        };
+      });
+      console.log(`[generateReminderSchedule] Deterministic "${taskType}" schedule for "${title}" — ${reminders.length} reminders (no LLM call)`);
+      return Response.json({ reminders });
+    }
 
     const scheduledStr = scheduled.toLocaleString('en-US', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -89,13 +197,13 @@ PRIORITY-BASED REMINDER PERSISTENCE (for future tasks):
 - LOW: Exactly 1 reminder, well-timed shortly before the event.
 
 FUTURE TASK TYPE GUIDELINES:
-- APPOINTMENTS (doctors, therapists, interviews): 2 days before (9 AM), 1 day before (9 AM), morning of (9 AM), 1 hour before
-- SOCIAL EVENTS (meets, concerts, parties): morning of (9 AM), 1 hour before
-- PAYMENTS / BILLS due on a future date: morning of, afternoon (1 PM), evening (6 PM) on the due date
 - DEADLINES (submissions, reports): 3 days before, 1 day before, morning of
 - ROUTINE / HABIT: 1-2 reminders at the right time
 - ONE-TIME SIMPLE (pickup, delivery, call): 1-2 reminders before the task time
 - TIME-SENSITIVE / PERISHABLE: 2-3 reminders within a few hours of the task
+- GENERAL: Use your judgment based on the task nature and priority
+
+NOTE: Appointments (doctors, therapists), social events (concerts, meetups), and payments (bills, rent) are handled by a separate deterministic system — you do not need to handle those types. Focus on general tasks, deadlines, and one-time actions.
 
 GENERAL RULES:
 - Always include at least 1 reminder
