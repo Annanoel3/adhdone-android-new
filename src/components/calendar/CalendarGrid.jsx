@@ -94,7 +94,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
   const [aiEmojis, setAiEmojis] = useState({});
 
   // Resolve context-aware emojis via AI for titles that don't match the
-  // keyword list (e.g. brand names like "Honda" → 🚗, "CycleGear" → 🚴).
+  // keyword list (e.g. brand names like "Honda" → 🚗, "CycleGear" → 🏍).
   useEffect(() => {
     const titlesNeedingResolution = new Set();
     itemsByDate.forEach((items) => {

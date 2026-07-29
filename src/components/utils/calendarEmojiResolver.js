@@ -62,7 +62,7 @@ Title: "${title}"
 
 Rules:
 - If the title contains a brand, company, or proper name, research what they sell or what they're associated with and pick the matching emoji.
-  Examples: Honda → 🚗 (cars), Tesla → 🚙 (car), Nike → 🏃 (running/fitness), Starbucks → ☕ (coffee), Apple → 🍎 (tech), Netflix → 🎬 (streaming), CycleGear → 🚴 (motorcycle gear)
+  Examples: Honda → 🚗 (cars), Tesla → 🚙 (car), Nike → 🏃 (running/fitness), Starbucks → ☕ (coffee), Apple → 🍎 (tech), Netflix → 🎬 (streaming), CycleGear → 🏍 (motorcycle gear)
 - For activities, use the matching emoji: call → 📞, pay bill → 💳, gym → 🏃, email → 📧, doctor → 🩺, grocery → 🛒
 - Return ONLY a single emoji character.`,
         add_context_from_internet: true,
