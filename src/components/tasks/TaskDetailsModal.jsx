@@ -43,6 +43,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  PopoverClose,
 } from "@/components/ui/popover";
 import {
   Select,
@@ -1203,6 +1204,7 @@ Return JSON:
                           }`}
                           />
                           </div>
+                          <PopoverClose asChild>
                           <Button
                             type="button"
                             onClick={() => handleUpdateReminderTime(reminderTime, reminderDate)}
@@ -1211,6 +1213,7 @@ Return JSON:
                           >
                             {isUpdating ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Date & Time</>}
                           </Button>
+                          </PopoverClose>
                           </div>
 
                                           {/* Interval options */}
@@ -1347,6 +1350,7 @@ Return JSON:
                          }`}
                         />
                       </div>
+                      <PopoverClose asChild>
                       <Button
                         type="button"
                         onClick={() => handleUpdateReminderTime(reminderTime, reminderDate)}
@@ -1355,6 +1359,7 @@ Return JSON:
                       >
                         {isUpdating ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Date & Time</>}
                       </Button>
+                      </PopoverClose>
                       <div className={`border-t pt-3 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
                         <button 
                           onClick={() => handleUpdateField('reminder_interval', 'daily')} 
