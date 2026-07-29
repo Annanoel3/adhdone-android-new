@@ -294,8 +294,13 @@ export default function TaskCard({
     return m[interval] || interval;
   };
 
-  // Single collapsed-line date label: prefer due date, then next reminder, then interval.
+  // Single collapsed-line date label: for one-time tasks the next_reminder IS
+  // the date the user picked — it must win over a stale due_date.  For
+  // recurring tasks the due_date (deadline) still takes priority.
   const collapsedDate = (() => {
+    if (task.reminder_interval === 'once' && task.next_reminder) {
+      return { label: isToday ? 'Today' : formatReminderDate(task.next_reminder), overdue: false };
+    }
     if (task.due_date) {
       const overdue = new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed';
       return { label: `Due ${formatReminderDate(task.due_date)}`, overdue };
