@@ -189,43 +189,12 @@ export async function ensureBirthdayReminders(birthdayTasks) {
 export async function createBirthdayFromInput(inputText, email) {
   if (!email) return null;
 
-  const now = new Date();
-  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-
-  const prompt = `Analyze this input from a user: "${inputText}"
-
-TODAY IS: ${today}
-
-Determine if the user is asking to be reminded of someone's BIRTHDAY — a yearly recurring celebration of a specific person. Strong signals: the word "birthday", "bday", "b-day", "cake", or naming a person together with a date that is clearly their birthday (e.g. "Mom's birthday is July 4", "remind me that Alex's birthday is this wednesday", "don't forget grandma's bday on the 12th").
-
-If it IS a birthday:
-- "person": the name of the person whose birthday it is (just the name, e.g. "Mom", "Alex", "Grandma"). If no name is given, use "Birthday".
-- "date": resolve the birthday to a concrete YYYY-MM-DD. Use relative language relative to TODAY:
-  - "this wednesday" → the Wednesday in the current week (today if today is Wednesday, otherwise the upcoming Wednesday this week; if that day already passed this week, use next week's Wednesday).
-  - "next friday" → the next Friday strictly after today.
-  - "tomorrow" → today + 1 day.
-  - "july 4" / "July 4th" / "7/4" → that month/day in the current year.
-  - "the 12th" / "on the 12th" → the 12th of the current month (or next month if already passed).
-  The DATE must be the actual birthday (the "day of"), never a reminder offset.
-
-Only return "is_birthday": true when you are confident this is a birthday reminder. If it is a regular task that merely mentions baking a cake or a party, return false.
-
-Return JSON: { "is_birthday": boolean, "person": string|null, "date": "YYYY-MM-DD"|"null" }`;
-
   let detected;
   try {
-    const res = await base44.integrations.Core.InvokeLLM({
-      prompt,
-      response_json_schema: {
-        type: "object",
-        properties: {
-          is_birthday: { type: "boolean" },
-          person: { type: "string" },
-          date: { type: "string" },
-        },
-      },
+    const response = await base44.functions.invoke('detectBirthday', {
+      inputText,
     });
-    detected = res;
+    detected = response.data || response;
   } catch (e) {
     console.error("[birthdayScheduler] detectBirthday LLM call failed", e);
     return null;

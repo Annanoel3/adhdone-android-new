@@ -44,9 +44,10 @@ export function getCachedAiEmoji(title) {
 }
 
 /**
- * Uses InvokeLLM with web search to research what a title refers to (especially
- * brand/company names) and returns a single contextually-appropriate emoji.
- * Results are cached in-module so repeat lookups are instant.
+ * Uses the resolveCalendarEmoji backend function (OpenAI) to determine what a
+ * title refers to (especially brand/company names) and returns a single
+ * contextually-appropriate emoji. Results are cached in-module so repeat
+ * lookups are instant.
  */
 export function resolveEmojiWithAI(title) {
   if (!title) return Promise.resolve(null);
@@ -55,30 +56,8 @@ export function resolveEmojiWithAI(title) {
 
   const promise = (async () => {
     try {
-      const result = await base44.integrations.Core.InvokeLLM({
-        prompt: `Research this calendar item title and return a single emoji that best represents its subject.
-
-Title: "${title}"
-
-Rules:
-- Research what the title refers to using web search, especially for proper names — brand names, company names, venue names, club names, studio names, place names, event names, or hobby-specific terms.
-- Figure out what that thing is about (what they sell, what activity they host, what hobby they represent, etc.) and pick the single emoji that best captures that subject.
-- Examples across different hobbies:
-  Honda → 🚗 (automotive), CycleGear → 🏍 (motorcycle gear), a dance studio → 💃, a pottery studio → 🏺,
-  Nike → 🏃 (running/fitness), Starbucks → ☕ (coffee), a book club → 📚, a gardening club → 🌱,
-  a chess club → ♟, a skateboarding club → 🚴, a piano studio → 🎵, a fishing club →🎣
-- For anything related to finance, money, payments, loans, taxes, bills, banking, or purchases — return 💲
-- For common activities without a proper name, use the matching emoji: call → 📞, gym → 🏃, email → 📧, doctor → 🩺, grocery → 🛒
-- Return ONLY a single emoji character.`,
-        add_context_from_internet: true,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            emoji: { type: "string", description: "A single emoji character" }
-          },
-          required: ["emoji"]
-        }
-      });
+      const response = await base44.functions.invoke('resolveCalendarEmoji', { title });
+      const result = response.data || response;
       let emoji = result?.emoji || '📌';
       // Extract the first emoji character if the AI returned extra text
       const match = emoji.match(/\p{Extended_Pictographic}/u);
