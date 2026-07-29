@@ -40,10 +40,13 @@ async function classifyEventWithAI(openai, event) {
   // Quick heuristic: if <2 hours away, it's urgent regardless
   const isImminentDeadline = hoursUntilEvent < 2 && hoursUntilEvent > 0;
 
-  const prompt = `You are an ADHD productivity assistant. Analyze this Google Calendar event and decide importance level.
+  const eventDateOnly = eventStart ? (eventStart.split('T')[0] || '') : '';
+
+  const prompt = `You are an ADHD productivity assistant. Analyze this Google Calendar event and decide its importance, type, and due/event date.
 
 Event title: "${event.summary || 'Untitled'}"
 Start: ${eventStart}
+Event date (YYYY-MM-DD): ${eventDateOnly}
 Hours until event: ${Math.round(hoursUntilEvent)}
 Attendee count: ${attendeeCount}
 Recurrence rule: ${recurrence || 'none'}
@@ -51,10 +54,10 @@ Location: "${event.location || 'none'}"
 Description: "${(event.description || '').substring(0, 200)}"
 Imminent (<2h): ${isImminentDeadline}
 
-URGENCY RULES (strict):
-- HIGH: Imminent (<2h away) OR meetings with 3+ attendees OR mentions "deadline/exam/urgent/meeting" AND <7 days away
-- MEDIUM: Personal appointments 1-7 days away OR 1-2 attendee meetings
-- LOW: Recurring events, social/casual, >7 days away, or birthdays
+IMPORTANCE (decide firmly — do NOT default to medium):
+- "high": Imminent (<2h away) OR 3+ attendees OR title contains "deadline/exam/urgent/interview/presentation/court" OR a one-time can't-miss event within 7 days
+- "medium": 1-2 attendee meetings, personal appointments 1-7 days away, classes, social plans
+- "low": Recurring routines, casual social, >7 days away, birthdays, gym/workout, daily standups
 
 REMINDER INTERVALS:
 - Urgent (<2h): 1hour
@@ -68,8 +71,13 @@ ITEM TYPE (classify what this calendar entry actually is):
 - Default to "event" unless the title clearly describes an actionable to-do with a deadline. Most calendar entries are events.
 - NAME-ONLY TITLES: If the title is just a person's name (1-3 words, no action verb, no obvious deadline object) — e.g. "Sarah", "Mom", "John Smith", "Dr. Patel" — treat it as "event" (likely a catch-up, call, or meeting with that person), NOT a task.
 
+DUE DATE:
+- For "event" items: set due_date to the event's start date (${eventDateOnly}).
+- For "task" items: set due_date to the deadline date (YYYY-MM-DD). If the event start IS the deadline, use the start date. If no clear deadline, use null.
+- Always use the format "YYYY-MM-DD" or null.
+
 Return ONLY valid JSON:
-{"importance":"medium","reminder_interval":"daily","item_type":"event"}`;
+{"importance":"high","reminder_interval":"daily","item_type":"event","due_date":"${eventDateOnly}"}`;
 
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
@@ -240,6 +248,16 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
         reminder_interval: ai.reminder_interval || 'daily',
         reminder_count: reminderCount,
         next_reminder: nextReminderDate.toISOString(),
+        due_date: (() => {
+          // Events: the "due date" is the event date itself.
+          if (ai.item_type === 'event') return nextReminderDate.toISOString();
+          // Tasks: use the AI-detected deadline if provided.
+          if (ai.due_date) {
+            const [y, m, d] = String(ai.due_date).split('-').map(n => parseInt(n, 10));
+            if (y && m && d) return new Date(y, m - 1, d, 17, 0, 0, 0).toISOString();
+          }
+          return null;
+        })(),
         notification_recipient_email: user.email,
         recurrence_pattern: recurrenceRule ? (recurrenceRule.includes('FREQ=DAILY') ? 'daily' : recurrenceRule.includes('FREQ=WEEKLY') ? 'weekly' : recurrenceRule.includes('FREQ=MONTHLY') ? 'monthly' : recurrenceRule.includes('FREQ=YEARLY') ? 'yearly' : 'none') : 'none'
       };

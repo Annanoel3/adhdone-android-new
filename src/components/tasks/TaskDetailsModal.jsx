@@ -953,6 +953,8 @@ Return JSON:
   // Calendar classification (Event / Task / Birthday). A user-set value on the
   // task overrides the auto-detected kind passed in from the calendar view.
   const currentClassification = task.classification || itemClassification || (task.birthday_person ? 'birthday' : 'task');
+  const isEvent = currentClassification === 'event';
+  const dueLabel = isEvent ? 'Event Date' : 'Due Date';
 
   const handleClassificationChange = async (newClass) => {
     if (!task || newClass === currentClassification) return;
@@ -1241,13 +1243,13 @@ Return JSON:
                       }`}>
                         <CalendarClock className="w-3 h-3" />
                         {new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
-                          ? 'Overdue'
-                          : `Due ${formatReminderDate(task.due_date)}`}
+                          ? (isEvent ? 'Past event' : 'Overdue')
+                          : `${isEvent ? 'Event' : 'Due'} ${formatReminderDate(task.due_date)}`}
                       </button>
                     </PopoverTrigger>
                     <PopoverContent className={`w-56 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200'}`}>
                       <div className="space-y-2">
-                        <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Due Date:</label>
+                        <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>{dueLabel}:</label>
                         <input
                           type="date"
                           defaultValue={task.due_date ? task.due_date.split('T')[0] : ''}
@@ -1258,7 +1260,7 @@ Return JSON:
                           onClick={() => handleDueDateChange(null)}
                           className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 rounded text-red-600 font-medium"
                         >
-                          Remove due date
+                          {isEvent ? 'Remove event date' : 'Remove due date'}
                         </button>
                       </div>
                     </PopoverContent>
@@ -1268,19 +1270,19 @@ Return JSON:
                     <PopoverTrigger asChild>
                       <button className="cursor-pointer hover:opacity-80 transition-opacity border border-dashed border-gray-300 px-3 py-1 rounded-full text-sm font-medium text-gray-500 bg-white flex items-center gap-1">
                         <CalendarClock className="w-3 h-3" />
-                        Add Due Date
+                        {isEvent ? 'Add Event Date' : 'Add Due Date'}
                       </button>
                     </PopoverTrigger>
                     <PopoverContent className={`w-56 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200'}`}>
                       <div className="space-y-2">
-                        <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Due Date:</label>
+                        <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>{dueLabel}:</label>
                         <input
                           type="date"
                           onChange={(e) => { if (e.target.value) handleDueDateChange(e.target.value); }}
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                         <p className="text-xs text-gray-500">
-                          Reminders continue until this date, then switch to overdue reminders.
+                          {isEvent ? 'The date this event takes place.' : 'Reminders continue until this date, then switch to overdue reminders.'}
                         </p>
                       </div>
                     </PopoverContent>
