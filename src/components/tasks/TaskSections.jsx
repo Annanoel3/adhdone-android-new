@@ -21,13 +21,10 @@ function categorizeTask(task) {
   const monthAhead = new Date(today);
   monthAhead.setDate(monthAhead.getDate() + 30);
 
-  // Recurring tasks go to the bottom section
-  const isRecurring =
-    (task.recurrence_pattern && task.recurrence_pattern !== "none") ||
-    (task.reminder_interval &&
-      ["daily", "every_other_day"].includes(task.reminder_interval));
-
-  if (isRecurring) return "recurring";
+  // Only tasks with an explicit recurrence pattern are "recurring"
+  // (a daily reminder interval is just a reminder frequency, not a recurring task)
+  if (task.recurrence_pattern && task.recurrence_pattern !== "none")
+    return "recurring";
 
   const reminderDate = task.next_reminder ? new Date(task.next_reminder) : null;
   const dueDate = task.due_date ? new Date(task.due_date) : null;
