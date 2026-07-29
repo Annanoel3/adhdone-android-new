@@ -1,6 +1,5 @@
 import React, { useState, useRef } from 'react';
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Task } from "@/entities/Task";
@@ -43,6 +42,7 @@ export default function TaskCard({
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(task.title);
   const [subtasksExpanded, setSubtasksExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const dateInputRef = useRef(null);
   const timeInputRef = useRef(null);
 
@@ -289,6 +289,26 @@ export default function TaskCard({
     });
   };
 
+  const shortInterval = (interval) => {
+    const m = { '10min':'10m','20min':'20m','30min':'30m','1hour':'1h','2hours':'2h','4hours':'4h','daily':'Daily','every_other_day':'2 days','once':'Once' };
+    return m[interval] || interval;
+  };
+
+  // Single collapsed-line date label: prefer due date, then next reminder, then interval.
+  const collapsedDate = (() => {
+    if (task.due_date) {
+      const overdue = new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed';
+      return { label: `Due ${formatReminderDate(task.due_date)}`, overdue };
+    }
+    if (task.next_reminder) {
+      return { label: isToday ? 'Today' : formatReminderDate(task.next_reminder), overdue: false };
+    }
+    if (task.reminder_interval && task.reminder_interval !== 'once') {
+      return { label: shortInterval(task.reminder_interval), overdue: false };
+    }
+    return null;
+  })();
+
   const handleReminderDateChange = async (newDate, newTime) => {
     try {
       let nextReminder;
@@ -374,178 +394,300 @@ export default function TaskCard({
             : 'bg-gradient-to-br from-white to-purple-50 border-purple-200 hover:border-purple-300'
       }`}
     >
-      <CardContent className="p-4">
-        <div className="flex flex-col gap-3">
-          {(!task.reminder_interval || task.reminder_interval === 'once') && (
-          <div className="flex flex-wrap items-center gap-2 min-w-0">
-            <Badge
-              variant="outline"
-              className={`flex items-center gap-1 text-xs flex-shrink-0 ${
-                isToday
-                  ? theme === 'dark' ? 'bg-green-900/30 border-green-700 text-green-400' : 'bg-green-50 border-green-300 text-green-700'
-                  : theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-400' : 'bg-gray-50 border-gray-300 text-gray-600'
-              }`}
+      <CardContent className="p-2 sm:p-3">
+        {/* Compact single-line row: complete · date · title · priority · expand */}
+        <div className="flex items-center gap-2 min-w-0">
+          {task.status === 'completed' ? (
+            <button
+              onClick={() => onUncomplete && onUncomplete(task)}
+              className={`flex-shrink-0 ${theme === 'dark' ? 'text-green-400 hover:text-green-300' : 'text-green-600 hover:text-green-700'}`}
+              aria-label="Mark as active"
             >
-              <Calendar className="w-3 h-3" />
-              {isToday ? 'Today' : taskDate}
-            </Badge>
-          </div>
-          )}
-
-          {isEditingTitle ? (
-            <Input
-              value={editedTitle}
-              onChange={(e) => setEditedTitle(e.target.value)}
-              onBlur={handleSaveTitle}
-              onKeyDown={handleKeyDown}
-              className="mb-2"
-              autoFocus
-            />
+              <CheckCircle2 className="w-5 h-5" />
+            </button>
           ) : (
-            <div className="flex items-start gap-2 min-w-0">
-              <h3
-                className={`text-base font-medium break-words flex-1 min-w-0 ${
-                  task.status === 'completed' ? 'line-through opacity-60' : ''
-                } ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}
-              >
-                {task.title}
-              </h3>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsEditingTitle(true);
-                }}
-                className={`p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0 ${
-                  theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                }`}
-                aria-label="Edit task title"
-              >
-                <Pencil className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            <button
+              onClick={handleCompleteTask}
+              className={`flex-shrink-0 ${theme === 'dark' ? 'text-gray-500 hover:text-green-400' : 'text-gray-300 hover:text-green-600'}`}
+              aria-label="Mark task complete"
+            >
+              <Circle className="w-5 h-5" />
+            </button>
           )}
 
-          {task.description && (
-            <p className={`text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-              {task.description}
-            </p>
+          {collapsedDate && (
+            <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${
+              collapsedDate.overdue
+                ? theme === 'dark' ? 'border-red-700 bg-red-900/30 text-red-300' : 'border-red-300 bg-red-50 text-red-700'
+                : isToday && !task.due_date
+                  ? theme === 'dark' ? 'border-green-700 bg-green-900/30 text-green-400' : 'border-green-300 bg-green-50 text-green-700'
+                  : theme === 'dark' ? 'border-gray-700 bg-gray-800 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-600'
+            }`}>
+              {collapsedDate.label}
+            </span>
           )}
 
-          {/* Badges */}
-          <div className="flex flex-wrap items-center gap-2">
-            <Popover>
-              <PopoverTrigger asChild>
+          <h3
+            className={`flex-1 min-w-0 truncate text-sm font-medium ${
+              task.status === 'completed' ? 'line-through opacity-60' : ''
+            } ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}
+            onClick={() => setExpanded(v => !v)}
+          >
+            {task.title}
+          </h3>
+
+          <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${getUrgencyColor(task.urgency)}`}>
+            {task.urgency}
+          </span>
+
+          <button
+            onClick={() => setExpanded(v => !v)}
+            className={`flex-shrink-0 p-1 rounded transition-colors ${
+              theme === 'dark' ? 'hover:bg-gray-700 text-gray-400' : 'hover:bg-gray-100 text-gray-500'
+            }`}
+            aria-label="Expand task"
+          >
+            {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {/* Expanded section: all other info + inline editing */}
+        {expanded && (
+          <div className={`mt-3 pt-3 border-t space-y-3 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
+            {isEditingTitle ? (
+              <Input
+                value={editedTitle}
+                onChange={(e) => setEditedTitle(e.target.value)}
+                onBlur={handleSaveTitle}
+                onKeyDown={handleKeyDown}
+                autoFocus
+              />
+            ) : (
+              <div className="flex items-center gap-2 min-w-0">
+                <h3 className={`text-base font-medium break-words flex-1 min-w-0 ${task.status === 'completed' ? 'line-through opacity-60' : ''} ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
+                  {task.title}
+                </h3>
                 <button
-                  onClick={(e) => e.stopPropagation()}
-                  className={`${getUrgencyColor(task.urgency)} border px-2 py-1 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity`}>
-                  {task.urgency}
+                  onClick={() => setIsEditingTitle(true)}
+                  className={`p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors flex-shrink-0 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}
+                  aria-label="Edit task title"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
                 </button>
-              </PopoverTrigger>
-              <PopoverContent className={`w-48 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
-                <div className="space-y-1">
-                  <button onClick={() => handleUrgencyChange('low')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Low</button>
-                  <button onClick={() => handleUrgencyChange('medium')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Medium</button>
-                  <button onClick={() => handleUrgencyChange('high')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>High</button>
-                  <button onClick={() => handleUrgencyChange('urgent')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Urgent</button>
-                </div>
-              </PopoverContent>
-            </Popover>
+              </div>
+            )}
 
-            {task.energy_required && (
+            {task.description && (
+              <p className={`text-sm break-words whitespace-pre-wrap ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                {task.description}
+              </p>
+            )}
+
+            {/* Badges / inline editors */}
+            <div className="flex flex-wrap items-center gap-2">
               <Popover>
                 <PopoverTrigger asChild>
                   <button
                     onClick={(e) => e.stopPropagation()}
-                    className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors ${
-                      theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600' : 'border-gray-300'
-                    }`}
-                  >
-                    <Zap className="w-3 h-3" />
-                    {task.energy_required} energy
+                    className={`${getUrgencyColor(task.urgency)} border px-2 py-1 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity`}>
+                    {task.urgency}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className={`w-48 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                   <div className="space-y-1">
-                    <button onClick={() => handleEnergyChange('low')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Low</button>
-                    <button onClick={() => handleEnergyChange('medium')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Medium</button>
-                    <button onClick={() => handleEnergyChange('high')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>High</button>
+                    <button onClick={() => handleUrgencyChange('low')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Low</button>
+                    <button onClick={() => handleUrgencyChange('medium')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Medium</button>
+                    <button onClick={() => handleUrgencyChange('high')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>High</button>
+                    <button onClick={() => handleUrgencyChange('urgent')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Urgent</button>
                   </div>
                 </PopoverContent>
               </Popover>
-            )}
 
-            {/* Show interval badge for recurring reminders */}
-            {task.reminder_interval && task.reminder_interval !== 'once' && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    onClick={(e) => e.stopPropagation()}
-                    className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
-                      theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600' : 'border-gray-300 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Clock className="w-3 h-3" />
-                    {formatReminderInterval(task.reminder_interval)}
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
-                  <div className="space-y-1">
-                    <button onClick={() => handleIntervalChange('10min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 10 minutes</button>
-                    <button onClick={() => handleIntervalChange('20min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 20 minutes</button>
-                    <button onClick={() => handleIntervalChange('30min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 30 minutes</button>
-                    <button onClick={() => handleIntervalChange('1hour')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button>
-                    <button onClick={() => handleIntervalChange('2hours')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button>
-                    <button onClick={() => handleIntervalChange('daily')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Daily</button>
-                    <button onClick={() => handleIntervalChange('every_other_day')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every other day</button>
-                    <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : ''}`}></div>
-                    <button onClick={() => handleIntervalChange('once')} className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}>📅 Set Specific Date Instead</button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            )}
+              {task.energy_required && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      onClick={(e) => e.stopPropagation()}
+                      className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors ${
+                        theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600' : 'border-gray-300'
+                      }`}
+                    >
+                      <Zap className="w-3 h-3" />
+                      {task.energy_required} energy
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className={`w-48 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
+                    <div className="space-y-1">
+                      <button onClick={() => handleEnergyChange('low')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Low</button>
+                      <button onClick={() => handleEnergyChange('medium')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Medium</button>
+                      <button onClick={() => handleEnergyChange('high')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>High</button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
 
-            {/* Due date option for recurring (interval) reminders */}
-            {task.reminder_interval && task.reminder_interval !== 'once' && (
-              task.due_date ? (
+              {/* Show interval badge for recurring reminders */}
+              {task.reminder_interval && task.reminder_interval !== 'once' && (
                 <Popover>
                   <PopoverTrigger asChild>
                     <button
                       onClick={(e) => e.stopPropagation()}
                       className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
-                        new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
-                          ? theme === 'dark'
-                            ? 'border-red-700 bg-red-900/30 text-red-300 hover:bg-red-900/50'
-                            : 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100'
-                          : theme === 'dark'
-                            ? 'border-amber-700 bg-amber-900/30 text-amber-300 hover:bg-amber-900/50'
-                            : 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                        theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600' : 'border-gray-300 hover:bg-gray-50'
                       }`}
                     >
-                      <CalendarClock className="w-3 h-3" />
-                      {new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
-                        ? 'Overdue'
-                        : `Due ${formatReminderDate(task.due_date)}`}
+                      <Clock className="w-3 h-3" />
+                      {formatReminderInterval(task.reminder_interval)}
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className={`w-56 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
-                    <div className="space-y-2">
-                      <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : ''}`}>Due Date:</label>
-                      <input
-                        type="date"
-                        defaultValue={task.due_date ? task.due_date.split('T')[0] : ''}
-                        onChange={(e) => handleDueDateChange(e.target.value)}
-                        className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
-                      />
-                      <button
-                        onClick={() => handleDueDateChange(null)}
-                        className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-gray-700 text-red-400' : 'hover:bg-red-50 text-red-600'}`}
-                      >
-                        Remove due date
-                      </button>
+                  <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
+                    <div className="space-y-1">
+                      <button onClick={() => handleIntervalChange('10min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 10 minutes</button>
+                      <button onClick={() => handleIntervalChange('20min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 20 minutes</button>
+                      <button onClick={() => handleIntervalChange('30min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 30 minutes</button>
+                      <button onClick={() => handleIntervalChange('1hour')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button>
+                      <button onClick={() => handleIntervalChange('2hours')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button>
+                      <button onClick={() => handleIntervalChange('daily')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Daily</button>
+                      <button onClick={() => handleIntervalChange('every_other_day')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every other day</button>
+                      <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : ''}`}></div>
+                      <button onClick={() => handleIntervalChange('once')} className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}>📅 Set Specific Date Instead</button>
                     </div>
                   </PopoverContent>
                 </Popover>
-              ) : (
+              )}
+
+              {/* Due date option for recurring (interval) reminders */}
+              {task.reminder_interval && task.reminder_interval !== 'once' && (
+                task.due_date ? (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
+                          new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
+                            ? theme === 'dark'
+                              ? 'border-red-700 bg-red-900/30 text-red-300 hover:bg-red-900/50'
+                              : 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100'
+                            : theme === 'dark'
+                              ? 'border-amber-700 bg-amber-900/30 text-amber-300 hover:bg-amber-900/50'
+                              : 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                        }`}
+                      >
+                        <CalendarClock className="w-3 h-3" />
+                        {new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
+                          ? 'Overdue'
+                          : `Due ${formatReminderDate(task.due_date)}`}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className={`w-56 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
+                      <div className="space-y-2">
+                        <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : ''}`}>Due Date:</label>
+                        <input
+                          type="date"
+                          defaultValue={task.due_date ? task.due_date.split('T')[0] : ''}
+                          onChange={(e) => handleDueDateChange(e.target.value)}
+                          className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
+                        />
+                        <button
+                          onClick={() => handleDueDateChange(null)}
+                          className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-gray-700 text-red-400' : 'hover:bg-red-50 text-red-600'}`}
+                        >
+                          Remove due date
+                        </button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        className={`flex items-center gap-1 border border-dashed px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
+                          theme === 'dark'
+                            ? 'border-gray-600 text-gray-400 hover:bg-gray-700'
+                            : 'border-gray-300 text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        <CalendarClock className="w-3 h-3" />
+                        Add Due Date
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className={`w-56 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
+                      <div className="space-y-2">
+                        <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : ''}`}>Due Date:</label>
+                        <input
+                          type="date"
+                          onChange={(e) => { if (e.target.value) handleDueDateChange(e.target.value); }}
+                          className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
+                        />
+                        <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Reminders continue until this date, then switch to overdue reminders.
+                        </p>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )
+              )}
+
+              {/* Show date badge for one-time reminders with a date set */}
+              {task.reminder_interval === 'once' && task.next_reminder && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      onClick={(e) => e.stopPropagation()}
+                      className={`border px-2 py-1 rounded text-xs cursor-pointer transition-colors flex items-center gap-1 ${
+                        theme === 'dark'
+                          ? 'border-purple-700 bg-purple-900/30 text-purple-300 hover:bg-purple-900/50'
+                          : 'border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100'
+                      }`}
+                    >
+                      <Calendar className="w-3 h-3" />
+                      {formatReminderDate(task.next_reminder)} • {formatReminderTime(task.next_reminder)}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className={`w-72 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
+                    <div className="space-y-4 p-2">
+                      <div>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Reminder Date:</label>
+                        <input
+                          type="date"
+                          ref={dateInputRef}
+                          defaultValue={getCurrentReminderDate(task)}
+                          onChange={(e) => {
+                            const currentTime = timeInputRef.current?.value || '09:00';
+                            handleReminderDateChange(e.target.value, currentTime);
+                          }}
+                          className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Reminder Time:</label>
+                        <input
+                          type="time"
+                          ref={timeInputRef}
+                          defaultValue={getCurrentReminderTime(task)}
+                          onChange={(e) => {
+                            const currentDate = dateInputRef.current?.value;
+                            handleReminderDateChange(currentDate, e.target.value);
+                          }}
+                          className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
+                        />
+                      </div>
+                      <div className={`border-t pt-2 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
+                        <button 
+                          onClick={() => handleIntervalChange('daily')} 
+                          className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}
+                        >
+                          🔄 Use Recurring Reminder Instead
+                        </button>
+                      </div>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              )}
+
+              {/* Show "Add Reminder" button if no reminder is set */}
+              {!task.reminder_interval && !task.next_reminder && (
                 <Popover>
                   <PopoverTrigger asChild>
                     <button
@@ -556,246 +698,148 @@ export default function TaskCard({
                           : 'border-gray-300 text-gray-500 hover:bg-gray-50'
                       }`}
                     >
-                      <CalendarClock className="w-3 h-3" />
-                      Add Due Date
+                      <Clock className="w-3 h-3" />
+                      Add Reminder
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className={`w-56 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
-                    <div className="space-y-2">
-                      <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : ''}`}>Due Date:</label>
-                      <input
-                        type="date"
-                        onChange={(e) => { if (e.target.value) handleDueDateChange(e.target.value); }}
-                        className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
-                      />
-                      <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                        Reminders continue until this date, then switch to overdue reminders.
-                      </p>
+                  <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
+                    <div className="space-y-1">
+                      <div className={`px-3 py-2 text-xs font-semibold uppercase ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Recurring</div>
+                      <button onClick={() => handleIntervalChange('30min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 30 minutes</button>
+                      <button onClick={() => handleIntervalChange('1hour')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button>
+                      <button onClick={() => handleIntervalChange('2hours')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button>
+                      <button onClick={() => handleIntervalChange('daily')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Daily</button>
+                      <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : ''}`}></div>
+                      <button onClick={() => handleIntervalChange('once')} className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}>📅 Set Specific Date</button>
                     </div>
                   </PopoverContent>
                 </Popover>
-              )
-            )}
+              )}
 
-            {/* Show date badge for one-time reminders with a date set */}
-            {task.reminder_interval === 'once' && task.next_reminder && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    onClick={(e) => e.stopPropagation()}
-                    className={`border px-2 py-1 rounded text-xs cursor-pointer transition-colors flex items-center gap-1 ${
-                      theme === 'dark'
-                        ? 'border-purple-700 bg-purple-900/30 text-purple-300 hover:bg-purple-900/50'
-                        : 'border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100'
-                    }`}
-                  >
-                    <Calendar className="w-3 h-3" />
-                    {formatReminderDate(task.next_reminder)} • {formatReminderTime(task.next_reminder)}
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className={`w-72 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
-                  <div className="space-y-4 p-2">
-                    <div>
-                      <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Reminder Date:</label>
-                      <input
-                        type="date"
-                        ref={dateInputRef}
-                        defaultValue={getCurrentReminderDate(task)}
-                        onChange={(e) => {
-                          const currentTime = timeInputRef.current?.value || '09:00';
-                          handleReminderDateChange(e.target.value, currentTime);
-                        }}
-                        className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
-                      />
-                    </div>
-                    <div>
-                      <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Reminder Time:</label>
-                      <input
-                        type="time"
-                        ref={timeInputRef}
-                        defaultValue={getCurrentReminderTime(task)}
-                        onChange={(e) => {
-                          const currentDate = dateInputRef.current?.value;
-                          handleReminderDateChange(currentDate, e.target.value);
-                        }}
-                        className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
-                      />
-                    </div>
-                    <div className={`border-t pt-2 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
-                      <button 
-                        onClick={() => handleIntervalChange('daily')} 
-                        className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}
-                      >
-                        🔄 Use Recurring Reminder Instead
-                      </button>
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            )}
-
-            {/* Show "Add Reminder" button if no reminder is set */}
-            {!task.reminder_interval && !task.next_reminder && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    onClick={(e) => e.stopPropagation()}
-                    className={`flex items-center gap-1 border border-dashed px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
-                      theme === 'dark'
-                        ? 'border-gray-600 text-gray-400 hover:bg-gray-700'
-                        : 'border-gray-300 text-gray-500 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Clock className="w-3 h-3" />
-                    Add Reminder
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
-                  <div className="space-y-1">
-                    <div className={`px-3 py-2 text-xs font-semibold uppercase ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Recurring</div>
-                    <button onClick={() => handleIntervalChange('30min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 30 minutes</button>
-                    <button onClick={() => handleIntervalChange('1hour')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button>
-                    <button onClick={() => handleIntervalChange('2hours')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button>
-                    <button onClick={() => handleIntervalChange('daily')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Daily</button>
-                    <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : ''}`}></div>
-                    <button onClick={() => handleIntervalChange('once')} className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}>📅 Set Specific Date</button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-            )}
-
-            {/* Subtask Badge - clickable to toggle */}
-            {subtaskCount > 0 && (
-              <button
-                onClick={(e) => { e.stopPropagation(); setSubtasksExpanded(v => !v); }}
-                className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded border transition-colors ${
-                  theme === 'dark'
-                    ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600'
-                    : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
-                }`}
-              >
-                <ListChecks className="w-3 h-3" />
-                {completedSubtaskCount}/{subtaskCount} Subtasks
-                {subtasksExpanded
-                  ? <ChevronDown className="w-3 h-3 ml-0.5" />
-                  : <ChevronRight className="w-3 h-3 ml-0.5" />
-                }
-              </button>
-            )}
-          </div>
-
-          <div className={`flex flex-wrap items-center justify-between gap-2 pt-2 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
-            <div className="flex gap-2 flex-shrink-0">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onShowDetails(task)}
-                className={`h-8 w-8 ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-100' : 'text-gray-500 hover:text-gray-900'}`}
-                aria-label="View task details"
-              >
-                <ListChecks className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleDeleteTask}
-                className={`h-8 w-8 ${theme === 'dark' ? 'hover:bg-gray-700 text-red-500 hover:text-red-400' : 'text-red-600 hover:text-red-700 hover:bg-red-50'}`}
-                aria-label="Delete task"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
-            </div>
-            {task.status === 'completed' ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => onUncomplete && onUncomplete(task)}
-                className={`flex items-center gap-2 flex-shrink-0 ${theme === 'dark' ? 'hover:bg-gray-700 text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
-                aria-label="Mark as active"
-              >
-                <Clock className="w-4 h-4" />
-                Make Active
-              </Button>
-            ) : (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleCompleteTask}
-                className={`h-8 w-8 flex-shrink-0 ${theme === 'dark' ? 'hover:bg-gray-700 text-green-500 hover:text-green-400' : 'text-green-600 hover:text-green-700'}`}
-                aria-label="Mark task complete"
-              >
-                <CheckCircle2 className="w-5 h-5" />
-              </Button>
-            )}
-          </div>
-
-          {(task.type === 'task' || task.type === 'reminder') && (
-            <div className={`flex flex-wrap gap-2 pt-2 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onSnooze(task, 15)}
-                className={`flex items-center gap-2 flex-1 min-w-[80px] ${theme === 'dark' ? 'bg-gray-700 text-gray-200 border-gray-600 hover:bg-gray-600' : ''}`}
-              >
-                <BellOff className="w-4 h-4" />
-                15 min
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onSnooze(task, 30)}
-                className={`flex items-center gap-2 flex-1 min-w-[80px] ${theme === 'dark' ? 'bg-gray-700 text-gray-200 border-gray-600 hover:bg-gray-600' : ''}`}
-              >
-                <BellOff className="w-4 h-4" />
-                30 min
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onSnooze(task, 60)}
-                className={`flex items-center gap-2 flex-1 min-w-[80px] ${theme === 'dark' ? 'bg-gray-700 text-gray-200 border-gray-600 hover:bg-gray-600' : ''}`}
-              >
-                <BellOff className="w-4 h-4" />
-                1 hour
-              </Button>
-            </div>
-          )}
-
-          {/* Collapsible subtasks — inside the same card */}
-          {subtasksExpanded && subtasks && subtasks.length > 0 && (
-            <div className={`pt-2 border-t space-y-1 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
-              {subtasks.map(subtask => (
-                <div
-                  key={subtask.id}
-                  className={`flex items-center gap-2 px-1 py-1.5 rounded text-sm ${
-                    theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
+              {/* Subtask Badge - clickable to toggle */}
+              {subtaskCount > 0 && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setSubtasksExpanded(v => !v); }}
+                  className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded border transition-colors ${
+                    theme === 'dark'
+                      ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600'
+                      : 'bg-gray-100 text-gray-700 border-gray-200 hover:bg-gray-200'
                   }`}
                 >
-                  <button
-                    onClick={(e) => { e.stopPropagation(); subtask.status === 'completed' ? onUncomplete(subtask) : onComplete(subtask); }}
-                    className={`flex-shrink-0 transition-colors ${
-                      subtask.status === 'completed'
-                        ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
-                        : theme === 'dark' ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+                  <ListChecks className="w-3 h-3" />
+                  {completedSubtaskCount}/{subtaskCount} Subtasks
+                  {subtasksExpanded
+                    ? <ChevronDown className="w-3 h-3 ml-0.5" />
+                    : <ChevronRight className="w-3 h-3 ml-0.5" />
+                  }
+                </button>
+              )}
+            </div>
+
+            {/* Actions: details + delete + snooze */}
+            <div className={`flex flex-wrap items-center justify-between gap-2 pt-2 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
+              <div className="flex gap-2 flex-shrink-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onShowDetails(task)}
+                  className={`h-8 w-8 ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-400 hover:text-gray-100' : 'text-gray-500 hover:text-gray-900'}`}
+                  aria-label="View task details"
+                >
+                  <ListChecks className="w-4 h-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleDeleteTask}
+                  className={`h-8 w-8 ${theme === 'dark' ? 'hover:bg-gray-700 text-red-500 hover:text-red-400' : 'text-red-600 hover:text-red-700 hover:bg-red-50'}`}
+                  aria-label="Delete task"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+              {task.status === 'completed' && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => onUncomplete && onUncomplete(task)}
+                  className={`flex items-center gap-2 flex-shrink-0 ${theme === 'dark' ? 'hover:bg-gray-700 text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
+                  aria-label="Mark as active"
+                >
+                  <Clock className="w-4 h-4" />
+                  Make Active
+                </Button>
+              )}
+            </div>
+
+            {(task.type === 'task' || task.type === 'reminder') && (
+              <div className={`flex flex-wrap gap-2 pt-2 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onSnooze(task, 15)}
+                  className={`flex items-center gap-2 flex-1 min-w-[80px] ${theme === 'dark' ? 'bg-gray-700 text-gray-200 border-gray-600 hover:bg-gray-600' : ''}`}
+                >
+                  <BellOff className="w-4 h-4" />
+                  15 min
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onSnooze(task, 30)}
+                  className={`flex items-center gap-2 flex-1 min-w-[80px] ${theme === 'dark' ? 'bg-gray-700 text-gray-200 border-gray-600 hover:bg-gray-600' : ''}`}
+                >
+                  <BellOff className="w-4 h-4" />
+                  30 min
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => onSnooze(task, 60)}
+                  className={`flex items-center gap-2 flex-1 min-w-[80px] ${theme === 'dark' ? 'bg-gray-700 text-gray-200 border-gray-600 hover:bg-gray-600' : ''}`}
+                >
+                  <BellOff className="w-4 h-4" />
+                  1 hour
+                </Button>
+              </div>
+            )}
+
+            {/* Collapsible subtasks — inside the same card */}
+            {subtasksExpanded && subtasks && subtasks.length > 0 && (
+              <div className={`pt-2 border-t space-y-1 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
+                {subtasks.map(subtask => (
+                  <div
+                    key={subtask.id}
+                    className={`flex items-center gap-2 px-1 py-1.5 rounded text-sm ${
+                      theme === 'dark' ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
                     }`}
                   >
-                    {subtask.status === 'completed'
-                      ? <CheckCircle2 className="w-4 h-4" />
-                      : <Circle className="w-4 h-4" />
-                    }
-                  </button>
-                  <span className={`flex-1 ${
-                    subtask.status === 'completed'
-                      ? 'line-through opacity-50'
-                      : theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                  }`}>
-                    {subtask.title}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); subtask.status === 'completed' ? onUncomplete(subtask) : onComplete(subtask); }}
+                      className={`flex-shrink-0 transition-colors ${
+                        subtask.status === 'completed'
+                          ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
+                          : theme === 'dark' ? 'text-gray-500 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'
+                      }`}
+                    >
+                      {subtask.status === 'completed'
+                        ? <CheckCircle2 className="w-4 h-4" />
+                        : <Circle className="w-4 h-4" />
+                      }
+                    </button>
+                    <span className={`flex-1 ${
+                      subtask.status === 'completed'
+                        ? 'line-through opacity-50'
+                        : theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                    }`}>
+                      {subtask.title}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
   );
