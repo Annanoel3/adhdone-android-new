@@ -77,8 +77,11 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
   const existingByGoogleId = {};
   for (const s of existingSynced) existingByGoogleId[s.google_event_id] = s;
 
-  // Load existing tasks to check if adhd_task_id still exists (user-scoped so RLS applies)
-  const existingTasks = await base44.entities.Task.list();
+  // Load existing tasks to check if adhd_task_id still exists (user-scoped so RLS applies).
+  // Use a high limit to avoid missing tasks when the user has many records —
+  // the default limit would cause the sync to think a still-existing task was
+  // "deleted" and create duplicates, or conversely re-use a stale sync record.
+  const existingTasks = await base44.entities.Task.list('-created_date', 1000);
   const existingTaskIds = new Set(existingTasks.map(t => t.id));
 
   let created = 0, updated = 0, skipped = 0;
@@ -378,8 +381,12 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
     };
 
     if (existing) {
-      await base44.asServiceRole.entities.CalendarSyncedEvent.update(existing.id, syncRecord);
-      updated++;
+      // The previous task was deleted — start fresh: delete the stale sync
+      // record and create a brand-new one so there is no carry-over of old
+      // notification IDs or schedule data from the deleted task.
+      await base44.asServiceRole.entities.CalendarSyncedEvent.delete(existing.id);
+      await base44.asServiceRole.entities.CalendarSyncedEvent.create(syncRecord);
+      created++;
     } else {
       await base44.asServiceRole.entities.CalendarSyncedEvent.create(syncRecord);
       created++;
