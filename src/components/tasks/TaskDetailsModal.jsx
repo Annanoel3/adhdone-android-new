@@ -625,26 +625,40 @@ Return JSON:
             ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
           }).catch(err => console.error("Error updating task:", err));
         } else {
-          // One-time reminder (same as creation)
-          const notificationId = await scheduleReminder({
+          // One-time reminder — check for multi-reminder category first
+          const { scheduleMultiReminders } = await import('../utils/multiReminderScheduler');
+          const multiIds = await scheduleMultiReminders({
             email: currentUser.email,
-            title: "Task Reminder 📋",
-            body: `${task.title}\n\nTap to mark as complete!`,
-            sendAtISO: nextReminder.toISOString(),
+            title: task.title,
+            scheduledDateISO: nextReminder.toISOString(),
             taskId: task.id,
-            data: {
-              screen: "/TaskNotification",
-              taskId: task.id,
-              urgency: task.urgency,
-              type: 'task_reminder'
-            },
-            buttons: [
-              { id: "snooze_15", text: "Snooze 15 min" },
-              { id: "snooze_60", text: "Snooze 1 hour" },
-              { id: "complete", text: "✅ Done" }
-            ]
+            urgency: task.urgency,
           });
-          if (notificationId) newNotificationIds = [notificationId];
+
+          if (multiIds) {
+            newNotificationIds = multiIds;
+          } else {
+            // No multi-reminder match — single reminder at the scheduled time
+            const notificationId = await scheduleReminder({
+              email: currentUser.email,
+              title: "Task Reminder 📋",
+              body: `${task.title}\n\nTap to mark as complete!`,
+              sendAtISO: nextReminder.toISOString(),
+              taskId: task.id,
+              data: {
+                screen: "/TaskNotification",
+                taskId: task.id,
+                urgency: task.urgency,
+                type: 'task_reminder'
+              },
+              buttons: [
+                { id: "snooze_15", text: "Snooze 15 min" },
+                { id: "snooze_60", text: "Snooze 1 hour" },
+                { id: "complete", text: "✅ Done" }
+              ]
+            });
+            if (notificationId) newNotificationIds = [notificationId];
+          }
 
           Task.update(task.id, {
             next_reminder: nextReminder.toISOString(),

@@ -273,23 +273,37 @@ Return JSON:
         notification_recipient_email: user.email
       });
 
-      scheduleReminder({
+      // Check for multi-reminder category first (appointments, events, payments)
+      const { scheduleMultiReminders } = await import('../utils/multiReminderScheduler');
+      const multiIds = await scheduleMultiReminders({
         email: user.email,
-        title: "Task Reminder 📋",
-        body: `${createdTask.title}\n\nTap to mark as complete!`,
-        sendAtISO: nextReminderTime.toISOString(),
+        title: createdTask.title,
+        scheduledDateISO: nextReminderTime.toISOString(),
         taskId: createdTask.id,
-        data: { screen: "/TaskNotification", taskId: createdTask.id, urgency, type: 'task_reminder' },
-        buttons: [
-          { id: "snooze_15", text: "Snooze 15 min" },
-          { id: "snooze_60", text: "Snooze 1 hour" },
-          { id: "complete", text: "✅ Done" }
-        ]
-      }).then(notificationId => {
-        if (notificationId) {
-          base44.entities.Task.update(createdTask.id, { onesignal_notification_ids: [notificationId] });
-        }
-      }).catch(error => console.error("Failed to schedule reminder:", error));
+        urgency,
+      });
+
+      if (multiIds) {
+        base44.entities.Task.update(createdTask.id, { onesignal_notification_ids: multiIds });
+      } else {
+        scheduleReminder({
+          email: user.email,
+          title: "Task Reminder 📋",
+          body: `${createdTask.title}\n\nTap to mark as complete!`,
+          sendAtISO: nextReminderTime.toISOString(),
+          taskId: createdTask.id,
+          data: { screen: "/TaskNotification", taskId: createdTask.id, urgency, type: 'task_reminder' },
+          buttons: [
+            { id: "snooze_15", text: "Snooze 15 min" },
+            { id: "snooze_60", text: "Snooze 1 hour" },
+            { id: "complete", text: "✅ Done" }
+          ]
+        }).then(notificationId => {
+          if (notificationId) {
+            base44.entities.Task.update(createdTask.id, { onesignal_notification_ids: [notificationId] });
+          }
+        }).catch(error => console.error("Failed to schedule reminder:", error));
+      }
 
       onClose();
       navigate(createPageUrl("Home"), { state: { reload: true } });

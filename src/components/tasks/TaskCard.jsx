@@ -348,20 +348,37 @@ export default function TaskCard({
 
         const { base44 } = await import('@/api/base44Client');
         const currentUser = await base44.auth.me();
-        const { scheduleReminder } = await import('../utils/reminderScheduler');
-        const notificationId = await scheduleReminder({
+
+        // Check for multi-reminder category first (appointments, events, payments)
+        const { scheduleMultiReminders } = await import('../utils/multiReminderScheduler');
+        const multiIds = await scheduleMultiReminders({
           email: currentUser.email,
-          title: "Task Reminder 📋",
-          body: `${task.title}\n\nTap to mark as complete!`,
-          sendAtISO: nextReminder.toISOString(),
+          title: task.title,
+          scheduledDateISO: nextReminder.toISOString(),
           taskId: task.id,
-          data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency, type: 'task_reminder' },
-          buttons: [{ id: "snooze_15", text: "Snooze 15 min" }, { id: "snooze_60", text: "Snooze 1 hour" }, { id: "complete", text: "✅ Done" }]
+          urgency: task.urgency,
         });
+
+        let notificationIds = [];
+        if (multiIds) {
+          notificationIds = multiIds;
+        } else {
+          const { scheduleReminder } = await import('../utils/reminderScheduler');
+          const notificationId = await scheduleReminder({
+            email: currentUser.email,
+            title: "Task Reminder 📋",
+            body: `${task.title}\n\nTap to mark as complete!`,
+            sendAtISO: nextReminder.toISOString(),
+            taskId: task.id,
+            data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency, type: 'task_reminder' },
+            buttons: [{ id: "snooze_15", text: "Snooze 15 min" }, { id: "snooze_60", text: "Snooze 1 hour" }, { id: "complete", text: "✅ Done" }]
+          });
+          if (notificationId) notificationIds = [notificationId];
+        }
 
         await Task.update(task.id, {
           next_reminder: nextReminder.toISOString(),
-          onesignal_notification_ids: notificationId ? [notificationId] : []
+          onesignal_notification_ids: notificationIds
         });
       }
 
