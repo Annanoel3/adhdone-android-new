@@ -5,7 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { isTodayTask, isUpcomingTask } from "../utils/todayTasks";
 
-const CURRENT_PROMPT_VERSION = 10; // Increment this when you update the prompt
+const CURRENT_PROMPT_VERSION = 11; // Increment this when you update the prompt
 
 const isEvening = () => new Date().getHours() >= 17;
 
@@ -245,20 +245,31 @@ Examples:
           || tasksWithFirstSteps[0];
 
         if (easyTask) {
+          const easyTaskDesc = easyTask.description ? `\nTASK DESCRIPTION: ${easyTask.description}` : '';
+          const allTaskContext = activeTasks.slice(0, 8).map(t => {
+            const d = t.description ? ` — ${t.description}` : '';
+            return `- "${t.title}"${d}`;
+          }).join('\n');
+
           contextualGuidance += `
 
 ACTIONABLE TASK SUGGESTION:
-Suggest starting with: "${easyTask.title}" (${easyTask.energy_required || 'medium'} energy)
+Suggest starting with: "${easyTask.title}" (${easyTask.energy_required || 'medium'} energy)${easyTaskDesc}
+
+ALL ACTIVE TASKS (for context — you may pick a different one if the suggested task is ambiguous):
+${allTaskContext}
 
 CRITICAL INSTRUCTION: Do NOT just say "start with [task name]". Instead, SUGGEST A SPECIFIC FIRST STEP for this task.
 
+RESEARCH RULE: Many task titles are brand names, apps, subscriptions, or products (e.g. "cancel everyday dose" is a coffee subscription, NOT a pharmacy; "cancel Spotify" is an app). Before suggesting a first step, use the task description AND web search to understand what the task ACTUALLY refers to. Do NOT assume a task requires a phone call unless it clearly says "call" or names a person/business you contact by phone. If a task is ambiguous and you cannot determine what it refers to, give a generic first step like "open the relevant app or website and find the cancel option" rather than guessing.
+
 Examples of first steps:
-- For "remind dad about door": The first step is "send him a quick text"
-- For "go through subscriptions": The first step is "open your email and search for 'subscribe confirmation'"
-- For "write email": The first step is "open a blank email and write the subject line"
-- For "call dentist": The first step is "pull up their phone number"
-- For "clean kitchen": The first step is "fill the sink with water"
-- For "organize photos": The first step is "open your photo library"
+- For "cancel everyday dose" (coffee subscription): "open the Everyday Dose app or your email receipt and find the manage subscription option"
+- For "remind dad about door": "send him a quick text"
+- For "go through subscriptions": "open your email and search for 'subscribe confirmation'"
+- For "write email": "open a blank email and write the subject line"
+- For "clean kitchen": "fill the sink with water"
+- For "organize photos": "open your photo library"
 
 Always make the first step tiny, concrete, and something they can do RIGHT NOW in under 2 minutes. Format: "The first step is to [specific action]"`;
         }

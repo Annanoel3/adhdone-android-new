@@ -16,18 +16,15 @@ Deno.serve(async (req) => {
 
     const { prompt } = await req.json();
 
-    // Generate tip text
-    const tipResponse = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'user',
-          content: prompt
-        }
-      ]
+    // Use InvokeLLM with web search so the AI can research ambiguous task names
+    // (e.g. "cancel everyday dose" is a coffee subscription, not a pharmacy call).
+    const llmResponse = await base44.integrations.Core.InvokeLLM({
+      prompt,
+      add_context_from_internet: true,
+      model: 'gemini_3_flash'
     });
 
-    const tipText = tipResponse.choices[0].message.content.trim();
+    const tipText = (typeof llmResponse === 'string' ? llmResponse : (llmResponse?.tipText || String(llmResponse || ''))).trim();
 
     // Categorize the tip
     const categoryPrompt = `Categorize this tip into ONE category: "${tipText}"\n\nCategories: focus, motivation, organization, self_care, time_management\n\nReturn ONLY the category name.`;
