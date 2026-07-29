@@ -26,17 +26,6 @@ async function classifyEventWithAI(openai, event) {
   const attendeeCount = (event.attendees || []).length;
   const recurrence = (event.recurrence || []).join(', ');
   
-  // Client-side urgency detection: check title/description for critical keywords
-  const fullText = `${event.summary || ''} ${event.description || ''}`.toLowerCase();
-  const urgentKeywords = ['urgent', 'deadline', 'asap', 'critical', 'exam', 'interview', 'presentation'];
-  const hasUrgentKeyword = urgentKeywords.some(kw => fullText.includes(kw));
-  
-  // If contains urgent keyword and within 7 days, immediately mark high
-  if (hasUrgentKeyword && hoursUntilEvent > 0 && hoursUntilEvent <= 168) {
-    const interval = hoursUntilEvent < 2 ? '1hour' : hoursUntilEvent < 24 ? '2hours' : 'daily';
-    return { importance: 'high', reminder_interval: interval };
-  }
-  
   // Quick heuristic: if <2 hours away, it's urgent regardless
   const isImminentDeadline = hoursUntilEvent < 2 && hoursUntilEvent > 0;
 
@@ -54,16 +43,23 @@ Location: "${event.location || 'none'}"
 Description: "${(event.description || '').substring(0, 200)}"
 Imminent (<2h): ${isImminentDeadline}
 
-IMPORTANCE (decide firmly — do NOT default to medium):
-- "high": Imminent (<2h away) OR 3+ attendees OR title contains "deadline/exam/urgent/interview/presentation/court" OR a one-time can't-miss event within 7 days
-- "medium": 1-2 attendee meetings, personal appointments 1-7 days away, classes, social plans
-- "low": Recurring routines, casual social, >7 days away, birthdays, gym/workout, daily standups
+URGENCY (same SMART INFERENCE as the app's task add — decide firmly, do NOT default to medium):
+- "urgent": Hard deadline today/tomorrow with serious consequences (rent due now, court, exam today, flight today)
+- "high": Time-sensitive/can't-miss event (<2h away OR 3+ attendees OR title contains "deadline/exam/urgent/interview/presentation/court"), perishable tasks (food, meds, laundry), hard financial/legal deadlines within 7 days
+- "medium": 1-2 attendee meetings, personal appointments 1-7 days away, classes, social plans, important-but-flexible obligations
+- "low": Recurring routines, casual social, >7 days away, gym/workout, daily standups, nice-to-haves
 
-REMINDER INTERVALS:
-- Urgent (<2h): 1hour
-- High urgency (<24h): 2hours
-- High urgency (1-7d): daily
-- Medium/Low: daily
+ENERGY REQUIRED: low (casual/routine) | medium (normal) | high (demanding/exam/presentation/move)
+
+REMINDER TYPE (match the app's quick-add / task-add logic):
+- For "event" items: this is a ONE-TIME event reminder — set reminder_interval="once". The app sends a single reminder at the event's start time.
+- For "task" items: this is a RECURRING reminder (keep reminding until done). Infer the interval from the task's nature:
+  * Hard deadline today/tomorrow, perishable, or time-sensitive → "1hour" or "2hours"
+  * Important obligation (pay bills, submit work, financial/legal) → "2hours"
+  * Important but flexible (selling, errands, projects, organizing) → "4hours"
+  * Routine/habit/wellness/daily chore → "daily"
+  * Low-stakes nice-to-have → "daily"
+  * When in doubt → "2hours"
 
 ITEM TYPE (classify what this calendar entry actually is):
 - "task": An actionable to-do the user must DO/complete by a deadline — e.g. "Pay rent", "Submit report", "Renew license", "File taxes", "Buy groceries". It has a due action, not just attendance.
@@ -77,7 +73,7 @@ DUE DATE:
 - Always use the format "YYYY-MM-DD" or null.
 
 Return ONLY valid JSON:
-{"importance":"high","reminder_interval":"daily","item_type":"event","due_date":"${eventDateOnly}"}`;
+{"urgency":"medium","energy_required":"medium","reminder_interval":"once","item_type":"event","due_date":"${eventDateOnly}"}`;
 
   const completion = await openai.chat.completions.create({
     model: 'gpt-4o-mini',
@@ -153,7 +149,9 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
     try {
       ai = await classifyEventWithAI(openai, event);
     } catch {
-      ai = { importance: 'medium', reminder_interval: 'daily' };
+      // Fallback if AI fails — default to a one-time event so we don't spam
+      // recurring reminders for something we couldn't classify.
+      ai = { urgency: 'medium', energy_required: 'medium', reminder_interval: 'once', item_type: 'event', due_date: null };
     }
 
     // Re-check if this event was already synced (race condition guard with retry)
@@ -229,35 +227,58 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
         reminder_interval: 'once',
         recurrence_pattern: 'yearly',
         birthday_person: birthdayPerson,
+        classification: 'birthday',
         next_reminder: nextReminderDate.toISOString(),
         notification_recipient_email: user.email
       };
     } else {
-      const urgencyMap = { low: 'low', medium: 'medium', high: 'high' };
-      
-      // For urgent tasks, don't limit reminders—let them continue until completion
-      const reminderCount = (ai.importance === 'high' || ai.reminder_interval === '1hour') ? 0 : 0;
-      
+      const validUrgency = ['low', 'medium', 'high', 'urgent'].includes(ai.urgency) ? ai.urgency : 'medium';
+      const validEnergy = ['low', 'medium', 'high'].includes(ai.energy_required) ? ai.energy_required : 'medium';
+      const isEventItem = ai.item_type === 'event';
+
+      // Reminder type matches the app's add-task logic:
+      //  - events get a ONE-TIME reminder at the event start time
+      //  - tasks get RECURRING reminders (interval inferred from the task's nature)
+      const recurringIntervals = ['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day'];
+      const intervalMsMap = {
+        '10min': 10 * 60 * 1000, '20min': 20 * 60 * 1000, '30min': 30 * 60 * 1000,
+        '1hour': 60 * 60 * 1000, '2hours': 2 * 60 * 60 * 1000, '4hours': 4 * 60 * 60 * 1000,
+        'daily': 24 * 60 * 60 * 1000, 'every_other_day': 2 * 24 * 60 * 60 * 1000,
+      };
+      const reminderInterval = isEventItem
+        ? 'once'
+        : (recurringIntervals.includes(ai.reminder_interval) ? ai.reminder_interval : '2hours');
+
+      // next_reminder: events fire at the event start; tasks start recurring now.
+      let nextReminderISO;
+      if (isEventItem) {
+        nextReminderISO = nextReminderDate.toISOString();
+      } else {
+        const startGap = intervalMsMap[reminderInterval] || intervalMsMap['2hours'];
+        nextReminderISO = new Date(Date.now() + startGap).toISOString();
+      }
+
+      // due_date: events → event date; tasks → AI-detected deadline (or null).
+      let dueDateISO = null;
+      if (isEventItem) {
+        dueDateISO = nextReminderDate.toISOString();
+      } else if (ai.due_date) {
+        const [y, m, d] = String(ai.due_date).split('-').map(n => parseInt(n, 10));
+        if (y && m && d) dueDateISO = new Date(y, m - 1, d, 17, 0, 0, 0).toISOString();
+      }
+
       taskRecord = {
         title: title,
         description: richDescription,
         notes: event.location ? `📍 ${event.location}` : (event.description ? event.description.substring(0, 200) : ''),
-        urgency: urgencyMap[ai.importance] || 'medium',
-        energy_required: ai.importance === 'high' ? 'high' : ai.importance === 'low' ? 'low' : 'medium',
+        urgency: validUrgency,
+        energy_required: validEnergy,
         status: 'active',
-        reminder_interval: ai.reminder_interval || 'daily',
-        reminder_count: reminderCount,
-        next_reminder: nextReminderDate.toISOString(),
-        due_date: (() => {
-          // Events: the "due date" is the event date itself.
-          if (ai.item_type === 'event') return nextReminderDate.toISOString();
-          // Tasks: use the AI-detected deadline if provided.
-          if (ai.due_date) {
-            const [y, m, d] = String(ai.due_date).split('-').map(n => parseInt(n, 10));
-            if (y && m && d) return new Date(y, m - 1, d, 17, 0, 0, 0).toISOString();
-          }
-          return null;
-        })(),
+        reminder_interval: reminderInterval,
+        reminder_count: 0,
+        next_reminder: nextReminderISO,
+        due_date: dueDateISO,
+        classification: isEventItem ? 'event' : 'task',
         notification_recipient_email: user.email,
         recurrence_pattern: recurrenceRule ? (recurrenceRule.includes('FREQ=DAILY') ? 'daily' : recurrenceRule.includes('FREQ=WEEKLY') ? 'weekly' : recurrenceRule.includes('FREQ=MONTHLY') ? 'monthly' : recurrenceRule.includes('FREQ=YEARLY') ? 'yearly' : 'none') : 'none'
       };
@@ -265,6 +286,41 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
 
     // Use user-scoped create so created_by is set to the current user (making the task visible in the app)
     const createdTask = await base44.entities.Task.create(taskRecord);
+
+    // For one-time events, schedule a single event reminder at the event start
+    // (cron only handles recurring tasks, so events must be scheduled here).
+    if (!isBirthday && ai.item_type === 'event' && createdTask.next_reminder) {
+      try {
+        const sendAt = new Date(createdTask.next_reminder);
+        if (sendAt.getTime() > Date.now() + 2 * 60 * 1000) {
+          const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+            toUserExternalId: user.email,
+            title: '📅 Event Reminder',
+            body: `${title}\n\nTap to view details.`,
+            sendAtISO: sendAt.toISOString(),
+            data: {
+              screen: '/TaskNotification',
+              taskId: createdTask.id,
+              urgency: createdTask.urgency || 'medium',
+              type: 'task_reminder',
+            },
+            buttons: [
+              { id: 'snooze_15', text: 'Snooze 15 min' },
+              { id: 'snooze_60', text: 'Snooze 1 hour' },
+              { id: 'complete', text: '✅ Done' },
+            ],
+          });
+          const result = res?.data || res;
+          if (result?.notificationId) {
+            await base44.entities.Task.update(createdTask.id, {
+              onesignal_notification_ids: [result.notificationId],
+            });
+          }
+        }
+      } catch (e) {
+        console.log('[syncGoogleCalendar] event reminder scheduling failed:', e.message);
+      }
+    }
 
     const syncRecord = {
       google_event_id: googleId,
