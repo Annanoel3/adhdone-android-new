@@ -102,11 +102,13 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
   const calRes = await fetch(calUrl, { headers: authHeader });
   if (!calRes.ok) {
     const err = await calRes.json().catch(() => ({}));
+    console.log('[syncGoogleCalendar] calendar API failed status=', calRes.status, 'err=', JSON.stringify(err), 'for=', connectedEmail);
     return { error: 'calendar_api_error', details: err, connectedEmail };
   }
 
   const calData = await calRes.json();
   const events = (calData.items || []).filter(e => e.status !== 'cancelled');
+  console.log('[syncGoogleCalendar] calendar fetch OK for=', connectedEmail, '| raw items=', (calData.items || []).length, '| active events=', events.length);
 
   // Load all existing synced events for this user
   const existingSynced = await base44.asServiceRole.entities.CalendarSyncedEvent.filter({ user_email: user.email });
@@ -334,8 +336,11 @@ Deno.serve(async (req) => {
     const result = await syncCalendarAccount(base44, openai, user, accessToken, user.email);
 
     if (result.error) {
+      console.log('[syncGoogleCalendar] sync returned error for=', result.connectedEmail, 'err=', JSON.stringify(result.details));
       return Response.json({ error: result.error, details: result.details }, { status: 502 });
     }
+
+    console.log('[syncGoogleCalendar] sync done for=', result.connectedEmail, '| created=', result.created, 'updated=', result.updated, 'skipped=', result.skipped, 'total=', result.total_events);
 
     return Response.json({
       success: true,
