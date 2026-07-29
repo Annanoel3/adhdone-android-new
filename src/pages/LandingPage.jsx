@@ -9,7 +9,15 @@ export default function LandingPage() {
 
   useEffect(() => {
     base44.auth.isAuthenticated().then((authed) => {
-      if (authed) navigate("/Home", { replace: true });
+      if (!authed) return;
+      // If returning from the Google Calendar OAuth flow, bounce to the
+      // Calendar page instead of the default Home redirect.
+      if (sessionStorage.getItem('adhd_calendar_oauth_return') === '1') {
+        sessionStorage.removeItem('adhd_calendar_oauth_return');
+        navigate('/Calendar', { replace: true });
+      } else {
+        navigate("/Home", { replace: true });
+      }
     });
   }, [navigate]);
 

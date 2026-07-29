@@ -183,7 +183,9 @@ export default function Calendar() {
         setSyncResult(result);
         if (result?.synced_at) setLastSyncedAt(result.synced_at);
         if (result?.connected_email) setConnectedEmail(result.connected_email);
-        await loadSyncedEvents();
+        // Reload both imported events AND in-app tasks — synced calendar
+        // events become Task records too, and the grid shows both.
+        await Promise.all([loadSyncedEvents(), loadTasks()]);
       }
     } catch (e) {
       setSyncError(e.message || 'Sync failed');
