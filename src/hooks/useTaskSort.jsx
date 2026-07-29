@@ -20,10 +20,12 @@ export function sortTasks(tasks, sortBy) {
         return (priorityOrder[a.urgency] ?? 2) - (priorityOrder[b.urgency] ?? 2);
       }
       case "due_date": {
-        // Sort by due_date first (if set), then next_reminder. Tasks with no
-        // date at all are treated as "due now" so they sort to the top, and
-        // far-future dated items (e.g. a yearly birthday) fall to the bottom.
+        // Match the collapsedDate display logic in TaskCard:
+        // 1. One-time tasks show next_reminder (the actual event time), not due_date
+        // 2. Recurring tasks with due_date show "Due <date>"
+        // 3. Other tasks with next_reminder show that date
         const dueSortKey = (t) => {
+          if (t.reminder_interval === 'once' && t.next_reminder) return new Date(t.next_reminder).getTime();
           if (t.due_date) return new Date(t.due_date).getTime();
           if (t.next_reminder) return new Date(t.next_reminder).getTime();
           return Date.now();
