@@ -168,13 +168,14 @@ export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }
               <SelectContent>
                 <SelectItem value="none">Does not repeat</SelectItem>
                 <SelectItem value="weekly">Weekly (same day next week)</SelectItem>
+                <SelectItem value="every_other_week">Every other week (same day, 2 weeks)</SelectItem>
                 <SelectItem value="monthly">Monthly (same day next month)</SelectItem>
                 <SelectItem value="yearly">Yearly (e.g. birthday)</SelectItem>
               </SelectContent>
             </Select>
             {formData.recurrence_pattern !== 'none' && (
               <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                When you check this off, a new copy will automatically appear for {formData.recurrence_pattern === 'weekly' ? 'next week' : formData.recurrence_pattern === 'monthly' ? 'next month' : 'next year'}.
+                When you check this off, a new copy will automatically appear for {formData.recurrence_pattern === 'weekly' ? 'next week' : formData.recurrence_pattern === 'every_other_week' ? 'in 2 weeks' : formData.recurrence_pattern === 'monthly' ? 'next month' : 'next year'}.
               </p>
             )}
           </div>

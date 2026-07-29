@@ -154,6 +154,7 @@
         "none",
         "daily",
         "weekly",
+        "every_other_week",
         "monthly",
         "yearly"
       ],

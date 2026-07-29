@@ -7,6 +7,8 @@ function getNextRecurrenceDate(task) {
 
   if (task.recurrence_pattern === 'weekly') {
     nextDate.setDate(nextDate.getDate() + 7);
+  } else if (task.recurrence_pattern === 'every_other_week') {
+    nextDate.setDate(nextDate.getDate() + 14);
   } else if (task.recurrence_pattern === 'monthly') {
     nextDate.setMonth(nextDate.getMonth() + 1);
   } else if (task.recurrence_pattern === 'yearly') {
@@ -18,6 +20,8 @@ function getNextRecurrenceDate(task) {
     nextDate = new Date(now);
     if (task.recurrence_pattern === 'weekly') {
       nextDate.setDate(nextDate.getDate() + 7);
+    } else if (task.recurrence_pattern === 'every_other_week') {
+      nextDate.setDate(nextDate.getDate() + 14);
     } else if (task.recurrence_pattern === 'monthly') {
       nextDate.setMonth(nextDate.getMonth() + 1);
     } else if (task.recurrence_pattern === 'yearly') {
@@ -70,6 +74,7 @@ export function getRecurrenceLabel(pattern) {
     none: '',
     daily: '🔁 Daily',
     weekly: '🔁 Weekly',
+    every_other_week: '🔁 Every other week',
     monthly: '🔁 Monthly',
     yearly: '🎂 Yearly'
   };
