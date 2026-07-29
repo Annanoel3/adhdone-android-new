@@ -125,7 +125,18 @@ export default function Calendar() {
 
   // Opens OAuth popup for connecting (or adding another account)
   const handleConnect = async () => {
-    const url = await base44.connectors.connectAppUser(CONNECTOR_ID);
+    const rawUrl = await base44.connectors.connectAppUser(CONNECTOR_ID);
+    // Force Google's account chooser on every connect/reconnect so the user can
+    // pick which Google account to link (otherwise it silently reuses the
+    // currently-signed-in account).
+    let url;
+    try {
+      url = new URL(rawUrl);
+      url.searchParams.set('prompt', 'select_account');
+      url = url.toString();
+    } catch {
+      url = rawUrl;
+    }
     const popup = window.open(url, '_blank', 'width=600,height=700');
     const timer = setInterval(async () => {
       if (!popup || popup.closed) {
