@@ -8,9 +8,9 @@ import { scheduleReminder } from './reminderScheduler';
 import { base44 } from '@/api/base44Client';
 
 // ── localStorage cache (24h TTL) ─────────────────────────────────────────────
-function getCachedSchedule(title) {
+function getCachedSchedule(title, urgency) {
   try {
-    const key = `adhd_reminder_cache_${title.toLowerCase().trim()}`;
+    const key = `adhd_reminder_cache_${title.toLowerCase().trim()}_${urgency || 'medium'}`;
     const cached = localStorage.getItem(key);
     if (!cached) return null;
     const { data, timestamp } = JSON.parse(cached);
@@ -21,33 +21,34 @@ function getCachedSchedule(title) {
   }
 }
 
-function setCachedSchedule(title, data) {
+function setCachedSchedule(title, urgency, data) {
   try {
-    const key = `adhd_reminder_cache_${title.toLowerCase().trim()}`;
+    const key = `adhd_reminder_cache_${title.toLowerCase().trim()}_${urgency || 'medium'}`;
     localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
   } catch {}
 }
 
 // ── Core: get reminder times (minutes_before + label) from LLM or cache ──────
-async function fetchReminderSchedule(title, scheduledDateISO) {
+async function fetchReminderSchedule(title, scheduledDateISO, urgency) {
   // Try cache first
-  let reminders = getCachedSchedule(title);
+  let reminders = getCachedSchedule(title, urgency);
 
   if (!reminders) {
-    console.log(`[multiReminderScheduler] No cache hit for "${title}" — calling LLM`);
+    console.log(`[multiReminderScheduler] No cache hit for "${title}" (priority: ${urgency || 'medium'}) — calling LLM`);
     const response = await base44.functions.invoke('generateReminderSchedule', {
       title,
       scheduledDateISO,
+      urgency,
     });
 
     const data = response.data || response;
     reminders = data.reminders || [];
 
     if (reminders.length > 0) {
-      setCachedSchedule(title, reminders);
+      setCachedSchedule(title, urgency, reminders);
     }
   } else {
-    console.log(`[multiReminderScheduler] Cache hit for "${title}" — ${reminders.length} reminders`);
+    console.log(`[multiReminderScheduler] Cache hit for "${title}" (priority: ${urgency || 'medium'}) — ${reminders.length} reminders`);
   }
 
   return reminders;
@@ -98,7 +99,7 @@ export async function scheduleMultiReminders({
   urgency,
 }) {
   try {
-    const reminders = await fetchReminderSchedule(title, scheduledDateISO);
+    const reminders = await fetchReminderSchedule(title, scheduledDateISO, urgency);
     if (!reminders || reminders.length === 0) return null;
 
     const reminderTimes = resolveReminderTimes(reminders, scheduledDateISO, title);

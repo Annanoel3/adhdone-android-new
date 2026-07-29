@@ -12,11 +12,13 @@ export default async function(req) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const bodyText = await req.text();
-    const { title, scheduledDateISO } = JSON.parse(bodyText);
+    const { title, scheduledDateISO, urgency } = JSON.parse(bodyText);
 
     if (!title || !scheduledDateISO) {
       return Response.json({ error: 'title and scheduledDateISO required' }, { status: 400 });
     }
+
+    const priority = urgency || 'medium';
 
     const scheduled = new Date(scheduledDateISO);
     const now = new Date();
@@ -33,6 +35,7 @@ export default async function(req) {
     const prompt = `You are an ADHD productivity expert helping someone with ADHD manage their task reminders.
 
 TASK TITLE: "${title}"
+TASK PRIORITY: ${priority}
 SCHEDULED FOR: ${scheduledStr}
 CURRENT TIME: ${nowStr}
 
@@ -45,6 +48,13 @@ KEY ADHD REMINDER PRINCIPLES:
 - Advance reminders help for tasks that need preparation or travel
 - Externalizing future thoughts reduces cognitive load — a well-timed reminder is like a "body double"
 - People with ADHD benefit from reminders that create a gentle sense of urgency without overwhelming
+
+PRIORITY-BASED REMINDER PERSISTENCE:
+The task priority is: ${priority}
+- URGENT: Maximum persistence. Use 3-4 reminders spread across multiple days and times. Start further in advance (e.g. 3 days before) and escalate closer to the event. Spread reminders across different times of day to maximize completion odds. Include a just-in-time reminder close to the event.
+- HIGH: Strong persistence. Use 2-3 reminders. Start 1-2 days in advance with a morning reminder, include a day-of reminder, and a just-in-time reminder.
+- MEDIUM: Moderate persistence. Use 1-2 reminders at well-chosen times (typically a day-of morning reminder and/or a just-in-time reminder).
+- LOW: Minimal persistence. Use exactly 1 reminder, well-timed (usually a single just-in-time reminder shortly before the event). Do not over-remind for low priority tasks.
 
 REMINDER SCHEDULE GUIDELINES BY TASK TYPE:
 
@@ -79,6 +89,7 @@ TIME-SENSITIVE / PERISHABLE tasks (food, laundry, medication timing):
 GENERAL RULES:
 - Always include at least 1 reminder
 - Never schedule more than 4 reminders (overwhelming)
+- Scale reminder count by priority: URGENT=3-4, HIGH=2-3, MEDIUM=1-2, LOW=1
 - For "morning" = 9 (hour 9)
 - For "afternoon" = 13 (hour 13, i.e. 1 PM)
 - For "evening" = 18 (hour 18, i.e. 6 PM)
