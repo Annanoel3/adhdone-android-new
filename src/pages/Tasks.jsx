@@ -12,7 +12,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import TaskCard from "../components/tasks/TaskCard";
 import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import TaskEditModal from "../components/tasks/TaskEditModal";
 import HelpfulRemindersSuggestions from "../components/tasks/HelpfulRemindersSuggestions";
@@ -20,6 +19,7 @@ import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
 import TaskSortDropdown from "../components/tasks/TaskSortDropdown";
+import TaskSections from "../components/tasks/TaskSections";
 
 export default function Tasks() {
   const navigate = useNavigate();
@@ -281,40 +281,33 @@ export default function Tasks() {
           <TaskSortDropdown />
         </div>
 
-        <div className="grid sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredTasks.map((task) => {
-            const subtasks = allTasks.filter(t => t.parent_task_id === task.id);
-            return (
-              <TaskCard
-                key={task.id}
-                task={task}
-                theme={theme}
-                onRefreshTasks={loadTasks}
-                onEditTitle={async (taskId, newTitle) => {
-                  await Task.update(taskId, { title: newTitle });
-                  loadTasks();
-                }}
-                onEdit={(taskToEdit) => {
-                  setSelectedTask(taskToEdit);
-                  setIsEditModalOpen(true);
-                }}
-                onComplete={handleComplete}
-                onUncomplete={handleUncomplete}
-                onSnooze={handleSnooze}
-                onShowDetails={(taskToShow) => {
-                  setSelectedTask(taskToShow);
-                  setIsDetailsModalOpen(true);
-                }}
-                onDelete={handleDelete}
-                subtaskCount={getSubtaskCount(task.id)}
-                completedSubtaskCount={getCompletedSubtaskCount(task.id)}
-                subtasks={subtasks}
-              />
-            );
-          })}
-        </div>
-
-        {filteredTasks.length === 0 && (
+        {filteredTasks.length > 0 ? (
+          <TaskSections
+            tasks={filteredTasks}
+            allTasks={allTasks}
+            theme={theme}
+            onRefreshTasks={loadTasks}
+            onEditTitle={async (taskId, newTitle) => {
+              await Task.update(taskId, { title: newTitle });
+              loadTasks();
+            }}
+            onEdit={(taskToEdit) => {
+              setSelectedTask(taskToEdit);
+              setIsEditModalOpen(true);
+            }}
+            onComplete={handleComplete}
+            onUncomplete={handleUncomplete}
+            onSnooze={handleSnooze}
+            onShowDetails={(taskToShow) => {
+              setSelectedTask(taskToShow);
+              setIsDetailsModalOpen(true);
+            }}
+            onDelete={handleDelete}
+            onAddTask={() => navigate(createPageUrl("AddTask"))}
+            isSeasonalTheme={isSeasonalTheme}
+            specialMode={specialMode}
+          />
+        ) : (
           <div className="text-center py-12">
             <p className="text-gray-500 text-lg">No tasks found</p>
           </div>
