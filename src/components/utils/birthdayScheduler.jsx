@@ -116,8 +116,53 @@ export async function scheduleBirthdayReminders(task) {
  * For a list of birthday tasks, schedule reminders for any active birthday
  * task that doesn't yet have notification IDs. Idempotent — safe to call on
  * every load. Covers both manually-added and Google-synced birthdays.
+ *
+ * Also rolls over birthdays whose day-of has already passed: updates
+ * next_reminder to next year's occurrence, clears stale notification IDs,
+ * and schedules fresh reminders.
  */
 export async function ensureBirthdayReminders(birthdayTasks) {
+  const now = new Date();
+  let didRollover = false;
+
+  for (const task of birthdayTasks || []) {
+    if (!task.birthday_person || task.status !== "active" || !task.next_reminder) continue;
+
+    const birthdayDate = new Date(task.next_reminder);
+    // Give a 1-day grace period so "day of" reminders still fire
+    const dayAfter = new Date(birthdayDate.getTime() + 24 * 60 * 60 * 1000);
+    if (dayAfter > now) continue;
+
+    // Birthday has passed — roll to next year
+    const month = birthdayDate.getMonth() + 1;
+    const day = birthdayDate.getDate();
+    const nextDate = computeNextBirthdayDate(month, day);
+
+    // Cancel old notifications if any
+    if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+      try {
+        const { cancelScheduledReminder } = await import("./reminderScheduler");
+        await cancelScheduledReminder(task.onesignal_notification_ids);
+      } catch (e) {
+        console.error("[birthdayScheduler] Failed to cancel old reminders on rollover", e);
+      }
+    }
+
+    try {
+      await base44.entities.Task.update(task.id, {
+        next_reminder: nextDate.toISOString(),
+        onesignal_notification_ids: [],
+      });
+      // Update in-memory so scheduleBirthdayReminders works with fresh data
+      task.next_reminder = nextDate.toISOString();
+      task.onesignal_notification_ids = [];
+      didRollover = true;
+    } catch (e) {
+      console.error("[birthdayScheduler] Failed to rollover birthday", task.id, e);
+    }
+  }
+
+  // Schedule reminders for any unscheduled birthday (including just-rolled-over ones)
   const unscheduled = (birthdayTasks || []).filter(
     (t) =>
       t.birthday_person &&
@@ -132,6 +177,8 @@ export async function ensureBirthdayReminders(birthdayTasks) {
       console.error("[birthdayScheduler] ensure failed for", task.id, e);
     }
   }
+
+  return didRollover;
 }
 
 /**

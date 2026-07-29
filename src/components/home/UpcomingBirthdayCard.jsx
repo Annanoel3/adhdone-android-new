@@ -19,15 +19,21 @@ function formatWhen(iso) {
 export default function UpcomingBirthdayCard({ tasks, user, theme, specialMode, onRefresh }) {
   const [showDialog, setShowDialog] = useState(false);
 
+  const SIX_MONTHS_MS = 6 * 30 * 24 * 60 * 60 * 1000;
+
   const birthdays = useMemo(
     () =>
       (tasks || [])
         .filter((t) => t.birthday_person && t.status === "active" && t.next_reminder)
+        .filter((t) => new Date(t.next_reminder) - new Date() <= SIX_MONTHS_MS)
         .sort((a, b) => new Date(a.next_reminder) - new Date(b.next_reminder)),
     [tasks]
   );
 
   const next = birthdays[0];
+
+  // Don't render the card at all when no birthdays are within 6 months
+  if (!next) return null;
 
   return (
     <>

@@ -11,6 +11,7 @@ import MotivationCoach from "../components/home/MotivationCoach";
 import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import MomentumCelebration from "../components/shared/MomentumCelebration";
 import { isTodayTask } from "../components/utils/todayTasks";
+import { ensureBirthdayReminders } from "../components/utils/birthdayScheduler";
 
 export default function Home() {
   const [tasks, setTasks] = useState([]);
@@ -55,6 +56,11 @@ export default function Home() {
     try {
       const allTasks = await base44.entities.Task.list('-updated_date');
       setTasks(allTasks);
+      // Roll over passed birthdays to next year and ensure reminders exist
+      const birthdayTasks = allTasks.filter(t => t.birthday_person && t.status === "active" && t.next_reminder);
+      if (birthdayTasks.length > 0) {
+        ensureBirthdayReminders(birthdayTasks).catch(() => {});
+      }
     } catch (error) {
       console.error('Error loading tasks:', error);
     }
