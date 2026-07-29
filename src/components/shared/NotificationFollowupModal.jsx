@@ -82,6 +82,7 @@ export default function NotificationFollowupModal({ user, theme }) {
           (t) =>
             t.next_reminder &&
             new Date(t.next_reminder) <= now &&
+            !t.birthday_person && // birthdays are reminders, not "did you do it?" tasks
             !dismissedTaskIds.current.has(t.id)
         );
         if (overdue.length > 0) {
