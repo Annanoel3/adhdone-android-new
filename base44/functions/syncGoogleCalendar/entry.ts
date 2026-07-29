@@ -189,6 +189,16 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
       nextReminderDate = new Date(Date.now() + 24 * 60 * 60 * 1000);
     }
 
+    // Google returns a recurring event's "master" record whose start date is
+    // the ORIGINAL occurrence (often a past year). For yearly events (birthdays),
+    // advance to the next upcoming occurrence so the reminder isn't set to a
+    // past date.
+    if (recurrenceRule.includes('FREQ=YEARLY') && nextReminderDate < new Date()) {
+      while (nextReminderDate < new Date()) {
+        nextReminderDate.setFullYear(nextReminderDate.getFullYear() + 1);
+      }
+    }
+
     let taskRecord;
     if (isBirthday) {
       const birthdayPerson = extractBirthdayPerson(title);
