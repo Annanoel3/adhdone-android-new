@@ -271,8 +271,17 @@ Deno.serve(async (req) => {
     
     const body = await req.json().catch(() => ({}));
 
-    // Probe mode: just check if connection can be established
+    // Probe mode: check whether a Google Calendar connection exists without
+    // running a full sync (used by the Calendar page to render connect state).
     if (body.probe) {
+      try {
+        const conn = await base44.connectors.getConnection('googlecalendar');
+        if (conn?.accessToken) {
+          return Response.json({ connected: true, connected_email: conn.email || user.email });
+        }
+      } catch (err) {
+        console.log('[syncGoogleCalendar] probe: no connection', err.message);
+      }
       return Response.json({ error: 'not_connected', message: 'Google Calendar not connected' }, { status: 400 });
     }
 

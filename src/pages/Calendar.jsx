@@ -77,49 +77,51 @@ export default function Calendar() {
   }, []);
 
   const attemptSync = useCallback(async () => {
-    // For now, just invoke backend — it will detect if Google Calendar is connected on the platform
     const res = await base44.functions.invoke('syncGoogleCalendar', {});
     return res.data;
   }, []);
 
+  // Lightweight connection check — does NOT trigger a full sync, so a sync
+  // error for any other reason can't be mistaken for "not connected".
+  const probeConnection = useCallback(async () => {
+    try {
+      const res = await base44.functions.invoke('syncGoogleCalendar', { probe: true });
+      const result = res.data;
+      if (result?.connected) {
+        setConnected(true);
+        if (result.connected_email) setConnectedEmail(result.connected_email);
+        return true;
+      }
+    } catch { /* not connected */ }
+    setConnected(false);
+    setConnectedEmail(null);
+    return false;
+  }, []);
+
   // On mount: check auth, load events, probe connection
   useEffect(() => {
-    const checkConnection = async () => {
+    const init = async () => {
       const authed = await base44.auth.isAuthenticated();
       if (authed) {
         const me = await base44.auth.me();
         setUser(me);
         await loadSyncedEvents();
+        await probeConnection();
       }
       setLoading(false);
     };
-    checkConnection();
-  }, [loadSyncedEvents]);
+    init();
+  }, [loadSyncedEvents, probeConnection]);
 
   // Re-check connection status every time the page becomes visible
   useEffect(() => {
-    const checkConn = async () => {
-      try {
-        const result = await attemptSync();
-        if (result?.error === 'not_connected') {
-          setConnected(false);
-          setConnectedEmail(null);
-        } else {
-          setConnected(true);
-          if (result?.connected_email) setConnectedEmail(result.connected_email);
-        }
-      } catch {
-        setConnected(false);
-      }
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') probeConnection();
     };
-
-    checkConn();
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') checkConn();
-    });
-
-    return () => document.removeEventListener('visibilitychange', checkConn);
-  }, [attemptSync]);
+    probeConnection();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [probeConnection]);
 
   // Opens OAuth popup for connecting (or adding another account)
   const handleConnect = async () => {
@@ -131,13 +133,11 @@ export default function Calendar() {
         setSyncing(true);
         setSyncError(null);
         try {
-          const result = await attemptSync();
-          if (result?.error === 'not_connected') {
-            setConnected(false);
+          const ok = await probeConnection();
+          if (!ok) {
             setSyncError('Failed to connect. Please try again.');
           } else {
-            setConnected(true);
-            if (result?.connected_email) setConnectedEmail(result.connected_email);
+            const result = await attemptSync();
             setSyncResult(result);
             if (result?.synced_at) setLastSyncedAt(result.synced_at);
             await loadSyncedEvents();
@@ -165,12 +165,11 @@ export default function Calendar() {
     setSyncError(null);
     setSyncResult(null);
     try {
-      const result = await attemptSync();
-      if (result?.error === 'not_connected') {
-        setConnected(false);
+      const ok = await probeConnection();
+      if (!ok) {
         setSyncError('Google Calendar disconnected. Please reconnect.');
       } else {
-        if (result?.connected_email) setConnectedEmail(result.connected_email);
+        const result = await attemptSync();
         setSyncResult(result);
         if (result?.synced_at) setLastSyncedAt(result.synced_at);
         await loadSyncedEvents();
