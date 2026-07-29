@@ -66,6 +66,7 @@ ITEM TYPE (classify what this calendar entry actually is):
 - "task": An actionable to-do the user must DO/complete by a deadline — e.g. "Pay rent", "Submit report", "Renew license", "File taxes", "Buy groceries". It has a due action, not just attendance.
 - "event": A scheduled occurrence the user attends or is present at — meetings, appointments, classes, doctor visits, social gatherings, travel, workouts, concerts.
 - Default to "event" unless the title clearly describes an actionable to-do with a deadline. Most calendar entries are events.
+- NAME-ONLY TITLES: If the title is just a person's name (1-3 words, no action verb, no obvious deadline object) — e.g. "Sarah", "Mom", "John Smith", "Dr. Patel" — treat it as "event" (likely a catch-up, call, or meeting with that person), NOT a task.
 
 Return ONLY valid JSON:
 {"importance":"medium","reminder_interval":"daily","item_type":"event"}`;
