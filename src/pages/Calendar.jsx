@@ -19,6 +19,7 @@ import {
   Plus,
   Mail,
 } from 'lucide-react';
+import CalendarGrid from '@/components/calendar/CalendarGrid';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
 
@@ -56,6 +57,7 @@ export default function Calendar() {
   const [syncResult, setSyncResult] = useState(null);
   const [syncError, setSyncError] = useState(null);
   const [syncedEvents, setSyncedEvents] = useState([]);
+  const [tasks, setTasks] = useState([]);
   const [lastSyncedAt, setLastSyncedAt] = useState(null);
   const [autoSyncInterval, setAutoSyncInterval] = useState(() => 
     localStorage.getItem('calendar_auto_sync_interval') || 'daily'
@@ -73,6 +75,15 @@ export default function Calendar() {
       }
     } catch {
       setSyncedEvents([]);
+    }
+  }, []);
+
+  const loadTasks = useCallback(async () => {
+    try {
+      const list = await base44.entities.Task.filter({ status: 'active' }, '-updated_date', 200);
+      setTasks(list || []);
+    } catch {
+      setTasks([]);
     }
   }, []);
 
@@ -105,7 +116,7 @@ export default function Calendar() {
       if (authed) {
         const me = await base44.auth.me();
         setUser(me);
-        await loadSyncedEvents();
+        await Promise.all([loadSyncedEvents(), loadTasks()]);
         await probeConnection();
       }
       setLoading(false);
@@ -132,7 +143,9 @@ export default function Calendar() {
     let url;
     try {
       url = new URL(rawUrl);
-      url.searchParams.set('prompt', 'select_account');
+      // select_account forces the account chooser; consent re-prompts so a
+      // previously-granted account isn't silently reused.
+      url.searchParams.set('prompt', 'select_account consent');
       url = url.toString();
     } catch {
       url = rawUrl;
@@ -226,7 +239,7 @@ export default function Calendar() {
   return (
     <div className={`min-h-screen p-4 md:p-8 ${isDark ? 'bg-gray-900' : ''}`}
       style={{ paddingBottom: 'max(8rem, calc(8rem + env(safe-area-inset-bottom)))' }}>
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div className="max-w-4xl mx-auto space-y-6">
 
         {/* Header card */}
         <Card className={`border-none shadow-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
@@ -310,7 +323,13 @@ export default function Calendar() {
             {/* Switch account button */}
             {connected && (
               <button
-                onClick={handleConnect}
+                onClick={async () => {
+                  // Disconnect first so the existing grant is cleared and Google
+                  // shows the account chooser instead of defaulting to the
+                  // currently-linked account.
+                  try { await base44.connectors.disconnectAppUser(CONNECTOR_ID); } catch {}
+                  handleConnect();
+                }}
                 className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-colors ${isDark ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-200' : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
               >
                 <Plus className="w-3.5 h-3.5" />
@@ -375,60 +394,18 @@ export default function Calendar() {
           </Card>
         )}
 
-        {/* Synced events list */}
-        {connected && syncedEvents.length > 0 && (
-          <div className="space-y-3">
-            <h2 className={`font-semibold text-sm uppercase tracking-wide ${textSecondary}`}>
-              Imported Events ({syncedEvents.length})
-            </h2>
-            {syncedEvents.map((ev) => (
-              <Card key={ev.id} className={`border shadow-sm ${cardBase}`}>
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        {ev.routed_as === 'birthday' && <Cake className="w-4 h-4 text-pink-500 flex-shrink-0" />}
-                        <span className={`font-medium truncate ${textPrimary}`}>{ev.title}</span>
-                      </div>
-                      <div className={`text-xs ${textSecondary} flex flex-wrap items-center gap-3`}>
-                        {ev.start_time && (
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {formatDateTime(ev.start_time, ev.is_all_day)}
-                          </span>
-                        )}
-                        {ev.attendee_count > 0 && (
-                          <span className="flex items-center gap-1">
-                            <Users className="w-3 h-3" />
-                            {ev.attendee_count} attendee{ev.attendee_count !== 1 ? 's' : ''}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                      <Badge className={`text-xs border ${URGENCY_COLORS[ev.ai_importance] || URGENCY_COLORS.medium}`}>
-                        {ev.ai_importance}
-                      </Badge>
-                      {ev.routed_as === 'birthday' ? (
-                        <Badge className="text-xs bg-pink-100 text-pink-700 border-pink-200 border">birthday</Badge>
-                      ) : ev.item_type === 'task' ? (
-                        <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200 border">task</Badge>
-                      ) : (
-                        <Badge className="text-xs bg-indigo-100 text-indigo-700 border-indigo-200 border">event</Badge>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+        {/* Calendar view — in-app tasks + imported events */}
+        <Card className={`border-none shadow-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
+          <CardContent className="p-4 md:p-6">
+            <CalendarGrid tasks={tasks} events={syncedEvents} isDark={isDark} />
+          </CardContent>
+        </Card>
 
-        {connected && syncedEvents.length === 0 && !syncing && (
-          <div className="text-center py-16">
+        {connected && syncedEvents.length === 0 && tasks.length === 0 && !syncing && (
+          <div className="text-center py-12">
             <CalendarDays className={`w-12 h-12 mx-auto mb-4 ${textSecondary}`} />
-            <p className={`font-medium ${textPrimary}`}>No events synced yet</p>
-            <p className={`text-sm mt-1 ${textSecondary}`}>Click "Sync now" to import your upcoming events.</p>
+            <p className={`font-medium ${textPrimary}`}>Nothing on the calendar yet</p>
+            <p className={`text-sm mt-1 ${textSecondary}`}>Add tasks in the app or sync Google Calendar to see them here.</p>
           </div>
         )}
       </div>
