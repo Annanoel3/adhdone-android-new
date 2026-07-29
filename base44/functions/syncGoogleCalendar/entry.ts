@@ -91,7 +91,8 @@ async function syncCalendarAccount(base44, openai, user, accessToken, calendarEm
       const profile = await profileRes.json();
       connectedEmail = profile.email || calendarEmail;
     }
-  } catch { /* use fallback */ }
+    } catch { /* use fallback */ }
+    console.log('[syncGoogleCalendar] token actually belongs to =', connectedEmail, '| passed calendarEmail =', calendarEmail);
 
   // Fetch upcoming events (next 60 days)
   const timeMin = new Date().toISOString();
@@ -306,6 +307,7 @@ Deno.serve(async (req) => {
       const conn = await base44.asServiceRole.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
       accessToken = conn?.accessToken;
       if (conn?.email) connectedEmail = conn.email;
+      console.log('[syncGoogleCalendar] platform conn.email =', conn?.email, '| user.email =', user.email);
     } catch (err) {
       console.log('[syncGoogleCalendar] No connection available:', err.message);
     }
