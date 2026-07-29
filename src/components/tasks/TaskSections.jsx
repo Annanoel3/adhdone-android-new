@@ -5,9 +5,10 @@ import TaskCard from "./TaskCard";
 
 const SECTIONS = [
   { key: "today", label: "Today" },
-  { key: "recurring", label: "Recurring" },
+  { key: "next7days", label: "Next 7 Days" },
   { key: "upcoming", label: "Upcoming" },
   { key: "later", label: "Later" },
+  { key: "recurring", label: "Recurring" },
 ];
 
 function categorizeTask(task) {
@@ -17,37 +18,40 @@ function categorizeTask(task) {
   tomorrow.setDate(tomorrow.getDate() + 1);
   const weekAhead = new Date(today);
   weekAhead.setDate(weekAhead.getDate() + 7);
+  const monthAhead = new Date(today);
+  monthAhead.setDate(monthAhead.getDate() + 30);
 
+  // Recurring tasks go to the bottom section
   const isRecurring =
     (task.recurrence_pattern && task.recurrence_pattern !== "none") ||
     (task.reminder_interval &&
-      task.reminder_interval !== "once" &&
-      task.reminder_interval !== "daily");
+      ["daily", "every_other_day"].includes(task.reminder_interval));
+
+  if (isRecurring) return "recurring";
 
   const reminderDate = task.next_reminder ? new Date(task.next_reminder) : null;
   const dueDate = task.due_date ? new Date(task.due_date) : null;
-  const relevantDate = reminderDate || dueDate;
+  const relevantDate = dueDate || reminderDate;
 
-  // Today: reminder or due date falls on today
-  if (relevantDate) {
-    const taskDay = new Date(
-      relevantDate.getFullYear(),
-      relevantDate.getMonth(),
-      relevantDate.getDate()
-    );
-    if (taskDay.getTime() === today.getTime()) return "today";
-  }
+  // No due date → Today (available to do now)
+  if (!relevantDate) return "today";
 
-  // Daily interval tasks always feel "today"
-  if (task.reminder_interval === "daily") return "today";
+  const taskDay = new Date(
+    relevantDate.getFullYear(),
+    relevantDate.getMonth(),
+    relevantDate.getDate()
+  );
 
-  // Recurring tasks without a specific today date
-  if (isRecurring) return "recurring";
+  // Due today or overdue → Today
+  if (taskDay <= today) return "today";
 
-  // Upcoming: date within the next 7 days
-  if (relevantDate && relevantDate >= tomorrow && relevantDate < weekAhead)
-    return "upcoming";
+  // Next 7 days
+  if (taskDay >= tomorrow && taskDay < weekAhead) return "next7days";
 
+  // Upcoming (beyond 7 days, within 30 days)
+  if (taskDay >= weekAhead && taskDay < monthAhead) return "upcoming";
+
+  // Later (beyond 30 days)
   return "later";
 }
 
@@ -70,7 +74,7 @@ export default function TaskSections({
   const [collapsed, setCollapsed] = useState({});
 
   const grouped = useMemo(() => {
-    const map = { today: [], recurring: [], upcoming: [], later: [] };
+    const map = { today: [], next7days: [], upcoming: [], later: [], recurring: [] };
     tasks.forEach((task) => {
       const section = categorizeTask(task);
       map[section].push(task);
