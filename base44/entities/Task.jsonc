@@ -56,9 +56,35 @@
       "type": "string",
       "description": "Email of the user who should receive notifications for this task"
     },
-    "reminder_schedule_summary": {
-      "type": "string",
-      "description": "Human-readable summary of LLM-decided reminder schedule (for one-time/event tasks). Null for recurring reminders."
+    "reminder_schedule": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "notification_id": {
+            "type": "string",
+            "description": "OneSignal scheduled notification ID"
+          },
+          "send_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this reminder fires"
+          },
+          "label": {
+            "type": "string",
+            "description": "Human-readable label like '1 day before', 'morning of', '1 hour before'"
+          },
+          "notification_title": {
+            "type": "string",
+            "description": "LLM-generated notification title"
+          },
+          "notification_body": {
+            "type": "string",
+            "description": "LLM-generated notification body"
+          }
+        }
+      },
+      "description": "Structured LLM-decided reminder schedule for one-time/event tasks. Each entry can be individually cancelled or edited."
     },
     "status": {
       "type": "string",

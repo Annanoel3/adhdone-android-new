@@ -341,20 +341,18 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
         }
 
         if (notificationIds.length > 0) {
-          const summary = `${notificationIds.length} smart reminder${notificationIds.length === 1 ? '' : 's'}:\n` +
-            reminderTimes
-              .slice(0, notificationIds.length)
-              .map(r => {
-                const dt = new Date(r.sendAtISO);
-                const formatted = dt.toLocaleString('en-US', {
-                  month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true,
-                });
-                return `• ${r.label} — ${formatted}`;
-              })
-              .join('\n');
+          const structured = reminderTimes
+            .slice(0, notificationIds.length)
+            .map((r, i) => ({
+              notification_id: notificationIds[i],
+              send_at: r.sendAtISO,
+              label: r.label,
+              notification_title: r.notification_title,
+              notification_body: r.notification_body,
+            }));
           await base44.entities.Task.update(createdTask.id, {
             onesignal_notification_ids: notificationIds,
-            reminder_schedule_summary: summary,
+            reminder_schedule: structured,
           });
         }
       } catch (e) {

@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 import { Task } from "@/entities/Task";
 import TaskDecompositionModal from "./TaskDecompositionModal";
+import SmartReminderEditor from "./SmartReminderEditor";
 import VoiceTaskInput from "./VoiceTaskInput";
 import { scheduleReminder, cancelScheduledReminder } from "../utils/reminderScheduler";
 import { User } from "@/entities/User";
@@ -437,7 +438,7 @@ Return JSON:
           
           updates.next_reminder = nextReminderDate.toISOString();
           updates.onesignal_notification_ids = [];
-          updates.reminder_schedule_summary = null;
+          updates.reminder_schedule = null;
 
           // Schedule single one-time reminder
           try {
@@ -496,7 +497,7 @@ Return JSON:
           }
           
           updates.next_reminder = nextReminderDate.toISOString();
-          updates.reminder_schedule_summary = null;
+          updates.reminder_schedule = null;
 
           // Schedule recurring reminders (10 at a time)
           try {
@@ -624,7 +625,7 @@ Return JSON:
           Task.update(task.id, {
             next_reminder: nextReminder.toISOString(),
             onesignal_notification_ids: newNotificationIds,
-            reminder_schedule_summary: null,
+            reminder_schedule: null,
             ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
           }).catch(err => console.error("Error updating task:", err));
         } else {
@@ -638,7 +639,7 @@ Return JSON:
             urgency: task.urgency,
           });
 
-          let scheduleSummary = null;
+          let scheduleData = null;
           if (multiIds) {
             newNotificationIds = multiIds;
           } else {
@@ -667,7 +668,7 @@ Return JSON:
           Task.update(task.id, {
             next_reminder: nextReminder.toISOString(),
             onesignal_notification_ids: newNotificationIds,
-            reminder_schedule_summary: scheduleSummary,
+            reminder_schedule: scheduleData,
           }).catch(err => console.error("Error updating task:", err));
         }
       } catch (error) {
@@ -1380,19 +1381,8 @@ Return JSON:
                       </Button>
                       </PopoverClose>
 
-                      {task.reminder_schedule_summary && (
-                        <div className={`rounded-lg p-3 text-xs leading-relaxed ${
-                          theme === 'dark' ? 'bg-purple-900/30 border border-purple-800 text-purple-200' : 'bg-purple-50 border border-purple-200 text-purple-800'
-                        }`}>
-                          <p className="font-semibold mb-1 flex items-center gap-1">
-                            <Sparkles className="w-3 h-3" />
-                            Smart Reminder Schedule
-                          </p>
-                          <pre className="whitespace-pre-wrap font-sans">{task.reminder_schedule_summary}</pre>
-                          <p className={`mt-2 italic ${theme === 'dark' ? 'text-purple-300' : 'text-purple-600'}`}>
-                            Save a new date &amp; time to regenerate this schedule.
-                          </p>
-                        </div>
+                      {task.reminder_schedule && task.reminder_schedule.length > 0 && (
+                        <SmartReminderEditor task={task} theme={theme} onUpdate={onUpdate} />
                       )}
 
                       <div className={`border-t pt-3 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
