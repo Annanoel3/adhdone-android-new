@@ -61,9 +61,13 @@ export function resolveEmojiWithAI(title) {
 Title: "${title}"
 
 Rules:
-- If the title contains a brand, company, or proper name, research what they sell or what they're associated with and pick the matching emoji.
-  Examples: Honda → 🚗 (cars), Tesla → 🚙 (car), Nike → 🏃 (running/fitness), Starbucks → ☕ (coffee), Apple → 🍎 (tech), Netflix → 🎬 (streaming), CycleGear → 🏍 (motorcycle gear)
-- For activities, use the matching emoji: call → 📞, pay bill → 💳, gym → 🏃, email → 📧, doctor → 🩺, grocery → 🛒
+- Research what the title refers to using web search, especially for proper names — brand names, company names, venue names, club names, studio names, place names, event names, or hobby-specific terms.
+- Figure out what that thing is about (what they sell, what activity they host, what hobby they represent, etc.) and pick the single emoji that best captures that subject.
+- Examples across different hobbies:
+  Honda → 🚗 (automotive), CycleGear → 🏍 (motorcycle gear), a dance studio → 💃, a pottery studio → 🏺,
+  Nike → 🏃 (running/fitness), Starbucks → ☕ (coffee), a book club → 📚, a gardening club → 🌱,
+  a chess club → ♟, a skateboarding club → 🚴, a piano studio → 🎵, a fishing club →🎣
+- For common activities without a proper name, use the matching emoji: call → 📞, pay bill → 💳, gym → 🏃, email → 📧, doctor → 🩺, grocery → 🛒
 - Return ONLY a single emoji character.`,
         add_context_from_internet: true,
         response_json_schema: {
