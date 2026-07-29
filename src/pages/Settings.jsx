@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { base44 } from '@/api/base44Client';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -25,8 +26,9 @@ export default function Settings() {
   const [specialMode, setSpecialMode] = useState(() => localStorage.getItem('special_mode') || 'normal');
   const [seasonalUnlocked, setSeasonalUnlocked] = useState(() => localStorage.getItem('seasonal_unlocked') === 'true');
   const [user, setUser] = useState(null);
-  const [quietHoursStart, setQuietHoursStart] = useState(() => localStorage.getItem('quiet_hours_start') || '20:00');
+  const [quietHoursStart, setQuietHoursStart] = useState(() => localStorage.getItem('quiet_hours_start') || '22:00');
   const [quietHoursEnd, setQuietHoursEnd] = useState(() => localStorage.getItem('quiet_hours_end') || '08:00');
+  const [quietHoursEnabled, setQuietHoursEnabled] = useState(false);
 
   useEffect(() => {
     loadUser();
@@ -47,6 +49,20 @@ export default function Settings() {
       if (currentUser.seasonal_unlocked) {
         setSeasonalUnlocked(true);
         localStorage.setItem('seasonal_unlocked', 'true');
+      }
+      // Quiet hours live on the profile (source of truth) so the backend cron
+      // can enforce them in the user's own timezone. Mirror to localStorage for
+      // the client-side reminder scheduler.
+      const enabled = currentUser.quiet_hours_enabled === true;
+      setQuietHoursEnabled(enabled);
+      localStorage.setItem('quiet_hours_enabled', enabled ? 'true' : 'false');
+      if (currentUser.quiet_hours_start) {
+        setQuietHoursStart(currentUser.quiet_hours_start);
+        localStorage.setItem('quiet_hours_start', currentUser.quiet_hours_start);
+      }
+      if (currentUser.quiet_hours_end) {
+        setQuietHoursEnd(currentUser.quiet_hours_end);
+        localStorage.setItem('quiet_hours_end', currentUser.quiet_hours_end);
       }
     } catch (error) {
       console.error('Error loading user:', error);
@@ -137,19 +153,40 @@ export default function Settings() {
     setQuietHoursEnd(endTime);
   };
 
-  const handleQuietHoursSave = async () => {
+  // Persist quiet hours to the user profile (the source of truth the backend
+  // cron reads), mirror to localStorage for the client-side scheduler, then
+  // ask the backend to re-check queued notifications against the new window.
+  const persistQuietHours = async (enabled, start, end) => {
     setQuietHoursSaving(true);
-    localStorage.setItem('quiet_hours_start', quietHoursStart);
-    localStorage.setItem('quiet_hours_end', quietHoursEnd);
+    localStorage.setItem('quiet_hours_enabled', enabled ? 'true' : 'false');
+    localStorage.setItem('quiet_hours_start', start);
+    localStorage.setItem('quiet_hours_end', end);
     try {
-      await base44.functions.invoke('applyQuietHours', {
-        quietStart: quietHoursStart,
-        quietEnd: quietHoursEnd
+      await base44.auth.updateMe({
+        quiet_hours_enabled: enabled,
+        quiet_hours_start: start,
+        quiet_hours_end: end
       });
+      if (enabled) {
+        await base44.functions.invoke('applyQuietHours', {
+          quietStart: start,
+          quietEnd: end
+        });
+      }
     } catch (e) {
-      console.error('Failed to apply quiet hours to queued notifications:', e);
+      console.error('Failed to save quiet hours:', e);
+    } finally {
+      setQuietHoursSaving(false);
     }
-    setQuietHoursSaving(false);
+  };
+
+  const handleQuietHoursToggle = async (enabled) => {
+    setQuietHoursEnabled(enabled);
+    await persistQuietHours(enabled, quietHoursStart, quietHoursEnd);
+  };
+
+  const handleQuietHoursSave = async () => {
+    await persistQuietHours(quietHoursEnabled, quietHoursStart, quietHoursEnd);
   };
 
   const settingsItems = [
@@ -221,38 +258,57 @@ export default function Settings() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-              Set the hours when you don't want to receive notifications. For example, 8 PM to 8 AM.
-            </p>
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="flex items-center justify-between mb-4">
               <div>
-                <Label htmlFor="quiet-start" className={theme === 'dark' ? 'text-gray-200' : ''}>Start Time</Label>
-                <Input
-                  id="quiet-start"
-                  type="time"
-                  value={quietHoursStart}
-                  onChange={(e) => handleQuietHoursChange(e.target.value, quietHoursEnd)}
-                  className={theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : ''}
-                />
+                <p className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
+                  Enable Quiet Hours
+                </p>
+                <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                  Silence reminders during set hours (in your timezone)
+                </p>
               </div>
-              <div>
-                <Label htmlFor="quiet-end" className={theme === 'dark' ? 'text-gray-200' : ''}>End Time</Label>
-                <Input
-                  id="quiet-end"
-                  type="time"
-                  value={quietHoursEnd}
-                  onChange={(e) => handleQuietHoursChange(quietHoursStart, e.target.value)}
-                  className={theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : ''}
-                />
-              </div>
+              <Switch
+                checked={quietHoursEnabled}
+                onCheckedChange={handleQuietHoursToggle}
+                disabled={quietHoursSaving}
+              />
             </div>
-            <Button
-              onClick={handleQuietHoursSave}
-              disabled={quietHoursSaving}
-              className="w-full bg-green-600 hover:bg-green-700 text-white"
-            >
-              {quietHoursSaving ? 'Saving...' : 'Save Quiet Hours'}
-            </Button>
+            {quietHoursEnabled && (
+              <>
+                <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                  No reminders will be sent between these times. For example, 10 PM to 8 AM.
+                </p>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <Label htmlFor="quiet-start" className={theme === 'dark' ? 'text-gray-200' : ''}>Start Time</Label>
+                    <Input
+                      id="quiet-start"
+                      type="time"
+                      value={quietHoursStart}
+                      onChange={(e) => handleQuietHoursChange(e.target.value, quietHoursEnd)}
+                      className={theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : ''}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="quiet-end" className={theme === 'dark' ? 'text-gray-200' : ''}>End Time</Label>
+                    <Input
+                      id="quiet-end"
+                      type="time"
+                      value={quietHoursEnd}
+                      onChange={(e) => handleQuietHoursChange(quietHoursStart, e.target.value)}
+                      className={theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : ''}
+                    />
+                  </div>
+                </div>
+                <Button
+                  onClick={handleQuietHoursSave}
+                  disabled={quietHoursSaving}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {quietHoursSaving ? 'Saving...' : 'Save Quiet Hours'}
+                </Button>
+              </>
+            )}
           </CardContent>
         </Card>
 

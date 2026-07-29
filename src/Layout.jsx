@@ -1109,6 +1109,14 @@ export default function Layout({ children, currentPageName }) {
         updates.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       }
       await base44.auth.updateMe(updates);
+
+      // Keep quiet hours in localStorage so the client-side reminder scheduler
+      // (used for one-time/event reminders) follows the profile values.
+      if (typeof currentUser.quiet_hours_enabled === 'boolean') {
+        localStorage.setItem('quiet_hours_enabled', currentUser.quiet_hours_enabled ? 'true' : 'false');
+      }
+      if (currentUser.quiet_hours_start) localStorage.setItem('quiet_hours_start', currentUser.quiet_hours_start);
+      if (currentUser.quiet_hours_end) localStorage.setItem('quiet_hours_end', currentUser.quiet_hours_end);
     } catch (error) {
       console.error("Error checking user status:", error);
       base44.auth.redirectToLogin(window.location.href);

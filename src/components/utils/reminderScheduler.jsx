@@ -9,7 +9,8 @@ import { base44 } from "@/api/base44Client";
  * Checks if a given time is within quiet hours
  */
 function isInQuietHours(dateTime) {
-  const quietStart = localStorage.getItem('quiet_hours_start') || '20:00';
+  if (localStorage.getItem('quiet_hours_enabled') !== 'true') return false;
+  const quietStart = localStorage.getItem('quiet_hours_start') || '22:00';
   const quietEnd = localStorage.getItem('quiet_hours_end') || '08:00';
   
   const date = new Date(dateTime);
