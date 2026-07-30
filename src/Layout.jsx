@@ -57,6 +57,7 @@ import PokeNotification from "./components/shared/PokeNotification";
 import NotificationFollowupModal from "./components/shared/NotificationFollowupModal";
 import AppGuideModal from "./components/shared/AppGuideModal";
 import FocusModePrompt from "./components/shared/FocusModePrompt";
+import ParkIdeaButton from "./components/shared/ParkIdeaButton";
 import { base44 } from "@/api/base44Client";
 import {
   DropdownMenu,
@@ -1020,6 +1021,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           <NotificationFollowupModal user={user} theme={theme} />
 
         <FocusModePrompt user={user} theme={theme} />
+        <ParkIdeaButton user={user} theme={theme} />
 
         <AppGuideModal
           isOpen={showAppGuide}
