@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Rocket, Timer } from 'lucide-react';
 import { useLaunch } from '@/context/LaunchContext';
 
-export default function LaunchButtons({ task, theme }) {
+export default function LaunchButtons({ task, theme, onStarted }) {
   const { startLaunchpad, startSprint, hasActiveLaunch } = useLaunch();
   if (!task || task.status === 'completed') return null;
 
@@ -11,7 +11,7 @@ export default function LaunchButtons({ task, theme }) {
     <div className="flex flex-wrap gap-2">
       <Button
         size="sm"
-        onClick={() => startLaunchpad(task)}
+        onClick={() => { startLaunchpad(task); onStarted?.(); }}
         disabled={hasActiveLaunch}
         className={`gap-1.5 ${
           theme === 'dark'
@@ -25,7 +25,7 @@ export default function LaunchButtons({ task, theme }) {
       <Button
         size="sm"
         variant="outline"
-        onClick={() => startSprint(task)}
+        onClick={() => { startSprint(task); onStarted?.(); }}
         disabled={hasActiveLaunch}
         className={`gap-1.5 ${
           theme === 'dark'

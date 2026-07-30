@@ -17,6 +17,7 @@ import {
   Pencil,
   ChevronDown,
   ChevronRight,
+  Rocket,
 } from "lucide-react";
 import {
   Popover,
@@ -463,6 +464,31 @@ export default function TaskCard({
           <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${getUrgencyColor(task.urgency)}`}>
             {task.urgency}
           </span>
+
+          {task.status !== 'completed' && (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  onClick={(e) => e.stopPropagation()}
+                  className={`flex-shrink-0 p-1.5 rounded transition-colors ${
+                    theme === 'dark'
+                      ? 'hover:bg-indigo-900/40 text-indigo-300'
+                      : 'hover:bg-indigo-50 text-indigo-600'
+                  }`}
+                  aria-label="Launch this task"
+                  title="Launchpad / 5-min Sprint"
+                >
+                  <Rocket className="w-4 h-4" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className={`w-64 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()} align="end">
+                <p className={`text-xs mb-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                  Start a launch for <span className="font-medium">{task.title}</span>
+                </p>
+                <LaunchButtons task={task} theme={theme} />
+              </PopoverContent>
+            </Popover>
+          )}
 
           <button
             onClick={() => setExpanded(v => !v)}

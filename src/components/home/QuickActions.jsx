@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
-import { Plus, Timer, Share2 } from "lucide-react";
+import { Plus, Timer, Share2, Rocket } from "lucide-react";
+import LaunchPicker from "../launch/LaunchPicker";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -10,6 +11,7 @@ export default function QuickActions({ theme }) {
   const specialMode = localStorage.getItem('special_mode') || 'normal';
   
   const [rotatingText, setRotatingText] = useState(0);
+  const [showLaunch, setShowLaunch] = useState(false);
   const rotatingOptions = ["Task", "Idea"];
 
   useEffect(() => {
@@ -28,6 +30,12 @@ export default function QuickActions({ theme }) {
       color: theme === 'minimalist' ? 'bg-green-100 text-green-700' : 'bg-gradient-to-br from-purple-100 to-orange-100 text-purple-700'
     },
     {
+      icon: Rocket,
+      label: "Launch",
+      onClick: () => setShowLaunch(true),
+      color: theme === 'minimalist' ? 'bg-indigo-100 text-indigo-700' : 'bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-700'
+    },
+    {
       icon: Timer,
       label: "Focus Timer",
       href: createPageUrl("FocusTimer"),
@@ -42,7 +50,8 @@ export default function QuickActions({ theme }) {
   ];
 
   return (
-    <div className="grid grid-cols-3 gap-4">
+    <div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
       {actions.map((action) => (
         <Card
           key={action.label}
@@ -81,6 +90,8 @@ export default function QuickActions({ theme }) {
           </div>
         </Card>
       ))}
+      </div>
+      <LaunchPicker open={showLaunch} onOpenChange={setShowLaunch} theme={theme} />
     </div>
   );
 }
