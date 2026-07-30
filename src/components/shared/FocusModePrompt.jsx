@@ -8,9 +8,10 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Target, Info, CheckCircle2, Timer } from "lucide-react";
+import { Target, Info, CheckCircle2, Timer, Play, Pause, Dices } from "lucide-react";
 import confetti from "canvas-confetti";
 import { isTodayTask } from "@/components/utils/todayTasks";
+import { usePomodoro } from "@/context/PomodoroContext";
 
 function formatElapsed(ms) {
   const totalSec = Math.floor(ms / 1000);
@@ -62,6 +63,44 @@ export default function FocusModePrompt({ user, theme }) {
   const [showInfo, setShowInfo] = useState(false);
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(null);
+  const [spinning, setSpinning] = useState(false);
+  const [spinLabel, setSpinLabel] = useState("");
+  const [showPomo, setShowPomo] = useState(false);
+  const pomo = usePomodoro();
+
+  // Mini pomodoro derived values (mirrors the FocusTimer circle at small scale)
+  const pomoTotal = (pomo.mode === "work" ? pomo.workDuration : pomo.breakDuration) * 60;
+  const pomoProgress = pomoTotal > 0 ? ((pomoTotal - pomo.timeLeft) / pomoTotal) * 100 : 0;
+  const pomoMM = String(Math.floor(Math.max(0, pomo.timeLeft) / 60)).padStart(2, "0");
+  const pomoSS = String(Math.max(0, pomo.timeLeft) % 60).padStart(2, "0");
+
+  // The Wheel — randomly selects one of today's pickable tasks to beat decision fatigue.
+  const handleSpin = () => {
+    if (pickableTasks.length < 2 || busy || spinning) return;
+    setSpinning(true);
+    let count = 0;
+    const id = setInterval(() => {
+      const t = pickableTasks[Math.floor(Math.random() * pickableTasks.length)];
+      setSpinLabel(t.title);
+      count++;
+      if (count > 16) {
+        clearInterval(id);
+        const chosen = pickableTasks[Math.floor(Math.random() * pickableTasks.length)];
+        setSpinLabel(chosen.title);
+        setTimeout(() => {
+          setSpinning(false);
+          setSpinLabel("");
+          handlePickTask(chosen);
+        }, 700);
+      }
+    }, 85);
+  };
+
+  const startPomo = () => {
+    pomo.resetTimer();
+    setTimeout(() => pomo.toggleTimer(), 60);
+    setShowPomo(true);
+  };
 
   // Live elapsed timer for the active focus session (counts up every second).
   useEffect(() => {
@@ -293,6 +332,51 @@ export default function FocusModePrompt({ user, theme }) {
                   </div>
                 )}
                 {elapsed == null && <div className="mb-4" />}
+                {!showPomo ? (
+                  <Button variant="outline" onClick={startPomo} className="mb-3 w-full">
+                    <Timer className="w-4 h-4 mr-2" /> Start a Pomodoro
+                  </Button>
+                ) : (
+                  <div className={`mb-4 p-4 rounded-xl text-center ${theme === "dark" ? "bg-gray-800" : "bg-green-50"}`}>
+                    <div className="relative mx-auto w-32 h-32 mb-3">
+                      <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
+                        <circle cx="100" cy="100" r="80" stroke={theme === "dark" ? "#374151" : "#e5e7eb"} strokeWidth="14" fill="none" />
+                        <circle
+                          cx="100" cy="100" r="80"
+                          stroke={pomo.mode === "work" ? "#22c55e" : "#3b82f6"}
+                          strokeWidth="14" fill="none" strokeLinecap="round"
+                          strokeDasharray={2 * Math.PI * 80}
+                          strokeDashoffset={2 * Math.PI * 80 * (1 - pomoProgress / 100)}
+                          style={{ transition: "stroke-dashoffset 0.3s linear" }}
+                        />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center">
+                        <div className="text-2xl font-bold tabular-nums">
+                          {pomoMM}:{pomoSS}
+                        </div>
+                        <div className="text-[10px] uppercase tracking-wider opacity-60">
+                          {pomo.mode === "work" ? "Focus" : "Break"}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex justify-center gap-2">
+                      <Button size="sm" onClick={pomo.toggleTimer}>
+                        {pomo.isActive ? (
+                          <><Pause className="w-4 h-4 mr-1" />Pause</>
+                        ) : (
+                          <><Play className="w-4 h-4 mr-1" />Start</>
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { pomo.resetTimer(); setShowPomo(false); }}
+                      >
+                        Reset
+                      </Button>
+                    </div>
+                  </div>
+                )}
                 <div className="flex flex-col gap-2">
                   <Button
                     onClick={handleComplete}
@@ -320,6 +404,22 @@ export default function FocusModePrompt({ user, theme }) {
                   (events, due dates, birthdays) are never affected.
                 </DialogDescription>
               </DialogHeader>
+              {pickableTasks.length >= 2 && (
+                <button
+                  onClick={handleSpin}
+                  disabled={busy || spinning}
+                  className="w-full mb-3 p-3 rounded-lg border-2 border-dashed border-purple-300 dark:border-purple-700 hover:border-purple-500 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {spinning ? (
+                    <span className="truncate">{spinLabel || "Spinning…"}</span>
+                  ) : (
+                    <>
+                      <Dices className="w-4 h-4 text-purple-500" />
+                      Can't decide? Spin the wheel
+                    </>
+                  )}
+                </button>
+              )}
               <div className="py-2 max-h-72 overflow-y-auto space-y-2">
                 {pickableTasks.length === 0 ? (
                   <p className="text-sm opacity-60 text-center py-4">
