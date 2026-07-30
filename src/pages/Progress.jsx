@@ -11,8 +11,7 @@ import FocusModeStats from "../components/progress/FocusModeStats";
 import RecurringTaskPatterns from "../components/progress/RecurringTaskPatterns";
 import { Button } from "@/components/ui/button";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  LineChart, Line, CartesianGrid
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer
 } from "recharts";
 
 export default function Progress() {
@@ -113,7 +112,6 @@ export default function Progress() {
       date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
       dateStr,
       completed,
-      rate: 0,
     });
   }
 
@@ -298,30 +296,6 @@ export default function Progress() {
               </CardContent>
             </Card>
 
-            {/* Completion rate trend */}
-            <Card className={cardClass}>
-              <CardHeader>
-                <CardTitle className={`flex items-center gap-2 ${textClass}`}>
-                  <TrendingUp className="w-5 h-5" />
-                  Daily Completion Rate — Last 14 Days
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={180}>
-                  <LineChart data={last14}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#374151' : '#f3f4f6'} />
-                    <XAxis dataKey="date" tick={{ fontSize: 11, fill: chartColors.muted }} interval={1} />
-                    <YAxis tick={{ fontSize: 11, fill: chartColors.muted }} domain={[0, 100]} unit="%" />
-                    <Tooltip
-                      contentStyle={{ background: theme === 'dark' ? '#1f2937' : '#fff', borderColor: '#e5e7eb' }}
-                      formatter={(v) => `${v}%`}
-                    />
-                    <Line type="monotone" dataKey="rate" stroke={chartColors.secondary} strokeWidth={2} dot={false} name="Rate" />
-                  </LineChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-
             {/* Tasks by day of week */}
             <Card className={cardClass}>
               <CardHeader>
@@ -404,46 +378,6 @@ export default function Progress() {
               </CardContent>
             </Card>
 
-            {/* Recent daily summaries — computed from real task data */}
-            <Card className={cardClass}>
-              <CardHeader>
-                <CardTitle className={`flex items-center gap-2 ${textClass}`}>
-                  <Calendar className="w-5 h-5" />
-                  Recent Daily Summaries
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {Object.keys(completionsByDate).length === 0 ? (
-                  <p className={subTextClass}>No completed tasks yet — complete tasks to build your history!</p>
-                ) : (
-                  <div className="space-y-3">
-                    {Array.from({ length: 14 }, (_, i) => {
-                      const d = new Date();
-                      d.setDate(d.getDate() - i);
-                      const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-                      const completed = completionsByDate[dateStr] || 0;
-                      return { dateStr, completed, d };
-                    })
-                    .filter(({ completed }) => completed > 0)
-                    .slice(0, 7)
-                    .map(({ dateStr, completed, d }) => (
-                      <div key={dateStr} className={`p-4 rounded-lg border ${
-                        theme === 'dark' ? 'border-gray-700 bg-gray-900/50' : 'border-gray-200 bg-gray-50'
-                      }`}>
-                        <div className="flex justify-between items-center">
-                          <span className={`font-medium text-sm ${textClass}`}>
-                            {d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </span>
-                          <span className="text-sm font-semibold text-green-500">
-                            ✅ {completed} {completed === 1 ? 'task' : 'tasks'} done
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </TabsContent>
         </Tabs>
 
