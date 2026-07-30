@@ -7,6 +7,7 @@ import TodaysAccomplishments from "../components/home/TodaysAccomplishments";
 import { base44 } from "@/api/base44Client";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { isTodayTask } from "../components/utils/todayTasks";
+import FocusModeStats from "../components/progress/FocusModeStats";
 import { Button } from "@/components/ui/button";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -19,6 +20,7 @@ export default function Progress() {
   const [todaysSummary, setTodaysSummary] = useState(null);
   const [summaries, setSummaries] = useState([]);
   const [energyLogs, setEnergyLogs] = useState([]);
+  const [focusLogs, setFocusLogs] = useState([]);
   const [specialMode, setSpecialMode] = useState(() => localStorage.getItem('special_mode') || 'normal');
 
   useEffect(() => {
@@ -46,6 +48,9 @@ export default function Progress() {
 
       const logs = await base44.entities.EnergyLog.list('-logged_at', 60);
       setEnergyLogs(logs);
+
+      const fLogs = await base44.entities.FocusSessionLog.list('-completed_at', 200);
+      setFocusLogs(fLogs);
     } catch (error) {
       console.error("Error loading data:", error);
     }
@@ -251,6 +256,14 @@ export default function Progress() {
                 </CardContent>
               </Card>
             </div>
+
+            <FocusModeStats
+              logs={focusLogs}
+              theme={theme}
+              cardClass={cardClass}
+              textClass={textClass}
+              subTextClass={subTextClass}
+            />
 
             {/* Tasks completed last 14 days */}
             <Card className={cardClass}>

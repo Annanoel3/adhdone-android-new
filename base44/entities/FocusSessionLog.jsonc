@@ -1,0 +1,41 @@
+{
+  "name": "FocusSessionLog",
+  "type": "object",
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "description": "ID of the task focused on (when available)"
+    },
+    "task_title": {
+      "type": "string",
+      "description": "Title of the task that was focused on"
+    },
+    "duration_seconds": {
+      "type": "number",
+      "description": "How long the focus session lasted, in seconds"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the focus session began"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the task was completed / session ended"
+    }
+  },
+  "required": [
+    "task_title",
+    "duration_seconds",
+    "completed_at"
+  ],
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}
