@@ -283,9 +283,9 @@ export default function FocusModePrompt({ user, theme }) {
                   <Target className="w-5 h-5 text-green-500" /> Focus Mode
                 </DialogTitle>
                 <DialogDescription>
-                  Pick one task to focus on — it'll switch to hourly "how's it going?" check-ins
-                  while your other recurring reminders go quiet. Time-specific reminders (events,
-                  due dates, birthdays) are never affected.
+                  Pick one task to focus on — it'll switch to hourly check-ins until completion or
+                  exit while your other recurring reminders go quiet. Time-specific reminders
+                  (events, due dates, birthdays) are never affected.
                 </DialogDescription>
               </DialogHeader>
               <div className="py-2 max-h-72 overflow-y-auto space-y-2">
