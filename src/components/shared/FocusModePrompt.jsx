@@ -8,7 +8,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Target, Info, CheckCircle2, Timer, Play, Pause, Dices } from "lucide-react";
+import { Target, Info, CheckCircle2, Timer, Play, Pause, Dices, Minus } from "lucide-react";
 import confetti from "canvas-confetti";
 import { isTodayTask } from "@/components/utils/todayTasks";
 import { usePomodoro } from "@/context/PomodoroContext";
@@ -305,14 +305,6 @@ export default function FocusModePrompt({ user, theme }) {
       ? "bg-gradient-to-br from-pink-100 via-purple-100 to-cyan-100 border-2 border-yellow-400"
       : "bg-white text-gray-900 border-gray-200";
 
-  // Full-screen background variant for the active focus session (no border).
-  const bgClass =
-    theme === "dark"
-      ? "bg-gray-900 text-white"
-      : theme === "spicybrains"
-      ? "bg-gradient-to-br from-pink-100 via-purple-100 to-cyan-100"
-      : "bg-white text-gray-900";
-
   const InfoButton = (
     <button
       onClick={() => setShowInfo(true)}
@@ -329,7 +321,7 @@ export default function FocusModePrompt({ user, theme }) {
       <Dialog open={open} onOpenChange={handleClose}>
         <DialogContent className={`${
           mode === "active"
-            ? "max-w-none w-screen h-[100dvh] rounded-none border-0 p-0 " + bgClass
+            ? "max-w-md w-[calc(100vw-2rem)] " + cardClass
             : "max-w-md " + cardClass
         }`}>
           {mode === "celebrate" ? (
@@ -355,8 +347,18 @@ export default function FocusModePrompt({ user, theme }) {
               </Button>
             </div>
           ) : mode === "active" ? (
-            <div className="flex flex-col min-h-[100dvh] sm:min-h-screen p-5 sm:p-8 overflow-y-auto">
-              <div className="flex justify-start">{InfoButton}</div>
+            <div className="flex flex-col p-5 sm:p-6 overflow-y-auto">
+              <div className="flex justify-between items-center">
+                {InfoButton}
+                <button
+                  onClick={() => setOpen(false)}
+                  className="inline-flex items-center justify-center w-7 h-7 rounded-full hover:bg-black/5 dark:hover:bg-white/10 opacity-60 hover:opacity-100 transition"
+                  aria-label="Minimize"
+                  title="Minimize"
+                >
+                  <Minus className="w-4 h-4" />
+                </button>
+              </div>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Target className="w-5 h-5 text-green-500" /> Focus Mode
