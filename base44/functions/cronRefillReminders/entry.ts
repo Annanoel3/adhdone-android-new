@@ -136,6 +136,15 @@ Deno.serve(async (req) => {
       const endMin = owner && owner.quiet_hours_end ? parseHHMM(owner.quiet_hours_end) : parseHHMM('08:00');
       const useQuiet = quietEnabled && !!timeZone;
 
+      // Focus Mode: while the owner has an active focus task, only that task
+      // gets recurring reminders — everything else stays silent until they exit.
+      const focusTaskId = owner && owner.focus_mode_task_id ? owner.focus_mode_task_id : null;
+      if (focusTaskId && task.id !== focusTaskId) {
+        console.log(`🎯 [REFILL] Skipping "${task.title}" — owner is in Focus Mode`);
+        skipped++;
+        continue;
+      }
+
       const notificationIds = [];
       let lastScheduledAt: Date | null = null; // de-dupe quiet-hour slots that collapse to the same time
 

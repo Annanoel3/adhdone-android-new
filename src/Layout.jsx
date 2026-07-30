@@ -55,6 +55,7 @@ import MicrophonePermissionCheck from "./components/shared/MicrophonePermissionC
 import PokeNotification from "./components/shared/PokeNotification";
 import NotificationFollowupModal from "./components/shared/NotificationFollowupModal";
 import AppGuideModal from "./components/shared/AppGuideModal";
+import FocusModePrompt from "./components/shared/FocusModePrompt";
 import { base44 } from "@/api/base44Client";
 import {
   DropdownMenu,
@@ -1002,6 +1003,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           <MicrophonePermissionCheck theme={theme} />
           <PokeNotification theme={theme} />
           <NotificationFollowupModal user={user} theme={theme} />
+
+        <FocusModePrompt user={user} theme={theme} />
 
         <AppGuideModal
           isOpen={showAppGuide}

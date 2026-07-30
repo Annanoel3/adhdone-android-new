@@ -10,6 +10,7 @@ import UpcomingBirthdayCard from "../components/home/UpcomingBirthdayCard";
 import MotivationCoach from "../components/home/MotivationCoach";
 import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import MomentumCelebration from "../components/shared/MomentumCelebration";
+import FocusModeButton from "../components/home/FocusModeButton";
 import { isTodayTask } from "../components/utils/todayTasks";
 import { ensureBirthdayReminders } from "../components/utils/birthdayScheduler";
 
@@ -185,6 +186,10 @@ export default function Home() {
         />
 
         <div className="space-y-6">
+          <div className="flex justify-end">
+            <FocusModeButton user={user} theme={theme} />
+          </div>
+
           <WelcomeCard userName={user?.full_name} theme={theme} specialMode={specialMode} />
           
           <QuickActions theme={theme} specialMode={specialMode} />
