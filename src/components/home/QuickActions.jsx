@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
-import { Plus, Timer, Share2, Rocket } from "lucide-react";
+import { Plus, Rocket } from "lucide-react";
 import LaunchPicker from "../launch/LaunchPicker";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -34,24 +34,12 @@ export default function QuickActions({ theme }) {
       label: "Launch",
       onClick: () => setShowLaunch(true),
       color: theme === 'minimalist' ? 'bg-indigo-100 text-indigo-700' : 'bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-700'
-    },
-    {
-      icon: Timer,
-      label: "Focus Timer",
-      href: createPageUrl("FocusTimer"),
-      color: theme === 'minimalist' ? 'bg-blue-100 text-blue-700' : 'bg-gradient-to-br from-blue-100 to-teal-100 text-blue-700'
-    },
-    {
-      icon: Share2,
-      label: "Find Partners",
-      href: createPageUrl("Accountability") + "?tab=find",
-      color: theme === 'minimalist' ? 'bg-purple-100 text-purple-700' : 'bg-gradient-to-br from-pink-100 to-purple-100 text-purple-700'
     }
   ];
 
   return (
     <div>
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-4">
       {actions.map((action) => (
         <Card
           key={action.label}
