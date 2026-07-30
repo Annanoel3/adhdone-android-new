@@ -287,6 +287,14 @@ export default function FocusModePrompt({ user, theme }) {
       ? "bg-gradient-to-br from-pink-100 via-purple-100 to-cyan-100 border-2 border-yellow-400"
       : "bg-white text-gray-900 border-gray-200";
 
+  // Full-screen background variant for the active focus session (no border).
+  const bgClass =
+    theme === "dark"
+      ? "bg-gray-900 text-white"
+      : theme === "spicybrains"
+      ? "bg-gradient-to-br from-pink-100 via-purple-100 to-cyan-100"
+      : "bg-white text-gray-900";
+
   const InfoButton = (
     <button
       onClick={() => setShowInfo(true)}
@@ -301,7 +309,11 @@ export default function FocusModePrompt({ user, theme }) {
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className={`max-w-md ${cardClass}`}>
+        <DialogContent className={`${
+          mode === "active"
+            ? "max-w-none w-screen h-[100dvh] rounded-none border-0 p-0 " + bgClass
+            : "max-w-md " + cardClass
+        }`}>
           {mode === "celebrate" ? (
             <div className="text-center py-6">
               <div className="text-7xl mb-4">
@@ -325,7 +337,7 @@ export default function FocusModePrompt({ user, theme }) {
               </Button>
             </div>
           ) : mode === "active" ? (
-            <>
+            <div className="flex flex-col min-h-[100dvh] sm:min-h-screen p-5 sm:p-8 overflow-y-auto">
               <div className="flex justify-start">{InfoButton}</div>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
@@ -406,7 +418,7 @@ export default function FocusModePrompt({ user, theme }) {
                   </Button>
                 </div>
               </div>
-            </>
+            </div>
           ) : (
             <>
               <div className="flex justify-start">{InfoButton}</div>
