@@ -206,10 +206,24 @@ export function LaunchProvider({ children }) {
             haptic([100, 50, 100]);
             setSprintEnded(true);
           }}
-          onKeepGoing={() => {
+          onKeepGoing={async () => {
+            // "Keep going" → hand off into Focus Mode for this task (same destination
+            // as the Launchpad liftoff and the Home Focus button). Reset the sprint's
+            // pomodoro so the Focus Mode overlay's own optional timer takes over.
+            const p = pomodoroRef.current;
+            if (p) p.resetTimer();
             localStorage.removeItem(SPRINT_KEY);
             setSprint(null);
             setSprintEnded(false);
+            if (sprint?.taskId) {
+              try {
+                await base44.functions.invoke('setFocusMode', { action: 'enter', taskId: sprint.taskId });
+                window.dispatchEvent(new CustomEvent('focus-mode-changed', { detail: { taskId: sprint.taskId } }));
+                navigate('/Home', { replace: true });
+              } catch (e) {
+                console.error('Failed to enter focus mode after sprint:', e);
+              }
+            }
           }}
           onStop={() => {
             const p = pomodoroRef.current;
