@@ -506,10 +506,21 @@ JSON:
         nextReminder = null;
       }
 
+      // For "today" recurring tasks the parser sets due_date = today so the task
+      // becomes overdue the next day if it isn't finished. Convert to end-of-day.
+      let dueDateISO = null;
+      if (parsed.due_date && actualReminderInterval && actualReminderInterval !== 'once') {
+        const [dy, dm, dd] = parsed.due_date.split('-').map(n => parseInt(n, 10));
+        if (!isNaN(dy) && !isNaN(dm) && !isNaN(dd)) {
+          dueDateISO = new Date(dy, dm - 1, dd, 23, 59, 0, 0).toISOString();
+        }
+      }
+
       console.log('🔄 [PROCESS] Creating task with data:', {
         title: parsed.title || inputText.trim(),
         reminder_interval: actualReminderInterval,
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
+        due_date: dueDateISO,
         urgency: parsed.urgency || 'medium',
         energy_required: parsed.energy_required || 'medium'
       });
@@ -520,6 +531,7 @@ JSON:
         reminder_interval: actualReminderInterval,
         reminder_count: 0,
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
+        due_date: dueDateISO,
         urgency: parsed.urgency || 'medium',
         energy_required: parsed.energy_required || 'medium',
         status: 'active',

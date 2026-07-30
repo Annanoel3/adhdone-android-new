@@ -49,7 +49,7 @@ Infer the best reminder_interval and urgency from the NATURE of the task:
   e.g. "pay rent", "submit form", "call doctor", "send report"
   → reminder_interval="1hour" (if deadline is today/tomorrow) or "2hours", urgency="high"
 
-- "TODAY" OVERRIDE: if the user said "today" (e.g., "clean the dishes today", "do laundry today"), the task needs doing TODAY — use reminder_interval="2hours" (NOT "daily"), even for chores.
+- "TODAY" OVERRIDE: if the user said "today" (e.g., "clean the dishes today", "do laundry today"), the task needs doing TODAY — use reminder_interval="2hours" (NOT "daily"), even for chores. ALSO set due_date = today's date (YYYY-MM-DD) so it becomes overdue the next day if unfinished. Do NOT set due_date for one-time events.
 - ROUTINE / HABIT (wellness, daily maintenance):
   e.g. "stretch", "take vitamins", "drink water", "meditate"
   → reminder_interval="daily", urgency="low" or "medium" (ONLY when the user did NOT say "today")
@@ -101,6 +101,7 @@ Return JSON:
   "reminder_interval": "10min" | "20min" | "30min" | "1hour" | "2hours" | "4hours" | "daily" | "every_other_day" | "once" | null,
   "reminder_time": "HH:MM" or null,
   "specific_date": "YYYY-MM-DD" or null,
+  "due_date": "YYYY-MM-DD or null (set to today's date ONLY for 'today' recurring tasks so they go overdue next day if unfinished)",
   "urgency": "low" | "medium" | "high" | "urgent",
   "energy_required": "low" | "medium" | "high",
   "priority_uninferrable": false,
@@ -184,12 +185,23 @@ Return JSON:
         }
       }
 
+      // For "today" recurring tasks, set due_date = end of today so the task becomes
+      // overdue the next day if it isn't finished.
+      let dueDateISO = null;
+      if (taskData.due_date && taskData.reminder_interval && taskData.reminder_interval !== 'once') {
+        const [dy, dm, dd] = taskData.due_date.split('-').map(n => parseInt(n, 10));
+        if (!isNaN(dy) && !isNaN(dm) && !isNaN(dd)) {
+          dueDateISO = new Date(dy, dm - 1, dd, 23, 59, 0, 0).toISOString();
+        }
+      }
+
       console.log('✅ [QUICK ADD] Creating task with data:', {
         title: taskData.title,
         urgency: taskData.urgency || 'medium',
         energy_required: taskData.energy_required || 'medium',
         reminder_interval: taskData.reminder_interval || null,
-        next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null
+        next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null,
+        due_date: dueDateISO
       });
 
       const createdTask = await base44.entities.Task.create({
@@ -200,6 +212,7 @@ Return JSON:
         reminder_interval: taskData.reminder_interval || null,
         reminder_count: 0,
         next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null,
+        due_date: dueDateISO,
         notification_recipient_email: user.email
       });
 

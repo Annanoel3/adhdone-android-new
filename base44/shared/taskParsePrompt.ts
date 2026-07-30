@@ -68,6 +68,10 @@ export function buildTaskParsePrompt(inputText: string): string {
       - "daily" is ONLY for ongoing habits/routines where the user did NOT say "today".
       - Example: "clean the dishes today" → reminder_interval="2hours", urgency="medium", needs_date_pick=false
       - Example: "do laundry today" → reminder_interval="2hours", urgency="high", needs_date_pick=false
+      - IMPORTANT: For these "today" recurring tasks, ALSO set due_date = today's date
+        (YYYY-MM-DD) so that if the task isn't finished by end of today, it automatically
+        becomes an OVERDUE task the next day. Do NOT set due_date for one-time events
+        (those use target_date/target_time instead).
 
       STEP 1 — Decide: is this RECURRING or ONE-TIME?
 
@@ -196,6 +200,7 @@ export function buildTaskParsePrompt(inputText: string): string {
       "target_date": "YYYY-MM-DD or null",
       "target_time": "HH:MM or null",
       "reminder_interval": "10min|20min|30min|1hour|2hours|4hours|daily|every_other_day|once",
+      "due_date": "YYYY-MM-DD or null (set to today's date ONLY for 'today' recurring tasks so they go overdue next day if unfinished)",
       "priority_uninferrable": false,
       "is_flexible": false,
       "needs_date_pick": false
