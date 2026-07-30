@@ -73,6 +73,7 @@ export default function FocusModePrompt({ user, theme }) {
         const todayStr = new Date().toLocaleDateString("en-CA");
         const pickable = allTasks.filter((t) => {
           if (t.birthday_person) return false;
+          if (t.parent_task_id) return false; // subtasks belong to a parent — don't pick them standalone
           if (!t.due_date) return true;
           const dueStr = new Date(t.due_date).toLocaleDateString("en-CA");
           return dueStr <= todayStr;
