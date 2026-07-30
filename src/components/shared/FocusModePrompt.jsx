@@ -274,6 +274,7 @@ export default function FocusModePrompt({ user, theme }) {
             duration_seconds: duration,
             started_at: new Date(enteredAt).toISOString(),
             completed_at: ended.toISOString(),
+            user_email: user?.email,
           });
         } catch (e) {
           console.error("FocusSessionLog save failed:", e);
