@@ -4,16 +4,20 @@ import { Button } from '@/components/ui/button';
 import { Play, Pause, RotateCcw, Coffee, Sparkles } from 'lucide-react';
 import { createPageUrl } from '@/utils';
 import { useLocation } from 'react-router-dom';
+import { useLaunch } from '@/context/LaunchContext';
 
 export default function MiniPomodoroBar({ theme }) {
   const { timeLeft, isActive, mode, sessionCount, toggleTimer, resetTimer } = usePomodoro();
   const location = useLocation();
+  const { hasActiveLaunch } = useLaunch();
 
   const isOnFocusPage = location.pathname === createPageUrl('FocusTimer');
 
   // Only show while the timer is actively running — it's a transient popup,
   // not a persistent nav bar. The full controls live on the FocusTimer page.
-  if (isOnFocusPage || !isActive) return null;
+  // Hide it while a Launchpad or Sprint overlay is open; those show their own
+  // timer, so the duplicate countdown at the bottom just looks cluttered.
+  if (isOnFocusPage || !isActive || hasActiveLaunch) return null;
 
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
