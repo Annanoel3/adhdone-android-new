@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Rocket, X } from 'lucide-react';
 import { motion } from 'framer-motion';
+import ConfirmDialog from '@/components/launch/ConfirmDialog';
 
 const TOTAL_MS = 5 * 60 * 1000;
 
@@ -8,6 +9,7 @@ export default function LaunchpadTransition({ session, onComplete, onCancel, onW
   const endTime = new Date(session.endTimeISO).getTime();
   const [remaining, setRemaining] = useState(() => Math.max(0, endTime - Date.now()));
   const warnedRef = useRef(false);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -87,12 +89,21 @@ export default function LaunchpadTransition({ session, onComplete, onCancel, onW
         </p>
 
         <button
-          onClick={() => { if (window.confirm('Cancel the launchpad?')) onCancel?.(); }}
+          onClick={() => setConfirming(true)}
           className="text-xs text-indigo-200/60 hover:text-white transition-colors"
         >
           Cancel launchpad
         </button>
       </div>
+
+      <ConfirmDialog
+        open={confirming}
+        title="Cancel the launchpad?"
+        description="We'll stop the countdown. You can start another anytime — no guilt. 💚"
+        confirmLabel="Yes, cancel"
+        onConfirm={() => { setConfirming(false); onCancel?.(); }}
+        onClose={() => setConfirming(false)}
+      />
     </div>
   );
 }

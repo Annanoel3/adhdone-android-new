@@ -3,12 +3,14 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Timer, PartyPopper } from 'lucide-react';
 import { motion } from 'framer-motion';
+import ConfirmDialog from '@/components/launch/ConfirmDialog';
 
 const TOTAL_MS = 5 * 60 * 1000;
 
 export default function SprintPopup({ session, ended, onComplete, onKeepGoing, onStop, onCancel, onMinimize }) {
   const endTime = new Date(session.endTimeISO).getTime();
   const [remaining, setRemaining] = useState(() => Math.max(0, endTime - Date.now()));
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (ended) return;
@@ -74,7 +76,7 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
             </p>
 
             <button
-              onClick={() => { if (window.confirm('Cancel the 5-minute sprint?')) onCancel?.(); }}
+              onClick={() => setConfirming(true)}
               className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
             >
               Cancel sprint
@@ -113,6 +115,14 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
             </div>
           </div>
         )}
+        <ConfirmDialog
+          open={confirming}
+          title="Cancel the 5-minute sprint?"
+          description="You can start another anytime. No guilt either way. 💚"
+          confirmLabel="Yes, cancel sprint"
+          onConfirm={() => { setConfirming(false); onCancel?.(); }}
+          onClose={() => setConfirming(false)}
+        />
       </DialogContent>
     </Dialog>
   );
