@@ -113,24 +113,24 @@ export default function FocusModePrompt({ user, theme }) {
     })();
   }, [user?.email, focusTaskId]);
 
-  // Prompt trigger on app open.
+  // One-time Focus Mode intro: fires exactly once — the first time the user has
+  // 2+ tasks that qualify for Focus Mode. After that, the Home button is the entry point.
   useEffect(() => {
     if (!user?.email) return;
     if (focusTaskId) {
       const t = setTimeout(() => setOpen(true), 1200);
       return () => clearTimeout(t);
     }
-    // Don't auto-prompt when there's nothing to focus on today.
-    if (pickableTasks.length === 0) return;
-    const win = getWindow();
-    const key = `focus_prompt_${win}_${todayKey()}`;
-    if (localStorage.getItem(key) === "1") return;
+    if (localStorage.getItem("focus_intro_seen") === "1" || user?.focus_intro_seen) return;
+    if (pickableTasks.length < 2) return;
     const t = setTimeout(() => {
       setOpen(true);
-      localStorage.setItem(key, "1");
+      localStorage.setItem("focus_intro_seen", "1");
+      window.dispatchEvent(new CustomEvent("focus-intro-seen"));
+      base44.auth.updateMe({ focus_intro_seen: true }).catch(() => {});
     }, 15000);
     return () => clearTimeout(t);
-  }, [user?.email, focusTaskId, pickableTasks]);
+  }, [user?.email, focusTaskId, pickableTasks, user?.focus_intro_seen]);
 
   // Manual open from the Home Focus button.
   useEffect(() => {

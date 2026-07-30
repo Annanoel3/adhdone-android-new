@@ -5,12 +5,29 @@ import { Target } from "lucide-react";
 export default function FocusModeButton({ user }) {
   const [focusTaskId, setFocusTaskId] = useState(user?.focus_mode_task_id || null);
   const [focusTitle, setFocusTitle] = useState("");
+  const [introSeen, setIntroSeen] = useState(
+    () => localStorage.getItem("focus_intro_seen") === "1" || !!user?.focus_intro_seen
+  );
 
   useEffect(() => {
     const handler = (e) => setFocusTaskId(e.detail?.taskId || null);
     window.addEventListener("focus-mode-changed", handler);
     return () => window.removeEventListener("focus-mode-changed", handler);
   }, []);
+
+  // Reveal the button once the one-time Focus Mode intro has fired.
+  useEffect(() => {
+    const handler = () => setIntroSeen(true);
+    window.addEventListener("focus-intro-seen", handler);
+    return () => window.removeEventListener("focus-intro-seen", handler);
+  }, []);
+
+  useEffect(() => {
+    if (user?.focus_intro_seen) {
+      setIntroSeen(true);
+      localStorage.setItem("focus_intro_seen", "1");
+    }
+  }, [user?.focus_intro_seen]);
 
   useEffect(() => {
     if (!focusTaskId) {
@@ -36,6 +53,9 @@ export default function FocusModeButton({ user }) {
       </button>
     );
   }
+
+  // Hide the Focus Mode button until the one-time intro popup has happened.
+  if (!introSeen) return null;
 
   return (
     <button
