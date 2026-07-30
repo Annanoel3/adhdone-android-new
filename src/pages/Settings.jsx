@@ -12,6 +12,7 @@ import {
   Bug,
   LogOut,
   ArrowLeft,
+  Info,
   User as UserIcon
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -190,6 +191,11 @@ export default function Settings() {
   };
 
   const settingsItems = [
+    {
+      icon: Info,
+      label: 'About ADHDone',
+      onClick: () => navigate('/About')
+    },
     {
       icon: UserIcon,
       label: 'My Profile',
