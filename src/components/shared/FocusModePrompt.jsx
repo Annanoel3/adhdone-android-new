@@ -70,7 +70,13 @@ export default function FocusModePrompt({ user, theme }) {
     (async () => {
       try {
         const allTasks = await base44.entities.Task.filter({ status: "active" });
-        const pickable = allTasks.filter((t) => !t.birthday_person);
+        const todayStr = new Date().toLocaleDateString("en-CA");
+        const pickable = allTasks.filter((t) => {
+          if (t.birthday_person) return false;
+          if (!t.due_date) return true;
+          const dueStr = new Date(t.due_date).toLocaleDateString("en-CA");
+          return dueStr <= todayStr;
+        });
         setPickableTasks(pickable);
         if (focusTaskId) {
           const ft = pickable.find((t) => t.id === focusTaskId);
