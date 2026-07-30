@@ -139,6 +139,38 @@ Deno.serve(async (req) => {
         reminder_interval: null,
         notification_recipient_email: null
       });
+
+      // If the completed task was the active Focus Mode task, record how long the
+      // focus session lasted so the Progress page can show per-task averages.
+      // (Completing via the Focus popup sets ids=[] so this branch is skipped there —
+      //  the popup logs its own session — avoiding double-counting.)
+      if (data.status === 'completed') {
+        const focusTaskId = user.focus_mode_task_id;
+        const enteredAt = user.focus_mode_entered_at;
+        if (focusTaskId && focusTaskId === event.entity_id && enteredAt) {
+          try {
+            const duration = Math.max(0, Math.round((Date.now() - new Date(enteredAt).getTime()) / 1000));
+            await base44.asServiceRole.entities.FocusSessionLog.create({
+              task_id: focusTaskId,
+              task_title: data.title || old_data?.title || '',
+              duration_seconds: duration,
+              started_at: enteredAt,
+              completed_at: data.completed_at || new Date().toISOString()
+            });
+          } catch (e) {
+            console.error('[onTaskUpdate] FocusSessionLog save failed:', e);
+          }
+          try {
+            await base44.asServiceRole.entities.User.update(user.id, {
+              focus_mode_task_id: null,
+              focus_mode_entered_at: null
+            });
+          } catch (e) {
+            console.error('[onTaskUpdate] clear focus state failed:', e);
+          }
+        }
+      }
+
       return Response.json({ success: true, cancelled: true, reason: 'task_completed_or_snoozed' });
     }
 

@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle2, Trophy, RotateCcw } from "lucide-react";
@@ -109,9 +108,10 @@ export default function TodaysAccomplishments({ tasks, theme, onUncomplete }) {
                           {task.urgency}
                         </Badge>
                         <Badge variant="outline" className={`text-xs ${theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600' : ''}`}>
-                          {new Date(task.completed_at).toLocaleTimeString('en-US', { 
-                            hour: 'numeric', 
-                            minute: '2-digit' 
+                          {new Date(task.completed_at).toLocaleTimeString('en-US', {
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            timeZone: 'UTC'
                           })}
                         </Badge>
                       </div>

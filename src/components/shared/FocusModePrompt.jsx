@@ -491,6 +491,23 @@ export default function FocusModePrompt({ user, theme }) {
           </Button>
         </DialogContent>
       </Dialog>
+
+      {mode === "active" && focusTaskId && !open && (
+        <button
+          onClick={() => setOpen(true)}
+          className={`fixed left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-full shadow-lg px-5 py-3 text-sm font-semibold ${
+            theme === "dark"
+              ? "bg-green-600 text-white hover:bg-green-700"
+              : theme === "spicybrains"
+              ? "bg-gradient-to-r from-pink-500 to-yellow-400 text-gray-900 border-2 border-cyan-400"
+              : "bg-green-600 text-white hover:bg-green-700"
+          }`}
+          style={{ bottom: "max(5.5rem, calc(5.5rem + env(safe-area-inset-bottom)))" }}
+        >
+          <Target className="w-4 h-4" />
+          {focusTask?.title ? `Back to Focus: ${focusTask.title}` : "Back to Focus Mode"}
+        </button>
+      )}
     </>
   );
 }
