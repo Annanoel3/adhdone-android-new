@@ -37,6 +37,7 @@ Your goal: Break this into 3-5 ACTIONABLE micro-steps that:
 3. Start with the FIRST physical action (not planning)
 4. Use action verbs: "Open", "Write", "Call", "Send", "Create"
 5. Address ADHD challenges (decision paralysis, perfectionism, getting started)
+6. Order the steps SEQUENTIALLY in the exact order they must actually be performed — the FIRST item in the list is the first action you'd do, the LAST item is the final action. For example, for "do laundry": "wash and dry the laundry" comes BEFORE "put all the laundry away" — never list the put-away step first.
 
 Also suggest:
 - **Best reminder interval** for each step (based on step complexity and ADHD patterns)
@@ -135,6 +136,7 @@ Return JSON with this structure:
         return {
           title: suggestion.title,
           parent_task_id: task.id,
+          subtask_order: index + 1, // Preserve the LLM's sequential step order
           urgency: task.urgency,
           energy_required: suggestion.energy_required || task.energy_required,
           reminder_interval: suggestion.reminder_interval || task.reminder_interval,

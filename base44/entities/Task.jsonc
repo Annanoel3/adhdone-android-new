@@ -118,6 +118,10 @@
       "type": "string",
       "description": "The ID of the parent task, if this is a sub-task"
     },
+    "subtask_order": {
+      "type": "number",
+      "description": "Sequence position of this subtask within its parent task (1 = first step). Preserves the logical/chronological order the steps should be performed in."
+    },
     "snooze_count": {
       "type": "number",
       "default": 0

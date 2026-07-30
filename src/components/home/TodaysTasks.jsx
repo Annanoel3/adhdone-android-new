@@ -334,7 +334,14 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
   };
 
   const getSubtasks = (taskId) => {
-    return tasks.filter(t => t.parent_task_id === taskId);
+    return tasks
+      .filter(t => t.parent_task_id === taskId)
+      .sort((a, b) => {
+        const ao = typeof a.subtask_order === 'number' ? a.subtask_order : 9999;
+        const bo = typeof b.subtask_order === 'number' ? b.subtask_order : 9999;
+        if (ao !== bo) return ao - bo;
+        return new Date(a.created_date || 0) - new Date(b.created_date || 0);
+      });
   };
 
   const toggleTaskExpansion = (taskId) => {
