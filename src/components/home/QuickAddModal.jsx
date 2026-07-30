@@ -49,9 +49,10 @@ Infer the best reminder_interval and urgency from the NATURE of the task:
   e.g. "pay rent", "submit form", "call doctor", "send report"
   → reminder_interval="1hour" (if deadline is today/tomorrow) or "2hours", urgency="high"
 
+- "TODAY" OVERRIDE: if the user said "today" (e.g., "clean the dishes today", "do laundry today"), the task needs doing TODAY — use reminder_interval="2hours" (NOT "daily"), even for chores.
 - ROUTINE / HABIT (wellness, daily maintenance):
   e.g. "stretch", "take vitamins", "drink water", "meditate"
-  → reminder_interval="daily", urgency="low" or "medium"
+  → reminder_interval="daily", urgency="low" or "medium" (ONLY when the user did NOT say "today")
 
 - GENERAL ACTIONABLE TASKS (not perishable, not a hard deadline, not a routine/habit):
   Tasks that need to get done but have no specific deadline or schedule.

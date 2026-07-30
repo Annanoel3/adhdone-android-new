@@ -58,6 +58,17 @@ export function buildTaskParsePrompt(inputText: string): string {
 
       REMINDER STRATEGY (when user does NOT specify a time):
 
+      "TODAY" OVERRIDE (CRITICAL — commonly missed):
+      If the user says "today" (e.g., "I need to clean the dishes and the floor today",
+      "do laundry today"), the task needs to get done TODAY — it is NOT an ongoing daily habit.
+      - Treat it as RECURRING with reminder_interval="2hours" (remind every 2 hours until completed).
+      - This applies to CHORES too: "clean the dishes today", "clean the floor today",
+        "do the dishes today" → reminder_interval="2hours", NOT "daily".
+      - urgency based on the task (chores → "medium", time-sensitive → "high").
+      - "daily" is ONLY for ongoing habits/routines where the user did NOT say "today".
+      - Example: "clean the dishes today" → reminder_interval="2hours", urgency="medium", needs_date_pick=false
+      - Example: "do laundry today" → reminder_interval="2hours", urgency="high", needs_date_pick=false
+
       STEP 1 — Decide: is this RECURRING or ONE-TIME?
 
       RECURRING (keep reminding until done):
@@ -124,6 +135,9 @@ export function buildTaskParsePrompt(inputText: string): string {
       - Wellness: "stretch", "take vitamins", "drink water", "meditate", "do pushups"
       - Chores: "make bed", "water plants", "tidy desk"
       - → reminder_interval="daily", urgency="low" or "medium"
+      - CRITICAL: Only use "daily" when the user did NOT say "today". If the user said
+        "today" (e.g., "clean the dishes today", "clean the floor today"), this is a
+        TODAY task, not a daily habit → use reminder_interval="2hours" instead (see TODAY OVERRIDE above).
 
       GENERAL ACTIONABLE TASKS (not perishable, not a hard deadline, not a routine/habit):
       Tasks that need to get done but have no specific deadline or schedule.

@@ -66,6 +66,10 @@ export default function AddTask() {
   - "buy milk, call mom, and do laundry" → 3 tasks (all independent)
   - "water the plants and schedule dentist appointment" → 2 tasks (unrelated)
 
+  CRITICAL: When splitting, PRESERVE any time/date words (e.g., "today", "tomorrow",
+  "tonight") on EACH split task so the user's timing intent is not lost.
+  - "clean the dishes and the floor today" → ["clean the dishes today", "clean the floor today"]
+
   Examples of SINGLE task (KEEP AS ONE):
   - "call the mini place and ask them to send recommendations" → ONE ("them" = mini place)
   - "text Sarah and see if she wants to meet up" → ONE ("she" = Sarah)
@@ -181,7 +185,8 @@ Bills, financial tasks, work obligations = ALWAYS recurring at "2hours".
 SMART INFERENCE (when user does NOT specify a time, frequency, or date):
 - PERISHABLE / TIME-SENSITIVE (food, laundry, meds, cooking, pets) → reminder_interval="2hours", urgency="high"
 - HARD DEADLINE / IMPORTANT OBLIGATION (pay rent, submit form, financial/legal) → reminder_interval="1hour" or "2hours", urgency="high"
-- ROUTINE / HABIT (stretch, vitamins, wellness, daily chores) → reminder_interval="daily", urgency="low" or "medium"
+- "TODAY" OVERRIDE: if the user said "today" (e.g., "clean the dishes today", "do laundry today"), the task needs doing TODAY — use reminder_interval="2hours" (NOT "daily"), even for chores.
+- ROUTINE / HABIT (stretch, vitamins, wellness, daily chores) → reminder_interval="daily", urgency="low" or "medium" (ONLY when the user did NOT say "today")
 - General fallback → reminder_interval="2hours", urgency="medium"
 
 JSON:
