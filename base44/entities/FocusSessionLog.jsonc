@@ -23,19 +23,24 @@
       "type": "string",
       "format": "date-time",
       "description": "When the task was completed / session ended"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Owner's email for RLS \u2014 must be set so the record is visible to the user who earned it (allows backfill/automation logging that can't run in the user's own session)."
     }
   },
   "required": [
     "task_title",
     "duration_seconds",
-    "completed_at"
+    "completed_at",
+    "user_email"
   ],
   "rls": {
     "read": {
-      "created_by": "{{user.email}}"
+      "data.user_email": "{{user.email}}"
     },
     "write": {
-      "created_by": "{{user.email}}"
+      "data.user_email": "{{user.email}}"
     }
   }
 }
