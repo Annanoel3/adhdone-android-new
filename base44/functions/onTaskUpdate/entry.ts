@@ -114,6 +114,38 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, skipped: true });
     }
 
+    // Focus session logging on completion — runs regardless of whether the task
+    // still has scheduled notifications, so the session is captured no matter
+    // how the user ENTERED Focus Mode (popup, Launchpad liftoff, Sprint "keep
+    // going") or how they COMPLETED the task (popup button vs. direct complete).
+    // Uses the authoritative focus_mode_entered_at from the user record.
+    if (data.status === 'completed') {
+      const focusTaskId = user.focus_mode_task_id;
+      const enteredAt = user.focus_mode_entered_at;
+      if (focusTaskId && focusTaskId === event.entity_id && enteredAt) {
+        try {
+          const duration = Math.max(0, Math.round((Date.now() - new Date(enteredAt).getTime()) / 1000));
+          await base44.asServiceRole.entities.FocusSessionLog.create({
+            task_id: focusTaskId,
+            task_title: data.title || old_data?.title || '',
+            duration_seconds: duration,
+            started_at: enteredAt,
+            completed_at: data.completed_at || new Date().toISOString()
+          });
+        } catch (e) {
+          console.error('[onTaskUpdate] FocusSessionLog save failed:', e);
+        }
+        try {
+          await base44.asServiceRole.entities.User.update(user.id, {
+            focus_mode_task_id: null,
+            focus_mode_entered_at: null
+          });
+        } catch (e) {
+          console.error('[onTaskUpdate] clear focus state failed:', e);
+        }
+      }
+    }
+
     // Check if there are scheduled notifications for this task
     if (!data.onesignal_notification_ids || data.onesignal_notification_ids.length === 0) {
       console.log('[onTaskUpdate] No scheduled notifications for this task');
@@ -139,37 +171,6 @@ Deno.serve(async (req) => {
         reminder_interval: null,
         notification_recipient_email: null
       });
-
-      // If the completed task was the active Focus Mode task, record how long the
-      // focus session lasted so the Progress page can show per-task averages.
-      // (Completing via the Focus popup sets ids=[] so this branch is skipped there —
-      //  the popup logs its own session — avoiding double-counting.)
-      if (data.status === 'completed') {
-        const focusTaskId = user.focus_mode_task_id;
-        const enteredAt = user.focus_mode_entered_at;
-        if (focusTaskId && focusTaskId === event.entity_id && enteredAt) {
-          try {
-            const duration = Math.max(0, Math.round((Date.now() - new Date(enteredAt).getTime()) / 1000));
-            await base44.asServiceRole.entities.FocusSessionLog.create({
-              task_id: focusTaskId,
-              task_title: data.title || old_data?.title || '',
-              duration_seconds: duration,
-              started_at: enteredAt,
-              completed_at: data.completed_at || new Date().toISOString()
-            });
-          } catch (e) {
-            console.error('[onTaskUpdate] FocusSessionLog save failed:', e);
-          }
-          try {
-            await base44.asServiceRole.entities.User.update(user.id, {
-              focus_mode_task_id: null,
-              focus_mode_entered_at: null
-            });
-          } catch (e) {
-            console.error('[onTaskUpdate] clear focus state failed:', e);
-          }
-        }
-      }
 
       return Response.json({ success: true, cancelled: true, reason: 'task_completed_or_snoozed' });
     }

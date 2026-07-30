@@ -217,22 +217,10 @@ export default function FocusModePrompt({ user, theme }) {
         completed_at: localISO,
         onesignal_notification_ids: [],
       });
-      // Log this focus session so Progress can show per-task averages & frequency.
-      try {
-        const startedAt = user?.focus_mode_entered_at;
-        const duration = startedAt
-          ? Math.max(0, Math.round((Date.now() - new Date(startedAt).getTime()) / 1000))
-          : 0;
-        await base44.entities.FocusSessionLog.create({
-          task_id: focusTask.id,
-          task_title: focusTask.title,
-          duration_seconds: duration,
-          started_at: startedAt || localISO,
-          completed_at: localISO,
-        });
-      } catch (e) {
-        console.error("FocusSessionLog save failed:", e);
-      }
+      // Focus session logging is handled centrally by the onTaskUpdate backend
+      // automation (fires on any completion of the focus task with the
+      // authoritative focus_mode_entered_at), so it's captured regardless of how
+      // the user entered or completed Focus Mode.
       if (focusTask.onesignal_notification_ids?.length) {
         try {
           const { cancelScheduledReminder } = await import(
