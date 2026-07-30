@@ -238,11 +238,20 @@ export default function FocusModePrompt({ user, theme }) {
 
   const handleComplete = async () => {
     if (!focusTask) return;
+    const task = focusTask;
+    // Celebrate instantly — don't freeze the UI on the task update, OneSignal
+    // cancel, and Focus Mode teardown. Those run in the background while the
+    // confetti + "back to it" popup show right away.
+    setMode("celebrate");
+    fireConfetti();
+    setFocusTaskId(null);
+    setFocusTask(null);
+    window.dispatchEvent(new CustomEvent("tasks-changed"));
     setBusy(true);
     try {
       const now = new Date();
       const localISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString();
-      await base44.entities.Task.update(focusTask.id, {
+      await base44.entities.Task.update(task.id, {
         status: "completed",
         completed_at: localISO,
         onesignal_notification_ids: [],
@@ -251,21 +260,16 @@ export default function FocusModePrompt({ user, theme }) {
       // automation (fires on any completion of the focus task with the
       // authoritative focus_mode_entered_at), so it's captured regardless of how
       // the user entered or completed Focus Mode.
-      if (focusTask.onesignal_notification_ids?.length) {
+      if (task.onesignal_notification_ids?.length) {
         try {
           const { cancelScheduledReminder } = await import(
             "@/components/utils/reminderScheduler"
           );
-          await cancelScheduledReminder(focusTask.onesignal_notification_ids);
+          await cancelScheduledReminder(task.onesignal_notification_ids);
         } catch {}
       }
       await base44.functions.invoke("setFocusMode", { action: "exit" });
-      setFocusTaskId(null);
-      setFocusTask(null);
       broadcast(null);
-      window.dispatchEvent(new CustomEvent("tasks-changed"));
-      setMode("celebrate");
-      fireConfetti();
     } catch (e) {
       console.error("Failed to complete focus task:", e);
     } finally {
