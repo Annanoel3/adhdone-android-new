@@ -786,13 +786,6 @@ export default function TaskCard({
               )}
             </div>
 
-            {/* Launchpad + 5-min Sprint entry points */}
-            {task.status !== 'completed' && (
-              <div className={`pt-2 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
-                <LaunchButtons task={task} theme={theme} />
-              </div>
-            )}
-
             {/* Actions: details + delete + snooze */}
             <div className={`flex flex-wrap items-center justify-between gap-2 pt-2 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
               <div className="flex items-center gap-2 flex-shrink-0">
