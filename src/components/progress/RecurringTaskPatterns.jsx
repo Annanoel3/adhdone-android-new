@@ -32,7 +32,13 @@ function frequencyLabel(avgDays, count) {
 export default function RecurringTaskPatterns({ tasks, focusLogs, theme, cardClass, textClass, subTextClass }) {
   const patterns = useMemo(() => {
     const completed = (tasks || []).filter(
-      (t) => t.status === "completed" && !t.parent_task_id && t.completed_at
+      (t) =>
+        t.status === "completed" &&
+        !t.parent_task_id &&
+        t.completed_at &&
+        // Birthdays are their own distinct feature — never surface them here.
+        t.classification !== "birthday" &&
+        !t.birthday_person
     );
 
     // Group completions by normalized title
