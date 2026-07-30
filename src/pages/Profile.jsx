@@ -186,8 +186,8 @@ export default function Profile() {
         </CardContent>
       </Card>
 
-      {/* Privacy Settings */}
-      <Card className={`border-none shadow-lg ${
+      {/* Privacy Settings — hidden for now (kept in source); re-enable by removing `hidden`) */}
+      <Card className={`hidden border-none shadow-lg ${
         theme === 'dark' ? 'bg-gray-800' : 'bg-white'
       }`}>
         <CardHeader>
