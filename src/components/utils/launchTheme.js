@@ -41,13 +41,13 @@ export function overlayClasses(theme, specialMode) {
   switch (theme) {
     case 'dark':
       return {
-        bg: 'bg-gradient-to-br from-indigo-950 via-purple-900 to-slate-900',
+        bg: 'bg-gradient-to-br from-gray-950 via-gray-900 to-black',
         text: 'text-white',
-        muted: 'text-indigo-100/80',
-        title: 'text-orange-300',
-        accent: 'bg-gradient-to-br from-orange-400 to-pink-500 text-white',
+        muted: 'text-gray-400',
+        title: 'text-white',
+        accent: 'bg-white/10 text-white',
         ringTrack: 'rgba(255,255,255,0.12)',
-        ring: '#a78bfa',
+        ring: '#9ca3af',
         ringWarn: '#fbbf24',
         warnText: 'text-amber-300',
       };
@@ -77,13 +77,13 @@ export function overlayClasses(theme, specialMode) {
       };
     default: // minimalist / light
       return {
-        bg: 'bg-gradient-to-br from-sky-100 via-indigo-100 to-purple-100',
+        bg: 'bg-gradient-to-br from-gray-50 via-white to-gray-100',
         text: 'text-gray-900',
         muted: 'text-gray-600',
-        title: 'text-orange-600',
-        accent: 'bg-gradient-to-br from-orange-400 to-pink-500 text-white',
+        title: 'text-gray-900',
+        accent: 'bg-gray-900 text-white',
         ringTrack: 'rgba(0,0,0,0.08)',
-        ring: '#7c3aed',
+        ring: '#374151',
         ringWarn: '#f59e0b',
         warnText: 'text-amber-600',
       };

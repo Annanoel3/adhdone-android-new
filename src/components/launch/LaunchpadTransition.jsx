@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Rocket, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ConfirmDialog from '@/components/launch/ConfirmDialog';
-import { overlayClasses } from '@/components/utils/launchTheme';
+import { overlayClasses, isSeasonal } from '@/components/utils/launchTheme';
 
 const TOTAL_MS = 5 * 60 * 1000;
 
@@ -41,7 +41,11 @@ export default function LaunchpadTransition({ session, onComplete, onCancel, onW
     <div className={`fixed inset-0 z-[100] flex items-center justify-center p-6 ${o.bg} ${o.text}`}>
       <button
         onClick={() => onMinimize?.()}
-        className="absolute top-5 right-5 w-10 h-10 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 transition-colors"
+        className={`absolute top-5 right-5 w-10 h-10 rounded-full flex items-center justify-center transition-colors ${
+          theme === 'dark' && !isSeasonal(specialMode)
+            ? 'bg-white/10 hover:bg-white/20'
+            : 'bg-black/5 hover:bg-black/10'
+        }`}
         aria-label="Minimize"
       >
         <X className="w-5 h-5" />
