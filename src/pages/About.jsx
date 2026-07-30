@@ -76,15 +76,15 @@ const SPICY_FEATURES = [
   },
   {
     icon: MessageCircleHeart,
-    title: 'A place to vent (and body-double)',
+    title: 'A place to vent',
     description:
-      "A judgment-free AI Support Space for when you need to talk something through — plus accountability partners, mood check-ins, and Focus Rooms (virtual body doubling) so you're not doing it alone.",
+      "A judgment-free AI Support Space for when you need to talk something through, vent, or process your thoughts — no human required, no shame.",
   },
   {
     icon: Trophy,
-    title: 'Wins, not guilt',
+    title: 'A weekly recap, not a guilt trip',
     description:
-      "Streaks, achievements, weekly challenges, and a weekly recap celebrate showing up — never the productivity-shaming 'you failed' notifications other apps love. We celebrate tiny wins, because tiny wins compound.",
+      "Each week ADHDone gives you a gentle look back at what you actually got done — no streaks to break, no achievements to miss, no shame. Just an honest recap so you can spot your own patterns and celebrate showing up.",
   },
 ];
 
@@ -138,25 +138,10 @@ export default function About() {
               Our Story
             </CardTitle>
           </CardHeader>
-          <CardContent className={`space-y-4 text-sm leading-relaxed ${body}`}>
+          <CardContent className={`text-sm leading-relaxed ${body}`}>
             <p>
               Built by someone with ADHD — for people with ADHD, and anyone who
               shares the same (or similar) struggles.
-            </p>
-            <p>
-              Let's be honest: a reminder at 3pm doesn't guarantee anything
-              actually gets done. Most task apps assume that if they ping you,
-              you'll do the thing. ADHDone doesn't. It's built around the way a
-              spicy brain actually works — the overwhelm, the time blindness, the
-              47 tabs open, the 2am ideas you can't afford to lose, and the shame
-              spiral when a to-do list gets too long.
-            </p>
-            <p>
-              So instead of another rigid checklist, ADHDone is your get-it-done
-              companion: it figures out what deserves your attention and when,
-              breaks the scary stuff into tiny first steps, celebrates you for
-              showing up, and gently course-corrects when life happens. No
-              productivity shaming — just one tiny win at a time.
             </p>
           </CardContent>
         </Card>
