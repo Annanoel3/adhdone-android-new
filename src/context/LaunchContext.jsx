@@ -62,6 +62,7 @@ export function LaunchProvider({ children }) {
           fireLiftoff(lp.taskId);
         } else {
           setLaunchpad(lp);
+          setLaunchpadMinimized(!!lp.minimized);
         }
       }
     } catch { /* ignore */ }
@@ -83,6 +84,7 @@ export function LaunchProvider({ children }) {
           setSprintEnded(true);
         } else {
           setSprint(sp);
+          setSprintMinimized(!!sp.minimized);
         }
       }
     } catch { /* ignore */ }
@@ -181,7 +183,7 @@ export function LaunchProvider({ children }) {
             setLaunchpad(null);
             fireLiftoff(launchpad.taskId);
           }}
-          onMinimize={() => setLaunchpadMinimized(true)}
+          onMinimize={() => { setLaunchpadMinimized(true); localStorage.setItem(LAUNCHPAD_KEY, JSON.stringify({ ...launchpad, minimized: true })); }}
           onCancel={cancelLaunchpad}
         />
       )}
@@ -189,7 +191,7 @@ export function LaunchProvider({ children }) {
         <MinimizedChip
           icon={Rocket}
           label={`Launchpad · ${launchpad.title}`}
-          onResume={() => setLaunchpadMinimized(false)}
+          onResume={() => { setLaunchpadMinimized(false); localStorage.setItem(LAUNCHPAD_KEY, JSON.stringify({ ...launchpad, minimized: false })); }}
           onCancel={cancelLaunchpad}
         />
       )}
@@ -217,7 +219,7 @@ export function LaunchProvider({ children }) {
             setSprint(null);
             setSprintEnded(false);
           }}
-          onMinimize={() => setSprintMinimized(true)}
+          onMinimize={() => { setSprintMinimized(true); localStorage.setItem(SPRINT_KEY, JSON.stringify({ ...sprint, minimized: true })); }}
           onCancel={cancelSprint}
         />
       )}
@@ -225,7 +227,7 @@ export function LaunchProvider({ children }) {
         <MinimizedChip
           icon={Timer}
           label={`5-min Sprint · ${sprint.title}`}
-          onResume={() => setSprintMinimized(false)}
+          onResume={() => { setSprintMinimized(false); localStorage.setItem(SPRINT_KEY, JSON.stringify({ ...sprint, minimized: false })); }}
           onCancel={cancelSprint}
         />
       )}
