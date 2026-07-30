@@ -29,36 +29,17 @@ Deno.serve(async (req) => {
             return Response.json({ success: false, error: 'Missing title or message body' }, { status: 400 });
         }
 
-        // --- Quiet hours enforcement ---
-        // US timezones range from UTC-4 (EDT) to UTC-8 (PST).
-        // To block 10 PM – 9 AM local for all US users, we use a UTC window of 03:00–14:00.
-        //   3 AM UTC  = 10 PM CDT / 11 PM EDT / 8 PM PDT
-        //  14 PM UTC  =  9 AM CDT / 10 AM EDT /  6 AM PDT
-        const QUIET_START_HOUR = 3;  // 3 AM UTC
-        const QUIET_END_HOUR   = 14; // 2 PM UTC
-
-        function adjustForQuietHours(isoString) {
-            const d = new Date(isoString);
-            const h = d.getUTCHours();
-            // Quiet window does NOT cross midnight UTC, so simple range check
-            const isQuiet = h >= QUIET_START_HOUR && h < QUIET_END_HOUR;
-            if (!isQuiet) return isoString;
-            // Push to QUIET_END_HOUR UTC same day (it's always ahead of current time in the window)
-            const adjusted = new Date(d);
-            adjusted.setUTCHours(QUIET_END_HOUR, 0, 0, 0);
-            if (adjusted <= d) adjusted.setUTCDate(adjusted.getUTCDate() + 1);
-            return adjusted.toISOString();
-        }
+        // Quiet hours enforcement is handled by callers using per-user, timezone-aware
+        // logic (see cronRefillReminders, rescanTasks, and the client-side
+        // reminderScheduler). A crude UTC blanket here would collapse multiple
+        // night/early-morning notifications to the same timestamp — causing
+        // duplicate notifications — so we do NOT apply quiet hours in schedulePush.
 
         let resolvedSendAt = sendAtISO
             ? sendAtISO
             : minutesFromNow !== undefined
                 ? new Date(Date.now() + minutesFromNow * 60 * 1000).toISOString()
                 : null;
-
-        if (resolvedSendAt) {
-            resolvedSendAt = adjustForQuietHours(resolvedSendAt);
-        }
 
         // Safety guard: never allow instant delivery by accident
         if (!resolvedSendAt || new Date(resolvedSendAt).getTime() <= Date.now()) {

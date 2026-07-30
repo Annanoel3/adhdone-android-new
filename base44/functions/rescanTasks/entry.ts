@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
+import { adjustForQuietHours, parseHHMM } from '../../shared/quietHours.ts';
 
 const INTERVAL_MS = {
   '10min': 10 * 60 * 1000,
@@ -31,6 +32,18 @@ export default async function(req: Request): Promise<Response> {
     }, '-created_date', 200);
 
     console.log(`[rescanTasks] Found ${tasks.length} active tasks for ${targetEmail}`);
+
+    // Fetch the target user's profile for per-user, timezone-aware quiet hours.
+    // schedulePush no longer applies its own (broken) UTC blanket, so the rescan
+    // must apply the owner's actual quiet hours — same as cronRefillReminders.
+    const allUsers = await base44.asServiceRole.entities.User.list();
+    const owner = allUsers.find(u => u.email && u.email.toLowerCase().trim() === targetEmail);
+    const quietEnabled = !!(owner && owner.quiet_hours_enabled);
+    const timeZone = owner && owner.timezone ? owner.timezone : null;
+    const startMin = owner && owner.quiet_hours_start ? parseHHMM(owner.quiet_hours_start) : parseHHMM('22:00');
+    const endMin = owner && owner.quiet_hours_end ? parseHHMM(owner.quiet_hours_end) : parseHHMM('08:00');
+    const useQuiet = quietEnabled && !!timeZone;
+    console.log(`[rescanTasks] Quiet hours: ${useQuiet ? `enabled (${owner.quiet_hours_start}-${owner.quiet_hours_end} ${timeZone})` : 'disabled'}`);
 
     const results = [];
 
@@ -147,13 +160,22 @@ export default async function(req: Request): Promise<Response> {
                 .filter(r => new Date(r.sendAtISO).getTime() > bufferMs)
                 .sort((a, b) => new Date(a.sendAtISO).getTime() - new Date(b.sendAtISO).getTime());
 
+              let oneTimeLastScheduledAt = null;
               for (const reminder of reminderTimes) {
+                let sendAt = new Date(reminder.sendAtISO);
+                if (useQuiet) {
+                  sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
+                  if (oneTimeLastScheduledAt && Math.abs(sendAt.getTime() - oneTimeLastScheduledAt.getTime()) < 60000) {
+                    continue;
+                  }
+                }
+                const adjustedISO = sendAt.toISOString();
                 try {
                   const pushResp = await base44.functions.invoke('schedulePush', {
                     toUserExternalId: targetEmail,
                     title: reminder.notification_title,
                     body: reminder.notification_body,
-                    sendAtISO: reminder.sendAtISO,
+                    sendAtISO: adjustedISO,
                     data: { screen: '/TaskNotification', taskId: task.id, urgency: newUrgency, type: 'task_reminder' },
                     buttons: [
                       { id: 'snooze_15', text: 'Snooze 15 min' },
@@ -164,9 +186,10 @@ export default async function(req: Request): Promise<Response> {
                   const pushResult = pushResp.data || pushResp;
                   if (pushResult.notificationId) {
                     newNotificationIds.push(pushResult.notificationId);
+                    oneTimeLastScheduledAt = sendAt;
                     newReminderSchedule.push({
                       notification_id: pushResult.notificationId,
-                      send_at: reminder.sendAtISO,
+                      send_at: adjustedISO,
                       label: reminder.label,
                       notification_title: reminder.notification_title,
                       notification_body: reminder.notification_body,
@@ -183,10 +206,21 @@ export default async function(req: Request): Promise<Response> {
             // Recurring task — schedule 10 notifications at the new interval
             let scheduleTime = new Date(nextReminder).getTime();
             const now = Date.now();
+            let lastScheduledAt = null; // de-dupe quiet-hour slots that collapse to the same time
 
             for (let i = 0; i < 10; i++) {
               if (scheduleTime > now) {
-                const sendAtISO = new Date(scheduleTime).toISOString();
+                let sendAt = new Date(scheduleTime);
+                if (useQuiet) {
+                  sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
+                  // Quiet-hours can shift two consecutive night slots onto the same
+                  // morning minute — skip duplicates rather than send two at once.
+                  if (lastScheduledAt && Math.abs(sendAt.getTime() - lastScheduledAt.getTime()) < 60000) {
+                    scheduleTime += INTERVAL_MS[newInterval];
+                    continue;
+                  }
+                }
+                const sendAtISO = sendAt.toISOString();
                 try {
                   const pushResp = await base44.functions.invoke('schedulePush', {
                     toUserExternalId: targetEmail,
@@ -203,6 +237,7 @@ export default async function(req: Request): Promise<Response> {
                   const pushResult = pushResp.data || pushResp;
                   if (pushResult.notificationId) {
                     newNotificationIds.push(pushResult.notificationId);
+                    lastScheduledAt = sendAt;
                   }
                 } catch (e) {
                   console.error(`[rescanTasks] Failed to schedule recurring reminder for "${task.title}":`, e);
@@ -212,7 +247,9 @@ export default async function(req: Request): Promise<Response> {
             }
 
             if (newNotificationIds.length > 0) {
-              newLastScheduledUntil = new Date(scheduleTime - INTERVAL_MS[newInterval]).toISOString();
+              newLastScheduledUntil = lastScheduledAt
+                ? lastScheduledAt.toISOString()
+                : new Date(scheduleTime - INTERVAL_MS[newInterval]).toISOString();
             }
           }
         }
