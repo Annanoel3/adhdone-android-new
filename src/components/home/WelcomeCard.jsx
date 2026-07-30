@@ -1,9 +1,9 @@
-
 import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
+import FocusModeButton from "./FocusModeButton";
 
-export default function WelcomeCard({ userName, theme }) {
+export default function WelcomeCard({ userName, theme, user }) {
   const specialMode = localStorage.getItem('special_mode') || 'normal';
 
   const getTimeGreeting = () => {
@@ -58,6 +58,9 @@ export default function WelcomeCard({ userName, theme }) {
               theme === 'minimalist' ? 'text-green-600' : theme === 'dark' ? 'text-green-400' : 'text-purple-600'
             }`} />
           </div>
+        </div>
+        <div className="mt-5">
+          <FocusModeButton user={user} theme={theme} />
         </div>
       </CardContent>
     </Card>
