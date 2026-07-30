@@ -25,15 +25,22 @@ export function LaunchProvider({ children }) {
   const pomodoroRef = useRef(pomodoro);
   useEffect(() => { pomodoroRef.current = pomodoro; }, [pomodoro]);
 
-  const fireLiftoff = useCallback(() => {
+  const fireLiftoff = useCallback(async (taskId) => {
     playLiftoff();
     haptic([200, 100, 200, 100, 300]);
-    const p = pomodoroRef.current;
-    if (p) {
-      p.resetTimer();
-      setTimeout(() => p.toggleTimer(), 60);
+    // Liftoff enters Focus Mode for the chosen task — silences other recurring
+    // reminders and enables hourly check-ins on it. The FocusModePrompt (in the
+    // Layout) listens for the broadcast event and shows the active session, which
+    // includes an optional mini Pomodoro for a timed burst.
+    if (taskId) {
+      try {
+        await base44.functions.invoke('setFocusMode', { action: 'enter', taskId });
+        window.dispatchEvent(new CustomEvent('focus-mode-changed', { detail: { taskId } }));
+      } catch (e) {
+        console.error('Failed to enter focus mode on liftoff:', e);
+      }
     }
-    navigate('/FocusTimer', { replace: true });
+    navigate('/Home', { replace: true });
   }, [navigate]);
 
   // Restore any session that was active when the app was backgrounded/closed.
@@ -49,7 +56,7 @@ export function LaunchProvider({ children }) {
           // Liftoff was due while away — fire it now.
           localStorage.removeItem(LAUNCHPAD_KEY);
           if (lp.notifId) cancelScheduledReminder(lp.notifId).catch(() => {});
-          fireLiftoff();
+          fireLiftoff(lp.taskId);
         } else {
           setLaunchpad(lp);
         }
@@ -162,7 +169,7 @@ export function LaunchProvider({ children }) {
             localStorage.removeItem(LAUNCHPAD_KEY);
             if (launchpad.notifId) cancelScheduledReminder(launchpad.notifId).catch(() => {});
             setLaunchpad(null);
-            fireLiftoff();
+            fireLiftoff(launchpad.taskId);
           }}
           onCancel={cancelLaunchpad}
         />
