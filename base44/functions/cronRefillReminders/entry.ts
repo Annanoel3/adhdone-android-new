@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent } from '../../shared/reminderTitle.ts';
-import { adjustForQuietHours, parseHHMM } from '../../shared/quietHours.ts';
+import { adjustForQuietHours, parseHHMM, localMinutesOfDay } from '../../shared/quietHours.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 const BATCH_SIZE = 10;
@@ -143,6 +143,11 @@ Deno.serve(async (req) => {
         let sendAt = new Date(batchStart.getTime() + interval * i);
         if (useQuiet) {
           sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
+          // Skip the first-of-day notification — the daily digest cron replaces it
+          // with a single summary instead of N individual task notifications.
+          if (localMinutesOfDay(sendAt, timeZone) === endMin) {
+            continue;
+          }
           // Quiet-hours can shift two consecutive night slots onto the same morning
           // minute — skip duplicates rather than send two notifications at once.
           if (lastScheduledAt && Math.abs(sendAt.getTime() - lastScheduledAt.getTime()) < 60000) {
@@ -198,6 +203,15 @@ Deno.serve(async (req) => {
 
           console.log(`✅ [REFILL] Scheduled ${notificationIds.length} reminders for "${task.title}", last at: ${newLastScheduledUntil.toISOString()}`);
           refilled++;
+        } else {
+          // All notifications landed in the digest window — update last_scheduled_until
+          // to prevent infinite retry loops. The daily digest will cover these tasks.
+          const batchEnd = new Date(batchStart.getTime() + interval * (BATCH_SIZE - 1));
+          await base44.asServiceRole.entities.Task.update(task.id, {
+            onesignal_notification_ids: [],
+            last_scheduled_until: batchEnd.toISOString(),
+          });
+          console.log(`📭 [REFILL] All notifications for "${task.title}" landed in digest window — digest will cover it`);
         }
       } catch (error) {
         console.error(`❌ [REFILL] Failed to refill task ${task.id}:`, error);

@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
-import { adjustForQuietHours, parseHHMM } from '../../shared/quietHours.ts';
+import { adjustForQuietHours, parseHHMM, localMinutesOfDay } from '../../shared/quietHours.ts';
 
 const INTERVAL_MS = {
   '10min': 10 * 60 * 1000,
@@ -165,6 +165,10 @@ export default async function(req: Request): Promise<Response> {
                 let sendAt = new Date(reminder.sendAtISO);
                 if (useQuiet) {
                   sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
+                  // Skip the first-of-day notification — the daily digest replaces it
+                  if (localMinutesOfDay(sendAt, timeZone) === endMin) {
+                    continue;
+                  }
                   if (oneTimeLastScheduledAt && Math.abs(sendAt.getTime() - oneTimeLastScheduledAt.getTime()) < 60000) {
                     continue;
                   }
@@ -213,6 +217,11 @@ export default async function(req: Request): Promise<Response> {
                 let sendAt = new Date(scheduleTime);
                 if (useQuiet) {
                   sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
+                  // Skip the first-of-day notification — the daily digest replaces it
+                  if (localMinutesOfDay(sendAt, timeZone) === endMin) {
+                    scheduleTime += INTERVAL_MS[newInterval];
+                    continue;
+                  }
                   // Quiet-hours can shift two consecutive night slots onto the same
                   // morning minute — skip duplicates rather than send two at once.
                   if (lastScheduledAt && Math.abs(sendAt.getTime() - lastScheduledAt.getTime()) < 60000) {
