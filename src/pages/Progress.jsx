@@ -8,6 +8,7 @@ import { base44 } from "@/api/base44Client";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { isTodayTask } from "../components/utils/todayTasks";
 import FocusModeStats from "../components/progress/FocusModeStats";
+import RecurringTaskPatterns from "../components/progress/RecurringTaskPatterns";
 import { Button } from "@/components/ui/button";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -259,6 +260,15 @@ export default function Progress() {
 
             <FocusModeStats
               logs={focusLogs}
+              theme={theme}
+              cardClass={cardClass}
+              textClass={textClass}
+              subTextClass={subTextClass}
+            />
+
+            <RecurringTaskPatterns
+              tasks={tasks}
+              focusLogs={focusLogs}
               theme={theme}
               cardClass={cardClass}
               textClass={textClass}
