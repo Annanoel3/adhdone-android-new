@@ -333,50 +333,6 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
     });
   };
 
-  if (activeTasks.length === 0) {
-    return (
-      <Card className={`${specialMode !== 'normal' ? `${specialMode}-card` : ''} border-none shadow-md ${
-        specialMode === 'normal' ? (
-          theme === 'minimalist'
-            ? 'bg-white/80 backdrop-blur-sm'
-            : theme === 'dark'
-              ? 'bg-gray-800 border border-gray-700 text-gray-100'
-              : 'bg-white/80 backdrop-blur-sm'
-        ) : ''
-      }`}>
-        <CardContent className="p-12 text-center">
-          <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${
-            specialMode !== 'normal' ? '' :
-            theme === 'minimalist' ? 'bg-green-100' : 
-            theme === 'dark' ? 'bg-green-700' :
-            'bg-gradient-to-br from-purple-100 to-orange-100'
-          }`}>
-            <CheckCircle2 className={`w-8 h-8 ${
-              specialMode !== 'normal' ? '' :
-              theme === 'minimalist' ? 'text-green-600' : 
-              theme === 'dark' ? 'text-green-200' :
-              'text-purple-600'
-            }`} />
-          </div>
-          <h3 className={`text-xl font-bold mb-2 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>All clear!</h3>
-          <p className={`${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'} mb-6`}>No active tasks. Ready to add something new?</p>
-          <Button
-            onClick={() => navigate(createPageUrl("AddTask"))}
-            className={
-              theme === 'minimalist' 
-                ? 'bg-green-600 hover:bg-green-700' 
-                : theme === 'dark'
-                  ? 'bg-blue-600 hover:bg-blue-700 text-white'
-                  : 'bg-gradient-to-r from-purple-600 to-orange-600 hover:from-purple-700 hover:to-orange-700'
-            }
-          >
-            Add Your First Task
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
   const getSubtasks = (taskId) => {
     return tasks.filter(t => t.parent_task_id === taskId);
   };
@@ -419,7 +375,24 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
       </CardHeader>
       <CardContent className="p-6">
         <div className="space-y-3">
-          {activeTasks.map((task) => {
+          {activeTasks.length === 0 ? (
+            <div className="text-center py-10">
+              <div className={`w-14 h-14 rounded-full mx-auto mb-3 flex items-center justify-center ${
+                theme === 'minimalist' ? 'bg-green-100' :
+                theme === 'dark' ? 'bg-green-700' :
+                'bg-gradient-to-br from-purple-100 to-orange-100'
+              }`}>
+                <CheckCircle2 className={`w-7 h-7 ${
+                  theme === 'minimalist' ? 'text-green-600' :
+                  theme === 'dark' ? 'text-green-200' :
+                  'text-purple-600'
+                }`} />
+              </div>
+              <p className={`${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'} font-semibold`}>
+                Nothing due today yet, why don't we make a task?
+              </p>
+            </div>
+          ) : activeTasks.map((task) => {
             const subtasks = getSubtasks(task.id);
             const completedSubtasks = subtasks.filter(st => st.status === 'completed');
             return (
