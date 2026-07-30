@@ -70,7 +70,7 @@ export default function FocusModePrompt({ user, theme }) {
     if (!user?.email) return;
     (async () => {
       try {
-        const allTasks = await base44.entities.Task.filter({ status: "active" });
+        const allTasks = await base44.entities.Task.filter({ status: "active" }, "-updated_date", 200);
         const pickable = allTasks.filter((t) => {
           if (t.birthday_person) return false;
           if (t.parent_task_id) return false; // subtasks belong to a parent — don't pick them standalone
