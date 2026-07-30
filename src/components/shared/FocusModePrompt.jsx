@@ -10,6 +10,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Target, Info, CheckCircle2 } from "lucide-react";
 import confetti from "canvas-confetti";
+import { isTodayTask } from "@/components/utils/todayTasks";
 
 const CELEBRATION_EMOJIS = ["🎉", "🎊", "✨", "🥳", "🌟", "💫", "🙌", "🏆"];
 const CELEBRATION_MESSAGES = [
@@ -70,13 +71,13 @@ export default function FocusModePrompt({ user, theme }) {
     (async () => {
       try {
         const allTasks = await base44.entities.Task.filter({ status: "active" });
-        const todayStr = new Date().toLocaleDateString("en-CA");
         const pickable = allTasks.filter((t) => {
           if (t.birthday_person) return false;
           if (t.parent_task_id) return false; // subtasks belong to a parent — don't pick them standalone
-          if (!t.due_date) return true;
-          const dueStr = new Date(t.due_date).toLocaleDateString("en-CA");
-          return dueStr <= todayStr;
+          // Mirror the Home screen's "today" logic (via isTodayTask) so a one-time
+          // task scheduled for a future date through next_reminder isn't offered
+          // here — only tasks due today, overdue, or with no effective date.
+          return isTodayTask(t);
         });
         setPickableTasks(pickable);
         if (focusTaskId) {
