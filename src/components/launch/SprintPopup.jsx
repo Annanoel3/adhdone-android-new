@@ -6,7 +6,7 @@ import { motion } from 'framer-motion';
 
 const TOTAL_MS = 5 * 60 * 1000;
 
-export default function SprintPopup({ session, ended, onComplete, onKeepGoing, onStop, onCancel }) {
+export default function SprintPopup({ session, ended, onComplete, onKeepGoing, onStop, onCancel, onMinimize }) {
   const endTime = new Date(session.endTimeISO).getTime();
   const [remaining, setRemaining] = useState(() => Math.max(0, endTime - Date.now()));
 
@@ -36,7 +36,9 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
       onOpenChange={(o) => {
         if (o) return;
         if (ended) return; // after the checkpoint, only the buttons dismiss
-        if (window.confirm('Cancel the 5-minute sprint?')) onCancel?.();
+        // Closing the dialog minimizes the sprint (keeps it running) — the user
+        // must explicitly tap "Cancel sprint" to actually stop it.
+        onMinimize?.();
       }}
     >
       <DialogContent className="max-w-sm w-[calc(100vw-2rem)] text-center overflow-hidden">

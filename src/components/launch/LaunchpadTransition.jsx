@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 
 const TOTAL_MS = 5 * 60 * 1000;
 
-export default function LaunchpadTransition({ session, onComplete, onCancel, onWarn }) {
+export default function LaunchpadTransition({ session, onComplete, onCancel, onWarn, onMinimize }) {
   const endTime = new Date(session.endTimeISO).getTime();
   const [remaining, setRemaining] = useState(() => Math.max(0, endTime - Date.now()));
   const warnedRef = useRef(false);
@@ -36,9 +36,9 @@ export default function LaunchpadTransition({ session, onComplete, onCancel, onW
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-gradient-to-br from-indigo-950 via-purple-900 to-slate-900 text-white">
       <button
-        onClick={onCancel}
+        onClick={() => onMinimize?.()}
         className="absolute top-5 right-5 w-10 h-10 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 transition-colors"
-        aria-label="Cancel launch"
+        aria-label="Minimize"
       >
         <X className="w-5 h-5" />
       </button>
@@ -82,9 +82,16 @@ export default function LaunchpadTransition({ session, onComplete, onCancel, onW
           </div>
         </div>
 
-        <p className="text-xs text-indigo-200/70 leading-relaxed">
+        <p className="text-xs text-indigo-200/70 leading-relaxed mb-4">
           When the clock hits zero, we'll start a focus session for you automatically. No pressure — you showed up, and that's everything.
         </p>
+
+        <button
+          onClick={() => { if (window.confirm('Cancel the launchpad?')) onCancel?.(); }}
+          className="text-xs text-indigo-200/60 hover:text-white transition-colors"
+        >
+          Cancel launchpad
+        </button>
       </div>
     </div>
   );
