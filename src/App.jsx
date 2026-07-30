@@ -22,6 +22,7 @@ import Home from '@/pages/Home';
 import Community from '@/pages/Community';
 import BrandBook from '@/pages/BrandBook';
 import About from '@/pages/About';
+import { LaunchProvider } from '@/context/LaunchContext';
 
 // Sentry loaded via CDN in index.html
 const Sentry = window.Sentry;
@@ -80,6 +81,7 @@ const AuthenticatedApp = () => {
 
   // Render the main app
   return (
+    <LaunchProvider>
     <Routes>
       {/* Fully public — no layout wrapper, no auth */}
       <Route path="/" element={<LandingPage />} />
@@ -98,6 +100,7 @@ const AuthenticatedApp = () => {
       <Route path="/About" element={<LayoutWrapper currentPageName="About"><About /></LayoutWrapper>} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
+    </LaunchProvider>
   );
 };
 

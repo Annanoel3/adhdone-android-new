@@ -53,6 +53,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import LaunchButtons from "../launch/LaunchButtons";
 
 export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete, theme, itemClassification }) {
   const [subTasks, setSubTasks] = useState([]);
@@ -1801,6 +1802,11 @@ Return JSON:
           </div>
 
           <DialogFooter className="gap-2 flex-wrap">
+            {task.status !== 'completed' && (
+              <div className="w-full mb-1">
+                <LaunchButtons task={task} theme={theme} />
+              </div>
+            )}
             <Button
               variant="outline"
               onClick={async () => {

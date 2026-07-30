@@ -23,6 +23,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import LaunchButtons from "../launch/LaunchButtons";
 
 export default function TaskCard({
   task,
@@ -758,6 +759,13 @@ export default function TaskCard({
                 </button>
               )}
             </div>
+
+            {/* Launchpad + 5-min Sprint entry points */}
+            {task.status !== 'completed' && (
+              <div className={`pt-2 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
+                <LaunchButtons task={task} theme={theme} />
+              </div>
+            )}
 
             {/* Actions: details + delete + snooze */}
             <div className={`flex flex-wrap items-center justify-between gap-2 pt-2 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
