@@ -8,9 +8,18 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Target, Info, CheckCircle2 } from "lucide-react";
+import { Target, Info, CheckCircle2, Timer } from "lucide-react";
 import confetti from "canvas-confetti";
 import { isTodayTask } from "@/components/utils/todayTasks";
+
+function formatElapsed(ms) {
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
 
 const CELEBRATION_EMOJIS = ["🎉", "🎊", "✨", "🥳", "🌟", "💫", "🙌", "🏆"];
 const CELEBRATION_MESSAGES = [
@@ -52,6 +61,18 @@ export default function FocusModePrompt({ user, theme }) {
   const [pickableTasks, setPickableTasks] = useState([]);
   const [showInfo, setShowInfo] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [elapsed, setElapsed] = useState(null);
+
+  // Live elapsed timer for the active focus session (counts up every second).
+  useEffect(() => {
+    if (mode !== "active") return;
+    const startStr = user?.focus_mode_entered_at;
+    if (!startStr) { setElapsed(null); return; }
+    const update = () => setElapsed(Math.max(0, Date.now() - new Date(startStr).getTime()));
+    update();
+    const id = setInterval(update, 1000);
+    return () => clearInterval(id);
+  }, [mode, user?.focus_mode_entered_at]);
 
   // Sync from external changes (e.g. another tab) + initial.
   useEffect(() => {
@@ -99,6 +120,8 @@ export default function FocusModePrompt({ user, theme }) {
       const t = setTimeout(() => setOpen(true), 1200);
       return () => clearTimeout(t);
     }
+    // Don't auto-prompt when there's nothing to focus on today.
+    if (pickableTasks.length === 0) return;
     const win = getWindow();
     const key = `focus_prompt_${win}_${todayKey()}`;
     if (localStorage.getItem(key) === "1") return;
@@ -107,7 +130,7 @@ export default function FocusModePrompt({ user, theme }) {
       localStorage.setItem(key, "1");
     }, 15000);
     return () => clearTimeout(t);
-  }, [user?.email, focusTaskId]);
+  }, [user?.email, focusTaskId, pickableTasks]);
 
   // Manual open from the Home Focus button.
   useEffect(() => {
@@ -260,9 +283,16 @@ export default function FocusModePrompt({ user, theme }) {
               </DialogHeader>
               <div className="py-4">
                 <p className="text-xs uppercase opacity-60 mb-1">Current task</p>
-                <p className="text-lg font-semibold mb-4">
+                <p className="text-lg font-semibold mb-2">
                   {focusTask?.title || "Loading…"}
                 </p>
+                {elapsed != null && (
+                  <div className={`inline-flex items-center gap-2 text-sm font-medium mb-4 px-3 py-1.5 rounded-full w-fit ${theme === "dark" ? "bg-gray-800 text-green-400" : "bg-green-50 text-green-700"}`}>
+                    <Timer className="w-4 h-4" />
+                    Elapsed: {formatElapsed(elapsed)}
+                  </div>
+                )}
+                {elapsed == null && <div className="mb-4" />}
                 <div className="flex flex-col gap-2">
                   <Button
                     onClick={handleComplete}
