@@ -8,7 +8,7 @@ export const FOCUS_MODE_INTERVAL_MS = 60 * 60 * 1000;
 
 export function getFocusModeContent(title: string): { title: string; body: string } {
   return {
-    title: '🎯 How\'s it going?',
-    body: `Still working on "${title}"? You've got this — keep at it!`,
+    title: `How's "${title}" going?`,
+    body: `Still working on it? You've got this — keep at it!`,
   };
 }

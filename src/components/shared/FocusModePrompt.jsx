@@ -48,7 +48,7 @@ export default function FocusModePrompt({ user, theme }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("offer"); // 'offer' | 'active' | 'celebrate'
   const [focusTask, setFocusTask] = useState(null);
-  const [recurringTasks, setRecurringTasks] = useState([]);
+  const [pickableTasks, setPickableTasks] = useState([]);
   const [showInfo, setShowInfo] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -70,14 +70,10 @@ export default function FocusModePrompt({ user, theme }) {
     (async () => {
       try {
         const allTasks = await base44.entities.Task.filter({ status: "active" });
-        const recurring = allTasks.filter(
-          (t) => t.reminder_interval && t.reminder_interval !== "once" && !t.birthday_person
-        );
-        setRecurringTasks(recurring);
+        const pickable = allTasks.filter((t) => !t.birthday_person);
+        setPickableTasks(pickable);
         if (focusTaskId) {
-          const ft =
-            recurring.find((t) => t.id === focusTaskId) ||
-            allTasks.find((t) => t.id === focusTaskId);
+          const ft = pickable.find((t) => t.id === focusTaskId);
           setFocusTask(ft || null);
         } else {
           setFocusTask(null);
@@ -204,6 +200,17 @@ export default function FocusModePrompt({ user, theme }) {
       ? "bg-gradient-to-br from-pink-100 via-purple-100 to-cyan-100 border-2 border-yellow-400"
       : "bg-white text-gray-900 border-gray-200";
 
+  const InfoButton = (
+    <button
+      onClick={() => setShowInfo(true)}
+      className="inline-flex items-center justify-center w-7 h-7 rounded-full hover:bg-black/5 dark:hover:bg-white/10 opacity-60 hover:opacity-100 transition"
+      aria-label="What is Focus Mode?"
+      title="What is Focus Mode?"
+    >
+      <Info className="w-4 h-4" />
+    </button>
+  );
+
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
@@ -232,19 +239,11 @@ export default function FocusModePrompt({ user, theme }) {
             </div>
           ) : mode === "active" ? (
             <>
+              <div className="flex justify-start">{InfoButton}</div>
               <DialogHeader>
-                <div className="flex items-center justify-between w-full">
-                  <DialogTitle className="flex items-center gap-2">
-                    <Target className="w-5 h-5 text-green-500" /> Focus Mode
-                  </DialogTitle>
-                  <button
-                    onClick={() => setShowInfo(true)}
-                    className="opacity-60 hover:opacity-100"
-                    aria-label="What is Focus Mode?"
-                  >
-                    <Info className="w-4 h-4" />
-                  </button>
-                </div>
+                <DialogTitle className="flex items-center gap-2">
+                  <Target className="w-5 h-5 text-green-500" /> Focus Mode
+                </DialogTitle>
                 <DialogDescription>
                   You're focused on one task — hourly check-ins, everything else quiet. Come back
                   here when you've finished it.
@@ -271,32 +270,24 @@ export default function FocusModePrompt({ user, theme }) {
             </>
           ) : (
             <>
+              <div className="flex justify-start">{InfoButton}</div>
               <DialogHeader>
-                <div className="flex items-center justify-between w-full">
-                  <DialogTitle className="flex items-center gap-2">
-                    <Target className="w-5 h-5 text-green-500" /> Focus Mode
-                  </DialogTitle>
-                  <button
-                    onClick={() => setShowInfo(true)}
-                    className="opacity-60 hover:opacity-100"
-                    aria-label="What is Focus Mode?"
-                  >
-                    <Info className="w-4 h-4" />
-                  </button>
-                </div>
+                <DialogTitle className="flex items-center gap-2">
+                  <Target className="w-5 h-5 text-green-500" /> Focus Mode
+                </DialogTitle>
                 <DialogDescription>
                   Pick one task to focus on — it'll switch to hourly "how's it going?" check-ins
                   while your other recurring reminders go quiet. Time-specific reminders (events,
                   due dates, birthdays) are never affected.
                 </DialogDescription>
               </DialogHeader>
-              <div className="py-2 max-h-64 overflow-y-auto space-y-2">
-                {recurringTasks.length === 0 ? (
+              <div className="py-2 max-h-72 overflow-y-auto space-y-2">
+                {pickableTasks.length === 0 ? (
                   <p className="text-sm opacity-60 text-center py-4">
-                    No recurring tasks right now. Add one to use Focus Mode.
+                    No active tasks right now. Add a task to use Focus Mode.
                   </p>
                 ) : (
-                  recurringTasks.map((t) => (
+                  pickableTasks.map((t) => (
                     <button
                       key={t.id}
                       onClick={() => handlePickTask(t)}
