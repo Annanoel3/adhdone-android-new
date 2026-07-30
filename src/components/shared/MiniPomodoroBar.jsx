@@ -2,7 +2,6 @@ import React from 'react';
 import { usePomodoro } from '@/context/PomodoroContext';
 import { Button } from '@/components/ui/button';
 import { Play, Pause, RotateCcw, Coffee, Sparkles } from 'lucide-react';
-import { Link } from 'react-router-dom';
 import { createPageUrl } from '@/utils';
 import { useLocation } from 'react-router-dom';
 
@@ -31,14 +30,14 @@ export default function MiniPomodoroBar({ theme }) {
           ? 'bg-green-600 text-white border-green-700'
           : 'bg-blue-500 text-white border-blue-600'
     }`} style={{ marginBottom: 'env(safe-area-inset-bottom)' }}>
-      <Link to={createPageUrl('FocusTimer')} className="flex items-center gap-2">
+      <div className="flex items-center gap-2">
         {isWork
           ? <Sparkles className="w-4 h-4" />
           : <Coffee className="w-4 h-4" />
         }
         <span className="text-sm font-medium">{isWork ? 'Focus' : 'Break'}</span>
         {sessionCount > 0 && <span className="text-xs opacity-75">🍅×{sessionCount}</span>}
-      </Link>
+      </div>
 
       <span className="text-xl font-bold tabular-nums">{timeStr}</span>
 
