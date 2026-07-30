@@ -7,6 +7,7 @@ import { playWarning, playLiftoff, playSprintEnd, haptic } from '@/components/ut
 import LaunchpadTransition from '@/components/launch/LaunchpadTransition';
 import SprintPopup from '@/components/launch/SprintPopup';
 import { Rocket, Timer, X } from 'lucide-react';
+import { readThemeState, chipClasses } from '@/components/utils/launchTheme';
 
 const LaunchContext = createContext(null);
 const LAUNCHPAD_KEY = 'launchpad_session';
@@ -24,6 +25,10 @@ export function LaunchProvider({ children }) {
   const [sprintEnded, setSprintEnded] = useState(false);
   const [launchpadMinimized, setLaunchpadMinimized] = useState(false);
   const [sprintMinimized, setSprintMinimized] = useState(false);
+  // Visual theme for the Launchpad / Sprint overlays — read from the same
+  // localStorage keys the Layout persists. Theme changes reload the app, so a
+  // render-time read is sufficient.
+  const { theme, specialMode } = readThemeState();
 
   const pomodoroRef = useRef(pomodoro);
   useEffect(() => { pomodoroRef.current = pomodoro; }, [pomodoro]);
@@ -175,6 +180,8 @@ export function LaunchProvider({ children }) {
       {launchpad && !launchpadMinimized && (
         <LaunchpadTransition
           session={launchpad}
+          theme={theme}
+          specialMode={specialMode}
           onWarn={() => { playWarning(); haptic(80); }}
           onComplete={() => {
             localStorage.removeItem(LAUNCHPAD_KEY);
@@ -191,6 +198,8 @@ export function LaunchProvider({ children }) {
         <MinimizedChip
           icon={Rocket}
           label={`Launchpad · ${launchpad.title}`}
+          theme={theme}
+          specialMode={specialMode}
           onResume={() => { setLaunchpadMinimized(false); localStorage.setItem(LAUNCHPAD_KEY, JSON.stringify({ ...launchpad, minimized: false })); }}
           onCancel={cancelLaunchpad}
         />
@@ -198,6 +207,8 @@ export function LaunchProvider({ children }) {
       {sprint && !sprintMinimized && (
         <SprintPopup
           session={sprint}
+          theme={theme}
+          specialMode={specialMode}
           ended={sprintEnded}
           onComplete={() => {
             if (sprint.notifId) cancelScheduledReminder(sprint.notifId).catch(() => {});
@@ -241,6 +252,8 @@ export function LaunchProvider({ children }) {
         <MinimizedChip
           icon={Timer}
           label={`5-min Sprint · ${sprint.title}`}
+          theme={theme}
+          specialMode={specialMode}
           onResume={() => { setSprintMinimized(false); localStorage.setItem(SPRINT_KEY, JSON.stringify({ ...sprint, minimized: false })); }}
           onCancel={cancelSprint}
         />
@@ -249,19 +262,19 @@ export function LaunchProvider({ children }) {
   );
 }
 
-function MinimizedChip({ icon: Icon, label, onResume, onCancel }) {
+function MinimizedChip({ icon: Icon, label, theme, specialMode, onResume, onCancel }) {
   return (
     <div
-      className="fixed left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-full shadow-lg pl-4 pr-2 py-2 bg-gray-900 text-white"
+      className={`fixed left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-full shadow-lg pl-4 pr-2 py-2 ${chipClasses(theme, specialMode)}`}
       style={{ bottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))' }}
     >
-      <Icon className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+      <Icon className="w-4 h-4 text-emerald-500 flex-shrink-0" />
       <button onClick={onResume} className="text-sm font-medium max-w-[45vw] truncate hover:underline">
         {label}
       </button>
       <button
         onClick={onCancel}
-        className="ml-1 w-7 h-7 rounded-full hover:bg-white/20 flex items-center justify-center flex-shrink-0"
+        className="ml-1 w-7 h-7 rounded-full hover:bg-black/10 flex items-center justify-center flex-shrink-0"
         aria-label="Cancel"
       >
         <X className="w-4 h-4" />

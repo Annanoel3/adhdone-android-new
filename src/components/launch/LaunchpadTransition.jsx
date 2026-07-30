@@ -2,10 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Rocket, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ConfirmDialog from '@/components/launch/ConfirmDialog';
+import { overlayClasses } from '@/components/utils/launchTheme';
 
 const TOTAL_MS = 5 * 60 * 1000;
 
-export default function LaunchpadTransition({ session, onComplete, onCancel, onWarn, onMinimize }) {
+export default function LaunchpadTransition({ session, onComplete, onCancel, onWarn, onMinimize, theme, specialMode }) {
+  const o = overlayClasses(theme, specialMode);
   const endTime = new Date(session.endTimeISO).getTime();
   const [remaining, setRemaining] = useState(() => Math.max(0, endTime - Date.now()));
   const warnedRef = useRef(false);
@@ -36,7 +38,7 @@ export default function LaunchpadTransition({ session, onComplete, onCancel, onW
   const isWarning = remaining <= 60000 && remaining > 0;
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-gradient-to-br from-indigo-950 via-purple-900 to-slate-900 text-white">
+    <div className={`fixed inset-0 z-[100] flex items-center justify-center p-6 ${o.bg} ${o.text}`}>
       <button
         onClick={() => onMinimize?.()}
         className="absolute top-5 right-5 w-10 h-10 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 transition-colors"
@@ -49,24 +51,24 @@ export default function LaunchpadTransition({ session, onComplete, onCancel, onW
         <motion.div
           animate={isWarning ? { scale: [1, 1.12, 1] } : { y: [0, -8, 0] }}
           transition={isWarning ? { duration: 0.6, repeat: Infinity } : { duration: 3, repeat: Infinity, ease: 'easeInOut' }}
-          className="mx-auto mb-5 w-20 h-20 rounded-2xl bg-gradient-to-br from-orange-400 to-pink-500 flex items-center justify-center shadow-2xl shadow-orange-500/30"
+          className={`mx-auto mb-5 w-20 h-20 rounded-2xl flex items-center justify-center shadow-2xl shadow-orange-500/30 ${o.accent}`}
         >
-          <Rocket className="w-10 h-10 text-white" />
+          <Rocket className="w-10 h-10" />
         </motion.div>
 
         <h2 className="text-2xl font-bold mb-1">The Launchpad</h2>
-        <p className="text-lg font-semibold text-orange-300 mb-4">{session.title}</p>
+        <p className={`text-lg font-semibold mb-4 ${o.title}`}>{session.title}</p>
 
-        <p className="text-sm text-indigo-100/80 leading-relaxed mb-8">
+        <p className={`text-sm leading-relaxed mb-8 ${o.muted}`}>
           You have 5 minutes to finish what you're doing, put down your phone, grab a glass of water, and sit at your desk.
         </p>
 
         <div className="relative mx-auto w-56 h-56 mb-8">
           <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
-            <circle cx="100" cy="100" r={R} stroke="rgba(255,255,255,0.12)" strokeWidth="12" fill="none" />
+            <circle cx="100" cy="100" r={R} stroke={o.ringTrack} strokeWidth="12" fill="none" />
             <circle
               cx="100" cy="100" r={R}
-              stroke={isWarning ? '#fbbf24' : '#a78bfa'}
+              stroke={isWarning ? o.ringWarn : o.ring}
               strokeWidth="12" fill="none"
               strokeLinecap="round"
               strokeDasharray={C}
@@ -75,22 +77,22 @@ export default function LaunchpadTransition({ session, onComplete, onCancel, onW
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <div className={`text-5xl font-bold tabular-nums ${isWarning ? 'text-amber-300' : 'text-white'}`}>
+            <div className={`text-5xl font-bold tabular-nums ${isWarning ? o.warnText : o.text}`}>
               {mm}:{ss}
             </div>
-            <div className="text-xs uppercase tracking-wider text-indigo-200/60 mt-1">
+            <div className={`text-xs uppercase tracking-wider mt-1 ${o.muted}`}>
               {isWarning ? 'heads up 👋' : 'until liftoff'}
             </div>
           </div>
         </div>
 
-        <p className="text-xs text-indigo-200/70 leading-relaxed mb-4">
+        <p className={`text-xs leading-relaxed mb-4 ${o.muted}`}>
           When the clock hits zero, we'll start a focus session for you automatically. No pressure — you showed up, and that's everything.
         </p>
 
         <button
           onClick={() => setConfirming(true)}
-          className="text-xs text-indigo-200/60 hover:text-white transition-colors"
+          className={`text-xs opacity-70 hover:opacity-100 transition-opacity ${o.muted}`}
         >
           Cancel launchpad
         </button>
@@ -103,6 +105,8 @@ export default function LaunchpadTransition({ session, onComplete, onCancel, onW
         confirmLabel="Yes, cancel"
         onConfirm={() => { setConfirming(false); onCancel?.(); }}
         onClose={() => setConfirming(false)}
+        theme={theme}
+        specialMode={specialMode}
       />
     </div>
   );

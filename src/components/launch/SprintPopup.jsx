@@ -1,13 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { Timer, PartyPopper } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ConfirmDialog from '@/components/launch/ConfirmDialog';
+import {
+  surfaceClasses,
+  mutedText,
+  subtleText,
+  primaryButton,
+  outlineButton,
+  isSeasonal,
+} from '@/components/utils/launchTheme';
 
 const TOTAL_MS = 5 * 60 * 1000;
 
-export default function SprintPopup({ session, ended, onComplete, onKeepGoing, onStop, onCancel, onMinimize }) {
+export default function SprintPopup({ session, ended, onComplete, onKeepGoing, onStop, onCancel, onMinimize, theme, specialMode }) {
+  const surface = surfaceClasses(theme, specialMode);
+  const muted = mutedText(theme, specialMode);
+  const subtle = subtleText(theme, specialMode);
+  const primary = primaryButton(theme, specialMode);
+  const outline = outlineButton(theme, specialMode);
+  const trackStroke = theme === 'dark' && !isSeasonal(specialMode) ? '#374151' : '#e5e7eb';
+
   const endTime = new Date(session.endTimeISO).getTime();
   const [remaining, setRemaining] = useState(() => Math.max(0, endTime - Date.now()));
   const [confirming, setConfirming] = useState(false);
@@ -43,18 +57,18 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
         onMinimize?.();
       }}
     >
-      <DialogContent className="max-w-sm w-[calc(100vw-2rem)] text-center overflow-hidden">
+      <DialogContent className={`max-w-sm w-[calc(100vw-2rem)] text-center overflow-hidden ${surface}`}>
         {!ended ? (
           <div className="py-4">
             <div className="mx-auto mb-4 w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shadow-lg">
               <Timer className="w-7 h-7 text-white" />
             </div>
             <div className="text-xs font-semibold uppercase tracking-wider text-emerald-600 mb-1">5-Minute Sprint</div>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">{session.title}</h2>
+            <h2 className="text-xl font-bold mb-4">{session.title}</h2>
 
             <div className="relative mx-auto w-44 h-44 mb-5">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
-                <circle cx="100" cy="100" r={R} stroke="#e5e7eb" strokeWidth="12" fill="none" />
+                <circle cx="100" cy="100" r={R} stroke={trackStroke} strokeWidth="12" fill="none" />
                 <motion.circle
                   cx="100" cy="100" r={R}
                   stroke="#10b981"
@@ -66,18 +80,18 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-4xl font-bold tabular-nums text-gray-900">{mm}:{ss}</div>
-                <div className="text-[10px] uppercase tracking-wider text-gray-400 mt-1">left</div>
+                <div className="text-4xl font-bold tabular-nums">{mm}:{ss}</div>
+                <div className={`text-[10px] uppercase tracking-wider mt-1 ${subtle}`}>left</div>
               </div>
             </div>
 
-            <p className="text-sm text-gray-600 leading-relaxed mb-4">
+            <p className={`text-sm leading-relaxed mb-4 ${muted}`}>
               You're doing it! Work until the timer ends — then you can stop if you want. No guilt either way. 💚
             </p>
 
             <button
               onClick={() => setConfirming(true)}
-              className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              className={`text-xs transition-colors ${subtle} hover:opacity-100`}
             >
               Cancel sprint
             </button>
@@ -93,25 +107,24 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
               <PartyPopper className="w-8 h-8 text-white" />
             </motion.div>
 
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">5 minutes done! 🎉</h2>
-            <p className="text-gray-600 leading-relaxed mb-6 px-2">
+            <h2 className="text-2xl font-bold mb-2">5 minutes done! 🎉</h2>
+            <p className={`leading-relaxed mb-6 px-2 ${muted}`}>
               It's okay to stop if you want — you showed up, and that's the win. Or keep the momentum going. Either way, we're proud of you.
             </p>
 
             <div className="flex gap-3">
-              <Button
+              <button
                 onClick={onKeepGoing}
-                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                className={`flex-1 rounded-xl text-sm font-semibold py-2.5 transition-colors ${primary}`}
               >
                 Keep going
-              </Button>
-              <Button
-                variant="outline"
+              </button>
+              <button
                 onClick={onStop}
-                className="flex-1"
+                className={`flex-1 rounded-xl text-sm font-medium py-2.5 transition-colors ${outline}`}
               >
                 Take the win &amp; stop
-              </Button>
+              </button>
             </div>
           </div>
         )}
@@ -122,6 +135,8 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
           confirmLabel="Yes, cancel sprint"
           onConfirm={() => { setConfirming(false); onCancel?.(); }}
           onClose={() => setConfirming(false)}
+          theme={theme}
+          specialMode={specialMode}
         />
       </DialogContent>
     </Dialog>
