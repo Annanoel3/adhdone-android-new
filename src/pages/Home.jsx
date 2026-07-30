@@ -195,7 +195,7 @@ export default function Home() {
           <QuickActions theme={theme} specialMode={specialMode} />
 
           <div className="grid lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
+            <div className="lg:col-span-2 space-y-6 min-w-0">
               <TodaysTasks
                 tasks={tasks}
                 theme={theme}
@@ -213,7 +213,7 @@ export default function Home() {
               />
             </div>
             
-            <div>
+            <div className="min-w-0">
               <DailyTipCard theme={theme} specialMode={specialMode} />
             </div>
           </div>
