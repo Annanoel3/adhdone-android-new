@@ -37,7 +37,14 @@ function todayKey() {
   ).padStart(2, "0")}`;
 }
 
+function broadcast(taskId) {
+  window.dispatchEvent(
+    new CustomEvent("focus-mode-changed", { detail: { taskId: taskId || null } })
+  );
+}
+
 export default function FocusModePrompt({ user, theme }) {
+  const [focusTaskId, setFocusTaskId] = useState(user?.focus_mode_task_id || null);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("offer"); // 'offer' | 'active' | 'celebrate'
   const [focusTask, setFocusTask] = useState(null);
@@ -45,8 +52,19 @@ export default function FocusModePrompt({ user, theme }) {
   const [showInfo, setShowInfo] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const inFocus = !!(user && user.focus_mode_task_id);
+  // Sync from external changes (e.g. another tab) + initial.
+  useEffect(() => {
+    const apply = (id) => {
+      setFocusTaskId(id || null);
+      setMode(id ? "active" : "offer");
+    };
+    apply(user?.focus_mode_task_id);
+    const handler = (e) => apply(e.detail?.taskId);
+    window.addEventListener("focus-mode-changed", handler);
+    return () => window.removeEventListener("focus-mode-changed", handler);
+  }, [user?.focus_mode_task_id]);
 
+  // Load tasks whenever the focus state or user changes.
   useEffect(() => {
     if (!user?.email) return;
     (async () => {
@@ -56,30 +74,27 @@ export default function FocusModePrompt({ user, theme }) {
           (t) => t.reminder_interval && t.reminder_interval !== "once" && !t.birthday_person
         );
         setRecurringTasks(recurring);
-        if (user?.focus_mode_task_id) {
+        if (focusTaskId) {
           const ft =
-            recurring.find((t) => t.id === user.focus_mode_task_id) ||
-            allTasks.find((t) => t.id === user.focus_mode_task_id);
+            recurring.find((t) => t.id === focusTaskId) ||
+            allTasks.find((t) => t.id === focusTaskId);
           setFocusTask(ft || null);
-          setMode("active");
         } else {
-          setMode("offer");
+          setFocusTask(null);
         }
       } catch (e) {
         console.error("FocusMode load error:", e);
       }
     })();
-  }, [user?.email, user?.focus_mode_task_id]);
+  }, [user?.email, focusTaskId]);
 
-  // Prompt trigger logic on app open.
+  // Prompt trigger on app open.
   useEffect(() => {
     if (!user?.email) return;
-    if (inFocus) {
-      // Active focus users see their task refocused shortly after each open.
+    if (focusTaskId) {
       const t = setTimeout(() => setOpen(true), 1200);
       return () => clearTimeout(t);
     }
-    // Not in focus — offer once per time window (morning / afternoon / evening).
     const win = getWindow();
     const key = `focus_prompt_${win}_${todayKey()}`;
     if (localStorage.getItem(key) === "1") return;
@@ -88,7 +103,7 @@ export default function FocusModePrompt({ user, theme }) {
       localStorage.setItem(key, "1");
     }, 15000);
     return () => clearTimeout(t);
-  }, [user?.email, inFocus]);
+  }, [user?.email, focusTaskId]);
 
   // Manual open from the Home Focus button.
   useEffect(() => {
@@ -101,12 +116,10 @@ export default function FocusModePrompt({ user, theme }) {
     setBusy(true);
     try {
       await base44.functions.invoke("setFocusMode", { action: "enter", taskId: task.id });
-      await base44.auth.updateMe({
-        focus_mode_task_id: task.id,
-        focus_mode_entered_at: new Date().toISOString(),
-      });
+      setFocusTaskId(task.id);
       setFocusTask(task);
       setMode("active");
+      broadcast(task.id);
     } catch (e) {
       console.error("Failed to enter focus mode:", e);
     } finally {
@@ -147,10 +160,9 @@ export default function FocusModePrompt({ user, theme }) {
         } catch {}
       }
       await base44.functions.invoke("setFocusMode", { action: "exit" });
-      await base44.auth.updateMe({
-        focus_mode_task_id: null,
-        focus_mode_entered_at: null,
-      });
+      setFocusTaskId(null);
+      setFocusTask(null);
+      broadcast(null);
       setMode("celebrate");
       fireConfetti();
     } catch (e) {
@@ -164,12 +176,10 @@ export default function FocusModePrompt({ user, theme }) {
     setBusy(true);
     try {
       await base44.functions.invoke("setFocusMode", { action: "exit" });
-      await base44.auth.updateMe({
-        focus_mode_task_id: null,
-        focus_mode_entered_at: null,
-      });
+      setFocusTaskId(null);
       setFocusTask(null);
       setMode("offer");
+      broadcast(null);
       setOpen(false);
     } catch (e) {
       console.error("Failed to exit focus mode:", e);
@@ -236,7 +246,8 @@ export default function FocusModePrompt({ user, theme }) {
                   </button>
                 </div>
                 <DialogDescription>
-                  You're focused on one task. Other recurring reminders are quiet for now.
+                  You're focused on one task — hourly check-ins, everything else quiet. Come back
+                  here when you've finished it.
                 </DialogDescription>
               </DialogHeader>
               <div className="py-4">
@@ -274,8 +285,9 @@ export default function FocusModePrompt({ user, theme }) {
                   </button>
                 </div>
                 <DialogDescription>
-                  Pick one task to focus on. Other recurring reminders go quiet until you're done.
-                  Time-specific reminders (events, due dates, birthdays) are never affected.
+                  Pick one task to focus on — it'll switch to hourly "how's it going?" check-ins
+                  while your other recurring reminders go quiet. Time-specific reminders (events,
+                  due dates, birthdays) are never affected.
                 </DialogDescription>
               </DialogHeader>
               <div className="py-2 max-h-64 overflow-y-auto space-y-2">
@@ -310,9 +322,10 @@ export default function FocusModePrompt({ user, theme }) {
             <DialogTitle>What is Focus Mode?</DialogTitle>
             <DialogDescription>
               Focus Mode is for when you want to get a specific task done without distractions from
-              your other recurring reminders. When you pick a task, only that task's reminders come
-              through — everything else goes quiet. You can exit Focus Mode at any time, and
-              time-specific reminders (events, due dates, birthdays) are never affected.
+              your other recurring reminders. When you pick a task, it switches to hourly
+              "how's it going?" check-ins and everything else goes quiet. You can exit Focus Mode
+              at any time, and time-specific reminders (events, due dates, birthdays) are never
+              affected.
             </DialogDescription>
           </DialogHeader>
           <Button onClick={() => setShowInfo(false)} className="w-full">

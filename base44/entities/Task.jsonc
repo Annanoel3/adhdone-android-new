@@ -131,6 +131,10 @@
       "type": "string",
       "description": "Original reminder interval before adaptation"
     },
+    "focus_mode_original_interval": {
+      "type": "string",
+      "description": "The reminder_interval this task had before entering Focus Mode. Restored when the user exits Focus Mode."
+    },
     "completed_at": {
       "type": "string",
       "format": "date-time",

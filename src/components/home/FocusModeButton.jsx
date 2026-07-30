@@ -3,8 +3,14 @@ import { base44 } from "@/api/base44Client";
 import { Target } from "lucide-react";
 
 export default function FocusModeButton({ user }) {
-  const focusTaskId = user?.focus_mode_task_id || null;
+  const [focusTaskId, setFocusTaskId] = useState(user?.focus_mode_task_id || null);
   const [focusTitle, setFocusTitle] = useState("");
+
+  useEffect(() => {
+    const handler = (e) => setFocusTaskId(e.detail?.taskId || null);
+    window.addEventListener("focus-mode-changed", handler);
+    return () => window.removeEventListener("focus-mode-changed", handler);
+  }, []);
 
   useEffect(() => {
     if (!focusTaskId) {

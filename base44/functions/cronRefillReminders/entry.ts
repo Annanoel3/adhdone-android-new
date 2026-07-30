@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent } from '../../shared/reminderTitle.ts';
 import { adjustForQuietHours, parseHHMM, localMinutesOfDay } from '../../shared/quietHours.ts';
+import { getFocusModeContent } from '../../shared/focusMode.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 const BATCH_SIZE = 10;
@@ -165,7 +166,11 @@ Deno.serve(async (req) => {
         }
         if (sendAt.getTime() <= now.getTime()) continue;
         const sendAtISO = sendAt.toISOString();
-        const { title, body } = getReminderContent(task.title, task.due_date, sendAtISO);
+        // Focus Mode: the focused task gets check-in style reminders.
+        const isFocusTask = !!(focusTaskId && task.id === focusTaskId);
+        const { title, body } = isFocusTask
+          ? getFocusModeContent(task.title)
+          : getReminderContent(task.title, task.due_date, sendAtISO);
         try {
           const res = await base44.asServiceRole.functions.invoke('schedulePush', {
             toUserExternalId: email,

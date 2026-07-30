@@ -1,4 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
+import { adjustForQuietHours, parseHHMM, localMinutesOfDay } from '../../shared/quietHours.ts';
+import { FOCUS_MODE_INTERVAL, FOCUS_MODE_INTERVAL_MS, getFocusModeContent } from '../../shared/focusMode.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
 const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
@@ -25,20 +27,83 @@ export default async function(req: Request): Promise<Response> {
     if (action === 'enter') {
       if (!taskId) return Response.json({ error: 'taskId required' }, { status: 400 });
 
-      // Fetch all active recurring tasks for this user and silence every one
-      // except the chosen focus task. The cron will refill the focus task on
-      // its next run; the others stay quiet until the user exits Focus Mode.
+      // ── Focus task: switch to hourly check-ins with focus-mode text ──
+      const focusTask = await base44.asServiceRole.entities.Task.get(taskId);
+      if (!focusTask) return Response.json({ error: 'Task not found' }, { status: 404 });
+
+      const focusIds = Array.isArray(focusTask.onesignal_notification_ids) ? focusTask.onesignal_notification_ids : [];
+      if (focusIds.length) await cancelOneSignal(focusIds);
+
+      const originalInterval = focusTask.reminder_interval || 'daily';
+
+      // Owner quiet hours (applied to the focus check-in batch)
+      const quietEnabled = !!(user && user.quiet_hours_enabled);
+      const timeZone = user && user.timezone ? user.timezone : null;
+      const startMin = user && user.quiet_hours_start ? parseHHMM(user.quiet_hours_start) : parseHHMM('22:00');
+      const endMin = user && user.quiet_hours_end ? parseHHMM(user.quiet_hours_end) : parseHHMM('08:00');
+      const useQuiet = quietEnabled && !!timeZone;
+
+      const now = Date.now();
+      const notificationIds: string[] = [];
+      let lastScheduledAt: Date | null = null;
+      let scheduleTime = now + FOCUS_MODE_INTERVAL_MS;
+
+      for (let i = 0; i < 6; i++) {
+        let sendAt = new Date(scheduleTime);
+        if (useQuiet) {
+          sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
+          if (localMinutesOfDay(sendAt, timeZone) === endMin) { scheduleTime += FOCUS_MODE_INTERVAL_MS; continue; }
+          if (lastScheduledAt && Math.abs(sendAt.getTime() - lastScheduledAt.getTime()) < 60000) { scheduleTime += FOCUS_MODE_INTERVAL_MS; continue; }
+        }
+        if (sendAt.getTime() <= now) { scheduleTime += FOCUS_MODE_INTERVAL_MS; continue; }
+        const { title, body } = getFocusModeContent(focusTask.title);
+        try {
+          const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+            toUserExternalId: user.email,
+            title,
+            body,
+            sendAtISO: sendAt.toISOString(),
+            data: { screen: '/TaskNotification', taskId, urgency: focusTask.urgency || 'medium', type: 'task_reminder', focus: true },
+            buttons: [
+              { id: 'snooze_15', text: 'Snooze 15 min' },
+              { id: 'snooze_60', text: 'Snooze 1 hour' },
+              { id: 'complete', text: '✅ Done' }
+            ]
+          });
+          const r = res?.data || res;
+          if (r?.notificationId) {
+            notificationIds.push(r.notificationId);
+            lastScheduledAt = sendAt;
+          }
+        } catch (e) {
+          console.error('[setFocusMode] Failed to schedule focus check-in:', e);
+        }
+        scheduleTime += FOCUS_MODE_INTERVAL_MS;
+      }
+
+      const newLastScheduledUntil = lastScheduledAt
+        ? lastScheduledAt.toISOString()
+        : new Date(now + FOCUS_MODE_INTERVAL_MS * 6).toISOString();
+
+      await base44.asServiceRole.entities.Task.update(taskId, {
+        reminder_interval: FOCUS_MODE_INTERVAL,
+        focus_mode_original_interval: originalInterval,
+        onesignal_notification_ids: notificationIds,
+        last_scheduled_until: newLastScheduledUntil,
+        next_reminder: new Date(now + FOCUS_MODE_INTERVAL_MS).toISOString()
+      });
+
+      // ── Non-focus recurring tasks: silence until Focus Mode ends ──
       const tasks = await base44.asServiceRole.entities.Task.filter({
         notification_recipient_email: user.email,
         status: 'active'
       }, '-updated_date', 500);
 
       const recurring = tasks.filter(t =>
-        t.reminder_interval && t.reminder_interval !== 'once'
+        t.reminder_interval && t.reminder_interval !== 'once' && t.id !== taskId
       );
 
       for (const t of recurring) {
-        if (t.id === taskId) continue;
         const ids = Array.isArray(t.onesignal_notification_ids) ? t.onesignal_notification_ids : [];
         if (ids.length) await cancelOneSignal(ids);
         await base44.asServiceRole.entities.Task.update(t.id, {
@@ -47,7 +112,8 @@ export default async function(req: Request): Promise<Response> {
         });
       }
 
-      await base44.auth.updateMe({
+      // ── Persist focus state on the user ──
+      await base44.asServiceRole.entities.User.update(user.id, {
         focus_mode_task_id: taskId,
         focus_mode_entered_at: new Date().toISOString()
       });
@@ -56,10 +122,29 @@ export default async function(req: Request): Promise<Response> {
     }
 
     if (action === 'exit') {
-      await base44.auth.updateMe({
+      // Restore the focus task's original interval + clear its focus check-ins.
+      const focusTaskId = user.focus_mode_task_id;
+      if (focusTaskId) {
+        const focusTask = await base44.asServiceRole.entities.Task.get(focusTaskId).catch(() => null);
+        if (focusTask) {
+          const ids = Array.isArray(focusTask.onesignal_notification_ids) ? focusTask.onesignal_notification_ids : [];
+          if (ids.length) await cancelOneSignal(ids);
+          const orig = focusTask.focus_mode_original_interval || focusTask.reminder_interval || 'daily';
+          await base44.asServiceRole.entities.Task.update(focusTaskId, {
+            reminder_interval: orig,
+            focus_mode_original_interval: null,
+            onesignal_notification_ids: [],
+            last_scheduled_until: null,
+            next_reminder: null
+          });
+        }
+      }
+
+      await base44.asServiceRole.entities.User.update(user.id, {
         focus_mode_task_id: null,
         focus_mode_entered_at: null
       });
+
       return Response.json({ success: true, focusMode: false });
     }
 
