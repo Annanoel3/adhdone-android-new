@@ -40,13 +40,18 @@ export default function Tasks() {
 
   useEffect(() => {
     loadTasks();
+    const handleTasksChanged = () => loadTasks();
+    window.addEventListener('tasks-changed', handleTasksChanged);
     const interval = setInterval(() => {
       const newTheme = localStorage.getItem('adhd_theme') || 'minimalist';
       setTheme(newTheme);
       const newSpecialMode = localStorage.getItem('special_mode') || 'normal';
       setSpecialMode(newSpecialMode);
     }, 100);
-    return () => clearInterval(interval);
+    return () => {
+      window.removeEventListener('tasks-changed', handleTasksChanged);
+      clearInterval(interval);
+    };
   }, []);
 
   // Reload tasks when navigating back to this page with a reload state

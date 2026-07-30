@@ -49,8 +49,13 @@ export default function Home() {
         loadTasks();
       }
     };
+    const handleTasksChanged = () => loadTasks();
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('tasks-changed', handleTasksChanged);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('tasks-changed', handleTasksChanged);
+    };
   }, []);
 
   const loadTasks = async () => {

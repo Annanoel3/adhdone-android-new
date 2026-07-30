@@ -165,6 +165,7 @@ export default function FocusModePrompt({ user, theme }) {
       setFocusTaskId(null);
       setFocusTask(null);
       broadcast(null);
+      window.dispatchEvent(new CustomEvent("tasks-changed"));
       setMode("celebrate");
       fireConfetti();
     } catch (e) {
