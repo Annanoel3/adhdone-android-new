@@ -23,6 +23,7 @@ import {
   MessageCircle,
   Bell,
   Sparkles,
+  Wrench,
   Mic,
   HelpCircle,
   Shield,
@@ -100,7 +101,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   });
   const [showEnergyCheckIn, setShowEnergyCheckIn] = useState(false);
   const [energyCheckInTitle, setEnergyCheckInTitle] = useState('');
-  const [reflectOpen, setReflectOpen] = useState(false);
+  const [openSections, setOpenSections] = useState({});
   const [accountabilityNotifications, setAccountabilityNotifications] = useState(0);
   const getDateBasedMode = () => {
     const now = new Date();
@@ -418,14 +419,21 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       icon: CalendarDays,
     },
     {
-      title: "Focus Timer",
-      url: createPageUrl("FocusTimer"),
-      icon: Timer,
-    },
-    {
-      title: "Parking Lot",
-      url: createPageUrl("ParkingLot"),
-      icon: Lightbulb,
+      title: "Tools",
+      isCollapsible: true,
+      icon: Wrench,
+      subItems: [
+        {
+          title: "Focus Timer",
+          url: createPageUrl("FocusTimer"),
+          icon: Timer,
+        },
+        {
+          title: "Parking Lot",
+          url: createPageUrl("ParkingLot"),
+          icon: Lightbulb,
+        },
+      ],
     },
     {
       title: "Reflect & Connect",
@@ -714,8 +722,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                   <SidebarMenu className="space-y-1">
                     {navigationItems.map((item) => {
                       if (item.isCollapsible) {
-                        const isOpen = reflectOpen;
-                        const onOpenChange = setReflectOpen;
+                        const isOpen = !!openSections[item.title] || item.subItems.some((s) => location.pathname === s.url);
+                        const onOpenChange = (open) => setOpenSections((prev) => ({ ...prev, [item.title]: open }));
 
                         return (
                           <Collapsible
@@ -739,7 +747,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                                   <div className="flex items-center gap-3 py-3 w-full">
                                     <item.icon className="w-5 h-5" />
                                     <span className="flex-1">{item.title}</span>
-                                    {accountabilityNotifications > 0 && (
+                                    {item.title === "Reflect & Connect" && accountabilityNotifications > 0 && (
                                       <span className="bg-red-500 text-white text-xs rounded-full min-w-[1.25rem] h-5 flex items-center justify-center font-bold px-1">
                                         {accountabilityNotifications}
                                       </span>
