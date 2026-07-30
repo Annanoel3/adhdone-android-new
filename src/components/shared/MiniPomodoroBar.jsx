@@ -12,11 +12,9 @@ export default function MiniPomodoroBar({ theme }) {
 
   const isOnFocusPage = location.pathname === createPageUrl('FocusTimer');
 
-  // Only show when timer has been started (not at full duration) and user is NOT on FocusTimer page
-  const totalSeconds = mode === 'work' ? 25 * 60 : 5 * 60;
-  const hasStarted = isActive || timeLeft < totalSeconds;
-
-  if (isOnFocusPage || !hasStarted) return null;
+  // Only show while the timer is actively running — it's a transient popup,
+  // not a persistent nav bar. The full controls live on the FocusTimer page.
+  if (isOnFocusPage || !isActive) return null;
 
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
