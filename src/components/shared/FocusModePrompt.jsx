@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
 import {
   Dialog,
@@ -63,6 +63,7 @@ export default function FocusModePrompt({ user, theme }) {
   const [showInfo, setShowInfo] = useState(false);
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(null);
+  const [enteredAt, setEnteredAt] = useState(user?.focus_mode_entered_at || null);
   const [spinning, setSpinning] = useState(false);
   const [spinLabel, setSpinLabel] = useState("");
   const [showPomo, setShowPomo] = useState(false);
@@ -105,25 +106,53 @@ export default function FocusModePrompt({ user, theme }) {
   // Live elapsed timer for the active focus session (counts up every second).
   useEffect(() => {
     if (mode !== "active") return;
-    const startStr = user?.focus_mode_entered_at;
-    if (!startStr) { setElapsed(null); return; }
-    const update = () => setElapsed(Math.max(0, Date.now() - new Date(startStr).getTime()));
+    if (!enteredAt) { setElapsed(null); return; }
+    const update = () => setElapsed(Math.max(0, Date.now() - new Date(enteredAt).getTime()));
     update();
     const id = setInterval(update, 1000);
     return () => clearInterval(id);
-  }, [mode, user?.focus_mode_entered_at]);
+  }, [mode, enteredAt]);
 
-  // Sync from external changes (e.g. another tab) + initial.
+  // Authoritative focus state lives on the user profile (focus_mode_task_id +
+  // focus_mode_entered_at). The `user` prop is fetched once in the Layout and
+  // goes stale the moment setFocusMode updates the profile, and the
+  // "focus-mode-changed" event is easily lost across navigations (the Layout
+  // remounts per route, so the listener registered on the previous page is
+  // gone by the time we land on Home). Re-fetch me() on mount and on every
+  // focus-mode-changed event so the Sprint/Launchpad "keep going" handoff
+  // reliably re-opens Focus Mode.
+  const syncFocusFromServer = useCallback(async () => {
+    try {
+      const me = await base44.auth.me();
+      const tid = me?.focus_mode_task_id || null;
+      setFocusTaskId(tid);
+      setMode(tid ? "active" : "offer");
+      setEnteredAt(me?.focus_mode_entered_at || null);
+      if (tid) setOpen(true);
+    } catch (e) {
+      console.error("FocusMode sync error:", e);
+    }
+  }, []);
+
+  useEffect(() => { syncFocusFromServer(); }, [syncFocusFromServer]);
+
   useEffect(() => {
-    const apply = (id) => {
-      setFocusTaskId(id || null);
-      setMode(id ? "active" : "offer");
+    const handler = (e) => {
+      const id = e.detail?.taskId;
+      if (id) {
+        setFocusTaskId(id);
+        setMode("active");
+        setOpen(true);
+        syncFocusFromServer();
+      } else {
+        setFocusTaskId(null);
+        setMode("offer");
+        setEnteredAt(null);
+      }
     };
-    apply(user?.focus_mode_task_id);
-    const handler = (e) => apply(e.detail?.taskId);
     window.addEventListener("focus-mode-changed", handler);
     return () => window.removeEventListener("focus-mode-changed", handler);
-  }, [user?.focus_mode_task_id]);
+  }, [syncFocusFromServer]);
 
   // Load tasks whenever the focus state or user changes.
   useEffect(() => {
@@ -185,6 +214,7 @@ export default function FocusModePrompt({ user, theme }) {
       setFocusTaskId(task.id);
       setFocusTask(task);
       setMode("active");
+      setEnteredAt(new Date().toISOString());
       broadcast(task.id);
     } catch (e) {
       console.error("Failed to enter focus mode:", e);
