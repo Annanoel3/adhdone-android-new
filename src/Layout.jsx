@@ -100,7 +100,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   });
   const [showEnergyCheckIn, setShowEnergyCheckIn] = useState(false);
   const [energyCheckInTitle, setEnergyCheckInTitle] = useState('');
-  const [communityOpen, setCommunityOpen] = useState(false);
+  const [reflectOpen, setReflectOpen] = useState(false);
   const [accountabilityNotifications, setAccountabilityNotifications] = useState(0);
   const getDateBasedMode = () => {
     const now = new Date();
@@ -423,24 +423,31 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       icon: Timer,
     },
     {
-      title: "Progress",
-      url: createPageUrl("Progress"),
-      icon: TrendingUp,
-    },
-    {
-      title: "Support Space",
-      url: createPageUrl("SupportSpace"),
-      icon: MessageCircleHeart,
-    },
-    {
       title: "Parking Lot",
       url: createPageUrl("ParkingLot"),
       icon: Lightbulb,
     },
     {
-      title: "Community",
-      url: createPageUrl("Community"),
-      icon: Users,
+      title: "Reflect & Connect",
+      isCollapsible: true,
+      icon: Sparkles,
+      subItems: [
+        {
+          title: "Progress",
+          url: createPageUrl("Progress"),
+          icon: TrendingUp,
+        },
+        {
+          title: "Support Space",
+          url: createPageUrl("SupportSpace"),
+          icon: MessageCircleHeart,
+        },
+        {
+          title: "Community",
+          url: createPageUrl("Community"),
+          icon: Users,
+        },
+      ],
     },
   ];
 
@@ -707,8 +714,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                   <SidebarMenu className="space-y-1">
                     {navigationItems.map((item) => {
                       if (item.isCollapsible) {
-                        const isOpen = communityOpen;
-                        const onOpenChange = setCommunityOpen;
+                        const isOpen = reflectOpen;
+                        const onOpenChange = setReflectOpen;
 
                         return (
                           <Collapsible
