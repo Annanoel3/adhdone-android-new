@@ -1192,7 +1192,7 @@ Return JSON:
                       )}
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className={`w-[22rem] max-w-[calc(100vw-1.5rem)] p-4 ${
+                  <PopoverContent className={`w-[22rem] max-w-[calc(100vw-1.5rem)] max-h-[85vh] overflow-y-auto p-4 ${
                     theme === 'dark' 
                       ? 'bg-gray-800 border-gray-700 text-gray-100' 
                       : 'bg-white border-gray-200'
@@ -1344,7 +1344,7 @@ Return JSON:
                       )}
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className={`w-[22rem] max-w-[calc(100vw-1.5rem)] p-4 ${
+                  <PopoverContent className={`w-[22rem] max-w-[calc(100vw-1.5rem)] max-h-[85vh] overflow-y-auto p-4 ${
                     theme === 'dark' 
                       ? 'bg-gray-800 border-gray-700 text-gray-100' 
                       : 'bg-white border-gray-200'
@@ -1385,7 +1385,7 @@ Return JSON:
                              : 'bg-white border-gray-300 text-gray-900'
                          }`}
                         />
-                      </div>
+                       </div>
                       <PopoverClose asChild>
                       <Button
                         type="button"
@@ -1396,8 +1396,6 @@ Return JSON:
                         {isUpdating ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Date & Time</>}
                       </Button>
                       </PopoverClose>
-
-                      <SmartReminderEditor task={task} theme={theme} onUpdate={onUpdate} />
 
                       <div className={`border-t pt-3 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
                         <button
