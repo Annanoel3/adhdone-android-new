@@ -54,8 +54,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import LaunchButtons from "../launch/LaunchButtons";
+import { useToast } from "@/components/ui/use-toast";
 
 export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete, theme, itemClassification }) {
+  const { toast } = useToast();
   const [subTasks, setSubTasks] = useState([]);
   const [newSubTask, setNewSubTask] = useState("");
   const [showDecomposition, setShowDecomposition] = useState(false);
@@ -685,6 +687,10 @@ Return JSON:
       reminderTimeRef.current = savedRt;
 
       onUpdate({ ...task, next_reminder: nextReminder.toISOString(), onesignal_notification_ids: newNotificationIds });
+      toast({
+        title: "Reminder saved ✓",
+        description: `We'll remind you ${nextReminder.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`,
+      });
     } finally {
       setIsUpdating(false);
     }
@@ -1186,7 +1192,7 @@ Return JSON:
                       )}
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className={`w-72 p-4 ${
+                  <PopoverContent className={`w-[22rem] max-w-[calc(100vw-1.5rem)] p-4 ${
                     theme === 'dark' 
                       ? 'bg-gray-800 border-gray-700 text-gray-100' 
                       : 'bg-white border-gray-200'
@@ -1338,7 +1344,7 @@ Return JSON:
                       )}
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className={`w-72 p-4 ${
+                  <PopoverContent className={`w-[22rem] max-w-[calc(100vw-1.5rem)] p-4 ${
                     theme === 'dark' 
                       ? 'bg-gray-800 border-gray-700 text-gray-100' 
                       : 'bg-white border-gray-200'
