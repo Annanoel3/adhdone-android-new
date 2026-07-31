@@ -1240,16 +1240,14 @@ Return JSON:
                           }`}
                           />
                           </div>
-                          <PopoverClose asChild>
                           <Button
                             type="button"
                             onClick={() => handleUpdateReminderTime(reminderTime, reminderDate)}
                             disabled={!reminderDate || !reminderTime || isUpdating}
-                            className="w-full"
+                            className={`w-full ${theme === 'dark' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
                           >
                             {isUpdating ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Date & Time</>}
                           </Button>
-                          </PopoverClose>
                           </div>
 
                                           {/* Interval options */}
@@ -1386,16 +1384,14 @@ Return JSON:
                          }`}
                         />
                        </div>
-                      <PopoverClose asChild>
                       <Button
                         type="button"
                         onClick={() => handleUpdateReminderTime(reminderTime, reminderDate)}
                         disabled={!reminderDate || !reminderTime || isUpdating}
-                        className="w-full"
+                        className={`w-full ${theme === 'dark' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
                       >
                         {isUpdating ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Date & Time</>}
                       </Button>
-                      </PopoverClose>
 
                       <div className={`border-t pt-3 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
                         <button
