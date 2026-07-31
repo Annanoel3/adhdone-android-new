@@ -94,7 +94,7 @@ DO NOT:
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 50, scale: 0.9 }}
         transition={{ duration: 0.3 }}
-        className="fixed bottom-6 right-6 max-w-md z-50"
+        className="fixed bottom-6 left-4 right-4 sm:left-auto sm:right-6 sm:max-w-md z-50 mx-auto sm:mx-0"
       >
         <Card className={`border-none shadow-2xl ${
           theme === 'dark'
