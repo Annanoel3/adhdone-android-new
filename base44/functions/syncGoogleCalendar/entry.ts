@@ -41,12 +41,25 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event) {
   // Advance recurring-series master dates into the future.
   const rrule = (event.recurrence || []).join(';');
   if (rrule && nextReminderDate && nextReminderDate < new Date()) {
-    const freqDays = rrule.includes('FREQ=DAILY') ? 1
-      : rrule.includes('FREQ=WEEKLY') ? 7
-      : rrule.includes('FREQ=MONTHLY') ? 30
-      : rrule.includes('FREQ=YEARLY') ? 365 : 1;
-    while (nextReminderDate < new Date()) {
-      nextReminderDate.setDate(nextReminderDate.getDate() + freqDays);
+    if (rrule.includes('FREQ=YEARLY')) {
+      // Step by full calendar years — fixed 365-day jumps drift ~1 day per
+      // leap year, which over decades moves a birthday off its real date.
+      let yr = nextReminderDate.getFullYear();
+      const mo = nextReminderDate.getMonth();
+      const dy = nextReminderDate.getDate();
+      const hr = nextReminderDate.getHours();
+      const mn = nextReminderDate.getMinutes();
+      while (nextReminderDate < new Date()) {
+        yr++;
+        nextReminderDate = new Date(yr, mo, dy, hr, mn, 0, 0);
+      }
+    } else {
+      const freqDays = rrule.includes('FREQ=DAILY') ? 1
+        : rrule.includes('FREQ=WEEKLY') ? 7
+        : rrule.includes('FREQ=MONTHLY') ? 30 : 1;
+      while (nextReminderDate < new Date()) {
+        nextReminderDate.setDate(nextReminderDate.getDate() + freqDays);
+      }
     }
   }
 
@@ -283,13 +296,25 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
     // the ORIGINAL occurrence (often in the past). Advance to the next
     // upcoming occurrence so the reminder isn't set to a past date.
     if (recurrenceRule && nextReminderDate < new Date()) {
-      const freqDays = recurrenceRule.includes('FREQ=DAILY') ? 1
-        : recurrenceRule.includes('FREQ=WEEKLY') ? 7
-        : recurrenceRule.includes('FREQ=MONTHLY') ? 30
-        : recurrenceRule.includes('FREQ=YEARLY') ? 365
-        : 1;
-      while (nextReminderDate < new Date()) {
-        nextReminderDate.setDate(nextReminderDate.getDate() + freqDays);
+      if (recurrenceRule.includes('FREQ=YEARLY')) {
+        // Step by full calendar years — fixed 365-day jumps drift ~1 day per
+        // leap year, which over decades moves a birthday off its real date.
+        let yr = nextReminderDate.getFullYear();
+        const mo = nextReminderDate.getMonth();
+        const dy = nextReminderDate.getDate();
+        const hr = nextReminderDate.getHours();
+        const mn = nextReminderDate.getMinutes();
+        while (nextReminderDate < new Date()) {
+          yr++;
+          nextReminderDate = new Date(yr, mo, dy, hr, mn, 0, 0);
+        }
+      } else {
+        const freqDays = recurrenceRule.includes('FREQ=DAILY') ? 1
+          : recurrenceRule.includes('FREQ=WEEKLY') ? 7
+          : recurrenceRule.includes('FREQ=MONTHLY') ? 30 : 1;
+        while (nextReminderDate < new Date()) {
+          nextReminderDate.setDate(nextReminderDate.getDate() + freqDays);
+        }
       }
     }
 
