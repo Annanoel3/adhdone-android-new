@@ -82,6 +82,7 @@ export default function TaskCard({
   const dueDate = task.next_reminder ? new Date(task.next_reminder) : new Date(task.created_date);
 
   const isEvent = task.classification === 'event';
+  const typeEmoji = task.classification === 'event' ? '📅' : task.classification === 'birthday' ? '🎂' : null;
 
   const taskDate = dueDate.toLocaleDateString('en-US', {
     month: 'short',
@@ -307,7 +308,7 @@ export default function TaskCard({
     }
     if (task.due_date) {
       const overdue = new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed';
-      return { label: `Due ${formatReminderDate(task.due_date)}`, overdue };
+      return { label: formatReminderDate(task.due_date), overdue };
     }
     if (task.next_reminder) {
       return { label: isToday ? 'Today' : formatReminderDate(task.next_reminder), overdue: false };
@@ -460,7 +461,7 @@ export default function TaskCard({
             } ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}
             onClick={() => setExpanded(v => !v)}
           >
-            {task.title}
+            {typeEmoji && <span className="mr-1">{typeEmoji}</span>}{task.title}
           </h3>
 
           <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${getUrgencyColor(task.urgency)}`}>
@@ -517,7 +518,7 @@ export default function TaskCard({
             ) : (
               <div className="flex items-center gap-2 min-w-0">
                 <h3 className={`text-base font-medium break-words flex-1 min-w-0 ${task.status === 'completed' ? 'line-through opacity-60' : ''} ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
-                  {task.title}
+                  {typeEmoji && <span className="mr-1">{typeEmoji}</span>}{task.title}
                 </h3>
                 <button
                   onClick={() => setIsEditingTitle(true)}
