@@ -56,10 +56,10 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
     } catch { /* use fallback */ }
     console.log('[syncGoogleCalendar] token actually belongs to =', connectedEmail, '| passed calendarEmail =', calendarEmail);
 
-  // Fetch upcoming events (next 60 days)
+  // Fetch upcoming events (next 12 months)
   const timeMin = new Date().toISOString();
-  const timeMax = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString();
-  const calUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=100&singleEvents=false&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&fields=items(id,summary,start,end,attendees,recurrence,description,location,status,organizer,conferenceData)`;
+  const timeMax = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+  const calUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=2500&singleEvents=false&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&fields=items(id,summary,start,end,attendees,recurrence,description,location,status,organizer,conferenceData)`;
 
   const calRes = await fetch(calUrl, { headers: authHeader });
   if (!calRes.ok) {
