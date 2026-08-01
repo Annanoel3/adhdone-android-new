@@ -232,25 +232,119 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── Birthday reminders ──────────────────────────────────────────────────────
-  // OneSignal won't accept send_after beyond ~30 days, so far-out birthday
-  // reminders are stored as "planned" (scheduled:false) entries in
-  // reminder_schedule. Schedule them here as they come into range.
+    // ── Birthday reminders (yearly recurring) ───────────────────────────────────
+  // Birthdays recur yearly. This pass:
+  //   1. Rolls over any birthday whose day-of has passed → next year, cancelling
+  //      old notifications and rebuilding the planned reminder schedule.
+  //   2. Rebuilds the planned schedule for any birthday missing one (legacy/orphaned).
+  //   3. Promotes planned (scheduled:false) entries to live OneSignal notifications
+  //      as they come within the scheduling window (~30 days).
+  // Doing the rollover server-side means birthdays advance every year reliably —
+  // not just when the user happens to open the Birthdays dialog.
   const BIRTHDAY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+  const DAY_MS = 24 * 60 * 60 * 1000;
+
+  function birthdayReminderContent(person: string, kind: string, birthdayIso: string) {
+    const dateStr = new Date(birthdayIso).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    switch (kind) {
+      case 'week_before':
+        return { title: `🎂 ${person}'s birthday is in 1 week`, body: `Don't lose it — ${person}'s birthday is coming up on ${dateStr}. Time to sort a gift or message.`, offsetDays: -7 };
+      case 'day_before':
+        return { title: `🎂 ${person}'s birthday is tomorrow`, body: `Heads up — ${person}'s birthday is tomorrow (${dateStr}).`, offsetDays: -1 };
+      case 'day_of':
+        return { title: `🎂 It's ${person}'s birthday today!`, body: `Today is ${person}'s birthday 🎉 Don't forget to reach out.`, offsetDays: 0 };
+      default:
+        return null;
+    }
+  }
+
+  function computeNextBirthday(month: number, day: number): Date {
+    const c = new Date(now.getFullYear(), month - 1, day, 9, 0, 0, 0);
+    if (c <= now) c.setFullYear(c.getFullYear() + 1);
+    return c;
+  }
+
+  // Build the 3 planned reminder entries for a birthday (mirrors the client scheduler).
+  function buildBirthdaySchedule(task: any, birthdayIso: string): any[] {
+    const person = task.birthday_person || 'Someone';
+    const birthdayDate = new Date(birthdayIso);
+    const toggles = {
+      week_before: task.birthday_remind_week_before !== false,
+      day_before: task.birthday_remind_day_before !== false,
+      day_of: task.birthday_remind_day_of !== false,
+    };
+    const kinds = [
+      { key: 'week_before', kind: 'week_before', label: '1 week before' },
+      { key: 'day_before', kind: 'day_before', label: '1 day before' },
+      { key: 'day_of', kind: 'day_of', label: 'Day of' },
+    ];
+    const entries: any[] = [];
+    for (const { key, kind, label } of kinds) {
+      if (!toggles[key]) continue;
+      const content = birthdayReminderContent(person, kind, birthdayIso);
+      if (!content) continue;
+      const sendAt = new Date(birthdayDate.getTime() + content.offsetDays * DAY_MS);
+      if (sendAt.getTime() <= now.getTime()) continue;
+      entries.push({
+        notification_id: `planned_${task.id}_${kind}_${sendAt.getTime()}`,
+        send_at: sendAt.toISOString(),
+        label,
+        notification_title: content.title,
+        notification_body: content.body,
+        scheduled: false,
+      });
+    }
+    return entries;
+  }
+
+  async function cancelOneSignalIds(ids: string[]) {
+    const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+    const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+    await Promise.allSettled(ids.map(id =>
+      fetch(`https://onesignal.com/api/v1/notifications/${id}?app_id=${appId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Basic ${restApiKey}` },
+      })
+    ));
+  }
+
+  let birthdayScheduled = 0;
+  let birthdayRolledOver = 0;
+
   const birthdayTasks = allTasks.filter(t =>
     t.status === 'active' &&
     t.birthday_person &&
-    t.recurrence_pattern === 'yearly' &&
     t.next_reminder &&
-    t.notification_recipient_email &&
-    Array.isArray(t.reminder_schedule) &&
-    t.reminder_schedule.length > 0
+    t.notification_recipient_email
   );
-  let birthdayScheduled = 0;
 
   for (const task of birthdayTasks) {
-    const schedule = [...task.reminder_schedule];
-    let changed = false;
+    let nextReminderIso = task.next_reminder;
+    let schedule = Array.isArray(task.reminder_schedule) ? [...task.reminder_schedule] : [];
+    let ids = Array.isArray(task.onesignal_notification_ids) ? [...task.onesignal_notification_ids] : [];
+    let dirty = false;
+
+    // 1. Yearly rollover — birthday day-of has passed
+    const birthdayDate = new Date(nextReminderIso);
+    const dayAfter = new Date(birthdayDate.getTime() + DAY_MS);
+    if (dayAfter <= now) {
+      const month = birthdayDate.getMonth() + 1;
+      const day = birthdayDate.getDate();
+      const nextDate = computeNextBirthday(month, day);
+      if (ids.length) await cancelOneSignalIds(ids);
+      nextReminderIso = nextDate.toISOString();
+      schedule = buildBirthdaySchedule(task, nextReminderIso);
+      ids = [];
+      dirty = true;
+      birthdayRolledOver++;
+      console.log(`🎂 [REFILL] Rolled over "${task.title}" → ${nextDate.toLocaleDateString()}`);
+    } else if (schedule.length === 0 && ids.length === 0) {
+      // 2. Legacy/orphaned birthday with no plan at all — rebuild it
+      schedule = buildBirthdaySchedule(task, nextReminderIso);
+      dirty = true;
+    }
+
+    // 3. Promote planned entries within the scheduling window
     const newIds: string[] = [];
     for (const entry of schedule) {
       if (entry.scheduled) continue;
@@ -270,24 +364,25 @@ Deno.serve(async (req) => {
           entry.notification_id = result.notificationId;
           entry.scheduled = true;
           newIds.push(result.notificationId);
-          changed = true;
+          dirty = true;
           birthdayScheduled++;
         }
       } catch (e) {
         console.error(`[REFILL] Birthday schedule failed for ${task.id}:`, e);
       }
     }
-    if (changed) {
-      const existingIds = Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : [];
+    if (newIds.length) ids = [...ids, ...newIds];
+
+    if (dirty) {
       await base44.asServiceRole.entities.Task.update(task.id, {
+        next_reminder: nextReminderIso,
         reminder_schedule: schedule,
-        onesignal_notification_ids: [...existingIds, ...newIds],
+        onesignal_notification_ids: ids,
       });
-      console.log(`🎂 [REFILL] Scheduled ${newIds.length} birthday reminders for "${task.title}"`);
     }
   }
 
-  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, birthdayScheduled, at: now.toISOString() };
+  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, birthdayScheduled, birthdayRolledOver, at: now.toISOString() };
     console.log('✅ [REFILL] Complete:', result);
     return Response.json(result);
   } catch (err) {
