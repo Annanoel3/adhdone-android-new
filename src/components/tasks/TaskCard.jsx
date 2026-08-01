@@ -394,6 +394,21 @@ export default function TaskCard({
     }
   };
 
+  // Multi-day events: let the user set / clear the last day of the span.
+  const handleEndDateChange = async (newDate) => {
+    try {
+      let endDateISO = null;
+      if (newDate) {
+        const [y, m, d] = newDate.split('-').map(n => parseInt(n, 10));
+        endDateISO = new Date(y, m - 1, d, 9, 0, 0, 0).toISOString();
+      }
+      await Task.update(task.id, { end_date: endDateISO });
+      onRefreshTasks();
+    } catch (error) {
+      console.error("Error updating end date:", error);
+    }
+  };
+
   const handleDueDateChange = async (newDate) => {
     try {
       let dueDateValue = null;
@@ -726,6 +741,28 @@ export default function TaskCard({
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
                         />
                       </div>
+                      {isEvent && (
+                        <div>
+                          <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Multi-day End Date:</label>
+                          <input
+                            type="date"
+                            defaultValue={task.end_date ? new Date(task.end_date).toLocaleDateString('en-CA') : ''}
+                            onChange={(e) => handleEndDateChange(e.target.value || null)}
+                            className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
+                          />
+                          {task.end_date && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleEndDateChange(null); }}
+                              className={`mt-1 w-full text-left px-2 py-1 text-xs rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-red-400' : 'hover:bg-red-50 text-red-600'}`}
+                            >
+                              Remove end date (single-day)
+                            </button>
+                          )}
+                          <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Event shows on each day from the event date through this date.
+                          </p>
+                        </div>
+                      )}
                       <div className={`border-t pt-2 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
                         <button 
                           onClick={() => handleIntervalChange('daily')} 

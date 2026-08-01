@@ -51,6 +51,19 @@ export function buildTaskParsePrompt(inputText: string): string {
         → Example: today is ${todayISO}, "pay zx4rr on the 28th" → target_date="${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-28", reminder_interval="once", target_time=null, needs_date_pick=true
       - "on the 1st", "by the 15th" → same logic
 
+      MULTI-DAY EVENTS / DATE RANGES (CRITICAL):
+      - If the user describes a SPAN of days, set target_date to the FIRST day and
+        end_date to the LAST day (inclusive, YYYY-MM-DD). The event shows on each day
+        from target_date through end_date.
+        Examples:
+          "conference July 20 to 24" → target_date=first day, end_date=last day
+          "vacation Aug 5 - Aug 10" → target_date=Aug 5, end_date=Aug 10
+          "festival from the 12th to the 15th" → target_date=12th, end_date=15th
+          "hotel Dec 3 through Dec 7" → target_date=Dec 3, end_date=Dec 7
+        - Only set end_date when the user explicitly gave a RANGE (to/until/through/–/-).
+        - If start and end are the SAME day, do NOT set end_date (single-day event).
+        - end_date only applies to ONE-TIME events (reminder_interval="once").
+
       Other rules:
       - "at 2pm" → ONE-TIME, reminder_interval="once", target_time="14:00"
       - "daily"/"every day" → reminder_interval="daily"
@@ -218,6 +231,7 @@ export function buildTaskParsePrompt(inputText: string): string {
       "classification": "task",
       "target_date": "YYYY-MM-DD or null",
       "target_time": "HH:MM or null",
+      "end_date": "YYYY-MM-DD or null (LAST day of a multi-day event span; only when the user gave a date range; null for single-day)",
       "reminder_interval": "10min|20min|30min|1hour|2hours|4hours|daily|every_other_day|once",
       "due_date": "YYYY-MM-DD or null (set to today's date ONLY for 'today' recurring tasks so they go overdue next day if unfinished)",
       "priority_uninferrable": false,

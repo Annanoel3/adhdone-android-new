@@ -414,6 +414,7 @@ JSON:
           fallbackInterval: parsed.reminder_interval || '2hours',
           initialDate: parsed.target_date || null,
           classification: parsed.classification || 'task',
+          end_date: parsed.end_date || null,
           currentUser
         });
         setShowDatePicker(true);
@@ -425,6 +426,16 @@ JSON:
       let actualReminderInterval = parsed.reminder_interval || null;
       
       const recurringIntervals = ['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day'];
+
+      // Multi-day events: if the parser detected a date range, record the last
+      // day so the event shows on each calendar day from start through end.
+      let endDateISO = null;
+      if (actualReminderInterval === 'once' && parsed.end_date && parsed.end_date !== parsed.target_date) {
+        const [ey, em, ed] = parsed.end_date.split('-').map(n => parseInt(n, 10));
+        if (!isNaN(ey) && !isNaN(em) && !isNaN(ed)) {
+          endDateISO = new Date(ey, em - 1, ed, 9, 0, 0, 0).toISOString();
+        }
+      }
 
       if (parsed.target_date && parsed.target_time && actualReminderInterval === 'once') {
         // One-time reminder with specific date/time
@@ -457,11 +468,12 @@ JSON:
             reminder_interval: actualReminderInterval,
             reminder_count: 0,
             next_reminder: nextReminder.toISOString(),
+            end_date: endDateISO,
             urgency: parsed.urgency || 'medium',
             energy_required: parsed.energy_required || 'medium',
             status: 'active',
             notification_recipient_email: currentUser.email
-          };
+            };
 
           console.log('🔄 [PROCESS] Task 1+ day away - showing advance reminder dialog');
           setPendingTask({ taskData, currentUser });
@@ -536,6 +548,7 @@ JSON:
         reminder_count: 0,
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
         due_date: dueDateISO,
+        end_date: endDateISO,
         urgency: parsed.urgency || 'medium',
         energy_required: parsed.energy_required || 'medium',
         status: 'active',
@@ -855,6 +868,16 @@ JSON:
         return;
       }
 
+      // Preserve a multi-day span end date from the parsed range, guarding
+      // that it's on or after the picked start day.
+      let endDateISO = null;
+      if (pendingDateTask.end_date && pendingDateTask.end_date !== date) {
+        const [ey, em, ed] = pendingDateTask.end_date.split('-').map(n => parseInt(n, 10));
+        if (!isNaN(ey) && !isNaN(em) && !isNaN(ed) && pendingDateTask.end_date >= date) {
+          endDateISO = new Date(ey, em - 1, ed, 9, 0, 0, 0).toISOString();
+        }
+      }
+
       const createdTask = await base44.entities.Task.create({
         title,
         description: '',
@@ -862,6 +885,7 @@ JSON:
         reminder_interval: 'once',
         reminder_count: 0,
         next_reminder: nextReminder.toISOString(),
+        end_date: endDateISO,
         urgency,
         energy_required,
         status: 'active',
