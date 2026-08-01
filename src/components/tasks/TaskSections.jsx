@@ -140,7 +140,7 @@ export default function TaskSections({
           <div key={section.key} className="border-b border-gray-200 dark:border-gray-700 last:border-0">
             <button
               onClick={() => toggleSection(section.key)}
-              className="w-full flex items-center gap-2 py-3 px-1 hover:bg-gray-50 dark:hover:bg-gray-800/50 rounded-lg transition-colors"
+              className="w-full flex items-center gap-2 py-3 px-1 active:bg-gray-100/70 dark:active:bg-gray-700/40 rounded-lg transition-colors"
             >
               {isCollapsed ? (
                 <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
