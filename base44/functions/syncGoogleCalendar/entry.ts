@@ -12,9 +12,22 @@ function isBirthdayEvent(title, recurrenceRule) {
 }
 
 function extractBirthdayPerson(title) {
-  let t = title.replace(/birthday|bday/gi, '').replace(/['s\-:,]/g, ' ').trim();
+  if (!title) return '';
+  // Strip the generic birthday words ("happy birthday", "bday") and
+  // possessive punctuation so "<Name>'s birthday" -> "<Name>". Also drop
+  // "happy" so a generic Google "Happy birthday!" event doesn't leave a
+  // meaningless "Happy !" as the person's name.
+  let t = title
+    .replace(/happy/gi, '')
+    .replace(/birthday|bday/gi, '')
+    .replace(/['\u2019]*s\b/gi, '')
+    .replace(/['\-:,]/g, ' ')
+    .trim();
   t = t.replace(/\s+/g, ' ').trim();
-  return t || title;
+  // If nothing meaningful remains (just punctuation/emojis), there's no
+  // person name — the caller falls back to "Happy Birthday".
+  if (!t || /^[^a-z0-9]+$/i.test(t)) return '';
+  return t;
 }
 
 // When an already-synced event's task still exists, check whether the Google
@@ -322,8 +335,9 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
     let reminderInterval = 'once';
     if (isBirthday) {
       const birthdayPerson = extractBirthdayPerson(title);
+      const birthdayDisplay = birthdayPerson ? `${birthdayPerson}'s Birthday` : 'Happy Birthday';
       taskRecord = {
-        title: `🎂 ${birthdayPerson}'s Birthday`,
+        title: `🎂 ${birthdayDisplay}`,
         description: richDescription || `Imported from Google Calendar (${connectedEmail})`,
         notes: event.description || '',
         urgency: 'medium',
@@ -331,7 +345,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
         status: 'active',
         reminder_interval: 'once',
         recurrence_pattern: 'yearly',
-        birthday_person: birthdayPerson,
+        birthday_person: birthdayPerson || null,
         classification: 'birthday',
         next_reminder: nextReminderDate.toISOString(),
         notification_recipient_email: user.email
