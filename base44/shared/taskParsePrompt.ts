@@ -184,6 +184,23 @@ export function buildTaskParsePrompt(inputText: string): string {
       - Still provide reminder_interval as a fallback (used if user picks "any day")
       - Do NOT set target_date or target_time — let the user pick
 
+      CLASSIFICATION (Event vs Task — CRITICAL):
+      Determine whether this is a TASK, EVENT, or BIRTHDAY:
+      - EVENT: A scheduled occurrence the user attends or goes to at a specific time/place.
+        Keywords: "go to", "attend", "visit", "watch", "see" + a named happening.
+        Examples: concerts, car shows, expos, weddings, parties, meetings, appointments,
+        classes, sports games, festivals, conferences, travel, social gatherings, shows,
+        "go to the Import Expo car show", "attend the wedding on Saturday", "see the concert"
+        → classification="event"
+      - TASK: An actionable to-do that needs doing — paying bills, submitting reports, chores,
+        errands, selling items, cleaning, organizing, calling, researching, buying, cooking,
+        fixing, posting, returning. Something you DO and complete, not something you attend.
+        → classification="task"
+      - BIRTHDAY: Only when explicitly about someone's birthday.
+        → classification="birthday"
+      When in doubt between event and task, ask: "Is the user going somewhere / attending
+      something at a scheduled time?" → event. "Is the user doing a thing that needs doing?" → task.
+
       Extract:
       1. Clean title (strip "remind me to/I need to/in X minutes" — keep inner action)
       2. Urgency: ALWAYS suggest (low/medium/high/urgent)
@@ -191,12 +208,14 @@ export function buildTaskParsePrompt(inputText: string): string {
       4. target_date: for "in X" (TODAY), "tomorrow", or specific dates — format YYYY-MM-DD
       5. target_time: for "in X" (calculate), "at X" (specific), or null if no time mentioned
       6. reminder_interval: ALWAYS provide (10min/20min/30min/1hour/2hours/4hours/daily/every_other_day/once)
+      7. classification: "task" | "event" | "birthday"
 
       JSON:
       {
       "title": "clean title",
       "urgency": "medium",
       "energy_required": "medium",
+      "classification": "task",
       "target_date": "YYYY-MM-DD or null",
       "target_time": "HH:MM or null",
       "reminder_interval": "10min|20min|30min|1hour|2hours|4hours|daily|every_other_day|once",

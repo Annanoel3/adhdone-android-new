@@ -1802,7 +1802,7 @@ Return JSON:
           </div>
 
           <DialogFooter className="gap-2 flex-wrap">
-            {task.status !== 'completed' && (
+            {task.status !== 'completed' && !isEvent && (
               <div className="w-full mb-1">
                 <LaunchButtons task={task} theme={theme} />
               </div>

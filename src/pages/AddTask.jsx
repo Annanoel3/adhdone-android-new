@@ -397,6 +397,7 @@ JSON:
         setPendingPriorityTask({
           title: parsed.title || inputText.trim(),
           energy_required: parsed.energy_required || 'medium',
+          classification: parsed.classification || 'task',
           currentUser
         });
         setShowPriorityPicker(true);
@@ -412,6 +413,7 @@ JSON:
           urgency: parsed.urgency || 'medium',
           fallbackInterval: parsed.reminder_interval || '2hours',
           initialDate: parsed.target_date || null,
+          classification: parsed.classification || 'task',
           currentUser
         });
         setShowDatePicker(true);
@@ -451,6 +453,7 @@ JSON:
           const taskData = {
             title: parsed.title || inputText.trim(),
             description: '',
+            classification: parsed.classification || 'task',
             reminder_interval: actualReminderInterval,
             reminder_count: 0,
             next_reminder: nextReminder.toISOString(),
@@ -528,6 +531,7 @@ JSON:
       const createdTask = await base44.entities.Task.create({
         title: parsed.title || inputText.trim(),
         description: '',
+        classification: parsed.classification || 'task',
         reminder_interval: actualReminderInterval,
         reminder_count: 0,
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
@@ -781,6 +785,7 @@ JSON:
       const createdTask = await base44.entities.Task.create({
         title,
         description: '',
+        classification: pendingPriorityTask.classification || 'task',
         reminder_interval: interval,
         reminder_count: 0,
         next_reminder: nextReminder.toISOString(),
@@ -853,6 +858,7 @@ JSON:
       const createdTask = await base44.entities.Task.create({
         title,
         description: '',
+        classification: pendingDateTask.classification || 'task',
         reminder_interval: 'once',
         reminder_count: 0,
         next_reminder: nextReminder.toISOString(),
@@ -924,6 +930,7 @@ JSON:
       const createdTask = await base44.entities.Task.create({
         title,
         description: '',
+        classification: pendingDateTask.classification || 'task',
         reminder_interval: interval,
         reminder_count: 0,
         next_reminder: nextReminder.toISOString(),

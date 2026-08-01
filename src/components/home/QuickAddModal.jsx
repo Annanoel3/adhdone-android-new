@@ -78,6 +78,21 @@ If the task DOES fit a SMART INFERENCE category, or has a specific time/date:
 - Set is_flexible=false if a specific time/date/deadline is mentioned
 - Set is_flexible=true if no specific time/date is mentioned but the task fits an inference category
 
+CLASSIFICATION (Event vs Task — CRITICAL):
+Determine whether this is a TASK, EVENT, or BIRTHDAY:
+- EVENT: A scheduled occurrence the user attends or goes to at a specific time/place.
+  Keywords: "go to", "attend", "visit", "watch", "see" + a named happening.
+  Examples: "go to the Import Expo car show", "attend the wedding", "see the concert",
+  car shows, expos, festivals, parties, meetings, appointments, classes, sports games, travel.
+  → classification="event"
+- TASK: An actionable to-do that needs doing — paying bills, chores, errands, selling,
+  cleaning, organizing, calling, researching, cooking, fixing. Something you DO and complete.
+  → classification="task"
+- BIRTHDAY: Only when explicitly about someone's birthday.
+  → classification="birthday"
+When in doubt: "Is the user going somewhere / attending something?" → event.
+"Is the user doing a thing that needs doing?" → task. Default to "task" if unsure.
+
 NEEDS DATE PICK (VERY RESTRICTIVE — only for scheduled events):
 ONLY set needs_date_pick=true for tasks tied to a SPECIFIC calendar date/event that the user
 explicitly referenced but didn't give a time for:
@@ -98,6 +113,7 @@ If needs_date_pick=true:
 Return JSON:
 {
   "title": "Clean task title",
+  "classification": "task" | "event" | "birthday",
   "reminder_interval": "10min" | "20min" | "30min" | "1hour" | "2hours" | "4hours" | "daily" | "every_other_day" | "once" | null,
   "reminder_time": "HH:MM" or null,
   "specific_date": "YYYY-MM-DD" or null,
@@ -117,6 +133,7 @@ Return JSON:
         setPendingPriorityTask({
           title: taskData.title,
           energy_required: taskData.energy_required || 'medium',
+          classification: taskData.classification || 'task',
           user
         });
         setShowPriorityPicker(true);
@@ -131,6 +148,7 @@ Return JSON:
           urgency: taskData.urgency || 'medium',
           fallbackInterval: taskData.reminder_interval || '2hours',
           initialDate: taskData.specific_date || null,
+          classification: taskData.classification || 'task',
           user
         });
         setShowDatePicker(true);
@@ -206,6 +224,7 @@ Return JSON:
 
       const createdTask = await base44.entities.Task.create({
         title: taskData.title,
+        classification: taskData.classification || 'task',
         urgency: taskData.urgency || 'medium',
         energy_required: taskData.energy_required || 'medium',
         status: 'active',
@@ -282,6 +301,7 @@ Return JSON:
 
       const createdTask = await base44.entities.Task.create({
         title, urgency, energy_required, status: 'active',
+        classification: pendingDateTask.classification || 'task',
         reminder_interval: 'once', reminder_count: 0,
         next_reminder: nextReminderTime.toISOString(),
         notification_recipient_email: user.email
@@ -347,6 +367,7 @@ Return JSON:
 
       const createdTask = await base44.entities.Task.create({
         title, urgency, energy_required, status: 'active',
+        classification: pendingDateTask.classification || 'task',
         reminder_interval: interval, reminder_count: 0,
         next_reminder: nextReminderTime.toISOString(),
         notification_recipient_email: user.email
@@ -404,6 +425,7 @@ Return JSON:
         title,
         urgency,
         energy_required,
+        classification: pendingPriorityTask.classification || 'task',
         status: 'active',
         reminder_interval: interval,
         reminder_count: 0,
