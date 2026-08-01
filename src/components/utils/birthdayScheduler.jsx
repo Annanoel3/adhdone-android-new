@@ -70,14 +70,15 @@ export async function scheduleBirthdayReminders(task) {
   const birthdayDate = new Date(birthdayIso);
   const now = new Date();
   const scheduledIds = [];
+  const scheduleEntries = [];
 
   const kinds = [
-    { key: "week_before", kind: "week_before" },
-    { key: "day_before", kind: "day_before" },
-    { key: "day_of", kind: "day_of" },
+    { key: "week_before", kind: "week_before", label: "1 week before" },
+    { key: "day_before", kind: "day_before", label: "1 day before" },
+    { key: "day_of", kind: "day_of", label: "Day of" },
   ];
 
-  for (const { key, kind } of kinds) {
+  for (const { key, kind, label } of kinds) {
     if (!toggles[key]) continue;
     const content = reminderContent(person, kind, birthdayIso);
     const sendAt = new Date(birthdayDate);
@@ -93,7 +94,16 @@ export async function scheduleBirthdayReminders(task) {
         taskId: task.id,
         data: { screen: "/TaskNotification", taskId: task.id, type: "birthday_reminder" },
       });
-      if (id) scheduledIds.push(id);
+      if (id) {
+        scheduledIds.push(id);
+        scheduleEntries.push({
+          notification_id: id,
+          send_at: sendAt.toISOString(),
+          label,
+          notification_title: content.title,
+          notification_body: content.body,
+        });
+      }
     } catch (e) {
       console.error("[birthdayScheduler] Failed to schedule", kind, e);
     }
@@ -103,6 +113,7 @@ export async function scheduleBirthdayReminders(task) {
     try {
       await base44.entities.Task.update(task.id, {
         onesignal_notification_ids: scheduledIds,
+        reminder_schedule: scheduleEntries,
       });
     } catch (e) {
       console.error("[birthdayScheduler] Failed to persist notification ids", e);

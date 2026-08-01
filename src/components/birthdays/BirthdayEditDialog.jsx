@@ -12,25 +12,20 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Switch } from "@/components/ui/switch";
 import {
   scheduleBirthdayReminders,
   computeNextBirthdayDate,
 } from "../utils/birthdayScheduler";
 import { cancelScheduledReminder } from "../utils/reminderScheduler";
-
-const REMINDER_ROWS = [
-  { key: "week_before", label: "1 week before", hint: "A nudge to prep a gift or message" },
-  { key: "day_before", label: "1 day before", hint: "A heads-up the day prior" },
-  { key: "day_of", label: "Day of", hint: "So you don't miss it" },
-];
+import SmartReminderEditor from "../tasks/SmartReminderEditor";
 
 export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved }) {
   const [name, setName] = useState("");
   const [date, setDate] = useState("");
   const [notes, setNotes] = useState("");
   const [pictures, setPictures] = useState([]);
-  const [toggles, setToggles] = useState({ week_before: true, day_before: true, day_of: true });
+  const [schedule, setSchedule] = useState([]);
+  const [notifIds, setNotifIds] = useState([]);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
@@ -44,11 +39,8 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
       );
       setNotes(birthday.notes || "");
       setPictures(birthday.pictures || []);
-      setToggles({
-        week_before: birthday.birthday_remind_week_before !== false,
-        day_before: birthday.birthday_remind_day_before !== false,
-        day_of: birthday.birthday_remind_day_of !== false,
-      });
+      setSchedule(birthday.reminder_schedule || []);
+      setNotifIds(birthday.onesignal_notification_ids || []);
     }
   }, [birthday]);
 
@@ -79,11 +71,7 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
       const oldD = new Date(birthday.next_reminder);
       const dateChanged = oldD.getMonth() + 1 !== m || oldD.getDate() !== d;
       const nameChanged = name.trim() !== birthday.birthday_person;
-      const togglesChanged =
-        (birthday.birthday_remind_week_before !== false) !== toggles.week_before ||
-        (birthday.birthday_remind_day_before !== false) !== toggles.day_before ||
-        (birthday.birthday_remind_day_of !== false) !== toggles.day_of;
-      const reschedule = dateChanged || nameChanged || togglesChanged;
+      const reschedule = dateChanged || nameChanged;
 
       const updates = {
         birthday_person: name.trim(),
@@ -91,14 +79,14 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
         next_reminder: nextDate.toISOString(),
         notes,
         pictures,
-        birthday_remind_week_before: toggles.week_before,
-        birthday_remind_day_before: toggles.day_before,
-        birthday_remind_day_of: toggles.day_of,
       };
 
-      if (reschedule && birthday.onesignal_notification_ids?.length) {
-        await cancelScheduledReminder(birthday.onesignal_notification_ids).catch(() => {});
+      if (reschedule && notifIds.length) {
+        await cancelScheduledReminder(notifIds).catch(() => {});
         updates.onesignal_notification_ids = [];
+        updates.reminder_schedule = [];
+        setNotifIds([]);
+        setSchedule([]);
       }
 
       await base44.entities.Task.update(birthday.id, updates);
@@ -116,12 +104,12 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
     }
   };
 
-  const handleDelete = async () => {
+  const handleDeleteBirthday = async () => {
     if (!confirm(`Delete ${birthday.birthday_person}'s birthday?`)) return;
     setSaving(true);
     try {
-      if (birthday.onesignal_notification_ids?.length) {
-        await cancelScheduledReminder(birthday.onesignal_notification_ids).catch(() => {});
+      if (notifIds.length) {
+        await cancelScheduledReminder(notifIds).catch(() => {});
       }
       await base44.entities.Task.delete(birthday.id);
       onSaved?.();
@@ -129,6 +117,18 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleReminderUpdate = (updated) => {
+    setSchedule(updated.reminder_schedule || []);
+    setNotifIds(updated.onesignal_notification_ids || []);
+    onSaved?.();
+  };
+
+  const editorTask = {
+    ...birthday,
+    reminder_schedule: schedule,
+    onesignal_notification_ids: notifIds,
   };
 
   return (
@@ -155,20 +155,14 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
             <p className="text-xs text-gray-500">Year doesn't matter — we'll remind you every year.</p>
           </div>
 
-          <div className="space-y-2 rounded-xl border border-gray-200 p-3">
-            <p className="text-sm font-medium text-gray-700">Reminders</p>
-            {REMINDER_ROWS.map((row) => (
-              <div key={row.key} className="flex items-center justify-between gap-3 py-1">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-900">🎂 {row.label}</p>
-                  <p className="text-xs text-gray-500">{row.hint}</p>
-                </div>
-                <Switch
-                  checked={toggles[row.key]}
-                  onCheckedChange={(v) => setToggles((prev) => ({ ...prev, [row.key]: v }))}
-                />
-              </div>
-            ))}
+          <div className="space-y-2">
+            <Label>Notifications</Label>
+            {schedule.length === 0 && notifIds.length > 0 && (
+              <p className="text-xs text-gray-500 mb-1">
+                🔔 {notifIds.length} notification(s) scheduled. Save a new name or date to refresh the list.
+              </p>
+            )}
+            <SmartReminderEditor task={editorTask} onUpdate={handleReminderUpdate} />
           </div>
 
           <div className="space-y-2">
@@ -226,7 +220,7 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
             </Button>
             <Button
               variant="outline"
-              onClick={handleDelete}
+              onClick={handleDeleteBirthday}
               disabled={saving}
               className="text-red-600 hover:text-red-700 hover:bg-red-50"
             >
