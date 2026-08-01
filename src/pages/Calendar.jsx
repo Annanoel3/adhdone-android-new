@@ -141,11 +141,25 @@ export default function Calendar() {
         const me = await base44.auth.me();
         setUser(me);
         await Promise.all([loadSyncedEvents(), loadTasks()]);
-        await probeConnection();
+        const isConnected = await probeConnection();
+        // Background auto-sync — at most once per the user's chosen interval.
+        // Manual "Sync now" still works anytime; this just keeps things fresh
+        // without requiring the user to tap anything.
+        if (isConnected && autoSyncInterval !== 'never') {
+          const thresholds = { '6hours': 6 * 3600_000, 'daily': 24 * 3600_000, 'weekly': 7 * 24 * 3600_000 };
+          const threshold = thresholds[autoSyncInterval];
+          const lastMs = lastSyncedAt ? new Date(lastSyncedAt).getTime() : 0;
+          if (Date.now() - lastMs > threshold) {
+            attemptSync()
+              .then(async () => { await Promise.all([loadSyncedEvents(), loadTasks()]); })
+              .catch(() => {});
+          }
+        }
       }
       setLoading(false);
     };
     init();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadSyncedEvents, probeConnection]);
 
   // Re-check connection status every time the page becomes visible
