@@ -17,6 +17,81 @@ function extractBirthdayPerson(title) {
   return t || title;
 }
 
+// When an already-synced event's task still exists, check whether the Google
+// event's start/end changed since the last sync. If so, patch the task's
+// event dates (next_reminder, due_date, end_date for one-time events) and
+// refresh the sync record — so editing a Google event (e.g. extending a
+// hotel stay to multi-day) actually updates the app on resync.
+async function patchExistingTaskDates(base44, syncRec, taskRec, event) {
+  const startRaw = event.start?.dateTime || event.start?.date || null;
+  const endRaw = event.end?.dateTime || event.end?.date || null;
+  const startChanged = (syncRec.start_time || null) !== startRaw;
+  const endChanged = (syncRec.end_time || null) !== endRaw;
+  if (!startChanged && !endChanged) return false;
+
+  // Recompute the event start the same way the create path does.
+  let nextReminderDate: Date | null = null;
+  if (startRaw && /^\d{4}-\d{2}-\d{2}$/.test(startRaw)) {
+    const [y, m, d] = startRaw.split('-').map(n => parseInt(n, 10));
+    nextReminderDate = new Date(y, m - 1, d, 9, 0, 0, 0);
+  } else if (startRaw) {
+    nextReminderDate = new Date(startRaw);
+  }
+
+  // Advance recurring-series master dates into the future.
+  const rrule = (event.recurrence || []).join(';');
+  if (rrule && nextReminderDate && nextReminderDate < new Date()) {
+    const freqDays = rrule.includes('FREQ=DAILY') ? 1
+      : rrule.includes('FREQ=WEEKLY') ? 7
+      : rrule.includes('FREQ=MONTHLY') ? 30
+      : rrule.includes('FREQ=YEARLY') ? 365 : 1;
+    while (nextReminderDate < new Date()) {
+      nextReminderDate.setDate(nextReminderDate.getDate() + freqDays);
+    }
+  }
+
+  const patch: any = {};
+
+  // One-time events: the event start IS the reminder/due date, and end_date
+  // records the multi-day span. Recurring tasks use now+gap for reminders, so
+  // only refresh due_date/end_date from the calendar date.
+  if (taskRec.reminder_interval === 'once') {
+    if (startChanged && nextReminderDate) {
+      patch.next_reminder = nextReminderDate.toISOString();
+      patch.due_date = nextReminderDate.toISOString();
+    }
+    if (endRaw) {
+      let endDate: Date;
+      if (/^\d{4}-\d{2}-\d{2}$/.test(endRaw)) {
+        const [y, m, d] = endRaw.split('-').map(n => parseInt(n, 10));
+        endDate = new Date(y, m - 1, d - 1, 9, 0, 0, 0); // all-day end is exclusive
+      } else {
+        endDate = new Date(endRaw);
+      }
+      const base = nextReminderDate || (taskRec.next_reminder ? new Date(taskRec.next_reminder) : new Date());
+      const fmt = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+      if (endDate > base && fmt(endDate) !== fmt(base)) {
+        patch.end_date = endDate.toISOString();
+      } else {
+        patch.end_date = null;
+      }
+    } else {
+      patch.end_date = null;
+    }
+  }
+
+  if (Object.keys(patch).length > 0) {
+    await base44.asServiceRole.entities.Task.update(taskRec.id, patch);
+  }
+  await base44.asServiceRole.entities.CalendarSyncedEvent.update(syncRec.id, {
+    start_time: startRaw,
+    end_time: endRaw,
+    last_synced_at: new Date().toISOString(),
+    title: event.summary || syncRec.title || 'Untitled event',
+  });
+  return true;
+}
+
 async function classifyEventWithAI(base44, event) {
   // Build a task-like input string from the calendar event, then run it
   // through the SAME parseTask function + prompt the AddTask page uses, so
@@ -98,14 +173,18 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
     // runs, which would make the sync skip re-creating deleted tasks.
     if (existing && existing.adhd_task_id) {
       let taskStillExists = false;
+      let existingTask = null;
       try {
-        const task = await base44.asServiceRole.entities.Task.get(existing.adhd_task_id);
-        taskStillExists = !!task;
+        existingTask = await base44.asServiceRole.entities.Task.get(existing.adhd_task_id);
+        taskStillExists = !!existingTask;
       } catch (e) {
         // Task.get throws when the record doesn't exist → was deleted
       }
       if (taskStillExists) {
-        skipped++;
+        // Event still exists + task still exists → only re-sync if the Google
+        // event's dates changed (e.g. user extended a multi-day stay).
+        const didUpdate = await patchExistingTaskDates(base44, existing, existingTask, event);
+        if (didUpdate) { updated++; } else { skipped++; }
         continue;
       }
     }
@@ -140,12 +219,14 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
       // exists. If the user deleted it, fall through and create a new one.
       if (rec.adhd_task_id) {
         let recTaskExists = false;
+        let recTask = null;
         try {
-          const recTask = await base44.asServiceRole.entities.Task.get(rec.adhd_task_id);
+          recTask = await base44.asServiceRole.entities.Task.get(rec.adhd_task_id);
           recTaskExists = !!recTask;
         } catch (e) { /* deleted */ }
         if (recTaskExists) {
-          skipped++;
+          const didUpdate = await patchExistingTaskDates(base44, rec, recTask, event);
+          if (didUpdate) { updated++; } else { skipped++; }
           continue;
         }
       }

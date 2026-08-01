@@ -701,7 +701,7 @@ export default function TaskCard({
                   <PopoverContent className={`w-72 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                     <div className="space-y-4 p-2">
                       <div>
-                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Reminder Date:</label>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>{isEvent ? 'Event Date:' : 'Reminder Date:'}</label>
                         <input
                           type="date"
                           ref={dateInputRef}
@@ -714,7 +714,7 @@ export default function TaskCard({
                         />
                       </div>
                       <div>
-                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Reminder Time:</label>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>{isEvent ? 'Event Time:' : 'Reminder Time:'}</label>
                         <input
                           type="time"
                           ref={timeInputRef}
