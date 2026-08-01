@@ -9,7 +9,7 @@ import {
 
 const OPTIONS = [
   { priority: "high", label: "High", interval: "every 2 hours", badgeClass: "bg-red-500 text-white" },
-  { priority: "medium", label: "Medium", interval: "every 4 hours", badgeClass: "bg-orange-500 text-white" },
+  { priority: "medium", label: "Med", interval: "every 4 hours", badgeClass: "bg-orange-500 text-white" },
   { priority: "low", label: "Low", interval: "daily", badgeClass: "bg-green-500 text-white" },
 ];
 

@@ -480,7 +480,7 @@ export default function TaskCard({
           </h3>
 
           <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${getUrgencyColor(task.urgency)}`}>
-            {task.urgency}
+            {task.urgency === 'medium' ? 'med' : task.urgency}
           </span>
 
           {task.status !== 'completed' && !isEvent && (
@@ -558,7 +558,7 @@ export default function TaskCard({
                   <button
                     onClick={(e) => e.stopPropagation()}
                     className={`${getUrgencyColor(task.urgency)} border px-2 py-1 rounded text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity`}>
-                    {task.urgency}
+                    {task.urgency === 'medium' ? 'med' : task.urgency}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className={`w-48 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
