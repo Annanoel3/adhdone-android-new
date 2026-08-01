@@ -82,6 +82,9 @@ export default function TaskSections({
   const grouped = useMemo(() => {
     const map = { today: [], next7days: [], upcoming: [], later: [], recurring: [] };
     tasks.forEach((task) => {
+      // Birthdays have their own dedicated section on Home — never show them
+      // in the standard task sections.
+      if (task.classification === "birthday" || task.birthday_person) return;
       const section = categorizeTask(task);
       map[section].push(task);
     });
