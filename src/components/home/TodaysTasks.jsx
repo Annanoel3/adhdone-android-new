@@ -762,12 +762,13 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
               {upcomingTasks.map((t) => (
                 <div
                   key={t.id}
-                  className={`flex items-center justify-between gap-3 p-3 rounded-xl border ${
+                  onClick={() => onViewDetails(t)}
+                  className={`flex items-center justify-between gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
                     theme === 'minimalist'
-                      ? 'bg-white border-gray-100'
+                      ? 'bg-white border-gray-100 hover:border-gray-200 hover:bg-gray-50'
                       : theme === 'dark'
-                        ? 'bg-gray-900/40 border-gray-700'
-                        : 'bg-white/60 border-purple-100'
+                        ? 'bg-gray-900/40 border-gray-700 hover:border-gray-600 hover:bg-gray-800/40'
+                        : 'bg-white/60 border-purple-100 hover:border-purple-200 hover:bg-purple-50/50'
                   }`}
                 >
                   <span className={`text-sm font-medium truncate ${theme === 'dark' ? 'text-gray-100' : 'text-gray-800'}`}>
