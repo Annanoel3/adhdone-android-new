@@ -40,6 +40,11 @@
       "format": "date-time",
       "description": "Optional deadline for interval-reminder tasks. Interval reminders continue until this date, then switch to overdue reminders until the task is completed."
     },
+    "end_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "For multi-day events, the last day of the span. When set, the event shows on each day from next_reminder through end_date."
+    },
     "last_scheduled_until": {
       "type": "string",
       "format": "date-time",

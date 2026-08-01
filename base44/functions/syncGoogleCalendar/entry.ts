@@ -234,10 +234,28 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
 
       let nextReminderISO;
       let dueDateISO = null;
+      let endDateISO = null;
       if (isOnce) {
         // Event: fire the single reminder at the event's start time.
         nextReminderISO = nextReminderDate.toISOString();
         dueDateISO = nextReminderDate.toISOString();
+        // Multi-day events: record the last day so the app shows the full
+        // span (calendar grid + Home "Today" + event detail). For all-day
+        // events Google's end date is exclusive, so the last day is one
+        // day earlier than the raw end.
+        if (endRaw) {
+          let endDate;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(endRaw)) {
+            const [y, m, d] = endRaw.split('-').map(n => parseInt(n, 10));
+            endDate = new Date(y, m - 1, d - 1, 9, 0, 0, 0);
+          } else {
+            endDate = new Date(endRaw);
+          }
+          const fmt = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+          if (endDate > nextReminderDate && fmt(endDate) !== fmt(nextReminderDate)) {
+            endDateISO = endDate.toISOString();
+          }
+        }
       } else {
         // Task: start recurring reminders now (same as AddTask).
         const startGap = intervalMsMap[reminderInterval] || intervalMsMap['2hours'];
@@ -260,6 +278,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
         reminder_count: 0,
         next_reminder: nextReminderISO,
         due_date: dueDateISO,
+        end_date: endDateISO,
         classification: isOnce ? 'event' : 'task',
         notification_recipient_email: user.email,
         recurrence_pattern: recurrenceRule ? (recurrenceRule.includes('FREQ=DAILY') ? 'daily' : recurrenceRule.includes('FREQ=WEEKLY') ? 'weekly' : recurrenceRule.includes('FREQ=MONTHLY') ? 'monthly' : recurrenceRule.includes('FREQ=YEARLY') ? 'yearly' : 'none') : 'none'

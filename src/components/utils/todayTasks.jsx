@@ -23,14 +23,27 @@ export const getTaskDueLocalDate = (task) => {
   return null;
 };
 
-// due today OR earlier (overdue) OR no effective date (recurring tasks with no due date)
-export const isTodayTask = (task, todayStr = getLocalDateString()) => {
-  const due = getTaskDueLocalDate(task);
-  return !due || due <= todayStr;
+// Last day of a multi-day event (inclusive), if any.
+export const getTaskEndLocalDate = (task) => {
+  if (!task || !task.end_date) return null;
+  return getLocalDateString(new Date(task.end_date));
 };
 
-// effective date strictly in the future
+// A task counts as "today" when its start has arrived (today >= start) and —
+// for multi-day events — today is still within the span (today <= end).
+// Ordinary overdue tasks (no end_date) remain "today" until completed, same
+// as before. Tasks with no effective date (recurring, no due) are always today.
+export const isTodayTask = (task, todayStr = getLocalDateString()) => {
+  const start = getTaskDueLocalDate(task);
+  if (!start) return true;
+  if (start > todayStr) return false;
+  const end = getTaskEndLocalDate(task);
+  if (end && end < todayStr) return false;
+  return true;
+};
+
+// effective start date strictly in the future
 export const isUpcomingTask = (task, todayStr = getLocalDateString()) => {
-  const due = getTaskDueLocalDate(task);
-  return !!due && due > todayStr;
+  const start = getTaskDueLocalDate(task);
+  return !!start && start > todayStr;
 };

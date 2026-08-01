@@ -903,11 +903,22 @@ Return JSON:
     if (!dateString) return null;
     // FIXED: Parse UTC time and display as local
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', { 
-      month: 'short', 
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
       day: 'numeric',
       year: 'numeric'
     });
+  };
+
+  // For multi-day events, show "Aug 1 – Aug 3" instead of just the start.
+  const formatEventDateRange = () => {
+    if (!task.next_reminder) return null;
+    const startStr = formatReminderDate(task.next_reminder);
+    if (!task.end_date) return startStr;
+    const startDay = new Date(task.next_reminder).toDateString();
+    const endDay = new Date(task.end_date).toDateString();
+    if (startDay === endDay) return startStr;
+    return `${startStr} – ${formatReminderDate(task.end_date)}`;
   };
 
   const getCurrentReminderTime = (task) => {
@@ -1340,7 +1351,7 @@ Return JSON:
                       <Clock className="w-3 h-3" />
                       {task.next_reminder ? (
                         <>
-                          {formatReminderDate(task.next_reminder)} • {formatReminderTime(task.next_reminder)}
+                          {isEvent ? formatEventDateRange() : formatReminderDate(task.next_reminder)} • {formatReminderTime(task.next_reminder)}
                         </>
                       ) : (
                         'Set Date & Time'
