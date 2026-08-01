@@ -528,11 +528,14 @@ Return JSON:
         }
       }
       
-      // Update in background
-      Task.update(task.id, updates).catch(error => {
+      // Await the save so the loading spinner shows and the server has the
+      // change before any parent refetch overwrites the optimistic update.
+      try {
+        await Task.update(task.id, updates);
+      } catch (error) {
         console.error(`Error updating ${field}:`, error);
-      });
-      
+      }
+
       // Optimistically update parent immediately
       onUpdate({ ...task, ...updates });
     } finally {
@@ -998,10 +1001,12 @@ Return JSON:
       } else if (task.birthday_person) {
         updates.birthday_person = null;
       }
-      Task.update(task.id, updates).catch(error => {
-        console.error("Error updating classification:", error);
-      });
+      await Task.update(task.id, updates);
       onUpdate({ ...task, ...updates });
+      toast({ title: "Saved ✓", description: newClass === 'event' ? 'Marked as event' : newClass === 'birthday' ? 'Marked as birthday' : 'Marked as task' });
+    } catch (error) {
+      console.error("Error updating classification:", error);
+      toast({ title: "Couldn't save", description: "Please try again.", variant: "destructive" });
     } finally {
       setIsUpdating(false);
     }
