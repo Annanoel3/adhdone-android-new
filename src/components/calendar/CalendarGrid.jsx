@@ -48,7 +48,14 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [selected, setSelected] = useState(() => new Date());
-  const [useEmoji, setUseEmoji] = useState(true);
+  const [useEmoji, setUseEmoji] = useState(() => {
+    const stored = localStorage.getItem('calendar_use_emoji');
+    return stored === null ? true : stored === 'true';
+  });
+  const toggleEmojiMode = (val) => {
+    setUseEmoji(val);
+    localStorage.setItem('calendar_use_emoji', String(val));
+  };
 
   // Group all items by local-date key.
   const itemsByDate = useMemo(() => {
@@ -165,13 +172,13 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
         <div className="flex items-center gap-2">
           <div className={`flex items-center rounded-lg border overflow-hidden ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
             <button
-              onClick={() => setUseEmoji(true)}
+              onClick={() => toggleEmojiMode(true)}
               className={`px-2 py-1 text-xs font-medium transition-colors ${useEmoji ? 'bg-blue-500 text-white' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               😀 Emoji
             </button>
             <button
-              onClick={() => setUseEmoji(false)}
+              onClick={() => toggleEmojiMode(false)}
               className={`px-2 py-1 text-xs font-medium transition-colors ${!useEmoji ? 'bg-blue-500 text-white' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               Aa Text
