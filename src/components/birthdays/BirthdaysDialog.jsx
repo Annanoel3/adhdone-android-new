@@ -55,10 +55,11 @@ export default function BirthdaysDialog({ isOpen, onClose, tasks, user, onRefres
   );
 
   useEffect(() => {
-    if (isOpen) {
-      setShowAdd(false);
-      ensureBirthdayReminders(birthdays);
-    }
+    if (!isOpen) return;
+    setShowAdd(false);
+    // Populate planned reminders for any birthday missing a schedule, then
+    // refresh so the list reflects the newly-stored planned notifications.
+    ensureBirthdayReminders(birthdays).finally(() => onRefresh?.());
   }, [isOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const resetForm = () => {

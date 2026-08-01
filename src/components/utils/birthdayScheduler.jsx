@@ -4,6 +4,12 @@ import { scheduleReminder } from "./reminderScheduler";
 const REMINDER_HOUR = 9;
 const REMINDER_MINUTE = 0;
 
+// OneSignal rejects send_after too far in the future, so birthday reminders
+// beyond this window are stored as "planned" (scheduled:false) entries in
+// reminder_schedule. The hourly refill cron schedules them as they come into
+// range. The UI shows the planned day/time immediately regardless.
+const BIRTHDAY_SCHEDULE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
 /**
  * Given a month (1-12) and day, returns the next upcoming occurrence of that
  * birthday at 9:00 local time. If this year's date already passed, rolls to next year.
@@ -85,39 +91,57 @@ export async function scheduleBirthdayReminders(task) {
     sendAt.setDate(sendAt.getDate() + content.offsetDays);
     if (sendAt <= now) continue; // skip reminders that would fire in the past
 
-    try {
-      const id = await scheduleReminder({
-        email,
-        title: content.title,
-        body: content.body,
-        sendAtISO: sendAt.toISOString(),
-        taskId: task.id,
-        data: { screen: "/TaskNotification", taskId: task.id, type: "birthday_reminder" },
-      });
-      if (id) {
-        scheduledIds.push(id);
-        scheduleEntries.push({
-          notification_id: id,
-          send_at: sendAt.toISOString(),
-          label,
-          notification_title: content.title,
-          notification_body: content.body,
+    const withinWindow = sendAt.getTime() - now.getTime() <= BIRTHDAY_SCHEDULE_WINDOW_MS;
+    let scheduledId = null;
+
+    if (withinWindow) {
+      try {
+        scheduledId = await scheduleReminder({
+          email,
+          title: content.title,
+          body: content.body,
+          sendAtISO: sendAt.toISOString(),
+          taskId: task.id,
+          data: { screen: "/TaskNotification", taskId: task.id, type: "birthday_reminder" },
         });
+      } catch (e) {
+        console.error("[birthdayScheduler] Failed to schedule", kind, e);
       }
-    } catch (e) {
-      console.error("[birthdayScheduler] Failed to schedule", kind, e);
+    }
+
+    if (scheduledId) {
+      scheduledIds.push(scheduledId);
+      scheduleEntries.push({
+        notification_id: scheduledId,
+        send_at: sendAt.toISOString(),
+        label,
+        notification_title: content.title,
+        notification_body: content.body,
+        scheduled: true,
+      });
+    } else {
+      // Too far out for OneSignal (or scheduling failed) — store as planned so
+      // the UI shows the day/time now; the refill cron schedules it closer to the date.
+      scheduleEntries.push({
+        notification_id: `planned_${task.id}_${kind}_${sendAt.getTime()}`,
+        send_at: sendAt.toISOString(),
+        label,
+        notification_title: content.title,
+        notification_body: content.body,
+        scheduled: false,
+      });
     }
   }
 
-  if (scheduledIds.length > 0) {
-    try {
-      await base44.entities.Task.update(task.id, {
-        onesignal_notification_ids: scheduledIds,
-        reminder_schedule: scheduleEntries,
-      });
-    } catch (e) {
-      console.error("[birthdayScheduler] Failed to persist notification ids", e);
-    }
+  // Always persist the full planned schedule so the UI can show every reminder,
+  // even when none could be scheduled in OneSignal yet.
+  try {
+    await base44.entities.Task.update(task.id, {
+      onesignal_notification_ids: scheduledIds,
+      reminder_schedule: scheduleEntries,
+    });
+  } catch (e) {
+    console.error("[birthdayScheduler] Failed to persist notification ids", e);
   }
 
   return scheduledIds;
@@ -163,22 +187,28 @@ export async function ensureBirthdayReminders(birthdayTasks) {
       await base44.entities.Task.update(task.id, {
         next_reminder: nextDate.toISOString(),
         onesignal_notification_ids: [],
+        reminder_schedule: [],
       });
       // Update in-memory so scheduleBirthdayReminders works with fresh data
       task.next_reminder = nextDate.toISOString();
       task.onesignal_notification_ids = [];
+      task.reminder_schedule = [];
       didRollover = true;
     } catch (e) {
       console.error("[birthdayScheduler] Failed to rollover birthday", task.id, e);
     }
   }
 
-  // Schedule reminders for any unscheduled birthday (including just-rolled-over ones)
+  // Schedule reminders for any birthday with NO plan at all (legacy/orphaned).
+  // Birthdays that already have a planned reminder_schedule but no live
+  // notification IDs are left alone — the refill cron schedules them as they
+  // come into OneSignal's scheduling window.
   const unscheduled = (birthdayTasks || []).filter(
     (t) =>
       t.birthday_person &&
       t.status === "active" &&
       t.next_reminder &&
+      (!t.reminder_schedule || t.reminder_schedule.length === 0) &&
       (!t.onesignal_notification_ids || t.onesignal_notification_ids.length === 0)
   );
   for (const task of unscheduled) {

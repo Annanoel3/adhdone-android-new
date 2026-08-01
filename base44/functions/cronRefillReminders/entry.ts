@@ -232,7 +232,62 @@ Deno.serve(async (req) => {
       }
     }
 
-    const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, at: now.toISOString() };
+    // ── Birthday reminders ──────────────────────────────────────────────────────
+  // OneSignal won't accept send_after beyond ~30 days, so far-out birthday
+  // reminders are stored as "planned" (scheduled:false) entries in
+  // reminder_schedule. Schedule them here as they come into range.
+  const BIRTHDAY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+  const birthdayTasks = allTasks.filter(t =>
+    t.status === 'active' &&
+    t.birthday_person &&
+    t.recurrence_pattern === 'yearly' &&
+    t.next_reminder &&
+    t.notification_recipient_email &&
+    Array.isArray(t.reminder_schedule) &&
+    t.reminder_schedule.length > 0
+  );
+  let birthdayScheduled = 0;
+
+  for (const task of birthdayTasks) {
+    const schedule = [...task.reminder_schedule];
+    let changed = false;
+    const newIds: string[] = [];
+    for (const entry of schedule) {
+      if (entry.scheduled) continue;
+      const sendAtMs = new Date(entry.send_at).getTime();
+      if (sendAtMs <= now.getTime()) continue;
+      if (sendAtMs - now.getTime() > BIRTHDAY_WINDOW_MS) continue;
+      try {
+        const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+          toUserExternalId: task.notification_recipient_email,
+          title: entry.notification_title,
+          body: entry.notification_body,
+          sendAtISO: entry.send_at,
+          data: { screen: '/TaskNotification', taskId: task.id, type: 'birthday_reminder' },
+        });
+        const result = res?.data || res;
+        if (result?.notificationId) {
+          entry.notification_id = result.notificationId;
+          entry.scheduled = true;
+          newIds.push(result.notificationId);
+          changed = true;
+          birthdayScheduled++;
+        }
+      } catch (e) {
+        console.error(`[REFILL] Birthday schedule failed for ${task.id}:`, e);
+      }
+    }
+    if (changed) {
+      const existingIds = Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : [];
+      await base44.asServiceRole.entities.Task.update(task.id, {
+        reminder_schedule: schedule,
+        onesignal_notification_ids: [...existingIds, ...newIds],
+      });
+      console.log(`🎂 [REFILL] Scheduled ${newIds.length} birthday reminders for "${task.title}"`);
+    }
+  }
+
+  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, birthdayScheduled, at: now.toISOString() };
     console.log('✅ [REFILL] Complete:', result);
     return Response.json(result);
   } catch (err) {
