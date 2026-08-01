@@ -49,7 +49,7 @@ export default function BirthdaysDialog({ isOpen, onClose, tasks, user, onRefres
   const birthdays = useMemo(
     () =>
       (tasks || [])
-        .filter((t) => t.birthday_person && t.status === "active" && t.next_reminder)
+        .filter((t) => (t.birthday_person || t.classification === "birthday") && t.status === "active" && t.next_reminder)
         .sort((a, b) => new Date(a.next_reminder) - new Date(b.next_reminder)),
     [tasks]
   );
@@ -198,7 +198,7 @@ export default function BirthdaysDialog({ isOpen, onClose, tasks, user, onRefres
                     <Cake className="w-5 h-5 text-pink-600" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 truncate">{b.birthday_person}</p>
+                    <p className="font-semibold text-gray-900 truncate">{b.birthday_person || (b.title || "").replace(/^🎂\s*/, "") || "Birthday"}</p>
                     <p className="text-xs text-gray-500">
                       {new Date(b.next_reminder).toLocaleDateString(undefined, {
                         month: "long",

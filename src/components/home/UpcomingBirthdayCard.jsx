@@ -24,7 +24,7 @@ export default function UpcomingBirthdayCard({ tasks, user, theme, specialMode, 
   const birthdays = useMemo(
     () =>
       (tasks || [])
-        .filter((t) => t.birthday_person && t.status === "active" && t.next_reminder)
+        .filter((t) => (t.birthday_person || t.classification === "birthday") && t.status === "active" && t.next_reminder)
         .filter((t) => new Date(t.next_reminder) - new Date() <= SIX_MONTHS_MS)
         .sort((a, b) => new Date(a.next_reminder) - new Date(b.next_reminder)),
     [tasks]
@@ -51,7 +51,7 @@ export default function UpcomingBirthdayCard({ tasks, user, theme, specialMode, 
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Next birthday</p>
               {next ? (
                 <>
-                  <p className="font-bold text-gray-900 text-lg truncate">{next.birthday_person}</p>
+                  <p className="font-bold text-gray-900 text-lg truncate">{next.birthday_person || (next.title || "").replace(/^🎂\s*/, "") || "Birthday"}</p>
                   <p className="text-sm text-gray-600">
                     {new Date(next.next_reminder).toLocaleDateString(undefined, {
                       month: "long",

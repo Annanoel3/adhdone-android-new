@@ -59,7 +59,7 @@ export default function Calendar() {
   const [syncError, setSyncError] = useState(null);
   const [syncedEvents, setSyncedEvents] = useState([]);
   const [tasks, setTasks] = useState([]);
-  const [lastSyncedAt, setLastSyncedAt] = useState(null);
+  const [lastSyncedAt, setLastSyncedAt] = useState(() => localStorage.getItem('calendar_last_synced_at') || null);
   const [autoSyncInterval, setAutoSyncInterval] = useState(() => 
     localStorage.getItem('calendar_auto_sync_interval') || 'daily'
   );
@@ -76,6 +76,7 @@ export default function Calendar() {
           new Date(a.last_synced_at) > new Date(b.last_synced_at) ? a : b
         );
         setLastSyncedAt(latest.last_synced_at);
+        localStorage.setItem('calendar_last_synced_at', latest.last_synced_at);
       }
     } catch {
       setSyncedEvents([]);
@@ -219,7 +220,10 @@ export default function Calendar() {
       } else {
         const result = await attemptSync();
         setSyncResult(result);
-        if (result?.synced_at) setLastSyncedAt(result.synced_at);
+        if (result?.synced_at) {
+          setLastSyncedAt(result.synced_at);
+          localStorage.setItem('calendar_last_synced_at', result.synced_at);
+        }
         if (result?.connected_email) setConnectedEmail(result.connected_email);
         // Reload both imported events AND in-app tasks — synced calendar
         // events become Task records too, and the grid shows both.
