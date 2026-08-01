@@ -78,12 +78,22 @@ export default function NotificationFollowupModal({ user, theme }) {
       try {
         const tasks = await base44.entities.Task.filter({ status: "active" });
         const now = new Date();
+        const startOfToday = new Date(
+          now.getFullYear(),
+          now.getMonth(),
+          now.getDate()
+        );
         const overdue = tasks.filter(
           (t) =>
             t.next_reminder &&
             new Date(t.next_reminder) <= now &&
             !t.birthday_person && // birthdays are reminders, not "did you do it?" tasks
-            !dismissedTaskIds.current.has(t.id)
+            !t.parent_task_id && // subtasks are checked from their parent
+            !dismissedTaskIds.current.has(t.id) &&
+            // Only follow up on tasks that are actually due today or overdue.
+            // A task whose due_date is still in the future isn't due yet,
+            // even if its next_reminder timestamp is stale.
+            (!t.due_date || new Date(t.due_date) <= startOfToday)
         );
         if (overdue.length > 0) {
           const existingIds = new Set(pendingTasksRef.current.map((t) => t.id));
