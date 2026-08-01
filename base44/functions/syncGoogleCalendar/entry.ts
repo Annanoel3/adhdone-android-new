@@ -187,6 +187,14 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
         if (didUpdate) { updated++; } else { skipped++; }
         continue;
       }
+      // The user deleted this task in the app. Respect that deletion — don't
+      // re-import the Google event. Refresh last_synced_at so we don't keep
+      // re-checking it every sync, then skip.
+      await base44.asServiceRole.entities.CalendarSyncedEvent.update(existing.id, {
+        last_synced_at: new Date().toISOString(),
+      });
+      skipped++;
+      continue;
     }
 
     // Run AI classification
@@ -216,7 +224,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
     if (recheck.length > 0) {
       const rec = recheck[0];
       // Direct-existence check: only skip if the previously-synced task still
-      // exists. If the user deleted it, fall through and create a new one.
+      // exists. If the user deleted it, respect the deletion and don't re-import.
       if (rec.adhd_task_id) {
         let recTaskExists = false;
         let recTask = null;
@@ -229,6 +237,12 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
           if (didUpdate) { updated++; } else { skipped++; }
           continue;
         }
+        // User deleted the synced task — respect the deletion, don't re-import.
+        await base44.asServiceRole.entities.CalendarSyncedEvent.update(rec.id, {
+          last_synced_at: new Date().toISOString(),
+        });
+        skipped++;
+        continue;
       }
       existing = rec;
     }
