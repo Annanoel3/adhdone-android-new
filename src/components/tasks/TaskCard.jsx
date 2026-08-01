@@ -456,7 +456,7 @@ export default function TaskCard({
           )}
 
           <h3
-            className={`flex-1 min-w-0 truncate text-sm font-medium ${
+            className={`flex-1 min-w-0 line-clamp-2 break-words text-sm font-medium leading-snug ${
               task.status === 'completed' ? 'line-through opacity-60' : ''
             } ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}
             onClick={() => setExpanded(v => !v)}
