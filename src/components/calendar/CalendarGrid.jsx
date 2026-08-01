@@ -82,11 +82,27 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
         (e.routed_as === 'birthday' ? 'birthday'
           : e.item_type === 'task' ? 'imported_task'
           : 'imported_event');
-      push(new Date(e.start_time), {
+      const item = {
         kind, title: e.title, id: e.id,
         taskId: e.adhd_task_id || null,
         task: linkedTask || null,
-      });
+      };
+      const startD = new Date(e.start_time);
+      // No end time → single-day event, place once on the start date.
+      if (!e.end_time) { push(startD, item); return; }
+      const endD = new Date(e.end_time);
+      // Same start/end day → single-day event.
+      if (startD.toDateString() === endD.toDateString()) { push(startD, item); return; }
+      // Multi-day: appear on each day from start through end. For all-day
+      // events Google's end date is exclusive, so stop one day earlier.
+      const lastDay = new Date(endD);
+      if (e.is_all_day) lastDay.setDate(lastDay.getDate() - 1);
+      const dayCursor = new Date(startD.getFullYear(), startD.getMonth(), startD.getDate());
+      const last = new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate());
+      while (dayCursor <= last) {
+        push(new Date(dayCursor), item);
+        dayCursor.setDate(dayCursor.getDate() + 1);
+      }
     });
     return map;
   }, [tasks, events]);
