@@ -1533,6 +1533,7 @@ Return JSON:
               </div>
             </div>
 
+            {!isEvent && (
             <div className="space-y-4">
               {subTasks.length > 0 && (
                 <div>
@@ -1778,9 +1779,9 @@ Return JSON:
                   </div>
                 </div>
               )}
-            </div>
+            </div>)}
 
-            {progress === 100 && subTasks.length > 0 && (
+            {progress === 100 && subTasks.length > 0 && !isEvent && (
               <div className={`p-6 rounded-xl text-center ${
                 theme === 'minimalist'
                   ? 'bg-green-50 border-2 border-green-200'

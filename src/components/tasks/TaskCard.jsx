@@ -81,6 +81,8 @@ export default function TaskCard({
 
   const dueDate = task.next_reminder ? new Date(task.next_reminder) : new Date(task.created_date);
 
+  const isEvent = task.classification === 'event';
+
   const taskDate = dueDate.toLocaleDateString('en-US', {
     month: 'short',
     day: 'numeric',
@@ -465,7 +467,7 @@ export default function TaskCard({
             {task.urgency}
           </span>
 
-          {task.status !== 'completed' && (
+          {task.status !== 'completed' && !isEvent && (
             <Popover>
               <PopoverTrigger asChild>
                 <button
@@ -767,7 +769,7 @@ export default function TaskCard({
               )}
 
               {/* Subtask Badge - clickable to toggle */}
-              {subtaskCount > 0 && (
+              {subtaskCount > 0 && !isEvent && (
                 <button
                   onClick={(e) => { e.stopPropagation(); setSubtasksExpanded(v => !v); }}
                   className={`flex items-center gap-1 text-xs font-medium px-2 py-1 rounded border transition-colors ${
@@ -800,7 +802,7 @@ export default function TaskCard({
                   }`}
                 >
                   <ListChecks className="w-4 h-4" />
-                  Task Details
+                  {isEvent ? 'Event Details' : 'Task Details'}
                 </Button>
                 <Button
                   variant="ghost"
@@ -859,7 +861,7 @@ export default function TaskCard({
             )}
 
             {/* Collapsible subtasks — inside the same card */}
-            {subtasksExpanded && subtasks && subtasks.length > 0 && (
+            {subtasksExpanded && subtasks && subtasks.length > 0 && !isEvent && (
               <div className={`pt-2 border-t space-y-1 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
                 {subtasks.map(subtask => (
                   <div
