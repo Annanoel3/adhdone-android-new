@@ -19,6 +19,7 @@ import {
   ensureBirthdayReminders,
 } from "../utils/birthdayScheduler";
 import { cancelScheduledReminder } from "../utils/reminderScheduler";
+import BirthdayEditDialog from "./BirthdayEditDialog";
 
 function daysUntil(iso) {
   return Math.ceil((new Date(iso) - new Date()) / (1000 * 60 * 60 * 24));
@@ -43,6 +44,7 @@ export default function BirthdaysDialog({ isOpen, onClose, tasks, user, onRefres
   const [date, setDate] = useState("");
   const [toggles, setToggles] = useState({ week_before: true, day_before: true, day_of: true });
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(null);
 
   const birthdays = useMemo(
     () =>
@@ -186,7 +188,11 @@ export default function BirthdaysDialog({ isOpen, onClose, tasks, user, onRefres
                 </p>
               )}
               {birthdays.map((b) => (
-                <Card key={b.id} className="p-3 flex items-center gap-3">
+                <Card
+                  key={b.id}
+                  className="p-3 flex items-center gap-3 cursor-pointer hover:border-pink-300 transition-colors"
+                  onClick={() => setEditing(b)}
+                >
                   <div className="w-10 h-10 rounded-xl bg-pink-100 flex items-center justify-center flex-shrink-0">
                     <Cake className="w-5 h-5 text-pink-600" />
                   </div>
@@ -200,7 +206,12 @@ export default function BirthdaysDialog({ isOpen, onClose, tasks, user, onRefres
                       · {formatWhen(b.next_reminder)}
                     </p>
                   </div>
-                  <Button variant="ghost" size="icon" onClick={() => handleDelete(b)} title="Delete">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={(e) => { e.stopPropagation(); handleDelete(b); }}
+                    title="Delete"
+                  >
                     <Trash2 className="w-4 h-4 text-gray-500" />
                   </Button>
                 </Card>
@@ -208,6 +219,13 @@ export default function BirthdaysDialog({ isOpen, onClose, tasks, user, onRefres
             </div>
           </>
         )}
+
+        <BirthdayEditDialog
+          birthday={editing}
+          isOpen={!!editing}
+          onClose={() => setEditing(null)}
+          onSaved={onRefresh}
+        />
       </DialogContent>
     </Dialog>
   );
