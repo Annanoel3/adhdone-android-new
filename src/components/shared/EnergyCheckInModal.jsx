@@ -122,8 +122,24 @@ export default function EnergyCheckInModal({ isOpen, onClose, theme, title }) {
     // Pull the user's active tasks and rank them by energy-fit + priority
     try {
       const allTasks = await base44.entities.Task.list('-updated_date', 100);
+      const now = new Date();
+      const todayStr = now.toDateString();
+      // Only suggest tasks that are actually owed today — due today/overdue,
+      // or with a reminder that lands on today or already passed. Future-dated
+      // items (e.g. a doctor's appointment next week) must NOT be suggested.
+      const isOwedToday = (t) => {
+        if (t.due_date) {
+          const dd = new Date(t.due_date);
+          return dd.toDateString() === todayStr || dd.getTime() < now.getTime();
+        }
+        if (t.next_reminder) {
+          const nr = new Date(t.next_reminder);
+          return nr.toDateString() === todayStr || nr.getTime() < now.getTime();
+        }
+        return false;
+      };
       const candidates = allTasks.filter(
-        (t) => t.status === 'active' && !t.parent_task_id && !t.birthday_person
+        (t) => t.status === 'active' && !t.parent_task_id && !t.birthday_person && isOwedToday(t)
       );
       const ranked = candidates
         .map((t) => ({ task: t, score: scoreTask(t, energyLevel) }))
