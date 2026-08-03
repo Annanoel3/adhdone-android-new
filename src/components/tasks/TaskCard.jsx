@@ -294,6 +294,16 @@ export default function TaskCard({
     });
   };
 
+  // Multi-day events: show "Dec 3 – Dec 7" when end_date is set on a
+  // different day than the start.
+  const formatEventDateRange = () => {
+    if (!task.next_reminder) return null;
+    const startStr = formatReminderDate(task.next_reminder);
+    if (!task.end_date) return startStr;
+    if (new Date(task.next_reminder).toDateString() === new Date(task.end_date).toDateString()) return startStr;
+    return `${startStr} – ${formatReminderDate(task.end_date)}`;
+  };
+
   const shortInterval = (interval) => {
     const m = { '10min':'10m','20min':'20m','30min':'30m','1hour':'1h','2hours':'2h','4hours':'4h','daily':'Daily','every_other_day':'2 days','once':'Once' };
     return m[interval] || interval;
@@ -304,6 +314,11 @@ export default function TaskCard({
   // recurring tasks the due_date (deadline) still takes priority.
   const collapsedDate = (() => {
     if (task.reminder_interval === 'once' && task.next_reminder) {
+      // Multi-day events show the full span (e.g. "Dec 3 – Dec 7") on the
+      // collapsed card instead of just the start date.
+      if (task.end_date && new Date(task.next_reminder).toDateString() !== new Date(task.end_date).toDateString()) {
+        return { label: formatEventDateRange(), overdue: false, isTodayLabel: false };
+      }
       return { label: isToday ? 'Today' : formatReminderDate(task.next_reminder), overdue: false, isTodayLabel: isToday };
     }
     if (task.due_date) {
@@ -721,7 +736,9 @@ export default function TaskCard({
                       }`}
                     >
                       <Calendar className="w-3 h-3" />
-                      {formatReminderDate(task.next_reminder)} • {formatReminderTime(task.next_reminder)}
+                      {task.end_date && new Date(task.next_reminder).toDateString() !== new Date(task.end_date).toDateString()
+                        ? `${formatEventDateRange()} • ${formatReminderTime(task.next_reminder)}`
+                        : `${formatReminderDate(task.next_reminder)} • ${formatReminderTime(task.next_reminder)}`}
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className={`w-72 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
