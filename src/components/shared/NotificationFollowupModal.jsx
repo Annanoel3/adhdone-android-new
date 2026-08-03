@@ -9,12 +9,13 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Clock, Zap, Loader2, Bell } from "lucide-react";
+import { CheckCircle2, Clock, Zap, Timer, Loader2, Bell } from "lucide-react";
 import {
   scheduleReminder,
   cancelScheduledReminder,
 } from "@/components/utils/reminderScheduler";
 import { updateTodaysSummary } from "@/components/utils/dailySummaryHelper";
+import { useLaunch } from "@/context/LaunchContext";
 
 const SNOOZE_OPTIONS = [
   { label: "1 hour", minutes: 60 },
@@ -31,6 +32,7 @@ export default function NotificationFollowupModal({ user, theme }) {
   const dismissedTaskIds = useRef(new Set());
   const isOpenRef = useRef(false);
   const loadingRef = useRef(false);
+  const { startSprint } = useLaunch();
 
   const showNextTask = useCallback(() => {
     const next = pendingTasksRef.current.find(
@@ -210,6 +212,9 @@ export default function NotificationFollowupModal({ user, theme }) {
         next_reminder: snoozeUntil.toISOString(),
         onesignal_notification_ids: notificationId ? [notificationId] : [],
         snooze_count: (currentTask.snooze_count || 0) + 1,
+        // Log avoidance so reminder cadence can adapt — a "not now" from the
+        // follow-up means the user is sidestepping this task, not just timing it.
+        consecutive_snoozes: (currentTask.consecutive_snoozes || 0) + 1,
       });
 
       dismissedTaskIds.current.add(currentTask.id);
@@ -224,6 +229,29 @@ export default function NotificationFollowupModal({ user, theme }) {
     }
   };
 
+  const handleJustFiveMinutes = async () => {
+    if (!currentTask) return;
+    setProcessing("sprint");
+    try {
+      await startSprint(currentTask);
+      dismissedTaskIds.current.add(currentTask.id);
+      pendingTasksRef.current = pendingTasksRef.current.filter(
+        (t) => t.id !== currentTask.id
+      );
+      setProcessing(null);
+      setShowNoOptions(false);
+      setCurrentTask(null);
+      isOpenRef.current = false;
+      setIsOpen(false);
+    } catch (error) {
+      console.error("Error starting 5-min sprint from followup:", error);
+      setProcessing(null);
+    }
+  };
+
+  const handleLeaveIt = () =>
+    handleSnooze({ label: "Not now", minutes: 180 });
+
   const handleDismiss = () => {
     if (!currentTask) return;
     dismissedTaskIds.current.add(currentTask.id);
@@ -233,10 +261,6 @@ export default function NotificationFollowupModal({ user, theme }) {
     setShowNoOptions(false);
     showNextTask();
   };
-
-  const isOneTime =
-    currentTask?.reminder_interval === "once" ||
-    !currentTask?.reminder_interval;
 
   const getUrgencyColor = (urgency) => {
     if (theme === "dark") {
@@ -284,11 +308,11 @@ export default function NotificationFollowupModal({ user, theme }) {
                 </div>
                 <div>
                   <DialogTitle className="text-xl">
-                    {showNoOptions ? "Snooze Reminder" : "Did you do it?"}
+                    {showNoOptions ? "Not yet?" : "Did you do it?"}
                   </DialogTitle>
                   <DialogDescription>
                     {showNoOptions
-                      ? "When should we remind you?"
+                      ? "What would help right now?"
                       : "Check in on this task"}
                   </DialogDescription>
                 </div>
@@ -352,13 +376,7 @@ export default function NotificationFollowupModal({ user, theme }) {
                   ✅ Yes
                 </Button>
                 <Button
-                  onClick={() => {
-                    if (isOneTime) {
-                      setShowNoOptions(true);
-                    } else {
-                      handleDismiss();
-                    }
-                  }}
+                  onClick={() => setShowNoOptions(true)}
                   disabled={!!processing}
                   variant="outline"
                   className={`flex-1 h-14 text-lg ${
@@ -367,18 +385,31 @@ export default function NotificationFollowupModal({ user, theme }) {
                       : "hover:bg-gray-100"
                   }`}
                 >
-                  {isOneTime ? "❌ No" : "Dismiss"}
+                  ❌ No
                 </Button>
               </div>
             ) : (
               <div className="space-y-2 mt-2">
-                <p
-                  className={`text-sm text-center mb-3 ${
-                    theme === "dark" ? "text-gray-400" : "text-gray-500"
+                <Button
+                  onClick={handleJustFiveMinutes}
+                  disabled={!!processing}
+                  className={`w-full h-14 justify-start text-base ${
+                    theme === "dark"
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white border-0"
+                      : "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white border-0"
                   }`}
                 >
-                  Not yet? When should we remind you?
-                </p>
+                  {processing === "sprint" ? (
+                    <Loader2 className="w-5 h-5 mr-3 animate-spin" />
+                  ) : (
+                    <Timer className="w-5 h-5 mr-3" />
+                  )}
+                  ⏱️ Just 5 minutes
+                  <span className="ml-auto text-xs font-normal opacity-80">
+                    low-pressure start
+                  </span>
+                </Button>
+
                 {SNOOZE_OPTIONS.map((option) => (
                   <Button
                     key={option.label}
@@ -399,8 +430,9 @@ export default function NotificationFollowupModal({ user, theme }) {
                     {option.label}
                   </Button>
                 ))}
+
                 <button
-                  onClick={handleDismiss}
+                  onClick={handleLeaveIt}
                   disabled={!!processing}
                   className={`w-full mt-2 text-sm ${
                     theme === "dark"
@@ -408,7 +440,7 @@ export default function NotificationFollowupModal({ user, theme }) {
                       : "text-gray-400 hover:text-gray-600"
                   }`}
                 >
-                  Dismiss
+                  Not now, just leave it
                 </button>
               </div>
             )}
