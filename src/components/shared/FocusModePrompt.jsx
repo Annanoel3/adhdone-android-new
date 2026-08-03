@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import {
   Dialog,
@@ -63,6 +63,10 @@ export default function FocusModePrompt({ user, theme }) {
   const [showInfo, setShowInfo] = useState(false);
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(null);
+  // Track the task that was just completed so we can exclude it from the
+  // next-picker list — the server-side status flip lags the list reload, so
+  // without this the finished task reappears in the "what's next?" picker.
+  const justCompletedRef = useRef(null);
   const [enteredAt, setEnteredAt] = useState(user?.focus_mode_entered_at || null);
   const [spinning, setSpinning] = useState(false);
   const [spinLabel, setSpinLabel] = useState("");
@@ -163,6 +167,7 @@ export default function FocusModePrompt({ user, theme }) {
         const pickable = allTasks.filter((t) => {
           if (t.birthday_person) return false;
           if (t.parent_task_id) return false; // subtasks belong to a parent — don't pick them standalone
+          if (t.id === justCompletedRef.current) return false; // exclude the task just finished this session
           // Mirror the Home screen's "today" logic (via isTodayTask) so a one-time
           // task scheduled for a future date through next_reminder isn't offered
           // here — only tasks due today, overdue, or with no effective date.
@@ -209,6 +214,9 @@ export default function FocusModePrompt({ user, theme }) {
 
   const handlePickTask = async (task) => {
     setBusy(true);
+    // Starting a new focus task — clear the just-completed exclusion so the
+    // picker list is fresh for the next completion.
+    justCompletedRef.current = null;
     try {
       await base44.functions.invoke("setFocusMode", { action: "enter", taskId: task.id });
       setFocusTaskId(task.id);
@@ -239,6 +247,9 @@ export default function FocusModePrompt({ user, theme }) {
   const handleComplete = async () => {
     if (!focusTask) return;
     const task = focusTask;
+    // Remember the just-finished task so the next-picker reload excludes it
+    // (the server status flip lags the list refresh triggered below).
+    justCompletedRef.current = task.id;
     // Celebrate instantly — don't freeze the UI on the task update, OneSignal
     // cancel, and Focus Mode teardown. Those run in the background while the
     // confetti + "back to it" popup show right away.

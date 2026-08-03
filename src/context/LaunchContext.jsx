@@ -228,7 +228,11 @@ export function LaunchProvider({ children }) {
             setSprintEnded(false);
             if (sprint?.taskId) {
               try {
-                await base44.functions.invoke('setFocusMode', { action: 'enter', taskId: sprint.taskId });
+                // Carry the time already spent in the sprint into Focus Mode so
+                // the elapsed timer keeps counting from the sprint's start
+                // instead of restarting at zero.
+                const sprintStartISO = new Date(new Date(sprint.endTimeISO).getTime() - DURATION_MS).toISOString();
+                await base44.functions.invoke('setFocusMode', { action: 'enter', taskId: sprint.taskId, startedAt: sprintStartISO });
                 window.dispatchEvent(new CustomEvent('focus-mode-changed', { detail: { taskId: sprint.taskId } }));
                 navigate('/Home', { replace: true });
               } catch (e) {

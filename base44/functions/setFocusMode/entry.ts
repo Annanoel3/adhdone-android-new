@@ -23,6 +23,12 @@ export default async function(req: Request): Promise<Response> {
 
     const body = await req.json().catch(() => ({}));
     const { action, taskId } = body;
+    // Optional: a caller (e.g. the 5-minute sprint "Keep going" handoff) can
+    // pass the moment the work actually started so the Focus Mode elapsed timer
+    // continues from there instead of restarting at 0.
+    const startedAt = typeof body.startedAt === 'string' && body.startedAt
+      ? body.startedAt
+      : null;
 
     if (action === 'enter') {
       if (!taskId) return Response.json({ error: 'taskId required' }, { status: 400 });
@@ -115,7 +121,7 @@ export default async function(req: Request): Promise<Response> {
       // ── Persist focus state on the user ──
       await base44.asServiceRole.entities.User.update(user.id, {
         focus_mode_task_id: taskId,
-        focus_mode_entered_at: new Date().toISOString()
+        focus_mode_entered_at: startedAt || new Date().toISOString()
       });
 
       return Response.json({ success: true, focusMode: true, taskId });
