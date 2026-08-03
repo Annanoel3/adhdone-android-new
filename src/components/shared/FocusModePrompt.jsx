@@ -267,29 +267,31 @@ export default function FocusModePrompt({ user, theme }) {
         completed_at: localISO,
         onesignal_notification_ids: [],
       });
-      // Log the focus session client-side using the local enteredAt. Doing it
-      // here (instead of the onTaskUpdate entity automation) avoids the race
-      // between Task.update firing the automation and setFocusMode exit
-      // clearing the focus state, and works regardless of whether the
-      // automation's auth context can read the user profile.
-      if (enteredAt) {
-        try {
+      // Log the focus session using the AUTHORITATIVE focus_mode_entered_at
+      // from the server profile — not the local enteredAt state, which can be
+      // stale or not yet synced when coming from a sprint handoff. This ensures
+      // the logged duration includes sprint time when the sprint's start was
+      // passed to setFocusMode as startedAt.
+      try {
+        const me = await base44.auth.me();
+        const authoritativeEnteredAt = me?.focus_mode_entered_at || enteredAt;
+        if (authoritativeEnteredAt) {
           const ended = new Date();
           const duration = Math.max(
             0,
-            Math.round((ended.getTime() - new Date(enteredAt).getTime()) / 1000)
+            Math.round((ended.getTime() - new Date(authoritativeEnteredAt).getTime()) / 1000)
           );
           await base44.entities.FocusSessionLog.create({
             task_id: task.id,
             task_title: task.title,
             duration_seconds: duration,
-            started_at: new Date(enteredAt).toISOString(),
+            started_at: new Date(authoritativeEnteredAt).toISOString(),
             completed_at: ended.toISOString(),
             user_email: user?.email,
           });
-        } catch (e) {
-          console.error("FocusSessionLog save failed:", e);
         }
+      } catch (e) {
+        console.error("FocusSessionLog save failed:", e);
       }
       if (task.onesignal_notification_ids?.length) {
         try {
