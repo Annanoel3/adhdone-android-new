@@ -322,7 +322,10 @@ export default function TaskCard({
       return { label: isToday ? 'Today' : formatReminderDate(task.next_reminder), overdue: false, isTodayLabel: isToday };
     }
     if (task.reminder_interval && task.reminder_interval !== 'once') {
-      return { label: shortInterval(task.reminder_interval), overdue: false, isTodayLabel: false };
+      // A recurring task with no due date is owed today — show "Today" to
+      // match sibling tasks in the Today list. The interval frequency itself
+      // is still visible in the expanded card.
+      return { label: 'Today', overdue: false, isTodayLabel: true };
     }
     return null;
   })();
