@@ -304,17 +304,25 @@ export default function TaskCard({
   // recurring tasks the due_date (deadline) still takes priority.
   const collapsedDate = (() => {
     if (task.reminder_interval === 'once' && task.next_reminder) {
-      return { label: isToday ? 'Today' : formatReminderDate(task.next_reminder), overdue: false };
+      return { label: isToday ? 'Today' : formatReminderDate(task.next_reminder), overdue: false, isTodayLabel: isToday };
     }
     if (task.due_date) {
-      const overdue = new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed';
-      return { label: formatReminderDate(task.due_date), overdue };
+      const dd = new Date(task.due_date);
+      const overdue = dd.getTime() < Date.now() && task.status !== 'completed';
+      const dueToday = dd.toDateString() === today.toDateString();
+      // A due date that lands on today reads "Today" (matching the next_reminder
+      // path) so the badge is consistent across all tasks owed today.
+      return {
+        label: dueToday && !overdue ? 'Today' : formatReminderDate(task.due_date),
+        overdue,
+        isTodayLabel: dueToday && !overdue,
+      };
     }
     if (task.next_reminder) {
-      return { label: isToday ? 'Today' : formatReminderDate(task.next_reminder), overdue: false };
+      return { label: isToday ? 'Today' : formatReminderDate(task.next_reminder), overdue: false, isTodayLabel: isToday };
     }
     if (task.reminder_interval && task.reminder_interval !== 'once') {
-      return { label: shortInterval(task.reminder_interval), overdue: false };
+      return { label: shortInterval(task.reminder_interval), overdue: false, isTodayLabel: false };
     }
     return null;
   })();
@@ -462,7 +470,7 @@ export default function TaskCard({
             <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${
               collapsedDate.overdue
                 ? theme === 'dark' ? 'border-red-700 bg-red-900/30 text-red-300' : 'border-red-300 bg-red-50 text-red-700'
-                : isToday && !task.due_date
+                : collapsedDate.isTodayLabel
                   ? theme === 'dark' ? 'border-green-700 bg-green-900/30 text-green-400' : 'border-green-300 bg-green-50 text-green-700'
                   : theme === 'dark' ? 'border-gray-700 bg-gray-800 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-600'
             }`}>
