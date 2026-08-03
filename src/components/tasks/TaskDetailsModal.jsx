@@ -565,10 +565,17 @@ Return JSON:
       const [hours, minutes] = finalEffectiveTime.split(':').map(n => parseInt(n, 10));
       let nextReminder = new Date(year, month - 1, day, hours, minutes, 0, 0);
 
-      // Cancel existing reminders
-      if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+      // Cancel existing reminders — include every notification ID we know about
+      // (both onesignal_notification_ids and any IDs stored on individual
+      // reminder_schedule entries) so no stale reminder survives a date/time
+      // change and fires with outdated "in about 30 minutes" wording.
+      const allOldNotificationIds = Array.from(new Set([
+        ...(task.onesignal_notification_ids || []),
+        ...((task.reminder_schedule || []).map(r => r.notification_id).filter(Boolean)),
+      ]));
+      if (allOldNotificationIds.length > 0) {
         try {
-          await cancelScheduledReminder(task.onesignal_notification_ids);
+          await cancelScheduledReminder(allOldNotificationIds);
         } catch (error) {
           console.error("Failed to cancel existing reminders:", error);
         }
