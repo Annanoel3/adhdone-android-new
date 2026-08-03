@@ -40,7 +40,12 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event) {
   const endRaw = event.end?.dateTime || event.end?.date || null;
   const startChanged = (syncRec.start_time || null) !== startRaw;
   const endChanged = (syncRec.end_time || null) !== endRaw;
-  if (!startChanged && !endChanged) return false;
+  // Backfill end_date for one-time events that are missing it (e.g. synced
+  // before the multi-day span logic landed). Without this, a re-sync where the
+  // Google dates are unchanged returns early and never records end_date, so the
+  // event detail never shows the full date range.
+  const needsEndBackfill = taskRec.reminder_interval === 'once' && !taskRec.end_date && !!endRaw;
+  if (!startChanged && !endChanged && !needsEndBackfill) return false;
 
   // Recompute the event start the same way the create path does.
   let nextReminderDate: Date | null = null;
