@@ -15,6 +15,13 @@ function getCachedSchedule(title, urgency) {
     if (!cached) return null;
     const { data, timestamp } = JSON.parse(cached);
     if (Date.now() - timestamp > 24 * 60 * 60 * 1000) return null;
+    // Safety net: never reuse a cached schedule that contains absolute
+    // clock-time reminders — those are pinned to a specific event time and
+    // would fire at the wrong time for a task at a different time of day.
+    const hasAbsolute = Array.isArray(data) && data.some(
+      (r) => r.days_before != null || r.hour != null || r.minute != null
+    );
+    if (hasAbsolute) return null;
     return data;
   } catch {
     return null;
@@ -23,6 +30,13 @@ function getCachedSchedule(title, urgency) {
 
 function setCachedSchedule(title, urgency, data) {
   try {
+    // Only cache purely-relative schedules. Absolute clock-time reminders
+    // (days_before/hour/minute) are tied to the original event time and must
+    // be regenerated fresh for each new task so they don't fire late.
+    const hasAbsolute = Array.isArray(data) && data.some(
+      (r) => r.days_before != null || r.hour != null || r.minute != null
+    );
+    if (hasAbsolute) return;
     const key = `adhd_reminder_cache_${title.toLowerCase().trim()}_${urgency || 'medium'}`;
     localStorage.setItem(key, JSON.stringify({ data, timestamp: Date.now() }));
   } catch {}
