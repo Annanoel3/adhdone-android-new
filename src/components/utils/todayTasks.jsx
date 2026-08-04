@@ -15,6 +15,9 @@ export const getLocalDateString = (d = new Date()) => {
 
 export const getTaskDueLocalDate = (task) => {
   if (!task) return null;
+  // If start_date is set, that's the effective start for "today" purposes —
+  // the task is "in progress" from start_date through due_date.
+  if (task.start_date) return getLocalDateString(new Date(task.start_date));
   if (task.due_date) return getLocalDateString(new Date(task.due_date));
   // One-time tasks use next_reminder as the effective date when no due_date
   if (task.reminder_interval === 'once' && task.next_reminder) {
@@ -23,10 +26,13 @@ export const getTaskDueLocalDate = (task) => {
   return null;
 };
 
-// Last day of a multi-day event (inclusive), if any.
+// Last day of a multi-day span (inclusive), if any.
 export const getTaskEndLocalDate = (task) => {
-  if (!task || !task.end_date) return null;
-  return getLocalDateString(new Date(task.end_date));
+  if (!task) return null;
+  // When start_date is set, due_date acts as the end of the "working on it" span.
+  if (task.start_date && task.due_date) return getLocalDateString(new Date(task.due_date));
+  if (task.end_date) return getLocalDateString(new Date(task.end_date));
+  return null;
 };
 
 // A task counts as "today" when its start has arrived (today >= start) and —

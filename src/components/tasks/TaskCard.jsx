@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronRight,
   Rocket,
+  PlayCircle,
 } from "lucide-react";
 import {
   Popover,
@@ -452,6 +453,31 @@ export default function TaskCard({
     }
   };
 
+  const handleStartDateChange = async (newDate) => {
+    try {
+      let startDateValue = null;
+      if (newDate) {
+        const [year, month, day] = newDate.split('-').map(n => parseInt(n, 10));
+        startDateValue = new Date(year, month - 1, day, 9, 0, 0, 0).toISOString();
+      }
+      await Task.update(task.id, { start_date: startDateValue });
+      onRefreshTasks();
+    } catch (error) {
+      console.error("Error updating start date:", error);
+    }
+  };
+
+  // "In Progress" badge: shown when start_date is set and today falls within
+  // the start→due span (or start has arrived with no due date yet).
+  const isInProgress = (() => {
+    if (!task.start_date || task.status === 'completed') return false;
+    const todayStr = new Date().toDateString();
+    const startStr = new Date(task.start_date).toDateString();
+    if (new Date(task.start_date) > new Date()) return false;
+    if (task.due_date && new Date(task.due_date) < new Date()) return false;
+    return true;
+  })();
+
   return (
     <Card
       className={`relative overflow-hidden border transition-all duration-200 hover:shadow-lg ${
@@ -493,6 +519,17 @@ export default function TaskCard({
                   : theme === 'dark' ? 'border-gray-700 bg-gray-800 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-600'
             }`}>
               {collapsedDate.label}
+            </span>
+          )}
+
+          {isInProgress && (
+            <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap flex items-center gap-1 ${
+              theme === 'dark'
+                ? 'border-blue-700 bg-blue-900/30 text-blue-300'
+                : 'border-blue-300 bg-blue-50 text-blue-700'
+            }`}>
+              <PlayCircle className="w-3 h-3" />
+              In Progress
             </span>
           )}
 
@@ -716,6 +753,76 @@ export default function TaskCard({
                         />
                         <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                           Reminders continue until this date, then switch to overdue reminders.
+                        </p>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )
+              )}
+
+              {/* Start date for recurring tasks — marks when you began working on it */}
+              {task.reminder_interval && task.reminder_interval !== 'once' && (
+                task.start_date ? (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
+                          theme === 'dark'
+                            ? 'border-blue-700 bg-blue-900/30 text-blue-300 hover:bg-blue-900/50'
+                            : 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100'
+                        }`}
+                      >
+                        <PlayCircle className="w-3 h-3" />
+                        Started {formatReminderDate(task.start_date)}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className={`w-56 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
+                      <div className="space-y-2">
+                        <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : ''}`}>Start Date:</label>
+                        <input
+                          type="date"
+                          defaultValue={task.start_date ? task.start_date.split('T')[0] : ''}
+                          onChange={(e) => handleStartDateChange(e.target.value)}
+                          className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
+                        />
+                        <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Marks this task as "in progress." It shows on each day from the start date through the due date.
+                        </p>
+                        <button
+                          onClick={() => handleStartDateChange(null)}
+                          className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-gray-700 text-red-400' : 'hover:bg-red-50 text-red-600'}`}
+                        >
+                          Remove start date
+                        </button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button
+                        onClick={(e) => e.stopPropagation()}
+                        className={`flex items-center gap-1 border border-dashed px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
+                          theme === 'dark'
+                            ? 'border-gray-600 text-gray-400 hover:bg-gray-700'
+                            : 'border-gray-300 text-gray-500 hover:bg-gray-50'
+                        }`}
+                      >
+                        <PlayCircle className="w-3 h-3" />
+                        Add Start Date
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className={`w-56 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
+                      <div className="space-y-2">
+                        <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : ''}`}>Start Date:</label>
+                        <input
+                          type="date"
+                          onChange={(e) => { if (e.target.value) handleStartDateChange(e.target.value); }}
+                          className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
+                        />
+                        <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                          Marks when you started working on this task. It will appear in Today's Tasks from this date through the due date.
                         </p>
                       </div>
                     </PopoverContent>

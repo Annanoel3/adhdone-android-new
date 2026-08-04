@@ -40,6 +40,11 @@
       "format": "date-time",
       "description": "Optional deadline for interval-reminder tasks. Interval reminders continue until this date, then switch to overdue reminders until the task is completed."
     },
+    "start_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Optional date the user began actively working on this task. When set alongside due_date, the task acts like a multi-day event: it shows on each day from start_date through due_date and appears in Today's Tasks the entire span, even if the due date is far out."
+    },
     "end_date": {
       "type": "string",
       "format": "date-time",
