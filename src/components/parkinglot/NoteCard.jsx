@@ -1,19 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Trash2 } from "lucide-react";
-import ReactQuill from "react-quill-new";
-import "react-quill-new/dist/quill.snow.css";
-
-const quillModules = {
-  toolbar: [
-    [{ header: [1, 2, 3, false] }],
-    ["bold", "italic", "underline"],
-    [{ list: "ordered" }, { list: "bullet" }],
-    ["link"],
-    ["clean"],
-  ],
-};
 
 export default function NoteCard({ note, theme, onUpdate, onDelete }) {
   const [title, setTitle] = useState(note.title || "");
@@ -48,13 +37,14 @@ export default function NoteCard({ note, theme, onUpdate, onDelete }) {
           <Trash2 className="w-4 h-4 text-red-500" />
         </Button>
       </div>
-      <ReactQuill
-        theme="snow"
+      <Textarea
         value={content}
-        onChange={setContent}
+        onChange={(e) => setContent(e.target.value)}
         onBlur={() => onUpdate(note.id, "content", content)}
-        modules={quillModules}
         placeholder="Elaborate on your idea..."
+        className={`min-h-[150px] resize-y ${
+          theme === 'dark' ? 'bg-gray-900/50 text-gray-100 border-gray-700' : ''
+        }`}
       />
     </div>
   );
