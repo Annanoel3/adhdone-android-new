@@ -144,7 +144,7 @@ Return JSON:
   "reminder_interval": "10min" | "20min" | "30min" | "1hour" | "2hours" | "4hours" | "daily" | "every_other_day" | "once" | null,
   "reminder_time": "HH:MM" or null,
   "specific_date": "YYYY-MM-DD" or null,
-  "due_date": "YYYY-MM-DD or null (set to today's date ONLY for 'today' recurring tasks so they go overdue next day if unfinished)",
+  "due_date": "YYYY-MM-DD or null — set when the user mentions a DEADLINE (e.g., 'by Friday', 'end of the week', 'by tomorrow', 'by the 15th', 'today' tasks). For 'today' tasks, set due_date=today. For relative deadline phrases, use the calculated date from the RELATIVE DEADLINES rules above.",
   "urgency": "low" | "medium" | "high" | "urgent",
   "energy_required": "low" | "medium" | "high",
   "priority_uninferrable": false,

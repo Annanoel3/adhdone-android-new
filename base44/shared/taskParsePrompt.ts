@@ -280,7 +280,7 @@ export function buildTaskParsePrompt(inputText: string): string {
       "target_time": "HH:MM or null",
       "end_date": "YYYY-MM-DD or null (LAST day of a multi-day event span; only when the user gave a date range; null for single-day)",
       "reminder_interval": "10min|20min|30min|1hour|2hours|4hours|daily|every_other_day|once",
-      "due_date": "YYYY-MM-DD or null (set to today's date ONLY for 'today' recurring tasks so they go overdue next day if unfinished)",
+      "due_date": "YYYY-MM-DD or null — set when the user mentions a DEADLINE (e.g., 'by Friday', 'end of the week', 'by tomorrow', 'by the 15th', 'today' tasks). For 'today' tasks, set due_date=today. For relative deadline phrases, use the calculated date from the RELATIVE DEADLINES rules above.",
       "priority_uninferrable": false,
       "is_flexible": false,
       "needs_date_pick": false
