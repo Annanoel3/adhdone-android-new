@@ -141,7 +141,11 @@ Deno.serve(async (req) => {
     // notifications in OneSignal that fire long after completion.
     if (data.status === 'completed' || data.status === 'snoozed') {
       console.log(`[onTaskUpdate] Task status is "${data.status}" — cancelling all notifications and clearing scheduling fields`);
-      const ids = data.onesignal_notification_ids || [];
+      // Fall back to old_data IDs when the update cleared them — otherwise the
+      // real OneSignal notifications would be orphaned and keep firing forever.
+      const ids = (data.onesignal_notification_ids?.length
+        ? data.onesignal_notification_ids
+        : (old_data?.onesignal_notification_ids || []));
       for (const notificationId of ids) {
         await cancelOneSignalNotification(notificationId);
       }
