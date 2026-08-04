@@ -27,6 +27,14 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import ImageViewer from "../components/shared/ImageViewer";
+import IdeaNotesDialog from "../components/parkinglot/IdeaNotesDialog";
+
+function stripHtml(html) {
+  if (!html) return "";
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  return (div.textContent || div.innerText || "").trim();
+}
 
 // IdeaCard component is kept as per instruction to preserve existing code,
 // though it is no longer directly used in the ParkingLot's main rendering loop
@@ -193,6 +201,7 @@ export default function ParkingLot() {
   const [expandedNotes, setExpandedNotes] = useState({});
   const [isUploadingPicture, setIsUploadingPicture] = useState(null);
   const [viewingImage, setViewingImage] = useState(null);
+  const [notesDialogIdea, setNotesDialogIdea] = useState(null);
   
   const specialMode = localStorage.getItem('special_mode') || 'normal';
   
@@ -205,6 +214,12 @@ export default function ParkingLot() {
     }, 100);
     return () => clearInterval(interval);
   }, []);
+
+  const { data: allNotes = [] } = useQuery({
+    queryKey: ['parkingLotNotes'],
+    queryFn: () => base44.entities.ParkingLotNote.list('-created_date', 200),
+    initialData: [],
+  });
 
   const { data: ideas = [], isLoading } = useQuery({
     queryKey: ['parkingLotIdeas'],
@@ -978,24 +993,49 @@ Return ONLY the category name, nothing else.`;
                   </div>
                 )}
 
-                {/* Notes Section */}
-                {expandedNotes[group.parent.id] && (
-                  <div className="mt-4">
-                    <Textarea
-                      defaultValue={group.parent.notes || ''}
-                      onBlur={(e) => handleNotesUpdate(group.parent.id, e.target.value)}
-                      placeholder="Add notes..."
-                      className="text-sm min-h-[80px]"
-                    />
-                  </div>
-                )}
-                {group.parent.notes && !expandedNotes[group.parent.id] && (
-                  <div className={`mt-4 p-3 rounded-lg text-sm ${
-                    theme === 'dark' ? 'bg-gray-900/50 text-gray-300' : 'bg-gray-50 text-gray-700'
-                  }`}>
-                    {group.parent.notes}
-                  </div>
-                )}
+                {/* Notes Preview — tap to open full notes dialog */}
+                {(() => {
+                  const ideaNotes = allNotes.filter(n => n.idea_id === group.parent.id);
+                  const latestNote = ideaNotes[0];
+                  const previewText = latestNote
+                    ? stripHtml(latestNote.content)
+                    : (group.parent.notes || '');
+                  const hasContent = previewText.length > 0;
+
+                  return (
+                    <button
+                      onClick={() => setNotesDialogIdea(group.parent)}
+                      className={`mt-4 w-full text-left p-3 rounded-lg text-sm transition-colors ${
+                        hasContent
+                          ? (theme === 'dark'
+                              ? 'bg-gray-900/50 text-gray-300 hover:bg-gray-900/70'
+                              : 'bg-gray-50 text-gray-700 hover:bg-gray-100')
+                          : (theme === 'dark'
+                              ? 'bg-gray-900/30 text-gray-500 hover:bg-gray-900/50 border border-dashed border-gray-700'
+                              : 'bg-transparent text-gray-400 hover:bg-gray-50 border border-dashed border-gray-300')
+                      }`}
+                    >
+                      {hasContent ? (
+                        <>
+                          <div className="flex items-center gap-2 mb-1">
+                            <FileText className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                            {ideaNotes.length > 0 && (
+                              <span className="text-xs text-gray-400">
+                                {ideaNotes.length} note{ideaNotes.length !== 1 ? 's' : ''}
+                              </span>
+                            )}
+                          </div>
+                          <p className="line-clamp-2">{previewText}</p>
+                        </>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>Add notes...</span>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })()}
 
                 {/* Action Buttons */}
                 <div className="flex items-center gap-2 mt-4 pt-3 border-t">
@@ -1027,16 +1067,6 @@ Return ONLY the category name, nothing else.`;
                       )}
                     </Button>
                   </label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setExpandedNotes({
-                      ...expandedNotes,
-                      [group.parent.id]: !expandedNotes[group.parent.id]
-                    })}
-                  >
-                    <FileText className="w-4 h-4" />
-                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -1093,6 +1123,13 @@ Return ONLY the category name, nothing else.`;
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <IdeaNotesDialog
+        idea={notesDialogIdea}
+        isOpen={!!notesDialogIdea}
+        onClose={() => setNotesDialogIdea(null)}
+        theme={theme}
+      />
 
       <ImageViewer
         imageUrl={viewingImage}

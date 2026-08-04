@@ -1,0 +1,30 @@
+{
+  "name": "ParkingLotNote",
+  "type": "object",
+  "properties": {
+    "idea_id": {
+      "type": "string",
+      "description": "ID of the parent ParkingLotIdea"
+    },
+    "title": {
+      "type": "string",
+      "description": "Optional title for this note"
+    },
+    "content": {
+      "type": "string",
+      "description": "The note content (HTML from rich text editor)"
+    }
+  },
+  "required": [
+    "idea_id",
+    "content"
+  ],
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}
