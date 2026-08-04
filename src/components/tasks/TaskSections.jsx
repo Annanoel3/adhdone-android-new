@@ -169,6 +169,29 @@ export default function TaskSections({
   const toggleSection = (key) =>
     setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
 
+  const getSectionDate = (sectionKey) => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (viewMode === 'days') {
+      const match = sectionKey.match(/^day_(\d+)$/);
+      if (match) {
+        const d = new Date(today);
+        d.setDate(d.getDate() + parseInt(match[1], 10));
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }
+    } else {
+      if (sectionKey === 'today') {
+        return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      }
+      if (sectionKey === 'tomorrow') {
+        const t = new Date(today);
+        t.setDate(t.getDate() + 1);
+        return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+      }
+    }
+    return null;
+  };
+
   const renderTaskCard = (task) => (
     <TaskCard
       key={task.id}
@@ -233,7 +256,7 @@ export default function TaskSections({
                 {sectionTasks.map(renderTaskCard)}
                 {sectionTasks.length === 0 && (
                   <button
-                    onClick={onAddTask}
+                    onClick={() => onAddTask(getSectionDate(section.key))}
                     className="text-sm text-gray-400 hover:text-gray-600 py-2 flex items-center gap-1 transition-colors"
                   >
                     <Plus className="w-3 h-3" />

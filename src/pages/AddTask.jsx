@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Sparkles, Mic, Loader2, ListChecks, Zap } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { buildTaskParsePrompt } from "../../base44/shared/taskParsePrompt";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,6 +23,14 @@ import DatePickerDialog from "../components/tasks/DatePickerDialog";
 
 export default function AddTask() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const presetDate = location.state?.presetDate;
+  const presetDueDateISO = (() => {
+    if (!presetDate) return null;
+    const [py, pm, pd] = presetDate.split('-').map(n => parseInt(n, 10));
+    if (isNaN(py) || isNaN(pm) || isNaN(pd)) return null;
+    return new Date(py, pm - 1, pd, 23, 59, 0, 0).toISOString();
+  })();
   const [tasks, setTasks] = useState([]);
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -225,6 +233,7 @@ JSON:
           title: subtaskCheck.main_task,
           description: '',
           reminder_interval: mainTaskParsed.reminder_interval || '1hour',
+          due_date: presetDueDateISO,
           reminder_count: 0,
           next_reminder: nextReminder ? nextReminder.toISOString() : null,
           urgency: mainTaskParsed.urgency || 'medium',
@@ -390,6 +399,14 @@ JSON:
       console.log('🔄 [PROCESS] Calling LLM for task parsing...');
       const parsed = (await base44.functions.invoke('parseTask', { prompt }))?.data?.response;
       console.log('🔄 [PROCESS] ✅ LLM parsed:', parsed);
+
+      // If the user clicked "Add task" under a specific day, pin the task to that date
+      if (presetDate) {
+        parsed.target_date = presetDate;
+        parsed.due_date = presetDate;
+        if (!parsed.target_time) parsed.target_time = '09:00';
+        parsed.needs_date_pick = false;
+      }
 
       // If priority can't be inferred and task is flexible, ask the user
       if (parsed.priority_uninferrable && parsed.is_flexible) {
@@ -800,6 +817,7 @@ JSON:
         description: '',
         classification: pendingPriorityTask.classification || 'task',
         reminder_interval: interval,
+        due_date: presetDueDateISO,
         reminder_count: 0,
         next_reminder: nextReminder.toISOString(),
         urgency,
@@ -1174,20 +1192,31 @@ JSON:
       paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))'
     }}>
       <div className="max-w-3xl mx-auto space-y-6">
-        <Button
-          variant="ghost"
-          onClick={() => {
-            if (window.history.length > 1) {
-              navigate(-1);
-            } else {
-              navigate(createPageUrl("Home"));
-            }
-          }}
-          className="gap-2"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back
-        </Button>
+        <div className="flex items-center justify-between">
+          <Button
+            variant="ghost"
+            onClick={() => {
+              if (window.history.length > 1) {
+                navigate(-1);
+              } else {
+                navigate(createPageUrl("Home"));
+              }
+            }}
+            className="gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </Button>
+          {presetDate && (() => {
+            const [y, m, d] = presetDate.split('-').map(n => parseInt(n, 10));
+            const date = new Date(y, m - 1, d);
+            return (
+              <span className="text-sm text-gray-500 font-medium">
+                📅 {date.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+              </span>
+            );
+          })()}
+        </div>
 
         <Card className={`border-none shadow-2xl overflow-hidden ${
           theme === 'dark'

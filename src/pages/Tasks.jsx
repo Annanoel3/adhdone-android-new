@@ -338,7 +338,7 @@ export default function Tasks() {
               setIsDetailsModalOpen(true);
             }}
             onDelete={handleDelete}
-            onAddTask={() => navigate(createPageUrl("AddTask"))}
+            onAddTask={(date) => navigate(createPageUrl("AddTask"), { state: { presetDate: date } })}
             isSeasonalTheme={isSeasonalTheme}
             specialMode={specialMode}
             viewMode={viewMode}
