@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 
@@ -28,12 +29,15 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
   const [aiInstructions, setAiInstructions] = useState("");
   const [aiFormal, setAiFormal] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
+  const [phone, setPhone] = useState("");
 
   const personName = birthdayTask?.birthday_person || "Birthday";
 
   useEffect(() => {
     if (!isOpen || !birthdayTask) return;
 
+    // Load saved phone number and message
+    setPhone(birthdayTask.birthday_phone_number || "");
     // If the task already has a saved message, load it instead of re-drafting
     if (birthdayTask.birthday_text_message) {
       setDraft(birthdayTask.birthday_text_message);
@@ -91,6 +95,7 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
     try {
       await base44.entities.Task.update(birthdayTask.id, {
         birthday_text_message: draft.trim(),
+        birthday_phone_number: phone.trim(),
       });
       onSaved?.();
       onClose?.();
@@ -106,12 +111,16 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
     const body = encodeURIComponent(draft.trim());
     if (birthdayTask?.id) {
       try {
-        await base44.entities.Task.update(birthdayTask.id, { birthday_text_sent: true });
+        await base44.entities.Task.update(birthdayTask.id, {
+          birthday_text_sent: true,
+          birthday_phone_number: phone.trim(),
+        });
       } catch (e) {
         console.error('[BirthdayTextDialog] Failed to mark text as sent:', e);
       }
     }
-    window.location.href = `sms:?&body=${body}`;
+    const cleanPhone = phone.trim().replace(/[^0-9+]/g, "");
+    window.location.href = cleanPhone ? `sms:${cleanPhone}?body=${body}` : `sms:?&body=${body}`;
   };
 
   return (
@@ -135,6 +144,17 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
               </div>
             ) : (
               <>
+                <div className="space-y-2">
+                  <Label>Their phone number (optional)</Label>
+                  <Input
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                    placeholder="e.g. 555-123-4567"
+                    type="tel"
+                  />
+                  <p className="text-xs text-gray-500">Fills in the recipient line when you send.</p>
+                </div>
+
                 <div className="space-y-2">
                   <Label>Your birthday text</Label>
                   <Textarea

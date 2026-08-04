@@ -221,7 +221,8 @@ export default function TaskNotification() {
                 } catch (e) {
                   console.error('Failed to mark text as sent:', e);
                 }
-                window.location.href = `sms:?&body=${body}`;
+                const cleanPhone = (task.birthday_phone_number || "").replace(/[^0-9+]/g, "");
+                window.location.href = cleanPhone ? `sms:${cleanPhone}?body=${body}` : `sms:?&body=${body}`;
               }}
               disabled={isProcessing}
               className={`w-full h-14 text-lg mb-4 ${

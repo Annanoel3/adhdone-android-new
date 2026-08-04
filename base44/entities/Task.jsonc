@@ -197,6 +197,10 @@
       "type": "string",
       "description": "AI-drafted birthday text message the user can send via their messaging app on the day of the birthday"
     },
+    "birthday_phone_number": {
+      "type": "string",
+      "description": "Optional phone number for the birthday person. When set, the Send Text button pre-fills both the recipient and the message body."
+    },
     "birthday_text_sent": {
       "type": "boolean",
       "default": false,

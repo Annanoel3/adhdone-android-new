@@ -26,6 +26,7 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
   const [pictures, setPictures] = useState([]);
   const [schedule, setSchedule] = useState([]);
   const [notifIds, setNotifIds] = useState([]);
+  const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef(null);
@@ -41,6 +42,7 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
       setPictures(birthday.pictures || []);
       setSchedule(birthday.reminder_schedule || []);
       setNotifIds(birthday.onesignal_notification_ids || []);
+      setPhone(birthday.birthday_phone_number || "");
     }
   }, [birthday]);
 
@@ -79,6 +81,7 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
         next_reminder: nextDate.toISOString(),
         notes,
         pictures,
+        birthday_phone_number: phone.trim(),
       };
 
       if (reschedule && notifIds.length) {
@@ -155,6 +158,17 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
             <p className="text-xs text-gray-500">Year doesn't matter — we'll remind you every year.</p>
           </div>
 
+          <div className="space-y-1.5">
+            <Label>Phone number (optional)</Label>
+            <Input
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="e.g. 555-123-4567"
+              type="tel"
+            />
+            <p className="text-xs text-gray-500">Pre-fills the recipient when sending a birthday text.</p>
+          </div>
+
           <div className="space-y-2">
             <Label>Notifications</Label>
             {schedule.length === 0 && notifIds.length > 0 && (
@@ -225,7 +239,8 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
                   } catch (e) {
                     console.error('Failed to mark text as sent:', e);
                   }
-                  window.location.href = `sms:?&body=${body}`;
+                  const cleanPhone = (birthday.birthday_phone_number || "").replace(/[^0-9+]/g, "");
+                  window.location.href = cleanPhone ? `sms:${cleanPhone}?body=${body}` : `sms:?&body=${body}`;
                 }}
                 className="w-full"
               >

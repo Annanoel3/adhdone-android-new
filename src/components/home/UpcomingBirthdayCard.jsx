@@ -49,7 +49,8 @@ export default function UpcomingBirthdayCard({ tasks, user, theme, specialMode, 
     } catch (e) {
       console.error('Failed to mark text as sent:', e);
     }
-    window.location.href = `sms:?&body=${body}`;
+    const cleanPhone = (next.birthday_phone_number || "").replace(/[^0-9+]/g, "");
+    window.location.href = cleanPhone ? `sms:${cleanPhone}?body=${body}` : `sms:?&body=${body}`;
   };
 
   return (
