@@ -983,7 +983,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               {children}
             </div>
 
-            {currentPageName !== "Home" && currentPageName !== "ParkingLot" && currentPageName !== "SupportSpace" && (
+            {currentPageName !== "Home" && currentPageName !== "ParkingLot" && currentPageName !== "SupportSpace" && currentPageName !== "AddTask" && (
               <Button
                 onClick={() => {
                   const event = new CustomEvent('open-voice-assistant');
