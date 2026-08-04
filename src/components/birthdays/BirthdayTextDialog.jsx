@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import ContactPickerButton from "./ContactPickerButton";
 
 /**
  * Prompts the user to draft a birthday text message when a birthday is created.
@@ -151,6 +152,12 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
                     onChange={(e) => setPhone(e.target.value)}
                     placeholder="e.g. 555-123-4567"
                     type="tel"
+                  />
+                  <ContactPickerButton
+                    theme={undefined}
+                    onContactPicked={({ phone: pickedPhone }) => {
+                      if (pickedPhone) setPhone(pickedPhone);
+                    }}
                   />
                   <p className="text-xs text-gray-500">Fills in the recipient line when you send.</p>
                 </div>

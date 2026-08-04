@@ -18,6 +18,7 @@ import {
 } from "../utils/birthdayScheduler";
 import { cancelScheduledReminder } from "../utils/reminderScheduler";
 import SmartReminderEditor from "../tasks/SmartReminderEditor";
+import ContactPickerButton from "./ContactPickerButton";
 
 export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved }) {
   const [name, setName] = useState("");
@@ -165,6 +166,13 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
               onChange={(e) => setPhone(e.target.value)}
               placeholder="e.g. 555-123-4567"
               type="tel"
+            />
+            <ContactPickerButton
+              theme={undefined}
+              onContactPicked={({ name: pickedName, phone: pickedPhone }) => {
+                if (pickedName) setName(pickedName);
+                if (pickedPhone) setPhone(pickedPhone);
+              }}
             />
             <p className="text-xs text-gray-500">Pre-fills the recipient when sending a birthday text.</p>
           </div>
