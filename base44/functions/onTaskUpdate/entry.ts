@@ -149,8 +149,23 @@ Deno.serve(async (req) => {
       for (const notificationId of ids) {
         await cancelOneSignalNotification(notificationId);
       }
+
+      // Also cancel one-time/event reminders stored in reminder_schedule —
+      // these are separate OneSignal notification IDs that are NOT in
+      // onesignal_notification_ids, so they'd otherwise keep firing after
+      // the task is completed.
+      const scheduleEntries = (data.reminder_schedule?.length
+        ? data.reminder_schedule
+        : (old_data?.reminder_schedule || []));
+      for (const entry of scheduleEntries) {
+        if (entry?.notification_id) {
+          await cancelOneSignalNotification(entry.notification_id);
+        }
+      }
+
       await base44.asServiceRole.entities.Task.update(event.entity_id, {
         onesignal_notification_ids: [],
+        reminder_schedule: [],
         last_scheduled_until: null,
         next_reminder: null,
         reminder_interval: null,

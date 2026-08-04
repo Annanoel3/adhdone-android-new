@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
 
     let canceledCount = 0;
 
-    // Cancel all pending OneSignal notifications
+    // Cancel all pending OneSignal notifications from onesignal_notification_ids
     if (task.onesignal_notification_ids && Array.isArray(task.onesignal_notification_ids) && task.onesignal_notification_ids.length > 0) {
       console.log(`[cancelTaskNotifications] Canceling ${task.onesignal_notification_ids.length} notifications for task ${taskId}`);
 
@@ -59,9 +59,39 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Clear the notification IDs and last_scheduled_until from the task
+    // Also cancel one-time/event reminders stored in reminder_schedule —
+    // these are separate OneSignal notification IDs not tracked in
+    // onesignal_notification_ids and would otherwise keep firing.
+    if (task.reminder_schedule && Array.isArray(task.reminder_schedule) && task.reminder_schedule.length > 0) {
+      console.log(`[cancelTaskNotifications] Canceling ${task.reminder_schedule.length} reminder_schedule entries for task ${taskId}`);
+
+      for (const entry of task.reminder_schedule) {
+        if (!entry?.notification_id) continue;
+        try {
+          const url = `https://onesignal.com/api/v1/notifications/${entry.notification_id}?app_id=${ONESIGNAL_APP_ID}`;
+          const response = await fetch(url, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Basic ${ONESIGNAL_REST_API_KEY}`
+            }
+          });
+
+          if (response.ok) {
+            canceledCount++;
+            console.log(`[cancelTaskNotifications] Successfully canceled reminder_schedule notification ${entry.notification_id}`);
+          } else {
+            console.warn(`[cancelTaskNotifications] Failed to cancel reminder_schedule notification ${entry.notification_id}: ${response.status}`);
+          }
+        } catch (error) {
+          console.error(`[cancelTaskNotifications] Error canceling reminder_schedule notification ${entry.notification_id}:`, error);
+        }
+      }
+    }
+
+    // Clear the notification IDs, reminder_schedule, and last_scheduled_until from the task
     await base44.asServiceRole.entities.Task.update(taskId, {
       onesignal_notification_ids: [],
+      reminder_schedule: [],
       last_scheduled_until: null
     });
 
