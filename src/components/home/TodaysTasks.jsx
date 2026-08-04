@@ -28,19 +28,16 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
     tasks.filter(t => t.status === 'active' && !t.parent_task_id && isTodayTask(t) && !t.birthday_person),
     sortBy
   ).slice(0, 5);
+  const now = new Date();
+  const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
   const upcomingTasks = tasks
-    .filter(t =>
-      t.status === 'active' &&
-      !t.parent_task_id &&
-      isUpcomingTask(t) &&
-      !t.birthday_person &&
-      t.classification !== 'birthday'
-    )
-    .sort((a, b) => {
-      const aDate = new Date(a.due_date || a.next_reminder);
-      const bDate = new Date(b.due_date || b.next_reminder);
-      return aDate - bDate;
+    .filter(t => {
+      if (t.status !== 'active' || t.parent_task_id) return false;
+      if (!isUpcomingTask(t)) return false;
+      const due = new Date(t.due_date || t.next_reminder);
+      return due - now <= SEVEN_DAYS_MS;
     })
+    .sort((a, b) => new Date(a.due_date || a.next_reminder) - new Date(b.due_date || b.next_reminder))
     .slice(0, 3);
   const [celebratingTaskId, setCelebratingTaskId] = React.useState(null);
   const [expandedTasks, setExpandedTasks] = React.useState({});
