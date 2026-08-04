@@ -26,7 +26,22 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
       console.log('🎤 [QUICK ADD] Voice input received:', transcription);
       const user = await base44.auth.me();
 
+      const now = new Date();
+      const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const dayOfWeek = now.toLocaleDateString('en-US', { weekday: 'long' });
+      const endOfThisWeek = new Date(now);
+      const daysUntilSunday = now.getDay() === 0 ? 0 : 7 - now.getDay();
+      endOfThisWeek.setDate(now.getDate() + daysUntilSunday);
+      const endOfThisWeekISO = `${endOfThisWeek.getFullYear()}-${String(endOfThisWeek.getMonth() + 1).padStart(2, '0')}-${String(endOfThisWeek.getDate()).padStart(2, '0')}`;
+      const endOfNextWeek = new Date(endOfThisWeek);
+      endOfNextWeek.setDate(endOfThisWeek.getDate() + 7);
+      const endOfNextWeekISO = `${endOfNextWeek.getFullYear()}-${String(endOfNextWeek.getMonth() + 1).padStart(2, '0')}-${String(endOfNextWeek.getDate()).padStart(2, '0')}`;
+
       const prompt = `Extract task details from this voice input: "${transcription}"
+
+TODAY IS: ${todayISO} (YYYY-MM-DD) — ${dayOfWeek}
+END OF THIS WEEK (Sunday): ${endOfThisWeekISO}
+END OF NEXT WEEK (Sunday): ${endOfNextWeekISO}
 
 RULES:
 1. Extract the CORE ACTION only
@@ -34,6 +49,18 @@ RULES:
 3. If "every X" mentioned, map to reminder_interval
 4. Keep title SHORT (2-8 words)
 5. CRITICAL: NEVER infer, guess, or hallucinate a reminder_time. Only set reminder_time when the user EXPLICITLY states a time (e.g., "at 5pm", "at 3:30", "by noon"). If the user did not mention a specific time, set reminder_time=null. Do not use domain knowledge to guess times (e.g., don't assume daycare pickup is 5pm, don't assume work starts at 9am).
+
+RELATIVE DEADLINES / DUE DATES (CRITICAL — commonly missed):
+If the user mentions a relative deadline or time boundary, you MUST set due_date to the calculated date. These are DEADLINES (the task must be done by then), not one-time events. The task is still RECURRING — keep reminding until done or the due date passes.
+- "by Friday" / "by [day of week]" → due_date = next occurrence of that day
+- "before the end of this week" / "end of the week" / "this week" / "by the end of the week" → due_date = ${endOfThisWeekISO}
+- "next week" / "by next week" / "end of next week" → due_date = ${endOfNextWeekISO}
+- "by tomorrow" → due_date = tomorrow
+- "by [date]" / "before [date]" → due_date = that date
+When a due_date is set for a relative deadline:
+- Keep reminder_interval as RECURRING (e.g., "2hours", "4hours") — do NOT use "once".
+- Do NOT set needs_date_pick — the deadline was already specified.
+- Set is_flexible=false (a deadline was mentioned).
 
 SMART INFERENCE (when user does NOT specify a time, frequency, or date):
 Infer the best reminder_interval and urgency from the NATURE of the task:

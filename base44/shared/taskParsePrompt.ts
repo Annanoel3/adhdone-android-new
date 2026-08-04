@@ -7,15 +7,43 @@
 export function buildTaskParsePrompt(inputText: string): string {
   const now = new Date();
   const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const dayOfWeek = now.toLocaleDateString('en-US', { weekday: 'long' });
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowISO = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
   const currentTime = now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
 
+  // Calculate end of this week (Sunday). getDay(): 0=Sun, 1=Mon, ... 6=Sat.
+  // Days until Sunday: if today is Sunday (0), end of week is today; otherwise (7 - getDay()).
+  const endOfThisWeek = new Date(now);
+  const daysUntilSunday = now.getDay() === 0 ? 0 : 7 - now.getDay();
+  endOfThisWeek.setDate(now.getDate() + daysUntilSunday);
+  const endOfThisWeekISO = `${endOfThisWeek.getFullYear()}-${String(endOfThisWeek.getMonth() + 1).padStart(2, '0')}-${String(endOfThisWeek.getDate()).padStart(2, '0')}`;
+
+  // End of next week (Sunday of next week)
+  const endOfNextWeek = new Date(endOfThisWeek);
+  endOfNextWeek.setDate(endOfThisWeek.getDate() + 7);
+  const endOfNextWeekISO = `${endOfNextWeek.getFullYear()}-${String(endOfNextWeek.getMonth() + 1).padStart(2, '0')}-${String(endOfNextWeek.getDate()).padStart(2, '0')}`;
+
+  // Calculate next occurrence of a given weekday (0=Sun..6=Sat) from today.
+  function nextWeekdayISO(targetDay: number): string {
+    const d = new Date(now);
+    let diff = targetDay - now.getDay();
+    if (diff <= 0) diff += 7; // next occurrence, not today
+    d.setDate(now.getDate() + diff);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  const nextFridayISO = nextWeekdayISO(5);
+  const nextSaturdayISO = nextWeekdayISO(6);
+  const nextSundayISO = nextWeekdayISO(0);
+
   return `Parse task: "${inputText}"
 
-      TODAY IS: ${todayISO} (YYYY-MM-DD)
+      TODAY IS: ${todayISO} (YYYY-MM-DD) — ${dayOfWeek}
       TOMORROW IS: ${tomorrowISO} (YYYY-MM-DD)
+      END OF THIS WEEK (Sunday): ${endOfThisWeekISO}
+      END OF NEXT WEEK (Sunday): ${endOfNextWeekISO}
+      NEXT FRIDAY: ${nextFridayISO}
       CURRENT TIME: ${currentTime}
 
       TITLE EXTRACTION RULES (CRITICAL):
@@ -63,6 +91,25 @@ export function buildTaskParsePrompt(inputText: string): string {
         - Only set end_date when the user explicitly gave a RANGE (to/until/through/–/-).
         - If start and end are the SAME day, do NOT set end_date (single-day event).
         - end_date only applies to ONE-TIME events (reminder_interval="once").
+
+      RELATIVE DEADLINES / DUE DATES (CRITICAL — commonly missed):
+      If the user mentions a relative deadline or time boundary, you MUST set due_date to the
+      calculated date. These are DEADLINES (the task must be done by then), not one-time events.
+      The task is still RECURRING — keep reminding until done or the due date passes.
+      - "by Friday" / "by [day of week]" → due_date = NEXT [that day] (use the NEXT dates provided above)
+      - "before the end of this week" / "end of the week" / "this week" / "by the end of the week"
+        → due_date = END OF THIS WEEK (${endOfThisWeekISO})
+      - "next week" / "by next week" / "end of next week"
+        → due_date = END OF NEXT WEEK (${endOfNextWeekISO})
+      - "by tomorrow" → due_date = TOMORROW (${tomorrowISO})
+      - "by [month] [day]" or "by the [Nth]" → due_date = that date (YYYY-MM-DD)
+      - "before [date]" / "by [date]" → due_date = that date (YYYY-MM-DD)
+      When a due_date is set for a relative deadline:
+      - Keep reminder_interval as RECURRING (e.g., "2hours", "4hours") based on urgency — do NOT use "once".
+      - Do NOT set needs_date_pick — the deadline was already specified by the user.
+      - Do NOT set target_date/target_time — due_date is the deadline field for recurring tasks.
+      - Set is_flexible=false (a deadline was mentioned).
+      - urgency: "high" if the deadline is soon (within 2-3 days), otherwise "medium".
 
       Other rules:
       - "at 2pm" → ONE-TIME, reminder_interval="once", target_time="14:00"
