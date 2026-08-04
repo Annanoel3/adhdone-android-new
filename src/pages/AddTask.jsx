@@ -1176,7 +1176,13 @@ JSON:
       <div className="max-w-3xl mx-auto space-y-6">
         <Button
           variant="ghost"
-          onClick={() => navigate(createPageUrl("Home"))}
+          onClick={() => {
+            if (window.history.length > 1) {
+              navigate(-1);
+            } else {
+              navigate(createPageUrl("Home"));
+            }
+          }}
           className="gap-2"
         >
           <ArrowLeft className="w-4 h-4" />
