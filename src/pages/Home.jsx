@@ -7,6 +7,7 @@ import QuickActions from "../components/home/QuickActions";
 import TodaysTasks from "../components/home/TodaysTasks";
 import EndOfDayReview from "../components/home/EndOfDayReview";
 import UpcomingBirthdayCard from "../components/home/UpcomingBirthdayCard";
+import BirthdayTextDialog from "../components/birthdays/BirthdayTextDialog";
 import MotivationCoach from "../components/home/MotivationCoach";
 import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import MomentumCelebration from "../components/shared/MomentumCelebration";
@@ -20,6 +21,7 @@ export default function Home() {
   const [showEndOfDayReview, setShowEndOfDayReview] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [birthdayTextTask, setBirthdayTextTask] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
   const specialMode = localStorage.getItem('special_mode') || 'normal'; // v2
@@ -49,11 +51,16 @@ export default function Home() {
       }
     };
     const handleTasksChanged = () => loadTasks();
+    const handleBirthdayCreated = (e) => {
+      setBirthdayTextTask(e.detail?.task || null);
+    };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('tasks-changed', handleTasksChanged);
+    window.addEventListener('birthday-created', handleBirthdayCreated);
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('tasks-changed', handleTasksChanged);
+      window.removeEventListener('birthday-created', handleBirthdayCreated);
     };
   }, []);
 
@@ -244,6 +251,13 @@ export default function Home() {
             setSelectedTask(null);
           }}
           theme={theme}
+        />
+
+        <BirthdayTextDialog
+          isOpen={!!birthdayTextTask}
+          onClose={() => setBirthdayTextTask(null)}
+          birthdayTask={birthdayTextTask}
+          onSaved={loadTasks}
         />
       </div>
     </div>

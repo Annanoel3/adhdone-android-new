@@ -91,6 +91,7 @@ export default function BirthdaysDialog({ isOpen, onClose, tasks, user, onRefres
         onesignal_notification_ids: [],
       });
       await scheduleBirthdayReminders(task);
+      window.dispatchEvent(new CustomEvent('birthday-created', { detail: { task } }));
       resetForm();
       setShowAdd(false);
       onRefresh?.();

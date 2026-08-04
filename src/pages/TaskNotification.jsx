@@ -4,7 +4,7 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Clock, Zap, Loader2 } from "lucide-react";
+import { CheckCircle2, Clock, Zap, Loader2, Send } from "lucide-react";
 import { createPageUrl } from "@/utils";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { scheduleReminder, cancelScheduledReminder } from "../components/utils/reminderScheduler";
@@ -208,6 +208,25 @@ export default function TaskNotification() {
               </p>
             )}
           </div>
+
+          {/* Birthday text button — shown when the task is a birthday with a saved message */}
+          {task.birthday_person && task.birthday_text_message && (
+            <Button
+              onClick={() => {
+                const body = encodeURIComponent(task.birthday_text_message);
+                window.location.href = `sms:?&body=${body}`;
+              }}
+              disabled={isProcessing}
+              className={`w-full h-14 text-lg mb-4 ${
+                theme === 'minimalist'
+                  ? 'bg-pink-600 hover:bg-pink-700'
+                  : 'bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-700 hover:to-rose-700'
+              }`}
+            >
+              <Send className="w-5 h-5 mr-2" />
+              Send Birthday Text 🎂
+            </Button>
+          )}
 
           {/* Complete button */}
           <Button

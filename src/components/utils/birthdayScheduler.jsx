@@ -271,5 +271,6 @@ export async function createBirthdayFromInput(inputText, email) {
   });
 
   await scheduleBirthdayReminders(task);
+  window.dispatchEvent(new CustomEvent('birthday-created', { detail: { task } }));
   return { task, person, nextDate };
 }

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
-import { Cake } from "lucide-react";
+import { Cake, Send } from "lucide-react";
 import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import BirthdaysDialog from "../birthdays/BirthdaysDialog";
 
 function daysUntil(iso) {
@@ -35,6 +36,16 @@ export default function UpcomingBirthdayCard({ tasks, user, theme, specialMode, 
   // Don't render the card at all when no birthdays are within 6 months
   if (!next) return null;
 
+  const isToday = daysUntil(next.next_reminder) <= 0;
+  const hasBirthdayText = !!next.birthday_text_message;
+
+  const handleSendText = (e) => {
+    e.stopPropagation();
+    if (!next.birthday_text_message) return;
+    const body = encodeURIComponent(next.birthday_text_message);
+    window.location.href = `sms:?&body=${body}`;
+  };
+
   return (
     <>
       <button type="button" onClick={() => setShowDialog(true)} className="w-full text-left">
@@ -67,7 +78,18 @@ export default function UpcomingBirthdayCard({ tasks, user, theme, specialMode, 
                 </>
               )}
             </div>
-            <span className="text-xs text-gray-400 hidden sm:block whitespace-nowrap">Manage →</span>
+            {isToday && hasBirthdayText ? (
+              <Button
+                onClick={handleSendText}
+                size="sm"
+                className="bg-pink-600 hover:bg-pink-700 text-white flex-shrink-0"
+              >
+                <Send className="w-4 h-4 mr-1" />
+                Send Text
+              </Button>
+            ) : (
+              <span className="text-xs text-gray-400 hidden sm:block whitespace-nowrap">Manage →</span>
+            )}
           </div>
         </Card>
       </button>

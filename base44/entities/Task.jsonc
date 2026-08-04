@@ -193,6 +193,10 @@
       "default": true,
       "description": "Send a birthday reminder on the day of the birthday"
     },
+    "birthday_text_message": {
+      "type": "string",
+      "description": "AI-drafted birthday text message the user can send via their messaging app on the day of the birthday"
+    },
     "classification": {
       "type": "string",
       "enum": [

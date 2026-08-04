@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
-import { Cake, Trash2, Upload } from "lucide-react";
+import { Cake, Trash2, Upload, Send } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -209,6 +209,26 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
               <Upload className="w-4 h-4 mr-1" /> {uploading ? "Uploading…" : "Add picture"}
             </Button>
           </div>
+
+          {birthday.birthday_text_message && (
+            <div className="space-y-2">
+              <Label>Birthday text</Label>
+              <div className="rounded-xl border border-gray-200 p-3 bg-pink-50/50">
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{birthday.birthday_text_message}</p>
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const body = encodeURIComponent(birthday.birthday_text_message);
+                  window.location.href = `sms:?&body=${body}`;
+                }}
+                className="w-full"
+              >
+                <Send className="w-4 h-4 mr-2" />
+                Send via Messages
+              </Button>
+            </div>
+          )}
 
           <div className="flex gap-2 pt-2">
             <Button
