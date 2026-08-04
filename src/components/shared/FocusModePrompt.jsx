@@ -262,10 +262,13 @@ export default function FocusModePrompt({ user, theme }) {
     try {
       const now = new Date();
       const localISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString();
+      // NOTE: Do NOT clear onesignal_notification_ids here — let onTaskUpdate
+      // see the IDs so it can cancel the actual OneSignal notifications
+      // server-side. Clearing them in this update makes onTaskUpdate return
+      // early (empty array) and the real push notifications never get cancelled.
       await base44.entities.Task.update(task.id, {
         status: "completed",
         completed_at: localISO,
-        onesignal_notification_ids: [],
       });
       // Log the focus session using the AUTHORITATIVE focus_mode_entered_at
       // from the server profile — not the local enteredAt state, which can be

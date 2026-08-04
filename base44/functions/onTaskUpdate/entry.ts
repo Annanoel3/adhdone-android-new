@@ -133,22 +133,16 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Check if there are scheduled notifications for this task
-    if (!data.onesignal_notification_ids || data.onesignal_notification_ids.length === 0) {
-      console.log('[onTaskUpdate] No scheduled notifications for this task');
-      return Response.json({ success: true, noNotifications: true });
-    }
-
-    // For one-time reminders, the frontend handles all scheduling — don't cancel or reschedule
-    if (data.reminder_interval === 'once') {
-      console.log('[onTaskUpdate] One-time reminder — frontend handles scheduling, skipping');
-      return Response.json({ success: true, skipped: true, reason: 'one_time_reminder' });
-    }
-
-    // CRITICAL: If task is completed or no longer active, cancel ALL notifications and wipe all scheduling fields
+    // CRITICAL: If task is completed or snoozed, cancel ALL notifications and wipe
+    // all scheduling fields. This MUST come before the empty-notification-IDs early
+    // return below — otherwise a task whose onesignal_notification_ids was already
+    // cleared (e.g. by the frontend or by setFocusMode exit) would skip this block
+    // and keep its reminder_interval / next_reminder set, leaving orphaned push
+    // notifications in OneSignal that fire long after completion.
     if (data.status === 'completed' || data.status === 'snoozed') {
       console.log(`[onTaskUpdate] Task status is "${data.status}" — cancelling all notifications and clearing scheduling fields`);
-      for (const notificationId of data.onesignal_notification_ids) {
+      const ids = data.onesignal_notification_ids || [];
+      for (const notificationId of ids) {
         await cancelOneSignalNotification(notificationId);
       }
       await base44.asServiceRole.entities.Task.update(event.entity_id, {
@@ -160,6 +154,18 @@ Deno.serve(async (req) => {
       });
 
       return Response.json({ success: true, cancelled: true, reason: 'task_completed_or_snoozed' });
+    }
+
+    // Check if there are scheduled notifications for this task
+    if (!data.onesignal_notification_ids || data.onesignal_notification_ids.length === 0) {
+      console.log('[onTaskUpdate] No scheduled notifications for this task');
+      return Response.json({ success: true, noNotifications: true });
+    }
+
+    // For one-time reminders, the frontend handles all scheduling — don't cancel or reschedule
+    if (data.reminder_interval === 'once') {
+      console.log('[onTaskUpdate] One-time reminder — frontend handles scheduling, skipping');
+      return Response.json({ success: true, skipped: true, reason: 'one_time_reminder' });
     }
 
     // Only cancel + reschedule when a reminder-relevant field changed. Other updates
