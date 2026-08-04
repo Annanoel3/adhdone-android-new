@@ -5,24 +5,15 @@ import TaskCard from "./TaskCard";
 
 const SECTIONS = [
   { key: "today", label: "Today" },
+  { key: "tomorrow", label: "Tomorrow" },
   { key: "next7days", label: "Next 7 Days" },
   { key: "upcoming", label: "Upcoming" },
   { key: "later", label: "Later" },
   { key: "recurring", label: "Recurring" },
 ];
 
-function categorizeTask(task) {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const weekAhead = new Date(today);
-  weekAhead.setDate(weekAhead.getDate() + 7);
-  const monthAhead = new Date(today);
-  monthAhead.setDate(monthAhead.getDate() + 30);
-
-  // Recurring = explicit recurrence pattern, OR a rolling reminder interval
-  // (daily/every-other-day) with no due date (those roll forward when completed)
+// Shared logic: determine if a task is recurring, and its relevant date.
+function getTaskMeta(task) {
   const hasDueDate = !!task.due_date;
   const isRollingReminder =
     task.reminder_interval &&
@@ -33,13 +24,26 @@ function categorizeTask(task) {
     (task.recurrence_pattern && task.recurrence_pattern !== "none") ||
     isRollingReminder
   )
-    return "recurring";
+    return { recurring: true };
 
   const reminderDate = task.next_reminder ? new Date(task.next_reminder) : null;
   const dueDate = task.due_date ? new Date(task.due_date) : null;
-  const relevantDate = dueDate || reminderDate;
+  return { recurring: false, relevantDate: dueDate || reminderDate };
+}
 
-  // No due date → Today (available to do now)
+// Categorize into named sections (section view)
+function categorizeTask(task) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const weekAhead = new Date(today);
+  weekAhead.setDate(weekAhead.getDate() + 7);
+  const monthAhead = new Date(today);
+  monthAhead.setDate(monthAhead.getDate() + 30);
+
+  const { recurring, relevantDate } = getTaskMeta(task);
+  if (recurring) return "recurring";
   if (!relevantDate) return "today";
 
   const taskDay = new Date(
@@ -48,17 +52,59 @@ function categorizeTask(task) {
     relevantDate.getDate()
   );
 
-  // Due today or overdue → Today
   if (taskDay <= today) return "today";
-
-  // Next 7 days
-  if (taskDay >= tomorrow && taskDay < weekAhead) return "next7days";
-
-  // Upcoming (beyond 7 days, within 30 days)
-  if (taskDay >= weekAhead && taskDay < monthAhead) return "upcoming";
-
-  // Later (beyond 30 days)
+  if (taskDay.getTime() === tomorrow.getTime()) return "tomorrow";
+  if (taskDay < weekAhead) return "next7days";
+  if (taskDay < monthAhead) return "upcoming";
   return "later";
+}
+
+// Categorize into a specific day index (0-6) or upcoming/later/recurring (day view)
+function categorizeTaskByDay(task) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const weekAhead = new Date(today);
+  weekAhead.setDate(weekAhead.getDate() + 7);
+  const monthAhead = new Date(today);
+  monthAhead.setDate(monthAhead.getDate() + 30);
+
+  const { recurring, relevantDate } = getTaskMeta(task);
+  if (recurring) return "recurring";
+  if (!relevantDate) return 0;
+
+  const taskDay = new Date(
+    relevantDate.getFullYear(),
+    relevantDate.getMonth(),
+    relevantDate.getDate()
+  );
+
+  if (taskDay <= today) return 0;
+  const dayDiff = Math.round(
+    (taskDay.getTime() - today.getTime()) / (24 * 60 * 60 * 1000)
+  );
+  if (dayDiff <= 6) return dayDiff;
+  if (taskDay < monthAhead) return "upcoming";
+  return "later";
+}
+
+// Build the 7 named day sections for the day view
+function buildDaySections() {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const sections = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + i);
+    const dayName = d.toLocaleDateString("en-US", { weekday: "long" });
+    let label = dayName;
+    if (i === 0) label = `${dayName} · Today`;
+    else if (i === 1) label = `${dayName} · Tomorrow`;
+    sections.push({ key: `day_${i}`, label });
+  }
+  sections.push({ key: "upcoming", label: "Upcoming" });
+  sections.push({ key: "later", label: "Later" });
+  sections.push({ key: "recurring", label: "Recurring" });
+  return sections;
 }
 
 export default function TaskSections({
@@ -76,41 +122,52 @@ export default function TaskSections({
   onAddTask,
   isSeasonalTheme,
   specialMode,
+  viewMode = "sections",
 }) {
   const [collapsed, setCollapsed] = useState({});
 
-  const grouped = useMemo(() => {
-    const map = { today: [], next7days: [], upcoming: [], later: [], recurring: [] };
+  const { sections, grouped } = useMemo(() => {
+    if (viewMode === "days") {
+      const daySections = buildDaySections();
+      const map = {};
+      daySections.forEach((s) => (map[s.key] = []));
+      tasks.forEach((task) => {
+        if (task.classification === "birthday" || task.birthday_person) return;
+        const cat = categorizeTaskByDay(task);
+        if (typeof cat === "number") map[`day_${cat}`].push(task);
+        else map[cat].push(task);
+      });
+      return { sections: daySections, grouped: map };
+    }
+
+    const map = {
+      today: [],
+      tomorrow: [],
+      next7days: [],
+      upcoming: [],
+      later: [],
+      recurring: [],
+    };
     tasks.forEach((task) => {
-      // Birthdays have their own dedicated section on Home — never show them
-      // in the standard task sections.
       if (task.classification === "birthday" || task.birthday_person) return;
       const section = categorizeTask(task);
       map[section].push(task);
     });
-    return map;
-  }, [tasks]);
+    return { sections: SECTIONS, grouped: map };
+  }, [tasks, viewMode]);
 
   const getSubtasks = (taskId) =>
     allTasks
       .filter((t) => t.parent_task_id === taskId)
       .sort((a, b) => {
-        const ao = typeof a.subtask_order === 'number' ? a.subtask_order : 9999;
-        const bo = typeof b.subtask_order === 'number' ? b.subtask_order : 9999;
+        const ao = typeof a.subtask_order === "number" ? a.subtask_order : 9999;
+        const bo = typeof b.subtask_order === "number" ? b.subtask_order : 9999;
         if (ao !== bo) return ao - bo;
         return new Date(a.created_date || 0) - new Date(b.created_date || 0);
       });
 
   const toggleSection = (key) =>
     setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
-
-  const cardClasses = isSeasonalTheme()
-    ? `${specialMode}-card`
-    : theme === "dark"
-      ? "bg-gray-800/90 backdrop-blur-sm border-gray-700"
-      : theme === "spicybrains"
-        ? "bg-gradient-to-br from-pink-100 to-purple-100 border-pink-300"
-        : "bg-white border-gray-200";
 
   const renderTaskCard = (task) => (
     <TaskCard
@@ -127,7 +184,9 @@ export default function TaskSections({
       onDelete={onDelete}
       subtaskCount={allTasks.filter((t) => t.parent_task_id === task.id).length}
       completedSubtaskCount={
-        allTasks.filter((t) => t.parent_task_id === task.id && t.status === "completed").length
+        allTasks.filter(
+          (t) => t.parent_task_id === task.id && t.status === "completed"
+        ).length
       }
       subtasks={getSubtasks(task.id)}
     />
@@ -135,12 +194,15 @@ export default function TaskSections({
 
   return (
     <div className="space-y-1">
-      {SECTIONS.map((section) => {
-        const sectionTasks = grouped[section.key];
+      {sections.map((section) => {
+        const sectionTasks = grouped[section.key] || [];
         const isCollapsed = collapsed[section.key];
 
         return (
-          <div key={section.key} className="border-b border-gray-200 dark:border-gray-700 last:border-0">
+          <div
+            key={section.key}
+            className="border-b border-gray-200 dark:border-gray-700 last:border-0"
+          >
             <button
               onClick={() => toggleSection(section.key)}
               className="w-full flex items-center gap-2 py-3 px-1 active:bg-gray-100/70 dark:active:bg-gray-700/40 rounded-lg transition-colors"

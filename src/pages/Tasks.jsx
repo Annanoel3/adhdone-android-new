@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Task } from "@/entities/Task";
 import { Button } from "@/components/ui/button";
-import { Plus, Filter, Download, Loader2 } from "lucide-react";
+import { Plus, Filter, Download, Loader2, List, CalendarDays } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import {
@@ -36,7 +36,12 @@ export default function Tasks() {
   const [activeTasks, setActiveTasks] = useState([]);
   const [completedThisWeek, setCompletedThisWeek] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('tasks_view_mode') || 'sections');
   const { sortBy } = useTaskSort();
+
+  useEffect(() => {
+    localStorage.setItem('tasks_view_mode', viewMode);
+  }, [viewMode]);
 
   useEffect(() => {
     loadTasks();
@@ -284,6 +289,31 @@ export default function Tasks() {
           </Select>
 
           <TaskSortDropdown />
+
+          <div className="flex items-center gap-1 ml-auto">
+            <Button
+              variant={viewMode === 'sections' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('sections')}
+              className={`h-8 px-3 text-xs ${
+                isSeasonalTheme() ? 'bg-white/70 text-gray-800' : ''
+              }`}
+            >
+              <List className="w-3.5 h-3.5 mr-1" />
+              Sections
+            </Button>
+            <Button
+              variant={viewMode === 'days' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => setViewMode('days')}
+              className={`h-8 px-3 text-xs ${
+                isSeasonalTheme() ? 'bg-white/70 text-gray-800' : ''
+              }`}
+            >
+              <CalendarDays className="w-3.5 h-3.5 mr-1" />
+              Days
+            </Button>
+          </div>
         </div>
 
         {filteredTasks.length > 0 ? (
@@ -311,6 +341,7 @@ export default function Tasks() {
             onAddTask={() => navigate(createPageUrl("AddTask"))}
             isSeasonalTheme={isSeasonalTheme}
             specialMode={specialMode}
+            viewMode={viewMode}
           />
         ) : (
           <div className="text-center py-12">
