@@ -101,9 +101,16 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
     }
   };
 
-  const handleSendText = () => {
+  const handleSendText = async () => {
     if (!draft.trim()) return;
     const body = encodeURIComponent(draft.trim());
+    if (birthdayTask?.id) {
+      try {
+        await base44.entities.Task.update(birthdayTask.id, { birthday_text_sent: true });
+      } catch (e) {
+        console.error('[BirthdayTextDialog] Failed to mark text as sent:', e);
+      }
+    }
     window.location.href = `sms:?&body=${body}`;
   };
 

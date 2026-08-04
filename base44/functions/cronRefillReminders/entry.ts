@@ -310,6 +310,7 @@ Deno.serve(async (req) => {
 
   let birthdayScheduled = 0;
   let birthdayRolledOver = 0;
+  let birthdayTextReminders = 0;
 
   const birthdayTasks = allTasks.filter(t =>
     t.status === 'active' &&
@@ -323,6 +324,7 @@ Deno.serve(async (req) => {
     let schedule = Array.isArray(task.reminder_schedule) ? [...task.reminder_schedule] : [];
     let ids = Array.isArray(task.onesignal_notification_ids) ? [...task.onesignal_notification_ids] : [];
     let dirty = false;
+    let resetBirthdayText = false;
 
     // 1. Yearly rollover — birthday day-of has passed
     const birthdayDate = new Date(nextReminderIso);
@@ -336,6 +338,7 @@ Deno.serve(async (req) => {
       schedule = buildBirthdaySchedule(task, nextReminderIso);
       ids = [];
       dirty = true;
+      resetBirthdayText = true;
       birthdayRolledOver++;
       console.log(`🎂 [REFILL] Rolled over "${task.title}" → ${nextDate.toLocaleDateString()}`);
     } else if (schedule.length === 0 && ids.length === 0) {
@@ -378,11 +381,70 @@ Deno.serve(async (req) => {
         next_reminder: nextReminderIso,
         reminder_schedule: schedule,
         onesignal_notification_ids: ids,
+        ...(resetBirthdayText ? { birthday_text_sent: false, birthday_text_last_reminded_at: null } : {}),
       });
+    }
+
+    // Birthday text reminder — hourly on day-of until the user sends the text.
+    // Only fires during waking hours, respects quiet hours, and dedupes via
+    // birthday_text_last_reminded_at so the user gets ~1/hour, not 1/cron-run.
+    const bdayDate = new Date(nextReminderIso);
+    const isDayOf = bdayDate.getFullYear() === now.getFullYear() &&
+                    bdayDate.getMonth() === now.getMonth() &&
+                    bdayDate.getDate() === now.getDate();
+    if (isDayOf && task.birthday_text_message && task.birthday_text_sent !== true) {
+      const owner = userMap[task.notification_recipient_email];
+      const timeZone = owner?.timezone || null;
+      if (timeZone) {
+        const localMin = localMinutesOfDay(now, timeZone);
+        const quietEnabled = !!(owner && owner.quiet_hours_enabled);
+        const qStart = owner?.quiet_hours_start ? parseHHMM(owner.quiet_hours_start) : parseHHMM('22:00');
+        const qEnd = owner?.quiet_hours_end ? parseHHMM(owner.quiet_hours_end) : parseHHMM('08:00');
+        const inQuiet = quietEnabled && (qStart < qEnd
+          ? (localMin >= qStart && localMin < qEnd)
+          : (localMin >= qStart || localMin < qEnd));
+        const inDefaultSleep = localMin < 8 * 60 || localMin >= 21 * 60;
+        const lastRemindedMs = task.birthday_text_last_reminded_at
+          ? new Date(task.birthday_text_last_reminded_at).getTime() : 0;
+        const dedupMs = 50 * 60 * 1000;
+        if (!inQuiet && !inDefaultSleep && (now.getTime() - lastRemindedMs) > dedupMs) {
+          try {
+            const bAppId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+            const bRestKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+            const playerIds = owner?.onesignal_player_ids || [];
+            const pushPayload: any = {
+              app_id: bAppId,
+              headings: { en: `🎂 Text ${task.birthday_person}!` },
+              contents: { en: `It's ${task.birthday_person}'s birthday today — don't forget to send your birthday text!` },
+              data: { screen: '/TaskNotification', taskId: task.id, type: 'birthday_text_reminder' },
+            };
+            if (playerIds.length > 0) {
+              pushPayload.include_player_ids = playerIds;
+            } else {
+              pushPayload.include_external_user_ids = [task.notification_recipient_email];
+            }
+            const pushRes = await fetch('https://onesignal.com/api/v1/notifications', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${bRestKey}` },
+              body: JSON.stringify(pushPayload),
+            });
+            const pushResult = await pushRes.json();
+            if (pushRes.ok && !pushResult.errors) {
+              await base44.asServiceRole.entities.Task.update(task.id, {
+                birthday_text_last_reminded_at: now.toISOString(),
+              });
+              birthdayTextReminders++;
+              console.log(`🎂 [REFILL] Sent birthday text reminder for "${task.title}"`);
+            }
+          } catch (e) {
+            console.error(`[REFILL] Birthday text push failed for ${task.id}:`, e);
+          }
+        }
+      }
     }
   }
 
-  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, birthdayScheduled, birthdayRolledOver, at: now.toISOString() };
+  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, at: now.toISOString() };
     console.log('✅ [REFILL] Complete:', result);
     return Response.json(result);
   } catch (err) {

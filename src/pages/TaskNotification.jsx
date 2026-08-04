@@ -4,7 +4,8 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Clock, Zap, Loader2, Send } from "lucide-react";
+import { CheckCircle2, Clock, Zap, Loader2, Send, Sparkles } from "lucide-react";
+import BirthdayTextDialog from "../components/birthdays/BirthdayTextDialog";
 import { createPageUrl } from "@/utils";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { scheduleReminder, cancelScheduledReminder } from "../components/utils/reminderScheduler";
@@ -22,6 +23,7 @@ export default function TaskNotification() {
   const [task, setTask] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [processingAction, setProcessingAction] = useState(null); // 'complete' | 'snooze-N'
+  const [showBirthdayDraft, setShowBirthdayDraft] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
 
   useEffect(() => {
@@ -212,8 +214,13 @@ export default function TaskNotification() {
           {/* Birthday text button — shown when the task is a birthday with a saved message */}
           {task.birthday_person && task.birthday_text_message && (
             <Button
-              onClick={() => {
+              onClick={async () => {
                 const body = encodeURIComponent(task.birthday_text_message);
+                try {
+                  await base44.entities.Task.update(task.id, { birthday_text_sent: true });
+                } catch (e) {
+                  console.error('Failed to mark text as sent:', e);
+                }
                 window.location.href = `sms:?&body=${body}`;
               }}
               disabled={isProcessing}
@@ -225,6 +232,22 @@ export default function TaskNotification() {
             >
               <Send className="w-5 h-5 mr-2" />
               Send Birthday Text 🎂
+            </Button>
+          )}
+
+          {/* Draft birthday text button — shown when the task is a birthday with no saved message */}
+          {task.birthday_person && !task.birthday_text_message && (
+            <Button
+              onClick={() => setShowBirthdayDraft(true)}
+              disabled={isProcessing}
+              className={`w-full h-14 text-lg mb-4 ${
+                theme === 'minimalist'
+                  ? 'bg-purple-600 hover:bg-purple-700'
+                  : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
+              }`}
+            >
+              <Sparkles className="w-5 h-5 mr-2" />
+              Draft Birthday Text 🎂
             </Button>
           )}
 
@@ -275,6 +298,16 @@ export default function TaskNotification() {
               ))}
             </div>
           </div>
+
+          <BirthdayTextDialog
+            isOpen={showBirthdayDraft}
+            onClose={() => setShowBirthdayDraft(false)}
+            birthdayTask={task}
+            onSaved={() => {
+              setShowBirthdayDraft(false);
+              loadTask();
+            }}
+          />
 
           <button
             onClick={() => navigate(createPageUrl("Home"))}

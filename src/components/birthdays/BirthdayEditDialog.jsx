@@ -218,8 +218,13 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
               </div>
               <Button
                 variant="outline"
-                onClick={() => {
+                onClick={async () => {
                   const body = encodeURIComponent(birthday.birthday_text_message);
+                  try {
+                    await base44.entities.Task.update(birthday.id, { birthday_text_sent: true });
+                  } catch (e) {
+                    console.error('Failed to mark text as sent:', e);
+                  }
                   window.location.href = `sms:?&body=${body}`;
                 }}
                 className="w-full"

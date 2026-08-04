@@ -3,6 +3,7 @@ import { Cake, Send } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import BirthdaysDialog from "../birthdays/BirthdaysDialog";
+import { base44 } from "@/api/base44Client";
 
 function daysUntil(iso) {
   const diff = new Date(iso) - new Date();
@@ -39,10 +40,15 @@ export default function UpcomingBirthdayCard({ tasks, user, theme, specialMode, 
   const isToday = daysUntil(next.next_reminder) <= 0;
   const hasBirthdayText = !!next.birthday_text_message;
 
-  const handleSendText = (e) => {
+  const handleSendText = async (e) => {
     e.stopPropagation();
     if (!next.birthday_text_message) return;
     const body = encodeURIComponent(next.birthday_text_message);
+    try {
+      await base44.entities.Task.update(next.id, { birthday_text_sent: true });
+    } catch (e) {
+      console.error('Failed to mark text as sent:', e);
+    }
     window.location.href = `sms:?&body=${body}`;
   };
 

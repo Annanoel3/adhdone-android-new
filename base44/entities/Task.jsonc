@@ -197,6 +197,16 @@
       "type": "string",
       "description": "AI-drafted birthday text message the user can send via their messaging app on the day of the birthday"
     },
+    "birthday_text_sent": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the user has pressed 'Send' for the birthday text. When true, hourly day-of reminders stop. Reset to false on yearly rollover."
+    },
+    "birthday_text_last_reminded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of the last hourly birthday text reminder sent by the cron. Used for deduplication to avoid spamming if the cron runs more than once per hour."
+    },
     "classification": {
       "type": "string",
       "enum": [
