@@ -20,13 +20,21 @@ function isRunningInCapacitor() {
 }
 
 // Handle incoming notification data and route to the correct in-app screen
-function handleNotificationData(data) {
+function handleNotificationData(data, navigate) {
   if (!data) return;
   const taskId = data.taskId || data.task_id;
-  if (taskId) {
-    sessionStorage.setItem('pending_task_followup', taskId);
-    window.dispatchEvent(new CustomEvent('show-task-followup', { detail: { taskId } }));
+  if (!taskId) return;
+
+  // Birthday notifications open the task directly so the user can draft/send the text
+  const isBirthdayType = data.type === 'birthday_reminder' || data.type === 'birthday_text_reminder';
+  if (isBirthdayType && data.screen && navigate) {
+    navigate(`${data.screen}?taskId=${taskId}`);
+    return;
   }
+
+  // Other notifications: dispatch event for modal-based follow-up
+  sessionStorage.setItem('pending_task_followup', taskId);
+  window.dispatchEvent(new CustomEvent('show-task-followup', { detail: { taskId } }));
 }
 
 export default function OneSignalInit({ user }) {
