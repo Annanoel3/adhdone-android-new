@@ -1183,15 +1183,12 @@ JSON:
   const displayTasks = [...optimisticTasks, ...tasks.filter(t => t.status === 'active')];
 
   return (
-    <div className={`min-h-screen p-4 md:p-8 ${
-      theme === 'spicybrains' 
-        ? 'bg-gradient-to-br from-red-300 via-orange-300 to-yellow-400' 
+    <div className={`h-full flex flex-col overflow-hidden p-3 md:p-4 ${
+      theme === 'spicybrains'
+        ? 'bg-gradient-to-br from-red-300 via-orange-300 to-yellow-400'
         : ''
-    }`} style={{
-      paddingTop: 'max(1rem, calc(1rem + env(safe-area-inset-top)))',
-      paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))'
-    }}>
-      <div className="max-w-3xl mx-auto space-y-6">
+    }`}>
+      <div className="max-w-3xl mx-auto w-full flex-1 flex flex-col min-h-0 space-y-3">
         <div className="flex items-center justify-between">
           <Button
             variant="ghost"
@@ -1218,7 +1215,7 @@ JSON:
           })()}
         </div>
 
-        <Card className={`border-none shadow-2xl overflow-hidden ${
+        <Card className={`border-none shadow-2xl overflow-hidden flex-1 flex flex-col ${
           theme === 'dark'
             ? 'bg-gray-800'
             : theme === 'minimalist'
@@ -1227,12 +1224,12 @@ JSON:
                 ? 'bg-gradient-to-br from-red-100 via-orange-100 to-yellow-100'
                 : 'bg-gradient-to-br from-purple-50 via-white to-orange-50'
         }`}>
-          <CardContent className="p-8 md:p-12">
-            <div className="flex justify-center gap-3 mb-8">
+          <CardContent className="p-4 md:p-6 flex-1 flex flex-col min-h-0">
+            <div className="flex justify-center gap-3 mb-4">
               <Button
                 variant={inputMode === 'voice' ? 'default' : 'outline'}
                 onClick={() => setInputMode('voice')}
-                className={`px-6 h-12 ${
+                className={`px-5 h-10 ${
                   inputMode === 'voice' && theme === 'minimalist'
                     ? 'bg-green-600 hover:bg-green-700'
                     : inputMode === 'voice' && theme === 'spicybrains'
@@ -1248,7 +1245,7 @@ JSON:
               <Button
                 variant={inputMode === 'text' ? 'default' : 'outline'}
                 onClick={() => setInputMode('text')}
-                className={`px-6 h-12 ${
+                className={`px-5 h-10 ${
                   inputMode === 'text' && theme === 'minimalist'
                     ? 'bg-green-600 hover:bg-green-700'
                     : inputMode === 'text' && theme === 'spicybrains'
@@ -1269,24 +1266,24 @@ JSON:
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="flex flex-col items-center gap-8 py-12"
+                  className="flex-1 flex flex-col items-center justify-center gap-3 py-2 min-h-0"
                 >
-                  <div className={`w-32 h-32 rounded-full flex items-center justify-center ${
+                  <div className={`w-20 h-20 rounded-full flex items-center justify-center ${
                     theme === 'minimalist'
                       ? 'bg-purple-100'
                       : theme === 'spicybrains'
                         ? 'bg-gradient-to-br from-red-200 to-yellow-200'
                         : 'bg-gradient-to-br from-purple-100 to-pink-100'
                   }`}>
-                    <Sparkles className={`w-16 h-16 ${
+                    <Sparkles className={`w-10 h-10 ${
                       theme === 'minimalist' ? 'text-purple-600' : theme === 'spicybrains' ? 'text-orange-700' : 'text-purple-700'
                     }`} />
                   </div>
                   <div className="text-center space-y-3 max-w-md">
-                    <h2 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                    <h2 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                       {isProcessing ? 'Creating your task...' : isRecording ? 'Listening...' : 'Ready to capture your tasks?'}
                     </h2>
-                    <p className={`text-lg ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                    <p className={`text-base ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
                       {isRecording
                         ? 'Tap to stop listening'
                         : 'Tap the mic and speak - say them one at a time or all at once'
@@ -1296,7 +1293,7 @@ JSON:
                   <button
                     onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
                     disabled={isProcessing}
-                    className={`w-32 h-32 rounded-full flex items-center justify-center transition-all ${
+                    className={`w-24 h-24 rounded-full flex items-center justify-center transition-all ${
                       isRecording
                         ? 'bg-red-500 animate-pulse'
                         : isProcessing
@@ -1309,9 +1306,9 @@ JSON:
                     } shadow-2xl`}
                   >
                     {isProcessing ? (
-                      <Loader2 className="w-16 h-16 text-white animate-spin" />
+                      <Loader2 className="w-12 h-12 text-white animate-spin" />
                     ) : (
-                      <Mic className="w-16 h-16 text-white" />
+                      <Mic className="w-12 h-12 text-white" />
                     )}
                   </button>
                   <p className="text-sm text-gray-500 text-center">
@@ -1324,13 +1321,13 @@ JSON:
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -20 }}
-                  className="space-y-6 py-8"
+                  className="flex-1 flex flex-col justify-center space-y-4 py-2 min-h-0"
                 >
-                  <div className="text-center space-y-3 max-w-md mx-auto mb-6">
-                    <h2 className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                  <div className="text-center space-y-2 max-w-md mx-auto mb-2">
+                    <h2 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                       Type your tasks
                     </h2>
-                    <p className={`text-lg ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                    <p className={`text-base ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
                       Enter each task and press Enter to add - AI will organize it with smart reminders
                     </p>
                   </div>
