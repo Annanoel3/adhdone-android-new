@@ -28,7 +28,10 @@ function getTaskMeta(task) {
 
   const reminderDate = task.next_reminder ? new Date(task.next_reminder) : null;
   const dueDate = task.due_date ? new Date(task.due_date) : null;
-  return { recurring: false, relevantDate: dueDate || reminderDate };
+  const startDate = task.start_date ? new Date(task.start_date) : null;
+  // If start_date is set, use it as the relevant date — the task is "in progress"
+  // from start through due and should appear in Today's section once started.
+  return { recurring: false, relevantDate: startDate || dueDate || reminderDate };
 }
 
 // Categorize into named sections (section view)
