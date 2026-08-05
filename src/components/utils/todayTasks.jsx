@@ -26,19 +26,19 @@ export const getTaskDueLocalDate = (task) => {
   return null;
 };
 
-// Last day of a multi-day span (inclusive), if any.
+// Last day of a multi-day span (inclusive), if any. Only used for events with
+// an explicit end_date — NOT for due_date, which is a deadline (the task stays
+// "today" as overdue until completed, even after the deadline passes).
 export const getTaskEndLocalDate = (task) => {
   if (!task) return null;
-  // When start_date is set, due_date acts as the end of the "working on it" span.
-  if (task.start_date && task.due_date) return getLocalDateString(new Date(task.due_date));
   if (task.end_date) return getLocalDateString(new Date(task.end_date));
   return null;
 };
 
-// A task counts as "today" when its start has arrived (today >= start) and —
-// for multi-day events — today is still within the span (today <= end).
-// Ordinary overdue tasks (no end_date) remain "today" until completed, same
-// as before. Tasks with no effective date (recurring, no due) are always today.
+// A task counts as "today" when its start has arrived (today >= start). Tasks
+// with no end_date stay "today" until completed — overdue tasks remain in
+// Today. Tasks with an explicit end_date (multi-day events) drop out once
+// the span ends. Tasks with no effective date (recurring, no due) are always today.
 export const isTodayTask = (task, todayStr = getLocalDateString()) => {
   const start = getTaskDueLocalDate(task);
   if (!start) return true;

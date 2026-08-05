@@ -467,12 +467,10 @@ export default function TaskCard({
     }
   };
 
-  // "In Progress" badge: shown when start_date is set and today falls within
-  // the start→due span (or start has arrived with no due date yet).
+  // "In Progress" badge: shown when start_date has arrived but due_date
+  // hasn't passed yet (or there's no due_date).
   const isInProgress = (() => {
     if (!task.start_date || task.status === 'completed') return false;
-    const todayStr = new Date().toDateString();
-    const startStr = new Date(task.start_date).toDateString();
     if (new Date(task.start_date) > new Date()) return false;
     if (task.due_date && new Date(task.due_date) < new Date()) return false;
     return true;
