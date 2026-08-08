@@ -1417,12 +1417,15 @@ Return JSON:
                       </Button>
 
                       <div className={`border-t pt-3 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
-                        <button
-                          onClick={() => handleUpdateField('reminder_interval', 'daily')}
-                          className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium"
-                        >
-                          🔄 Use Recurring Reminder Instead
-                        </button>
+                        <p className={`text-xs font-semibold uppercase mb-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Or switch to repeating</p>
+                        <p className={`text-xs mb-0.5 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Frequent nudges</p>
+                        <button onClick={() => handleUpdateField('reminder_interval', '10min')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 10 min</button>
+                        <button onClick={() => handleUpdateField('reminder_interval', '30min')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 30 min</button>
+                        <button onClick={() => handleUpdateField('reminder_interval', '1hour')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button>
+                        <button onClick={() => handleUpdateField('reminder_interval', '2hours')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button>
+                        <p className={`text-xs mt-1.5 mb-0.5 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Daily check-ins</p>
+                        <button onClick={() => handleUpdateField('reminder_interval', 'daily')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Daily</button>
+                        <button onClick={() => handleUpdateField('reminder_interval', 'every_other_day')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every other day</button>
                       </div>
                     </div>
                   </PopoverContent>
