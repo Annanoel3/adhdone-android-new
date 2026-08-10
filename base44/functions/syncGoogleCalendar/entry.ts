@@ -3,6 +3,43 @@ import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
 
+// ── Timezone-aware local→UTC conversion ─────────────────────────────────────
+// Deno runs in UTC, so Date.setHours(9,0) means 9:00 UTC — not 9:00 in the user's
+// timezone. Reminder specs from generateReminderSchedule (hour/minute) are local
+// wall-clock times, so ABSOLUTE reminders must be converted from the user's TZ
+// to a UTC instant. Without this, a "morning of" (9 AM) reminder fires at 4 AM
+// for a US-Central user.
+function localParts(utcDate: Date, timeZone: string) {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone, hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  });
+  const p: Record<string, string> = {};
+  for (const part of fmt.formatToParts(utcDate)) p[part.type] = part.value;
+  const hour = p.hour === '24' ? 0 : parseInt(p.hour, 10);
+  return { year: parseInt(p.year, 10), month: parseInt(p.month, 10), day: parseInt(p.day, 10), hour, minute: parseInt(p.minute, 10) };
+}
+
+function offsetMinutesAt(utcDate: Date, timeZone: string): number {
+  const lp = localParts(utcDate, timeZone);
+  const localAsUtc = Date.UTC(lp.year, lp.month - 1, lp.day, lp.hour, lp.minute);
+  return Math.round((localAsUtc - utcDate.getTime()) / 60000);
+}
+
+// Returns the UTC instant for a reminder at local `hour:minute` on the day that
+// is `daysBefore` days before the event's local day, in the user's timezone.
+function localReminderUtc(eventUtc: Date, daysBefore: number, hour: number, minute: number, timeZone: string | null): Date {
+  if (!timeZone) {
+    const d = new Date(eventUtc);
+    d.setDate(d.getDate() - daysBefore);
+    d.setHours(hour, minute, 0, 0);
+    return d;
+  }
+  const lp = localParts(eventUtc, timeZone);
+  const target = new Date(Date.UTC(lp.year, lp.month - 1, lp.day - daysBefore, hour, minute, 0, 0));
+  const off = offsetMinutesAt(target, timeZone);
+  return new Date(target.getTime() - off * 60000);
+}
+
 function isBirthdayEvent(title, recurrenceRule) {
   if (!recurrenceRule) return false;
   const isYearly = recurrenceRule.includes('FREQ=YEARLY');
@@ -443,15 +480,17 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
         // to ISO times and filter past reminders
         const scheduledDate = new Date(createdTask.next_reminder);
         const bufferMs = Date.now() + 2 * 60 * 1000;
+        const userTimeZone = (user as any)?.timezone || null;
         const reminderTimes = rawReminders
           .map(r => {
             let reminderTime;
             if (r.relative_minutes_before != null) {
               reminderTime = new Date(scheduledDate.getTime() - r.relative_minutes_before * 60 * 1000);
             } else {
-              reminderTime = new Date(scheduledDate);
-              reminderTime.setDate(reminderTime.getDate() - (r.days_before || 0));
-              reminderTime.setHours(r.hour || 0, r.minute || 0, 0, 0);
+              // ABSOLUTE reminders specify a local wall-clock time (e.g. 9 AM).
+              // Convert via the user's timezone so a "morning of" reminder fires
+              // at 9 AM local, not 9 AM UTC (which would be 4 AM US-Central).
+              reminderTime = localReminderUtc(scheduledDate, r.days_before || 0, r.hour || 0, r.minute || 0, userTimeZone);
             }
             return { sendAtISO: reminderTime.toISOString(), label: r.label, notification_title: r.notification_title || '📅 Upcoming', notification_body: r.notification_body || title };
           })
