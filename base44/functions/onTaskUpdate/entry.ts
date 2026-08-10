@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent } from '../../shared/reminderTitle.ts';
+import { adjustForQuietHours, parseHHMM, localMinutesOfDay } from '../../shared/quietHours.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID');
 const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY');
@@ -244,15 +245,39 @@ Deno.serve(async (req) => {
         const ms = intervalMs[currentTask.reminder_interval];
         const now = Date.now();
         const nextReminderTime = new Date(currentTask.next_reminder).getTime();
-        
+
+        // Owner quiet hours (local "HH:MM"). Apply only when enabled AND the owner
+        // has a recorded timezone — otherwise we can't convert local wall-time to UTC.
+        // Mirrors cronRefillReminders so a reschedule here never fires at 4 AM.
+        const quietEnabled = !!(user && user.quiet_hours_enabled);
+        const timeZone = user && user.timezone ? user.timezone : null;
+        const startMin = user && user.quiet_hours_start ? parseHHMM(user.quiet_hours_start) : parseHHMM('22:00');
+        const endMin = user && user.quiet_hours_end ? parseHHMM(user.quiet_hours_end) : parseHHMM('08:00');
+        const useQuiet = quietEnabled && !!timeZone;
+
         // Schedule the next 10 notifications with updated title
         const newNotificationIds = [];
         let scheduleTime = nextReminderTime;
-        
+        let lastScheduledAt: number | null = null;
+
         for (let i = 0; i < 10; i++) {
+          let sendAt = new Date(scheduleTime);
+          if (useQuiet) {
+            sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
+            // Skip the first-of-day slot — the daily digest cron covers it.
+            if (localMinutesOfDay(sendAt, timeZone) === endMin) {
+              scheduleTime += ms;
+              continue;
+            }
+            // Skip duplicates that collapse onto the same morning minute.
+            if (lastScheduledAt && Math.abs(sendAt.getTime() - lastScheduledAt) < 60000) {
+              scheduleTime += ms;
+              continue;
+            }
+          }
           // Only schedule if it's in the future
-          if (scheduleTime > now) {
-            const sendAtISO = new Date(scheduleTime).toISOString();
+          if (sendAt.getTime() > now) {
+            const sendAtISO = sendAt.toISOString();
             const { title, body } = getReminderContent(currentTask.title, currentTask.due_date, sendAtISO);
             const notificationId = await scheduleOneSignalNotification(
               currentTask.notification_recipient_email || user.email,
@@ -264,6 +289,7 @@ Deno.serve(async (req) => {
 
             if (notificationId) {
               newNotificationIds.push(notificationId);
+              lastScheduledAt = sendAt.getTime();
             }
           }
 
