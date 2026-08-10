@@ -34,6 +34,15 @@ const KIND_LABEL = {
   task: 'Task',
 };
 
+// Colors for multi-day span bars. Middle days use a thin stripe (bar);
+// start/end days use a pill with the emoji or title.
+const SPAN_COLORS = {
+  birthday: { bar: 'bg-pink-300', pill: 'bg-pink-100', text: 'text-pink-700' },
+  imported_event: { bar: 'bg-indigo-300', pill: 'bg-indigo-100', text: 'text-indigo-700' },
+  imported_task: { bar: 'bg-blue-300', pill: 'bg-blue-100', text: 'text-blue-700' },
+  task: { bar: 'bg-amber-300', pill: 'bg-amber-100', text: 'text-amber-700' },
+};
+
 function dateKey(d) {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
@@ -88,8 +97,14 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
         } else {
           const dayCursor = new Date(startD.getFullYear(), startD.getMonth(), startD.getDate());
           const last = new Date(endD.getFullYear(), endD.getMonth(), endD.getDate());
+          let isFirst = true;
           while (dayCursor <= last) {
-            push(new Date(dayCursor), { kind, title: t.title, id: t.id, taskId: t.id, task: t });
+            const isLast = dayCursor.toDateString() === last.toDateString();
+            push(new Date(dayCursor), {
+              kind, title: t.title, id: t.id, taskId: t.id, task: t,
+              spanPos: isLast ? 'end' : isFirst ? 'start' : 'middle',
+            });
+            isFirst = false;
             dayCursor.setDate(dayCursor.getDate() + 1);
           }
         }
@@ -123,8 +138,14 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
       if (e.is_all_day) lastDay.setDate(lastDay.getDate() - 1);
       const dayCursor = new Date(startD.getFullYear(), startD.getMonth(), startD.getDate());
       const last = new Date(lastDay.getFullYear(), lastDay.getMonth(), lastDay.getDate());
+      let isFirst = true;
       while (dayCursor <= last) {
-        push(new Date(dayCursor), item);
+        const isLast = dayCursor.toDateString() === last.toDateString();
+        push(new Date(dayCursor), {
+          ...item,
+          spanPos: isLast ? 'end' : isFirst ? 'start' : 'middle',
+        });
+        isFirst = false;
         dayCursor.setDate(dayCursor.getDate() + 1);
       }
     });
@@ -250,9 +271,12 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           const isToday = sameDayKey(cell, today);
           const isSelected = sameDayKey(cell, selected);
 
-          // Show up to 3 items per cell.
-          const shown = dayItems.slice(0, 3);
-          const overflow = dayItems.length - shown.length;
+          // Separate multi-day span bars from regular items for cleaner rendering.
+          const spanItems = dayItems.filter((it) => it.spanPos);
+          const regularItems = dayItems.filter((it) => !it.spanPos);
+          const regularShown = regularItems.slice(0, 3);
+          const spanShown = spanItems.slice(0, 3);
+          const totalOverflow = dayItems.length - spanShown.length - regularShown.length;
 
           return (
             <button
@@ -277,26 +301,61 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                 )}
               </div>
               {dayItems.length > 0 && (
-                <div className="mt-1 leading-none">
-                  {useEmoji ? (
-                    <div className="flex flex-wrap gap-0.5">
-                      {shown.map((it, i) => (
-                        <span key={i} className="text-sm">{emojiFor(it)}</span>
-                      ))}
-                      {overflow > 0 && (
-                        <span className={`text-[10px] ${textSecondary} self-end`}>+{overflow}</span>
-                      )}
-                    </div>
-                  ) : (
+                <div className="mt-1 leading-none space-y-0.5">
+                  {/* Multi-day span bars: start = pill with label, middle = thin stripe, end = pill */}
+                  {spanItems.length > 0 && (
                     <div className="space-y-0.5">
-                      {shown.map((it, i) => (
-                        <div key={i} className={`text-[10px] truncate ${textSecondary}`} title={it.title}>
-                          {it.title}
-                        </div>
-                      ))}
-                      {overflow > 0 && (
-                        <div className={`text-[10px] ${textSecondary}`}>+{overflow} more</div>
-                      )}
+                      {spanShown.map((it, i) => {
+                        const colors = SPAN_COLORS[it.kind] || SPAN_COLORS.task;
+                        if (it.spanPos === 'middle') {
+                          return (
+                            <div
+                              key={`span-${i}`}
+                              className={`h-1 rounded-full ${colors.bar} -mx-1`}
+                              title={it.title}
+                            />
+                          );
+                        }
+                        const isStart = it.spanPos === 'start';
+                        return (
+                          <div
+                            key={`span-${i}`}
+                            className={`flex items-center gap-0.5 text-[10px] truncate ${colors.pill} ${colors.text} ${
+                              isStart ? 'rounded-l-full pl-1 -mr-1' : 'rounded-r-full pr-1 -ml-1'
+                            }`}
+                            title={it.title}
+                          >
+                            {useEmoji ? (
+                              <span className="text-xs flex-shrink-0">{emojiFor(it)}</span>
+                            ) : (
+                              <span className="truncate flex-1">{it.title}</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {/* Regular (non-span) items */}
+                  {regularShown.length > 0 && (
+                    useEmoji ? (
+                      <div className="flex flex-wrap gap-0.5">
+                        {regularShown.map((it, i) => (
+                          <span key={i} className="text-sm">{emojiFor(it)}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-0.5">
+                        {regularShown.map((it, i) => (
+                          <div key={i} className={`text-[10px] truncate ${textSecondary}`} title={it.title}>
+                            {it.title}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  )}
+                  {totalOverflow > 0 && (
+                    <div className={`text-[10px] ${textSecondary}`}>
+                      {useEmoji ? `+${totalOverflow}` : `+${totalOverflow} more`}
                     </div>
                   )}
                 </div>
