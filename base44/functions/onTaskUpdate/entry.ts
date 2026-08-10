@@ -163,14 +163,32 @@ Deno.serve(async (req) => {
         }
       }
 
-      await base44.asServiceRole.entities.Task.update(event.entity_id, {
-        onesignal_notification_ids: [],
-        reminder_schedule: [],
-        last_scheduled_until: null,
-        next_reminder: null,
-        reminder_interval: null,
-        notification_recipient_email: null
-      });
+      // GUARD: Only update if there's actually something to clear. Without this,
+      // the Task.update() call below re-triggers this very automation (entity
+      // update event), which sees the same completed/snoozed status, enters this
+      // block again, and calls update again — an infinite self-triggering loop
+      // that burns integration credits (48k+ in 9 days).
+      const needsClearing =
+        (data.onesignal_notification_ids?.length > 0) ||
+        (data.reminder_schedule?.length > 0) ||
+        data.last_scheduled_until ||
+        data.next_reminder ||
+        data.reminder_interval ||
+        data.notification_recipient_email;
+
+      if (needsClearing) {
+        await base44.asServiceRole.entities.Task.update(event.entity_id, {
+          onesignal_notification_ids: [],
+          reminder_schedule: [],
+          last_scheduled_until: null,
+          next_reminder: null,
+          reminder_interval: null,
+          notification_recipient_email: null
+        });
+        console.log('[onTaskUpdate] Cleared scheduling fields');
+      } else {
+        console.log('[onTaskUpdate] Scheduling fields already clear — skipping update to prevent loop');
+      }
 
       return Response.json({ success: true, cancelled: true, reason: 'task_completed_or_snoozed' });
     }
