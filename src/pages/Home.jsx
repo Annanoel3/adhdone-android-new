@@ -66,7 +66,7 @@ export default function Home() {
 
   const loadTasks = async () => {
     try {
-      const allTasks = await base44.entities.Task.list('-updated_date');
+      const allTasks = await base44.entities.Task.list('-updated_date', 500);
       setTasks(allTasks);
       // Roll over passed birthdays to next year and ensure reminders exist
       const birthdayTasks = allTasks.filter(t => t.birthday_person && t.status === "active" && t.next_reminder);

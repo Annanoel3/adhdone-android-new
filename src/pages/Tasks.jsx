@@ -104,7 +104,7 @@ export default function Tasks() {
   }, [applyFilters]);
 
   const loadTasks = async () => {
-    const fetchedTasks = await Task.list('-created_date');
+    const fetchedTasks = await Task.list('-created_date', 500);
     setAllTasks(fetchedTasks);
   };
 

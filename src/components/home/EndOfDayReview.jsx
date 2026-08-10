@@ -53,14 +53,16 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
     });
 
     // Remaining = active parent tasks that are due today (or have no due date).
+    // Birthdays are tracked separately and excluded from task counts.
     // Future-dated tasks are "upcoming" and excluded from today's counts.
-    const remaining = allTasks.filter(t => t.status === 'active' && !t.parent_task_id && isTodayTask(t, today));
+    const remaining = allTasks.filter(t => t.status === 'active' && !t.parent_task_id && !t.birthday_person && isTodayTask(t, today));
 
-    // Upcoming = active parent tasks with a due date in the future
-    const upcoming = allTasks.filter(t => t.status === 'active' && !t.parent_task_id && isUpcomingTask(t, today));
+    // Upcoming = active parent tasks with a due date in the future (birthdays excluded)
+    const upcoming = allTasks.filter(t => t.status === 'active' && !t.parent_task_id && !t.birthday_person && isUpcomingTask(t, today));
 
     // todayTasks for completion rate = completed today + today's active/snoozed parent tasks
-    const todayTasks = [...completed, ...remaining, ...allTasks.filter(t => t.status === 'snoozed' && !t.parent_task_id && isTodayTask(t, today))];
+    // Birthdays are tracked separately and excluded from task counts.
+    const todayTasks = [...completed, ...remaining, ...allTasks.filter(t => t.status === 'snoozed' && !t.parent_task_id && !t.birthday_person && isTodayTask(t, today))];
     
     // SMART SNOOZE DETECTION: Only flag problematic snoozes
     const snoozedTasks = todayTasks.filter(t => {

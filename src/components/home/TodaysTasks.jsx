@@ -101,7 +101,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
       
       await awardPoints(points + bonusPoints);
       
-      const allTasks = await base44.entities.Task.list();
+      const allTasks = await base44.entities.Task.list('-updated_date', 500);
       const completedTasks = allTasks.filter(t => t.status === 'completed');
       const summaries = await base44.entities.DailySummary.list('-date', 1);
       const currentStreak = summaries[0]?.streak_days || 0;
