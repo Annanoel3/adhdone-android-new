@@ -270,6 +270,14 @@ export default function ScheduledTextDialog({ isOpen, onClose, onSaved, user, ed
                   <Textarea
                     value={draft}
                     onChange={handleManualEdit}
+                    onFocus={(e) => {
+                      setTimeout(() => {
+                        e.target.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }, 300);
+                      setTimeout(() => {
+                        e.target.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }, 600);
+                      }}
                     className="min-h-[90px]"
                     placeholder="Type your message or let the AI draft one…"
                   />
