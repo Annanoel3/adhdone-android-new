@@ -187,7 +187,7 @@ export default function ScheduledTextDialog({ isOpen, onClose, onSaved, user, ed
   return (
     <>
       <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Phone className="w-5 h-5 text-blue-600" /> Schedule a Text
@@ -197,13 +197,23 @@ export default function ScheduledTextDialog({ isOpen, onClose, onSaved, user, ed
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             <div className="space-y-2">
               <Label>Who's it for?</Label>
               <Input
                 value={recipientName}
-                onChange={(e) => setRecipientName(e.target.value)}
-                placeholder="e.g. Mom, Alex, Sam"
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setRecipientName(val);
+                  // Typing a phone number manually captures it as the recipient's number.
+                  const digits = val.replace(/[^\d+]/g, "");
+                  if (digits.length >= 7) {
+                    setPhone(val.trim());
+                  } else if (!val.trim()) {
+                    setPhone("");
+                  }
+                }}
+                placeholder="Type a name or number, or pick a contact"
               />
               <ContactPickerButton
                 theme={undefined}
@@ -212,17 +222,7 @@ export default function ScheduledTextDialog({ isOpen, onClose, onSaved, user, ed
                   if (pickedPhone) setPhone(pickedPhone);
                 }}
               />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Their phone number (optional)</Label>
-              <Input
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                placeholder="e.g. 555-123-4567"
-                type="tel"
-              />
-              <p className="text-xs text-gray-500">Fills in the recipient when you send.</p>
+              {phone && <p className="text-xs text-gray-500">📱 {phone}</p>}
             </div>
 
             <div className="space-y-2">
@@ -270,7 +270,7 @@ export default function ScheduledTextDialog({ isOpen, onClose, onSaved, user, ed
                   <Textarea
                     value={draft}
                     onChange={handleManualEdit}
-                    className="min-h-[120px]"
+                    className="min-h-[90px]"
                     placeholder="Type your message or let the AI draft one…"
                   />
                 </div>
