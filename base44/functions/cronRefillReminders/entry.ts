@@ -444,7 +444,85 @@ Deno.serve(async (req) => {
     }
   }
 
-  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, at: now.toISOString() };
+  // ── Scheduled texts (📞) — hourly follow-ups on the day-of until sent ─────────
+  // The initial reminder(s) are pre-scheduled via OneSignal at save time (9 AM
+  // for day-only, exact time + 10 min for time-specific). This pass sends the
+  // hourly follow-ups: once the due time has passed and the text is unsent, it
+  // pushes ~once per hour during waking hours, deduped by last_reminded_at.
+  let scheduledTextReminders = 0;
+  try {
+    const allTexts = await base44.asServiceRole.entities.ScheduledText.list('-send_at', 500);
+    const dueTexts = allTexts.filter(t =>
+      t.sent !== true &&
+      t.notification_recipient_email &&
+      t.send_at
+    );
+
+    for (const text of dueTexts) {
+      const due = new Date(text.send_at);
+      if (now.getTime() < due.getTime()) continue;          // not due yet
+      if (text.snoozed_until && new Date(text.snoozed_until).getTime() > now.getTime()) continue;
+
+      const owner = userMap[text.notification_recipient_email];
+      const timeZone = owner?.timezone || null;
+      if (!timeZone) continue;                               // can't apply local-time rules
+
+      // Only remind on the same local calendar day as the due time.
+      const dueLocalStr = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(due);
+      const nowLocalStr = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+      if (dueLocalStr !== nowLocalStr) continue;
+
+      const localMin = localMinutesOfDay(now, timeZone);
+      const quietEnabled = !!(owner && owner.quiet_hours_enabled);
+      const qStart = owner?.quiet_hours_start ? parseHHMM(owner.quiet_hours_start) : parseHHMM('22:00');
+      const qEnd = owner?.quiet_hours_end ? parseHHMM(owner.quiet_hours_end) : parseHHMM('08:00');
+      const inQuiet = quietEnabled && (qStart < qEnd
+        ? (localMin >= qStart && localMin < qEnd)
+        : (localMin >= qStart || localMin < qEnd));
+      const inDefaultSleep = localMin < 8 * 60 || localMin >= 21 * 60;
+      if (inQuiet || inDefaultSleep) continue;
+
+      const lastRemindedMs = text.last_reminded_at ? new Date(text.last_reminded_at).getTime() : 0;
+      const dedupMs = 50 * 60 * 1000;
+      if (now.getTime() - lastRemindedMs < dedupMs) continue;
+
+      try {
+        const sAppId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+        const sRestKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+        const playerIds = owner?.onesignal_player_ids || [];
+        const pushPayload: any = {
+          app_id: sAppId,
+          headings: { en: `📞 Time to text ${text.recipient_name}` },
+          contents: { en: text.message || `Don't forget to send your text to ${text.recipient_name}.` },
+          data: { screen: '/Home', type: 'scheduled_text', scheduledTextId: text.id },
+        };
+        if (playerIds.length > 0) {
+          pushPayload.include_player_ids = playerIds;
+        } else {
+          pushPayload.include_external_user_ids = [text.notification_recipient_email];
+        }
+        const pushRes = await fetch('https://onesignal.com/api/v1/notifications', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${sRestKey}` },
+          body: JSON.stringify(pushPayload),
+        });
+        const pushResult = await pushRes.json();
+        if (pushRes.ok && !pushResult.errors) {
+          await base44.asServiceRole.entities.ScheduledText.update(text.id, {
+            last_reminded_at: now.toISOString(),
+          });
+          scheduledTextReminders++;
+          console.log(`📞 [REFILL] Sent scheduled text reminder for "${text.recipient_name}"`);
+        }
+      } catch (e) {
+        console.error(`[REFILL] Scheduled text push failed for ${text.id}:`, e);
+      }
+    }
+  } catch (e) {
+    console.error('[REFILL] Scheduled text pass failed:', e);
+  }
+
+  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, scheduledTextReminders, at: now.toISOString() };
     console.log('✅ [REFILL] Complete:', result);
     return Response.json(result);
   } catch (err) {

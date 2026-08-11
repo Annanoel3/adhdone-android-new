@@ -26,6 +26,8 @@ export default function ScheduledTextDialog({ isOpen, onClose, onSaved, user, ed
   const [phone, setPhone] = useState("");
   const [occasion, setOccasion] = useState("");
   const [date, setDate] = useState("");
+  const [time, setTime] = useState("");
+  const [useSpecificTime, setUseSpecificTime] = useState(false);
   const [draft, setDraft] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -49,6 +51,13 @@ export default function ScheduledTextDialog({ isOpen, onClose, onSaved, user, ed
       if (editScheduledText.send_at) {
         setDate(new Date(editScheduledText.send_at).toISOString().slice(0, 10));
       }
+      if (editScheduledText.send_time) {
+        setTime(editScheduledText.send_time);
+        setUseSpecificTime(true);
+      } else {
+        setTime("");
+        setUseSpecificTime(false);
+      }
       // editing an existing draft — don't re-draft
       draftedKeyRef.current = `${editScheduledText.recipient_name}|${editScheduledText.send_at}`;
     } else {
@@ -56,6 +65,8 @@ export default function ScheduledTextDialog({ isOpen, onClose, onSaved, user, ed
       setPhone("");
       setOccasion("");
       setDate("");
+      setTime("");
+      setUseSpecificTime(false);
       setDraft("");
     }
   }, [isOpen, editScheduledText]);
@@ -122,10 +133,14 @@ export default function ScheduledTextDialog({ isOpen, onClose, onSaved, user, ed
 
   const handleSave = async () => {
     if (!draft.trim() || !recipientName.trim() || !date || !user?.email) return;
+    if (useSpecificTime && !time) return;
     setSaving(true);
     try {
-      // send_at = chosen date at 9 AM local
-      const sendAt = new Date(date + "T09:00:00");
+      // Day-only → 9 AM local; time-specific → chosen date+time (local).
+      const sendAt = useSpecificTime
+        ? new Date(`${date}T${time}`)
+        : new Date(date + "T09:00:00");
+      const sendTime = useSpecificTime ? time : "";
 
       if (editScheduledText) {
         const updated = {
@@ -135,6 +150,7 @@ export default function ScheduledTextDialog({ isOpen, onClose, onSaved, user, ed
           occasion: occasion.trim(),
           message: draft.trim(),
           send_at: sendAt.toISOString(),
+          send_time: sendTime,
         };
         await base44.entities.ScheduledText.update(editScheduledText.id, {
           recipient_name: updated.recipient_name,
@@ -142,6 +158,7 @@ export default function ScheduledTextDialog({ isOpen, onClose, onSaved, user, ed
           occasion: updated.occasion,
           message: updated.message,
           send_at: updated.send_at,
+          send_time: updated.send_time,
         });
         await rescheduleScheduledTextReminder(updated);
       } else {
@@ -151,6 +168,7 @@ export default function ScheduledTextDialog({ isOpen, onClose, onSaved, user, ed
           occasion: occasion.trim(),
           message: draft.trim(),
           send_at: sendAt.toISOString(),
+          send_time: sendTime,
           sent: false,
           onesignal_notification_ids: [],
           notification_recipient_email: user.email,
@@ -214,7 +232,21 @@ export default function ScheduledTextDialog({ isOpen, onClose, onSaved, user, ed
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
               />
-              <p className="text-xs text-gray-500">We'll remind you at 9 AM that morning.</p>
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 p-3">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Specific time?</p>
+                  <p className="text-xs text-gray-500">Off = remind at 9 AM that morning. On = remind at an exact time, then 10 min later, then hourly.</p>
+                </div>
+                <Switch checked={useSpecificTime} onCheckedChange={(v) => { setUseSpecificTime(v); if (!v) setTime(""); }} />
+              </div>
+              {useSpecificTime && (
+                <Input
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                />
+              )}
+              {!useSpecificTime && <p className="text-xs text-gray-500">We'll remind you at 9 AM that morning, then hourly until you send.</p>}
             </div>
 
             <div className="space-y-2">
@@ -246,7 +278,7 @@ export default function ScheduledTextDialog({ isOpen, onClose, onSaved, user, ed
                 <div className="flex gap-2">
                   <Button
                     onClick={handleSave}
-                    disabled={!draft.trim() || !recipientName.trim() || !date || saving}
+                    disabled={!draft.trim() || !recipientName.trim() || !date || (useSpecificTime && !time) || saving}
                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}

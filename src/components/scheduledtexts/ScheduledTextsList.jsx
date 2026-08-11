@@ -81,6 +81,7 @@ export default function ScheduledTextsList({ tasks, user, theme, specialMode, on
         id: t.id,
         name: t.recipient_name,
         dateIso: t.send_at,
+        sendTime: t.send_time || "",
         message: t.message,
         phone: t.phone_number || "",
         sent: false,
@@ -99,6 +100,7 @@ export default function ScheduledTextsList({ tasks, user, theme, specialMode, on
       } catch (e) { /* ignore */ }
     } else {
       try {
+        await cancelScheduledTextReminders(item.raw);
         await base44.entities.ScheduledText.update(item.id, { sent: true });
       } catch (e) { /* ignore */ }
     }
@@ -181,7 +183,9 @@ export default function ScheduledTextsList({ tasks, user, theme, specialMode, on
                     <p className="text-xs text-pink-600 font-medium">Tap to write your text →</p>
                   )}
                   <p className="text-xs text-gray-400 mt-0.5">
-                    {new Date(item.dateIso).toLocaleDateString(undefined, { month: "long", day: "numeric" })}
+                    {item.sendTime
+                      ? new Date(item.dateIso).toLocaleString(undefined, { month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })
+                      : new Date(item.dateIso).toLocaleDateString(undefined, { month: "long", day: "numeric" })}
                     {" · "}{formatWhen(item.dateIso)}
                     {item.sent && " · Sent ✓"}
                   </p>

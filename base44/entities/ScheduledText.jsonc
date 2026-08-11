@@ -22,7 +22,11 @@
     "send_at": {
       "type": "string",
       "format": "date-time",
-      "description": "The date the user wants to send the text. The morning-of reminder fires at 9 AM local on this date."
+      "description": "The original due time for the first reminder. For day-only texts this is 9 AM local on the chosen date; for time-specific texts it is the exact chosen date+time. Never changed by snoozing."
+    },
+    "send_time": {
+      "type": "string",
+      "description": "Optional time-of-day (HH:MM, 24h, local) for a time-specific text. When set, the first reminder fires at this exact time, then 10 min later, then hourly. When empty, the text is day-only (9 AM morning-of, then hourly)."
     },
     "sent": {
       "type": "boolean",
@@ -32,7 +36,12 @@
     "last_reminded_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Timestamp of the last morning-of reminder, for deduplication"
+      "description": "Timestamp of the last reminder push sent (pre-scheduled or cron). Used for hourly deduplication."
+    },
+    "snoozed_until": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When set to a future time, reminders (cron + in-app popup) are suppressed until this time passes. Set by the Snooze button."
     },
     "onesignal_notification_ids": {
       "type": "array",
@@ -40,7 +49,7 @@
         "type": "string"
       },
       "default": [],
-      "description": "OneSignal scheduled notification IDs for the morning-of reminder (for cancellation on edit/delete)"
+      "description": "OneSignal scheduled notification IDs for the initial reminder(s): one for day-only (9 AM), two for time-specific (exact time + 10-min follow-up). Used for cancellation on edit/delete/send."
     },
     "notification_recipient_email": {
       "type": "string",

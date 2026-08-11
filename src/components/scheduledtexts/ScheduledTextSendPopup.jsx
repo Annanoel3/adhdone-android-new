@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { scheduleReminder, cancelScheduledReminder } from "@/components/utils/reminderScheduler";
+import { cancelScheduledTextReminders } from "@/components/utils/scheduledTextScheduler";
 
 /**
  * Morning-of "time to send your text" popup. Appears when a scheduled text
@@ -49,7 +50,10 @@ export default function ScheduledTextSendPopup({ user, theme }) {
       const dueTexts = (texts || [])
         .filter((t) => {
           const sendAt = new Date(t.send_at);
-          return sendAt <= now && sendAt >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          if (sendAt > now) return false;
+          if (sendAt < new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)) return false;
+          if (t.snoozed_until && new Date(t.snoozed_until) > now) return false;
+          return true;
         })
         .map((t) => ({
           key: `text-${t.id}`,
@@ -119,6 +123,7 @@ export default function ScheduledTextSendPopup({ user, theme }) {
     setProcessing("send");
     try {
       if (current.kind === "text") {
+        await cancelScheduledTextReminders(current.raw);
         await base44.entities.ScheduledText.update(current.id, { sent: true });
       } else {
         await base44.entities.Task.update(current.id, { birthday_text_sent: true });
@@ -156,10 +161,10 @@ export default function ScheduledTextSendPopup({ user, theme }) {
         ],
       }).catch(() => null);
 
-      if (current.kind === "text" && id) {
+      if (current.kind === "text") {
         await base44.entities.ScheduledText.update(current.id, {
-          onesignal_notification_ids: [id],
-          send_at: snoozeUntil.toISOString(),
+          snoozed_until: snoozeUntil.toISOString(),
+          onesignal_notification_ids: id ? [id] : [],
         });
       }
       dismissedRef.current.add(current.key);
