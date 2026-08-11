@@ -8,6 +8,7 @@ import TodaysTasks from "../components/home/TodaysTasks";
 import EndOfDayReview from "../components/home/EndOfDayReview";
 import UpcomingBirthdayCard from "../components/home/UpcomingBirthdayCard";
 import BirthdayTextDialog from "../components/birthdays/BirthdayTextDialog";
+import ScheduledTextsList from "../components/scheduledtexts/ScheduledTextsList";
 import MotivationCoach from "../components/home/MotivationCoach";
 import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import MomentumCelebration from "../components/shared/MomentumCelebration";
@@ -199,7 +200,7 @@ export default function Home() {
         <div className="space-y-6">
           <WelcomeCard userName={user?.full_name} theme={theme} specialMode={specialMode} user={user} />
           
-          <QuickActions theme={theme} specialMode={specialMode} />
+          <QuickActions theme={theme} specialMode={specialMode} user={user} />
 
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6 min-w-0">
@@ -212,6 +213,14 @@ export default function Home() {
               />
 
               <UpcomingBirthdayCard
+                tasks={tasks}
+                user={user}
+                theme={theme}
+                specialMode={specialMode}
+                onRefresh={loadTasks}
+              />
+
+              <ScheduledTextsList
                 tasks={tasks}
                 user={user}
                 theme={theme}

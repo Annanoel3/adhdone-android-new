@@ -1,17 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
-import { Plus, Rocket } from "lucide-react";
+import { Plus, Rocket, Phone } from "lucide-react";
 import LaunchPicker from "../launch/LaunchPicker";
+import ScheduledTextDialog from "../scheduledtexts/ScheduledTextDialog";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function QuickActions({ theme }) {
+export default function QuickActions({ theme, user }) {
   const navigate = useNavigate();
   const specialMode = localStorage.getItem('special_mode') || 'normal';
   
   const [rotatingText, setRotatingText] = useState(0);
   const [showLaunch, setShowLaunch] = useState(false);
+  const [showScheduleText, setShowScheduleText] = useState(false);
   const rotatingOptions = ["Task", "Idea"];
 
   useEffect(() => {
@@ -34,12 +36,18 @@ export default function QuickActions({ theme }) {
       label: "Launch",
       onClick: () => setShowLaunch(true),
       color: theme === 'minimalist' ? 'bg-indigo-100 text-indigo-700' : 'bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-700'
+    },
+    {
+      icon: Phone,
+      label: "Text",
+      onClick: () => setShowScheduleText(true),
+      color: theme === 'minimalist' ? 'bg-blue-100 text-blue-700' : 'bg-gradient-to-br from-blue-100 to-cyan-100 text-blue-700'
     }
   ];
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-3">
       {actions.map((action) => (
         <Card
           key={action.label}
@@ -80,6 +88,16 @@ export default function QuickActions({ theme }) {
       ))}
       </div>
       <LaunchPicker open={showLaunch} onOpenChange={setShowLaunch} theme={theme} />
+      <ScheduledTextDialog
+        isOpen={showScheduleText}
+        onClose={() => setShowScheduleText(false)}
+        onSaved={() => {
+          setShowScheduleText(false);
+          window.dispatchEvent(new Event("scheduled-texts-changed"));
+        }}
+        user={user}
+        theme={theme}
+      />
     </div>
   );
 }

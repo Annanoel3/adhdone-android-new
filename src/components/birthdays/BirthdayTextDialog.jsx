@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import ContactPickerButton from "./ContactPickerButton";
+import { findContactByName } from "../utils/contactMatcher";
 
 /**
  * Prompts the user to draft a birthday text message when a birthday is created.
@@ -31,6 +32,7 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
   const [aiFormal, setAiFormal] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [phone, setPhone] = useState("");
+  const [autoMatched, setAutoMatched] = useState(false);
 
   const personName = birthdayTask?.birthday_person || "Birthday";
 
@@ -39,6 +41,7 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
 
     // Load saved phone number and message
     setPhone(birthdayTask.birthday_phone_number || "");
+    setAutoMatched(false);
     // If the task already has a saved message, load it instead of re-drafting
     if (birthdayTask.birthday_text_message) {
       setDraft(birthdayTask.birthday_text_message);
@@ -46,6 +49,18 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
     }
 
     let cancelled = false;
+
+    // Auto-match a contact from the phone by the birthday person's name.
+    // Best-effort — if it fails or finds nothing, the manual picker covers it.
+    if (!birthdayTask.birthday_phone_number && birthdayTask.birthday_person) {
+      findContactByName(birthdayTask.birthday_person).then((found) => {
+        if (!cancelled && found?.phone) {
+          setPhone(found.phone);
+          setAutoMatched(true);
+        }
+      });
+    }
+
     const fetchDraft = async () => {
       setLoading(true);
       try {
@@ -157,9 +172,13 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
                     theme={undefined}
                     onContactPicked={({ phone: pickedPhone }) => {
                       if (pickedPhone) setPhone(pickedPhone);
+                      setAutoMatched(false);
                     }}
                   />
-                  <p className="text-xs text-gray-500">Fills in the recipient line when you send.</p>
+                  {autoMatched && (
+                    <p className="text-xs text-green-600">✓ Auto-matched from your contacts. Tap to change if it's wrong.</p>
+                  )}
+                  {!autoMatched && <p className="text-xs text-gray-500">Fills in the recipient line when you send.</p>}
                 </div>
 
                 <div className="space-y-2">

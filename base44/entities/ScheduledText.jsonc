@@ -1,0 +1,63 @@
+{
+  "name": "ScheduledText",
+  "type": "object",
+  "properties": {
+    "recipient_name": {
+      "type": "string",
+      "description": "Who the text is for"
+    },
+    "phone_number": {
+      "type": "string",
+      "description": "Recipient phone number. When set, the Send button pre-fills the recipient in the messaging app.",
+      "default": ""
+    },
+    "message": {
+      "type": "string",
+      "description": "The text message body to send"
+    },
+    "occasion": {
+      "type": "string",
+      "description": "Optional context/occasion for the text (e.g. 'follow up about the project', 'thank you for dinner', 'thinking of you')"
+    },
+    "send_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The date the user wants to send the text. The morning-of reminder fires at 9 AM local on this date."
+    },
+    "sent": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the user has pressed Send (opens messaging app). Stops further reminders."
+    },
+    "last_reminded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of the last morning-of reminder, for deduplication"
+    },
+    "onesignal_notification_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "OneSignal scheduled notification IDs for the morning-of reminder (for cancellation on edit/delete)"
+    },
+    "notification_recipient_email": {
+      "type": "string",
+      "description": "Email of the user who should receive the reminder"
+    }
+  },
+  "required": [
+    "recipient_name",
+    "message",
+    "send_at"
+  ],
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}
