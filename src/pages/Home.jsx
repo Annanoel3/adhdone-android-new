@@ -8,7 +8,6 @@ import TodaysTasks from "../components/home/TodaysTasks";
 import EndOfDayReview from "../components/home/EndOfDayReview";
 import UpcomingBirthdayCard from "../components/home/UpcomingBirthdayCard";
 import BirthdayTextDialog from "../components/birthdays/BirthdayTextDialog";
-import ScheduledTextsList from "../components/scheduledtexts/ScheduledTextsList";
 import MotivationCoach from "../components/home/MotivationCoach";
 import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import MomentumCelebration from "../components/shared/MomentumCelebration";
@@ -213,14 +212,6 @@ export default function Home() {
               />
 
               <UpcomingBirthdayCard
-                tasks={tasks}
-                user={user}
-                theme={theme}
-                specialMode={specialMode}
-                onRefresh={loadTasks}
-              />
-
-              <ScheduledTextsList
                 tasks={tasks}
                 user={user}
                 theme={theme}

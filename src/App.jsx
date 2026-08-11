@@ -22,6 +22,7 @@ import Home from '@/pages/Home';
 import Community from '@/pages/Community';
 import BrandBook from '@/pages/BrandBook';
 import About from '@/pages/About';
+import ScheduledTexts from '@/pages/ScheduledTexts';
 import { LaunchProvider } from '@/context/LaunchContext';
 
 // Sentry loaded via CDN in index.html
@@ -98,6 +99,7 @@ const AuthenticatedApp = () => {
       <Route path="/Calendar" element={<LayoutWrapper currentPageName="Calendar"><Calendar /></LayoutWrapper>} />
       <Route path="/Community" element={<LayoutWrapper currentPageName="Community"><Community /></LayoutWrapper>} />
       <Route path="/About" element={<LayoutWrapper currentPageName="About"><About /></LayoutWrapper>} />
+      <Route path="/ScheduledTexts" element={<LayoutWrapper currentPageName="ScheduledTexts"><ScheduledTexts /></LayoutWrapper>} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
     </LaunchProvider>

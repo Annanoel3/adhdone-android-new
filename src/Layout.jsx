@@ -435,6 +435,11 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           url: createPageUrl("ParkingLot"),
           icon: Lightbulb,
         },
+        {
+          title: "Scheduled Texts",
+          url: createPageUrl("ScheduledTexts"),
+          icon: MessageCircle,
+        },
       ],
     },
     {
