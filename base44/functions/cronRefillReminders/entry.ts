@@ -289,6 +289,7 @@ Deno.serve(async (req) => {
         notification_id: `planned_${task.id}_${kind}_${sendAt.getTime()}`,
         send_at: sendAt.toISOString(),
         label,
+        kind,
         notification_title: content.title,
         notification_body: content.body,
         scheduled: false,
@@ -354,11 +355,30 @@ Deno.serve(async (req) => {
       const sendAtMs = new Date(entry.send_at).getTime();
       if (sendAtMs <= now.getTime()) continue;
       if (sendAtMs - now.getTime() > BIRTHDAY_WINDOW_MS) continue;
+
+      // If the user still hasn't drafted a birthday text, repurpose the
+      // day-before and day-of reminders into a "write your text" nudge instead
+      // of the generic "birthday is tomorrow/today" message. The hourly
+      // send-text push and in-app popup are already gated on a drafted
+      // message, so this is the only nudge they get when nothing is written.
+      let pushTitle = entry.notification_title;
+      let pushBody = entry.notification_body;
+      if (!task.birthday_text_message && (entry.kind === 'day_before' || entry.kind === 'day_of')) {
+        const person = task.birthday_person || 'Someone';
+        const dateStr = new Date(nextReminderIso).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+        pushTitle = `🎂 Write a text for ${person}`;
+        pushBody = entry.kind === 'day_before'
+          ? `It's ${person}'s birthday tomorrow (${dateStr}) — you haven't written a text yet. Tap to draft one now.`
+          : `It's ${person}'s birthday today (${dateStr}) — you haven't written a text yet. Tap to draft one now.`;
+        entry.notification_title = pushTitle;
+        entry.notification_body = pushBody;
+      }
+
       try {
         const res = await base44.asServiceRole.functions.invoke('schedulePush', {
           toUserExternalId: task.notification_recipient_email,
-          title: entry.notification_title,
-          body: entry.notification_body,
+          title: pushTitle,
+          body: pushBody,
           sendAtISO: entry.send_at,
           data: { screen: '/TaskNotification', taskId: task.id, type: 'birthday_reminder' },
         });
