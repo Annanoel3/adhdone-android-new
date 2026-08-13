@@ -5,7 +5,9 @@ function getNextRecurrenceDate(task) {
   const now = new Date();
   let nextDate = new Date(baseDate);
 
-  if (task.recurrence_pattern === 'weekly') {
+  if (task.recurrence_pattern === 'daily') {
+    nextDate.setDate(nextDate.getDate() + 1);
+  } else if (task.recurrence_pattern === 'weekly') {
     nextDate.setDate(nextDate.getDate() + 7);
   } else if (task.recurrence_pattern === 'every_other_week') {
     nextDate.setDate(nextDate.getDate() + 14);
@@ -18,7 +20,9 @@ function getNextRecurrenceDate(task) {
   // If computed date is still in the past, calculate from now
   if (nextDate <= now) {
     nextDate = new Date(now);
-    if (task.recurrence_pattern === 'weekly') {
+    if (task.recurrence_pattern === 'daily') {
+      nextDate.setDate(nextDate.getDate() + 1);
+    } else if (task.recurrence_pattern === 'weekly') {
       nextDate.setDate(nextDate.getDate() + 7);
     } else if (task.recurrence_pattern === 'every_other_week') {
       nextDate.setDate(nextDate.getDate() + 14);
