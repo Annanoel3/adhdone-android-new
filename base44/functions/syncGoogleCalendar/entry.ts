@@ -421,7 +421,12 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
         end_date: endDateISO,
         classification: isOnce ? 'event' : 'task',
         notification_recipient_email: user.email,
-        recurrence_pattern: recurrenceRule ? (recurrenceRule.includes('FREQ=DAILY') ? 'daily' : recurrenceRule.includes('FREQ=WEEKLY') ? 'weekly' : recurrenceRule.includes('FREQ=MONTHLY') ? 'monthly' : recurrenceRule.includes('FREQ=YEARLY') ? 'yearly' : 'none') : 'none'
+        // Imported calendar events do NOT use the app's "repeats after completion"
+        // recurrence — the calendar itself already represents the recurrence,
+        // and enabling app-side recurrence creates duplicate task records on
+        // every completion. Users can still set recurrence manually in the edit
+        // modal if they want a new copy after completion.
+        recurrence_pattern: 'none'
       };
     }
 
