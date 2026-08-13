@@ -167,6 +167,7 @@ export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Does not repeat</SelectItem>
+                <SelectItem value="daily">Daily (same time tomorrow)</SelectItem>
                 <SelectItem value="weekly">Weekly (same day next week)</SelectItem>
                 <SelectItem value="every_other_week">Every other week (same day, 2 weeks)</SelectItem>
                 <SelectItem value="monthly">Monthly (same day next month)</SelectItem>
@@ -174,9 +175,23 @@ export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }
               </SelectContent>
             </Select>
             {formData.recurrence_pattern !== 'none' && (
-              <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                When you check this off, a new copy will automatically appear for {formData.recurrence_pattern === 'weekly' ? 'next week' : formData.recurrence_pattern === 'every_other_week' ? 'in 2 weeks' : formData.recurrence_pattern === 'monthly' ? 'next month' : 'next year'}.
-              </p>
+              <div className={`mt-2 flex items-start gap-2 rounded-lg border p-2.5 text-xs ${
+                theme === 'dark'
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+                  : 'border-amber-300 bg-amber-50 text-amber-800'
+              }`}>
+                <RefreshCw className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" />
+                <span>
+                  <strong>Heads up:</strong> When you complete this task, a new copy will
+                  automatically be created for{' '}
+                  {formData.recurrence_pattern === 'daily' ? 'tomorrow'
+                    : formData.recurrence_pattern === 'weekly' ? 'next week'
+                    : formData.recurrence_pattern === 'every_other_week' ? 'in 2 weeks'
+                    : formData.recurrence_pattern === 'monthly' ? 'next month'
+                    : 'next year'}{' '}
+                  — so it keeps coming back until you change this to "Does not repeat".
+                </span>
+              </div>
             )}
           </div>
 
