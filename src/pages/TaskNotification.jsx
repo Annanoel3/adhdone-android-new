@@ -109,11 +109,6 @@ export default function TaskNotification() {
         sendAtISO: snoozeUntil.toISOString(),
         taskId: task.id,
         data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency, type: 'task_reminder' },
-        buttons: [
-          { id: "snooze_30", text: "Snooze 30 min" },
-          { id: "snooze_60", text: "Snooze 1 hour" },
-          { id: "complete", text: "✅ Done" }
-        ]
       });
 
       await base44.entities.Task.update(task.id, {

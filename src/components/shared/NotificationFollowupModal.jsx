@@ -201,11 +201,6 @@ export default function NotificationFollowupModal({ user, theme }) {
           urgency: currentTask.urgency,
           type: "task_reminder",
         },
-        buttons: [
-          { id: "snooze_15", text: "Snooze 15 min" },
-          { id: "snooze_60", text: "Snooze 1 hour" },
-          { id: "complete", text: "✅ Done" },
-        ],
       });
 
       await base44.entities.Task.update(currentTask.id, {

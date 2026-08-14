@@ -97,13 +97,15 @@ function resolveReminderTimes(reminders, scheduledDateISO, title = '') {
     })
     .filter(r => new Date(r.sendAtISO).getTime() > bufferMs)
     .sort((a, b) => new Date(a.sendAtISO).getTime() - new Date(b.sendAtISO).getTime())
-    // Deduplicate by send time: the LLM occasionally returns two reminders
-    // (e.g. "morning of" + "day of at 9am") that resolve to the same minute,
-    // which produced two near-identical notifications at once. Keep the first
-    // (earliest-sorted) entry for each 1-minute slot.
+    // Deduplicate by send time: the schedule sometimes produces two reminders
+    // that resolve to the same clock time (e.g. "morning of at 9am" + "1 hour
+    // before" for a 10am task both land at 9:00). Keep only the first reminder
+    // for each unique time so the user gets one notification at 9am, not two.
     .filter((r, i, arr) => {
       if (i === 0) return true;
-      return Math.abs(new Date(r.sendAtISO).getTime() - new Date(arr[i - 1].sendAtISO).getTime()) >= 60000;
+      const prevMin = Math.floor(new Date(arr[i - 1].sendAtISO).getTime() / 60000);
+      const thisMin = Math.floor(new Date(r.sendAtISO).getTime() / 60000);
+      return thisMin !== prevMin;
     });
 }
 
