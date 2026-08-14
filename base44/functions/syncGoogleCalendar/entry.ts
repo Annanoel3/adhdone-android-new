@@ -378,6 +378,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
       let nextReminderISO;
       let dueDateISO = null;
       let endDateISO = null;
+      let startDateISO = null;
       if (isOnce) {
         // Event: fire the single reminder at the event's start time.
         nextReminderISO = nextReminderDate.toISOString();
@@ -408,6 +409,26 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
           const [y, m, d] = String(ai.target_date).split('-').map(n => parseInt(n, 10));
           if (y && m && d) dueDateISO = new Date(y, m - 1, d, 17, 0, 0, 0).toISOString();
         }
+        // Preserve multi-day span for tasks the same way events keep theirs:
+        // if the Google event spans multiple days, anchor start_date to the
+        // event start and end_date (plus due_date) to the event end so the
+        // task shows on each day of the span and drops off after the last day.
+        if (endRaw) {
+          let endDate;
+          if (/^\d{4}-\d{2}-\d{2}$/.test(endRaw)) {
+            const [y, m, d] = endRaw.split('-').map(n => parseInt(n, 10));
+            endDate = new Date(y, m - 1, d - 1, 9, 0, 0, 0);
+          } else {
+            endDate = new Date(endRaw);
+          }
+          const fmt = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+          if (endDate > nextReminderDate && fmt(endDate) !== fmt(nextReminderDate)) {
+            startDateISO = nextReminderDate.toISOString();
+            endDateISO = endDate.toISOString();
+            // The event end is the natural deadline for a multi-day task.
+            dueDateISO = endDate.toISOString();
+          }
+        }
       }
 
       taskRecord = {
@@ -420,6 +441,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
         reminder_interval: reminderInterval,
         reminder_count: 0,
         next_reminder: nextReminderISO,
+        start_date: startDateISO,
         due_date: dueDateISO,
         end_date: endDateISO,
         classification: isOnce ? 'event' : 'task',
