@@ -41,6 +41,7 @@ export default function AddTask() {
   const [optimisticTasks, setOptimisticTasks] = useState([]);
   const [showAdvanceReminderDialog, setShowAdvanceReminderDialog] = useState(false);
   const [pendingTask, setPendingTask] = useState(null);
+  const [advanceQueue, setAdvanceQueue] = useState([]);
   const [showPriorityPicker, setShowPriorityPicker] = useState(false);
   const [pendingPriorityTask, setPendingPriorityTask] = useState(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -73,6 +74,18 @@ export default function AddTask() {
   - "call dentist and pay rent" → 2 tasks (completely different)
   - "buy milk, call mom, and do laundry" → 3 tasks (all independent)
   - "water the plants and schedule dentist appointment" → 2 tasks (unrelated)
+
+  ITINERARY / SCHEDULED EVENTS (SPLIT THESE):
+  If the input is an itinerary, schedule, or plan with MULTIPLE DISTINCT TIMED EVENTS
+  (travel segments, appointments, or activities at different times/locations), SPLIT
+  each distinct event into its own task — even though the events are part of the same
+  trip or day. Each event = a separate activity or destination with its own start time.
+  - "On Sunday October 4 leave the Airbnb at 12:30 PM for Cañon City. Arrive at the Royal Gorge train depot at 2:30 PM to check in. Train runs 3:30 PM to 5:30 PM." → 2 tasks:
+    1. "On Sunday October 4 leave the Airbnb at 12:30 PM for Cañon City"
+    2. "On Sunday October 4 arrive at the Royal Gorge train depot at 2:30 PM to check in. Train runs 3:30 PM to 5:30 PM"
+    (The 2:30 arrival/check-in and the 3:30-5:30 train ride are ONE event — same outing — so keep them together; only split distinct outings/activities.)
+  - "Monday: dentist at 9am, lunch with mom at 12pm, pick up kids at 3pm" → 3 tasks (one per timed event)
+  GROUPING RULE: Sub-actions that belong to the SAME outing (arriving early, check-in, the activity itself, the ride home) stay together in ONE task. Only split when there are separate activities/destinations at different times.
 
   CRITICAL: When splitting, PRESERVE any time/date words (e.g., "today", "tomorrow",
   "tonight") on EACH split task so the user's timing intent is not lost.
@@ -499,7 +512,9 @@ JSON:
         const isAtLeastOneDayAway = nextReminder >= oneDayFromNow;
 
         if (isAtLeastOneDayAway) {
-          // Show advance reminder dialog for tasks 1+ day away
+          // Task 1+ day away — the caller collects these and shows the advance
+          // reminder dialog once per task (queued), so a multi-event itinerary
+          // creates a separate task for each segment instead of only the last.
           const taskData = {
             title: parsed.title || inputText.trim(),
             description: '',
@@ -513,12 +528,10 @@ JSON:
             energy_required: parsed.energy_required || 'medium',
             status: 'active',
             notification_recipient_email: currentUser.email
-            };
+          };
 
-          console.log('🔄 [PROCESS] Task 1+ day away - showing advance reminder dialog');
-          setPendingTask({ taskData, currentUser });
-          setShowAdvanceReminderDialog(true);
-          return false; // Don't navigate - let dialog handle it
+          console.log('🔄 [PROCESS] Task 1+ day away - queuing for advance reminder dialog');
+          return { needsAdvance: true, taskData, currentUser };
         }
         // Otherwise, continue with normal creation (no advance reminder dialog)
       } else if (parsed.reminder_interval && recurringIntervals.includes(parsed.reminder_interval)) {
@@ -729,6 +742,61 @@ JSON:
     }
   };
 
+  // Creates one advance-eligible task with the user's chosen lead time.
+  // The reminder fires `minutesBefore` before the event (or at the event time
+  // if they chose "just on time"). The event time itself is preserved on
+  // taskData.event_time so it stays visible on the card.
+  const createAdvanceTask = async (taskData, currentUser, minutesBefore) => {
+    const eventTime = new Date(taskData.next_reminder);
+    const reminderTime = minutesBefore > 0
+      ? new Date(eventTime.getTime() - (minutesBefore * 60 * 1000))
+      : eventTime;
+
+    // Never schedule a past reminder — fall back to the event time.
+    let effectiveReminderTime = reminderTime;
+    if (reminderTime.getTime() <= Date.now() + 2 * 60 * 1000) {
+      effectiveReminderTime = eventTime;
+    }
+
+    const createdTask = await base44.entities.Task.create({
+      ...taskData,
+      next_reminder: effectiveReminderTime.toISOString(),
+    });
+
+    if (effectiveReminderTime.getTime() > Date.now()) {
+      try {
+        const notificationId = await scheduleReminder({
+          email: currentUser.email,
+          title: minutesBefore > 0 ? "📋 Upcoming Task" : "Task Reminder 📋",
+          body: minutesBefore > 0
+            ? `In ${minutesBefore >= 60 ? `${minutesBefore / 60} hour${minutesBefore > 60 ? 's' : ''}` : `${minutesBefore} min`}: ${createdTask.title}\n\nTap to view details.`
+            : `${createdTask.title}\n\nTap to mark as complete!`,
+          sendAtISO: effectiveReminderTime.toISOString(),
+          taskId: createdTask.id,
+          data: {
+            screen: "/TaskNotification",
+            taskId: createdTask.id,
+            urgency: createdTask.urgency,
+            type: minutesBefore > 0 ? 'advance_reminder' : 'task_reminder'
+          },
+          buttons: [
+            { id: "snooze_15", text: "Snooze 15 min" },
+            { id: "snooze_60", text: "Snooze 1 hour" },
+            { id: "complete", text: "✅ Done" }
+          ]
+        });
+        if (notificationId) {
+          base44.entities.Task.update(createdTask.id, {
+            onesignal_notification_ids: [notificationId]
+          });
+        }
+      } catch (error) {
+        console.error("Failed to schedule reminder:", error);
+      }
+    }
+    return createdTask;
+  };
+
   const handleAdvanceReminderChoice = async (minutesBefore) => {
     if (!pendingTask) return;
 
@@ -738,83 +806,25 @@ JSON:
     setIsProcessing(true);
 
     try {
-      // Create task first
-      const createdTask = await base44.entities.Task.create(taskData);
+      await createAdvanceTask(taskData, currentUser, minutesBefore);
 
-      const mainReminderTime = new Date(taskData.next_reminder);
-
-      // Check for multi-reminder category first (appointments, events, payments)
-      const { scheduleMultiReminders } = await import('../components/utils/multiReminderScheduler');
-      const multiIds = await scheduleMultiReminders({
-        email: currentUser.email,
-        title: createdTask.title,
-        scheduledDateISO: mainReminderTime.toISOString(),
-        taskId: createdTask.id,
-        urgency: createdTask.urgency,
-      });
-
-      if (multiIds) {
-        // Multi-reminder matched — use the category-based schedule
-        base44.entities.Task.update(createdTask.id, {
-          onesignal_notification_ids: multiIds
-        });
+      // If more advance-eligible tasks are queued (e.g. a multi-event
+      // itinerary), show the dialog for the next one.
+      if (advanceQueue.length > 0) {
+        const next = advanceQueue[0];
+        setAdvanceQueue(prev => prev.slice(1));
+        setPendingTask(next);
+        setShowAdvanceReminderDialog(true);
       } else {
-        // No multi-reminder match — use user's advance reminder choice
-        Promise.all([
-          scheduleReminder({
-            email: currentUser.email,
-            title: "Task Reminder 📋",
-            body: `${createdTask.title}\n\nTap to mark as complete!`,
-            sendAtISO: mainReminderTime.toISOString(),
-            taskId: createdTask.id,
-            data: {
-              screen: "/TaskNotification",
-              taskId: createdTask.id,
-              urgency: createdTask.urgency,
-              type: 'task_reminder'
-            },
-            buttons: [
-              { id: "snooze_15", text: "Snooze 15 min" },
-              { id: "snooze_60", text: "Snooze 1 hour" },
-              { id: "complete", text: "✅ Done" }
-            ]
-          }),
-          minutesBefore > 0 ? (async () => {
-            const advanceTime = new Date(mainReminderTime.getTime() - (minutesBefore * 60 * 1000));
-            if (advanceTime.getTime() > new Date().getTime()) {
-              return scheduleReminder({
-                email: currentUser.email,
-                title: "📋 Upcoming Task",
-                body: `In ${minutesBefore >= 60 ? `${minutesBefore / 60} hour${minutesBefore > 60 ? 's' : ''}` : `${minutesBefore} min`}: ${createdTask.title}\n\nTap to view details.`,
-                sendAtISO: advanceTime.toISOString(),
-                taskId: createdTask.id,
-                data: {
-                  screen: "/TaskNotification",
-                  taskId: createdTask.id,
-                  urgency: createdTask.urgency,
-                  type: 'advance_reminder'
-                }
-              });
-            }
-          })() : null
-        ]).then(([notificationId]) => {
-          if (notificationId) {
-            base44.entities.Task.update(createdTask.id, {
-              onesignal_notification_ids: [notificationId]
-            });
-          }
-        }).catch(error => {
-          console.error("Failed to schedule reminders:", error);
-        });
+        setPendingTask(null);
+        navigate(createPageUrl("Home"), { state: { reload: true } });
       }
-
-      // Navigate after task is created
-      navigate(createPageUrl("Home"), { state: { reload: true } });
     } catch (error) {
       console.error("Error creating task with advance reminder:", error);
       alert("Failed to create task with advance reminder. Please try again.");
-    } finally {
       setPendingTask(null);
+      setAdvanceQueue([]);
+    } finally {
       setIsProcessing(false);
     }
   };
@@ -1106,6 +1116,30 @@ JSON:
     }
   };
 
+  // Runs detectMultipleTasks' split list through processAndCreateTask, collecting
+  // any advance-eligible tasks and queueing them for the advance-reminder dialog
+  // (one at a time) so a multi-event itinerary creates a task per segment.
+  const processTaskList = async (taskList) => {
+    const advanceEligible = [];
+    let allSuccess = true;
+    for (const taskText of taskList) {
+      const result = await processAndCreateTask(taskText);
+      if (result && typeof result === 'object' && result.needsAdvance) {
+        advanceEligible.push(result);
+      } else if (result !== true) {
+        allSuccess = false;
+      }
+    }
+    setIsProcessing(false);
+    if (advanceEligible.length > 0) {
+      setAdvanceQueue(advanceEligible.slice(1));
+      setPendingTask(advanceEligible[0]);
+      setShowAdvanceReminderDialog(true);
+    } else if (allSuccess) {
+      navigate(createPageUrl("Home"), { state: { reload: true } });
+    }
+  };
+
   const handleVoiceTranscription = async (audioBlob) => {
     try {
     // Convert audio to base64 for transcription
@@ -1126,16 +1160,7 @@ JSON:
         const taskList = await detectMultipleTasks(response.data.text);
         console.log('🎤 [VOICE] Detected', taskList.length, 'task(s)');
 
-        // Process each task
-        let allSuccess = true;
-        for (const taskText of taskList) {
-          const success = await processAndCreateTask(taskText);
-          if (!success) allSuccess = false;
-        }
-
-        if (allSuccess && !showAdvanceReminderDialog) {
-          navigate(createPageUrl("Home"), { state: { reload: true } });
-        }
+        await processTaskList(taskList);
       } else {
         throw new Error('Failed to transcribe audio');
       }
@@ -1165,22 +1190,7 @@ JSON:
       const taskList = await detectMultipleTasks(input);
       console.log('📝 [TEXT INPUT] Detected', taskList.length, 'task(s)');
 
-      // Process each task
-      let allSuccess = true;
-      for (const taskText of taskList) {
-        console.log('📝 [TEXT INPUT] Processing:', taskText);
-        const success = await processAndCreateTask(taskText);
-        if (!success) allSuccess = false;
-      }
-
-      setIsProcessing(false);
-
-      if (allSuccess && !showAdvanceReminderDialog) {
-        console.log('📝 [TEXT INPUT] ✅ All successful, navigating to Home');
-        navigate(createPageUrl("Home"), { state: { reload: true } });
-      } else {
-        console.log('📝 [TEXT INPUT] ⚠️ Not navigating:', { allSuccess, showAdvanceReminderDialog });
-      }
+      await processTaskList(taskList);
     } catch (error) {
       console.error('📝 [TEXT INPUT] ❌ ERROR:', error);
       setIsProcessing(false);
