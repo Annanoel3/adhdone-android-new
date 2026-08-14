@@ -454,7 +454,17 @@ JSON:
         }
       }
 
-      if (parsed.target_date && parsed.target_time && actualReminderInterval === 'once') {
+      if (parsed.day_only_task && parsed.target_date && actualReminderInterval === 'once') {
+        // "Remind me to do X on [day]" — night-before heads up + day-of hourly.
+        // Anchor the schedule at 9 AM on the target day.
+        const [y, m, d] = parsed.target_date.split('-').map(n => parseInt(n, 10));
+        nextReminder = new Date(y, m - 1, d, 9, 0, 0, 0);
+        const twoMinFromNow = new Date(now.getTime() + 2 * 60 * 1000);
+        if (nextReminder <= twoMinFromNow) {
+          // Target day is today/past — shouldn't happen for future-day tasks.
+          nextReminder = null;
+        }
+      } else if (parsed.target_date && parsed.target_time && actualReminderInterval === 'once') {
         // One-time reminder with specific date/time
         console.log('🔄 [PROCESS] One-time reminder with date/time');
         // Parse date components to avoid timezone issues
@@ -618,6 +628,7 @@ JSON:
               scheduledDateISO: nextReminder.toISOString(),
               taskId: createdTask.id,
               urgency: createdTask.urgency,
+              dayOnly: !!parsed.day_only_task,
             }))
             .then(multiIds => {
               if (multiIds) {

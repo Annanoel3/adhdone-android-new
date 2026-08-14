@@ -65,20 +65,41 @@ export function buildTaskParsePrompt(inputText: string): string {
         Set: reminder_interval="10min" or "1hour", no target_date/target_time
 
       "tomorrow" with NO specific time (CRITICAL — commonly misclassified):
-      - If it is a GENERAL ACTIONABLE TASK (research, "look into", "check on", sell, organize, clean, errands, projects, chores, posting, returning, fixing) → DO NOT use "once". Treat it as RECURRING and fall through to the SMART INFERENCE / GENERAL ACTIONABLE TASKS rules below: pick reminder_interval from urgency (e.g. "2hours"/"4hours"/"daily"), set needs_date_pick=false. "tomorrow" here just means the user is thinking about it tomorrow — the app should keep nudging until it's done, NOT fire a single reminder.
+      - If it is a GENERAL ACTIONABLE TASK (research, "look into", "check on", sell, organize, clean, errands, projects, chores, posting, returning, fixing) → This is a DAY-ONLY task: reminder_interval="once", target_date=TOMORROW, target_time=null, needs_date_pick=false, day_only_task=true. The app sends ONE "heads up, this is due tomorrow" reminder TONIGHT, then hourly nudges TOMORROW until the task is done. Do NOT start recurring reminders now — the task isn't due until tomorrow, so bugging the user every 2 hours before then is annoying and counterproductive.
       - If it is a genuine SCHEDULED EVENT or APPOINTMENT (dentist, doctor, therapist, concert, wedding, party, meeting, class, "make lunch", "pick up cake", travel) → reminder_interval="once", target_date=TOMORROW, target_time=null, needs_date_pick=true (the app asks the user to pick a time).
-      - When in doubt, default to RECURRING (not "once").
+      - When in doubt, default to DAY-ONLY for tasks (day_only_task=true), or needs_date_pick for events.
 
       "tomorrow at X":
       - Set: reminder_interval="once", target_date=TOMORROW, target_time=<specified time>
 
       SPECIFIC DAY-OF-MONTH (CRITICAL — this is commonly missed):
-      - "on the 28th", "by the 28th", "the 28th" → ONE-TIME, reminder_interval="once"
+      - "on the 28th", "the 28th" (a TASK tied to that day, no "by") → DAY-ONLY: reminder_interval="once", day_only_task=true
         → target_date = current month + that day number, format YYYY-MM-DD
         → If that day has already passed this month, use next month
-        → target_time = null unless a time is also specified; if no time, set needs_date_pick=true
-        → Example: today is ${todayISO}, "pay zx4rr on the 28th" → target_date="${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-28", reminder_interval="once", target_time=null, needs_date_pick=true
-      - "on the 1st", "by the 15th" → same logic
+        → target_time = null unless a time is also specified; if no time, needs_date_pick=false, day_only_task=true
+        → Example: today is ${todayISO}, "pay zx4rr on the 28th" → target_date="${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-28", reminder_interval="once", target_time=null, needs_date_pick=false, day_only_task=true
+      - "by the 28th", "by the 15th" (a DEADLINE) → RECURRING with due_date (see RELATIVE DEADLINES), NOT day-only.
+      - "on the 1st" → same DAY-ONLY logic as "on the 28th".
+      - If it's an EVENT/appointment on that day (dentist, concert) → needs_date_pick=true, day_only_task=false.
+
+      "ON [specific day]" TASKS — DAY-ONLY RULE (CRITICAL):
+      - If the user says "remind me to do X on Friday", "remind me to do X on the 20th",
+        "remind me to do X next Monday" — a TASK (not event) tied to a specific future day with NO time:
+        → reminder_interval="once"
+        → target_date = that day (YYYY-MM-DD)
+        → target_time = null
+        → needs_date_pick = false (do NOT ask for a time — the user wants day-of nudges)
+        → day_only_task = true
+        → classification = "task"
+        → is_flexible = false
+      - The app sends ONE "heads up, X is due tomorrow" reminder the night before, then hourly
+        nudges on the day of (based on priority) until the task is done. NO reminders fire in the
+        days leading up — the task isn't due until that day, so bugging the user every 2 hours for
+        6 days would be extremely annoying.
+      - This does NOT apply to EVENTS/appointments (dentist, concert, party) → those use needs_date_pick.
+      - This does NOT apply to "by Friday" deadlines → those are RECURRING with due_date.
+      - This does NOT apply to "today" tasks → those start recurring immediately (TODAY OVERRIDE).
+      - If the target day is TODAY, do NOT use day_only_task — use the TODAY OVERRIDE (recurring 2hours).
 
       MULTI-DAY EVENTS / DATE RANGES (CRITICAL):
       - If the user describes a SPAN of days, set target_date to the FIRST day and
@@ -284,6 +305,7 @@ export function buildTaskParsePrompt(inputText: string): string {
       "due_date": "YYYY-MM-DD or null — set when the user mentions a DEADLINE (e.g., 'by Friday', 'end of the week', 'by tomorrow', 'by the 15th', 'today' tasks). For 'today' tasks, set due_date=today. For relative deadline phrases, use the calculated date from the RELATIVE DEADLINES rules above.",
       "priority_uninferrable": false,
       "is_flexible": false,
-      "needs_date_pick": false
+      "needs_date_pick": false,
+      "day_only_task": false
       }`;
 }

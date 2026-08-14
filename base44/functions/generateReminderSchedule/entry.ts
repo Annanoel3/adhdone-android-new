@@ -104,7 +104,7 @@ export default async function(req) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const bodyText = await req.text();
-    const { title, scheduledDateISO, urgency } = JSON.parse(bodyText);
+    const { title, scheduledDateISO, urgency, dayOnly } = JSON.parse(bodyText);
 
     if (!title || !scheduledDateISO) {
       return Response.json({ error: 'title and scheduledDateISO required' }, { status: 400 });
@@ -139,6 +139,36 @@ export default async function(req) {
         };
       });
       console.log(`[generateReminderSchedule] Deterministic "${taskType}" schedule for "${title}" — ${reminders.length} reminders (no LLM call)`);
+      return Response.json({ reminders });
+    }
+
+    // ── Day-only tasks ("remind me to do X on [day]") ──────────────────────
+    // One "heads up, due tomorrow" the night before, then hourly nudges on the
+    // day of based on priority. No reminders fire in the days leading up.
+    if (dayOnly) {
+      const dayOfHours = {
+        urgent: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
+        high: [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
+        medium: [9, 11, 13, 15, 17, 19],
+        low: [9, 13, 17],
+      };
+      const hours = dayOfHours[priority] || dayOfHours.medium;
+      const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
+      const reminders = [
+        {
+          days_before: 1, hour: 20, minute: 0, relative_minutes_before: null,
+          label: 'night before',
+          notification_title: `Heads up 🌙 ${t}`,
+          notification_body: `Just a heads up — "${t}" is due tomorrow. You've got this! ✨`,
+        },
+        ...hours.map(h => ({
+          days_before: 0, hour: h, minute: 0, relative_minutes_before: null,
+          label: h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening',
+          notification_title: `📋 ${t}`,
+          notification_body: `Today's the day — "${t}". You got this! 💪`,
+        })),
+      ];
+      console.log(`[generateReminderSchedule] Day-only schedule for "${title}" (${priority}) — ${reminders.length} reminders (no LLM)`);
       return Response.json({ reminders });
     }
 
