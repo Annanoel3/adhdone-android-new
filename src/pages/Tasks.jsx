@@ -118,6 +118,10 @@ export default function Tasks() {
     });
     await updateTodaysSummary();
 
+    // Mark all active subtasks as completed too
+    const { completeSubtasks } = await import('../components/utils/subtaskCompletion');
+    await completeSubtasks(task.id);
+
     // Create next recurrence if needed
     if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
       const { createNextRecurrence } = await import('../components/utils/taskRecurrence');

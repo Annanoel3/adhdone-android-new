@@ -114,12 +114,14 @@ export default function Home() {
       }
     }
     
-    // Optimistically update UI
+    // Optimistically update UI (parent + its subtasks)
     setTasks(prevTasks => 
       prevTasks.map(t => 
         t.id === task.id 
           ? { ...t, status: 'completed', completed_at: localISOString, onesignal_notification_ids: [] }
-          : t
+          : t.parent_task_id === task.id && t.status !== 'completed'
+            ? { ...t, status: 'completed', completed_at: localISOString }
+            : t
       )
     );
 
@@ -129,6 +131,10 @@ export default function Home() {
         completed_at: localISOString,
         onesignal_notification_ids: []
       });
+
+      // Mark all active subtasks as completed too
+      const { completeSubtasks } = await import('../components/utils/subtaskCompletion');
+      await completeSubtasks(task.id);
 
       // Create next recurrence if needed
       if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
