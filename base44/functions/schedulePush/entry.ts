@@ -55,8 +55,9 @@ Deno.serve(async (req) => {
             channel_for_external_user_ids: "push",
             // Scheduling
             send_after: resolvedSendAt,
-            // Action buttons (Snooze / Complete)
-            ...(buttons && buttons.length > 0 && { buttons: buttons }),
+            // NOTE: Action buttons (Snooze / Complete) were removed — native
+            // notification action buttons in this Capacitor app only open the
+            // app without performing the action, which is worse than no button.
         };
         
         if (android_channel_id) {

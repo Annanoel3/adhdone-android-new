@@ -96,7 +96,15 @@ function resolveReminderTimes(reminders, scheduledDateISO, title = '') {
       };
     })
     .filter(r => new Date(r.sendAtISO).getTime() > bufferMs)
-    .sort((a, b) => new Date(a.sendAtISO).getTime() - new Date(b.sendAtISO).getTime());
+    .sort((a, b) => new Date(a.sendAtISO).getTime() - new Date(b.sendAtISO).getTime())
+    // Deduplicate by send time: the LLM occasionally returns two reminders
+    // (e.g. "morning of" + "day of at 9am") that resolve to the same minute,
+    // which produced two near-identical notifications at once. Keep the first
+    // (earliest-sorted) entry for each 1-minute slot.
+    .filter((r, i, arr) => {
+      if (i === 0) return true;
+      return Math.abs(new Date(r.sendAtISO).getTime() - new Date(arr[i - 1].sendAtISO).getTime()) >= 60000;
+    });
 }
 
 /**
@@ -136,11 +144,6 @@ export async function scheduleMultiReminders({
             urgency: urgency || 'medium',
             type: 'task_reminder',
           },
-          buttons: [
-            { id: 'snooze_15', text: 'Snooze 15 min' },
-            { id: 'snooze_60', text: 'Snooze 1 hour' },
-            { id: 'complete', text: '✅ Done' },
-          ],
         });
         if (id) notificationIds.push(id);
       } catch (e) {
