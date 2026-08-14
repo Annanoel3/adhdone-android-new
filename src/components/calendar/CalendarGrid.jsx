@@ -34,14 +34,27 @@ const KIND_LABEL = {
   task: 'Task',
 };
 
-// Colors for multi-day span bars. Middle days use a thin stripe (bar);
-// start/end days use a pill with the emoji or title.
-const SPAN_COLORS = {
-  birthday: { bar: 'bg-pink-300', pill: 'bg-pink-100', text: 'text-pink-700' },
-  imported_event: { bar: 'bg-indigo-300', pill: 'bg-indigo-100', text: 'text-indigo-700' },
-  imported_task: { bar: 'bg-blue-300', pill: 'bg-blue-100', text: 'text-blue-700' },
-  task: { bar: 'bg-amber-300', pill: 'bg-amber-100', text: 'text-amber-700' },
-};
+// Distinct color palette for multi-day span bars so overlapping spans are
+// visually distinguishable. Each multi-day item gets a stable color picked
+// from its id (so the same trip is always the same color across days).
+const SPAN_PALETTE = [
+  { bar: 'bg-pink-300', pill: 'bg-pink-100', text: 'text-pink-700' },
+  { bar: 'bg-indigo-300', pill: 'bg-indigo-100', text: 'text-indigo-700' },
+  { bar: 'bg-blue-300', pill: 'bg-blue-100', text: 'text-blue-700' },
+  { bar: 'bg-amber-300', pill: 'bg-amber-100', text: 'text-amber-700' },
+  { bar: 'bg-green-300', pill: 'bg-green-100', text: 'text-green-700' },
+  { bar: 'bg-purple-300', pill: 'bg-purple-100', text: 'text-purple-700' },
+  { bar: 'bg-teal-300', pill: 'bg-teal-100', text: 'text-teal-700' },
+  { bar: 'bg-orange-300', pill: 'bg-orange-100', text: 'text-orange-700' },
+  { bar: 'bg-rose-300', pill: 'bg-rose-100', text: 'text-rose-700' },
+  { bar: 'bg-cyan-300', pill: 'bg-cyan-100', text: 'text-cyan-700' },
+];
+function colorForSpanId(id) {
+  const key = String(id || '');
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+  return SPAN_PALETTE[h % SPAN_PALETTE.length];
+}
 
 function dateKey(d) {
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
@@ -310,7 +323,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                   {spanItems.length > 0 && (
                     <div className="space-y-0.5">
                       {spanShown.map((it, i) => {
-                        const colors = SPAN_COLORS[it.kind] || SPAN_COLORS.task;
+                        const colors = colorForSpanId(it.id || it.title);
                         if (it.spanPos === 'middle') {
                           return (
                             <div
