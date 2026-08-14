@@ -185,18 +185,18 @@
     },
     "birthday_remind_week_before": {
       "type": "boolean",
-      "default": true,
-      "description": "Send a birthday reminder 1 week before"
+      "default": false,
+      "description": "Send a birthday reminder 1 week before. Only set on actual birthday tasks."
     },
     "birthday_remind_day_before": {
       "type": "boolean",
-      "default": true,
-      "description": "Send a birthday reminder 1 day before"
+      "default": false,
+      "description": "Send a birthday reminder 1 day before. Only set on actual birthday tasks."
     },
     "birthday_remind_day_of": {
       "type": "boolean",
-      "default": true,
-      "description": "Send a birthday reminder on the day of the birthday"
+      "default": false,
+      "description": "Send a birthday reminder on the day of the birthday. Only set on actual birthday tasks."
     },
     "birthday_text_message": {
       "type": "string",

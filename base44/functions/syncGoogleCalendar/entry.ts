@@ -352,6 +352,9 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
         reminder_interval: 'once',
         recurrence_pattern: 'yearly',
         birthday_person: birthdayPerson || null,
+        birthday_remind_week_before: true,
+        birthday_remind_day_before: true,
+        birthday_remind_day_of: true,
         classification: 'birthday',
         next_reminder: nextReminderDate.toISOString(),
         notification_recipient_email: user.email

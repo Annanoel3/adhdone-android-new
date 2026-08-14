@@ -64,9 +64,10 @@ export function buildTaskParsePrompt(inputText: string): string {
       - If user says "every 10 minutes" or "every hour" → RECURRING
         Set: reminder_interval="10min" or "1hour", no target_date/target_time
 
-      "tomorrow" with NO specific time:
-      - Set: reminder_interval="once", target_date=TOMORROW, target_time=null, needs_date_pick=true
-      - The app will ask the user to pick a time.
+      "tomorrow" with NO specific time (CRITICAL — commonly misclassified):
+      - If it is a GENERAL ACTIONABLE TASK (research, "look into", "check on", sell, organize, clean, errands, projects, chores, posting, returning, fixing) → DO NOT use "once". Treat it as RECURRING and fall through to the SMART INFERENCE / GENERAL ACTIONABLE TASKS rules below: pick reminder_interval from urgency (e.g. "2hours"/"4hours"/"daily"), set needs_date_pick=false. "tomorrow" here just means the user is thinking about it tomorrow — the app should keep nudging until it's done, NOT fire a single reminder.
+      - If it is a genuine SCHEDULED EVENT or APPOINTMENT (dentist, doctor, therapist, concert, wedding, party, meeting, class, "make lunch", "pick up cake", travel) → reminder_interval="once", target_date=TOMORROW, target_time=null, needs_date_pick=true (the app asks the user to pick a time).
+      - When in doubt, default to RECURRING (not "once").
 
       "tomorrow at X":
       - Set: reminder_interval="once", target_date=TOMORROW, target_time=<specified time>
@@ -148,10 +149,10 @@ export function buildTaskParsePrompt(inputText: string): string {
         "take my medication" → reminder_interval="daily"
         "finish project by Friday" → reminder_interval="2hours"
 
-      ONE-TIME (single notification, then done):
-      - User explicitly mentions a time: "at 3pm", "tomorrow morning", "in 2 hours"
-      - Low-stakes reminders where one nudge is enough: "pick up cookies", "find the pasta", "check the mail"
-      - Things tied to a specific moment: "make lunch tomorrow", "reminder for my dentist at 2pm"
+      ONE-TIME (single notification, then done) — ONLY for these cases:
+      - User explicitly mentions a specific clock time: "at 3pm", "tomorrow morning", "in 2 hours", "at 2pm tomorrow"
+      - Genuine scheduled events/appointments tied to a specific moment: "dentist tomorrow", "concert on the 28th", "make lunch tomorrow", "reminder for my dentist at 2pm"
+      - NEVER use "once" for a general actionable task just because the user said "tomorrow" with no time — those are RECURRING (see "tomorrow with NO specific time" rule above).
       - Use: reminder_interval="once", target_date=YYYY-MM-DD, target_time=HH:MM
       - Examples:
         "remind me to make lunch tomorrow" → once, target_date=TOMORROW, target_time=null, needs_date_pick=true
