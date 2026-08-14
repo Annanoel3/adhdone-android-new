@@ -162,12 +162,19 @@ STRONG signals for ONE TASK WITH SUBTASKS:
 - "call dentist and then schedule appointment and then confirm insurance" → main task with sequential steps
 - ANY time items are listed as children of a main goal/action
 
-NOT subtasks (these are separate independent tasks):
+NOT subtasks (these are separate independent tasks OR a single event):
 - "call dentist and also buy groceries" (two unrelated actions, neither is a parent of the other)
 - "clean dishes and take out trash" (two equal, unrelated chores)
+- A TIMED SEQUENCE of actions that form ONE event/outing is NOT subtasks — it is ONE task.
+  Example: "arrive at the depot at 2:30 PM to check in. Train runs 3:30 PM to 5:30 PM" → ONE task
+  (a single event with a time span), NOT a parent with subtasks. The "check in" and "train ride"
+  are sequential parts of the same outing, not independent to-do items.
+- Any input where the parts are connected by specific TIMES (arrive at 2:30, activity at 3:30)
+  is a scheduled EVENT, not a parent-with-subtasks. Return has_subtasks=false for these.
 
 KEY RULE: If the items listed are all INSTANCES of the same category named first, they are subtasks.
 Example: "pay my bills" + list of bills = subtasks. "Buy groceries" + list of items = subtasks.
+BUT: a timed itinerary (arrive → check in → activity) is ONE event, NOT subtasks.
 
 Return JSON:
 {
