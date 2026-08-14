@@ -10,12 +10,18 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 
 import com.onesignal.OneSignal;
 import com.onesignal.user.subscriptions.IPushSubscription;
+import com.onesignal.notifications.INotification;
+import com.onesignal.notifications.INotificationClickListener;
+import com.onesignal.notifications.INotificationClickEvent;
 
 import kotlin.coroutines.Continuation;
 import kotlin.coroutines.CoroutineContext;
 import kotlin.coroutines.EmptyCoroutineContext;
 
 import org.jetbrains.annotations.NotNull;
+import org.json.JSONObject;
+
+import java.util.Iterator;
 
 /**
  * NotifyBridge — Custom Capacitor plugin bridging the web app to the native OneSignal SDK.
@@ -26,10 +32,70 @@ public class NotifyBridge extends Plugin {
 
     private static final String TAG = "NotifyBridge";
 
+    // Holds the additional-data payload of the notification that opened the
+    // app on cold start. The web app retrieves (and clears) it via
+    // getLaunchNotification() so the follow-up popup can be shown even when
+    // the JS listener wasn't attached yet when the click fired.
+    private static JSONObject lastLaunchNotificationData = null;
+
     @Override
     public void load() {
         Log.d(TAG, "NotifyBridge loaded");
         super.load();
+        registerNotificationClickListener();
+    }
+
+    /**
+     * Register a OneSignal click listener so tapping a notification emits a
+     * "notificationOpened" Capacitor event to the web app and stores the data
+     * for cold-start retrieval. Without this, notification taps only open the
+     * app and the web-side follow-up popup never appears.
+     */
+    private void registerNotificationClickListener() {
+        try {
+            OneSignal.getNotifications().addClickListener(new INotificationClickListener() {
+                @Override
+                public void onClick(@NotNull INotificationClickEvent event) {
+                    try {
+                        INotification notification = event.getNotification();
+                        JSONObject data = notification.getAdditionalData();
+                        if (data == null) data = new JSONObject();
+
+                        // Store for cold-start retrieval (getLaunchNotification)
+                        lastLaunchNotificationData = data;
+
+                        // Emit to any live web listeners (warm start)
+                        JSObject wrapper = new JSObject();
+                        wrapper.put("data", toJSObject(data));
+                        notifyListeners("notificationOpened", wrapper);
+
+                        Log.d(TAG, "Notification opened, data: " + data.toString());
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error handling notification click: " + e.getMessage());
+                    }
+                }
+            });
+            Log.d(TAG, "Notification click listener registered");
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to register notification click listener: " + e.getMessage());
+        }
+    }
+
+    /** Convert a JSONObject to a Capacitor JSObject by copying keys. */
+    private JSObject toJSObject(JSONObject data) {
+        JSObject result = new JSObject();
+        if (data == null) return result;
+        Iterator<String> keys = data.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            try {
+                Object value = data.get(key);
+                result.put(key, value == null ? "" : value);
+            } catch (Exception e) {
+                // skip unreadable key
+            }
+        }
+        return result;
     }
 
     /** Associate the logged-in user's email with their OneSignal player ID */
@@ -93,6 +159,28 @@ public class NotifyBridge extends Plugin {
             });
         } catch (Exception e) {
             call.reject("Failed to request permission: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Returns the data payload of the notification that opened the app (cold
+     * start), then clears it so the popup only fires once. Returns an empty
+     * object when the app was not opened from a notification.
+     */
+    @PluginMethod
+    public void getLaunchNotification(PluginCall call) {
+        try {
+            JSObject result = new JSObject();
+            if (lastLaunchNotificationData != null) {
+                JSObject notification = new JSObject();
+                notification.put("data", toJSObject(lastLaunchNotificationData));
+                result.put("notification", notification);
+                // Clear so it only triggers once per launch
+                lastLaunchNotificationData = null;
+            }
+            call.resolve(result);
+        } catch (Exception e) {
+            call.reject("Failed to get launch notification: " + e.getMessage());
         }
     }
 
