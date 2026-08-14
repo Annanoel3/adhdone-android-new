@@ -87,11 +87,15 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
     tasks.forEach((t) => {
       const kind = kindFromClassification(t.classification) ||
         (t.birthday_person ? 'birthday' : 'task');
-      // If start_date is set alongside due_date, the task is "in progress" —
-      // show it on each day from start through due (like a multi-day event).
-      if (t.start_date && t.due_date) {
-        const startD = new Date(t.start_date);
-        const endD = new Date(t.due_date);
+      // Multi-day span: show the task on each day from its start through its end.
+      //  - start_date + due_date: "in progress" interval task (start_date → due_date)
+      //  - due_date + end_date (no start_date): one-time multi-day event (due_date → end_date)
+      //  - next_reminder + end_date (no due_date): one-time event with an end span
+      const spanStart = t.start_date || t.due_date || t.next_reminder;
+      const spanEnd = t.end_date || (t.start_date ? t.due_date : null);
+      if (spanStart && spanEnd) {
+        const startD = new Date(spanStart);
+        const endD = new Date(spanEnd);
         if (startD.toDateString() === endD.toDateString()) {
           push(startD, { kind, title: t.title, id: t.id, taskId: t.id, task: t });
         } else {
