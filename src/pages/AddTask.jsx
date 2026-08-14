@@ -83,7 +83,7 @@ export default function AddTask() {
   - "On Sunday October 4 leave the Airbnb at 12:30 PM for Cañon City. Arrive at the Royal Gorge train depot at 2:30 PM to check in. Train runs 3:30 PM to 5:30 PM." → 2 tasks:
     1. "On Sunday October 4 leave the Airbnb at 12:30 PM for Cañon City"
     2. "On Sunday October 4 arrive at the Royal Gorge train depot at 2:30 PM to check in. Train runs 3:30 PM to 5:30 PM"
-    (The 2:30 arrival/check-in and the 3:30-5:30 train ride are ONE event — same outing — so keep them together; only split distinct outings/activities.)
+    (The 2:30 arrival/check-in and the 3:30-5:30 train ride are ONE event — same outing — so keep them together; only split distinct outings/activities. Do NOT split "check in" from "train runs" — they are the same activity.)
   - "Monday: dentist at 9am, lunch with mom at 12pm, pick up kids at 3pm" → 3 tasks (one per timed event)
   GROUPING RULE: Sub-actions that belong to the SAME outing (arriving early, check-in, the activity itself, the ride home) stay together in ONE task. Only split when there are separate activities/destinations at different times.
 
@@ -454,7 +454,18 @@ JSON:
       console.log('🔄 [PROCESS] Calculating reminder times...');
       let nextReminder = null;
       let actualReminderInterval = parsed.reminder_interval || null;
-      
+
+      // If the parser gave a specific date AND time, this is a one-time event —
+      // not a recurring task. The parser sometimes mislabels events as "2hours"
+      // recurring, which would start reminders 2 hours from NOW instead of at
+      // the event time. Override to "once" so it routes through the one-time
+      // event flow (advance reminder dialog, correct scheduling). Per the
+      // parser's own rules, recurring tasks should never have both
+      // target_date and target_time set.
+      if (parsed.target_date && parsed.target_time) {
+        actualReminderInterval = 'once';
+      }
+
       const recurringIntervals = ['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day'];
 
       // Multi-day events: if the parser detected a date range, record the last
@@ -1478,6 +1489,11 @@ JSON:
         <DialogContent className="max-w-md w-[calc(100vw-2rem)]">
           <DialogHeader>
             <DialogTitle>Would you like an advance reminder?</DialogTitle>
+            {pendingTask?.taskData?.title && (
+              <p className="text-sm font-medium text-gray-700 pt-1">
+                📌 {pendingTask.taskData.title}
+              </p>
+            )}
           </DialogHeader>
           <div className="space-y-3 py-4">
             <p className="text-sm text-gray-600">Get notified before the task is due:</p>
