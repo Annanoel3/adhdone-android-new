@@ -1350,6 +1350,18 @@ Return JSON:
                 )
               )}
 
+              {/* Event time — the actual time the event takes place. Shown
+                  separately from the reminder badge so it stays visible even
+                  when the user manually edits the reminder time. */}
+              {task.event_time && (
+                <div className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
+                  theme === 'dark' ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-700'
+                }`}>
+                  <CalendarClock className="w-3 h-3" />
+                  Event {formatReminderDate(task.event_time)} • {formatReminderTime(task.event_time)}
+                </div>
+              )}
+
               {/* Show date badge for one-time reminders - FIXED: Show even if next_reminder is null */}
               {task.reminder_interval === 'once' && (
                 <Popover>

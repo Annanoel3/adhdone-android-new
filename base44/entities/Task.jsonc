@@ -50,6 +50,11 @@
       "format": "date-time",
       "description": "For multi-day events, the last day of the span. When set, the event shows on each day from next_reminder through end_date."
     },
+    "event_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The actual date/time an event takes place. Stored separately from next_reminder (the reminder time) so the event time stays visible on the task card even after the user manually edits the reminder time. Only set for events with a specific time."
+    },
     "last_scheduled_until": {
       "type": "string",
       "format": "date-time",

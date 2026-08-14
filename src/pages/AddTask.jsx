@@ -454,6 +454,18 @@ JSON:
         }
       }
 
+      // Event time (when the event actually happens) — stored separately from
+      // next_reminder so it stays visible on the card even if the user later
+      // edits the reminder time. Only set for events with a specific time.
+      let eventTimeISO = null;
+      if (parsed.classification === 'event' && parsed.target_date && parsed.target_time && actualReminderInterval === 'once') {
+        const [vyy, vmm, vdd] = parsed.target_date.split('-').map(n => parseInt(n, 10));
+        const [vhh, vmin] = parsed.target_time.split(':').map(n => parseInt(n, 10));
+        if (!isNaN(vyy) && !isNaN(vmm) && !isNaN(vdd) && !isNaN(vhh) && !isNaN(vmin)) {
+          eventTimeISO = new Date(vyy, vmm - 1, vdd, vhh, vmin, 0, 0).toISOString();
+        }
+      }
+
       if (parsed.day_only_task && parsed.target_date && actualReminderInterval === 'once') {
         // "Remind me to do X on [day]" — night-before heads up + day-of hourly.
         // Anchor the schedule at 9 AM on the target day.
@@ -496,6 +508,7 @@ JSON:
             reminder_count: 0,
             next_reminder: nextReminder.toISOString(),
             end_date: endDateISO,
+            event_time: eventTimeISO,
             urgency: parsed.urgency || 'medium',
             energy_required: parsed.energy_required || 'medium',
             status: 'active',
@@ -576,6 +589,7 @@ JSON:
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
         due_date: dueDateISO,
         end_date: endDateISO,
+        event_time: eventTimeISO,
         urgency: parsed.urgency || 'medium',
         energy_required: parsed.energy_required || 'medium',
         status: 'active',
