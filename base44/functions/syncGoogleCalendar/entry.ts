@@ -369,9 +369,9 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
         'daily': 24 * 60 * 60 * 1000, 'every_other_day': 2 * 24 * 60 * 60 * 1000,
       };
 
-      // Same once-vs-recurring decision as AddTask: a one-time (or date-pick)
+      // Same once-vs-interval decision as AddTask: a one-time (or date-pick)
       // result = a scheduled event → single reminder at the event time;
-      // a recurring interval = an actionable task → reminders until done.
+      // an interval reminder = an actionable task → reminders until done.
       const isOnce = ai.reminder_interval === 'once' || ai.needs_date_pick || !recurringIntervals.includes(ai.reminder_interval);
       reminderInterval = isOnce ? 'once' : ai.reminder_interval;
 
@@ -401,7 +401,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
           }
         }
       } else {
-        // Task: start recurring reminders now (same as AddTask).
+        // Task: start interval reminders now (same as AddTask).
         const startGap = intervalMsMap[reminderInterval] || intervalMsMap['2hours'];
         nextReminderISO = new Date(Date.now() + startGap).toISOString();
         // Anchor the task to its calendar date (deadline) if the AI found one.
