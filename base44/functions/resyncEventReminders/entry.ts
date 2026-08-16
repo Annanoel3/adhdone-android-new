@@ -52,6 +52,8 @@ Deno.serve(async (req) => {
       const schedRes = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
         title: task.title,
         scheduledDateISO: task.next_reminder,
+        urgency: task.urgency,
+        classification: task.classification || 'event',
       });
       const schedData = schedRes?.data || schedRes || {};
       const rawReminders = schedData.reminders || [];
@@ -76,6 +78,14 @@ Deno.serve(async (req) => {
           };
         })
         .filter(r => new Date(r.sendAtISO).getTime() > bufferMs)
+        .filter(r => {
+          // For events, never schedule a reminder after the event start time.
+          if ((task.classification || 'event') === 'event' && new Date(r.sendAtISO).getTime() > scheduledDate.getTime()) {
+            console.log(`[resyncEventReminders] Dropping post-event reminder "${r.label}" at ${r.sendAtISO}`);
+            return false;
+          }
+          return true;
+        })
         .sort((a, b) => new Date(a.sendAtISO).getTime() - new Date(b.sendAtISO).getTime());
 
       if (!reminderTimes.length) { skipped++; continue; }

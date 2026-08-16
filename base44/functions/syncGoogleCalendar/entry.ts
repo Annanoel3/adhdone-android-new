@@ -461,6 +461,8 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
         const scheduleRes = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
           title,
           scheduledDateISO: createdTask.next_reminder,
+          urgency: createdTask.urgency,
+          classification: createdTask.classification || 'event',
         });
         const scheduleData = scheduleRes?.data || scheduleRes || {};
         const rawReminders = scheduleData.reminders || [];
@@ -484,6 +486,15 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
             return { sendAtISO: reminderTime.toISOString(), label: r.label, notification_title: r.notification_title || '📅 Upcoming', notification_body: r.notification_body || title };
           })
           .filter(r => new Date(r.sendAtISO).getTime() > bufferMs)
+          .filter(r => {
+            // For events, never schedule a reminder after the event start time.
+            // A "coming up in an hour" nudge 4 hours into the event is useless.
+            if (createdTask.classification === 'event' && new Date(r.sendAtISO).getTime() > scheduledDate.getTime()) {
+              console.log(`[syncGoogleCalendar] Dropping post-event reminder "${r.label}" at ${r.sendAtISO} (event at ${createdTask.next_reminder})`);
+              return false;
+            }
+            return true;
+          })
           .sort((a, b) => new Date(a.sendAtISO).getTime() - new Date(b.sendAtISO).getTime());
 
         const notificationIds = [];

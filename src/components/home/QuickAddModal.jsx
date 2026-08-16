@@ -343,6 +343,7 @@ Return JSON:
         scheduledDateISO: nextReminderTime.toISOString(),
         taskId: createdTask.id,
         urgency,
+        classification: pendingDateTask.classification || 'task',
       });
 
       if (multiIds) {
