@@ -7,14 +7,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-export default function DatePickerDialog({ isOpen, onClose, onSelect, onAnyDay, taskTitle, initialDate }) {
+export default function DatePickerDialog({ isOpen, onClose, onSelect, onAnyDay, taskTitle, initialDate, initialTime }) {
   const [date, setDate] = useState('');
   const [time, setTime] = useState('09:00');
 
   useEffect(() => {
     if (isOpen) {
       const now = new Date();
-      const defaultTime = '09:00';
+      // Use the parsed time if available (e.g. "18:00" from "Bike meet at 6 PM"),
+      // otherwise default to 9 AM. This prevents the dialog from silently
+      // discarding the time the user already specified in their input.
+      const defaultTime = initialTime || '09:00';
       let baseDate;
 
       if (initialDate) {
@@ -24,7 +27,7 @@ export default function DatePickerDialog({ isOpen, onClose, onSelect, onAnyDay, 
         baseDate.setDate(baseDate.getDate() + 1); // tomorrow
       }
 
-      // If 9:00 AM on the default date has already passed, roll forward to tomorrow
+      // If the default time on the default date has already passed, roll forward to tomorrow
       const [dh, dm] = defaultTime.split(':').map(n => parseInt(n, 10));
       const testDateTime = new Date(baseDate.getFullYear(), baseDate.getMonth(), baseDate.getDate(), dh, dm, 0, 0);
       if (testDateTime <= now) {
@@ -36,7 +39,7 @@ export default function DatePickerDialog({ isOpen, onClose, onSelect, onAnyDay, 
       setDate(td);
       setTime(defaultTime);
     }
-  }, [isOpen, initialDate]);
+  }, [isOpen, initialDate, initialTime]);
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>

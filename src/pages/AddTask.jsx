@@ -450,6 +450,7 @@ JSON:
           urgency: parsed.urgency || 'medium',
           fallbackInterval: parsed.reminder_interval || '2hours',
           initialDate: parsed.target_date || null,
+          initialTime: parsed.target_time || null,
           classification: parsed.classification || 'task',
           end_date: parsed.end_date || null,
           currentUser
@@ -674,6 +675,7 @@ JSON:
               taskId: createdTask.id,
               urgency: createdTask.urgency,
               dayOnly: !!parsed.day_only_task,
+              classification: createdTask.classification,
             }))
             .then(multiIds => {
               if (multiIds) {
@@ -971,6 +973,7 @@ JSON:
         scheduledDateISO: nextReminder.toISOString(),
         taskId: createdTask.id,
         urgency,
+        classification: pendingDateTask.classification || 'task',
       });
 
       if (multiIds) {
@@ -1480,6 +1483,7 @@ JSON:
         onAnyDay={handleDateAnyDay}
         taskTitle={pendingDateTask?.title}
         initialDate={pendingDateTask?.initialDate}
+        initialTime={pendingDateTask?.initialTime}
       />
 
       <PriorityPickerDialog

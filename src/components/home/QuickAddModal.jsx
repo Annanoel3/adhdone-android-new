@@ -175,6 +175,7 @@ Return JSON:
           urgency: taskData.urgency || 'medium',
           fallbackInterval: taskData.reminder_interval || '2hours',
           initialDate: taskData.specific_date || null,
+          initialTime: taskData.reminder_time || null,
           classification: taskData.classification || 'task',
           user
         });
@@ -509,6 +510,7 @@ Return JSON:
       onAnyDay={handleDateAnyDay}
       taskTitle={pendingDateTask?.title}
       initialDate={pendingDateTask?.initialDate}
+      initialTime={pendingDateTask?.initialTime}
     />
     <PriorityPickerDialog
       isOpen={showPriorityPicker}

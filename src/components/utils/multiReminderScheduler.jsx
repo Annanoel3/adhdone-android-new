@@ -43,7 +43,7 @@ function setCachedSchedule(title, urgency, data) {
 }
 
 // ── Core: get reminder times (minutes_before + label) from LLM or cache ──────
-async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly) {
+async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification) {
   // Day-only schedules have absolute clock times — never use the cache.
   let reminders = dayOnly ? null : getCachedSchedule(title, urgency);
 
@@ -54,6 +54,7 @@ async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly) 
       scheduledDateISO,
       urgency,
       dayOnly,
+      classification,
     });
 
     const data = response.data || response;
@@ -73,9 +74,14 @@ async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly) 
 // Supports two reminder types from the LLM:
 //   ABSOLUTE: { days_before, hour, minute } — a specific clock time on a day
 //   RELATIVE: { relative_minutes_before } — N minutes before the event time
-function resolveReminderTimes(reminders, scheduledDateISO, title = '') {
+function resolveReminderTimes(reminders, scheduledDateISO, title = '', classification) {
   const scheduled = new Date(scheduledDateISO);
   const bufferMs = Date.now() + 2 * 60 * 1000;
+  // For EVENTS (meetings, concerts, appointments, parties), a reminder that
+  // fires AFTER the event start time is useless — the event is already over or
+  // in progress. Filter those out so the user never gets a "coming up in an
+  // hour" notification 4 hours after the event already happened.
+  const isEvent = classification === 'event';
 
   return reminders
     .map(r => {
@@ -97,6 +103,14 @@ function resolveReminderTimes(reminders, scheduledDateISO, title = '') {
       };
     })
     .filter(r => new Date(r.sendAtISO).getTime() > bufferMs)
+    .filter(r => {
+      // For events, never schedule a reminder after the event start time.
+      if (isEvent && new Date(r.sendAtISO).getTime() > scheduled.getTime()) {
+        console.log(`[multiReminderScheduler] Dropping post-event reminder "${r.label}" at ${r.sendAtISO} (event at ${scheduledDateISO})`);
+        return false;
+      }
+      return true;
+    })
     .sort((a, b) => new Date(a.sendAtISO).getTime() - new Date(b.sendAtISO).getTime())
     // Deduplicate by send time: the schedule sometimes produces two reminders
     // that resolve to the same clock time (e.g. "morning of at 9am" + "1 hour
@@ -123,12 +137,13 @@ export async function scheduleMultiReminders({
   taskId,
   urgency,
   dayOnly,
+  classification,
 }) {
   try {
-    const reminders = await fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly);
+    const reminders = await fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification);
     if (!reminders || reminders.length === 0) return null;
 
-    const reminderTimes = resolveReminderTimes(reminders, scheduledDateISO, title);
+    const reminderTimes = resolveReminderTimes(reminders, scheduledDateISO, title, classification);
     if (reminderTimes.length === 0) return null;
 
     console.log(`[multiReminderScheduler] Scheduling ${reminderTimes.length} LLM-determined reminders for "${title}"`);

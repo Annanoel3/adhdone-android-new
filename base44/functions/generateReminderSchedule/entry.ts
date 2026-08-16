@@ -104,7 +104,7 @@ export default async function(req) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const bodyText = await req.text();
-    const { title, scheduledDateISO, urgency, dayOnly } = JSON.parse(bodyText);
+    const { title, scheduledDateISO, urgency, dayOnly, classification } = JSON.parse(bodyText);
 
     if (!title || !scheduledDateISO) {
       return Response.json({ error: 'title and scheduledDateISO required' }, { status: 400 });
@@ -185,10 +185,12 @@ export default async function(req) {
 
 TASK TITLE: "${title}"
 TASK PRIORITY: ${priority}
+TASK CLASSIFICATION: ${classification || 'task'}
 SCHEDULED FOR: ${scheduledStr}
 CURRENT TIME: ${nowStr}
 TASK TIMING: ${isSameDay ? 'SAME-DAY TASK — this task is scheduled for TODAY. The scheduled time may have already passed, but the task is still owed today. Generate reminders for the remaining hours of today using days_before: 0.' : 'FUTURE TASK — this task is scheduled for a future date. Use days_before to schedule advance reminders.'}
 ${isSameDay ? `HOURS REMAINING TODAY: ~${hoursRemainingToday} hours until end of day. Spread reminders across these remaining hours.` : ''}
+${classification === 'event' ? 'CRITICAL EVENT RULE: This is an EVENT (a scheduled occurrence the user attends — meeting, concert, appointment, party, class, meetup). NEVER schedule a reminder AFTER the event start time. The event is over once it starts — a "coming up in an hour" reminder 4 hours after the event is useless and confusing. All reminders must fire BEFORE the scheduled time. If the event time has already passed, do NOT schedule any reminders at all.' : ''}
 
 Based on ADHD research and behavioral psychology, determine the optimal reminder schedule for this specific task.
 
