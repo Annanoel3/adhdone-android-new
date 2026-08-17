@@ -55,6 +55,13 @@ export default function AdManager() {
     let c = 5;
     setCountdown(c);
     countRef.current = setInterval(() => {
+      // Cancel the ad if the user became busy (e.g. started recording) during the countdown
+      if (isUserBusy()) {
+        clearInterval(countRef.current);
+        setCountdown(null);
+        delayRef.current = setTimeout(() => tryShowAd(), 30000);
+        return;
+      }
       c -= 1;
       if (c <= 0) {
         clearInterval(countRef.current);

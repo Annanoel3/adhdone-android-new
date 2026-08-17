@@ -52,6 +52,7 @@ export default function VoiceTaskInput({ onTranscription, theme, inline = true }
 
       mediaRecorder.onstop = async () => {
         console.log('[VOICE INPUT] Recording stopped, processing...');
+        window.__microphoneActive = false;
         const audioBlob = new Blob(chunksRef.current, { type: mimeType });
         console.log('[VOICE INPUT] Audio blob created:', audioBlob.size, 'bytes');
         
@@ -68,6 +69,7 @@ export default function VoiceTaskInput({ onTranscription, theme, inline = true }
 
       mediaRecorder.start();
       setIsRecording(true);
+      window.__microphoneActive = true;
       console.log('[VOICE INPUT] Recording started');
     } catch (error) {
       console.error('[VOICE INPUT] Error accessing microphone:', error);

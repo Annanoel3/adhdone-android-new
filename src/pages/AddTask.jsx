@@ -55,6 +55,32 @@ export default function AddTask() {
     return () => clearInterval(interval);
   }, []);
 
+  // When the LLM splits a multi-task input, it sometimes drops shared date
+  // words like "today" from some split tasks. This propagates the original
+  // input's date word to any split task that's missing one, so "do the dishes,
+  // laundry, and recycling today" gives all three tasks a "today" due date.
+  const propagateDateWords = (originalInput, splitTasks) => {
+    if (!splitTasks || splitTasks.length <= 1) return splitTasks;
+    const dateWords = [
+      'today', 'tomorrow', 'tonight', 'this morning', 'this afternoon',
+      'this evening', 'this week', 'next week', 'this weekend', 'next weekend',
+    ];
+    const buildRegex = (w) => w.includes(' ')
+      ? new RegExp(w.replace(/ /g, '\\s+'))
+      : new RegExp(`\\b${w}\\b`);
+    const lower = originalInput.toLowerCase();
+    const foundWords = dateWords.filter(w => buildRegex(w).test(lower));
+    // Only propagate when there's exactly one date word (unambiguous)
+    if (foundWords.length !== 1) return splitTasks;
+    const dateWord = foundWords[0];
+    return splitTasks.map(task => {
+      const taskLower = task.toLowerCase();
+      const hasDate = dateWords.some(w => buildRegex(w).test(taskLower));
+      if (hasDate) return task;
+      return `${task} ${dateWord}`;
+    });
+  };
+
   const detectMultipleTasks = async (inputText) => {
     console.log('🔍 [DETECT] Checking if input contains multiple tasks...');
 
@@ -108,7 +134,8 @@ export default function AddTask() {
       const result = (await base44.functions.invoke('detectMultipleTasks', { prompt: multiTaskPrompt }))?.data?.response;
 
       console.log('🔍 [DETECT] Result:', result);
-      return result.tasks || [inputText];
+      const tasks = result.tasks || [inputText];
+      return propagateDateWords(inputText, tasks);
     } catch (error) {
       console.error('🔍 [DETECT] Error detecting tasks, treating as single:', error);
       return [inputText];
@@ -1107,6 +1134,7 @@ JSON:
       };
 
       recorder.onstop = async () => {
+        window.__microphoneActive = false;
         const audioBlob = new Blob(chunks, { type: mimeType });
         stream.getTracks().forEach(track => track.stop());
 
@@ -1123,6 +1151,7 @@ JSON:
       recorder.start();
       setMediaRecorder(recorder);
       setIsRecording(true);
+      window.__microphoneActive = true;
     } catch (error) {
       console.error("Microphone error:", error);
       alert("Could not access microphone");
