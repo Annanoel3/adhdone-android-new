@@ -8,10 +8,11 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Target, Info, CheckCircle2, Timer, Play, Pause, Dices, Minus } from "lucide-react";
+import { Target, Info, CheckCircle2, Timer, Dices, Minus } from "lucide-react";
 import confetti from "canvas-confetti";
 import { isTodayTask } from "@/components/utils/todayTasks";
 import { usePomodoro } from "@/context/PomodoroContext";
+import FocusPomodoroPopup from "./FocusPomodoroPopup";
 
 function formatElapsed(ms) {
   const totalSec = Math.floor(ms / 1000);
@@ -72,12 +73,6 @@ export default function FocusModePrompt({ user, theme }) {
   const [spinLabel, setSpinLabel] = useState("");
   const [showPomo, setShowPomo] = useState(false);
   const pomo = usePomodoro();
-
-  // Mini pomodoro derived values (mirrors the FocusTimer circle at small scale)
-  const pomoTotal = (pomo.mode === "work" ? pomo.workDuration : pomo.breakDuration) * 60;
-  const pomoProgress = pomoTotal > 0 ? ((pomoTotal - pomo.timeLeft) / pomoTotal) * 100 : 0;
-  const pomoMM = String(Math.floor(Math.max(0, pomo.timeLeft) / 60)).padStart(2, "0");
-  const pomoSS = String(Math.max(0, pomo.timeLeft) % 60).padStart(2, "0");
 
   // The Wheel — randomly selects one of today's pickable tasks to beat decision fatigue.
   const handleSpin = () => {
@@ -420,51 +415,9 @@ export default function FocusModePrompt({ user, theme }) {
                   </div>
                 )}
                 {elapsed == null && <div className="mb-4" />}
-                {!showPomo ? (
-                  <Button variant="outline" onClick={startPomo} className="mb-3 w-full">
-                    <Timer className="w-4 h-4 mr-2" /> Start a Pomodoro
-                  </Button>
-                ) : (
-                  <div className={`mb-4 p-4 rounded-xl text-center ${theme === "dark" ? "bg-gray-800" : "bg-green-50"}`}>
-                    <div className="relative mx-auto w-32 h-32 mb-3">
-                      <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
-                        <circle cx="100" cy="100" r="80" stroke={theme === "dark" ? "#374151" : "#e5e7eb"} strokeWidth="14" fill="none" />
-                        <circle
-                          cx="100" cy="100" r="80"
-                          stroke={pomo.mode === "work" ? "#22c55e" : "#3b82f6"}
-                          strokeWidth="14" fill="none" strokeLinecap="round"
-                          strokeDasharray={2 * Math.PI * 80}
-                          strokeDashoffset={2 * Math.PI * 80 * (1 - pomoProgress / 100)}
-                          style={{ transition: "stroke-dashoffset 0.3s linear" }}
-                        />
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <div className="text-2xl font-bold tabular-nums">
-                          {pomoMM}:{pomoSS}
-                        </div>
-                        <div className="text-[10px] uppercase tracking-wider opacity-60">
-                          {pomo.mode === "work" ? "Focus" : "Break"}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex justify-center gap-2">
-                      <Button size="sm" onClick={pomo.toggleTimer}>
-                        {pomo.isActive ? (
-                          <><Pause className="w-4 h-4 mr-1" />Pause</>
-                        ) : (
-                          <><Play className="w-4 h-4 mr-1" />Start</>
-                        )}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => { pomo.resetTimer(); setShowPomo(false); }}
-                      >
-                        Reset
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                <Button variant="outline" onClick={startPomo} className="mb-3 w-full">
+                  <Timer className="w-4 h-4 mr-2" /> Start a Pomodoro
+                </Button>
                 <div className="flex flex-col gap-2">
                   <Button
                     onClick={handleComplete}
@@ -533,6 +486,17 @@ export default function FocusModePrompt({ user, theme }) {
           )}
         </DialogContent>
       </Dialog>
+
+      <FocusPomodoroPopup
+        open={showPomo}
+        onBack={() => setShowPomo(false)}
+        focusTask={focusTask}
+        elapsed={elapsed}
+        theme={theme}
+        onComplete={handleComplete}
+        onExit={handleExit}
+        busy={busy}
+      />
 
       <Dialog open={showInfo} onOpenChange={setShowInfo}>
         <DialogContent className={`max-w-sm ${cardClass}`}>
