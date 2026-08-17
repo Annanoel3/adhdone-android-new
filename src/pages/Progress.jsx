@@ -21,6 +21,7 @@ export default function Progress() {
   const [summaries, setSummaries] = useState([]);
   const [energyLogs, setEnergyLogs] = useState([]);
   const [focusLogs, setFocusLogs] = useState([]);
+  const [userEmail, setUserEmail] = useState("");
   const [specialMode, setSpecialMode] = useState(() => localStorage.getItem('special_mode') || 'normal');
 
   useEffect(() => {
@@ -51,6 +52,9 @@ export default function Progress() {
 
       const fLogs = await base44.entities.FocusSessionLog.list('-completed_at', 200);
       setFocusLogs(fLogs);
+
+      const me = await base44.auth.me();
+      setUserEmail(me?.email || "");
     } catch (error) {
       console.error("Error loading data:", error);
     }
@@ -253,6 +257,7 @@ export default function Progress() {
             <FocusModeStats
               logs={focusLogs}
               tasks={tasks}
+              userEmail={userEmail}
               theme={theme}
               cardClass={cardClass}
               textClass={textClass}

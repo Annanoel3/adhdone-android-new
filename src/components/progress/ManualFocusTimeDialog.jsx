@@ -15,7 +15,7 @@ import { base44 } from "@/api/base44Client";
 // Lets the user manually log focus time for a task — for when they didn't use
 // Focus Mode or the session data didn't save. Creates a FocusSessionLog record
 // just like a real focus session would.
-export default function ManualFocusTimeDialog({ open, onOpenChange, tasks, theme, onSaved }) {
+export default function ManualFocusTimeDialog({ open, onOpenChange, tasks, userEmail, theme, onSaved }) {
   const [taskTitle, setTaskTitle] = useState("");
   const [selectedTaskId, setSelectedTaskId] = useState("");
   const [minutes, setMinutes] = useState("");
@@ -55,7 +55,7 @@ export default function ManualFocusTimeDialog({ open, onOpenChange, tasks, theme
         duration_seconds: mins * 60,
         started_at: startedAt.toISOString(),
         completed_at: now.toISOString(),
-        user_email: (await base44.auth.me())?.email,
+        user_email: userEmail,
       });
       reset();
       onOpenChange(false);

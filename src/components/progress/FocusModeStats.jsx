@@ -17,7 +17,7 @@ function formatDuration(sec) {
   return `${s}s`;
 }
 
-export default function FocusModeStats({ logs, tasks, theme, cardClass, textClass, subTextClass, onManualAdded }) {
+export default function FocusModeStats({ logs, tasks, userEmail, theme, cardClass, textClass, subTextClass, onManualAdded }) {
   const [showManual, setShowManual] = useState(false);
   const { rows, totalSessions, totalTime } = useMemo(() => {
     const byTitle = {};
@@ -124,6 +124,7 @@ export default function FocusModeStats({ logs, tasks, theme, cardClass, textClas
         open={showManual}
         onOpenChange={setShowManual}
         tasks={tasks}
+        userEmail={userEmail}
         theme={theme}
         onSaved={onManualAdded}
       />
