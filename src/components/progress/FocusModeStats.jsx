@@ -1,6 +1,8 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Target, Clock, Repeat, Timer } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Target, Clock, Repeat, Timer, Plus } from "lucide-react";
+import ManualFocusTimeDialog from "./ManualFocusTimeDialog";
 
 // Aggregates FocusSessionLog records into per-task patterns: how often each
 // task gets done and the average time it takes to finish it.
@@ -15,7 +17,8 @@ function formatDuration(sec) {
   return `${s}s`;
 }
 
-export default function FocusModeStats({ logs, theme, cardClass, textClass, subTextClass }) {
+export default function FocusModeStats({ logs, tasks, theme, cardClass, textClass, subTextClass, onManualAdded }) {
+  const [showManual, setShowManual] = useState(false);
   const { rows, totalSessions, totalTime } = useMemo(() => {
     const byTitle = {};
     (logs || []).forEach((l) => {
@@ -43,10 +46,20 @@ export default function FocusModeStats({ logs, theme, cardClass, textClass, subT
   return (
     <Card className={cardClass}>
       <CardHeader>
-        <CardTitle className={`flex items-center gap-2 ${textClass}`}>
-          <Target className="w-5 h-5" />
-          Focus Mode — Task Patterns
-        </CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className={`flex items-center gap-2 ${textClass}`}>
+            <Target className="w-5 h-5" />
+            Focus Mode — Task Patterns
+          </CardTitle>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setShowManual(true)}
+            className="flex items-center gap-1.5 shrink-0"
+          >
+            <Plus className="w-4 h-4" /> Add time
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {totalSessions === 0 ? (
@@ -106,6 +119,14 @@ export default function FocusModeStats({ logs, theme, cardClass, textClass, subT
           </>
         )}
       </CardContent>
+
+      <ManualFocusTimeDialog
+        open={showManual}
+        onOpenChange={setShowManual}
+        tasks={tasks}
+        theme={theme}
+        onSaved={onManualAdded}
+      />
     </Card>
   );
 }

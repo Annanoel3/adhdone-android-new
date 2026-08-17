@@ -158,12 +158,6 @@ export default function Progress() {
 
   const bestEnergyTime = energyChartData.reduce((best, cur) => cur.avg > best.avg ? cur : best, { label: 'N/A', avg: 0 }).label;
 
-  // Urgency breakdown (all time — shows overall patterns)
-  const urgencyBreakdown = ['urgent', 'high', 'medium', 'low'].map(u => ({
-    label: u.charAt(0).toUpperCase() + u.slice(1),
-    count: allCompletedTasks.filter(t => t.urgency === u).length,
-  }));
-
   const chartColors = theme === 'dark'
     ? { primary: '#4ade80', secondary: '#60a5fa', muted: '#6b7280' }
     : { primary: '#16a34a', secondary: '#3b82f6', muted: '#9ca3af' };
@@ -258,10 +252,12 @@ export default function Progress() {
 
             <FocusModeStats
               logs={focusLogs}
+              tasks={tasks}
               theme={theme}
               cardClass={cardClass}
               textClass={textClass}
               subTextClass={subTextClass}
+              onManualAdded={loadData}
             />
 
             <RecurringTaskPatterns
@@ -344,39 +340,6 @@ export default function Progress() {
                 </CardContent>
               </Card>
             )}
-
-            {/* Urgency breakdown */}
-            <Card className={cardClass}>
-              <CardHeader>
-                <CardTitle className={`flex items-center gap-2 ${textClass}`}>
-                  <Target className="w-5 h-5" />
-                  Completed Tasks by Priority
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {urgencyBreakdown.map(({ label, count }) => {
-                    const max = Math.max(...urgencyBreakdown.map(x => x.count), 1);
-                    const pct = Math.round((count / max) * 100);
-                    const colors = { Urgent: 'bg-red-500', High: 'bg-orange-400', Medium: 'bg-blue-400', Low: 'bg-gray-400' };
-                    return (
-                      <div key={label}>
-                        <div className="flex justify-between mb-1">
-                          <span className={`text-sm font-medium ${textClass}`}>{label}</span>
-                          <span className={`text-sm ${subTextClass}`}>{count} tasks</span>
-                        </div>
-                        <div className={`h-2 rounded-full ${theme === 'dark' ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                          <div
-                            className={`h-2 rounded-full ${colors[label]}`}
-                            style={{ width: `${pct}%`, transition: 'width 0.5s ease' }}
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
 
           </TabsContent>
         </Tabs>
