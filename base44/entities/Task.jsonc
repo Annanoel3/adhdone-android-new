@@ -55,6 +55,11 @@
       "format": "date-time",
       "description": "The actual date/time an event takes place. Stored separately from next_reminder (the reminder time) so the event time stays visible on the task card even after the user manually edits the reminder time. Only set for events with a specific time."
     },
+    "day_only_task": {
+      "type": "boolean",
+      "default": false,
+      "description": "True when the task is tied to a specific day with NO specific time (e.g. 'remind me to do X on Friday'). Gets a single night-before heads-up, then smart hourly nudges from cronSmartTaskNudge (which picks ONE task to surface at a time with an LLM-written message) instead of per-task hourly notifications that flood the notification tray."
+    },
     "last_scheduled_until": {
       "type": "string",
       "format": "date-time",

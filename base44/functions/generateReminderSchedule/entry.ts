@@ -146,13 +146,11 @@ export default async function(req) {
     // One "heads up, due tomorrow" the night before, then hourly nudges on the
     // day of based on priority. No reminders fire in the days leading up.
     if (dayOnly) {
-      const dayOfHours = {
-        urgent: [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21],
-        high: [9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20],
-        medium: [9, 11, 13, 15, 17, 19],
-        low: [9, 13, 17],
-      };
-      const hours = dayOfHours[priority] || dayOfHours.medium;
+      // Day-only tasks get ONE night-before heads-up. The day-of hourly nudges
+      // are handled by cronSmartTaskNudge, which looks at ALL the user's due-today
+      // day-only tasks and uses the LLM to pick ONE to surface at a time — instead
+      // of each task independently firing its own hourly notifications (which
+      // floods the notification tray and causes ADHD paralysis).
       const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
       const reminders = [
         {
@@ -161,14 +159,8 @@ export default async function(req) {
           notification_title: `Heads up 🌙 ${t}`,
           notification_body: `Just a heads up — "${t}" is due tomorrow. You've got this! ✨`,
         },
-        ...hours.map(h => ({
-          days_before: 0, hour: h, minute: 0, relative_minutes_before: null,
-          label: h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening',
-          notification_title: `📋 ${t}`,
-          notification_body: `Today's the day — "${t}". You got this! 💪`,
-        })),
       ];
-      console.log(`[generateReminderSchedule] Day-only schedule for "${title}" (${priority}) — ${reminders.length} reminders (no LLM)`);
+      console.log(`[generateReminderSchedule] Day-only schedule for "${title}" (${priority}) — ${reminders.length} reminder (night-before only; day-of handled by smart cron)`);
       return Response.json({ reminders });
     }
 

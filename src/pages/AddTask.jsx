@@ -628,6 +628,13 @@ JSON:
         if (!isNaN(dy) && !isNaN(dm) && !isNaN(dd)) {
           dueDateISO = new Date(dy, dm - 1, dd, 23, 59, 0, 0).toISOString();
         }
+      } else if (parsed.day_only_task && parsed.target_date && actualReminderInterval === 'once') {
+        // Day-only tasks: set due_date to end-of-day on the target date so the
+        // smart nudge cron can find tasks "due today" in the user's timezone.
+        const [dy, dm, dd] = parsed.target_date.split('-').map(n => parseInt(n, 10));
+        if (!isNaN(dy) && !isNaN(dm) && !isNaN(dd)) {
+          dueDateISO = new Date(dy, dm - 1, dd, 23, 59, 0, 0).toISOString();
+        }
       }
 
       console.log('🔄 [PROCESS] Creating task with data:', {
@@ -644,6 +651,7 @@ JSON:
         description: '',
         classification: parsed.classification || 'task',
         reminder_interval: actualReminderInterval,
+        day_only_task: !!parsed.day_only_task,
         reminder_count: 0,
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
         due_date: dueDateISO,
