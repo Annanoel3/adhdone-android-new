@@ -495,7 +495,18 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
             }
             return true;
           })
-          .sort((a, b) => new Date(a.sendAtISO).getTime() - new Date(b.sendAtISO).getTime());
+          .sort((a, b) => new Date(a.sendAtISO).getTime() - new Date(b.sendAtISO).getTime())
+          // Deduplicate by send time: the LLM sometimes returns two reminders
+          // that resolve to the same (or near-same) clock time — e.g. "1 day
+          // before at 6pm" + "evening before at 6pm" both land at 6:00 PM.
+          // Keep only the first reminder within a 5-minute window so the user
+          // gets one notification, not two near-identical duplicates.
+          .filter((r, i, arr) => {
+            if (i === 0) return true;
+            const prevMs = new Date(arr[i - 1].sendAtISO).getTime();
+            const thisMs = new Date(r.sendAtISO).getTime();
+            return (thisMs - prevMs) > 5 * 60 * 1000;
+          });
 
         const notificationIds = [];
         for (const reminder of reminderTimes) {
