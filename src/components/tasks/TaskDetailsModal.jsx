@@ -35,6 +35,7 @@ import {
 import { Task } from "@/entities/Task";
 import TaskDecompositionModal from "./TaskDecompositionModal";
 import SmartReminderEditor from "./SmartReminderEditor";
+import ReminderTypeSelector from "./ReminderTypeSelector";
 import VoiceTaskInput from "./VoiceTaskInput";
 import { scheduleReminder, cancelScheduledReminder } from "../utils/reminderScheduler";
 import { User } from "@/entities/User";
@@ -369,6 +370,62 @@ Return JSON:
           }
         } catch (error) {
           console.error("Failed to reschedule notifications:", error);
+        }
+      } else if (task.reminder_schedule && task.reminder_schedule.length > 0) {
+        // One-time / event task — cancel the LLM-decided reminder schedule and
+        // reschedule each entry at the same time with the updated title so the
+        // notification content stays in sync with the new title.
+        try {
+          const currentUser = await base44.auth.me();
+          const oldIds = Array.from(new Set([
+            ...(task.onesignal_notification_ids || []),
+            ...((task.reminder_schedule || []).map((r) => r.notification_id).filter(Boolean)),
+          ]));
+          if (oldIds.length > 0) {
+            await cancelScheduledReminder(oldIds);
+          }
+          const newSchedule = [];
+          const newIds = [];
+          for (const entry of task.reminder_schedule) {
+            const notificationId = await scheduleReminder({
+              email: currentUser.email,
+              title: `📌 ${editedTitle.trim()}`,
+              body: `You've got this! ${editedTitle.trim()}`,
+              sendAtISO: entry.send_at,
+              taskId: task.id,
+              data: {
+                screen: '/TaskNotification',
+                taskId: task.id,
+                urgency: task.urgency,
+                type: 'task_reminder',
+              },
+              buttons: [
+                { id: 'snooze_15', text: 'Snooze 15 min' },
+                { id: 'snooze_60', text: 'Snooze 1 hour' },
+                { id: 'complete', text: '✅ Done' },
+              ],
+            });
+            if (notificationId) {
+              newIds.push(notificationId);
+              newSchedule.push({
+                ...entry,
+                notification_id: notificationId,
+                notification_title: `📌 ${editedTitle.trim()}`,
+                notification_body: `You've got this! ${editedTitle.trim()}`,
+              });
+            } else {
+              newSchedule.push(entry);
+            }
+          }
+          Task.update(task.id, {
+            title: editedTitle.trim(),
+            reminder_schedule: newSchedule,
+            onesignal_notification_ids: newIds,
+          }).catch((error) => {
+            console.error("Error updating task:", error);
+          });
+        } catch (error) {
+          console.error("Failed to reschedule one-time reminders:", error);
         }
       } else {
         // Just update title if no recurring reminders
@@ -1030,6 +1087,56 @@ Return JSON:
     }
   };
 
+  // Switch a task to "Smart Reminders" — the LLM smart-nudge system takes over.
+  // Cancels every scheduled notification (recurring + one-time/event schedule)
+  // and clears all reminder fields so the task flows to the LLM.
+  const handleSetSmartReminders = async () => {
+    if (!task) return;
+    setIsUpdating(true);
+    try {
+      const allOldIds = Array.from(new Set([
+        ...(task.onesignal_notification_ids || []),
+        ...((task.reminder_schedule || []).map((r) => r.notification_id).filter(Boolean)),
+      ]));
+      if (allOldIds.length > 0) {
+        try {
+          await cancelScheduledReminder(allOldIds);
+        } catch (e) {
+          console.error("Failed to cancel reminders:", e);
+        }
+      }
+      const updates = {
+        reminder_interval: null,
+        recurrence_pattern: 'none',
+        next_reminder: null,
+        event_time: null,
+        day_only_task: false,
+        onesignal_notification_ids: [],
+        reminder_schedule: [],
+        classification: 'task',
+        birthday_person: null,
+      };
+      await Task.update(task.id, updates);
+      onUpdate({ ...task, ...updates });
+      toast({ title: "Smart Reminders on ✓", description: "AI will decide when to nudge you about this task." });
+    } catch (e) {
+      console.error("Error switching to smart reminders:", e);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // One entry point for the ReminderTypeSelector — routes each type to the
+  // right existing handler so all the cancel/reschedule logic stays in one place.
+  const handleChangeReminderType = (type, sub) => {
+    if (type === 'smart') return handleSetSmartReminders();
+    if (type === 'interval') return handleUpdateField('reminder_interval', sub);
+    if (type === 'repeat') return handleUpdateField('recurrence_pattern', sub);
+    if (type === 'once') return handleUpdateField('reminder_interval', 'once');
+    if (type === 'event') return handleClassificationChange('event');
+    if (type === 'birthday') return handleClassificationChange('birthday');
+  };
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -1105,51 +1212,9 @@ Return JSON:
             )}
 
             <div className="flex flex-wrap gap-2">
-              {/* Classification (Event / Task / Birthday) */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
-                    currentClassification === 'birthday' ? 'bg-pink-100 text-pink-700'
-                      : currentClassification === 'event' ? 'bg-indigo-100 text-indigo-700'
-                      : 'bg-emerald-100 text-emerald-700'
-                  }`}>
-                    {currentClassification === 'birthday' ? '🎂' : currentClassification === 'event' ? '📆' : '✅'}
-                    {currentClassification === 'birthday' ? 'Birthday' : currentClassification === 'event' ? 'Event' : 'Task'}
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-48 p-2">
-                  <div className="space-y-1">
-                    <button onClick={() => handleClassificationChange('event')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-2"><span>📆</span> Event</button>
-                    <button onClick={() => handleClassificationChange('task')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-2"><span>✅</span> Task</button>
-                    <button onClick={() => handleClassificationChange('birthday')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-2"><span>🎂</span> Birthday</button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-
-              {/* Recurrence Badge - Clickable */}
-              {task.recurrence_pattern && task.recurrence_pattern !== 'none' && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
-                      theme === 'minimalist'
-                        ? 'bg-indigo-100 text-indigo-700'
-                        : theme === 'dark'
-                          ? 'bg-indigo-900 text-indigo-300'
-                          : 'bg-indigo-200 text-indigo-800'
-                    }`}>
-                      🔄 {task.recurrence_pattern}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-48 p-2">
-                    <div className="space-y-1">
-                      <button onClick={() => handleUpdateField('recurrence_pattern', 'none')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">No Recurrence</button>
-                      <button onClick={() => handleUpdateField('recurrence_pattern', 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
-                      <button onClick={() => handleUpdateField('recurrence_pattern', 'weekly')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Weekly</button>
-                      <button onClick={() => handleUpdateField('recurrence_pattern', 'monthly')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Monthly</button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              )}
+              {/* Unified reminder-type selector — replaces the old classification,
+                  interval, recurring, and add-reminder pills with one control */}
+              <ReminderTypeSelector task={task} theme={theme} onChangeType={handleChangeReminderType} />
 
               {/* Energy Badge - Clickable */}
               <Popover>
@@ -1203,89 +1268,51 @@ Return JSON:
                 </div>
               )}
 
-              {/* Show interval badge for recurring reminders */}
-              {task.reminder_interval && task.reminder_interval !== 'once' && (
+              {/* First-reminder date & time — for one-time and interval reminders */}
+              {task.reminder_interval && (
                 <Popover>
                   <PopoverTrigger asChild>
-                    <button className="cursor-pointer hover:opacity-80 transition-opacity border px-3 py-1 rounded-full text-sm font-medium bg-white flex items-center gap-1">
+                    <button className="cursor-pointer hover:opacity-80 transition-opacity bg-purple-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
                       <Clock className="w-3 h-3" />
-                      {formatReminderInterval(task.reminder_interval)}
-                      {task.next_reminder && (
-                        <span className="ml-1">• {formatReminderTime(task.next_reminder)}</span>
+                      {task.next_reminder ? (
+                        <>
+                          {isEvent ? formatEventDateRange() : formatReminderDate(task.next_reminder)} • {formatReminderTime(task.next_reminder)}
+                        </>
+                      ) : (
+                        'Set Date & Time'
                       )}
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className={`w-[22rem] max-w-[calc(100vw-1.5rem)] max-h-[85vh] overflow-y-auto p-4 ${
-                    theme === 'dark' 
-                      ? 'bg-gray-800 border-gray-700 text-gray-100' 
-                      : 'bg-white border-gray-200'
+                    theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200'
                   }`}>
                     <div className="space-y-3">
-                      {/* Date & Time picker for all recurring intervals */}
-                      <div className="pb-3 border-b space-y-3">
-                        <div>
-                          <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
-                            First Reminder Date:
-                          </label>
-                          <input
+                      <div>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Reminder Date:</label>
+                        <input
                           type="date"
                           value={reminderDate}
-                          onChange={(e) => {
-                            setReminderDate(e.target.value);
-                            reminderDateRef.current = e.target.value;
-                            if (!isInitializingRef.current && e.target.value && !reminderTimeRef.current) {
-                              setReminderTime('09:00');
-                              reminderTimeRef.current = '09:00';
-                            }
-                          }}
-                          className={`w-full border rounded px-3 py-2 ${
-                            theme === 'dark'
-                              ? 'bg-gray-900 border-gray-600 text-gray-100'
-                              : 'bg-white border-gray-300 text-gray-900'
-                          }`}
-                          />
-                          </div>
-                          <div>
-                          <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
-                           Reminder Time:
-                          </label>
-                          <input
+                          onChange={(e) => { setReminderDate(e.target.value); reminderDateRef.current = e.target.value; }}
+                          className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Reminder Time:</label>
+                        <input
                           type="time"
                           value={reminderTime}
-                          onChange={(e) => {
-                            setReminderTime(e.target.value);
-                            reminderTimeRef.current = e.target.value;
-                          }}
-                          className={`w-full border rounded px-3 py-2 ${
-                            theme === 'dark'
-                              ? 'bg-gray-900 border-gray-600 text-gray-100'
-                              : 'bg-white border-gray-300 text-gray-900'
-                          }`}
-                          />
-                          </div>
-                          <Button
-                            type="button"
-                            onClick={() => handleUpdateReminderTime(reminderTime, reminderDate)}
-                            disabled={!reminderDate || !reminderTime || isUpdating}
-                            className={`w-full ${theme === 'dark' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
-                          >
-                            {isUpdating ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Date & Time</>}
-                          </Button>
-                          </div>
-
-                                          {/* Interval options */}
-                      <div className="space-y-1">
-                        <button onClick={() => handleUpdateField('reminder_interval', '10min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 10 minutes</button>
-                        <button onClick={() => handleUpdateField('reminder_interval', '20min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 20 minutes</button>
-                        <button onClick={() => handleUpdateField('reminder_interval', '30min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 30 minutes</button>
-                        <button onClick={() => handleUpdateField('reminder_interval', '1hour')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every hour</button>
-                        <button onClick={() => handleUpdateField('reminder_interval', '2hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 2 hours</button>
-                        <button onClick={() => handleUpdateField('reminder_interval', '4hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 4 hours</button>
-                        <button onClick={() => handleUpdateField('reminder_interval', 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
-                        <button onClick={() => handleUpdateField('reminder_interval', 'every_other_day')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every other day</button>
-                        <div className="border-t my-1"></div>
-                        <button onClick={() => handleUpdateField('reminder_interval', 'once')} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium">📅 One-Time Only</button>
+                          onChange={(e) => { setReminderTime(e.target.value); reminderTimeRef.current = e.target.value; }}
+                          className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
+                        />
                       </div>
+                      <Button
+                        type="button"
+                        onClick={() => handleUpdateReminderTime(reminderTime, reminderDate)}
+                        disabled={!reminderDate || !reminderTime || isUpdating}
+                        className="w-full bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        {isUpdating ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Date & Time</>}
+                      </Button>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -1361,130 +1388,7 @@ Return JSON:
                   Event {formatReminderDate(task.event_time)} • {formatReminderTime(task.event_time)}
                 </div>
               )}
-
-              {/* Show date badge for one-time reminders - FIXED: Show even if next_reminder is null */}
-              {task.reminder_interval === 'once' && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className="cursor-pointer hover:opacity-80 transition-opacity bg-purple-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {task.next_reminder ? (
-                        <>
-                          {isEvent ? formatEventDateRange() : formatReminderDate(task.next_reminder)} • {formatReminderTime(task.next_reminder)}
-                        </>
-                      ) : (
-                        'Set Date & Time'
-                      )}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className={`w-[22rem] max-w-[calc(100vw-1.5rem)] max-h-[85vh] overflow-y-auto p-4 ${
-                    theme === 'dark' 
-                      ? 'bg-gray-800 border-gray-700 text-gray-100' 
-                      : 'bg-white border-gray-200'
-                  }`}>
-                    <div className="space-y-4">
-                      <div>
-                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
-                          Reminder Date:
-                        </label>
-                        <input
-                         type="date"
-                         value={reminderDate}
-                         onChange={(e) => {
-                           setReminderDate(e.target.value);
-                           reminderDateRef.current = e.target.value;
-                         }}
-                         className={`w-full border rounded px-3 py-2 ${
-                           theme === 'dark'
-                             ? 'bg-gray-900 border-gray-600 text-gray-100'
-                             : 'bg-white border-gray-300 text-gray-900'
-                         }`}
-                        />
-                        </div>
-                        <div>
-                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
-                         Reminder Time:
-                        </label>
-                        <input
-                         type="time"
-                         value={reminderTime}
-                         onChange={(e) => {
-                           setReminderTime(e.target.value);
-                           reminderTimeRef.current = e.target.value;
-                         }}
-                         className={`w-full border rounded px-3 py-2 ${
-                           theme === 'dark'
-                             ? 'bg-gray-900 border-gray-600 text-gray-100'
-                             : 'bg-white border-gray-300 text-gray-900'
-                         }`}
-                        />
-                       </div>
-                      <Button
-                        type="button"
-                        onClick={() => handleUpdateReminderTime(reminderTime, reminderDate)}
-                        disabled={!reminderDate || !reminderTime || isUpdating}
-                        className={`w-full ${theme === 'dark' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-green-600 hover:bg-green-700 text-white'}`}
-                      >
-                        {isUpdating ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Date & Time</>}
-                      </Button>
-
-                      <div className={`border-t pt-3 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
-                        <p className={`text-xs font-semibold uppercase mb-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Or switch to repeating</p>
-                        <p className={`text-xs mb-0.5 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Frequent nudges</p>
-                        <button onClick={() => handleUpdateField('reminder_interval', '10min')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 10 min</button>
-                        <button onClick={() => handleUpdateField('reminder_interval', '30min')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 30 min</button>
-                        <button onClick={() => handleUpdateField('reminder_interval', '1hour')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button>
-                        <button onClick={() => handleUpdateField('reminder_interval', '2hours')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button>
-                        <p className={`text-xs mt-1.5 mb-0.5 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Daily check-ins</p>
-                        <button onClick={() => handleUpdateField('reminder_interval', 'daily')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Daily</button>
-                        <button onClick={() => handleUpdateField('reminder_interval', 'every_other_day')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every other day</button>
-                      </div>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              )}
-
-              {/* Show "Add Reminder" button if no reminder is set */}
-              {!task.reminder_interval && !task.next_reminder && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className="cursor-pointer hover:opacity-80 transition-opacity border border-dashed border-gray-300 px-3 py-1 rounded-full text-sm font-medium text-gray-500 bg-white flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      Add Reminder
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-56 p-2">
-                    <div className="space-y-1">
-                      <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Recurring</div>
-                      <button onClick={() => handleUpdateField('reminder_interval', '30min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 30 minutes</button>
-                      <button onClick={() => handleUpdateField('reminder_interval', '1hour')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every hour</button>
-                      <button onClick={() => handleUpdateField('reminder_interval', '2hours')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 2 hours</button>
-                      <button onClick={() => handleUpdateField('reminder_interval', 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
-                      <div className="border-t my-1"></div>
-                      <button onClick={() => handleUpdateField('reminder_interval', 'once')} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium">📅 Set Specific Date</button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              )}
-
-              {/* Show "Make Recurring" button if no recurrence set */}
-              {(!task.recurrence_pattern || task.recurrence_pattern === 'none') && (
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className="cursor-pointer hover:opacity-80 transition-opacity border border-dashed border-gray-300 px-3 py-1 rounded-full text-sm font-medium text-gray-500 bg-white flex items-center gap-1">
-                      🔄 Make Recurring
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-48 p-2">
-                    <div className="space-y-1">
-                      <button onClick={() => handleUpdateField('recurrence_pattern', 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
-                      <button onClick={() => handleUpdateField('recurrence_pattern', 'weekly')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Weekly</button>
-                      <button onClick={() => handleUpdateField('recurrence_pattern', 'monthly')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Monthly</button>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              )}
-              </div>
+            </div>
 
             {/* Pictures Section */}
             <div className="space-y-3">
