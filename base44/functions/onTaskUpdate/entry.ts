@@ -109,6 +109,33 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, cancelled: ids.length, reason: 'task_deleted' });
     }
 
+    // On create: if this is a smart-nudge-eligible task (day-only or no due date,
+    // not a birthday/event), mark the daily nudge schedule dirty so the next cron
+    // run regenerates it with the new task included. No OneSignal work needed here —
+    // the cron handles sending.
+    if (event.type === 'create') {
+      const isSmartNudgeTask =
+        data.status === 'active' &&
+        data.classification !== 'birthday' && data.classification !== 'event' &&
+        !data.birthday_person && (
+          data.day_only_task ||
+          (!data.due_date && !data.event_time && !data.start_date)
+        );
+
+      if (isSmartNudgeTask) {
+        console.log('[onTaskUpdate] New smart-nudge task created — marking schedule dirty');
+        try {
+          await base44.asServiceRole.entities.User.update(user.id, {
+            smart_nudge_schedule_dirty: true
+          });
+        } catch (e) {
+          console.error('[onTaskUpdate] Failed to mark smart nudge schedule dirty on create:', e);
+        }
+      }
+
+      return Response.json({ success: true, created: true, smartNudge: isSmartNudgeTask });
+    }
+
     // Only handle update events beyond this point
     if (event.type !== 'update') {
       console.log('[onTaskUpdate] Not an update or delete event, skipping');
