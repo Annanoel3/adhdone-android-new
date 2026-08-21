@@ -109,6 +109,7 @@ Deno.serve(async (req) => {
       const chosenTask = todaysTasks[nudge.task_index - 1];
       if (!chosenTask) continue;
 
+      console.log(`[SMART NUDGE] LLM chose: "${nudge.notification_title}" — "${nudge.notification_body}" for "${chosenTask.title}"`);
       const sent = await sendNudgeNotification(email, user, nudge, chosenTask.id);
       if (sent) {
         try {
@@ -232,20 +233,17 @@ async function sendNudgeNotification(
   const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
   if (!appId || !restApiKey) return false;
 
-  const playerIds = user?.onesignal_player_ids || [];
+  // Use include_external_user_ids (email) — same approach as onTaskUpdate's
+  // scheduleOneSignalNotification. Player IDs go stale (reinstall, new device)
+  // while the email maps to all active subscriptions reliably.
   const payload: any = {
     app_id: appId,
     headings: { en: nudge.notification_title },
     contents: { en: nudge.notification_body },
     data: { screen: '/TaskNotification', taskId, type: 'smart_nudge' },
+    include_external_user_ids: [email],
     channel_for_external_user_ids: 'push',
   };
-
-  if (playerIds.length > 0) {
-    payload.include_player_ids = playerIds;
-  } else {
-    payload.include_external_user_ids = [email];
-  }
 
   try {
     const response = await fetch('https://onesignal.com/api/v1/notifications', {

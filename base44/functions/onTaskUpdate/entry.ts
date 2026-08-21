@@ -194,6 +194,21 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, cancelled: true, reason: 'task_completed_or_snoozed' });
     }
 
+    // Smart nudge reassessment: when urgency changes to "urgent", reset the
+    // smart nudge dedup timer so the next hourly cron run nudges immediately
+    // (within ~45 min) instead of waiting for the normal dedup window to expire.
+    if (old_data?.urgency !== 'urgent' && data.urgency === 'urgent') {
+      console.log('[onTaskUpdate] Urgency changed to urgent — resetting smart nudge dedup');
+      try {
+        await base44.asServiceRole.entities.User.update(user.id, {
+          last_smart_nudge_at: null,
+          last_smart_nudge_task_id: null
+        });
+      } catch (e) {
+        console.error('[onTaskUpdate] Failed to reset smart nudge dedup:', e);
+      }
+    }
+
     // Check if there are scheduled notifications for this task
     if (!data.onesignal_notification_ids || data.onesignal_notification_ids.length === 0) {
       console.log('[onTaskUpdate] No scheduled notifications for this task');

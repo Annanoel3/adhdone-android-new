@@ -54,6 +54,23 @@
       "type": "string",
       "format": "date-time",
       "description": "When the user entered Focus Mode"
+    },
+    "onesignal_player_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "OneSignal player IDs registered for this user's devices. Used for push notification targeting."
+    },
+    "last_smart_nudge_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of the last smart nudge sent to this user. Used for 45-minute dedup to prevent back-to-back nudges."
+    },
+    "last_smart_nudge_task_id": {
+      "type": "string",
+      "description": "ID of the task the last smart nudge was about. The LLM avoids nudging the same task twice in a row (unless urgent)."
     }
   },
   "name": "User"
