@@ -1126,6 +1126,60 @@ Return JSON:
     }
   };
 
+  // Choosing "Event" cancels any old notifications, marks the task as an event,
+  // and — if a date/time is already set — regenerates the LLM lead-time reminder
+  // schedule so the future-notifications list appears immediately.
+  const handleSelectEvent = async () => {
+    if (!task) return;
+    setIsUpdating(true);
+    try {
+      const currentUser = await base44.auth.me();
+      const allOldIds = Array.from(new Set([
+        ...(task.onesignal_notification_ids || []),
+        ...((task.reminder_schedule || []).map((r) => r.notification_id).filter(Boolean)),
+      ]));
+      if (allOldIds.length > 0) {
+        try { await cancelScheduledReminder(allOldIds); } catch (e) { console.error(e); }
+      }
+      const updates = {
+        classification: 'event',
+        onesignal_notification_ids: [],
+        reminder_schedule: [],
+      };
+      if (task.birthday_person) updates.birthday_person = null;
+      await Task.update(task.id, updates);
+
+      const eventDate = task.event_time || task.next_reminder;
+      if (eventDate) {
+        try {
+          const { scheduleMultiReminders } = await import('../utils/multiReminderScheduler');
+          const multiIds = await scheduleMultiReminders({
+            email: currentUser.email,
+            title: task.title,
+            scheduledDateISO: eventDate,
+            taskId: task.id,
+            urgency: task.urgency,
+            classification: 'event',
+          });
+          if (multiIds && multiIds.length > 0) {
+            await Task.update(task.id, { onesignal_notification_ids: multiIds });
+          }
+        } catch (e) {
+          console.error('Failed to generate event reminders:', e);
+        }
+        const refreshed = await Task.filter({ id: task.id });
+        if (refreshed[0]) onUpdate(refreshed[0]);
+      } else {
+        onUpdate({ ...task, ...updates });
+        toast({ title: 'Event saved', description: 'Set the event date & time to generate reminders.' });
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   // One entry point for the ReminderTypeSelector — routes each type to the
   // right existing handler so all the cancel/reschedule logic stays in one place.
   const handleChangeReminderType = (type, sub) => {
@@ -1133,7 +1187,7 @@ Return JSON:
     if (type === 'interval') return handleUpdateField('reminder_interval', sub);
     if (type === 'repeat') return handleUpdateField('recurrence_pattern', sub);
     if (type === 'once') return handleUpdateField('reminder_interval', 'once');
-    if (type === 'event') return handleClassificationChange('event');
+    if (type === 'event') return handleSelectEvent();
     if (type === 'birthday') return handleClassificationChange('birthday');
   };
 
@@ -1261,8 +1315,9 @@ Return JSON:
                 </PopoverContent>
               </Popover>
 
-              {/* Intelligent notification schedule — visible directly, not buried in a popover */}
-              {task.reminder_schedule && task.reminder_schedule.length > 0 && (
+              {/* Intelligent notification schedule — visible directly, not buried in a popover.
+                  Always shown for events so the future-reminder list is visible. */}
+              {((task.reminder_schedule && task.reminder_schedule.length > 0) || task.classification === 'event') && (
                 <div className="w-full mt-2">
                   <SmartReminderEditor task={task} theme={theme} onUpdate={onUpdate} />
                 </div>
