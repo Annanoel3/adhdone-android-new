@@ -1,8 +1,16 @@
 // Shared "smart add" prompt used by BOTH the AddTask page and the Google
 // Calendar sync, so manually-added and imported items go through the EXACT
-// same AI decision process (urgency, energy, reminder type & frequency,
-// event-vs-task, due date). Keep this in sync with nothing — this IS the
-// single source of truth for the smart-add prompt.
+// same AI decision process (urgency, energy, event-vs-task, due date).
+//
+// REMINDER PHILOSOPHY (CRITICAL):
+// Recurring interval reminders (10min/20min/30min/1hour/2hours/4hours/daily/
+// every_other_day) are ONLY created when the user EXPLICITLY asks for them
+// ("remind me every 10 minutes", "remind me daily", "every other day").
+// For EVERYTHING else, set reminder_interval=null. The app's LLM smart-nudge
+// system decides when/how often to remind — it weighs urgency and whether the
+// task is due today, and generates a small daily schedule instead of flooding
+// the notification tray. Never auto-assign a recurring interval based on the
+// task's perceived importance.
 
 export function buildTaskParsePrompt(inputText: string): string {
   const now = new Date();
@@ -56,16 +64,39 @@ export function buildTaskParsePrompt(inputText: string): string {
       - Keep the inner action intact; only strip the outermost "remind me to" phrase.
       - Capitalize the first word. Remove time/date references from the title.
 
+      ═══════════════════════════════════════════════════════════════════════
+      REMINDER INTERVAL RULES (CRITICAL — read carefully)
+      ═══════════════════════════════════════════════════════════════════════
+      reminder_interval must ONLY be set to a recurring value (10min/20min/30min/
+      1hour/2hours/4hours/daily/every_other_day) when the user EXPLICITLY uses
+      recurring language:
+        - "every 10 minutes" → "10min"
+        - "every 20 minutes" → "20min"
+        - "every hour" / "hourly" → "1hour"
+        - "every 2 hours" → "2hours"
+        - "every day" / "daily" / "everyday" → "daily"
+        - "every other day" → "every_other_day"
+      For ALL other tasks, set reminder_interval=null. The app's LLM smart-nudge
+      system handles when to remind — it weighs urgency and whether the task is
+      due today, and sends a few well-timed nudges instead of flooding. NEVER
+      auto-assign a recurring interval based on urgency, task type, or perceived
+      importance. If the user wants frequent recurring reminders, they ask for them.
+
+      "once" is ONLY for one-time precise reminders tied to a specific moment
+      (see ONE-TIME below). If a task is not an explicit recurring request AND not
+      a precise one-time moment, reminder_interval=null.
+      ═══════════════════════════════════════════════════════════════════════
+
       TIMING RULES:
 
       "in X" vs "every X":
-      - If user says "in 10 minutes" or "in 1 hour" → ONE-TIME ONLY
+      - If user says "in 10 minutes" or "in 1 hour" → ONE-TIME PRECISE
         Set: reminder_interval="once", target_date=TODAY, target_time=CALCULATED_TIME
-      - If user says "every 10 minutes" or "every hour" → RECURRING
+      - If user says "every 10 minutes" or "every hour" → EXPLICIT RECURRING
         Set: reminder_interval="10min" or "1hour", no target_date/target_time
 
       "tomorrow" with NO specific time (CRITICAL — commonly misclassified):
-      - If it is a GENERAL ACTIONABLE TASK (research, "look into", "check on", sell, organize, clean, errands, projects, chores, posting, returning, fixing) → This is a DAY-ONLY task: reminder_interval="once", target_date=TOMORROW, target_time=null, needs_date_pick=false, day_only_task=true. The app sends ONE "heads up, this is due tomorrow" reminder TONIGHT, then hourly nudges TOMORROW until the task is done. Do NOT start recurring reminders now — the task isn't due until tomorrow, so bugging the user every 2 hours before then is annoying and counterproductive.
+      - If it is a GENERAL ACTIONABLE TASK (research, "look into", "check on", sell, organize, clean, errands, projects, chores, posting, returning, fixing) → This is a DAY-ONLY task: reminder_interval=null, target_date=TOMORROW, target_time=null, needs_date_pick=false, day_only_task=true. The app sends ONE "heads up, this is due tomorrow" reminder TONIGHT, then the LLM smart-nudge system surfaces it TOMORROW. Do NOT assign a recurring interval.
       - If it is a genuine SCHEDULED EVENT or APPOINTMENT (dentist, doctor, therapist, concert, wedding, party, meeting, class, "make lunch", "pick up cake", travel) → reminder_interval="once", target_date=TOMORROW, target_time=null, needs_date_pick=true (the app asks the user to pick a time).
       - When in doubt, default to DAY-ONLY for tasks (day_only_task=true), or needs_date_pick for events.
 
@@ -73,33 +104,31 @@ export function buildTaskParsePrompt(inputText: string): string {
       - Set: reminder_interval="once", target_date=TOMORROW, target_time=<specified time>
 
       SPECIFIC DAY-OF-MONTH (CRITICAL — this is commonly missed):
-      - "on the 28th", "the 28th" (a TASK tied to that day, no "by") → DAY-ONLY: reminder_interval="once", day_only_task=true
+      - "on the 28th", "the 28th" (a TASK tied to that day, no "by") → DAY-ONLY: reminder_interval=null, day_only_task=true
         → target_date = current month + that day number, format YYYY-MM-DD
         → If that day has already passed this month, use next month
         → target_time = null unless a time is also specified; if no time, needs_date_pick=false, day_only_task=true
-        → Example: today is ${todayISO}, "pay zx4rr on the 28th" → target_date="${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-28", reminder_interval="once", target_time=null, needs_date_pick=false, day_only_task=true
-      - "by the 28th", "by the 15th" (a DEADLINE) → RECURRING with due_date (see RELATIVE DEADLINES), NOT day-only.
+        → Example: today is ${todayISO}, "pay zx4rr on the 28th" → target_date="${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-28", reminder_interval=null, target_time=null, needs_date_pick=false, day_only_task=true
+      - "by the 28th", "by the 15th" (a DEADLINE) → DEADLINE (see RELATIVE DEADLINES), NOT day-only.
       - "on the 1st" → same DAY-ONLY logic as "on the 28th".
       - If it's an EVENT/appointment on that day (dentist, concert) → needs_date_pick=true, day_only_task=false.
 
       "ON [specific day]" TASKS — DAY-ONLY RULE (CRITICAL):
       - If the user says "remind me to do X on Friday", "remind me to do X on the 20th",
         "remind me to do X next Monday" — a TASK (not event) tied to a specific future day with NO time:
-        → reminder_interval="once"
+        → reminder_interval=null
         → target_date = that day (YYYY-MM-DD)
         → target_time = null
         → needs_date_pick = false (do NOT ask for a time — the user wants day-of nudges)
         → day_only_task = true
         → classification = "task"
         → is_flexible = false
-      - The app sends ONE "heads up, X is due tomorrow" reminder the night before, then hourly
-        nudges on the day of (based on priority) until the task is done. NO reminders fire in the
-        days leading up — the task isn't due until that day, so bugging the user every 2 hours for
-        6 days would be extremely annoying.
+      - The app sends ONE "heads up, X is due tomorrow" reminder the night before, then the
+        LLM smart-nudge system surfaces it on the day of (prioritized by urgency). NO reminders
+        fire in the days leading up — the task isn't due until that day.
       - This does NOT apply to EVENTS/appointments (dentist, concert, party) → those use needs_date_pick.
-      - This does NOT apply to "by Friday" deadlines → those are RECURRING with due_date.
-      - This does NOT apply to "today" tasks → those start recurring immediately (TODAY OVERRIDE).
-      - If the target day is TODAY, do NOT use day_only_task — use the TODAY OVERRIDE (recurring 2hours).
+      - This does NOT apply to "by Friday" deadlines → those are DEADLINES (due_date set, day_only_task=true).
+      - This does NOT apply to "today" tasks → those use the TODAY rule (day_only_task=true, due_date=today).
 
       MULTI-DAY EVENTS / DATE RANGES (CRITICAL):
       - If the user describes a SPAN of days, set target_date to the FIRST day and
@@ -116,8 +145,10 @@ export function buildTaskParsePrompt(inputText: string): string {
 
       RELATIVE DEADLINES / DUE DATES (CRITICAL — commonly missed):
       If the user mentions a relative deadline or time boundary, you MUST set due_date to the
-      calculated date. These are DEADLINES (the task must be done by then), not one-time events.
-      The task is still RECURRING — keep reminding until done or the due date passes.
+      calculated date. These are DEADLINES (the task must be done by then). The LLM smart-nudge
+      system picks the task up WHEN IT IS ACTUALLY DUE (on the due date) — no recurring reminders
+      fire in the days leading up. A single "heads up, due tomorrow" reminder fires the night
+      before, then day-of LLM nudges.
       - "by Friday" / "by [day of week]" → due_date = NEXT [that day] (use the NEXT dates provided above)
       - "before the end of this week" / "end of the week" / "this week" / "by the end of the week"
         → due_date = END OF THIS WEEK (${endOfThisWeekISO})
@@ -127,53 +158,38 @@ export function buildTaskParsePrompt(inputText: string): string {
       - "by [month] [day]" or "by the [Nth]" → due_date = that date (YYYY-MM-DD)
       - "before [date]" / "by [date]" → due_date = that date (YYYY-MM-DD)
       When a due_date is set for a relative deadline:
-      - Keep reminder_interval as RECURRING (e.g., "2hours", "4hours") based on urgency — do NOT use "once".
+      - reminder_interval=null (NOT a recurring interval — the LLM handles nudges on the due day).
+      - day_only_task=true (so the night-before heads-up + day-of LLM nudges apply).
       - Do NOT set needs_date_pick — the deadline was already specified by the user.
-      - Do NOT set target_date/target_time — due_date is the deadline field for recurring tasks.
+      - Do NOT set target_date/target_time — due_date is the deadline field.
       - Set is_flexible=false (a deadline was mentioned).
       - urgency: "high" if the deadline is soon (within 2-3 days), otherwise "medium".
 
       Other rules:
-      - "at 2pm" → ONE-TIME, reminder_interval="once", target_time="14:00"
-      - "daily"/"every day" → reminder_interval="daily"
-      - "every other day" → reminder_interval="every_other_day"
+      - "at 2pm" → ONE-TIME PRECISE, reminder_interval="once", target_time="14:00"
+      - "daily"/"every day"/"everyday" → EXPLICIT RECURRING, reminder_interval="daily"
+      - "every other day" → EXPLICIT RECURRING, reminder_interval="every_other_day"
 
-      REMINDER STRATEGY (when user does NOT specify a time):
-
-      "TODAY" OVERRIDE (CRITICAL — commonly missed):
+      ═══════════════════════════════════════════════════════════════════════
+      TODAY OVERRIDE (CRITICAL — commonly missed)
+      ═══════════════════════════════════════════════════════════════════════
       If the user says "today" (e.g., "I need to clean the dishes and the floor today",
-      "do laundry today"), the task needs to get done TODAY — it is NOT an ongoing daily habit.
-      - Treat it as RECURRING with reminder_interval="2hours" (remind every 2 hours until completed).
-      - This applies to CHORES too: "clean the dishes today", "clean the floor today",
-        "do the dishes today" → reminder_interval="2hours", NOT "daily".
+      "do laundry today", "pay rent today"), the task needs to get done TODAY.
+      - reminder_interval=null (NOT a recurring interval — the LLM handles day-of nudges).
+      - day_only_task=true (so the LLM smart-nudge system picks it up today, prioritized by urgency).
+      - due_date = today's date (${todayISO}) so that if it isn't finished by end of today, it
+        becomes an OVERDUE task the next day.
+      - This applies to CHORES too: "clean the dishes today", "clean the floor today" → day_only_task=true, reminder_interval=null.
       - urgency based on the task (chores → "medium", time-sensitive → "high").
-      - "daily" is ONLY for ongoing habits/routines where the user did NOT say "today".
-      - Example: "clean the dishes today" → reminder_interval="2hours", urgency="medium", needs_date_pick=false
-      - Example: "do laundry today" → reminder_interval="2hours", urgency="high", needs_date_pick=false
-      - IMPORTANT: For these "today" recurring tasks, ALSO set due_date = today's date
-        (YYYY-MM-DD) so that if the task isn't finished by end of today, it automatically
-        becomes an OVERDUE task the next day. Do NOT set due_date for one-time events
-        (those use target_date/target_time instead).
+      - "daily" is ONLY for ongoing habits/routines where the user EXPLICITLY said "daily"/"every day".
+      - Example: "clean the dishes today" → reminder_interval=null, day_only_task=true, due_date="${todayISO}", urgency="medium", needs_date_pick=false
+      - Example: "do laundry today" → reminder_interval=null, day_only_task=true, due_date="${todayISO}", urgency="high", needs_date_pick=false
+      - Do NOT set due_date for one-time events (those use target_date/target_time instead).
 
-      STEP 1 — Decide: is this RECURRING or ONE-TIME?
-
-      RECURRING (keep reminding until done):
-      - Important obligations that need to get done: paying bills, submitting reports, calling someone important, taking medicine, deadlines
-      - Anything where forgetting has real consequences
-      - Habits or routines: "walk the dog every day", "take vitamins"
-      - Use: reminder_interval = "2hours", "daily", or "every_other_day" (NO target_date/target_time)
-      - Examples:
-        "pay my electric bill" → reminder_interval="2hours" (important, needs doing today)
-        "pay rent" → reminder_interval="2hours" (urgent financial obligation)
-        "submit the report" → reminder_interval="1hour" (work deadline, high stakes)
-        "call the doctor" → reminder_interval="2hours" (health-related, important)
-        "take my medication" → reminder_interval="daily"
-        "finish project by Friday" → reminder_interval="2hours"
-
-      ONE-TIME (single notification, then done) — ONLY for these cases:
+      ONE-TIME PRECISE (single notification at a specific moment) — ONLY for these cases:
       - User explicitly mentions a specific clock time: "at 3pm", "tomorrow morning", "in 2 hours", "at 2pm tomorrow"
       - Genuine scheduled events/appointments tied to a specific moment: "dentist tomorrow", "concert on the 28th", "make lunch tomorrow", "reminder for my dentist at 2pm"
-      - NEVER use "once" for a general actionable task just because the user said "tomorrow" with no time — those are RECURRING (see "tomorrow with NO specific time" rule above).
+      - NEVER use "once" for a general actionable task just because the user said "tomorrow" with no time — those are DAY-ONLY (reminder_interval=null, day_only_task=true).
       - Use: reminder_interval="once", target_date=YYYY-MM-DD, target_time=HH:MM
       - Examples:
         "remind me to make lunch tomorrow" → once, target_date=TOMORROW, target_time=null, needs_date_pick=true
@@ -181,23 +197,33 @@ export function buildTaskParsePrompt(inputText: string): string {
         "remind me at 5pm to call John" → once, target_date=TODAY, target_time="17:00"
         "find the pasta" → once, target_date=TODAY, target_time=null, needs_date_pick=true
 
-      STEP 2 — Pick the right interval for recurring tasks:
-      - "2hours" → important tasks needing to be done today (bills, deadlines, work tasks)
-      - "1hour" → very urgent/time-sensitive work tasks with hard deadlines
-      - "daily" → habits, routines, or things due in a few days
-      - "every_other_day" → lower-importance ongoing things
+      EXPLICIT RECURRING (keep reminding at a fixed interval until done):
+      - ONLY when the user EXPLICITLY says "every X", "daily", "every day", "every other day", "hourly".
+      - Use the matching reminder_interval (10min/20min/30min/1hour/2hours/4hours/daily/every_other_day).
+      - No target_date/target_time (unless the user also gave a start time).
+      - Examples:
+        "remind me every 10 minutes to check the oven" → reminder_interval="10min"
+        "remind me daily to take my vitamins" → reminder_interval="daily"
+        "remind me every other day to water the plants" → reminder_interval="every_other_day"
+      - If the user did NOT use explicit recurring language, reminder_interval=null (LLM handles it).
 
       NEVER set target_time to the current moment unless user said "now" or "right now".
       CRITICAL: NEVER infer, guess, or hallucinate a target_time. Only set target_time when the user EXPLICITLY states a time (e.g., "at 5pm", "at 3:30", "by noon"). If the user did not mention a specific time, set target_time=null. Do not use domain knowledge to guess times (e.g., don't assume daycare pickup is 5pm, don't assume work starts at 9am).
 
-      SMART PRIORITY SUGGESTIONS:
+      SMART PRIORITY SUGGESTIONS (always infer urgency, even when reminder_interval=null):
       - Time-sensitive or deadline-based → "urgent" or "high"
       - Important but flexible → "high" or "medium"
       - Routine maintenance → "medium"
       - Nice-to-have → "low"
+      The LLM smart-nudge system uses urgency to decide WHEN to surface a task and HOW
+      often, so always set a meaningful urgency. A high-urgency task due today takes
+      precedence; a high-urgency task with no due date is still surfaced, just not ahead
+      of one due today.
 
       SMART INFERENCE (when user does NOT specify a time, frequency, or date):
-      Infer the best reminder_interval and urgency from the NATURE of the task:
+      Infer urgency and energy from the NATURE of the task. Do NOT infer a recurring
+      reminder_interval — set reminder_interval=null for all of these; the LLM handles
+      nudges. Only set reminder_interval when the user explicitly asked for recurring.
 
       PERISHABLE / TIME-SENSITIVE (degrades or has consequences if delayed):
       - Food/perishables: "move food to freezer", "put leftovers in fridge", "defrost chicken"
@@ -205,36 +231,37 @@ export function buildTaskParsePrompt(inputText: string): string {
       - Medication: "take meds", "take medicine", "take antibiotics"
       - Cooking: "check on the oven", "stir the pot", "flip the food"
       - Pets/plants: "feed the cat", "water the plants"
-      - → reminder_interval="2hours", urgency="high"
-      - CRITICAL: These are RECURRING tasks, NOT one-time. Set needs_date_pick=false.
-        They must start recurring reminders immediately — never show the date picker for these.
-        "move food to the freezer" → reminder_interval="2hours", urgency="high", needs_date_pick=false
+      - → reminder_interval=null, urgency="high", needs_date_pick=false, day_only_task=false
+      - If the user wants frequent reminders for these, they will say "every X minutes".
+        Otherwise the LLM surfaces them with appropriate urgency.
 
       HARD DEADLINE / IMPORTANT OBLIGATION (serious consequences if missed):
       - Financial: "pay rent", "pay electric bill", "transfer money", "pay credit card"
       - Legal/admin: "submit form", "file taxes", "renew license", "submit application"
       - Work: "submit report", "send email to boss", "turn in project"
       - Appointments: "call doctor", "confirm appointment", "reschedule meeting"
-      - → reminder_interval="1hour" if deadline is today or tomorrow, otherwise "2hours", urgency="high"
+      - If the user gave a deadline ("by Friday") → due_date set, day_only_task=true, reminder_interval=null (see RELATIVE DEADLINES).
+      - If NO deadline given → reminder_interval=null, urgency="high", no due_date (LLM handles).
 
-      ROUTINE / HABIT (recurring wellness or maintenance, low urgency):
+      ROUTINE / HABIT (recurring wellness or maintenance):
       - Wellness: "stretch", "take vitamins", "drink water", "meditate", "do pushups"
       - Chores: "make bed", "water plants", "tidy desk"
-      - → reminder_interval="daily", urgency="low" or "medium"
-      - CRITICAL: Only use "daily" when the user did NOT say "today". If the user said
-        "today" (e.g., "clean the dishes today", "clean the floor today"), this is a
-        TODAY task, not a daily habit → use reminder_interval="2hours" instead (see TODAY OVERRIDE above).
+      - If the user EXPLICITLY said "daily"/"every day" → reminder_interval="daily".
+      - Otherwise → reminder_interval=null, urgency="low" or "medium" (LLM handles).
+      - CRITICAL: Only use "daily" when the user EXPLICITLY said "daily"/"every day". If the user
+        said "today" (e.g., "clean the dishes today"), use the TODAY OVERRIDE (day_only_task=true, reminder_interval=null).
 
       GENERAL ACTIONABLE TASKS (not perishable, not a hard deadline, not a routine/habit):
       Tasks that need to get done but have no specific deadline or schedule.
       Examples: "post the Subaru parts on Marketplace", "sell the old laptop", "fix the leaky faucet",
       "organize the garage", "research vacuum cleaners", "list items on eBay", "clean the car",
       "Amazon returns", "drop off donation"
-      - These are RECURRING — remind until done. Do NOT ask for a date.
-      - ALWAYS infer urgency and reminder_interval yourself based on the task's nature:
-        * Real consequences if delayed (deadline today, someone waiting, time-sensitive) → urgency="high", reminder_interval="2hours"
-        * Important but flexible — no deadline pressure (selling items, errands, projects, organizing) → urgency="medium", reminder_interval="4hours"
-        * Low-stakes, nice-to-have, no rush → urgency="low", reminder_interval="daily"
+      - reminder_interval=null (the LLM smart-nudge system handles these — do NOT auto-assign an interval).
+      - Do NOT ask for a date (needs_date_pick=false) unless it's a scheduled event.
+      - ALWAYS infer urgency based on the task's nature:
+        * Real consequences if delayed (deadline today, someone waiting, time-sensitive) → urgency="high"
+        * Important but flexible — no deadline pressure (selling items, errands, projects, organizing) → urgency="medium"
+        * Low-stakes, nice-to-have, no rush → urgency="low"
         * When in doubt, default to medium.
       - Set priority_uninferrable=false, is_flexible=true (task can be done any day)
 
@@ -242,7 +269,7 @@ export function buildTaskParsePrompt(inputText: string): string {
       Only set priority_uninferrable=true if the task is SO VAGUE that you genuinely cannot
       determine any reasonable urgency level. This should be extremely rare — almost every task
       has enough context to infer at least a medium priority. When in doubt, default to
-      urgency="medium", reminder_interval="4hours" rather than asking the user.
+      urgency="medium", reminder_interval=null rather than asking the user.
 
       If the task DOES fit a SMART INFERENCE category, or has a specific time/date:
       - Set priority_uninferrable=false
@@ -257,13 +284,13 @@ export function buildTaskParsePrompt(inputText: string): string {
       - Scheduled activities: "make lunch tomorrow", "pick up cake Tuesday"
 
       NEVER use needs_date_pick for:
-      - General actionable tasks (selling, posting, errands, chores, projects) → infer urgency and set recurring reminder_interval
-      - PERISHABLE/TIME-SENSITIVE tasks → recurring (reminder_interval set)
-      - HARD DEADLINE tasks → recurring (reminder_interval set)
-      - Routine/habit tasks → recurring (reminder_interval="daily")
+      - General actionable tasks (selling, posting, errands, chores, projects) → reminder_interval=null, LLM handles
+      - PERISHABLE/TIME-SENSITIVE tasks → reminder_interval=null, LLM handles
+      - HARD DEADLINE tasks → due_date set (if deadline given) or reminder_interval=null (LLM handles)
+      - Routine/habit tasks → reminder_interval="daily" ONLY if explicit, otherwise null (LLM handles)
 
       If needs_date_pick=true:
-      - Still provide reminder_interval as a fallback (used if user picks "any day")
+      - Still provide reminder_interval="once" as a fallback (used if user picks "any day")
       - Do NOT set target_date or target_time — let the user pick
 
       CLASSIFICATION (Event vs Task — CRITICAL):
@@ -289,7 +316,7 @@ export function buildTaskParsePrompt(inputText: string): string {
       3. Energy: ALWAYS suggest (low/medium/high)
       4. target_date: for "in X" (TODAY), "tomorrow", or specific dates — format YYYY-MM-DD
       5. target_time: for "in X" (calculate), "at X" (specific), or null if no time mentioned
-      6. reminder_interval: ALWAYS provide (10min/20min/30min/1hour/2hours/4hours/daily/every_other_day/once)
+      6. reminder_interval: null UNLESS the user explicitly asked for recurring ("every X"/"daily"/"every other day"), or "once" for a precise one-time moment. NEVER auto-infer a recurring interval.
       7. classification: "task" | "event" | "birthday"
 
       JSON:
@@ -301,7 +328,7 @@ export function buildTaskParsePrompt(inputText: string): string {
       "target_date": "YYYY-MM-DD or null",
       "target_time": "HH:MM or null",
       "end_date": "YYYY-MM-DD or null (LAST day of a multi-day event span; only when the user gave a date range; null for single-day)",
-      "reminder_interval": "10min|20min|30min|1hour|2hours|4hours|daily|every_other_day|once",
+      "reminder_interval": "10min|20min|30min|1hour|2hours|4hours|daily|every_other_day|once|null",
       "due_date": "YYYY-MM-DD or null — set when the user mentions a DEADLINE (e.g., 'by Friday', 'end of the week', 'by tomorrow', 'by the 15th', 'today' tasks). For 'today' tasks, set due_date=today. For relative deadline phrases, use the calculated date from the RELATIVE DEADLINES rules above.",
       "priority_uninferrable": false,
       "is_flexible": false,

@@ -114,12 +114,14 @@ Deno.serve(async (req) => {
     // run regenerates it with the new task included. No OneSignal work needed here —
     // the cron handles sending.
     if (event.type === 'create') {
+      const RECURRING_INTERVALS = new Set(['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day']);
       const isSmartNudgeTask =
         data.status === 'active' &&
+        !RECURRING_INTERVALS.has(data.reminder_interval) &&
         data.classification !== 'birthday' && data.classification !== 'event' &&
         !data.birthday_person && (
           data.day_only_task ||
-          (!data.due_date && !data.event_time && !data.start_date)
+          (!data.due_date && !data.event_time && !data.start_date && !data.next_reminder)
         );
 
       if (isSmartNudgeTask) {

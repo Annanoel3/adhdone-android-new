@@ -37,12 +37,19 @@ Deno.serve(async (req) => {
     const tasksByUser: Record<string, any[]> = {};
     const completedTaskIds = new Set<string>();
 
+    // Recurring interval reminders (10min..every_other_day) are handled by the
+    // refill cron with their own OneSignal notifications — exclude them so the
+    // LLM doesn't ALSO nudge them (duplicate notifications). "once" and null are
+    // fine: "once" marks a day-only/precise task whose actual nudges come from
+    // the night-before + LLM day-of flow, not a recurring flood.
+    const RECURRING_INTERVALS = new Set(['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day']);
     const isSmartNudgeTask = (t: any) =>
       t.status === 'active' &&
+      !RECURRING_INTERVALS.has(t.reminder_interval) &&
       t.classification !== 'birthday' && t.classification !== 'event' &&
       !t.birthday_person && (
         t.day_only_task ||
-        (!t.due_date && !t.event_time && !t.start_date)
+        (!t.due_date && !t.event_time && !t.start_date && !t.next_reminder)
       );
 
     for (const task of allTasks) {
