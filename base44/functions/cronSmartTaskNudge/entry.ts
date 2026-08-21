@@ -35,18 +35,27 @@ Deno.serve(async (req) => {
     // 2. Get all tasks — group active day-only tasks by recipient, and count
     //    completed-today tasks per user (for celebration context in the prompt)
     const allTasks = await base44.asServiceRole.entities.Task.list('-updated_date', 500);
-    const dayOnlyByUser: Record<string, any[]> = {};
+    const smartNudgeByUser: Record<string, any[]> = {};
     const completedTodayByUser: Record<string, number> = {};
+
+    // Smart nudge pool: day-only tasks (due today) + no-due-date tasks (always in pool).
+    // Birthdays, events, and multi-day tasks keep their own reminder systems.
+    const isSmartNudgeTask = (t: any) =>
+      t.status === 'active' &&
+      t.classification !== 'birthday' && t.classification !== 'event' &&
+      !t.birthday_person && (
+        t.day_only_task ||
+        (!t.due_date && !t.event_time && !t.start_date)
+      );
 
     for (const task of allTasks) {
       const email = task.notification_recipient_email;
       if (!email) continue;
 
-      if (task.status === 'active' && task.day_only_task) {
-        if (!dayOnlyByUser[email]) dayOnlyByUser[email] = [];
-        dayOnlyByUser[email].push(task);
+      if (isSmartNudgeTask(task)) {
+        if (!smartNudgeByUser[email]) smartNudgeByUser[email] = [];
+        smartNudgeByUser[email].push(task);
       } else if (task.status === 'completed' && task.completed_at) {
-        // Approximate — allTasks is capped at 500 but it's enough for context
         if (isSameLocalDay(new Date(task.completed_at), now, userMap[email]?.timezone || 'UTC')) {
           completedTodayByUser[email] = (completedTodayByUser[email] || 0) + 1;
         }
@@ -56,7 +65,7 @@ Deno.serve(async (req) => {
     let nudgesSent = 0;
     const results: any[] = [];
 
-    for (const email of Object.keys(dayOnlyByUser)) {
+    for (const email of Object.keys(smartNudgeByUser)) {
       const user = userMap[email];
       if (!user) continue;
 
@@ -75,11 +84,14 @@ Deno.serve(async (req) => {
         if (now.getTime() - lastNudge < 45 * 60 * 1000) continue;
       }
 
-      // Filter to tasks due today (in the user's timezone)
-      const todaysTasks = dayOnlyByUser[email].filter(t => {
-        const dateStr = t.due_date || t.next_reminder;
-        if (!dateStr) return false;
-        return isSameLocalDay(new Date(dateStr), now, timeZone);
+      // Day-only tasks: include only if due today. No-due-date tasks: always in pool.
+      const todaysTasks = smartNudgeByUser[email].filter(t => {
+        if (t.day_only_task) {
+          const dateStr = t.due_date || t.next_reminder;
+          if (!dateStr) return false;
+          return isSameLocalDay(new Date(dateStr), now, timeZone);
+        }
+        return true; // no due date — always eligible
       });
 
       if (todaysTasks.length === 0) continue;
@@ -150,9 +162,10 @@ async function generateSmartNudge(
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
   const timeStr = formatTime(localMin);
 
-  const taskList = tasks.map((t, i) =>
-    `${i + 1}. "${t.title}" (priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'})`
-  ).join('\n');
+  const taskList = tasks.map((t, i) => {
+    const type = t.day_only_task ? 'due today' : 'no due date';
+    return `${i + 1}. "${t.title}" (${type}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'})`;
+  }).join('\n');
 
   const prompt = `You are a supportive ADHD productivity companion — warm, encouraging, like a friend, never a clinician. Your job: pick ONE task to gently nudge the user about right now, and write a short, supportive notification.
 
@@ -165,10 +178,12 @@ TASKS DUE TODAY (not yet completed):
 ${taskList}
 
 HOW TO CHOOSE THE TASK:
+- "due today" tasks take priority over "no due date" tasks — a deadline is approaching.
 - Morning (before noon): Pick something EASY (low energy) to build momentum. A quick win sets a positive tone for the day.
 - Afternoon (noon-5pm): Pick something important that keeps momentum going.
 - Evening (after 5pm): Pick the most urgent remaining task, or something quick that can still get done today.
 - URGENT tasks: Always surface these with appropriate urgency, regardless of time of day. Let them know it's urgent and you'll keep reminding them until it's done.
+- "no due date" tasks: only pick these when there are no "due today" tasks left, or when it's a quick easy win to build momentum.
 - If there's only ONE task left, nudge about that one.
 - Avoid picking the same task you nudged about last time (unless it's urgent).
 

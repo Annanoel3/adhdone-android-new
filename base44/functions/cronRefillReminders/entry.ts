@@ -33,12 +33,21 @@ Deno.serve(async (req) => {
     const allTasks = await base44.asServiceRole.entities.Task.list('-updated_date', 500);
     console.log(`📦 [REFILL] Total tasks fetched: ${allTasks.length}`);
 
+    // Tasks with no due date, no event time, and no start date are handled by
+    // cronSmartTaskNudge (one intelligent nudge per hour) instead of interval
+    // flooding (10+ notifications/day). Skip them here.
+    const isSmartNudgeTask = (t: any) =>
+      !t.due_date && !t.event_time && !t.start_date &&
+      t.classification !== 'birthday' && t.classification !== 'event' &&
+      !t.birthday_person && !t.day_only_task;
+
     const recurringTasks = allTasks.filter(t =>
       t.status === 'active' &&
       t.reminder_interval &&
       t.reminder_interval !== 'once' &&
       intervalMsMap[t.reminder_interval] &&
-      t.notification_recipient_email  // require explicit email — never fall back to created_by
+      t.notification_recipient_email &&  // require explicit email — never fall back to created_by
+      !isSmartNudgeTask(t)  // smart nudge cron handles these
     );
 
     console.log(`📊 [REFILL] Found ${recurringTasks.length} recurring tasks`);
