@@ -127,6 +127,20 @@ export default function NotificationFollowupModal({ user, theme }) {
     // Always check for overdue tasks (delayed to let page settle)
     const timer = setTimeout(checkOverdueTasks, 1500);
 
+    // Check for recent smart nudge — open the app on the most recently nudged
+    // task. Uses localStorage to prevent re-showing on every app open. The key
+    // includes the nudge timestamp so each new nudge gets one chance to show.
+    const checkRecentNudge = () => {
+      if (!user?.last_smart_nudge_task_id || !user?.last_smart_nudge_at) return;
+      const seenKey = `seen_nudge_${user.last_smart_nudge_task_id}_${user.last_smart_nudge_at}`;
+      if (localStorage.getItem(seenKey)) return;
+      const nudgeTime = new Date(user.last_smart_nudge_at).getTime();
+      if (Date.now() - nudgeTime > 3 * 60 * 60 * 1000) return; // older than 3 hours
+      localStorage.setItem(seenKey, 'true');
+      loadTaskById(user.last_smart_nudge_task_id);
+    };
+    const nudgeTimer = setTimeout(checkRecentNudge, 2000);
+
     // Listen for notification click events
     const handleFollowupEvent = (event) => {
       const taskId = event.detail?.taskId;
@@ -139,6 +153,7 @@ export default function NotificationFollowupModal({ user, theme }) {
     return () => {
       window.removeEventListener("show-task-followup", handleFollowupEvent);
       clearTimeout(timer);
+      clearTimeout(nudgeTimer);
     };
   }, [user?.email, loadTaskById, showNextTask]);
 

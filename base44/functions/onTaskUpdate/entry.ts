@@ -194,18 +194,17 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, cancelled: true, reason: 'task_completed_or_snoozed' });
     }
 
-    // Smart nudge reassessment: when urgency changes to "urgent", reset the
-    // smart nudge dedup timer so the next hourly cron run nudges immediately
-    // (within ~45 min) instead of waiting for the normal dedup window to expire.
+    // Smart nudge reassessment: when urgency changes to "urgent", mark the daily
+    // nudge schedule as dirty so the next hourly cron regenerates it with the
+    // urgent task included (surfaces it sooner, with appropriate urgency).
     if (old_data?.urgency !== 'urgent' && data.urgency === 'urgent') {
-      console.log('[onTaskUpdate] Urgency changed to urgent — resetting smart nudge dedup');
+      console.log('[onTaskUpdate] Urgency changed to urgent — marking smart nudge schedule dirty');
       try {
         await base44.asServiceRole.entities.User.update(user.id, {
-          last_smart_nudge_at: null,
-          last_smart_nudge_task_id: null
+          smart_nudge_schedule_dirty: true
         });
       } catch (e) {
-        console.error('[onTaskUpdate] Failed to reset smart nudge dedup:', e);
+        console.error('[onTaskUpdate] Failed to mark smart nudge schedule dirty:', e);
       }
     }
 

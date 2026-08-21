@@ -1,20 +1,20 @@
-// Smart hourly task nudge for day-only tasks.
+// Smart daily task nudge — LLM-generated daily schedule.
 //
-// Replaces the old per-task hourly notification flood (N day-only tasks due the
-// same day = N notifications every hour) with a SINGLE, LLM-curated notification.
-// The LLM looks at ALL the user's due-today day-only tasks and picks ONE to
-// surface right now, with a context-aware message:
-//   - Morning → pick an easy win to build momentum
-//   - Afternoon → keep momentum going
-//   - Evening → surface the most urgent remaining task
-//   - Urgent → "I'll keep reminding you until it's done"
+// Instead of one nudge per hour (which floods the notification tray), the LLM
+// generates a DAILY SCHEDULE of 3-5 well-timed nudges based on the user's tasks,
+// their urgency, and the time of day. The schedule is stored on the user and
+// the hourly cron only sends due nudges (no LLM call). The schedule is
+// regenerated once per day, or when a task is marked urgent (dirty flag).
 //
-// This prevents the notification flood that causes ADHD paralysis — the user
-// sees ONE supportive nudge instead of a wall of 8 task reminders.
+// This reduces LLM calls from ~12/day to ~1/day per user (huge credit savings)
+// while providing smarter, less overwhelming notifications:
+//   - 3-5 nudges per day instead of one-an-hour
+//   - Check-in style for repeat nudges ("Have you done X yet?")
+//   - Multiple-urgent handling ("multiple urgent tasks, pick one to start")
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
-import { localMinutesOfDay, parseHHMM, isInQuietHours } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, parseHHMM, isInQuietHours, adjustForQuietHours } from '../../shared/quietHours.ts';
 
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 
@@ -27,19 +27,16 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const now = new Date();
 
-    // 1. Get all users (for timezone, quiet hours, dedup tracking, player IDs)
+    // 1. Get all users
     const allUsers = await base44.asServiceRole.entities.User.list();
     const userMap: Record<string, any> = {};
     for (const u of allUsers) if (u && u.email) userMap[u.email] = u;
 
-    // 2. Get all tasks — group active day-only tasks by recipient, and count
-    //    completed-today tasks per user (for celebration context in the prompt)
+    // 2. Get all tasks — group active smart-nudge tasks by recipient, track completed
     const allTasks = await base44.asServiceRole.entities.Task.list('-updated_date', 500);
-    const smartNudgeByUser: Record<string, any[]> = {};
-    const completedTodayByUser: Record<string, number> = {};
+    const tasksByUser: Record<string, any[]> = {};
+    const completedTaskIds = new Set<string>();
 
-    // Smart nudge pool: day-only tasks (due today) + no-due-date tasks (always in pool).
-    // Birthdays, events, and multi-day tasks keep their own reminder systems.
     const isSmartNudgeTask = (t: any) =>
       t.status === 'active' &&
       t.classification !== 'birthday' && t.classification !== 'event' &&
@@ -51,83 +48,134 @@ Deno.serve(async (req) => {
     for (const task of allTasks) {
       const email = task.notification_recipient_email;
       if (!email) continue;
-
       if (isSmartNudgeTask(task)) {
-        if (!smartNudgeByUser[email]) smartNudgeByUser[email] = [];
-        smartNudgeByUser[email].push(task);
-      } else if (task.status === 'completed' && task.completed_at) {
-        if (isSameLocalDay(new Date(task.completed_at), now, userMap[email]?.timezone || 'UTC')) {
-          completedTodayByUser[email] = (completedTodayByUser[email] || 0) + 1;
-        }
+        if (!tasksByUser[email]) tasksByUser[email] = [];
+        tasksByUser[email].push(task);
+      }
+      if (task.status === 'completed') {
+        completedTaskIds.add(task.id);
       }
     }
 
     let nudgesSent = 0;
+    let schedulesGenerated = 0;
     const results: any[] = [];
 
-    for (const email of Object.keys(smartNudgeByUser)) {
+    for (const email of Object.keys(tasksByUser)) {
       const user = userMap[email];
       if (!user) continue;
 
       const timeZone = user.timezone || 'UTC';
 
-      // Quiet hours — skip if the user is in their quiet window. Default to
-      // 9 PM – 8 AM if the user hasn't configured quiet hours (no late nudges).
+      // Quiet hours — skip if the user is in their quiet window
       const quietEnabled = !!user.quiet_hours_enabled;
       const startMin = quietEnabled && user.quiet_hours_start ? parseHHMM(user.quiet_hours_start) : parseHHMM('21:00');
       const endMin = quietEnabled && user.quiet_hours_end ? parseHHMM(user.quiet_hours_end) : parseHHMM('08:00');
       if (isInQuietHours(now, startMin, endMin, timeZone)) continue;
 
-      // Dedup: skip if we nudged this user within the last 45 minutes
-      if (user.last_smart_nudge_at) {
-        const lastNudge = new Date(user.last_smart_nudge_at).getTime();
-        if (now.getTime() - lastNudge < 45 * 60 * 1000) continue;
-      }
+      const todayStr = getLocalDateString(now, timeZone);
 
-      // Day-only tasks: include only if due today. No-due-date tasks: always in pool.
-      const todaysTasks = smartNudgeByUser[email].filter(t => {
-        if (t.day_only_task) {
-          const dateStr = t.due_date || t.next_reminder;
-          if (!dateStr) return false;
-          return isSameLocalDay(new Date(dateStr), now, timeZone);
-        }
-        return true; // no due date — always eligible
-      });
+      // Check if schedule exists for today and not dirty
+      const hasValidSchedule = user.smart_nudge_schedule_date === todayStr &&
+                               !user.smart_nudge_schedule_dirty &&
+                               user.smart_nudge_schedule?.length > 0;
 
-      if (todaysTasks.length === 0) continue;
+      let schedule: any[] = user.smart_nudge_schedule || [];
 
-      const localMin = localMinutesOfDay(now, timeZone);
-      const completedToday = completedTodayByUser[email] || 0;
-      const lastNudgeTitle = user.last_smart_nudge_task_id
-        ? (todaysTasks.find(t => t.id === user.last_smart_nudge_task_id)?.title || null)
-        : null;
+      if (!hasValidSchedule) {
+        // Generate new schedule (1 LLM call per day per user)
+        const todaysTasks = tasksByUser[email].filter(t => {
+          if (t.day_only_task) {
+            const dateStr = t.due_date || t.next_reminder;
+            if (!dateStr) return false;
+            return isSameLocalDay(new Date(dateStr), now, timeZone);
+          }
+          return true;
+        });
 
-      // Ask the LLM to pick ONE task + write a supportive message
-      const nudge = await generateSmartNudge(todaysTasks, completedToday, localMin, lastNudgeTitle);
-      if (!nudge || nudge.task_index == null) continue;
+        if (todaysTasks.length === 0) continue;
 
-      const chosenTask = todaysTasks[nudge.task_index - 1];
-      if (!chosenTask) continue;
+        // Get already-nudged task titles (from existing schedule entries with sent=true)
+        const alreadyNudgedIds = schedule
+          .filter((e: any) => e.sent && e.task_id)
+          .map((e: any) => e.task_id);
+        const alreadyNudgedTitles = todaysTasks
+          .filter(t => alreadyNudgedIds.includes(t.id))
+          .map(t => t.title);
 
-      console.log(`[SMART NUDGE] LLM chose: "${nudge.notification_title}" — "${nudge.notification_body}" for "${chosenTask.title}"`);
-      const sent = await sendNudgeNotification(email, user, nudge, chosenTask.id);
-      if (sent) {
+        const localMin = localMinutesOfDay(now, timeZone);
+        const newEntries = await generateDailySchedule(
+          todaysTasks,
+          alreadyNudgedTitles,
+          localMin,
+          timeZone,
+          startMin,
+          endMin
+        );
+
+        if (!newEntries || newEntries.length === 0) continue;
+
+        // Merge: keep sent entries (for history), add new ones
+        const sentEntries = schedule.filter((e: any) => e.sent);
+        schedule = [...sentEntries, ...newEntries];
+
         try {
           await base44.asServiceRole.entities.User.update(user.id, {
-            last_smart_nudge_task_id: chosenTask.id,
-            last_smart_nudge_at: now.toISOString(),
+            smart_nudge_schedule: schedule,
+            smart_nudge_schedule_date: todayStr,
+            smart_nudge_schedule_dirty: false,
           });
+          schedulesGenerated++;
+          console.log(`[SMART NUDGE] Generated schedule for ${email}: ${newEntries.length} nudges`);
         } catch (e) {
-          console.error(`[SMART NUDGE] Failed to update user ${email}:`, e);
+          console.error(`[SMART NUDGE] Failed to store schedule for ${email}:`, e);
         }
-        nudgesSent++;
-        results.push({ email, taskTitle: chosenTask.title, title: nudge.notification_title });
-        console.log(`[SMART NUDGE] Sent to ${email}: "${nudge.notification_title}" for "${chosenTask.title}"`);
+      }
+
+      // Send due nudges (no LLM call — just OneSignal)
+      let updated = false;
+      let lastSentTaskId: string | null = null;
+      for (const entry of schedule) {
+        if (entry.sent) continue;
+        if (new Date(entry.send_at).getTime() > now.getTime()) continue; // not due yet
+
+        // Skip if task is completed
+        if (completedTaskIds.has(entry.task_id)) {
+          entry.sent = true;
+          entry.sent_at = now.toISOString();
+          updated = true;
+          continue;
+        }
+
+        const sent = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id);
+        if (sent) {
+          entry.sent = true;
+          entry.sent_at = now.toISOString();
+          updated = true;
+          lastSentTaskId = entry.task_id;
+          nudgesSent++;
+          results.push({ email, title: entry.title, type: entry.type });
+          console.log(`[SMART NUDGE] Sent to ${email}: "${entry.title}" (${entry.type})`);
+        }
+      }
+
+      // Save updated schedule + last nudge in one call
+      if (updated) {
+        const updateData: any = { smart_nudge_schedule: schedule };
+        if (lastSentTaskId) {
+          updateData.last_smart_nudge_task_id = lastSentTaskId;
+          updateData.last_smart_nudge_at = now.toISOString();
+        }
+        try {
+          await base44.asServiceRole.entities.User.update(user.id, updateData);
+        } catch (e) {
+          console.error(`[SMART NUDGE] Failed to update schedule for ${email}:`, e);
+        }
       }
     }
 
-    console.log(`[SMART NUDGE] Done — ${nudgesSent} nudge(s) sent at ${now.toISOString()}`);
-    return Response.json({ success: true, nudgesSent, results, at: now.toISOString() });
+    console.log(`[SMART NUDGE] Done — ${nudgesSent} nudge(s) sent, ${schedulesGenerated} schedule(s) generated at ${now.toISOString()}`);
+    return Response.json({ success: true, nudgesSent, schedulesGenerated, results, at: now.toISOString() });
   } catch (err) {
     console.error('[SMART NUDGE] Fatal:', err);
     return Response.json({ success: false, error: String(err) }, { status: 500 });
@@ -136,13 +184,13 @@ Deno.serve(async (req) => {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
+function getLocalDateString(d: Date, timeZone: string): string {
+  const fmt = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
+  return fmt.format(d);
+}
+
 function isSameLocalDay(d1: Date, d2: Date, timeZone: string): boolean {
-  const fmt = new Intl.DateTimeFormat('en-US', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
-  const p1: Record<string, string> = {};
-  for (const part of fmt.formatToParts(d1)) p1[part.type] = part.value;
-  const p2: Record<string, string> = {};
-  for (const part of fmt.formatToParts(d2)) p2[part.type] = part.value;
-  return p1.year === p2.year && p1.month === p2.month && p1.day === p2.day;
+  return getLocalDateString(d1, timeZone) === getLocalDateString(d2, timeZone);
 }
 
 function formatTime(localMin: number): string {
@@ -153,55 +201,62 @@ function formatTime(localMin: number): string {
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
-async function generateSmartNudge(
+async function generateDailySchedule(
   tasks: any[],
-  completedToday: number,
+  alreadyNudgedTitles: string[],
   localMin: number,
-  lastNudgeTitle: string | null
-): Promise<{ task_index: number; notification_title: string; notification_body: string } | null> {
+  timeZone: string,
+  quietStartMin: number,
+  quietEndMin: number
+): Promise<any[] | null> {
   const hour = Math.floor(localMin / 60);
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
   const timeStr = formatTime(localMin);
+  const quietStartStr = formatTime(quietStartMin);
+  const quietEndStr = formatTime(quietEndMin);
 
   const taskList = tasks.map((t, i) => {
     const type = t.day_only_task ? 'due today' : 'no due date';
-    return `${i + 1}. "${t.title}" (${type}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'})`;
+    const nudged = alreadyNudgedTitles.includes(t.title) ? ' — ALREADY NUDGED TODAY' : '';
+    return `${i + 1}. "${t.title}" (${type}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${nudged})`;
   }).join('\n');
 
-  const prompt = `You are a supportive ADHD productivity companion — warm, encouraging, like a friend, never a clinician. Your job: pick ONE task to gently nudge the user about right now, and write a short, supportive notification.
+  const urgentCount = tasks.filter(t => t.urgency === 'urgent').length;
+
+  const prompt = `You are a supportive ADHD productivity coach — warm, encouraging, like a friend, never a clinician. Your job: create a notification schedule for the rest of today. NOT one per hour — think about when the user genuinely needs a nudge.
 
 CURRENT CONTEXT:
-- Time of day: ${timeStr} (${timeOfDay})
-- Tasks completed today: ${completedToday}
-${lastNudgeTitle ? `- Last task you nudged about: "${lastNudgeTitle}" (avoid repeating unless it's urgent)` : ''}
+- Current time: ${timeStr} (${timeOfDay})
+- Timezone: ${timeZone}
+- Quiet hours: ${quietStartStr} - ${quietEndStr} (don't schedule during these)
 
-TASKS DUE TODAY (not yet completed):
+TASKS:
 ${taskList}
 
-HOW TO CHOOSE THE TASK:
-- "due today" tasks take priority over "no due date" tasks — a deadline is approaching.
-- Morning (before noon): Pick something EASY (low energy) to build momentum. A quick win sets a positive tone for the day.
-- Afternoon (noon-5pm): Pick something important that keeps momentum going.
-- Evening (after 5pm): Pick the most urgent remaining task, or something quick that can still get done today.
-- URGENT tasks: Always surface these with appropriate urgency, regardless of time of day. Let them know it's urgent and you'll keep reminding them until it's done.
-- "no due date" tasks: only pick these when there are no "due today" tasks left, or when it's a quick easy win to build momentum.
-- If there's only ONE task left, nudge about that one.
-- Avoid picking the same task you nudged about last time (unless it's urgent).
-
-MESSAGE GUIDELINES:
-- notification_title: 2-6 words, include a relevant emoji, reference the task naturally.
-- notification_body: ONE supportive sentence. Warm, non-shaming. Never productivity-shame.
-- For easy tasks: frame it as a quick win ("This one's quick — knock it out and feel great! ✨")
-- For urgent tasks: be direct but kind ("Hey, this one's urgent. I'll keep reminding you until it's done — you've got this. 💪")
-- For morning: encourage starting with an easy win ("Start your day with this one! 🌅")
-- If they've completed tasks today, briefly celebrate that momentum.
-- NEVER list all the tasks. NEVER say "you have X tasks." Focus only on the ONE chosen task.
+${alreadyNudgedTitles.length > 0 ? `TASKS ALREADY NUDGED TODAY (use check-in style for these — "Have you done X yet?"):\n${alreadyNudgedTitles.map(t => `- "${t}"`).join('\n')}\n` : ''}SCHEDULE GUIDELINES:
+- Generate 3-5 notifications for the rest of today (NOT one per hour — fewer, smarter)
+- Space them at natural transition points (e.g., late morning, early afternoon, late afternoon)
+- For tasks ALREADY NUDGED: use a check-in style ("Have you done X yet?") — supportive, not shaming
+- For URGENT tasks: surface them sooner with direct urgency ("Hey, this one's urgent — you've got this 💪")
+${urgentCount >= 2 ? `- There are ${urgentCount} URGENT tasks. One notification should say "You have multiple urgent tasks — let's pick one to start with" and briefly mention them. Use task_index: 0 for this one.\n` : ''}- Morning (before noon): encourage easy wins to build momentum
+- Afternoon (noon-5pm): keep momentum going
+- Evening (after 5pm): surface the most urgent remaining tasks
+- Be supportive, never productivity-shame
+- Each notification_body: ONE supportive sentence
+- delay_minutes: minutes from now to send this nudge (e.g., 30 = 30 min from now, 120 = 2 hours from now)
+- Don't schedule past quiet hours start (${quietStartStr})
 
 Return ONLY valid JSON:
 {
-  "task_index": <1-based index of the chosen task>,
-  "notification_title": "<short title with emoji, 2-6 words>",
-  "notification_body": "<one supportive sentence>"
+  "nudges": [
+    {
+      "task_index": <1-based index of the task, or 0 for a multiple_urgent message>,
+      "delay_minutes": <minutes from now>,
+      "title": "<2-6 words with emoji>",
+      "body": "<one supportive sentence>",
+      "type": "initial" | "check_in" | "multiple_urgent"
+    }
+  ]
 }`;
 
   try {
@@ -213,10 +268,37 @@ Return ONLY valid JSON:
       ],
       response_format: { type: 'json_object' },
       temperature: 0.6,
-      max_tokens: 150,
+      max_tokens: 400,
     });
 
-    return JSON.parse(response.choices[0].message.content);
+    const parsed = JSON.parse(response.choices[0].message.content);
+    const nudges = parsed.nudges || [];
+
+    // Convert to schedule entries
+    const nowMs = Date.now();
+    const fallbackTaskId = tasks.find(t => t.urgency === 'urgent')?.id || tasks[0]?.id || null;
+
+    const entries = nudges.map((n: any) => {
+      const task = n.task_index > 0 ? tasks[n.task_index - 1] : null;
+      const taskId = task?.id || fallbackTaskId;
+      const delayMs = Math.max(1, (n.delay_minutes || 30)) * 60 * 1000;
+      let sendAt = new Date(nowMs + delayMs);
+
+      // Adjust for quiet hours (don't send during quiet hours)
+      sendAt = adjustForQuietHours(sendAt, quietStartMin, quietEndMin, timeZone);
+
+      return {
+        task_id: taskId,
+        send_at: sendAt.toISOString(),
+        title: n.title || 'Task nudge',
+        body: n.body || '',
+        type: n.type || 'initial',
+        sent: false,
+        sent_at: null,
+      };
+    });
+
+    return entries;
   } catch (e) {
     console.error('[SMART NUDGE] LLM error:', e);
     return null;
@@ -225,21 +307,18 @@ Return ONLY valid JSON:
 
 async function sendNudgeNotification(
   email: string,
-  user: any,
-  nudge: { notification_title: string; notification_body: string },
+  title: string,
+  body: string,
   taskId: string
 ): Promise<boolean> {
   const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
   const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
   if (!appId || !restApiKey) return false;
 
-  // Use include_external_user_ids (email) — same approach as onTaskUpdate's
-  // scheduleOneSignalNotification. Player IDs go stale (reinstall, new device)
-  // while the email maps to all active subscriptions reliably.
   const payload: any = {
     app_id: appId,
-    headings: { en: nudge.notification_title },
-    contents: { en: nudge.notification_body },
+    headings: { en: title },
+    contents: { en: body },
     data: { screen: '/TaskNotification', taskId, type: 'smart_nudge' },
     include_external_user_ids: [email],
     channel_for_external_user_ids: 'push',

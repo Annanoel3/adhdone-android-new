@@ -66,11 +66,67 @@
     "last_smart_nudge_at": {
       "type": "string",
       "format": "date-time",
-      "description": "Timestamp of the last smart nudge sent to this user. Used for 45-minute dedup to prevent back-to-back nudges."
+      "description": "Timestamp of the last smart nudge sent to this user. Used by the app to open on the most recently nudged task."
     },
     "last_smart_nudge_task_id": {
       "type": "string",
-      "description": "ID of the task the last smart nudge was about. The LLM avoids nudging the same task twice in a row (unless urgent)."
+      "description": "ID of the task the last smart nudge was about. The app opens on this task when the user opens the app after receiving a nudge."
+    },
+    "smart_nudge_schedule": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "description": "ID of the task to nudge about"
+          },
+          "send_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this nudge should fire"
+          },
+          "title": {
+            "type": "string",
+            "description": "LLM-generated notification title"
+          },
+          "body": {
+            "type": "string",
+            "description": "LLM-generated notification body"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "initial",
+              "check_in",
+              "multiple_urgent"
+            ],
+            "description": "Type of nudge: initial = first time surfacing a task, check_in = follow-up on a previously nudged task, multiple_urgent = multiple urgent tasks, pick one"
+          },
+          "sent": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether this nudge has been sent"
+          },
+          "sent_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this nudge was sent"
+          }
+        }
+      },
+      "default": [],
+      "description": "LLM-generated daily schedule of 3-5 smart nudges. Regenerated once per day or when a task is marked urgent (dirty flag)."
+    },
+    "smart_nudge_schedule_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date (YYYY-MM-DD) the current schedule was generated for. When this doesn't match today, a new schedule is generated."
+    },
+    "smart_nudge_schedule_dirty": {
+      "type": "boolean",
+      "default": false,
+      "description": "Set to true when a task is marked urgent (or other significant change) to trigger schedule regeneration on the next cron run."
     }
   },
   "name": "User"
