@@ -153,6 +153,27 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
       }
       const raw = t.due_date || t.next_reminder;
       if (!raw) return;
+      const dueD = new Date(raw);
+      // Overdue: an active (not completed) task whose due date has already
+      // passed. Show it on every day from the due date through today so it
+      // stays visible (and red) until the user completes it — not just on
+      // the original due date.
+      if (t.status !== 'completed') {
+        const now = new Date();
+        const dueDay = new Date(dueD.getFullYear(), dueD.getMonth(), dueD.getDate());
+        const todayDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (dueDay.getTime() < todayDay.getTime()) {
+          const dayCursor = new Date(dueDay);
+          while (dayCursor <= todayDay) {
+            push(new Date(dayCursor), {
+              kind, title: t.title, id: t.id, taskId: t.id, task: t,
+              overdue: true,
+            });
+            dayCursor.setDate(dayCursor.getDate() + 1);
+          }
+          return;
+        }
+      }
       push(new Date(raw), { kind, title: t.title, id: t.id, taskId: t.id, task: t });
     });
     events.forEach((e) => {
@@ -377,13 +398,15 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                         onClick={(e) => { e.stopPropagation(); clickable && onItemOpen?.(it); }}
                         disabled={!clickable}
                         className={`flex items-center gap-1 w-full text-left rounded p-1 transition-colors ${
-                          clickable
-                            ? isDark ? 'hover:bg-gray-700' : 'hover:bg-blue-50'
-                            : 'cursor-default opacity-70'
+                          it.overdue
+                            ? isDark ? 'bg-red-900/40' : 'bg-red-100'
+                            : clickable
+                              ? isDark ? 'hover:bg-gray-700' : 'hover:bg-blue-50'
+                              : 'cursor-default opacity-70'
                         }`}
                       >
                         <span className="text-sm flex-shrink-0">{emojiFor(it)}</span>
-                        <span className={`text-[11px] truncate flex-1 ${textPrimary}`} title={it.title}>{it.title}</span>
+                        <span className={`text-[11px] truncate flex-1 ${it.overdue ? (isDark ? 'text-red-300' : 'text-red-700') + ' font-medium' : textPrimary}`} title={it.title}>{it.title}</span>
                       </button>
                     );
                   })}
@@ -470,13 +493,13 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                     useEmoji ? (
                       <div className="flex flex-wrap gap-0.5">
                         {regularShown.map((it, i) => (
-                          <span key={i} className="text-sm">{emojiFor(it)}</span>
+                          <span key={i} className={`text-sm rounded ${it.overdue ? 'bg-red-100 px-0.5' : ''}`}>{emojiFor(it)}</span>
                         ))}
                       </div>
                     ) : (
                       <div className="space-y-0.5">
                         {regularShown.map((it, i) => (
-                          <div key={i} className={`text-[10px] truncate ${textSecondary}`} title={it.title}>
+                          <div key={i} className={`text-[10px] truncate rounded px-1 ${it.overdue ? 'bg-red-100 text-red-700 font-medium' : textSecondary}`} title={it.title}>
                             {it.title}
                           </div>
                         ))}
@@ -501,6 +524,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
         <span className="flex items-center gap-1"><span>🎂</span> Birthday</span>
         <span className="flex items-center gap-1"><span>📆</span> Event</span>
         <span className="flex items-center gap-1"><span>✅</span> Task</span>
+        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> Overdue</span>
       </div>
 
       {/* Selected day detail */}
@@ -532,8 +556,12 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                     }`}
                   >
                     <span className="text-base flex-shrink-0">{emojiFor(it)}</span>
-                    <span className={`text-sm flex-1 truncate ${textPrimary}`}>{it.title}</span>
-                    <Badge className={`text-xs border flex-shrink-0 ${KIND_BADGE[it.kind]}`}>{KIND_LABEL[it.kind]}</Badge>
+                    <span className={`text-sm flex-1 truncate ${it.overdue ? (isDark ? 'text-red-300' : 'text-red-600') + ' font-medium' : textPrimary}`}>{it.title}</span>
+                    {it.overdue ? (
+                      <Badge className="text-xs border flex-shrink-0 bg-red-100 text-red-700 border-red-200">Overdue</Badge>
+                    ) : (
+                      <Badge className={`text-xs border flex-shrink-0 ${KIND_BADGE[it.kind]}`}>{KIND_LABEL[it.kind]}</Badge>
+                    )}
                   </button>
                 </li>
               );
