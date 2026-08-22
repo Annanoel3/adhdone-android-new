@@ -78,6 +78,12 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
     setUseEmoji(val);
     localStorage.setItem('calendar_use_emoji', String(val));
   };
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('calendar_view_mode') || 'month');
+  const [weekCursor, setWeekCursor] = useState(() => new Date());
+  const setView = (mode) => {
+    setViewMode(mode);
+    localStorage.setItem('calendar_view_mode', mode);
+  };
 
   // Group all items by local-date key.
   const itemsByDate = useMemo(() => {
@@ -209,6 +215,30 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
   for (let day = 1; day <= daysInMonth; day++) cells.push(new Date(year, month, day));
   while (cells.length % 7 !== 0) cells.push(null);
 
+  // Week view: 7 days starting Sunday of the weekCursor's week.
+  const weekStart = useMemo(() => {
+    const d = new Date(weekCursor);
+    const dow = d.getDay();
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow);
+  }, [weekCursor]);
+  const weekDays = useMemo(() => {
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() + i);
+      days.push(d);
+    }
+    return days;
+  }, [weekStart]);
+  const weekHeaderLabel = useMemo(() => {
+    const s = weekDays[0];
+    const e = weekDays[6];
+    if (s.getMonth() === e.getMonth()) {
+      return `${MONTH_NAMES[s.getMonth()]} ${s.getDate()} – ${e.getDate()}, ${e.getFullYear()}`;
+    }
+    return `${MONTH_NAMES[s.getMonth()].slice(0, 3)} ${s.getDate()} – ${MONTH_NAMES[e.getMonth()].slice(0, 3)} ${e.getDate()}, ${e.getFullYear()}`;
+  }, [weekDays]);
+
   const today = new Date();
   const selectedItems = itemsByDate.get(dateKey(selected)) || [];
 
@@ -219,12 +249,26 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
 
   return (
     <div className="space-y-4">
-      {/* Month navigation */}
-      <div className="flex items-center justify-between">
+      {/* Month/Week navigation */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className={`text-lg font-bold ${textPrimary}`}>
-          {MONTH_NAMES[month]} {year}
+          {viewMode === 'month' ? `${MONTH_NAMES[month]} ${year}` : weekHeaderLabel}
         </h2>
         <div className="flex items-center gap-2">
+          <div className={`flex items-center rounded-lg border overflow-hidden ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+            <button
+              onClick={() => setView('month')}
+              className={`px-2 py-1 text-xs font-medium transition-colors ${viewMode === 'month' ? 'bg-blue-500 text-white' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              Month
+            </button>
+            <button
+              onClick={() => setView('week')}
+              className={`px-2 py-1 text-xs font-medium transition-colors ${viewMode === 'week' ? 'bg-blue-500 text-white' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              Week
+            </button>
+          </div>
           <div className={`flex items-center rounded-lg border overflow-hidden ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
             <button
               onClick={() => toggleEmojiMode(true)}
@@ -242,7 +286,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setCursor(new Date(year, month - 1, 1))}
+            onClick={() => viewMode === 'month' ? setCursor(new Date(year, month - 1, 1)) : setWeekCursor(new Date(weekCursor.getFullYear(), weekCursor.getMonth(), weekCursor.getDate() - 7))}
             className={isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}
           >
             <ChevronLeft className="w-5 h-5" />
@@ -253,6 +297,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
             onClick={() => {
               const n = new Date();
               setCursor(new Date(n.getFullYear(), n.getMonth(), 1));
+              setWeekCursor(new Date(n.getFullYear(), n.getMonth(), n.getDate()));
               setSelected(n);
             }}
             className={isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}
@@ -262,7 +307,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => setCursor(new Date(year, month + 1, 1))}
+            onClick={() => viewMode === 'month' ? setCursor(new Date(year, month + 1, 1)) : setWeekCursor(new Date(weekCursor.getFullYear(), weekCursor.getMonth(), weekCursor.getDate() + 7))}
             className={isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}
           >
             <ChevronRight className="w-5 h-5" />
@@ -280,6 +325,56 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
       </div>
 
       {/* Calendar grid */}
+      {viewMode === 'week' ? (
+        <div className="grid grid-cols-7 gap-1">
+          {weekDays.map((day) => {
+            const k = dateKey(day);
+            const dayItems = itemsByDate.get(k) || [];
+            const isToday = sameDayKey(day, today);
+            const isSelected = sameDayKey(day, selected);
+            return (
+              <div
+                key={k}
+                onClick={() => setSelected(day)}
+                className={`min-h-[300px] rounded-lg border p-2 text-left transition-all flex flex-col cursor-pointer ${
+                  isSelected
+                    ? 'ring-2 ring-blue-400 ' + cellBase
+                    : cellBase + ' hover:border-blue-300'
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className={`text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-500 text-white' : textPrimary}`}>
+                    {day.getDate()}
+                  </span>
+                  {dayItems.length > 0 && (
+                    <span className={`text-[10px] ${textSecondary}`}>{dayItems.length}</span>
+                  )}
+                </div>
+                <div className="flex-1 space-y-1 overflow-hidden">
+                  {dayItems.map((it, i) => {
+                    const clickable = !!(it.task || it.taskId);
+                    return (
+                      <button
+                        key={i}
+                        onClick={(e) => { e.stopPropagation(); clickable && onItemOpen?.(it); }}
+                        disabled={!clickable}
+                        className={`flex items-center gap-1 w-full text-left rounded p-1 transition-colors ${
+                          clickable
+                            ? isDark ? 'hover:bg-gray-700' : 'hover:bg-blue-50'
+                            : 'cursor-default opacity-70'
+                        }`}
+                      >
+                        <span className="text-sm flex-shrink-0">{emojiFor(it)}</span>
+                        <span className={`text-[11px] truncate flex-1 ${textPrimary}`} title={it.title}>{it.title}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
       <div className="grid grid-cols-7 gap-1">
         {cells.map((cell, idx) => {
           if (!cell) return <div key={`b-${idx}`} className={`min-h-[58px] rounded-lg border ${cellMuted}`} />;
@@ -381,6 +476,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           );
         })}
       </div>
+      )}
 
       {/* Legend */}
       <div className={`flex flex-wrap items-center gap-3 text-xs ${textSecondary}`}>
