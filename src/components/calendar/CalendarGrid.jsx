@@ -66,10 +66,19 @@ function sameDayKey(a, b) {
 
 export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOpen }) {
   const [cursor, setCursor] = useState(() => {
+    const saved = localStorage.getItem('calendar_cursor');
+    if (saved) {
+      const d = new Date(saved);
+      if (!isNaN(d)) return new Date(d.getFullYear(), d.getMonth(), 1);
+    }
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
-  const [selected, setSelected] = useState(() => new Date());
+  const [selected, setSelected] = useState(() => {
+    const saved = localStorage.getItem('calendar_selected');
+    if (saved) { const d = new Date(saved); if (!isNaN(d)) return d; }
+    return new Date();
+  });
   const [useEmoji, setUseEmoji] = useState(() => {
     const stored = localStorage.getItem('calendar_use_emoji');
     return stored === null ? true : stored === 'true';
@@ -79,11 +88,20 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
     localStorage.setItem('calendar_use_emoji', String(val));
   };
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('calendar_view_mode') || 'month');
-  const [weekCursor, setWeekCursor] = useState(() => new Date());
+  const [weekCursor, setWeekCursor] = useState(() => {
+    const saved = localStorage.getItem('calendar_week_cursor');
+    if (saved) { const d = new Date(saved); if (!isNaN(d)) return d; }
+    return new Date();
+  });
   const setView = (mode) => {
     setViewMode(mode);
     localStorage.setItem('calendar_view_mode', mode);
   };
+
+  // Persist the user's calendar position so it survives leaving and returning.
+  useEffect(() => { localStorage.setItem('calendar_cursor', cursor.toISOString()); }, [cursor]);
+  useEffect(() => { localStorage.setItem('calendar_week_cursor', weekCursor.toISOString()); }, [weekCursor]);
+  useEffect(() => { localStorage.setItem('calendar_selected', selected.toISOString()); }, [selected]);
 
   // Group all items by local-date key.
   const itemsByDate = useMemo(() => {
