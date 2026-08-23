@@ -223,29 +223,30 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, cancelled: true, reason: 'task_completed_or_snoozed' });
     }
 
-    // Back Burner: a silenced task gets NO notifications. Cancel everything and
-    // clear scheduling fields, but keep the task's config (interval, due date,
-    // etc.) so it can be reactivated later. On reactivation, seed next_reminder
-    // (recurring) or mark the smart nudge schedule dirty so cron jobs pick it up.
+    // Back Burner: a silenced task gets NO notifications. Cancel every live
+    // OneSignal notification, but PRESERVE the task's config and its
+    // reminder_schedule send_at times (with dead notification_ids nulled) so the
+    // task can be fully restored on reactivation. Only the live notification IDs
+    // and the refill bookkeeping field are cleared.
     if (data.silenced === true && old_data?.silenced !== true) {
       console.log('[onTaskUpdate] Task silenced (back burner) — cancelling all notifications');
-      const ids = (data.onesignal_notification_ids?.length
+      const liveIds = (data.onesignal_notification_ids?.length
         ? data.onesignal_notification_ids
         : (old_data?.onesignal_notification_ids || []));
-      for (const notificationId of ids) {
-        await cancelOneSignalNotification(notificationId);
-      }
       const scheduleEntries = (data.reminder_schedule?.length
         ? data.reminder_schedule
         : (old_data?.reminder_schedule || []));
-      for (const entry of scheduleEntries) {
-        if (entry?.notification_id) await cancelOneSignalNotification(entry.notification_id);
+      const scheduleIds = scheduleEntries.map((e) => e?.notification_id).filter(Boolean);
+      for (const notificationId of [...liveIds, ...scheduleIds]) {
+        await cancelOneSignalNotification(notificationId);
       }
+      // Keep the send_at times so reactivation can reschedule them; null the
+      // now-dead OneSignal IDs so nothing tries to cancel them twice.
+      const preservedSchedule = scheduleEntries.map((e) => ({ ...e, notification_id: null }));
       await base44.asServiceRole.entities.Task.update(event.entity_id, {
         onesignal_notification_ids: [],
-        reminder_schedule: [],
+        reminder_schedule: preservedSchedule,
         last_scheduled_until: null,
-        next_reminder: null,
       });
       try {
         await base44.asServiceRole.entities.User.update(user.id, { smart_nudge_schedule_dirty: true });
@@ -258,27 +259,58 @@ Deno.serve(async (req) => {
     if (data.silenced === false && old_data?.silenced === true) {
       console.log('[onTaskUpdate] Task reactivated from back burner — rescheduling');
       const RECURRING = new Set(['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day']);
-      if (data.reminder_interval && RECURRING.has(data.reminder_interval) && data.notification_recipient_email) {
+      const email = data.notification_recipient_email || user.email;
+      const now = Date.now();
+      const quietEnabled = !!(user && user.quiet_hours_enabled);
+      const timeZone = user && user.timezone ? user.timezone : null;
+      const startMin = user && user.quiet_hours_start ? parseHHMM(user.quiet_hours_start) : parseHHMM('22:00');
+      const endMin = user && user.quiet_hours_end ? parseHHMM(user.quiet_hours_end) : parseHHMM('08:00');
+
+      if (data.reminder_interval && RECURRING.has(data.reminder_interval) && email) {
+        // Recurring interval task — the refill cron reschedules the batch (it's
+        // excluded while silenced; last_scheduled_until is null so it'll force a
+        // fresh schedule). Just make sure next_reminder is in the future so the
+        // first reminder doesn't fire instantly in the past.
         const intervalMs = {
           '10min': 10 * 60 * 1000, '20min': 20 * 60 * 1000, '30min': 30 * 60 * 1000,
           '1hour': 60 * 60 * 1000, '2hours': 2 * 60 * 60 * 1000, '4hours': 4 * 60 * 60 * 1000,
           'daily': 24 * 60 * 60 * 1000, 'every_other_day': 2 * 24 * 60 * 60 * 1000,
         };
         const ms = intervalMs[data.reminder_interval];
-        let sendAt = new Date(Date.now() + ms);
-        const quietEnabled = !!(user && user.quiet_hours_enabled);
-        const timeZone = user && user.timezone ? user.timezone : null;
-        const startMin = user && user.quiet_hours_start ? parseHHMM(user.quiet_hours_start) : parseHHMM('22:00');
-        const endMin = user && user.quiet_hours_end ? parseHHMM(user.quiet_hours_end) : parseHHMM('08:00');
+        let sendAt = new Date(now + ms);
         if (quietEnabled && timeZone) {
           sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
         }
         await base44.asServiceRole.entities.Task.update(event.entity_id, {
           next_reminder: sendAt.toISOString(),
         });
+      } else if (Array.isArray(data.reminder_schedule) && data.reminder_schedule.length > 0 && email) {
+        // One-time / event task — reschedule each future reminder from the
+        // preserved send_at times, repopulating the live OneSignal IDs.
+        const newIds = [];
+        const newSchedule = [];
+        for (const entry of data.reminder_schedule) {
+          const sendAtMs = entry?.send_at ? new Date(entry.send_at).getTime() : 0;
+          if (sendAtMs <= now) { newSchedule.push(entry); continue; }
+          const sendAtISO = entry.send_at;
+          const title = entry.notification_title || `📌 ${data.title}`;
+          const body = entry.notification_body || `You've got this! ${data.title}`;
+          const notificationId = await scheduleOneSignalNotification(email, title, body, sendAtISO, event.entity_id);
+          if (notificationId) {
+            newIds.push(notificationId);
+            newSchedule.push({ ...entry, notification_id: notificationId });
+          } else {
+            newSchedule.push(entry);
+          }
+        }
+        await base44.asServiceRole.entities.Task.update(event.entity_id, {
+          onesignal_notification_ids: newIds,
+          reminder_schedule: newSchedule,
+        });
       } else {
-        // Smart-nudge or one-time task — mark the daily nudge schedule dirty so
-        // the next cron run regenerates it with this task included.
+        // Smart-nudge task (no interval, no event schedule) — mark the daily
+        // nudge schedule dirty so the next cron run regenerates it with this
+        // task included.
         try {
           await base44.asServiceRole.entities.User.update(user.id, { smart_nudge_schedule_dirty: true });
         } catch (e) {
