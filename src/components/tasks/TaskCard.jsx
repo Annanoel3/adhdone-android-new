@@ -268,6 +268,17 @@ export default function TaskCard({
     }
   };
 
+  // Back Burner — silence/reactivate all notifications for this task. The
+  // onTaskUpdate automation handles cancelling/rescheduling OneSignal pushes.
+  const handleToggleSilenced = async () => {
+    try {
+      await Task.update(task.id, { silenced: !task.silenced });
+      onRefreshTasks();
+    } catch (error) {
+      console.error("Error toggling silenced:", error);
+    }
+  };
+
   const getCurrentReminderTime = (taskItem) => {
     if (!taskItem.next_reminder) return '';
     const date = new Date(taskItem.next_reminder);
@@ -517,6 +528,15 @@ export default function TaskCard({
                   : theme === 'dark' ? 'border-gray-700 bg-gray-800 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-600'
             }`}>
               {collapsedDate.label}
+            </span>
+          )}
+
+          {task.silenced && (
+            <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap flex items-center gap-1 ${
+              theme === 'dark' ? 'border-amber-700 bg-amber-900/30 text-amber-300' : 'border-amber-300 bg-amber-50 text-amber-700'
+            }`}>
+              <BellOff className="w-3 h-3" />
+              Back Burner
             </span>
           )}
 
@@ -977,6 +997,20 @@ export default function TaskCard({
                 >
                   <ListChecks className="w-4 h-4" />
                   {isEvent ? 'Event Details' : 'Task Details'}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleToggleSilenced}
+                  className={`h-8 gap-1.5 ${
+                    task.silenced
+                      ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50'
+                      : theme === 'dark' ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'
+                  }`}
+                  title={task.silenced ? 'Reactivate reminders' : 'Silence reminders (back burner)'}
+                >
+                  {task.silenced ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+                  {task.silenced ? 'Reactivate' : 'Silence'}
                 </Button>
                 <Button
                   variant="ghost"

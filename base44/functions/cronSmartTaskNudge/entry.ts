@@ -36,6 +36,7 @@ Deno.serve(async (req) => {
     const allTasks = await base44.asServiceRole.entities.Task.list('-updated_date', 500);
     const tasksByUser: Record<string, any[]> = {};
     const completedTaskIds = new Set<string>();
+    const silencedTaskIds = new Set<string>();
 
     // Recurring interval reminders (10min..every_other_day) are handled by the
     // refill cron with their own OneSignal notifications — exclude them so the
@@ -45,6 +46,7 @@ Deno.serve(async (req) => {
     const RECURRING_INTERVALS = new Set(['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day']);
     const isSmartNudgeTask = (t: any) =>
       t.status === 'active' &&
+      !t.silenced &&  // Back Burner: silenced tasks get no nudges
       !RECURRING_INTERVALS.has(t.reminder_interval) &&
       t.classification !== 'birthday' && t.classification !== 'event' &&
       !t.birthday_person && (
@@ -61,6 +63,9 @@ Deno.serve(async (req) => {
       }
       if (task.status === 'completed') {
         completedTaskIds.add(task.id);
+      }
+      if (task.silenced) {
+        silencedTaskIds.add(task.id);
       }
     }
 
@@ -154,6 +159,15 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Skip if task is silenced (back burner) — mark as sent so it doesn't
+        // fire before the dirty schedule regenerates without it.
+        if (silencedTaskIds.has(entry.task_id)) {
+          entry.sent = true;
+          entry.sent_at = now.toISOString();
+          updated = true;
+          continue;
+        }
+
         const sent = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id);
         if (sent) {
           entry.sent = true;
@@ -206,6 +220,25 @@ function formatTime(localMin: number): string {
   const ampm = h < 12 ? 'AM' : 'PM';
   const h12 = h % 12 === 0 ? 12 : h % 12;
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+// Correct time-of-day words in an LLM-generated nudge title so they match the
+// actual send time — e.g. an "Evening Check-in" scheduled for 1:35 PM becomes
+// "Afternoon Check-in". The LLM writes the title at schedule-generation time,
+// but the nudge may fire hours later via delay_minutes.
+function fixTitleTimeOfDay(title: string, sendAt: Date, timeZone: string): string {
+  if (!title) return title;
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hour12: false });
+    const hour = parseInt(fmt.format(sendAt), 10);
+    const correct = hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening';
+    return title
+      .replace(/\bMorning\b/g, correct)
+      .replace(/\bAfternoon\b/g, correct)
+      .replace(/\bEvening\b/g, correct);
+  } catch {
+    return title;
+  }
 }
 
 async function generateDailySchedule(
@@ -297,7 +330,7 @@ Return ONLY valid JSON:
       return {
         task_id: taskId,
         send_at: sendAt.toISOString(),
-        title: n.title || 'Task nudge',
+        title: fixTitleTimeOfDay(n.title || 'Task nudge', sendAt, timeZone),
         body: n.body || '',
         type: n.type || 'initial',
         sent: false,

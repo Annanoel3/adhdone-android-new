@@ -30,7 +30,9 @@ import {
   Lightbulb,
   Image as ImageIcon,
   Upload,
-  FileText
+  FileText,
+  Bell,
+  BellOff
 } from "lucide-react";
 import { Task } from "@/entities/Task";
 import TaskDecompositionModal from "./TaskDecompositionModal";
@@ -1180,6 +1182,29 @@ Return JSON:
     }
   };
 
+  // Back Burner — silence all notifications for this task (or reactivate them).
+  // The onTaskUpdate automation cancels/reschedules the actual OneSignal
+  // notifications, so the frontend only flips the flag.
+  const handleToggleSilenced = async () => {
+    if (!task) return;
+    setIsUpdating(true);
+    try {
+      const newSilenced = !task.silenced;
+      await Task.update(task.id, { silenced: newSilenced });
+      onUpdate({ ...task, silenced: newSilenced });
+      toast({
+        title: newSilenced ? 'On the back burner 🔇' : 'Reminders back on 🔔',
+        description: newSilenced
+          ? 'No more notifications for this task until you reactivate it.'
+          : 'Notifications resumed for this task.',
+      });
+    } catch (e) {
+      console.error('Error toggling silenced:', e);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   // One entry point for the ReminderTypeSelector — routes each type to the
   // right existing handler so all the cancel/reschedule logic stays in one place.
   const handleChangeReminderType = (type, sub) => {
@@ -1269,6 +1294,23 @@ Return JSON:
               {/* Unified reminder-type selector — replaces the old classification,
                   interval, recurring, and add-reminder pills with one control */}
               <ReminderTypeSelector task={task} theme={theme} onChangeType={handleChangeReminderType} />
+
+              {/* Back Burner — silence all notifications for this task */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleToggleSilenced}
+                className={`gap-1.5 h-8 ${
+                  task.silenced
+                    ? 'bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200'
+                    : theme === 'dark'
+                      ? 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700'
+                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {task.silenced ? <BellOff className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
+                {task.silenced ? 'Back Burner (silenced)' : 'Back Burner'}
+              </Button>
 
               {/* Energy Badge - Clickable */}
               <Popover>

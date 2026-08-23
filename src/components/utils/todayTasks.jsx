@@ -40,6 +40,9 @@ export const getTaskEndLocalDate = (task) => {
 // Today. Tasks with an explicit end_date (multi-day events) drop out once
 // the span ends. Tasks with no effective date (recurring, no due) are always today.
 export const isTodayTask = (task, todayStr = getLocalDateString()) => {
+  // Back Burner: silenced tasks drop out of Today's Tasks — they're intentionally
+  // out of sight (and silent) until the user reactivates them.
+  if (task.silenced) return false;
   const start = getTaskDueLocalDate(task);
   if (!start) return true;
   if (start > todayStr) return false;

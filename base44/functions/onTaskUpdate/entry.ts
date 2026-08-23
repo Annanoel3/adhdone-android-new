@@ -223,6 +223,71 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, cancelled: true, reason: 'task_completed_or_snoozed' });
     }
 
+    // Back Burner: a silenced task gets NO notifications. Cancel everything and
+    // clear scheduling fields, but keep the task's config (interval, due date,
+    // etc.) so it can be reactivated later. On reactivation, seed next_reminder
+    // (recurring) or mark the smart nudge schedule dirty so cron jobs pick it up.
+    if (data.silenced === true && old_data?.silenced !== true) {
+      console.log('[onTaskUpdate] Task silenced (back burner) — cancelling all notifications');
+      const ids = (data.onesignal_notification_ids?.length
+        ? data.onesignal_notification_ids
+        : (old_data?.onesignal_notification_ids || []));
+      for (const notificationId of ids) {
+        await cancelOneSignalNotification(notificationId);
+      }
+      const scheduleEntries = (data.reminder_schedule?.length
+        ? data.reminder_schedule
+        : (old_data?.reminder_schedule || []));
+      for (const entry of scheduleEntries) {
+        if (entry?.notification_id) await cancelOneSignalNotification(entry.notification_id);
+      }
+      await base44.asServiceRole.entities.Task.update(event.entity_id, {
+        onesignal_notification_ids: [],
+        reminder_schedule: [],
+        last_scheduled_until: null,
+        next_reminder: null,
+      });
+      try {
+        await base44.asServiceRole.entities.User.update(user.id, { smart_nudge_schedule_dirty: true });
+      } catch (e) {
+        console.error('[onTaskUpdate] Failed to mark smart nudge schedule dirty on silence:', e);
+      }
+      return Response.json({ success: true, silenced: true });
+    }
+
+    if (data.silenced === false && old_data?.silenced === true) {
+      console.log('[onTaskUpdate] Task reactivated from back burner — rescheduling');
+      const RECURRING = new Set(['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day']);
+      if (data.reminder_interval && RECURRING.has(data.reminder_interval) && data.notification_recipient_email) {
+        const intervalMs = {
+          '10min': 10 * 60 * 1000, '20min': 20 * 60 * 1000, '30min': 30 * 60 * 1000,
+          '1hour': 60 * 60 * 1000, '2hours': 2 * 60 * 60 * 1000, '4hours': 4 * 60 * 60 * 1000,
+          'daily': 24 * 60 * 60 * 1000, 'every_other_day': 2 * 24 * 60 * 60 * 1000,
+        };
+        const ms = intervalMs[data.reminder_interval];
+        let sendAt = new Date(Date.now() + ms);
+        const quietEnabled = !!(user && user.quiet_hours_enabled);
+        const timeZone = user && user.timezone ? user.timezone : null;
+        const startMin = user && user.quiet_hours_start ? parseHHMM(user.quiet_hours_start) : parseHHMM('22:00');
+        const endMin = user && user.quiet_hours_end ? parseHHMM(user.quiet_hours_end) : parseHHMM('08:00');
+        if (quietEnabled && timeZone) {
+          sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
+        }
+        await base44.asServiceRole.entities.Task.update(event.entity_id, {
+          next_reminder: sendAt.toISOString(),
+        });
+      } else {
+        // Smart-nudge or one-time task — mark the daily nudge schedule dirty so
+        // the next cron run regenerates it with this task included.
+        try {
+          await base44.asServiceRole.entities.User.update(user.id, { smart_nudge_schedule_dirty: true });
+        } catch (e) {
+          console.error('[onTaskUpdate] Failed to mark smart nudge schedule dirty on reactivate:', e);
+        }
+      }
+      return Response.json({ success: true, reactivated: true });
+    }
+
     // Smart nudge reassessment: when urgency changes to "urgent", mark the daily
     // nudge schedule as dirty so the next hourly cron regenerates it with the
     // urgent task included (surfaces it sooner, with appropriate urgency).

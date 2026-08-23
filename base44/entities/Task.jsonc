@@ -115,6 +115,11 @@
       ],
       "default": "active"
     },
+    "silenced": {
+      "type": "boolean",
+      "default": false,
+      "description": "Back Burner: when true, all notifications for this task are cancelled and suppressed until the user reactivates it. The task stays visible in the full task list but drops out of Today's Tasks and smart nudges."
+    },
     "urgency": {
       "type": "string",
       "enum": [

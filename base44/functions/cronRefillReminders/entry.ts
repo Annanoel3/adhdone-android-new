@@ -43,6 +43,7 @@ Deno.serve(async (req) => {
 
     const recurringTasks = allTasks.filter(t =>
       t.status === 'active' &&
+      !t.silenced &&  // Back Burner: silenced tasks get no notifications
       t.reminder_interval &&
       t.reminder_interval !== 'once' &&
       intervalMsMap[t.reminder_interval] &&
