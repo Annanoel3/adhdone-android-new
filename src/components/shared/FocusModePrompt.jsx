@@ -11,8 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Target, Info, CheckCircle2, Timer, Dices, Minus } from "lucide-react";
 import confetti from "canvas-confetti";
 import { isTodayTask } from "@/components/utils/todayTasks";
-import { usePomodoro } from "@/context/PomodoroContext";
-import FocusPomodoroPopup from "./FocusPomodoroPopup";
 
 function formatElapsed(ms) {
   const totalSec = Math.floor(ms / 1000);
@@ -22,18 +20,6 @@ function formatElapsed(ms) {
   if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   return `${m}:${String(s).padStart(2, "0")}`;
 }
-
-const CELEBRATION_EMOJIS = ["🎉", "🎊", "✨", "🥳", "🌟", "💫", "🙌", "🏆"];
-const CELEBRATION_MESSAGES = [
-  "Heck yes, you did it!",
-  "One less thing on your plate!",
-  "That's how it's done!",
-  "Crushed it!",
-  "Look at you, finishing things!",
-  "Done and done!",
-  "Your brain thanks you!",
-  "Tiny steps add up — big win!",
-];
 
 function getWindow() {
   const h = new Date().getHours();
@@ -71,8 +57,6 @@ export default function FocusModePrompt({ user, theme }) {
   const [enteredAt, setEnteredAt] = useState(user?.focus_mode_entered_at || null);
   const [spinning, setSpinning] = useState(false);
   const [spinLabel, setSpinLabel] = useState("");
-  const [showPomo, setShowPomo] = useState(false);
-  const pomo = usePomodoro();
 
   // The Wheel — randomly selects one of today's pickable tasks to beat decision fatigue.
   const handleSpin = () => {
@@ -94,12 +78,6 @@ export default function FocusModePrompt({ user, theme }) {
         }, 700);
       }
     }, 85);
-  };
-
-  const startPomo = () => {
-    pomo.resetTimer();
-    setTimeout(() => pomo.toggleTimer(), 60);
-    setShowPomo(true);
   };
 
   // Live elapsed timer for the active focus session (counts up every second).
@@ -248,8 +226,9 @@ export default function FocusModePrompt({ user, theme }) {
     // Celebrate instantly — don't freeze the UI on the task update, OneSignal
     // cancel, and Focus Mode teardown. Those run in the background while the
     // confetti + "back to it" popup show right away.
-    setMode("celebrate");
     fireConfetti();
+    setOpen(false);
+    setMode("offer");
     setFocusTaskId(null);
     setFocusTask(null);
     window.dispatchEvent(new CustomEvent("tasks-changed"));
@@ -327,7 +306,6 @@ export default function FocusModePrompt({ user, theme }) {
   const handleClose = (o) => {
     if (!o) {
       setOpen(false);
-      if (mode === "celebrate") setMode("offer");
     } else {
       setOpen(true);
     }
@@ -359,29 +337,7 @@ export default function FocusModePrompt({ user, theme }) {
             ? "max-w-md w-[calc(100vw-2rem)] " + cardClass
             : "max-w-md " + cardClass
         }`}>
-          {mode === "celebrate" ? (
-            <div className="text-center py-6">
-              <div className="text-7xl mb-4">
-                {CELEBRATION_EMOJIS[Math.floor(Math.random() * CELEBRATION_EMOJIS.length)]}
-              </div>
-              <h2 className="text-2xl font-bold mb-2">
-                {CELEBRATION_MESSAGES[Math.floor(Math.random() * CELEBRATION_MESSAGES.length)]}
-              </h2>
-              <p className="text-sm opacity-80 mb-6">
-                What's next? Tap the 🎯 Focus button on the Home screen to pick your next task and
-                jump right back in.
-              </p>
-              <Button
-                onClick={() => {
-                  setOpen(false);
-                  setMode("offer");
-                }}
-                className="w-full"
-              >
-                Back to it
-              </Button>
-            </div>
-          ) : mode === "active" ? (
+          {mode === "active" ? (
             <div className="flex flex-col p-5 sm:p-6 overflow-y-auto">
               <div className="flex justify-between items-center">
                 {InfoButton}
@@ -415,9 +371,6 @@ export default function FocusModePrompt({ user, theme }) {
                   </div>
                 )}
                 {elapsed == null && <div className="mb-4" />}
-                <Button variant="outline" onClick={startPomo} className="mb-3 w-full">
-                  <Timer className="w-4 h-4 mr-2" /> Start a Pomodoro
-                </Button>
                 <div className="flex flex-col gap-2">
                   <Button
                     onClick={handleComplete}
@@ -486,17 +439,6 @@ export default function FocusModePrompt({ user, theme }) {
           )}
         </DialogContent>
       </Dialog>
-
-      <FocusPomodoroPopup
-        open={showPomo}
-        onBack={() => setShowPomo(false)}
-        focusTask={focusTask}
-        elapsed={elapsed}
-        theme={theme}
-        onComplete={handleComplete}
-        onExit={handleExit}
-        busy={busy}
-      />
 
       <Dialog open={showInfo} onOpenChange={setShowInfo}>
         <DialogContent className={`max-w-sm ${cardClass}`}>
