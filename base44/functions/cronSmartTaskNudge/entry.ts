@@ -55,18 +55,22 @@ Deno.serve(async (req) => {
         (!t.due_date && !t.event_time && !t.start_date && !t.next_reminder)
       );
 
+    // Track completed/silenced IDs BEFORE the email guard — onTaskUpdate clears
+    // notification_recipient_email on completion, so a completed task has no
+    // email and would be skipped here, leaving completedTaskIds empty and
+    // letting pre-scheduled smart nudges fire for tasks the user already finished.
     for (const task of allTasks) {
-      const email = task.notification_recipient_email;
-      if (!email) continue;
-      if (isSmartNudgeTask(task)) {
-        if (!tasksByUser[email]) tasksByUser[email] = [];
-        tasksByUser[email].push(task);
-      }
       if (task.status === 'completed') {
         completedTaskIds.add(task.id);
       }
       if (task.silenced) {
         silencedTaskIds.add(task.id);
+      }
+      const email = task.notification_recipient_email;
+      if (!email) continue;
+      if (isSmartNudgeTask(task)) {
+        if (!tasksByUser[email]) tasksByUser[email] = [];
+        tasksByUser[email].push(task);
       }
     }
 
