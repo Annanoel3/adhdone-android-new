@@ -3,8 +3,10 @@
 // same AI decision process (urgency, energy, event-vs-task, due date).
 //
 // REMINDER PHILOSOPHY (CRITICAL):
-// Recurring interval reminders (10min/20min/30min/1hour/2hours/4hours/daily/
-// every_other_day) are ONLY created when the user EXPLICITLY asks for them
+// Recurring interval reminders (10min/20min/30min/1hour/daily/
+// every_other_day) are ONLY created when the user EXPLICITLY asks for them.
+// 2hours/4hours are NEVER assigned — fixed multi-hour intervals are robotic
+// and flood the user; the LLM smart-nudge system handles timing instead.
 // ("remind me every 10 minutes", "remind me daily", "every other day").
 // For EVERYTHING else, set reminder_interval=null. The app's LLM smart-nudge
 // system decides when/how often to remind — it weighs urgency and whether the
@@ -68,14 +70,16 @@ export function buildTaskParsePrompt(inputText: string): string {
       REMINDER INTERVAL RULES (CRITICAL — read carefully)
       ═══════════════════════════════════════════════════════════════════════
       reminder_interval must ONLY be set to a recurring value (10min/20min/30min/
-      1hour/2hours/4hours/daily/every_other_day) when the user EXPLICITLY uses
+      1hour/daily/every_other_day) when the user EXPLICITLY uses
       recurring language:
         - "every 10 minutes" → "10min"
         - "every 20 minutes" → "20min"
         - "every hour" / "hourly" → "1hour"
-        - "every 2 hours" → "2hours"
         - "every day" / "daily" / "everyday" → "daily"
         - "every other day" → "every_other_day"
+        - "every 2 hours" / "every 4 hours" → null (NEVER assign 2hours/4hours;
+          fixed multi-hour intervals are robotic and flood the user. Let the
+          LLM smart-nudge system decide well-timed reminders instead.)
       For ALL other tasks, set reminder_interval=null. The app's LLM smart-nudge
       system handles when to remind — it weighs urgency and whether the task is
       due today, and sends a few well-timed nudges instead of flooding. NEVER
@@ -199,7 +203,9 @@ export function buildTaskParsePrompt(inputText: string): string {
 
       EXPLICIT RECURRING (keep reminding at a fixed interval until done):
       - ONLY when the user EXPLICITLY says "every X", "daily", "every day", "every other day", "hourly".
-      - Use the matching reminder_interval (10min/20min/30min/1hour/2hours/4hours/daily/every_other_day).
+      - Use the matching reminder_interval (10min/20min/30min/1hour/daily/every_other_day).
+      - "every 2 hours" / "every 4 hours" → reminder_interval=null (the smart-nudge
+        system handles timing; fixed 2h/4h intervals are too robotic and flood the user).
       - No target_date/target_time (unless the user also gave a start time).
       - Examples:
         "remind me every 10 minutes to check the oven" → reminder_interval="10min"
@@ -328,7 +334,7 @@ export function buildTaskParsePrompt(inputText: string): string {
       "target_date": "YYYY-MM-DD or null",
       "target_time": "HH:MM or null",
       "end_date": "YYYY-MM-DD or null (LAST day of a multi-day event span; only when the user gave a date range; null for single-day)",
-      "reminder_interval": "10min|20min|30min|1hour|2hours|4hours|daily|every_other_day|once|null",
+      "reminder_interval": "10min|20min|30min|1hour|daily|every_other_day|once|null",
       "due_date": "YYYY-MM-DD or null — set when the user mentions a DEADLINE (e.g., 'by Friday', 'end of the week', 'by tomorrow', 'by the 15th', 'today' tasks). For 'today' tasks, set due_date=today. For relative deadline phrases, use the calculated date from the RELATIVE DEADLINES rules above.",
       "priority_uninferrable": false,
       "is_flexible": false,

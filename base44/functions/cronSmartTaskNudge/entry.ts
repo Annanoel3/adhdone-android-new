@@ -51,6 +51,7 @@ Deno.serve(async (req) => {
       t.classification !== 'birthday' && t.classification !== 'event' &&
       !t.birthday_person && (
         t.day_only_task ||
+        t.start_date ||  // multi-day task: LLM fits reminders inside the start→due window
         (!t.due_date && !t.event_time && !t.start_date && !t.next_reminder)
       );
 
@@ -101,6 +102,15 @@ Deno.serve(async (req) => {
             const dateStr = t.due_date || t.next_reminder;
             if (!dateStr) return false;
             return isSameLocalDay(new Date(dateStr), now, timeZone);
+          }
+          // Multi-day task (start_date → due_date): only nudge if today falls
+          // inside the working window. Before the start date or after the due
+          // date, the user doesn't need to hear about it right now.
+          if (t.start_date && t.due_date) {
+            const today = getLocalDateString(now, timeZone);
+            const startStr = getLocalDateString(new Date(t.start_date), timeZone);
+            const dueStr = getLocalDateString(new Date(t.due_date), timeZone);
+            return today >= startStr && today <= dueStr;
           }
           return true;
         });
@@ -256,7 +266,10 @@ async function generateDailySchedule(
   const quietEndStr = formatTime(quietEndMin);
 
   const taskList = tasks.map((t, i) => {
-    const type = t.day_only_task ? 'due today' : 'no due date';
+    let type = t.day_only_task ? 'due today' : 'no due date';
+    if (t.start_date && t.due_date) {
+      type = `working window ${getLocalDateString(new Date(t.start_date), timeZone)} → ${getLocalDateString(new Date(t.due_date), timeZone)}`;
+    }
     const nudged = alreadyNudgedTitles.includes(t.title) ? ' — ALREADY NUDGED TODAY' : '';
     return `${i + 1}. "${t.title}" (${type}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${nudged})`;
   }).join('\n');
@@ -281,6 +294,8 @@ ${alreadyNudgedTitles.length > 0 ? `TASKS ALREADY NUDGED TODAY (use check-in sty
 ${urgentCount >= 2 ? `- There are ${urgentCount} URGENT tasks. One notification should say "You have multiple urgent tasks — let's pick one to start with" and briefly mention them. Use task_index: 0 for this one.\n` : ''}- Morning (before noon): encourage easy wins to build momentum
 - Afternoon (noon-5pm): keep momentum going
 - Evening (after 5pm): surface the most urgent remaining tasks
+- Multi-day tasks show a "working window" (start date → due date). Today is inside that window. Fit reminders by priority: a high/urgent multi-day task deserves real nudges; a low-priority one may only need one check-in, ideally later in the window.
+- Don't waste notifications on low-priority tasks the user doesn't need to do right now. If only low-priority tasks remain, send at most ONE combined heads-up (e.g., "Hey, you've got a few low-priority things to get through when you have time") using task_index 0, rather than a nudge per task. Never skip a task entirely without acknowledging it at least once.
 - Be supportive, never productivity-shame
 - Each notification_body: ONE supportive sentence
 - delay_minutes: minutes from now to send this nudge (e.g., 30 = 30 min from now, 120 = 2 hours from now)

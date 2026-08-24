@@ -791,6 +791,22 @@ Return JSON:
     onUpdate({ ...task, due_date: dueDateValue });
   };
 
+  // Start date — only meaningful when there's a future due date. Lets the user
+  // say "this is due Friday but I should be working on it all week." Default
+  // is no start date; clearing it sets it back to null.
+  const handleStartDateChange = async (newDate) => {
+    if (!task) return;
+    let startDateValue = null;
+    if (newDate) {
+      const [year, month, day] = newDate.split('-').map(n => parseInt(n, 10));
+      startDateValue = new Date(year, month - 1, day, 9, 0, 0, 0).toISOString();
+    }
+    Task.update(task.id, { start_date: startDateValue }).catch(error => {
+      console.error("Error updating start date:", error);
+    });
+    onUpdate({ ...task, start_date: startDateValue });
+  };
+
   // Set the actual event date & time for event-classified tasks. Cancels any
   // old lead-time reminders and regenerates a fresh schedule from the new time.
   const handleUpdateEventTime = async (selectedDate, selectedTime) => {
@@ -1480,8 +1496,9 @@ Return JSON:
                 </Popover>
               )}
 
-              {/* Due date — only for interval reminders (a deadline the reminders count down to) */}
-              {currentType === 'interval' && (
+              {/* Due date — editable for one-time, interval, and repeat tasks.
+                   Events use the Event Date control above instead. */}
+              {(currentType === 'once' || currentType === 'interval' || currentType === 'repeat') && (
                 task.due_date ? (
                   <Popover>
                     <PopoverTrigger asChild>
@@ -1533,6 +1550,61 @@ Return JSON:
                         <p className="text-xs text-gray-500">
                           {isEvent ? 'The date this event takes place.' : 'Reminders continue until this date, then switch to overdue reminders.'}
                         </p>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                )
+              )}
+
+              {/* Start date — only available when the task has a future due
+                   date, so the user can say "due Friday, work on it all week."
+                   Default is no start date. */}
+              {task.due_date && new Date(task.due_date).getTime() > Date.now() && !isEvent && (
+                task.start_date ? (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
+                        theme === 'dark' ? 'bg-emerald-900 text-emerald-300' : 'bg-emerald-100 text-emerald-700'
+                      }`}>
+                        <CalendarClock className="w-3 h-3" />
+                        Start {formatReminderDate(task.start_date)}
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className={`w-56 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200'}`}>
+                      <div className="space-y-2">
+                        <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Start Date:</label>
+                        <input
+                          type="date"
+                          defaultValue={task.start_date ? task.start_date.split('T')[0] : ''}
+                          onChange={(e) => handleStartDateChange(e.target.value)}
+                          className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
+                        />
+                        <button
+                          onClick={() => handleStartDateChange(null)}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 rounded text-red-600 font-medium"
+                        >
+                          Remove start date
+                        </button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <button className="cursor-pointer hover:opacity-80 transition-opacity border border-dashed border-gray-300 px-3 py-1 rounded-full text-sm font-medium text-gray-500 bg-white flex items-center gap-1">
+                        <CalendarClock className="w-3 h-3" />
+                        Add Start Date
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className={`w-56 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200'}`}>
+                      <div className="space-y-2">
+                        <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Start Date:</label>
+                        <input
+                          type="date"
+                          onChange={(e) => { if (e.target.value) handleStartDateChange(e.target.value); }}
+                          className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
+                        />
+                        <p className="text-xs text-gray-500">When you'll start working on this before it's due.</p>
                       </div>
                     </PopoverContent>
                   </Popover>
