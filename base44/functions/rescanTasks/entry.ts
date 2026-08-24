@@ -22,7 +22,7 @@ export default async function(req: Request): Promise<Response> {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json();
-    const { email, dryRun = false } = body;
+    const { email, dryRun = false, skipReparse = false } = body;
     const targetEmail = (email || user.email).toLowerCase().trim();
 
     // Fetch all active tasks for the account
@@ -49,24 +49,34 @@ export default async function(req: Request): Promise<Response> {
 
     for (const task of tasks) {
       try {
-        // ── Step 1: Re-parse the task title through current parseTask logic ──
-        const prompt = buildTaskParsePrompt(task.title);
-        const parseResp = await base44.functions.invoke('parseTask', { prompt });
-        const parsed = (parseResp.data || parseResp).response;
+        // ── Step 1: Determine new field values ──────────────────────────────
+        // When skipReparse is true, use existing task values as-is — don't re-parse
+        // the already-clean title (re-parsing would wipe due dates, day-only flags,
+        // etc. since the clean title has no date/time info). Only convert
+        // 2hours/4hours → null (the user wants those gone, replaced by smart nudge).
+        let newUrgency, newEnergy, newInterval;
 
-        // ── Step 2: Determine new field values ──────────────────────────────
-        const newUrgency = parsed.urgency || task.urgency || 'medium';
-        const newEnergy = parsed.energy_required || task.energy_required || 'medium';
+        if (skipReparse) {
+          newUrgency = task.urgency || 'medium';
+          newEnergy = task.energy_required || 'medium';
+          newInterval = (task.reminder_interval === '2hours' || task.reminder_interval === '4hours')
+            ? null
+            : task.reminder_interval;
+        } else {
+          const prompt = buildTaskParsePrompt(task.title);
+          const parseResp = await base44.functions.invoke('parseTask', { prompt });
+          const parsed = (parseResp.data || parseResp).response;
 
-        // For tasks that already have a future date/time, keep 'once' interval
-        // (they are appointments/events/payments with specific schedules).
-        // For recurring tasks, let parseTask decide the new interval.
-        const hasFutureDate = (task.next_reminder && new Date(task.next_reminder) > new Date()) ||
-                              (task.due_date && new Date(task.due_date) > new Date());
+          newUrgency = parsed.urgency || task.urgency || 'medium';
+          newEnergy = parsed.energy_required || task.energy_required || 'medium';
 
-        let newInterval = parsed.reminder_interval || task.reminder_interval;
-        if (hasFutureDate && task.reminder_interval === 'once') {
-          newInterval = 'once';
+          const hasFutureDate = (task.next_reminder && new Date(task.next_reminder) > new Date()) ||
+                                (task.due_date && new Date(task.due_date) > new Date());
+
+          newInterval = parsed.reminder_interval || task.reminder_interval;
+          if (hasFutureDate && task.reminder_interval === 'once') {
+            newInterval = 'once';
+          }
         }
 
         // Calculate next_reminder
@@ -79,6 +89,12 @@ export default async function(req: Request): Promise<Response> {
         }
 
         const wouldSchedule = !!(nextReminder && new Date(nextReminder) > new Date(Date.now() + 2 * 60 * 1000));
+
+        // For smart-nudge tasks (null interval), clear next_reminder — the smart
+        // nudge cron handles timing, not the per-task next_reminder field.
+        if (!newInterval) {
+          nextReminder = null;
+        }
 
         if (dryRun) {
           results.push({
@@ -290,6 +306,22 @@ export default async function(req: Request): Promise<Response> {
         console.error(`[rescanTasks] Failed to rescan task ${task.id}:`, taskError);
         results.push({ id: task.id, title: task.title, status: 'error', error: taskError.message });
       }
+    }
+
+    // Mark the smart nudge schedule dirty + clear old schedule so the cron
+    // regenerates immediately with the updated task list (includes converted
+    // 2hours/4hours tasks that are now smart-nudge-eligible).
+    try {
+      const ownerRecord = allUsers.find(u => u.email && u.email.toLowerCase().trim() === targetEmail);
+      if (ownerRecord) {
+        await base44.asServiceRole.entities.User.update(ownerRecord.id, {
+          smart_nudge_schedule_dirty: true,
+          smart_nudge_schedule: [],
+        });
+        console.log(`[rescanTasks] Marked smart nudge schedule dirty for ${targetEmail}`);
+      }
+    } catch (e) {
+      console.error('[rescanTasks] Failed to mark smart nudge dirty:', e);
     }
 
     return Response.json({ email: targetEmail, totalTasks: tasks.length, results });
