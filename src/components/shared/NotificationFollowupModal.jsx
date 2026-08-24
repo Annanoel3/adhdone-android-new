@@ -172,6 +172,9 @@ export default function NotificationFollowupModal({ user, theme }) {
         ).catch(() => {});
       }
       await updateTodaysSummary();
+      // Tell the Home page (and any other listener) to refresh its task list —
+      // without this the DB is updated but the UI still shows the task as active.
+      window.dispatchEvent(new CustomEvent('tasks-changed'));
       dismissedTaskIds.current.add(currentTask.id);
       pendingTasksRef.current = pendingTasksRef.current.filter(
         (t) => t.id !== currentTask.id
