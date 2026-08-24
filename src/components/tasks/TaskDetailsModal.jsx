@@ -805,10 +805,21 @@ Return JSON:
       const minutes = existing ? existing.getMinutes() : 0;
       dueDateValue = new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString();
     }
-    Task.update(task.id, { due_date: dueDateValue }).catch(error => {
+    // Track when the user pushes a due date LATER — used by Insights and the
+    // smart-nudge LLM to spot chronically postponed tasks. Only counts as a
+    // push when there was an existing due date and the new one is later.
+    const updates = { due_date: dueDateValue };
+    if (dueDateValue && task.due_date) {
+      const oldDate = new Date(task.due_date);
+      const newDateObj = new Date(dueDateValue);
+      if (newDateObj.getTime() > oldDate.getTime()) {
+        updates.due_date_pushes = (task.due_date_pushes || 0) + 1;
+      }
+    }
+    Task.update(task.id, updates).catch(error => {
       console.error("Error updating due date:", error);
     });
-    onUpdate({ ...task, due_date: dueDateValue });
+    onUpdate({ ...task, ...updates });
   };
 
   // Start date — only meaningful when there's a future due date. Lets the user

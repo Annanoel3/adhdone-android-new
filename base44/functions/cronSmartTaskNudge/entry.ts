@@ -299,6 +299,9 @@ async function generateDailySchedule(
       windowInfo = ` [working window: ${formatDateShort(t.start_date, timeZone)} → ${formatDateShort(t.due_date, timeZone)}]`;
     }
     const nudged = alreadyNudgedTitles.includes(t.title) ? ' — ALREADY NUDGED TODAY' : '';
+    // Due-date push count — lets the LLM spot chronically postponed tasks and
+    // suggest breaking them down or acknowledging the avoidance pattern.
+    const pushInfo = (t.due_date_pushes || 0) > 0 ? `, pushed ${t.due_date_pushes}x` : '';
     // Sub-task progress — lets the LLM acknowledge where the user is in a
     // multi-step task (e.g. "you've got the laundry going — don't forget to
     // move it to the dryer"). Only sub-tasks that belong to THIS parent.
@@ -310,7 +313,7 @@ async function generateDailySchedule(
       const steps = subs.map((s: any) => s.status === 'completed' ? `✓${s.title}` : `○${s.title}`).join(', ');
       subInfo = ` [${done.length}/${subs.length} steps done: ${steps}]`;
     }
-    return `${i + 1}. "${t.title}" (${dueInfo}${windowInfo}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${nudged}${subInfo})`;
+    return `${i + 1}. "${t.title}" (${dueInfo}${windowInfo}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${pushInfo}${nudged}${subInfo})`;
   }).join('\n');
 
   const urgentCount = tasks.filter(t => t.urgency === 'urgent').length;
@@ -340,6 +343,7 @@ ${urgentCount >= 2 ? `- There are ${urgentCount} URGENT tasks. Consider one noti
 - Evening (after 5pm): surface the most urgent remaining tasks.
 - Each notification body: ONE supportive sentence. Warm, like a friend. Never productivity-shame. Never say "you should" or "you need to".
 - SUB-TASK PROGRESS: when a task shows step progress (✓/○), use it to acknowledge where they are — e.g. "you've got the laundry going — don't forget to move it to the dryer" or "great progress on printing — just the label left to ship". Never list every step; just acknowledge the current spot naturally.
+- PUSHED TASKS: when a task shows "pushed Nx" (the user moved its due date later N times), it's being avoided. Don't shame — gently name it: "this one's been bumped a few times — want to break it into a tiny first step?" or "no rush, but this keeps getting pushed — is it still something you actually want to do?" Higher push counts deserve more attention but never guilt.
 - delay_minutes: minutes from NOW to send this nudge (e.g., 30 = 30 min from now, 120 = 2 hours from now).
 - Don't schedule past quiet hours start (${quietStartStr}).
 - You decide HOW MANY nudges. There's no cap, no formula. Use your judgment — some days need 2, some need 6.

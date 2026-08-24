@@ -9,6 +9,7 @@ import {
   Clock, 
   Target,
   Calendar,
+  CalendarClock,
   Zap,
   Sparkles
 } from "lucide-react";
@@ -100,6 +101,14 @@ export default function Insights() {
       ? dayNames[Object.keys(tasksByDay).reduce((a, b) => tasksByDay[a] > tasksByDay[b] ? a : b)]
       : 'Not enough data';
 
+    // Due date push tracking — how many times the user postponed deadlines
+    const tasksWithPushes = tasks.filter(t => (t.due_date_pushes || 0) > 0);
+    const totalPushes = tasks.reduce((sum, t) => sum + (t.due_date_pushes || 0), 0);
+    const mostPushed = tasksWithPushes
+      .sort((a, b) => (b.due_date_pushes || 0) - (a.due_date_pushes || 0))
+      .slice(0, 3)
+      .map(t => ({ title: t.title, pushes: t.due_date_pushes, status: t.status }));
+
     setInsights({
       morningEnergy: getAverageEnergy(morningEnergy),
       afternoonEnergy: getAverageEnergy(afternoonEnergy),
@@ -111,7 +120,10 @@ export default function Insights() {
       avgCompletionRate,
       mostProductiveDay,
       totalTasksCompleted: completedTasks.length,
-      currentStreak: summaries[0]?.streak_days || 0
+      currentStreak: summaries[0]?.streak_days || 0,
+      totalDueDatePushes: totalPushes,
+      tasksPushed: tasksWithPushes.length,
+      mostPushedTasks: mostPushed,
     });
 
     setIsLoading(false);
@@ -301,6 +313,60 @@ export default function Insights() {
           </CardContent>
         </Card>
 
+        {/* Due Date Push Tracking */}
+        <Card className="border-none shadow-lg md:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CalendarClock className="w-5 h-5" />
+              Deadline Dodging
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className={`p-4 rounded-xl text-center ${
+                theme === 'minimalist' ? 'bg-amber-50' : 'bg-gradient-to-br from-amber-100 to-orange-100'
+              }`}>
+                <div className="text-2xl font-bold text-gray-900">{insights.totalDueDatePushes}</div>
+                <p className="text-xs text-gray-600 mt-1">Total Due Date Pushes</p>
+              </div>
+              <div className={`p-4 rounded-xl text-center ${
+                theme === 'minimalist' ? 'bg-purple-50' : 'bg-gradient-to-br from-purple-100 to-pink-100'
+              }`}>
+                <div className="text-2xl font-bold text-gray-900">{insights.tasksPushed}</div>
+                <p className="text-xs text-gray-600 mt-1">Tasks Postponed</p>
+              </div>
+            </div>
+
+            {insights.mostPushedTasks && insights.mostPushedTasks.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium text-gray-700">Most postponed:</p>
+                {insights.mostPushedTasks.map((t, i) => (
+                  <div key={i} className={`flex items-center justify-between p-3 rounded-lg ${
+                    theme === 'minimalist' ? 'bg-gray-50' : 'bg-white/60'
+                  }`}>
+                    <span className={`text-sm flex-1 truncate ${t.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                      {t.title}
+                    </span>
+                    <Badge className="bg-amber-100 text-amber-700 ml-2 flex-shrink-0">
+                      Pushed {t.pushes}x
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {(!insights.mostPushedTasks || insights.mostPushedTasks.length === 0) && (
+              <div className={`p-4 rounded-xl text-center ${
+                theme === 'minimalist' ? 'bg-green-50' : 'bg-gradient-to-r from-green-100 to-teal-100'
+              }`}>
+                <p className="text-sm text-gray-700">
+                  No pushed deadlines — you're staying on top of things! 🎯
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Actionable Recommendations */}
         <Card className={`border-none shadow-lg md:col-span-2 ${
           theme === 'minimalist' 
@@ -325,6 +391,14 @@ export default function Insights() {
                 <div className="w-2 h-2 rounded-full bg-purple-600 mt-2 flex-shrink-0" />
                 <p className="text-gray-700">
                   Your energy dips in the afternoon. Try scheduling lower-energy tasks or taking a short break during this time.
+                </p>
+              </div>
+            )}
+            {insights.totalDueDatePushes >= 3 && (
+              <div className="flex items-start gap-3">
+                <div className="w-2 h-2 rounded-full bg-amber-500 mt-2 flex-shrink-0" />
+                <p className="text-gray-700">
+                  You've pushed deadlines <strong>{insights.totalDueDatePushes}</strong> times. The tasks you keep postponing might need to be broken into smaller steps — or they might not actually matter to you, and that's okay too.
                 </p>
               </div>
             )}

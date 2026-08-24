@@ -40,6 +40,11 @@
       "format": "date-time",
       "description": "Optional deadline for interval-reminder tasks. Interval reminders continue until this date, then switch to overdue reminders until the task is completed."
     },
+    "due_date_pushes": {
+      "type": "number",
+      "default": 0,
+      "description": "How many times the user has pushed this task's due date later. Tracked so Insights and the smart-nudge LLM can spot chronically postponed tasks and suggest breaking them down or rethinking them."
+    },
     "start_date": {
       "type": "string",
       "format": "date-time",
