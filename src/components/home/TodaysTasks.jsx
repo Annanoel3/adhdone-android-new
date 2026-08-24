@@ -20,7 +20,7 @@ import {
 import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
 import TaskSortDropdown from "../tasks/TaskSortDropdown";
 
-export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails }) {
+export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails, onUpdateTask }) {
   const navigate = useNavigate();
   const { sortBy } = useTaskSort();
   // Filter out subtasks, sort by the shared preference, then take the top 5.
@@ -118,18 +118,25 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
   };
 
   const handleUrgencyChange = async (task, newUrgency) => {
-    await base44.entities.Task.update(task.id, { urgency: newUrgency });
-    window.location.reload();
+    if (onUpdateTask) onUpdateTask({ ...task, urgency: newUrgency });
+    base44.entities.Task.update(task.id, { urgency: newUrgency }).catch(error => {
+      console.error("Error updating urgency:", error);
+    });
   };
 
   const handleEnergyChange = async (task, newEnergy) => {
-    await base44.entities.Task.update(task.id, { energy_required: newEnergy });
-    window.location.reload();
+    if (onUpdateTask) onUpdateTask({ ...task, energy_required: newEnergy });
+    base44.entities.Task.update(task.id, { energy_required: newEnergy }).catch(error => {
+      console.error("Error updating energy:", error);
+    });
   };
 
   const handleIntervalChange = async (task, newInterval) => {
     console.log('🔄 [INTERVAL CHANGE] Updating interval to:', newInterval);
-    
+
+    // Optimistic — update UI instantly
+    if (onUpdateTask) onUpdateTask({ ...task, reminder_interval: newInterval });
+
     // Cancel existing reminders
     if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
       try {
@@ -266,13 +273,17 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
       console.error('Failed to schedule new reminders:', error);
     }
 
-    await base44.entities.Task.update(task.id, { 
+    // Sync the computed next_reminder + notification IDs
+    if (onUpdateTask) onUpdateTask({ ...task, reminder_interval: newInterval, next_reminder: nextReminder.toISOString(), onesignal_notification_ids: newNotificationIds });
+
+    base44.entities.Task.update(task.id, { 
       reminder_interval: newInterval,
       next_reminder: nextReminder.toISOString(),
       onesignal_notification_ids: newNotificationIds,
       ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
+    }).catch(error => {
+      console.error("Error updating interval:", error);
     });
-    window.location.reload();
   };
 
   const handleReminderDateChange = async (task, newDate, newTime) => {
@@ -294,10 +305,12 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
 
     console.log(`📅 [REMINDER DATE] Setting reminder for ${updatedNextReminder.toLocaleString()} (${updatedNextReminder.toISOString()})`);
 
-    await base44.entities.Task.update(task.id, { 
+    if (onUpdateTask) onUpdateTask({ ...task, next_reminder: updatedNextReminder.toISOString() });
+    base44.entities.Task.update(task.id, { 
       next_reminder: updatedNextReminder.toISOString()
+    }).catch(error => {
+      console.error("Error updating reminder date:", error);
     });
-    window.location.reload();
   };
 
   const handleDueDateChange = async (task, newDate) => {
@@ -309,8 +322,10 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails 
       const minutes = existing ? existing.getMinutes() : 0;
       dueDateValue = new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString();
     }
-    await base44.entities.Task.update(task.id, { due_date: dueDateValue });
-    window.location.reload();
+    if (onUpdateTask) onUpdateTask({ ...task, due_date: dueDateValue });
+    base44.entities.Task.update(task.id, { due_date: dueDateValue }).catch(error => {
+      console.error("Error updating due date:", error);
+    });
   };
 
   const getCurrentReminderTime = (task) => {

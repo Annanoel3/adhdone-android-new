@@ -108,54 +108,86 @@ export default function Tasks() {
     setAllTasks(fetchedTasks);
   };
 
+  const handleTaskUpdate = (updatedTask) => {
+    setAllTasks(prev => prev.map(t => t.id === updatedTask.id ? { ...t, ...updatedTask } : t));
+  };
+
   const handleComplete = async (task) => {
     const now = new Date();
     const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
-    
-    await Task.update(task.id, {
-      status: 'completed',
-      completed_at: localISOString
-    });
-    await updateTodaysSummary();
 
-    // Mark all active subtasks as completed too
-    const { completeSubtasks } = await import('../components/utils/subtaskCompletion');
-    await completeSubtasks(task.id);
+    // Optimistic — update UI instantly
+    setAllTasks(prev => prev.map(t =>
+      t.id === task.id
+        ? { ...t, status: 'completed', completed_at: localISOString }
+        : t.parent_task_id === task.id && t.status !== 'completed'
+          ? { ...t, status: 'completed', completed_at: localISOString }
+          : t
+    ));
 
-    // Create next recurrence if needed
-    if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
-      const { createNextRecurrence } = await import('../components/utils/taskRecurrence');
-      await createNextRecurrence(task);
-    }
-
-    loadTasks();
+    // Save + side effects in the background
+    (async () => {
+      try {
+        await Task.update(task.id, { status: 'completed', completed_at: localISOString });
+        await updateTodaysSummary();
+        const { completeSubtasks } = await import('../components/utils/subtaskCompletion');
+        await completeSubtasks(task.id);
+        if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
+          const { createNextRecurrence } = await import('../components/utils/taskRecurrence');
+          const result = await createNextRecurrence(task);
+          if (result) loadTasks();
+        }
+      } catch (error) {
+        console.error("Failed to complete task:", error);
+        loadTasks();
+      }
+    })();
   };
 
   const handleUncomplete = async (task) => {
-    await Task.update(task.id, {
-      status: 'active',
-      completed_at: null
-    });
-    await updateTodaysSummary();
-    loadTasks();
+    // Optimistic — update UI instantly
+    setAllTasks(prev => prev.map(t =>
+      t.id === task.id ? { ...t, status: 'active', completed_at: null } : t
+    ));
+
+    (async () => {
+      try {
+        await Task.update(task.id, { status: 'active', completed_at: null });
+        await updateTodaysSummary();
+      } catch (error) {
+        console.error("Failed to uncomplete task:", error);
+        loadTasks();
+      }
+    })();
   };
 
   const handleSnooze = async (task, minutes) => {
     const nextReminder = new Date();
     nextReminder.setMinutes(nextReminder.getMinutes() + minutes);
 
-    await Task.update(task.id, {
+    // Optimistic — update UI instantly
+    setAllTasks(prev => prev.map(t =>
+      t.id === task.id
+        ? { ...t, snooze_count: (t.snooze_count || 0) + 1, consecutive_snoozes: (t.consecutive_snoozes || 0) + 1, status: 'snoozed', next_reminder: nextReminder.toISOString() }
+        : t
+    ));
+
+    Task.update(task.id, {
       snooze_count: (task.snooze_count || 0) + 1,
       consecutive_snoozes: (task.consecutive_snoozes || 0) + 1,
       status: 'snoozed',
       next_reminder: nextReminder.toISOString()
-    });
-    loadTasks();
+    }).catch(error => console.error("Failed to snooze task:", error));
   };
 
   const handleDelete = async (task) => {
-    await Task.delete(task.id);
-    loadTasks();
+    // Optimistic — remove from UI instantly
+    setAllTasks(prev => prev.filter(t => t.id !== task.id && t.parent_task_id !== task.id));
+
+    Task.delete(task.id).catch(error => {
+      console.error("Failed to delete task:", error);
+      loadTasks();
+    });
   };
 
   const getSubtaskCount = (taskId) => {
@@ -327,9 +359,13 @@ export default function Tasks() {
             theme={theme}
             onRefreshTasks={loadTasks}
             onEditTitle={async (taskId, newTitle) => {
-              await Task.update(taskId, { title: newTitle });
-              loadTasks();
+              setAllTasks(prev => prev.map(t => t.id === taskId ? { ...t, title: newTitle } : t));
+              Task.update(taskId, { title: newTitle }).catch(error => {
+                console.error("Failed to update title:", error);
+                loadTasks();
+              });
             }}
+            onUpdateTask={handleTaskUpdate}
             onEdit={(taskToEdit) => {
               setSelectedTask(taskToEdit);
               setIsEditModalOpen(true);
@@ -360,7 +396,7 @@ export default function Tasks() {
             setIsDetailsModalOpen(false);
             setSelectedTask(null);
           }}
-          onUpdate={loadTasks}
+          onUpdate={handleTaskUpdate}
           onDelete={() => {
             loadTasks();
             setIsDetailsModalOpen(false);
@@ -376,7 +412,7 @@ export default function Tasks() {
             setIsEditModalOpen(false);
             setSelectedTask(null);
           }}
-          onUpdate={loadTasks}
+          onUpdate={handleTaskUpdate}
           theme={theme}
         />
       </div>

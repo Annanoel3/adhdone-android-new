@@ -71,6 +71,8 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(task ? task.title : '');
   const [isUpdating, setIsUpdating] = useState(false);
+  const [isSavingReminder, setIsSavingReminder] = useState(false);
+  const [isSavingEvent, setIsSavingEvent] = useState(false);
   const [isUploadingPicture, setIsUploadingPicture] = useState(false);
   const [taskPictures, setTaskPictures] = useState([]);
   const [taskNotes, setTaskNotes] = useState('');
@@ -128,13 +130,15 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
 
   const handleSubTaskToggle = async (subTask) => {
     const newStatus = subTask.status === 'completed' ? 'active' : 'completed';
-    await base44.entities.Task.update(subTask.id, { status: newStatus });
-    await fetchSubTasks(task.id);
-    
-    // Call onUpdate with parent task to trigger refresh
+    // Optimistic — update local state immediately
+    setSubTasks(prev => prev.map(s => s.id === subTask.id ? { ...s, status: newStatus } : s));
     if (onUpdate) {
       onUpdate(task);
     }
+    // Save in the background, then re-fetch to sync
+    base44.entities.Task.update(subTask.id, { status: newStatus })
+      .then(() => fetchSubTasks(task.id))
+      .catch(error => console.error("Error toggling subtask:", error));
   };
 
   const handleAddSubTask = async (e) => {
@@ -143,10 +147,25 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
 
     try {
       const currentUser = await base44.auth.me();
-      
+
       // Split by comma to support multiple subtasks
       const subtaskTitles = newSubTask.split(',').map(s => s.trim()).filter(s => s.length > 0);
-      
+
+      // Optimistic — add subtasks to local state immediately
+      const tempSubTasks = subtaskTitles.map((title, i) => ({
+        id: `temp_${Date.now()}_${i}`,
+        title,
+        parent_task_id: task.id,
+        urgency: task.urgency,
+        energy_required: task.energy_required,
+        status: 'active',
+        reminder_interval: task.reminder_interval,
+        subtask_order: subTasks.length + i + 1,
+      }));
+      setSubTasks(prev => [...prev, ...tempSubTasks]);
+      setNewSubTask("");
+      if (onUpdate) onUpdate(task);
+
       const now = new Date();
       let nextReminder = new Date(now.getTime());
       
@@ -180,34 +199,32 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
           break;
       }
 
-      // Create all subtasks
-      for (const title of subtaskTitles) {
-        await Task.create({
-          title: title,
-          parent_task_id: task.id,
-          urgency: task.urgency,
-          energy_required: task.energy_required,
-          status: 'active',
-          reminder_interval: task.reminder_interval,
-          reminder_count: 0,
-          next_reminder: task.reminder_interval && task.reminder_interval !== 'once' && nextReminder ? nextReminder.toISOString() : null,
-          notification_recipient_email: currentUser.email
-        });
-
-        // Note: Recurring reminders are handled by cron job, not OneSignal
-        // Only one-time reminders (interval='once') should use OneSignal
-      }
-
-      setNewSubTask("");
-      const updatedSubTasks = await fetchSubTasks(task.id);
-      
-      // Call onUpdate with the parent task to trigger refresh
-      if (onUpdate) {
-        onUpdate(task);
-      }
+      // Create all subtasks in the background
+      (async () => {
+        try {
+          for (const title of subtaskTitles) {
+            await Task.create({
+              title: title,
+              parent_task_id: task.id,
+              urgency: task.urgency,
+              energy_required: task.energy_required,
+              status: 'active',
+              reminder_interval: task.reminder_interval,
+              reminder_count: 0,
+              next_reminder: task.reminder_interval && task.reminder_interval !== 'once' && nextReminder ? nextReminder.toISOString() : null,
+              notification_recipient_email: currentUser.email
+            });
+          }
+          // Re-fetch to replace temp subtasks with real ones
+          await fetchSubTasks(task.id);
+          if (onUpdate) onUpdate(task);
+        } catch (error) {
+          console.error("Error adding subtask:", error);
+          fetchSubTasks(task.id);
+        }
+      })();
     } catch (error) {
       console.error("Error adding subtask:", error);
-      alert("Failed to add subtask. Please try again.");
     }
   };
 
@@ -300,13 +317,15 @@ Return JSON:
   };
 
   const handleDeleteSubTask = async (subTaskId) => {
-    await Task.delete(subTaskId);
-    await fetchSubTasks(task.id);
-    
-    // Call onUpdate with parent task to trigger refresh
+    // Optimistic — remove from local state immediately
+    setSubTasks(prev => prev.filter(s => s.id !== subTaskId));
     if (onUpdate) {
       onUpdate(task);
     }
+    // Delete in the background, then re-fetch to sync
+    Task.delete(subTaskId)
+      .then(() => fetchSubTasks(task.id))
+      .catch(error => console.error("Error deleting subtask:", error));
   };
 
   const handleUndoDecomposition = async () => {
@@ -332,7 +351,10 @@ Return JSON:
       return;
     }
 
-    setIsUpdating(true);
+    // Optimistic update — user sees the title change instantly
+    onUpdate({ ...task, title: editedTitle.trim() });
+    setIsEditingTitle(false);
+
     try {
       // If task has recurring reminders, cancel old notifications and reschedule with new title
       if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0 && task.reminder_interval && task.reminder_interval !== 'once') {
@@ -445,19 +467,17 @@ Return JSON:
           console.error("Error updating task title:", error);
         });
       }
-
-      // Optimistically update parent immediately
-      onUpdate({ ...task, title: editedTitle.trim() });
-      setIsEditingTitle(false);
-    } finally {
-      setIsUpdating(false);
+    } catch (error) {
+      console.error("Error saving title:", error);
     }
   };
 
   const handleUpdateField = async (field, value) => {
     if (!task) return;
-    
-    setIsUpdating(true);
+
+    // Optimistic update — user sees the change instantly
+    onUpdate({ ...task, [field]: value });
+
     try {
       const updates = { [field]: value };
       
@@ -597,25 +617,22 @@ Return JSON:
         }
       }
       
-      // Await the save so the loading spinner shows and the server has the
-      // change before any parent refetch overwrites the optimistic update.
-      try {
-        await Task.update(task.id, updates);
-      } catch (error) {
+      // Fire the save in the background — don't block the UI
+      Task.update(task.id, updates).catch(error => {
         console.error(`Error updating ${field}:`, error);
-      }
+      });
 
-      // Optimistically update parent immediately
+      // Sync backend-generated fields (notification IDs, next_reminder)
       onUpdate({ ...task, ...updates });
-    } finally {
-      setIsUpdating(false);
+    } catch (error) {
+      console.error(`Error in handleUpdateField for ${field}:`, error);
     }
   };
 
   const handleUpdateReminderTime = async (selectedTime, selectedDate) => {
     if (!task) return;
-    
-    setIsUpdating(true);
+
+    setIsSavingReminder(true);
     try {
       const currentTaskTime = getCurrentReminderTime(task);
       const currentTaskDate = getCurrentReminderDate(task);
@@ -633,6 +650,9 @@ Return JSON:
       const [year, month, day] = finalEffectiveDate.split('-').map(n => parseInt(n, 10));
       const [hours, minutes] = finalEffectiveTime.split(':').map(n => parseInt(n, 10));
       let nextReminder = new Date(year, month - 1, day, hours, minutes, 0, 0);
+
+      // Optimistic update — user sees the new date/time instantly
+      onUpdate({ ...task, next_reminder: nextReminder.toISOString() });
 
       // Cancel existing reminders — include every notification ID we know about
       // (both onesignal_notification_ids and any IDs stored on individual
@@ -771,7 +791,7 @@ Return JSON:
         description: `We'll remind you ${nextReminder.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`,
       });
     } finally {
-      setIsUpdating(false);
+      setIsSavingReminder(false);
     }
   };
 
@@ -811,11 +831,14 @@ Return JSON:
   // old lead-time reminders and regenerates a fresh schedule from the new time.
   const handleUpdateEventTime = async (selectedDate, selectedTime) => {
     if (!task || !selectedDate || !selectedTime) return;
-    setIsUpdating(true);
+    setIsSavingEvent(true);
     try {
       const [year, month, day] = selectedDate.split('-').map(n => parseInt(n, 10));
       const [hours, minutes] = selectedTime.split(':').map(n => parseInt(n, 10));
       const eventTime = new Date(year, month - 1, day, hours, minutes, 0, 0);
+
+      // Optimistic update — user sees the new event time instantly
+      onUpdate({ ...task, event_time: eventTime.toISOString(), next_reminder: eventTime.toISOString() });
 
       const allOldIds = Array.from(new Set([
         ...(task.onesignal_notification_ids || []),
@@ -856,19 +879,27 @@ Return JSON:
     } catch (e) {
       console.error('Error updating event time:', e);
     } finally {
-      setIsUpdating(false);
+      setIsSavingEvent(false);
     }
   };
 
   const handleComplete = async () => {
     if (!task) return;
 
-    setIsUpdating(true);
-    try {
-      // CRITICAL FIX: Store local date/time, not UTC
-      const now = new Date();
-      const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
+    // CRITICAL FIX: Store local date/time, not UTC
+    const now = new Date();
+    const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
 
+    // Optimistic update — user sees the task complete instantly
+    onUpdate({
+      ...task,
+      status: 'completed',
+      completed_at: localISOString,
+      onesignal_notification_ids: []
+    });
+    onClose();
+
+    try {
       console.log('✅ [COMPLETE] Marking task complete with local time:', localISOString);
 
       // Cancel all scheduled reminders when task is completed
@@ -974,56 +1005,37 @@ Return JSON:
 
         console.log('✅ [RECURRING] New task created:', newTask.id);
       }
-
-      // Optimistically update parent immediately
-      onUpdate({ 
-        ...task, 
-        status: 'completed',
-        completed_at: localISOString,
-        onesignal_notification_ids: []
-      });
-
-      onClose();
-    } finally {
-      setIsUpdating(false);
+    } catch (error) {
+      console.error("Error completing task:", error);
     }
   };
 
   const handleDelete = async () => {
     if (!task || !confirm(`Delete "${task.title}" and all its sub-tasks?`)) return;
-    
-    setIsUpdating(true);
-    try {
-      // CRITICAL: Cancel all scheduled notifications before deleting
-      if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
-        console.log(`🗑️ [DELETE] Canceling ${task.onesignal_notification_ids.length} notifications for task "${task.title}"`);
-        await cancelScheduledReminder(task.onesignal_notification_ids);
-      }
 
-      // Delete subtasks and their notifications
-      for (const subTask of subTasks) {
-        if (subTask.onesignal_notification_ids && subTask.onesignal_notification_ids.length > 0) {
-          await cancelScheduledReminder(subTask.onesignal_notification_ids);
-        }
-        Task.delete(subTask.id).catch(error => {
-          console.error("Error deleting subtask:", error);
-        });
-      }
-
-      // Delete the task
-      Task.delete(task.id).catch(error => {
-        console.error("Error deleting task:", error);
-      });
-      
-      // Notify parent immediately
-      if (onDelete) {
-        onDelete();
-      }
-      // Always close the dialog so the user returns to the task list
-      onClose();
-    } finally {
-      setIsUpdating(false);
+    // Optimistic — close dialog and notify parent immediately
+    if (onDelete) {
+      onDelete();
     }
+    onClose();
+
+    // Cancel notifications + delete in the background
+    (async () => {
+      try {
+        if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+          await cancelScheduledReminder(task.onesignal_notification_ids);
+        }
+        for (const subTask of subTasks) {
+          if (subTask.onesignal_notification_ids && subTask.onesignal_notification_ids.length > 0) {
+            await cancelScheduledReminder(subTask.onesignal_notification_ids);
+          }
+          Task.delete(subTask.id).catch(error => console.error("Error deleting subtask:", error));
+        }
+        Task.delete(task.id).catch(error => console.error("Error deleting task:", error));
+      } catch (error) {
+        console.error("Error during delete:", error);
+      }
+    })();
   };
 
   const completedCount = subTasks.filter(s => s.status === 'completed').length;
@@ -1148,25 +1160,19 @@ Return JSON:
 
   const handleClassificationChange = async (newClass) => {
     if (!task || newClass === currentClassification) return;
-    setIsUpdating(true);
-    try {
-      const updates = { classification: newClass };
-      // Keep birthday_person in sync so the Birthday tracker and calendar
-      // agree on what's a birthday.
-      if (newClass === 'birthday') {
-        if (!task.birthday_person) updates.birthday_person = task.title;
-      } else if (task.birthday_person) {
-        updates.birthday_person = null;
-      }
-      await Task.update(task.id, updates);
-      onUpdate({ ...task, ...updates });
-      toast({ title: "Saved ✓", description: newClass === 'event' ? 'Marked as event' : newClass === 'birthday' ? 'Marked as birthday' : 'Marked as task' });
-    } catch (error) {
-      console.error("Error updating classification:", error);
-      toast({ title: "Couldn't save", description: "Please try again.", variant: "destructive" });
-    } finally {
-      setIsUpdating(false);
+    const updates = { classification: newClass };
+    if (newClass === 'birthday') {
+      if (!task.birthday_person) updates.birthday_person = task.title;
+    } else if (task.birthday_person) {
+      updates.birthday_person = null;
     }
+    // Optimistic update — user sees the change instantly
+    onUpdate({ ...task, ...updates });
+    toast({ title: "Saved ✓", description: newClass === 'event' ? 'Marked as event' : newClass === 'birthday' ? 'Marked as birthday' : 'Marked as task' });
+    // Save in the background
+    Task.update(task.id, updates).catch(error => {
+      console.error("Error updating classification:", error);
+    });
   };
 
   // Switch a task to "Smart Reminders" — the LLM smart-nudge system takes over.
@@ -1174,38 +1180,35 @@ Return JSON:
   // and clears all reminder fields so the task flows to the LLM.
   const handleSetSmartReminders = async () => {
     if (!task) return;
-    setIsUpdating(true);
-    try {
-      const allOldIds = Array.from(new Set([
-        ...(task.onesignal_notification_ids || []),
-        ...((task.reminder_schedule || []).map((r) => r.notification_id).filter(Boolean)),
-      ]));
-      if (allOldIds.length > 0) {
-        try {
-          await cancelScheduledReminder(allOldIds);
-        } catch (e) {
-          console.error("Failed to cancel reminders:", e);
+    const updates = {
+      reminder_interval: null,
+      recurrence_pattern: 'none',
+      next_reminder: null,
+      event_time: null,
+      day_only_task: false,
+      onesignal_notification_ids: [],
+      reminder_schedule: [],
+      classification: 'task',
+      birthday_person: null,
+    };
+    // Optimistic update — user sees the change instantly
+    onUpdate({ ...task, ...updates });
+    toast({ title: "Smart Reminders on ✓", description: "AI will decide when to nudge you about this task." });
+    // Cancel old reminders + save in the background
+    (async () => {
+      try {
+        const allOldIds = Array.from(new Set([
+          ...(task.onesignal_notification_ids || []),
+          ...((task.reminder_schedule || []).map((r) => r.notification_id).filter(Boolean)),
+        ]));
+        if (allOldIds.length > 0) {
+          await cancelScheduledReminder(allOldIds).catch(e => console.error("Failed to cancel reminders:", e));
         }
+        await Task.update(task.id, updates);
+      } catch (e) {
+        console.error("Error switching to smart reminders:", e);
       }
-      const updates = {
-        reminder_interval: null,
-        recurrence_pattern: 'none',
-        next_reminder: null,
-        event_time: null,
-        day_only_task: false,
-        onesignal_notification_ids: [],
-        reminder_schedule: [],
-        classification: 'task',
-        birthday_person: null,
-      };
-      await Task.update(task.id, updates);
-      onUpdate({ ...task, ...updates });
-      toast({ title: "Smart Reminders on ✓", description: "AI will decide when to nudge you about this task." });
-    } catch (e) {
-      console.error("Error switching to smart reminders:", e);
-    } finally {
-      setIsUpdating(false);
-    }
+    })();
   };
 
   // Choosing "Event" cancels any old notifications, marks the task as an event,
@@ -1213,53 +1216,55 @@ Return JSON:
   // schedule so the future-notifications list appears immediately.
   const handleSelectEvent = async () => {
     if (!task) return;
-    setIsUpdating(true);
-    try {
-      const currentUser = await base44.auth.me();
-      const allOldIds = Array.from(new Set([
-        ...(task.onesignal_notification_ids || []),
-        ...((task.reminder_schedule || []).map((r) => r.notification_id).filter(Boolean)),
-      ]));
-      if (allOldIds.length > 0) {
-        try { await cancelScheduledReminder(allOldIds); } catch (e) { console.error(e); }
-      }
-      const updates = {
-        classification: 'event',
-        onesignal_notification_ids: [],
-        reminder_schedule: [],
-      };
-      if (task.birthday_person) updates.birthday_person = null;
-      await Task.update(task.id, updates);
-
-      const eventDate = task.event_time || task.next_reminder;
-      if (eventDate) {
-        try {
-          const { scheduleMultiReminders } = await import('../utils/multiReminderScheduler');
-          const multiIds = await scheduleMultiReminders({
-            email: currentUser.email,
-            title: task.title,
-            scheduledDateISO: eventDate,
-            taskId: task.id,
-            urgency: task.urgency,
-            classification: 'event',
-          });
-          if (multiIds && multiIds.length > 0) {
-            await Task.update(task.id, { onesignal_notification_ids: multiIds });
-          }
-        } catch (e) {
-          console.error('Failed to generate event reminders:', e);
-        }
-        const refreshed = await Task.filter({ id: task.id });
-        if (refreshed[0]) onUpdate(refreshed[0]);
-      } else {
-        onUpdate({ ...task, ...updates });
-        toast({ title: 'Event saved', description: 'Set the event date & time to generate reminders.' });
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsUpdating(false);
+    const updates = {
+      classification: 'event',
+      onesignal_notification_ids: [],
+      reminder_schedule: [],
+    };
+    if (task.birthday_person) updates.birthday_person = null;
+    // Optimistic update — user sees the change instantly
+    onUpdate({ ...task, ...updates });
+    const eventDate = task.event_time || task.next_reminder;
+    if (!eventDate) {
+      toast({ title: 'Event saved', description: 'Set the event date & time to generate reminders.' });
     }
+    // Cancel old reminders + save + schedule in the background
+    (async () => {
+      try {
+        const currentUser = await base44.auth.me();
+        const allOldIds = Array.from(new Set([
+          ...(task.onesignal_notification_ids || []),
+          ...((task.reminder_schedule || []).map((r) => r.notification_id).filter(Boolean)),
+        ]));
+        if (allOldIds.length > 0) {
+          await cancelScheduledReminder(allOldIds).catch(e => console.error(e));
+        }
+        await Task.update(task.id, updates);
+
+        if (eventDate) {
+          try {
+            const { scheduleMultiReminders } = await import('../utils/multiReminderScheduler');
+            const multiIds = await scheduleMultiReminders({
+              email: currentUser.email,
+              title: task.title,
+              scheduledDateISO: eventDate,
+              taskId: task.id,
+              urgency: task.urgency,
+              classification: 'event',
+            });
+            if (multiIds && multiIds.length > 0) {
+              await Task.update(task.id, { onesignal_notification_ids: multiIds });
+            }
+          } catch (e) {
+            console.error('Failed to generate event reminders:', e);
+          }
+          const refreshed = await Task.filter({ id: task.id });
+          if (refreshed[0]) onUpdate(refreshed[0]);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    })();
   };
 
   // Back Burner — silence all notifications for this task (or reactivate them).
@@ -1267,22 +1272,19 @@ Return JSON:
   // notifications, so the frontend only flips the flag.
   const handleToggleSilenced = async () => {
     if (!task) return;
-    setIsUpdating(true);
-    try {
-      const newSilenced = !task.silenced;
-      await Task.update(task.id, { silenced: newSilenced });
-      onUpdate({ ...task, silenced: newSilenced });
-      toast({
-        title: newSilenced ? 'On the back burner 🔇' : 'Reminders back on 🔔',
-        description: newSilenced
-          ? 'No more notifications for this task until you reactivate it.'
-          : 'Notifications resumed for this task.',
-      });
-    } catch (e) {
+    const newSilenced = !task.silenced;
+    // Optimistic update — user sees the change instantly
+    onUpdate({ ...task, silenced: newSilenced });
+    toast({
+      title: newSilenced ? 'On the back burner 🔇' : 'Reminders back on 🔔',
+      description: newSilenced
+        ? 'No more notifications for this task until you reactivate it.'
+        : 'Notifications resumed for this task.',
+    });
+    // Save in the background
+    Task.update(task.id, { silenced: newSilenced }).catch(e => {
       console.error('Error toggling silenced:', e);
-    } finally {
-      setIsUpdating(false);
-    }
+    });
   };
 
   // One entry point for the ReminderTypeSelector — routes each type to the
@@ -1300,14 +1302,6 @@ Return JSON:
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className={`max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto ${theme === 'dark' ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
-          {isUpdating && (
-            <div className={`absolute inset-0 backdrop-blur-sm flex items-center justify-center z-50 rounded-lg ${theme === 'dark' ? 'bg-gray-900/80' : 'bg-white/80'}`}>
-              <div className="flex flex-col items-center gap-3">
-                <div className="w-8 h-8 border-4 border-gray-300 border-t-purple-600 rounded-full animate-spin"></div>
-                <p className="text-sm font-medium text-gray-700">Updating...</p>
-              </div>
-            </div>
-          )}
           
           <DialogHeader>
             <DialogTitle className={`text-2xl font-bold pt-6 pb-2 ${theme === 'dark' ? 'text-white' : ''}`}>
@@ -1486,10 +1480,10 @@ Return JSON:
                       <Button
                         type="button"
                         onClick={() => handleUpdateReminderTime(reminderTime, reminderDate)}
-                        disabled={!reminderDate || !reminderTime || isUpdating}
+                        disabled={!reminderDate || !reminderTime || isSavingReminder}
                         className="w-full bg-green-600 hover:bg-green-700 text-white"
                       >
-                        {isUpdating ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Date & Time</>}
+                        {isSavingReminder ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Date & Time</>}
                       </Button>
                     </div>
                   </PopoverContent>
@@ -1648,10 +1642,10 @@ Return JSON:
                       <Button
                         type="button"
                         onClick={() => handleUpdateEventTime(eventDate, eventTime)}
-                        disabled={!eventDate || !eventTime || isUpdating}
+                        disabled={!eventDate || !eventTime || isSavingEvent}
                         className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
                       >
-                        {isUpdating ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Event Time</>}
+                        {isSavingEvent ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Event Time</>}
                       </Button>
                     </div>
                   </PopoverContent>
@@ -2025,29 +2019,27 @@ Return JSON:
               onClick={async () => {
                 if (!confirm(`Convert "${task.title}" to a parking lot idea?`)) return;
                 
-                setIsUpdating(true);
-                try {
-                  // Cancel reminders if exist
-                  if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
-                    await cancelScheduledReminder(task.onesignal_notification_ids);
-                  }
-                  
-                  // Create parking lot idea
-                  await base44.entities.ParkingLotIdea.create({
-                    idea: task.title + (task.description ? `\n\n${task.description}` : ''),
-                    converted_to_task: false
-                  });
-                  
-                  // Delete task
-                  await base44.entities.Task.delete(task.id);
-                  
-                  if (onDelete) {
-                    onDelete();
-                  }
-                  onClose();
-                } finally {
-                  setIsUpdating(false);
+                // Optimistic — close dialog and notify parent immediately
+                if (onDelete) {
+                  onDelete();
                 }
+                onClose();
+
+                // Cancel reminders + create idea + delete task in the background
+                (async () => {
+                  try {
+                    if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+                      await cancelScheduledReminder(task.onesignal_notification_ids);
+                    }
+                    await base44.entities.ParkingLotIdea.create({
+                      idea: task.title + (task.description ? `\n\n${task.description}` : ''),
+                      converted_to_task: false
+                    });
+                    await base44.entities.Task.delete(task.id);
+                  } catch (error) {
+                    console.error("Error converting to parking lot:", error);
+                  }
+                })();
               }}
               className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
             >

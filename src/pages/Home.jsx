@@ -224,6 +224,7 @@ export default function Home() {
                 theme={theme}
                 onTaskAction={handleTaskComplete}
                 onViewDetails={handleViewDetails}
+                onUpdateTask={handleTaskUpdate}
                 specialMode={specialMode}
               />
 

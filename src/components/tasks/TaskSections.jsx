@@ -123,6 +123,7 @@ export default function TaskSections({
   onShowDetails,
   onDelete,
   onAddTask,
+  onUpdateTask,
   isSeasonalTheme,
   specialMode,
   viewMode = "sections",
@@ -201,6 +202,7 @@ export default function TaskSections({
       task={task}
       theme={theme}
       onRefreshTasks={onRefreshTasks}
+      onUpdateTask={onUpdateTask}
       onEditTitle={onEditTitle}
       onEdit={onEdit}
       onComplete={onComplete}

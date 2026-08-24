@@ -26,6 +26,25 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
       console.log('🎤 [QUICK ADD] Voice input received:', transcription);
       const user = await base44.auth.me();
 
+      // Close modal immediately — don't make the user wait for LLM parsing
+      onClose();
+      navigate(createPageUrl("Home"));
+
+      // Create the task immediately with the raw transcription as the title.
+      // The user sees the task card right away — no waiting for LLM parsing.
+      const createdTask = await base44.entities.Task.create({
+        title: transcription,
+        classification: 'task',
+        urgency: 'medium',
+        energy_required: 'medium',
+        status: 'active',
+        reminder_interval: null,
+        reminder_count: 0,
+        notification_recipient_email: user.email
+      });
+      // Reload the task list to show the new task
+      window.dispatchEvent(new CustomEvent('tasks-changed'));
+
       const now = new Date();
       const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       const dayOfWeek = now.toLocaleDateString('en-US', { weekday: 'long' });
@@ -155,32 +174,16 @@ Return JSON:
       const result = await base44.functions.invoke('extractTaskFromVoice', { prompt });
       const taskData = result?.data?.taskData;
 
-      // If priority can't be inferred and task is flexible, ask the user
+      // If priority can't be inferred, use medium as default (user can edit later).
+      // If task needs a date pick, use a default interval instead (user can edit later).
+      // The modal is already closed — we don't show pickers, just use sensible defaults.
       if (taskData.priority_uninferrable && taskData.is_flexible) {
-        setPendingPriorityTask({
-          title: taskData.title,
-          energy_required: taskData.energy_required || 'medium',
-          classification: taskData.classification || 'task',
-          user
-        });
-        setShowPriorityPicker(true);
-        return;
+        taskData.urgency = taskData.urgency || 'medium';
+        taskData.reminder_interval = taskData.reminder_interval || '4hours';
       }
-
-      // If the task is one-time but no date/time was given, ask the user
       if (taskData.needs_date_pick || (taskData.specific_date && !taskData.reminder_time)) {
-        setPendingDateTask({
-          title: taskData.title,
-          energy_required: taskData.energy_required || 'medium',
-          urgency: taskData.urgency || 'medium',
-          fallbackInterval: taskData.reminder_interval || '2hours',
-          initialDate: taskData.specific_date || null,
-          initialTime: taskData.reminder_time || null,
-          classification: taskData.classification || 'task',
-          user
-        });
-        setShowDatePicker(true);
-        return;
+        taskData.reminder_interval = taskData.reminder_interval || '4hours';
+        taskData.needs_date_pick = false;
       }
 
       let nextReminderTime = null;
@@ -250,17 +253,15 @@ Return JSON:
         due_date: dueDateISO
       });
 
-      const createdTask = await base44.entities.Task.create({
+      // Update the task with the LLM-parsed data (title, urgency, interval, etc.)
+      await base44.entities.Task.update(createdTask.id, {
         title: taskData.title,
         classification: taskData.classification || 'task',
         urgency: taskData.urgency || 'medium',
         energy_required: taskData.energy_required || 'medium',
-        status: 'active',
         reminder_interval: taskData.reminder_interval || null,
-        reminder_count: 0,
         next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null,
         due_date: dueDateISO,
-        notification_recipient_email: user.email
       });
 
       console.log('✅ [QUICK ADD] Task created successfully:', createdTask);
@@ -304,11 +305,10 @@ Return JSON:
         });
       }
 
-      onClose();
-      navigate(createPageUrl("Home"), { state: { reload: true } });
+      // Reload the task list to show the new task
+      window.dispatchEvent(new CustomEvent('tasks-changed'));
     } catch (error) {
       console.error("❌ [QUICK ADD] Error processing input:", error);
-      alert("Failed to process your input. Please try again.");
     }
   };
 

@@ -31,6 +31,7 @@ export default function TaskCard({
   task,
   theme,
   onRefreshTasks,
+  onUpdateTask,
   onEditTitle,
   onEdit,
   onComplete,
@@ -149,7 +150,6 @@ export default function TaskCard({
 
     try {
       await onEditTitle(task.id, editedTitle.trim());
-      onRefreshTasks();
       setIsEditingTitle(false);
     } catch (error) {
       console.error("Error updating task title:", error);
@@ -169,17 +169,6 @@ export default function TaskCard({
 
   const handleIntervalChange = async (newInterval) => {
     try {
-      // Cancel any pending OneSignal notifications before changing interval
-      if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
-        try {
-          const { base44 } = await import('@/api/base44Client');
-          await base44.functions.invoke('cancelTaskNotifications', { taskId: task.id });
-          console.log('Cancelled pending notifications for task:', task.id);
-        } catch (error) {
-          console.error('Error canceling notifications:', error);
-        }
-      }
-
       const now = new Date();
       let nextReminder = new Date();
 
@@ -225,11 +214,25 @@ export default function TaskCard({
         }
       }
 
-      await Task.update(task.id, {
-        reminder_interval: newInterval,
-        next_reminder: nextReminder.toISOString()
-      });
-      onRefreshTasks();
+      // Optimistic — update UI instantly
+      if (onUpdateTask) onUpdateTask({ ...task, reminder_interval: newInterval, next_reminder: nextReminder.toISOString() });
+
+      // Cancel + save in the background
+      (async () => {
+        try {
+          if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+            const { base44 } = await import('@/api/base44Client');
+            await base44.functions.invoke('cancelTaskNotifications', { taskId: task.id });
+          }
+          await Task.update(task.id, {
+            reminder_interval: newInterval,
+            next_reminder: nextReminder.toISOString()
+          });
+        } catch (error) {
+          console.error("Error updating interval:", error);
+          if (onRefreshTasks) onRefreshTasks();
+        }
+      })();
     } catch (error) {
       console.error("Error updating interval:", error);
     }
@@ -251,32 +254,30 @@ export default function TaskCard({
   };
 
   const handleUrgencyChange = async (newUrgency) => {
-    try {
-      await Task.update(task.id, { urgency: newUrgency });
-      onRefreshTasks();
-    } catch (error) {
+    if (onUpdateTask) onUpdateTask({ ...task, urgency: newUrgency });
+    Task.update(task.id, { urgency: newUrgency }).catch(error => {
       console.error("Error updating urgency:", error);
-    }
+      if (onRefreshTasks) onRefreshTasks();
+    });
   };
 
   const handleEnergyChange = async (newEnergy) => {
-    try {
-      await Task.update(task.id, { energy_required: newEnergy });
-      onRefreshTasks();
-    } catch (error) {
+    if (onUpdateTask) onUpdateTask({ ...task, energy_required: newEnergy });
+    Task.update(task.id, { energy_required: newEnergy }).catch(error => {
       console.error("Error updating energy:", error);
-    }
+      if (onRefreshTasks) onRefreshTasks();
+    });
   };
 
   // Back Burner — silence/reactivate all notifications for this task. The
   // onTaskUpdate automation handles cancelling/rescheduling OneSignal pushes.
   const handleToggleSilenced = async () => {
-    try {
-      await Task.update(task.id, { silenced: !task.silenced });
-      onRefreshTasks();
-    } catch (error) {
+    const newSilenced = !task.silenced;
+    if (onUpdateTask) onUpdateTask({ ...task, silenced: newSilenced });
+    Task.update(task.id, { silenced: newSilenced }).catch(error => {
       console.error("Error toggling silenced:", error);
-    }
+      if (onRefreshTasks) onRefreshTasks();
+    });
   };
 
   const getCurrentReminderTime = (taskItem) => {
@@ -376,57 +377,68 @@ export default function TaskCard({
 
       const interval = task.reminder_interval;
 
+      // Optimistic — update UI instantly
+      if (onUpdateTask) onUpdateTask({ ...task, next_reminder: nextReminder.toISOString() });
+
       if (interval && interval !== 'once') {
         // Recurring task: the onTaskUpdate entity automation handles cancelling old
         // notifications and rescheduling new ones. Frontend only updates next_reminder.
-        await Task.update(task.id, {
+        Task.update(task.id, {
           next_reminder: nextReminder.toISOString()
+        }).catch(error => {
+          console.error("Error updating reminder date/time:", error);
+          if (onRefreshTasks) onRefreshTasks();
         });
       } else {
         // One-time task: backend automation skips these, so frontend must cancel + reschedule.
-        if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
-          const { cancelScheduledReminder } = await import('../utils/reminderScheduler');
-          await cancelScheduledReminder(task.onesignal_notification_ids).catch(e => console.error("Cancel failed:", e));
-        }
+        // Fire in the background — UI already updated optimistically.
+        (async () => {
+          try {
+            if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+              const { cancelScheduledReminder } = await import('../utils/reminderScheduler');
+              await cancelScheduledReminder(task.onesignal_notification_ids).catch(e => console.error("Cancel failed:", e));
+            }
 
-        const { base44 } = await import('@/api/base44Client');
-        const currentUser = await base44.auth.me();
+            const { base44 } = await import('@/api/base44Client');
+            const currentUser = await base44.auth.me();
 
-        // Check for multi-reminder category first (appointments, events, payments)
-        const { scheduleMultiReminders } = await import('../utils/multiReminderScheduler');
-        const multiIds = await scheduleMultiReminders({
-          email: currentUser.email,
-          title: task.title,
-          scheduledDateISO: nextReminder.toISOString(),
-          taskId: task.id,
-          urgency: task.urgency,
-        });
+            const { scheduleMultiReminders } = await import('../utils/multiReminderScheduler');
+            const multiIds = await scheduleMultiReminders({
+              email: currentUser.email,
+              title: task.title,
+              scheduledDateISO: nextReminder.toISOString(),
+              taskId: task.id,
+              urgency: task.urgency,
+            });
 
-        let notificationIds = [];
-        if (multiIds) {
-          notificationIds = multiIds;
-        } else {
-          const { scheduleReminder } = await import('../utils/reminderScheduler');
-          const notificationId = await scheduleReminder({
-            email: currentUser.email,
-            title: "Task Reminder 📋",
-            body: `${task.title}\n\nTap to mark as complete!`,
-            sendAtISO: nextReminder.toISOString(),
-            taskId: task.id,
-            data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency, type: 'task_reminder' },
-            buttons: [{ id: "snooze_15", text: "Snooze 15 min" }, { id: "snooze_60", text: "Snooze 1 hour" }, { id: "complete", text: "✅ Done" }]
-          });
-          if (notificationId) notificationIds = [notificationId];
-        }
+            let notificationIds = [];
+            if (multiIds) {
+              notificationIds = multiIds;
+            } else {
+              const { scheduleReminder } = await import('../utils/reminderScheduler');
+              const notificationId = await scheduleReminder({
+                email: currentUser.email,
+                title: "Task Reminder 📋",
+                body: `${task.title}\n\nTap to mark as complete!`,
+                sendAtISO: nextReminder.toISOString(),
+                taskId: task.id,
+                data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency, type: 'task_reminder' },
+                buttons: [{ id: "snooze_15", text: "Snooze 15 min" }, { id: "snooze_60", text: "Snooze 1 hour" }, { id: "complete", text: "✅ Done" }]
+              });
+              if (notificationId) notificationIds = [notificationId];
+            }
 
-        await Task.update(task.id, {
-          next_reminder: nextReminder.toISOString(),
-          onesignal_notification_ids: notificationIds,
-          reminder_schedule: multiIds ? undefined : null,
-        });
+            await Task.update(task.id, {
+              next_reminder: nextReminder.toISOString(),
+              onesignal_notification_ids: notificationIds,
+              reminder_schedule: multiIds ? undefined : null,
+            });
+          } catch (error) {
+            console.error("Error updating reminder date/time:", error);
+            if (onRefreshTasks) onRefreshTasks();
+          }
+        })();
       }
-
-      onRefreshTasks();
     } catch (error) {
       console.error("Error updating reminder date/time:", error);
     }
@@ -440,8 +452,11 @@ export default function TaskCard({
         const [y, m, d] = newDate.split('-').map(n => parseInt(n, 10));
         endDateISO = new Date(y, m - 1, d, 9, 0, 0, 0).toISOString();
       }
-      await Task.update(task.id, { end_date: endDateISO });
-      onRefreshTasks();
+      if (onUpdateTask) onUpdateTask({ ...task, end_date: endDateISO });
+      Task.update(task.id, { end_date: endDateISO }).catch(error => {
+        console.error("Error updating end date:", error);
+        if (onRefreshTasks) onRefreshTasks();
+      });
     } catch (error) {
       console.error("Error updating end date:", error);
     }
@@ -457,8 +472,11 @@ export default function TaskCard({
         const minutes = existing ? existing.getMinutes() : 0;
         dueDateValue = new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString();
       }
-      await Task.update(task.id, { due_date: dueDateValue });
-      onRefreshTasks();
+      if (onUpdateTask) onUpdateTask({ ...task, due_date: dueDateValue });
+      Task.update(task.id, { due_date: dueDateValue }).catch(error => {
+        console.error("Error updating due date:", error);
+        if (onRefreshTasks) onRefreshTasks();
+      });
     } catch (error) {
       console.error("Error updating due date:", error);
     }
@@ -471,8 +489,11 @@ export default function TaskCard({
         const [year, month, day] = newDate.split('-').map(n => parseInt(n, 10));
         startDateValue = new Date(year, month - 1, day, 9, 0, 0, 0).toISOString();
       }
-      await Task.update(task.id, { start_date: startDateValue });
-      onRefreshTasks();
+      if (onUpdateTask) onUpdateTask({ ...task, start_date: startDateValue });
+      Task.update(task.id, { start_date: startDateValue }).catch(error => {
+        console.error("Error updating start date:", error);
+        if (onRefreshTasks) onRefreshTasks();
+      });
     } catch (error) {
       console.error("Error updating start date:", error);
     }
