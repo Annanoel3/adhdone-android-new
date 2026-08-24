@@ -553,22 +553,22 @@ export default function TaskCard({
           )}
 
           {task.silenced && (
-            <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap flex items-center gap-1 ${
+            <span className={`shrink min-w-0 text-xs px-2 py-1 rounded border flex items-center gap-1 ${
               theme === 'dark' ? 'border-amber-700 bg-amber-900/30 text-amber-300' : 'border-amber-300 bg-amber-50 text-amber-700'
             }`}>
-              <BellOff className="w-3 h-3" />
-              Back Burner
+              <BellOff className="w-3 h-3 flex-shrink-0" />
+              <span className="truncate">Back Burner</span>
             </span>
           )}
 
           {isInProgress && (
-            <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap flex items-center gap-1 ${
+            <span className={`shrink min-w-0 text-xs px-2 py-1 rounded border flex items-center gap-1 ${
               theme === 'dark'
                 ? 'border-blue-700 bg-blue-900/30 text-blue-300'
                 : 'border-blue-300 bg-blue-50 text-blue-700'
             }`}>
-              <PlayCircle className="w-3 h-3" />
-              In Progress
+              <PlayCircle className="w-3 h-3 flex-shrink-0" />
+              <span className="truncate">In Progress</span>
             </span>
           )}
 
