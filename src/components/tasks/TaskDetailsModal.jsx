@@ -1375,11 +1375,14 @@ Return JSON:
               </div>
             )}
 
-            <div className="flex flex-wrap gap-2">
-              {/* Unified reminder-type selector — replaces the old classification,
-                  interval, recurring, and add-reminder pills with one control */}
+            {/* Task Type — the primary control that determines notification behavior.
+                Pulled into its own row above the other pills so it stands out. */}
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-bold uppercase tracking-wide ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Task Type</span>
               <ReminderTypeSelector task={task} theme={theme} onChangeType={handleChangeReminderType} />
+            </div>
 
+            <div className="flex flex-wrap gap-2">
               {/* Back Burner — silence all notifications for this task */}
               <Button
                 variant="outline"
@@ -1462,7 +1465,7 @@ Return JSON:
                           {isEvent ? formatEventDateRange() : formatReminderDate(task.next_reminder)} • {formatReminderTime(task.next_reminder)}
                         </>
                       ) : (
-                        'Set Date & Time'
+                        'Add reminder'
                       )}
                     </button>
                   </PopoverTrigger>

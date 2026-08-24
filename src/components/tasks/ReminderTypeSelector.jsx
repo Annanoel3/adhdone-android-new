@@ -125,8 +125,8 @@ export default function ReminderTypeSelector({ task, theme, onChangeType }) {
       }}
     >
       <PopoverTrigger asChild>
-        <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${meta.pillClass}`}>
-          <meta.icon className="w-3 h-3" />
+        <button className={`cursor-pointer hover:opacity-90 transition-all px-3.5 py-1.5 rounded-full text-sm font-semibold flex items-center gap-1.5 ring-2 ring-offset-1 ${isDark ? 'ring-offset-gray-900' : 'ring-offset-white'} ${meta.pillClass} ${meta.pillClass.includes('text-white') ? 'ring-purple-300' : isDark ? 'ring-purple-700/50' : 'ring-purple-300'}`}>
+          <meta.icon className="w-3.5 h-3.5" />
           {pillLabel}
         </button>
       </PopoverTrigger>
