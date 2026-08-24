@@ -37,7 +37,7 @@ import {
 import { Task } from "@/entities/Task";
 import TaskDecompositionModal from "./TaskDecompositionModal";
 import SmartReminderEditor from "./SmartReminderEditor";
-import ReminderTypeSelector from "./ReminderTypeSelector";
+import ReminderTypeSelector, { getCurrentReminderType } from "./ReminderTypeSelector";
 import VoiceTaskInput from "./VoiceTaskInput";
 import { scheduleReminder, cancelScheduledReminder } from "../utils/reminderScheduler";
 import { User } from "@/entities/User";
@@ -77,6 +77,8 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
   const [viewingImage, setViewingImage] = useState(null);
   const [reminderDate, setReminderDate] = useState('');
   const [reminderTime, setReminderTime] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [eventTime, setEventTime] = useState('');
   const reminderDateRef = useRef('');
   const reminderTimeRef = useRef('');
   const isInitializingRef = useRef(false);
@@ -105,6 +107,14 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
         setReminderTime('');
         reminderDateRef.current = '';
         reminderTimeRef.current = '';
+      }
+      if (task.event_time) {
+        const ed = new Date(task.event_time);
+        setEventDate(`${ed.getFullYear()}-${String(ed.getMonth()+1).padStart(2,'0')}-${String(ed.getDate()).padStart(2,'0')}`);
+        setEventTime(`${String(ed.getHours()).padStart(2,'0')}:${String(ed.getMinutes()).padStart(2,'0')}`);
+      } else {
+        setEventDate('');
+        setEventTime('');
       }
       setTimeout(() => { isInitializingRef.current = false; }, 100);
     }
@@ -781,6 +791,59 @@ Return JSON:
     onUpdate({ ...task, due_date: dueDateValue });
   };
 
+  // Set the actual event date & time for event-classified tasks. Cancels any
+  // old lead-time reminders and regenerates a fresh schedule from the new time.
+  const handleUpdateEventTime = async (selectedDate, selectedTime) => {
+    if (!task || !selectedDate || !selectedTime) return;
+    setIsUpdating(true);
+    try {
+      const [year, month, day] = selectedDate.split('-').map(n => parseInt(n, 10));
+      const [hours, minutes] = selectedTime.split(':').map(n => parseInt(n, 10));
+      const eventTime = new Date(year, month - 1, day, hours, minutes, 0, 0);
+
+      const allOldIds = Array.from(new Set([
+        ...(task.onesignal_notification_ids || []),
+        ...((task.reminder_schedule || []).map(r => r.notification_id).filter(Boolean)),
+      ]));
+      if (allOldIds.length > 0) {
+        try { await cancelScheduledReminder(allOldIds); } catch (e) { console.error('Failed to cancel old reminders:', e); }
+      }
+
+      await Task.update(task.id, {
+        event_time: eventTime.toISOString(),
+        next_reminder: eventTime.toISOString(),
+        onesignal_notification_ids: [],
+        reminder_schedule: [],
+      });
+
+      const currentUser = await base44.auth.me();
+      const { scheduleMultiReminders } = await import('../utils/multiReminderScheduler');
+      const multiIds = await scheduleMultiReminders({
+        email: currentUser.email,
+        title: task.title,
+        scheduledDateISO: eventTime.toISOString(),
+        taskId: task.id,
+        urgency: task.urgency,
+        classification: 'event',
+      });
+      if (multiIds && multiIds.length > 0) {
+        await Task.update(task.id, { onesignal_notification_ids: multiIds });
+      }
+
+      const refreshed = await Task.filter({ id: task.id });
+      if (refreshed[0]) {
+        onUpdate(refreshed[0]);
+      } else {
+        onUpdate({ ...task, event_time: eventTime.toISOString(), next_reminder: eventTime.toISOString() });
+      }
+      toast({ title: 'Event time saved ✓' });
+    } catch (e) {
+      console.error('Error updating event time:', e);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
   const handleComplete = async () => {
     if (!task) return;
 
@@ -1064,6 +1127,7 @@ Return JSON:
   // task overrides the auto-detected kind passed in from the calendar view.
   const currentClassification = task.classification || itemClassification || (task.birthday_person ? 'birthday' : 'task');
   const isEvent = currentClassification === 'event';
+  const currentType = getCurrentReminderType(task);
   const dueLabel = isEvent ? 'Event Date' : 'Due Date';
 
   const handleClassificationChange = async (newClass) => {
@@ -1300,16 +1364,16 @@ Return JSON:
                 variant="outline"
                 size="sm"
                 onClick={handleToggleSilenced}
-                className={`gap-1.5 h-8 ${
+                className={`gap-1.5 h-8 transition-all active:scale-95 ${
                   task.silenced
-                    ? 'bg-amber-100 text-amber-700 border-amber-300 hover:bg-amber-200'
+                    ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600 shadow-sm'
                     : theme === 'dark'
                       ? 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700'
                       : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
                 }`}
               >
                 {task.silenced ? <BellOff className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
-                {task.silenced ? 'Back Burner (silenced)' : 'Back Burner'}
+                {task.silenced ? 'Back Burner 🔇' : 'Back Burner'}
               </Button>
 
               {/* Energy Badge - Clickable */}
@@ -1365,8 +1429,9 @@ Return JSON:
                 </div>
               )}
 
-              {/* First-reminder date & time — for one-time and interval reminders */}
-              {task.reminder_interval && (
+              {/* First-reminder date & time — shown for one-time, interval, and
+                   repeat tasks. Smart reminders and events have their own controls. */}
+              {(currentType === 'once' || currentType === 'interval' || currentType === 'repeat') && (
                 <Popover>
                   <PopoverTrigger asChild>
                     <button className="cursor-pointer hover:opacity-80 transition-opacity bg-purple-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
@@ -1415,8 +1480,8 @@ Return JSON:
                 </Popover>
               )}
 
-              {/* Due date option for recurring (interval) reminders */}
-              {task.reminder_interval && task.reminder_interval !== 'once' && (
+              {/* Due date — only for interval reminders (a deadline the reminders count down to) */}
+              {currentType === 'interval' && (
                 task.due_date ? (
                   <Popover>
                     <PopoverTrigger asChild>
@@ -1474,16 +1539,51 @@ Return JSON:
                 )
               )}
 
-              {/* Event time — the actual time the event takes place. Shown
-                  separately from the reminder badge so it stays visible even
-                  when the user manually edits the reminder time. */}
-              {task.event_time && (
-                <div className={`px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
-                  theme === 'dark' ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-100 text-indigo-700'
-                }`}>
-                  <CalendarClock className="w-3 h-3" />
-                  Event {formatReminderDate(task.event_time)} • {formatReminderTime(task.event_time)}
-                </div>
+              {/* Event date & time — editable for event tasks. Setting it
+                   regenerates the lead-time reminder schedule automatically. */}
+              {currentType === 'event' && (
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button className="cursor-pointer hover:opacity-80 transition-opacity bg-indigo-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
+                      <CalendarClock className="w-3 h-3" />
+                      {task.event_time
+                        ? `Event ${formatReminderDate(task.event_time)} • ${formatReminderTime(task.event_time)}`
+                        : 'Set Event Date & Time'}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className={`w-[22rem] max-w-[calc(100vw-1.5rem)] max-h-[85vh] overflow-y-auto p-4 ${
+                    theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : 'bg-white border-gray-200'
+                  }`}>
+                    <div className="space-y-3">
+                      <div>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Event Date:</label>
+                        <input
+                          type="date"
+                          value={eventDate}
+                          onChange={(e) => setEventDate(e.target.value)}
+                          className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
+                        />
+                      </div>
+                      <div>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Event Time:</label>
+                        <input
+                          type="time"
+                          value={eventTime}
+                          onChange={(e) => setEventTime(e.target.value)}
+                          className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
+                        />
+                      </div>
+                      <Button
+                        type="button"
+                        onClick={() => handleUpdateEventTime(eventDate, eventTime)}
+                        disabled={!eventDate || !eventTime || isUpdating}
+                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
+                      >
+                        {isUpdating ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Event Time</>}
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               )}
             </div>
 
