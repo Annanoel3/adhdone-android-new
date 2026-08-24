@@ -26,8 +26,6 @@ const INTERVAL_OPTIONS = [
   { value: '20min', label: 'Every 20 minutes' },
   { value: '30min', label: 'Every 30 minutes' },
   { value: '1hour', label: 'Every hour' },
-  { value: '2hours', label: 'Every 2 hours' },
-  { value: '4hours', label: 'Every 4 hours' },
   { value: 'daily', label: 'Daily' },
   { value: 'every_other_day', label: 'Every other day' },
 ];
