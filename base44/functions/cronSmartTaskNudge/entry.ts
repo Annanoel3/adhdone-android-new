@@ -47,9 +47,22 @@ Deno.serve(async (req) => {
     const isSmartNudgeTask = (t: any) =>
       t.status === 'active' &&
       !t.silenced &&
+      !t.parent_task_id && // sub-tasks are context for their parent, not independent nudges
       !RECURRING_INTERVALS.has(t.reminder_interval) &&
       t.classification !== 'birthday' && t.classification !== 'event' &&
       !t.birthday_person;
+
+    // Sub-task map: parent_id → [sub-tasks]. Sub-tasks are NOT nudged
+    // independently — they're context for the parent task's wording so the LLM
+    // can acknowledge where the user is in a multi-step task (e.g. "you're
+    // stuck on the dryer part of laundry").
+    const subtasksByParent: Record<string, any[]> = {};
+    for (const task of allTasks) {
+      if (task.parent_task_id) {
+        if (!subtasksByParent[task.parent_task_id]) subtasksByParent[task.parent_task_id] = [];
+        subtasksByParent[task.parent_task_id].push(task);
+      }
+    }
 
     // Track completed/silenced IDs BEFORE the email guard — onTaskUpdate clears
     // notification_recipient_email on completion, so a completed task has no email
@@ -113,7 +126,8 @@ Deno.serve(async (req) => {
           localMin,
           timeZone,
           startMin,
-          endMin
+          endMin,
+          subtasksByParent
         );
 
         if (!newEntries || newEntries.length === 0) continue;
@@ -258,7 +272,8 @@ async function generateDailySchedule(
   localMin: number,
   timeZone: string,
   quietStartMin: number,
-  quietEndMin: number
+  quietEndMin: number,
+  subtasksByParent: Record<string, any[]>
 ): Promise<any[] | null> {
   const hour = Math.floor(localMin / 60);
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
@@ -284,7 +299,18 @@ async function generateDailySchedule(
       windowInfo = ` [working window: ${formatDateShort(t.start_date, timeZone)} → ${formatDateShort(t.due_date, timeZone)}]`;
     }
     const nudged = alreadyNudgedTitles.includes(t.title) ? ' — ALREADY NUDGED TODAY' : '';
-    return `${i + 1}. "${t.title}" (${dueInfo}${windowInfo}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${nudged})`;
+    // Sub-task progress — lets the LLM acknowledge where the user is in a
+    // multi-step task (e.g. "you've got the laundry going — don't forget to
+    // move it to the dryer"). Only sub-tasks that belong to THIS parent.
+    const subs = (subtasksByParent[t.id] || []).sort((a: any, b: any) => (a.subtask_order || 0) - (b.subtask_order || 0));
+    let subInfo = '';
+    if (subs.length > 0) {
+      const done = subs.filter((s: any) => s.status === 'completed');
+      const remaining = subs.filter((s: any) => s.status !== 'completed');
+      const steps = subs.map((s: any) => s.status === 'completed' ? `✓${s.title}` : `○${s.title}`).join(', ');
+      subInfo = ` [${done.length}/${subs.length} steps done: ${steps}]`;
+    }
+    return `${i + 1}. "${t.title}" (${dueInfo}${windowInfo}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${nudged}${subInfo})`;
   }).join('\n');
 
   const urgentCount = tasks.filter(t => t.urgency === 'urgent').length;
@@ -313,6 +339,7 @@ ${urgentCount >= 2 ? `- There are ${urgentCount} URGENT tasks. Consider one noti
 - Afternoon (noon-5pm): keep momentum going.
 - Evening (after 5pm): surface the most urgent remaining tasks.
 - Each notification body: ONE supportive sentence. Warm, like a friend. Never productivity-shame. Never say "you should" or "you need to".
+- SUB-TASK PROGRESS: when a task shows step progress (✓/○), use it to acknowledge where they are — e.g. "you've got the laundry going — don't forget to move it to the dryer" or "great progress on printing — just the label left to ship". Never list every step; just acknowledge the current spot naturally.
 - delay_minutes: minutes from NOW to send this nudge (e.g., 30 = 30 min from now, 120 = 2 hours from now).
 - Don't schedule past quiet hours start (${quietStartStr}).
 - You decide HOW MANY nudges. There's no cap, no formula. Use your judgment — some days need 2, some need 6.
