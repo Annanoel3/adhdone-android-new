@@ -474,6 +474,64 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── Event tasks (📅) — promote planned reminders within OneSignal's window ──
+  // Events with classification='event' store a deterministic reminder schedule
+  // (night before + 1 hour before) but OneSignal rejects scheduling more than
+  // ~30 days out. This pass promotes unscheduled entries to live notifications
+  // as the event date approaches, mirroring the birthday promotion logic.
+  let eventScheduled = 0;
+  const eventTasks = allTasks.filter(t =>
+    t.status === 'active' &&
+    !t.silenced &&
+    t.classification === 'event' &&
+    t.notification_recipient_email &&
+    Array.isArray(t.reminder_schedule) && t.reminder_schedule.length > 0
+  );
+
+  for (const task of eventTasks) {
+    const schedule = [...task.reminder_schedule];
+    const ids = Array.isArray(task.onesignal_notification_ids) ? [...task.onesignal_notification_ids] : [];
+    let dirty = false;
+    const newIds: string[] = [];
+
+    for (const entry of schedule) {
+      // Skip entries already scheduled with a real OneSignal ID.
+      // Check notification_id alone — older entries may not have the `scheduled` flag.
+      if (entry.notification_id) continue;
+
+      const sendAtMs = new Date(entry.send_at).getTime();
+      if (sendAtMs <= now.getTime()) continue;
+      if (sendAtMs - now.getTime() > BIRTHDAY_WINDOW_MS) continue;
+
+      try {
+        const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+          toUserExternalId: task.notification_recipient_email,
+          title: entry.notification_title || task.title,
+          body: entry.notification_body || task.title,
+          sendAtISO: entry.send_at,
+          data: { screen: '/TaskNotification', taskId: task.id, type: 'event_reminder' },
+        });
+        const result = res?.data || res;
+        if (result?.notificationId) {
+          entry.notification_id = result.notificationId;
+          entry.scheduled = true;
+          newIds.push(result.notificationId);
+          dirty = true;
+          eventScheduled++;
+        }
+      } catch (e) {
+        console.error(`[REFILL] Event schedule failed for ${task.id}:`, e);
+      }
+    }
+
+    if (dirty) {
+      await base44.asServiceRole.entities.Task.update(task.id, {
+        reminder_schedule: schedule,
+        onesignal_notification_ids: [...ids, ...newIds],
+      });
+    }
+  }
+
   // ── Scheduled texts (📞) — hourly follow-ups on the day-of until sent ─────────
   // The initial reminder(s) are pre-scheduled via OneSignal at save time (9 AM
   // for day-only, exact time + 10 min for time-specific). This pass sends the
@@ -552,7 +610,7 @@ Deno.serve(async (req) => {
     console.error('[REFILL] Scheduled text pass failed:', e);
   }
 
-  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, scheduledTextReminders, at: now.toISOString() };
+  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, eventScheduled, scheduledTextReminders, at: now.toISOString() };
     console.log('✅ [REFILL] Complete:', result);
     return Response.json(result);
   } catch (err) {
