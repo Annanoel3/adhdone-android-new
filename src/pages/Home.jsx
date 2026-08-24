@@ -183,7 +183,17 @@ export default function Home() {
     return completedDate === today;
   });
 
-  const activeTasks = tasks.filter(t => t.status === 'active' && !t.parent_task_id && isTodayTask(t) && !t.birthday_person);
+  // "Today" count = things you realistically need to DO today. Excludes:
+  // subtasks, birthdays, events (you attend those, not "do" them), and
+  // recurring no-deadline tasks (ongoing habits with no due date aren't "due today").
+  const activeTasks = tasks.filter(t =>
+    t.status === 'active' &&
+    !t.parent_task_id &&
+    isTodayTask(t) &&
+    !t.birthday_person &&
+    t.classification !== 'event' &&
+    !(t.reminder_interval && t.reminder_interval !== 'once' && !t.due_date)
+  );
 
 
 
