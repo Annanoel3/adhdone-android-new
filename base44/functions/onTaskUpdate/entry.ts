@@ -121,6 +121,7 @@ Deno.serve(async (req) => {
         data.classification !== 'birthday' && data.classification !== 'event' &&
         !data.birthday_person && (
           data.day_only_task ||
+          data.start_date ||  // multi-day task (start→due) — smart nudge fits reminders in the window
           (!data.due_date && !data.event_time && !data.start_date && !data.next_reminder)
         );
 
