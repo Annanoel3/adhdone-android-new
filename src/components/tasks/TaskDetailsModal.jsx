@@ -81,6 +81,7 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
   const [reminderTime, setReminderTime] = useState('');
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
+  const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
   const reminderDateRef = useRef('');
   const reminderTimeRef = useRef('');
   const isInitializingRef = useRef(false);
@@ -1508,7 +1509,7 @@ Return JSON:
                    Events use the Event Date control above instead. */}
               {(currentType === 'once' || currentType === 'interval' || currentType === 'repeat') && (
                 task.due_date ? (
-                  <Popover>
+                  <Popover open={dueDatePopoverOpen} onOpenChange={setDueDatePopoverOpen}>
                     <PopoverTrigger asChild>
                       <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
                         new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
@@ -1527,11 +1528,11 @@ Return JSON:
                         <input
                           type="date"
                           defaultValue={task.due_date ? task.due_date.split('T')[0] : ''}
-                          onChange={(e) => handleDueDateChange(e.target.value)}
+                          onChange={(e) => { handleDueDateChange(e.target.value); setDueDatePopoverOpen(false); }}
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                         <button
-                          onClick={() => handleDueDateChange(null)}
+                          onClick={() => { handleDueDateChange(null); setDueDatePopoverOpen(false); }}
                           className="w-full text-left px-3 py-2 text-sm hover:bg-red-50 rounded text-red-600 font-medium"
                         >
                           {isEvent ? 'Remove event date' : 'Remove due date'}
@@ -1540,7 +1541,7 @@ Return JSON:
                     </PopoverContent>
                   </Popover>
                 ) : (
-                  <Popover>
+                  <Popover open={dueDatePopoverOpen} onOpenChange={setDueDatePopoverOpen}>
                     <PopoverTrigger asChild>
                       <button className="cursor-pointer hover:opacity-80 transition-opacity border border-dashed border-gray-300 px-3 py-1 rounded-full text-sm font-medium text-gray-500 bg-white flex items-center gap-1">
                         <CalendarClock className="w-3 h-3" />
@@ -1552,7 +1553,7 @@ Return JSON:
                         <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>{dueLabel}:</label>
                         <input
                           type="date"
-                          onChange={(e) => { if (e.target.value) handleDueDateChange(e.target.value); }}
+                          onChange={(e) => { if (e.target.value) { handleDueDateChange(e.target.value); setDueDatePopoverOpen(false); } }}
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                         <p className="text-xs text-gray-500">
