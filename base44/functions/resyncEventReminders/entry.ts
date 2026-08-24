@@ -84,6 +84,14 @@ Deno.serve(async (req) => {
             console.log(`[resyncEventReminders] Dropping post-event reminder "${r.label}" at ${r.sendAtISO}`);
             return false;
           }
+          // For events, never schedule a reminder more than 1 day before.
+          if ((task.classification || 'event') === 'event') {
+            const advanceMs = scheduledDate.getTime() - new Date(r.sendAtISO).getTime();
+            if (advanceMs > 24 * 60 * 60 * 1000) {
+              console.log(`[resyncEventReminders] Dropping far-out event reminder "${r.label}" at ${r.sendAtISO} (${Math.round(advanceMs / 86400000)}d before)`);
+              return false;
+            }
+          }
           return true;
         })
         .sort((a, b) => new Date(a.sendAtISO).getTime() - new Date(b.sendAtISO).getTime());

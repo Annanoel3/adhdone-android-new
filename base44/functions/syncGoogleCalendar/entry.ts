@@ -493,6 +493,15 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
               console.log(`[syncGoogleCalendar] Dropping post-event reminder "${r.label}" at ${r.sendAtISO} (event at ${createdTask.next_reminder})`);
               return false;
             }
+            // For events, never schedule a reminder more than 1 day before —
+            // nobody wants a "2 months before" notification for a far-future event.
+            if (createdTask.classification === 'event') {
+              const advanceMs = scheduledDate.getTime() - new Date(r.sendAtISO).getTime();
+              if (advanceMs > 24 * 60 * 60 * 1000) {
+                console.log(`[syncGoogleCalendar] Dropping far-out event reminder "${r.label}" at ${r.sendAtISO} (${Math.round(advanceMs / 86400000)}d before event)`);
+                return false;
+              }
+            }
             return true;
           })
           .sort((a, b) => new Date(a.sendAtISO).getTime() - new Date(b.sendAtISO).getTime())

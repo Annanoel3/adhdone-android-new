@@ -58,7 +58,7 @@ function getDeterministicSchedule(taskType) {
       ];
     case 'event':
       return [
-        { days_before: 0, hour: 9, minute: 0, relative_minutes_before: null, label: 'morning of' },
+        { days_before: 1, hour: 20, minute: 0, relative_minutes_before: null, label: 'night before' },
         { days_before: null, hour: null, minute: null, relative_minutes_before: 60, label: '1 hour before' },
       ];
     case 'payment':
@@ -84,7 +84,7 @@ function getDeterministicNotificationText(taskType, label, title) {
       '1 hour before': { title: `⏰ ${t}`, body: `Almost time! Your "${t}" is in about an hour. Time to head out! 🚗` },
     },
     event: {
-      'morning of': { title: `${emoji} ${t}`, body: `Good morning! Your "${t}" is today. You got this! ✨` },
+      'night before': { title: `${emoji} ${t}`, body: `Heads up! Your "${t}" is tomorrow. Don't forget to prep! ✨` },
       '1 hour before': { title: `⏰ ${t}`, body: `Almost time! Your "${t}" is in about an hour. Time to head out! 🚗` },
     },
     payment: {
@@ -123,7 +123,11 @@ export default async function(req) {
 
     // ── Deterministic classification ──────────────────────────────────────
     // Appointments, events, and payments use fixed schedules (no LLM needed).
-    const taskType = classifyTaskType(title);
+    // Check the explicit classification from calendar sync FIRST — if it's an
+    // event, use the deterministic event schedule regardless of title keywords.
+    // This prevents the LLM from scheduling "2 months before" reminders for
+    // far-future events (nobody wants a notification 60 days early).
+    const taskType = classification === 'event' ? 'event' : classifyTaskType(title);
     if (taskType) {
       const schedule = getDeterministicSchedule(taskType);
       const reminders = schedule.map(r => {
@@ -314,7 +318,7 @@ Examples:
 
     const result = JSON.parse(completion.choices[0].message.content);
 
-    const reminders = (result.reminders || []).map(r => ({
+    let reminders = (result.reminders || []).map(r => ({
       days_before: r.days_before != null ? Number(r.days_before) : null,
       hour: r.hour != null ? Number(r.hour) : null,
       minute: r.minute != null ? Number(r.minute) : null,
@@ -323,6 +327,22 @@ Examples:
       notification_title: r.notification_title || title,
       notification_body: r.notification_body || title,
     }));
+
+    // Safety cap for events: never schedule a reminder more than 1 day before.
+    // The LLM sometimes generates "60 days before" reminders for far-future
+    // events, which fires immediately and is completely useless.
+    if (classification === 'event') {
+      const maxAdvanceMinutes = 24 * 60; // 1 day
+      const before = reminders.length;
+      reminders = reminders.filter(r => {
+        if (r.relative_minutes_before != null) return r.relative_minutes_before <= maxAdvanceMinutes;
+        if (r.days_before != null && r.days_before > 1) return false;
+        return true;
+      });
+      if (reminders.length < before) {
+        console.log(`[generateReminderSchedule] Dropped ${before - reminders.length} event reminder(s) more than 1 day before`);
+      }
+    }
 
     console.log(`[generateReminderSchedule] Generated ${reminders.length} reminders for "${title}"`);
 
