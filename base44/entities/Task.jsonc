@@ -135,6 +135,16 @@
       ],
       "default": "medium"
     },
+    "pre_backburner_urgency": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "urgent"
+      ],
+      "description": "The urgency this task had before it was moved to the Back Burner. Back-burnered tasks are forced to 'low' (they're explicitly not a priority right now); this remembers the real priority so it can be restored when the task comes back off the Back Burner."
+    },
     "energy_required": {
       "type": "string",
       "enum": [

@@ -247,10 +247,16 @@ Deno.serve(async (req) => {
       // Keep the send_at times so reactivation can reschedule them; null the
       // now-dead OneSignal IDs so nothing tries to cancel them twice.
       const preservedSchedule = scheduleEntries.map((e) => ({ ...e, notification_id: null }));
+      // A back-burnered task is by definition not a priority right now — force
+      // it to low so it stops sorting to the top of the list, remembering the
+      // real urgency so it can be restored on reactivation.
+      const currentUrgency = data.urgency || 'medium';
       await base44.asServiceRole.entities.Task.update(event.entity_id, {
         onesignal_notification_ids: [],
         reminder_schedule: preservedSchedule,
         last_scheduled_until: null,
+        urgency: 'low',
+        pre_backburner_urgency: data.pre_backburner_urgency || currentUrgency,
       });
       try {
         await base44.asServiceRole.entities.User.update(user.id, { smart_nudge_schedule_dirty: true });
@@ -270,6 +276,13 @@ Deno.serve(async (req) => {
       const startMin = user && user.quiet_hours_start ? parseHHMM(user.quiet_hours_start) : parseHHMM('22:00');
       const endMin = user && user.quiet_hours_end ? parseHHMM(user.quiet_hours_end) : parseHHMM('08:00');
 
+      // Restore the priority the task had before it went to the Back Burner
+      // (it was forced to low while silenced). Merged into each branch's update
+      // so reactivation stays a single write per branch.
+      const restoreUrgency = data.pre_backburner_urgency
+        ? { urgency: data.pre_backburner_urgency, pre_backburner_urgency: null }
+        : {};
+
       if (data.reminder_interval && RECURRING.has(data.reminder_interval) && email) {
         // Recurring interval task — the refill cron reschedules the batch (it's
         // excluded while silenced; last_scheduled_until is null so it'll force a
@@ -287,6 +300,7 @@ Deno.serve(async (req) => {
         }
         await base44.asServiceRole.entities.Task.update(event.entity_id, {
           next_reminder: sendAt.toISOString(),
+          ...restoreUrgency,
         });
       } else if (Array.isArray(data.reminder_schedule) && data.reminder_schedule.length > 0 && email) {
         // One-time / event task — reschedule each future reminder from the
@@ -310,11 +324,15 @@ Deno.serve(async (req) => {
         await base44.asServiceRole.entities.Task.update(event.entity_id, {
           onesignal_notification_ids: newIds,
           reminder_schedule: newSchedule,
+          ...restoreUrgency,
         });
       } else {
         // Smart-nudge task (no interval, no event schedule) — mark the daily
         // nudge schedule dirty so the next cron run regenerates it with this
         // task included.
+        if (data.pre_backburner_urgency) {
+          await base44.asServiceRole.entities.Task.update(event.entity_id, restoreUrgency);
+        }
         try {
           await base44.asServiceRole.entities.User.update(user.id, { smart_nudge_schedule_dirty: true });
         } catch (e) {
