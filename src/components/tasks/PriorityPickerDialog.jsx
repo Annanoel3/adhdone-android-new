@@ -8,9 +8,9 @@ import {
 } from "@/components/ui/dialog";
 
 const OPTIONS = [
-  { priority: "high", label: "High", interval: "every 2 hours", badgeClass: "bg-red-500 text-white" },
-  { priority: "medium", label: "Medium", interval: "every 4 hours", badgeClass: "bg-orange-500 text-white" },
-  { priority: "low", label: "Low", interval: "daily", badgeClass: "bg-green-500 text-white" },
+  { priority: "high", label: "High", badgeClass: "bg-red-500 text-white" },
+  { priority: "medium", label: "Medium", badgeClass: "bg-orange-500 text-white" },
+  { priority: "low", label: "Low", badgeClass: "bg-green-500 text-white" },
 ];
 
 export default function PriorityPickerDialog({ isOpen, onClose, onSelect }) {
@@ -21,7 +21,7 @@ export default function PriorityPickerDialog({ isOpen, onClose, onSelect }) {
           <DialogTitle>How important is this task?</DialogTitle>
         </DialogHeader>
         <div className="space-y-3 py-4">
-          <p className="text-sm text-gray-600">Pick a priority and we'll set smart reminders:</p>
+          <p className="text-sm text-gray-600">Pick a priority — the app's smart reminders will handle the rest:</p>
           <div className="grid grid-cols-1 gap-2">
             {OPTIONS.map((opt) => (
               <Button
@@ -35,7 +35,6 @@ export default function PriorityPickerDialog({ isOpen, onClose, onSelect }) {
                     {opt.label}
                   </span>
                 </div>
-                <span className="text-xs text-gray-500">remind {opt.interval}</span>
               </Button>
             ))}
           </div>

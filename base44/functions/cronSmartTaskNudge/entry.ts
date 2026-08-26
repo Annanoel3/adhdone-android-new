@@ -363,7 +363,7 @@ Return ONLY valid JSON:
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-4o',
       messages: [
         { role: 'system', content: 'You are an ADHD productivity companion — a personal assistant to a disorganized but brilliant boss. Always respond with valid JSON only.' },
         { role: 'user', content: prompt },

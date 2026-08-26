@@ -87,35 +87,33 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
   };
 
   const handleComplete = async (task) => {
-    setCelebratingTaskId(task.id);
+    // Complete immediately — no delay. The task disappears from the list
+    // right away (optimistic UI via onTaskAction). Gamification runs in
+    // the background without blocking the UI.
+    await onTaskAction(task);
+    await updateTodaysSummary();
     
-    setTimeout(async () => {
-      await onTaskAction(task);
-      await updateTodaysSummary();
-      
-      const points = task.urgency === 'urgent' 
-        ? getPointsForAction('urgent_task_completed')
-        : getPointsForAction('task_completed');
-      
-      const hour = new Date().getHours();
-      const bonusPoints = hour < 9 ? getPointsForAction('early_morning_task') : 0;
-      
-      await awardPoints(points + bonusPoints);
-      
-      const allTasks = await base44.entities.Task.list('-updated_date', 500);
+    const points = task.urgency === 'urgent' 
+      ? getPointsForAction('urgent_task_completed')
+      : getPointsForAction('task_completed');
+    
+    const hour = new Date().getHours();
+    const bonusPoints = hour < 9 ? getPointsForAction('early_morning_task') : 0;
+    
+    awardPoints(points + bonusPoints).catch(() => {});
+    
+    base44.entities.Task.list('-updated_date', 500).then(allTasks => {
       const completedTasks = allTasks.filter(t => t.status === 'completed');
-      const summaries = await base44.entities.DailySummary.list('-date', 1);
-      const currentStreak = summaries[0]?.streak_days || 0;
-      
-      await checkAndAwardAchievements({
-        totalTasksCompleted: completedTasks.length,
-        streakDays: currentStreak,
-        completedUrgentTask: task.urgency === 'urgent',
-        completedBeforeNineAM: hour < 9
-      });
-      
-      setCelebratingTaskId(null);
-    }, 1500);
+      base44.entities.DailySummary.list('-date', 1).then(summaries => {
+        const currentStreak = summaries[0]?.streak_days || 0;
+        checkAndAwardAchievements({
+          totalTasksCompleted: completedTasks.length,
+          streakDays: currentStreak,
+          completedUrgentTask: task.urgency === 'urgent',
+          completedBeforeNineAM: hour < 9
+        }).catch(() => {});
+      }).catch(() => {});
+    }).catch(() => {});
   };
 
   const handleUrgencyChange = async (task, newUrgency) => {

@@ -234,44 +234,16 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
     setShowDatePicker(false);
 
     try {
-      const intervalMs = {
-        '10min': 10*60*1000, '20min': 20*60*1000, '30min': 30*60*1000,
-        '1hour': 60*60*1000, '2hours': 2*60*60*1000, '4hours': 4*60*60*1000,
-        'daily': 24*60*60*1000, 'every_other_day': 2*24*60*60*1000,
-      };
-      const interval = fallbackInterval || '2hours';
-      const ms = intervalMs[interval] || intervalMs['2hours'];
-      const now = new Date();
-      const nextReminderTime = new Date(now.getTime() + ms);
-
+      // "Any day" = flexible task with no fixed time. Smart nudge handles
+      // when to remind — no hardcoded recurring interval.
       const createdTask = await base44.entities.Task.create({
         title, urgency, energy_required, status: 'active',
         classification: pendingDateTask.classification || 'task',
-        reminder_interval: interval, reminder_count: 0,
-        next_reminder: nextReminderTime.toISOString(),
+        reminder_interval: null, // smart nudge — no hardcoded interval
+        reminder_count: 0,
+        next_reminder: null,
         notification_recipient_email: user.email
       });
-
-      scheduleRecurringReminders({
-        email: user.email,
-        title: "Task Reminder 📋",
-        body: `${createdTask.title}\n\nTap to mark as complete!`,
-        startTime: nextReminderTime.toISOString(),
-        intervalMs: ms, count: 10, taskId: createdTask.id,
-        data: { screen: "/TaskNotification", taskId: createdTask.id, urgency, type: 'task_reminder' },
-        buttons: [
-          { id: "snooze_15", text: "Snooze 15 min" },
-          { id: "snooze_60", text: "Snooze 1 hour" },
-          { id: "complete", text: "✅ Done" }
-        ]
-      }).then(({ notificationIds, lastScheduledUntil }) => {
-        if (notificationIds && notificationIds.length > 0) {
-          base44.entities.Task.update(createdTask.id, {
-            onesignal_notification_ids: notificationIds,
-            ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
-          });
-        }
-      }).catch(error => console.error("Failed to schedule reminders:", error));
 
       onClose();
       navigate(createPageUrl("Home"), { state: { reload: true } });
@@ -290,15 +262,17 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
     setShowPriorityPicker(false);
 
     try {
-      const priorityMap = {
-        high: { interval: '2hours', urgency: 'high', intervalMs: 2 * 60 * 60 * 1000 },
-        medium: { interval: '4hours', urgency: 'medium', intervalMs: 4 * 60 * 60 * 1000 },
-        low: { interval: 'daily', urgency: 'low', intervalMs: 24 * 60 * 60 * 1000 },
+      // Priority sets URGENCY ONLY — no recurring interval. The smart nudge
+      // cron decides when/how often to remind based on urgency and due date.
+      // Hardcoding 2h/4h intervals here was the source of notification fatigue
+      // and was supposed to be removed long ago.
+      const urgencyMap = {
+        high: 'high',
+        medium: 'medium',
+        low: 'low',
       };
 
-      const { interval, urgency, intervalMs } = priorityMap[priority];
-      const now = new Date();
-      const nextReminderTime = new Date(now.getTime() + intervalMs);
+      const urgency = urgencyMap[priority] || 'medium';
 
       const createdTask = await base44.entities.Task.create({
         title,
@@ -306,40 +280,10 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
         energy_required,
         classification: pendingPriorityTask.classification || 'task',
         status: 'active',
-        reminder_interval: interval,
+        reminder_interval: null, // smart nudge — no hardcoded interval
         reminder_count: 0,
-        next_reminder: nextReminderTime.toISOString(),
+        next_reminder: null,
         notification_recipient_email: user.email
-      });
-
-      scheduleRecurringReminders({
-        email: user.email,
-        title: "Task Reminder 📋",
-        body: `${createdTask.title}\n\nTap to mark as complete!`,
-        startTime: nextReminderTime.toISOString(),
-        intervalMs,
-        count: 10,
-        taskId: createdTask.id,
-        data: {
-          screen: "/TaskNotification",
-          taskId: createdTask.id,
-          urgency,
-          type: 'task_reminder'
-        },
-        buttons: [
-          { id: "snooze_15", text: "Snooze 15 min" },
-          { id: "snooze_60", text: "Snooze 1 hour" },
-          { id: "complete", text: "✅ Done" }
-        ]
-      }).then(({ notificationIds, lastScheduledUntil }) => {
-        if (notificationIds && notificationIds.length > 0) {
-          base44.entities.Task.update(createdTask.id, {
-            onesignal_notification_ids: notificationIds,
-            ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
-          });
-        }
-      }).catch(error => {
-        console.error("Failed to schedule reminders:", error);
       });
 
       onClose();
