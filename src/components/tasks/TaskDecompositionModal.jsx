@@ -31,16 +31,47 @@ export default function TaskDecompositionModal({ task, isOpen, onClose, onUpdate
     try {
       const prompt = `You are an ADHD productivity expert. A user has this task: "${task.title}"${task.description ? `\n\nContext: ${task.description}` : ''}
 
-Your goal: Break this into 3-4 ACTIONABLE steps (fewer is better — never more than 4) that:
-0. Are each a MEANINGFUL, DISTINCT chunk of the task. Do NOT split one physical action into several steps, and do NOT list the same action twice in different words. Bundle trivial companion actions into the step they belong to.
-   BAD for "do laundry" (7 needless steps, duplicates): Sort clothes / Load washer / Add detergent / Start washer / Transfer to dryer / Fold clothes / Put away clothes
-   GOOD for "do laundry" (4 real steps): Put clothes in the washer / Transfer to the dryer / Fold the clothes / Put the clothes away
+STEP 1 — DECIDE WHAT KIND OF TASK THIS IS. This determines everything:
+
+(A) AMORPHOUS / UNFAMILIAR — the user doesn't know where to begin, or the task is a project with real
+    decisions in it ("write blog post", "plan vacation", "do my taxes", "find a new apartment").
+    The obstacle is STARTING. Break it into small paralysis-breaking entry points — a ridiculously
+    easy first action, then increasing commitment. This is where ADHD micro-stepping belongs.
+
+(B) CONCRETE & FAMILIAR — the user already knows exactly how to do this; it's a chore or errand
+    ("do laundry", "clean the kitchen", "take the car in", "go grocery shopping").
+    The obstacle is NOT knowing how — it's remembering to come back to it. So the ONLY steps that
+    belong here are the task's natural HANDOFF POINTS: the moments where you physically stop, walk
+    away, wait, or change location/context, and could forget to return.
+    Everything between two handoff points is ONE step, no matter how many motions it contains.
+
+HOW TO TEST WHETHER SOMETHING IS ITS OWN STEP:
+Ask: "Could I finish this and then genuinely walk away, forget, and need a reminder to continue?"
+- Yes → it's a step.
+- No (it happens in the same breath as the action next to it) → it is NOT a step; fold it in.
+Sorting clothes, adding detergent, and pressing start are all one uninterrupted trip to the washer —
+that is ONE step, not three. But the laundry then SITS in the washer while you go do something else,
+so moving it to the dryer IS its own step.
+
+WORKED EXAMPLE — "do laundry" (type B):
+BAD (motions, not steps — every one of these is a needless notification):
+  Sort clothes / Load washer / Add detergent / Start washer / Transfer to dryer / Fold clothes / Put away clothes
+GOOD (only the real handoff points, where you actually walk away and could forget):
+  Get a load into the washer and start it / Move the load to the dryer / Fold it / Put it away
+
+HOW MANY STEPS: however many the task actually HAS — no target number. Some tasks have 2, some have 6.
+If the task is already a single action you'd do in one sitting ("take out the trash", "call the vet"),
+return an EMPTY sub_tasks list — do not invent steps for a task that doesn't need them. Padding a list
+with fake steps is worse than not breaking it down at all.
+
+STEP 2 — write the steps, following these rules:
 1. Are SPECIFIC and CONCRETE (no vague advice like "research" or "plan")
-2. Each step takes 5-30 minutes max
-3. Start with the FIRST physical action (not planning)
-4. Use action verbs: "Open", "Write", "Call", "Send", "Create"
-5. Address ADHD challenges (decision paralysis, perfectionism, getting started)
-6. Order the steps SEQUENTIALLY in the exact order they must actually be performed — the FIRST item in the list is the first action you'd do, the LAST item is the final action. For example, for "do laundry": "wash and dry the laundry" comes BEFORE "put all the laundry away" — never list the put-away step first.
+2. Never add prep, planning, gathering, or "get ready to..." steps the user didn't need
+3. Never restate the same action in different words as two steps
+4. For type A, start with the FIRST physical action (not planning)
+5. Use action verbs: "Open", "Write", "Call", "Send", "Create"
+6. Address ADHD challenges (decision paralysis, perfectionism, getting started)
+7. Order the steps SEQUENTIALLY in the exact order they must actually be performed — the FIRST item in the list is the first action you'd do, the LAST item is the final action. For example, for "do laundry": "wash and dry the laundry" comes BEFORE "put all the laundry away" — never list the put-away step first.
 
 Also suggest:
 - **Best reminder interval** for each step (based on step complexity and ADHD patterns)

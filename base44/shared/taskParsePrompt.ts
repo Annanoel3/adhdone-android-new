@@ -299,12 +299,28 @@ export function buildTaskParsePrompt(inputText: string): string {
 
       CLASSIFICATION (Event vs Task — CRITICAL):
       Determine whether this is a TASK, EVENT, or BIRTHDAY:
-      - EVENT: A scheduled occurrence the user attends or goes to at a specific time/place.
-        Keywords: "go to", "attend", "visit", "watch", "see" + a named happening.
-        Examples: concerts, car shows, expos, weddings, parties, meetings, appointments,
-        classes, sports games, festivals, conferences, travel, social gatherings, shows,
+      - EVENT: A happening that has its OWN start time set by someone else — it begins at that time
+        whether or not the user shows up, and arriving late means missing it.
+        Examples: concerts, car shows, expos, weddings, parties, meetings, booked appointments,
+        classes, sports games, festivals, conferences, flights/travel, social gatherings, shows,
         "go to the Import Expo car show", "attend the wedding on Saturday", "see the concert"
         → classification="event"
+      - THE PHRASE "go to" DOES NOT MAKE SOMETHING AN EVENT. Going somewhere to get something DONE
+        is an ERRAND, which is a TASK. The place having a name changes nothing.
+        Errands (→ classification="task"): "go to Jared for ring maintenance", "go to the bank",
+        "go to Target", "go to the post office", "take the car to the shop", "drop off the dry cleaning",
+        "go get an oil change", "swing by the pharmacy".
+        Test: does this thing START at a set time without the user (event), or does it happen WHENEVER
+        the user goes and take as long as it takes (errand → task)?
+      - A SOFT OR RELATIVE DEADLINE IS NEVER AN EVENT. If the user said "this week", "by Friday",
+        "sometime", "when I get a chance", "next week" — they gave a window to fit something into, not
+        an appointment. That is ALWAYS classification="task" with due_date set + day_only_task=true +
+        reminder_interval=null, so the smart-nudge system decides when to surface it.
+        Example: "remind me to go to Jared for ring maintenance this week"
+          → classification="task", due_date="${endOfThisWeekISO}", day_only_task=true,
+            reminder_interval=null, target_time=null, needs_date_pick=false
+        Getting this wrong is a real failure: it turns a flexible errand into a fake appointment with
+        rigid "night before" and "1 hour before" alarms for a time the user never chose.
       - TASK: An actionable to-do that needs doing — paying bills, submitting reports, chores,
         errands, selling items, cleaning, organizing, calling, researching, buying, cooking,
         fixing, posting, returning. Something you DO and complete, not something you attend.
