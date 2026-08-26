@@ -31,7 +31,10 @@ export default function TaskDecompositionModal({ task, isOpen, onClose, onUpdate
     try {
       const prompt = `You are an ADHD productivity expert. A user has this task: "${task.title}"${task.description ? `\n\nContext: ${task.description}` : ''}
 
-Your goal: Break this into 3-5 ACTIONABLE micro-steps that:
+Your goal: Break this into 3-4 ACTIONABLE steps (fewer is better — never more than 4) that:
+0. Are each a MEANINGFUL, DISTINCT chunk of the task. Do NOT split one physical action into several steps, and do NOT list the same action twice in different words. Bundle trivial companion actions into the step they belong to.
+   BAD for "do laundry" (7 needless steps, duplicates): Sort clothes / Load washer / Add detergent / Start washer / Transfer to dryer / Fold clothes / Put away clothes
+   GOOD for "do laundry" (4 real steps): Put clothes in the washer / Transfer to the dryer / Fold the clothes / Put the clothes away
 1. Are SPECIFIC and CONCRETE (no vague advice like "research" or "plan")
 2. Each step takes 5-30 minutes max
 3. Start with the FIRST physical action (not planning)

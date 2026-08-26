@@ -124,9 +124,19 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
   }, [task?.id, isOpen]);
 
   const fetchSubTasks = async (taskId) => {
-    const fetchedSubTasks = await Task.filter({ parent_task_id: taskId }, '-created_date');
-    setSubTasks(fetchedSubTasks);
-    return fetchedSubTasks;
+    // Sub-tasks are STEPS — always show them in the order they're performed:
+    // by subtask_order when set, otherwise oldest-created first. Sorting by
+    // '-created_date' showed the last step first (put clothes away before
+    // starting the washer).
+    const fetchedSubTasks = await Task.filter({ parent_task_id: taskId }, 'created_date');
+    const ordered = [...fetchedSubTasks].sort((a, b) => {
+      const ao = a.subtask_order ?? Infinity;
+      const bo = b.subtask_order ?? Infinity;
+      if (ao !== bo) return ao - bo;
+      return new Date(a.created_date) - new Date(b.created_date);
+    });
+    setSubTasks(ordered);
+    return ordered;
   };
 
   const handleSubTaskToggle = async (subTask) => {
@@ -203,10 +213,12 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
       // Create all subtasks in the background
       (async () => {
         try {
-          for (const title of subtaskTitles) {
+          for (let i = 0; i < subtaskTitles.length; i++) {
+            const title = subtaskTitles[i];
             await Task.create({
               title: title,
               parent_task_id: task.id,
+              subtask_order: subTasks.length + i + 1,
               urgency: task.urgency,
               energy_required: task.energy_required,
               status: 'active',
@@ -286,10 +298,13 @@ Return JSON:
           break;
       }
 
-      for (const subtaskTitle of response.subtasks || []) {
+      const spoken = response.subtasks || [];
+      for (let i = 0; i < spoken.length; i++) {
+        const subtaskTitle = spoken[i];
         await Task.create({
           title: subtaskTitle.trim(),
           parent_task_id: task.id,
+          subtask_order: subTasks.length + i + 1,
           urgency: task.urgency,
           energy_required: task.energy_required,
           status: 'active',
