@@ -602,8 +602,8 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                         )
                       )}
 
-                      {/* Due date pill for one-time tasks — THE prominent date users expect to set/change */}
-                      {task.reminder_interval === 'once' && (
+                      {/* Due date pill for one-time and no-reminder tasks — THE prominent date on the closed card */}
+                      {(!task.reminder_interval || task.reminder_interval === 'once') && (
                         task.due_date ? (
                           <Popover>
                             <PopoverTrigger asChild>
@@ -666,81 +666,6 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                             </PopoverContent>
                           </Popover>
                         )
-                      )}
-
-                      {/* Reminder pill for one-time tasks — clearly labeled, secondary to due date */}
-                      {task.reminder_interval === 'once' && task.next_reminder && (
-                        <Popover open={reminderPopoverTaskId === task.id} onOpenChange={(o) => setReminderPopoverTaskId(o ? task.id : null)}>
-                          <PopoverTrigger asChild>
-                            <button
-                              onClick={(e) => e.stopPropagation()}
-                              className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
-                                theme === 'dark'
-                                  ? 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600'
-                                  : 'border-gray-300 bg-gray-50 text-gray-600 hover:bg-gray-100'
-                              }`}
-                            >
-                              <Bell className="w-3 h-3" />
-                              {formatReminderDate(task.next_reminder)} • {new Date(task.next_reminder).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className={`w-72 p-2 ${
-                            theme === 'dark' 
-                              ? 'bg-gray-800 border-gray-700 text-gray-100' 
-                              : 'bg-white border-gray-200'
-                          }`} onClick={(e) => e.stopPropagation()}>
-                            <div className="space-y-4 p-2">
-                              <div>
-                                <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
-                                  Reminder Date:
-                                </label>
-                                <input
-                                  type="date"
-                                  ref={el => dateInputRefs.current[task.id] = el}
-                                  defaultValue={getCurrentReminderDate(task)}
-                                  onChange={(e) => {
-                                    const currentTime = timeInputRefs.current[task.id]?.value || '09:00';
-                                    handleReminderDateChange(task, e.target.value, currentTime);
-                                    setReminderPopoverTaskId(null);
-                                  }}
-                                  className={`w-full border rounded px-3 py-2 ${
-                                    theme === 'dark'
-                                      ? 'bg-gray-900 border-gray-600 text-gray-100'
-                                      : 'bg-white border-gray-300 text-gray-900'
-                                  }`}
-                                />
-                              </div>
-                              <div>
-                                <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
-                                  Reminder Time:
-                                </label>
-                                <input
-                                  type="time"
-                                  ref={el => timeInputRefs.current[task.id] = el}
-                                  defaultValue={getCurrentReminderTime(task)}
-                                  onChange={(e) => {
-                                    const currentDate = dateInputRefs.current[task.id]?.value;
-                                    handleReminderDateChange(task, currentDate, e.target.value);
-                                    setReminderPopoverTaskId(null);
-                                  }}
-                                  className={`w-full border rounded px-3 py-2 ${
-                                    theme === 'dark'
-                                      ? 'bg-gray-900 border-gray-600 text-gray-100'
-                                      : 'bg-white border-gray-300 text-gray-900'
-                                  }`}
-                                />
-                              </div>
-                              <div className={`border-t pt-2 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
-                                <button 
-                                  onClick={() => { handleIntervalChange(task, 'daily'); setReminderPopoverTaskId(null); }} 
-                                  className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium"
-                                >
-                                  🔄 Use Recurring Reminder Instead
-                                </button>
-                              </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
                       )}
 
                       {/* Recurrence badge */}
