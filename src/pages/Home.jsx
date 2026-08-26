@@ -104,16 +104,13 @@ export default function Home() {
     const now = new Date();
     const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
     
-    // Cancel all scheduled reminders when task is completed
+    // Cancel all scheduled reminders in the BACKGROUND — never block the UI
     if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
-      try {
-        const { cancelScheduledReminder } = await import('../components/utils/reminderScheduler');
-        await cancelScheduledReminder(task.onesignal_notification_ids);
-      } catch (error) {
-        console.error("Failed to cancel reminders:", error);
-      }
+      import('../components/utils/reminderScheduler')
+        .then(({ cancelScheduledReminder }) => cancelScheduledReminder(task.onesignal_notification_ids))
+        .catch((error) => console.error("Failed to cancel reminders:", error));
     }
-    
+
     // Optimistically update UI (parent + its subtasks)
     setTasks(prevTasks => 
       prevTasks.map(t => 
