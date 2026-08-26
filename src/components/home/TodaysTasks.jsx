@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CheckCircle2, Clock, Zap, Pencil, Calendar, CalendarClock, ListChecks, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,7 @@ import TaskSortDropdown from "../tasks/TaskSortDropdown";
 export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails, onUpdateTask }) {
   const navigate = useNavigate();
   const { sortBy } = useTaskSort();
+  const [reminderPopoverTaskId, setReminderPopoverTaskId] = useState(null);
   // Filter out subtasks, sort by the shared preference, then take the top 5.
   const activeTasks = sortTasks(
     tasks.filter(t => t.status === 'active' && !t.parent_task_id && isTodayTask(t) && !t.birthday_person),
@@ -222,7 +223,11 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
 
     let newNotificationIds = [];
     let lastScheduledUntil = null;
-    
+
+    // Optimistic UI update — show the new interval immediately, before the
+    // (slow) OneSignal scheduling round-trip completes.
+    if (onUpdateTask) onUpdateTask({ ...task, reminder_interval: newInterval, next_reminder: nextReminder.toISOString() });
+
     // Schedule new reminders
     try {
       const currentUser = await base44.auth.me();
@@ -599,7 +604,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
 
                       {/* Show date badge for one-time reminders with a date set */}
                       {task.reminder_interval === 'once' && task.next_reminder && (
-                        <Popover>
+                        <Popover open={reminderPopoverTaskId === task.id} onOpenChange={(o) => setReminderPopoverTaskId(o ? task.id : null)}>
                           <PopoverTrigger asChild>
                             <button 
                               onClick={(e) => e.stopPropagation()}
@@ -626,6 +631,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                                   onChange={(e) => {
                                     const currentTime = timeInputRefs.current[task.id]?.value || '09:00';
                                     handleReminderDateChange(task, e.target.value, currentTime);
+                                    setReminderPopoverTaskId(null);
                                   }}
                                   className={`w-full border rounded px-3 py-2 ${
                                     theme === 'dark'
@@ -645,6 +651,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                                   onChange={(e) => {
                                     const currentDate = dateInputRefs.current[task.id]?.value;
                                     handleReminderDateChange(task, currentDate, e.target.value);
+                                    setReminderPopoverTaskId(null);
                                   }}
                                   className={`w-full border rounded px-3 py-2 ${
                                     theme === 'dark'
@@ -655,7 +662,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                               </div>
                               <div className={`border-t pt-2 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
                                 <button 
-                                  onClick={() => handleIntervalChange(task, 'daily')} 
+                                  onClick={() => { handleIntervalChange(task, 'daily'); setReminderPopoverTaskId(null); }} 
                                   className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium"
                                 >
                                   🔄 Use Recurring Reminder Instead
