@@ -8,7 +8,7 @@ export default function TaskCompletionCelebration({ theme }) {
     : ['#a855f7', '#ec4899', '#f97316', '#06b6d4'];
 
   return (
-    <div className="absolute inset-0 pointer-events-none z-50 overflow-hidden rounded-xl">
+    <div className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden flex items-center justify-center">
       {/* Confetti particles */}
       {[...Array(20)].map((_, i) => (
         <motion.div

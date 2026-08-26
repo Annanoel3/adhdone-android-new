@@ -87,11 +87,14 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
   };
 
   const handleComplete = async (task) => {
-    // Complete immediately — no delay. The task disappears from the list
-    // right away (optimistic UI via onTaskAction). Gamification runs in
-    // the background without blocking the UI.
-    await onTaskAction(task);
-    await updateTodaysSummary();
+    // Show celebration overlay immediately (fixed position, survives task removal)
+    setCelebratingTaskId(task.id);
+    setTimeout(() => setCelebratingTaskId(null), 1500);
+
+    // Complete immediately — task disappears from the list right away.
+    // Gamification runs in the background without blocking the UI.
+    onTaskAction(task).catch(() => {});
+    updateTodaysSummary().catch(() => {});
     
     const points = task.urgency === 'urgent' 
       ? getPointsForAction('urgent_task_completed')
@@ -429,16 +432,8 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
             const completedSubtasks = subtasks.filter(st => st.status === 'completed');
             return (
             <div key={task.id} className="relative">
-              {celebratingTaskId === task.id && (
-                <TaskCompletionCelebration theme={theme} />
-              )}
               <motion.div
                 initial={{ opacity: 1, scale: 1 }}
-                animate={celebratingTaskId === task.id ? { 
-                  scale: [1, 1.05, 1],
-                  opacity: [1, 0.8, 1]
-                } : {}}
-                transition={{ duration: 0.5 }}
                 className={`p-4 rounded-xl border transition-all duration-200 hover:shadow-md ${
                   theme === 'minimalist' 
                     ? 'bg-white border-gray-100 hover:border-gray-200' 
@@ -828,6 +823,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
           See all
         </Button>
       </CardContent>
+      {celebratingTaskId && <TaskCompletionCelebration theme={theme} />}
     </Card>
   );
 }

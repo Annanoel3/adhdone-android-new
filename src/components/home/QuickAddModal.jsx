@@ -62,6 +62,21 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
         return;
       }
 
+      // DEFENSIVE GUARD: Never accept 2hours/4hours from the parser, even if
+      // the LLM disobeys its instructions. These intervals were explicitly
+      // removed per user request — the smart nudge system handles all
+      // non-explicit recurring tasks. Only keep them if the user LITERALLY
+      // said "every 2 hours" or "every 4 hours" in their input.
+      const inputLower = transcription.toLowerCase();
+      const explicit2h = /every\s+2\s+hours|every\s+two\s+hours/.test(inputLower);
+      const explicit4h = /every\s+4\s+hours|every\s+four\s+hours/.test(inputLower);
+      if (taskData.reminder_interval === '2hours' && !explicit2h) {
+        taskData.reminder_interval = null;
+      }
+      if (taskData.reminder_interval === '4hours' && !explicit4h) {
+        taskData.reminder_interval = null;
+      }
+
       let nextReminderTime = null;
 
       if (taskData.reminder_interval === 'once' && taskData.target_date) {

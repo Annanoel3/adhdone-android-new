@@ -420,6 +420,21 @@ Return JSON:
       const parsed = (await base44.functions.invoke('parseTask', { prompt }))?.data?.response;
       console.log('🔄 [PROCESS] ✅ LLM parsed:', parsed);
 
+      // DEFENSIVE GUARD: Never accept 2hours/4hours from the parser, even if
+      // the LLM disobeys its instructions. These intervals were explicitly
+      // removed per user request — the smart nudge system handles all
+      // non-explicit recurring tasks. Only keep them if the user LITERALLY
+      // said "every 2 hours" or "every 4 hours" in their input.
+      const inputLower = inputText.toLowerCase();
+      const explicit2h = /every\s+2\s+hours|every\s+two\s+hours/.test(inputLower);
+      const explicit4h = /every\s+4\s+hours|every\s+four\s+hours/.test(inputLower);
+      if (parsed.reminder_interval === '2hours' && !explicit2h) {
+        parsed.reminder_interval = null;
+      }
+      if (parsed.reminder_interval === '4hours' && !explicit4h) {
+        parsed.reminder_interval = null;
+      }
+
       // If the user clicked "Add task" under a specific day, pin the task to that date
       if (presetDate) {
         parsed.target_date = presetDate;
