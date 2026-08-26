@@ -43,11 +43,18 @@ export function playLiftoff() {
   setTimeout(() => tone({ freq: 110, type: 'sine', gain: 0.3, dur: 0.7 }), 1150);
 }
 
-// Warm, pleasant chord for the sprint-end "it's okay to stop" moment.
+// Warm chord for the sprint-end "it's okay to stop" moment. Played loud enough
+// to actually get attention — this is the moment the user has to make a choice.
 export function playSprintEnd() {
   [523.25, 659.25, 783.99].forEach((f, i) => {
-    setTimeout(() => tone({ freq: f, type: 'sine', gain: 0.16, dur: 1.1 }), i * 90);
+    setTimeout(() => tone({ freq: f, type: 'sine', gain: 0.5, dur: 1.2 }), i * 90);
   });
+  // Second pass a beat later so it reads as an alert, not a background chime.
+  setTimeout(() => {
+    [523.25, 783.99].forEach((f, i) => {
+      setTimeout(() => tone({ freq: f, type: 'sine', gain: 0.45, dur: 0.9 }), i * 90);
+    });
+  }, 700);
 }
 
 export function haptic(pattern) {

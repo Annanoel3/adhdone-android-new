@@ -8,9 +8,10 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Target, Info, CheckCircle2, Timer, Dices, Minus } from "lucide-react";
+import { Target, Info, CheckCircle2, Timer, Dices, X } from "lucide-react";
 import confetti from "canvas-confetti";
 import { isTodayTask } from "@/components/utils/todayTasks";
+import ConfirmDialog from "@/components/launch/ConfirmDialog";
 
 function formatElapsed(ms) {
   const totalSec = Math.floor(ms / 1000);
@@ -48,6 +49,7 @@ export default function FocusModePrompt({ user, theme }) {
   const [focusTask, setFocusTask] = useState(null);
   const [pickableTasks, setPickableTasks] = useState([]);
   const [showInfo, setShowInfo] = useState(false);
+  const [confirmExit, setConfirmExit] = useState(false);
   const [busy, setBusy] = useState(false);
   const [elapsed, setElapsed] = useState(null);
   // Track the task that was just completed so we can exclude it from the
@@ -303,12 +305,13 @@ export default function FocusModePrompt({ user, theme }) {
     }
   };
 
+  // While a focus session is active the popup is locked — no outside-click, no
+  // Escape, no stray dismissal. The only way out is the X, which confirms first.
+  // There's no reason to be browsing the app mid-focus, and an accidental
+  // dismissal used to be hard to recover from.
   const handleClose = (o) => {
-    if (!o) {
-      setOpen(false);
-    } else {
-      setOpen(true);
-    }
+    if (!o && mode === "active") return;
+    setOpen(!!o);
   };
 
   const cardClass =
@@ -332,22 +335,28 @@ export default function FocusModePrompt({ user, theme }) {
   return (
     <>
       <Dialog open={open} onOpenChange={handleClose}>
-        <DialogContent className={`${
-          mode === "active"
-            ? "max-w-md w-[calc(100vw-2rem)] " + cardClass
-            : "max-w-md " + cardClass
-        }`}>
+        <DialogContent
+          className={`${
+            mode === "active"
+              ? // hide the dialog's built-in corner X while focusing — the only
+                // exit is our own X, which confirms first
+                "max-w-md w-[calc(100vw-2rem)] [&>button:last-child]:hidden " + cardClass
+              : "max-w-md " + cardClass
+          }`}
+          onEscapeKeyDown={(e) => { if (mode === "active") e.preventDefault(); }}
+          onInteractOutside={(e) => { if (mode === "active") e.preventDefault(); }}
+        >
           {mode === "active" ? (
             <div className="flex flex-col p-5 sm:p-6 overflow-y-auto">
               <div className="flex justify-between items-center">
                 {InfoButton}
                 <button
-                  onClick={() => setOpen(false)}
+                  onClick={() => setConfirmExit(true)}
                   className="inline-flex items-center justify-center w-7 h-7 rounded-full hover:bg-black/5 dark:hover:bg-white/10 opacity-60 hover:opacity-100 transition"
-                  aria-label="Minimize"
-                  title="Minimize"
+                  aria-label="Exit Focus Mode"
+                  title="Exit Focus Mode"
                 >
-                  <Minus className="w-4 h-4" />
+                  <X className="w-4 h-4" />
                 </button>
               </div>
               <DialogHeader>
@@ -379,7 +388,7 @@ export default function FocusModePrompt({ user, theme }) {
                   >
                     <CheckCircle2 className="w-4 h-4 mr-2" /> I completed this
                   </Button>
-                  <Button onClick={handleExit} variant="outline" disabled={busy}>
+                  <Button onClick={() => setConfirmExit(true)} variant="outline" disabled={busy}>
                     Exit Focus Mode
                   </Button>
                 </div>
@@ -439,6 +448,17 @@ export default function FocusModePrompt({ user, theme }) {
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmExit}
+        title="Exit Focus Mode?"
+        description="You'll go back to your normal reminders and this task stops getting hourly check-ins. You can start Focus Mode again anytime."
+        confirmLabel="Yes, exit Focus Mode"
+        cancelLabel="No, keep focusing"
+        onConfirm={() => { setConfirmExit(false); handleExit(); }}
+        onClose={() => setConfirmExit(false)}
+        theme={theme}
+      />
 
       <Dialog open={showInfo} onOpenChange={setShowInfo}>
         <DialogContent className={`max-w-sm ${cardClass}`}>

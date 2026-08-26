@@ -3,6 +3,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Timer, PartyPopper } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ConfirmDialog from '@/components/launch/ConfirmDialog';
+import { speak } from '@/components/utils/speak';
 import {
   surfaceClasses,
   mutedText,
@@ -38,6 +39,17 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
     }, 250);
     return () => clearInterval(id);
   }, [endTime, ended]);
+
+  // Speak the checkpoint out loud — a quiet chime is easy to miss, and this is
+  // the moment the user has to decide whether to keep going.
+  useEffect(() => {
+    if (!ended) return;
+    const t = setTimeout(
+      () => speak('Your five minutes is up. Would you like to keep going?'),
+      400
+    );
+    return () => clearTimeout(t);
+  }, [ended]);
 
   const totalSec = Math.floor(remaining / 1000);
   const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');

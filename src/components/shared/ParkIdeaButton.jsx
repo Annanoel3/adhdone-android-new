@@ -13,11 +13,10 @@ import { Lightbulb, Send } from "lucide-react";
 import { usePomodoro } from "@/context/PomodoroContext";
 import { useLaunch } from "@/context/LaunchContext";
 
-// Shows only while a focus or countdown session is active (focus mode,
-// Launchpad/Sprint, or a running Pomodoro). Tapping opens a dead-simple
-// box to jot a distracting thought, save it to the Parking Lot, and get
-// nudged right back to work.
-export default function ParkIdeaButton({ user, theme }) {
+// Always-available way to dump a distracting thought straight into the Parking
+// Lot without losing your place. Hidden only on the pages where it'd be
+// redundant (the Parking Lot itself and the Add Task flow).
+export default function ParkIdeaButton({ user, theme, currentPageName }) {
   const pomo = usePomodoro();
   const launch = useLaunch();
 
@@ -38,7 +37,14 @@ export default function ParkIdeaButton({ user, theme }) {
     return () => window.removeEventListener("focus-mode-changed", handler);
   }, []);
 
-  const visible = focusActive || launch?.hasActiveLaunch || pomo?.isActive;
+  const HIDDEN_PAGES = ["ParkingLot", "AddTask"];
+  const visible = !HIDDEN_PAGES.includes(currentPageName);
+  // A focus/sprint/pomodoro session is running — sit higher so the button
+  // doesn't land under the session pill anchored near the bottom.
+  const sessionActive = focusActive || launch?.hasActiveLaunch || pomo?.isActive;
+  const bottomOffset = sessionActive
+    ? "max(8.5rem, calc(8.5rem + env(safe-area-inset-bottom)))"
+    : "max(1.25rem, calc(1.25rem + env(safe-area-inset-bottom)))";
 
   const handleSave = async () => {
     const trimmed = text.trim();
@@ -77,9 +83,7 @@ export default function ParkIdeaButton({ user, theme }) {
     <>
       <div
         className="fixed left-1/2 -translate-x-1/2 z-40 pointer-events-none"
-        style={{
-          bottom: "max(1.25rem, calc(1.25rem + env(safe-area-inset-bottom)))",
-        }}
+        style={{ bottom: bottomOffset }}
       >
         <Button
           onClick={() => setOpen(true)}
@@ -126,9 +130,7 @@ export default function ParkIdeaButton({ user, theme }) {
       {justSaved && (
         <div
           className={`fixed left-1/2 -translate-x-1/2 z-50 rounded-full px-5 py-3 shadow-2xl text-sm font-semibold ${pillAccent}`}
-          style={{
-            bottom: "max(1.25rem, calc(1.25rem + env(safe-area-inset-bottom)))",
-          }}
+          style={{ bottom: bottomOffset }}
         >
           💡 Saved. Get back to work.
         </div>

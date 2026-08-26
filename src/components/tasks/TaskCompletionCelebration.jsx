@@ -1,67 +1,42 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles } from 'lucide-react';
+import confetti from 'canvas-confetti';
 
+// Real, unmissable confetti burst on task completion — uses canvas-confetti
+// (the same library the Focus Mode celebration uses) instead of a handful of
+// tiny animated divs that were too small to notice.
 export default function TaskCompletionCelebration({ theme }) {
-  const confettiColors = theme === 'minimalist' 
-    ? ['#10b981', '#3b82f6', '#8b5cf6']
-    : ['#a855f7', '#ec4899', '#f97316', '#06b6d4'];
+  useEffect(() => {
+    const colors =
+      theme === 'minimalist'
+        ? ['#10b981', '#3b82f6', '#8b5cf6']
+        : ['#a855f7', '#ec4899', '#f97316', '#06b6d4'];
+
+    confetti({ particleCount: 90, spread: 75, origin: { y: 0.65 }, colors });
+    const t1 = setTimeout(
+      () => confetti({ particleCount: 50, angle: 60, spread: 55, origin: { x: 0, y: 0.7 }, colors }),
+      150
+    );
+    const t2 = setTimeout(
+      () => confetti({ particleCount: 50, angle: 120, spread: 55, origin: { x: 1, y: 0.7 }, colors }),
+      300
+    );
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [theme]);
 
   return (
-    <div className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden flex items-center justify-center">
-      {/* Confetti particles */}
-      {[...Array(20)].map((_, i) => (
-        <motion.div
-          key={i}
-          className="absolute w-2 h-2 rounded-full"
-          style={{
-            backgroundColor: confettiColors[i % confettiColors.length],
-            left: `${Math.random() * 100}%`,
-            top: '50%',
-          }}
-          initial={{ scale: 0, opacity: 1 }}
-          animate={{
-            y: [0, -100 - Math.random() * 100],
-            x: [0, (Math.random() - 0.5) * 200],
-            scale: [0, 1, 0.5],
-            opacity: [1, 1, 0],
-            rotate: [0, Math.random() * 360],
-          }}
-          transition={{
-            duration: 1 + Math.random() * 0.5,
-            ease: "easeOut",
-          }}
-        />
-      ))}
-
-      {/* Center sparkle burst */}
+    <div className="fixed inset-0 pointer-events-none z-[9999] flex items-center justify-center">
       <motion.div
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-        initial={{ scale: 0, opacity: 1 }}
-        animate={{ scale: [0, 2, 0], opacity: [1, 0.8, 0] }}
-        transition={{ duration: 0.8 }}
-      >
-        <Sparkles className={`w-12 h-12 ${
-          theme === 'minimalist' ? 'text-green-500' : 'text-purple-500'
-        }`} />
-      </motion.div>
-
-      {/* Points popup */}
-      <motion.div
-        className={`absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 px-4 py-2 rounded-full font-bold text-white shadow-lg ${
-          theme === 'minimalist' 
-            ? 'bg-green-600' 
+        className={`px-5 py-2.5 rounded-full font-bold text-white shadow-lg ${
+          theme === 'minimalist'
+            ? 'bg-green-600'
             : 'bg-gradient-to-r from-purple-600 to-orange-600'
         }`}
         initial={{ scale: 0, y: 0, opacity: 0 }}
-        animate={{ 
-          scale: [0, 1.2, 1], 
-          y: [0, -20, -40],
-          opacity: [0, 1, 0]
-        }}
+        animate={{ scale: [0, 1.2, 1], y: [0, -20, -40], opacity: [0, 1, 0] }}
         transition={{ duration: 1.5, times: [0, 0.3, 1] }}
       >
-        +10 Points!
+        Nice. That's done. 🎉
       </motion.div>
     </div>
   );

@@ -1034,7 +1034,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           <NotificationFollowupModal user={user} theme={theme} />
 
         <FocusModePrompt user={user} theme={theme} />
-        <ParkIdeaButton user={user} theme={theme} />
+        <ParkIdeaButton user={user} theme={theme} currentPageName={currentPageName} />
         <ScheduledTextSendPopup user={user} theme={theme} />
         <BirthdayTextPromptPopup user={user} theme={theme} />
 
