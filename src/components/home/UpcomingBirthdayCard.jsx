@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from "react";
-import { Cake, Send } from "lucide-react";
+import { Cake, Send, PenLine } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import BirthdaysDialog from "../birthdays/BirthdaysDialog";
+import BirthdayTextDialog from "../birthdays/BirthdayTextDialog";
 import { base44 } from "@/api/base44Client";
 
 function daysUntil(iso) {
@@ -20,6 +21,7 @@ function formatWhen(iso) {
 
 export default function UpcomingBirthdayCard({ tasks, user, theme, specialMode, onRefresh }) {
   const [showDialog, setShowDialog] = useState(false);
+  const [showTextDialog, setShowTextDialog] = useState(false);
 
   const SIX_MONTHS_MS = 6 * 30 * 24 * 60 * 60 * 1000;
 
@@ -37,8 +39,12 @@ export default function UpcomingBirthdayCard({ tasks, user, theme, specialMode, 
   // Don't render the card at all when no birthdays are within 6 months
   if (!next) return null;
 
-  const isToday = daysUntil(next.next_reminder) <= 0;
+  const daysAway = daysUntil(next.next_reminder);
+  const isToday = daysAway <= 0;
   const hasBirthdayText = !!next.birthday_text_message;
+  // Prompt to write the text ahead of the day — covers birthdays added by
+  // Google Calendar sync, which never got the "just added" prompt.
+  const needsTextPrompt = !hasBirthdayText && daysAway <= 14;
 
   const handleSendText = async (e) => {
     e.stopPropagation();
@@ -94,6 +100,16 @@ export default function UpcomingBirthdayCard({ tasks, user, theme, specialMode, 
                 <Send className="w-4 h-4 mr-1" />
                 Send Text
               </Button>
+            ) : needsTextPrompt ? (
+              <Button
+                onClick={(e) => { e.stopPropagation(); setShowTextDialog(true); }}
+                size="sm"
+                variant="outline"
+                className="border-pink-300 text-pink-700 flex-shrink-0"
+              >
+                <PenLine className="w-4 h-4 mr-1" />
+                Write Text
+              </Button>
             ) : (
               <span className="text-xs text-gray-400 hidden sm:block whitespace-nowrap">Manage →</span>
             )}
@@ -107,6 +123,13 @@ export default function UpcomingBirthdayCard({ tasks, user, theme, specialMode, 
         tasks={tasks}
         user={user}
         onRefresh={onRefresh}
+      />
+
+      <BirthdayTextDialog
+        isOpen={showTextDialog}
+        onClose={() => setShowTextDialog(false)}
+        birthdayTask={next}
+        onSaved={onRefresh}
       />
     </>
   );

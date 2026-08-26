@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { EnergyLog } from "@/entities/EnergyLog";
-import { Task } from "@/entities/Task";
-import { DailySummary } from "@/entities/DailySummary";
+import { base44 } from "@/api/base44Client";
 import { 
   TrendingUp, 
   Battery, 
@@ -34,9 +32,9 @@ export default function Insights() {
     setIsLoading(true);
 
     // Get last 30 days of data
-    const energyLogs = await EnergyLog.list('-logged_at', 100);
-    const tasks = await Task.list('-created_date', 100);
-    const summaries = await DailySummary.list('-date', 30);
+    const energyLogs = await base44.entities.EnergyLog.list('-logged_at', 100);
+    const tasks = await base44.entities.Task.list('-created_date', 500);
+    const summaries = await base44.entities.DailySummary.list('-date', 30);
 
     // Analyze energy patterns
     const morningEnergy = energyLogs.filter(log => {
@@ -101,12 +99,13 @@ export default function Insights() {
       ? dayNames[Object.keys(tasksByDay).reduce((a, b) => tasksByDay[a] > tasksByDay[b] ? a : b)]
       : 'Not enough data';
 
-    // Due date push tracking — how many times the user postponed deadlines
-    const tasksWithPushes = tasks.filter(t => (t.due_date_pushes || 0) > 0);
-    const totalPushes = tasks.reduce((sum, t) => sum + (t.due_date_pushes || 0), 0);
+    // Due date push tracking — how many times the user postponed deadlines.
+    // Subtasks and birthdays aren't things you "postpone" — exclude them.
+    const tasksWithPushes = tasks.filter(t => (t.due_date_pushes || 0) > 0 && !t.parent_task_id && !t.birthday_person);
+    const totalPushes = tasksWithPushes.reduce((sum, t) => sum + (t.due_date_pushes || 0), 0);
     const mostPushed = tasksWithPushes
       .sort((a, b) => (b.due_date_pushes || 0) - (a.due_date_pushes || 0))
-      .slice(0, 3)
+      .slice(0, 5)
       .map(t => ({ title: t.title, pushes: t.due_date_pushes, status: t.status }));
 
     setInsights({

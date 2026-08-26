@@ -10,6 +10,7 @@ import {
   Sun,
   Moon,
   TrendingUp,
+  BarChart3,
   Share2,
   CalendarDays,
   Bug,
@@ -451,6 +452,11 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           title: "Progress",
           url: createPageUrl("Progress"),
           icon: TrendingUp,
+        },
+        {
+          title: "Insights",
+          url: createPageUrl("Insights"),
+          icon: BarChart3,
         },
         {
           title: "Support Space",
