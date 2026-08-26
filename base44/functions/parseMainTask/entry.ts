@@ -1,5 +1,6 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.25";
 import OpenAI from "npm:openai";
+import { TASK_PARSE_SYSTEM_PROMPT } from "../../shared/taskParsePrompt.ts";
 
 Deno.serve(async (req) => {
   await createClientFromRequest(req);
@@ -10,7 +11,7 @@ Deno.serve(async (req) => {
     messages: [
       {
         role: "system",
-        content: "You are a task parsing assistant for an ADHD productivity app. Always respond with valid JSON and populate all required fields including reminder_interval, urgency, and energy_required. Never omit fields."
+        content: TASK_PARSE_SYSTEM_PROMPT
       },
       { role: "user", content: prompt }
     ],

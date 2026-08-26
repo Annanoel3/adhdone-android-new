@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import OpenAI from 'npm:openai';
+import { TASK_PARSE_SYSTEM_PROMPT } from '../../shared/taskParsePrompt.ts';
 
 const openai = new OpenAI({
   apiKey: Deno.env.get('OPENAI_API_KEY')
@@ -19,6 +20,10 @@ Deno.serve(async (req) => {
     const response = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
+        {
+          role: 'system',
+          content: TASK_PARSE_SYSTEM_PROMPT
+        },
         {
           role: 'user',
           content: prompt

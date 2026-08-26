@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, Clock, Zap, Pencil, Calendar, CalendarClock, ListChecks, RefreshCw, Bell } from "lucide-react";
+import { CheckCircle2, Clock, Zap, Pencil, Calendar, CalendarClock, ListChecks, RefreshCw, Bell, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
@@ -680,21 +680,29 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                         </span>
                       )}
 
-                      {/* Show "Add Reminder" button if no reminder is set */}
-                      {!task.reminder_interval && !task.next_reminder && (
+                      {/* Smart Reminders badge — the task is handled by the LLM smart-nudge system */}
+                      {!task.reminder_interval && (
                         <Popover>
                           <PopoverTrigger asChild>
-                            <button 
+                            <button
                               onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-1 border border-dashed border-gray-300 px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors text-gray-500"
+                              className={`flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
+                                theme === 'dark'
+                                  ? 'bg-purple-900/40 text-purple-300 border border-purple-700 hover:bg-purple-900/60'
+                                  : 'bg-purple-50 text-purple-600 border border-purple-200 hover:bg-purple-100'
+                              }`}
                             >
-                              <Clock className="w-3 h-3" />
-                              Add Reminder
+                              <Sparkles className="w-3 h-3" />
+                              Smart Reminders
                             </button>
                           </PopoverTrigger>
                           <PopoverContent className="w-56 p-2" onClick={(e) => e.stopPropagation()}>
                             <div className="space-y-1">
-                              <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Recurring</div>
+                              <div className="px-3 py-2 text-xs text-gray-500">
+                                This task is on Smart Reminders — the app's AI decides when to nudge you based on your schedule and energy. Switch to a fixed interval below if you prefer.
+                              </div>
+                              <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}></div>
+                              <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Switch to fixed</div>
                               <button onClick={() => handleIntervalChange(task, '30min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 30 minutes</button>
                               <button onClick={() => handleIntervalChange(task, '1hour')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every hour</button>
                               <button onClick={() => handleIntervalChange(task, 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>

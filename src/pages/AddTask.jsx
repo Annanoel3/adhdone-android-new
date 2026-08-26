@@ -222,36 +222,9 @@ Return JSON:
         const now = new Date();
         const today = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
         
-        const mainTaskPrompt = `Parse this main task: "${subtaskCheck.main_task}"
+        const mainTaskPrompt = buildTaskParsePrompt(subtaskCheck.main_task);
 
-TODAY IS: ${today}
-CURRENT TIME: ${now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
-
-Extract urgency, energy, and reminder strategy for the MAIN task (not subtasks).
-
-REMINDER STRATEGY:
-- Important obligations (pay bills, submit work, call someone important) → reminder_interval="2hours" (keep reminding until done)
-- Hard deadlines or work tasks → reminder_interval="1hour" or "2hours"
-- Daily habits/routines → reminder_interval="daily"
-- Low-stakes one-time things → reminder_interval="once" (but prefer recurring for important tasks)
-
-Bills, financial tasks, work obligations = ALWAYS recurring at "2hours".
-
-SMART INFERENCE (when user does NOT specify a time, frequency, or date):
-- PERISHABLE / TIME-SENSITIVE (food, laundry, meds, cooking, pets) → reminder_interval="2hours", urgency="high"
-- HARD DEADLINE / IMPORTANT OBLIGATION (pay rent, submit form, financial/legal) → reminder_interval="1hour" or "2hours", urgency="high"
-- "TODAY" OVERRIDE: if the user said "today" (e.g., "clean the dishes today", "do laundry today"), the task needs doing TODAY — use reminder_interval="2hours" (NOT "daily"), even for chores.
-- ROUTINE / HABIT (stretch, vitamins, wellness, daily chores) → reminder_interval="daily", urgency="low" or "medium" (ONLY when the user did NOT say "today")
-- General fallback → reminder_interval="2hours", urgency="medium"
-
-JSON:
-{
-  "urgency": "low|medium|high|urgent",
-  "energy_required": "low|medium|high",
-  "reminder_interval": "1hour|2hours|daily|every_other_day|once"
-}`;
-
-        const mainTaskParsed = (await base44.functions.invoke('parseMainTask', { prompt: mainTaskPrompt }))?.data?.response;
+        const mainTaskParsed = (await base44.functions.invoke('parseTask', { prompt: mainTaskPrompt }))?.data?.response;
 
         // Calculate next_reminder for parent task
         let nextReminder = null;
@@ -279,7 +252,7 @@ JSON:
         const parentTask = await base44.entities.Task.create({
           title: subtaskCheck.main_task,
           description: '',
-          reminder_interval: mainTaskParsed.reminder_interval || '1hour',
+          reminder_interval: mainTaskParsed.reminder_interval || null,
           due_date: presetDueDateISO,
           reminder_count: 0,
           next_reminder: nextReminder ? nextReminder.toISOString() : null,
@@ -309,14 +282,14 @@ JSON:
         console.log('🔄 [PROCESS] ✅ Created', subtaskCheck.subtasks.length, 'subtasks');
 
         // Schedule reminders if needed
-        if (nextReminder && intervalMs[mainTaskParsed.reminder_interval || '1hour']) {
+        if (nextReminder && mainTaskParsed.reminder_interval && intervalMs[mainTaskParsed.reminder_interval]) {
           import('../components/utils/reminderScheduler').then(module => {
             return module.scheduleRecurringReminders({
               email: currentUser.email,
               title: "Task Reminder 📋",
               body: `${parentTask.title}\n\nTap to mark as complete!`,
               startTime: nextReminder.toISOString(),
-              intervalMs: intervalMs[mainTaskParsed.reminder_interval || '1hour'],
+              intervalMs: intervalMs[mainTaskParsed.reminder_interval],
               count: 10,
               taskId: parentTask.id,
               data: {
