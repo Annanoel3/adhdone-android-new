@@ -156,8 +156,16 @@ Deno.serve(async (req) => {
         if (entry.sent) continue;
         if (new Date(entry.send_at).getTime() > now.getTime()) continue; // not due yet
 
-        // Skip if task is completed (ghost-notification guard)
-        if (completedTaskIds.has(entry.task_id)) {
+        // Ghost-notification guard. A nudge can reference SEVERAL tasks (a
+        // combined "recycling and dishes" message), so validate every task the
+        // wording names — not just the one we deep-link to. If any of them is
+        // already done or back-burnered, the message is stale and would tell
+        // the user to do something they finished hours ago.
+        const referencedIds: string[] = (entry.task_ids && entry.task_ids.length)
+          ? entry.task_ids
+          : (entry.task_id ? [entry.task_id] : []);
+
+        if (referencedIds.some((id: string) => completedTaskIds.has(id))) {
           entry.sent = true;
           entry.sent_at = now.toISOString();
           entry.skipped_reason = 'completed';
@@ -165,8 +173,7 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        // Skip if task is silenced (back burner)
-        if (silencedTaskIds.has(entry.task_id)) {
+        if (referencedIds.some((id: string) => silencedTaskIds.has(id))) {
           entry.sent = true;
           entry.sent_at = now.toISOString();
           entry.skipped_reason = 'silenced';
@@ -354,6 +361,7 @@ Return ONLY valid JSON:
   "nudges": [
     {
       "task_index": <1-based index of the task, or 0 for a combined/multiple-urgent message>,
+      "task_indexes": [<REQUIRED: the 1-based index of EVERY task this message refers to. For a single-task nudge this is just [that index]. For a combined message it MUST list all of them — if the body says "recycling and dishes", list both. Never omit a task you named in the body; a task left out here can be completed and still get nudged>],
       "delay_minutes": <minutes from now>,
       "title": "<2-6 words with emoji>",
       "body": "<one supportive sentence>",
@@ -384,6 +392,16 @@ Return ONLY valid JSON:
     const entries = nudges.map((n: any) => {
       const task = n.task_index > 0 ? tasks[n.task_index - 1] : null;
       const taskId = task?.id || fallbackTaskId;
+
+      // Every task this nudge's wording refers to — so the send-time guard can
+      // suppress a combined message when ANY of the named tasks is already done.
+      const referenced = Array.isArray(n.task_indexes) ? n.task_indexes : [n.task_index];
+      const taskIds = Array.from(new Set(
+        referenced
+          .map((i: any) => tasks[Number(i) - 1]?.id)
+          .filter(Boolean)
+      ));
+      if (taskIds.length === 0 && taskId) taskIds.push(taskId);
       const delayMs = Math.max(1, (n.delay_minutes || 30)) * 60 * 1000;
       let sendAt = new Date(nowMs + delayMs);
 
@@ -392,6 +410,7 @@ Return ONLY valid JSON:
 
       return {
         task_id: taskId,
+        task_ids: taskIds,
         send_at: sendAt.toISOString(),
         title: fixTitleTimeOfDay(n.title || 'Task nudge', sendAt, timeZone),
         body: n.body || '',

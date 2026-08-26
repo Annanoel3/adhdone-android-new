@@ -390,9 +390,13 @@ Deno.serve(async (req) => {
       }
 
       const currentTask = task[0];
-      
-      // If there's a next_reminder set, reschedule the next batch of notifications
-      if (currentTask.next_reminder && currentTask.reminder_interval) {
+
+      // We just cancelled every live notification. From here the task MUST end up
+      // with either a fresh batch or a genuinely empty list — never the stale IDs
+      // of the notifications we just deleted. A stale non-empty list makes the
+      // refill cron believe the task is still covered (it only refills tasks with
+      // an empty list), so the task would go permanently silent.
+      if (currentTask.reminder_interval) {
         const intervalMs = {
           '10min': 10 * 60 * 1000,
           '20min': 20 * 60 * 1000,
@@ -406,7 +410,11 @@ Deno.serve(async (req) => {
 
         const ms = intervalMs[currentTask.reminder_interval];
         const now = Date.now();
-        const nextReminderTime = new Date(currentTask.next_reminder).getTime();
+        // next_reminder can be missing or already in the past (cron bookkeeping,
+        // or a due-date edit that outran it). Fall back to one interval from now
+        // so an edit never leaves a recurring task with zero notifications.
+        const storedNext = currentTask.next_reminder ? new Date(currentTask.next_reminder).getTime() : 0;
+        const nextReminderTime = storedNext > now ? storedNext : now + ms;
 
         // Owner quiet hours (local "HH:MM"). Apply only when enabled AND the owner
         // has a recorded timezone — otherwise we can't convert local wall-time to UTC.
@@ -458,16 +466,30 @@ Deno.serve(async (req) => {
           scheduleTime += ms;
         }
 
-        // Update task with new notification IDs
-        if (newNotificationIds.length > 0) {
-          const lastScheduledUntil = new Date(scheduleTime - ms).toISOString();
-          await base44.asServiceRole.entities.Task.update(event.entity_id, {
-            onesignal_notification_ids: newNotificationIds,
-            last_scheduled_until: lastScheduledUntil
-          });
+        // Always write the result — including an empty list when every schedule
+        // call failed. Leaving the old (now-cancelled) IDs in place would hide the
+        // task from the refill cron and silence it for good.
+        await base44.asServiceRole.entities.Task.update(event.entity_id, {
+          onesignal_notification_ids: newNotificationIds,
+          last_scheduled_until: newNotificationIds.length > 0
+            ? new Date(scheduleTime - ms).toISOString()
+            : null,
+          next_reminder: new Date(nextReminderTime).toISOString()
+        });
 
+        if (newNotificationIds.length > 0) {
           console.log('[onTaskUpdate] Rescheduled', newNotificationIds.length, 'notifications');
+        } else {
+          console.warn('[onTaskUpdate] Reschedule produced 0 notifications — cleared IDs so the refill cron picks this task up');
         }
+      } else {
+        // Interval was removed (e.g. switched to smart nudges) — the cancelled IDs
+        // must still be cleared so nothing stale lingers on the task.
+        await base44.asServiceRole.entities.Task.update(event.entity_id, {
+          onesignal_notification_ids: [],
+          last_scheduled_until: null
+        });
+        console.log('[onTaskUpdate] No interval after edit — cleared cancelled notification IDs');
       }
     }
 
