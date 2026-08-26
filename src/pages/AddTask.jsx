@@ -1195,7 +1195,7 @@ Return JSON:
     }
   };
 
-  const displayTasks = [...optimisticTasks, ...tasks.filter(t => t.status === 'active')];
+  const displayTasks = [...optimisticTasks, ...tasks.filter(t => t.status === 'active' && !t.parent_task_id)];
 
   return (
     <div className={`h-full flex flex-col overflow-hidden p-3 md:p-4 ${
