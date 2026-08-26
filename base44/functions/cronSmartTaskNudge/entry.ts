@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
       t.status === 'active' &&
       !t.silenced &&
       !t.parent_task_id && // sub-tasks are context for their parent, not independent nudges
-      !RECURRING_INTERVALS.has(t.reminder_interval) &&
+      !t.reminder_interval && // null only — "once" and recurring have their own flows
       t.classification !== 'birthday' && t.classification !== 'event' &&
       !t.birthday_person;
 
