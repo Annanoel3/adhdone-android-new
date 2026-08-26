@@ -480,10 +480,15 @@ Deno.serve(async (req) => {
   // ~30 days out. This pass promotes unscheduled entries to live notifications
   // as the event date approaches, mirroring the birthday promotion logic.
   let eventScheduled = 0;
+  // Covers classification='event' AND any one-time ('once') task with a planned
+  // schedule (payments, deadlines with a specific date but no classification) —
+  // they all use the same planned-entry promotion mechanics. Birthdays with a
+  // birthday_person are handled by the birthday pass above, so exclude them.
   const eventTasks = allTasks.filter(t =>
     t.status === 'active' &&
     !t.silenced &&
-    t.classification === 'event' &&
+    !t.birthday_person &&
+    (t.classification === 'event' || t.reminder_interval === 'once') &&
     t.notification_recipient_email &&
     Array.isArray(t.reminder_schedule) && t.reminder_schedule.length > 0
   );
