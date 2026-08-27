@@ -264,10 +264,13 @@ function fixTitleTimeOfDay(title: string, sendAt: Date, timeZone: string): strin
     const fmt = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hour12: false });
     const hour = parseInt(fmt.format(sendAt), 10);
     const correct = hour < 12 ? 'Morning' : hour < 17 ? 'Afternoon' : 'Evening';
+    // Also swap a mismatched time-of-day emoji ("Afternoon Chores 🌙") to match.
+    const correctEmoji = hour < 12 ? '🌅' : hour < 17 ? '☀️' : '🌙';
     return title
       .replace(/\bMorning\b/g, correct)
       .replace(/\bAfternoon\b/g, correct)
-      .replace(/\bEvening\b/g, correct);
+      .replace(/\bEvening\b/g, correct)
+      .replace(/🌅|🌄|🌞|☀️|🌇|🌆|🌙|🌜|🌛|🌚/g, correctEmoji);
   } catch {
     return title;
   }
