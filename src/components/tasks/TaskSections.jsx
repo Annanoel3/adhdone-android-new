@@ -10,6 +10,7 @@ const SECTIONS = [
   { key: "upcoming", label: "Upcoming" },
   { key: "later", label: "Later" },
   { key: "recurring", label: "Recurring" },
+  { key: "backburner", label: "🔥 Back Burner" },
 ];
 
 // Shared logic: determine if a task is recurring, and its relevant date.
@@ -107,6 +108,7 @@ function buildDaySections() {
   sections.push({ key: "upcoming", label: "Upcoming" });
   sections.push({ key: "later", label: "Later" });
   sections.push({ key: "recurring", label: "Recurring" });
+  sections.push({ key: "backburner", label: "🔥 Back Burner" });
   return sections;
 }
 
@@ -137,6 +139,10 @@ export default function TaskSections({
       daySections.forEach((s) => (map[s.key] = []));
       tasks.forEach((task) => {
         if (task.classification === "birthday" || task.birthday_person) return;
+        if (task.silenced) {
+          map.backburner.push(task);
+          return;
+        }
         const cat = categorizeTaskByDay(task);
         if (typeof cat === "number") map[`day_${cat}`].push(task);
         else map[cat].push(task);
@@ -151,9 +157,14 @@ export default function TaskSections({
       upcoming: [],
       later: [],
       recurring: [],
+      backburner: [],
     };
     tasks.forEach((task) => {
       if (task.classification === "birthday" || task.birthday_person) return;
+      if (task.silenced) {
+        map.backburner.push(task);
+        return;
+      }
       const section = categorizeTask(task);
       map[section].push(task);
     });
@@ -224,7 +235,13 @@ export default function TaskSections({
     <div className="space-y-1">
       {sections.map((section) => {
         const sectionTasks = grouped[section.key] || [];
-        const isCollapsed = collapsed[section.key];
+        // Back Burner: hidden when empty, collapsed by default so it stays
+        // present without taking over the screen.
+        if (section.key === "backburner" && sectionTasks.length === 0) return null;
+        const isCollapsed =
+          collapsed[section.key] !== undefined
+            ? collapsed[section.key]
+            : section.key === "backburner";
 
         return (
           <div
