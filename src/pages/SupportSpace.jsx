@@ -54,13 +54,31 @@ export default function SupportSpace() {
       const latestEnergy = energyLogs.length > 0 ? energyLogs[0].energy_level : 'unknown';
       const currentStreak = summaries.length > 0 ? summaries[0].streak_days || 0 : 0;
 
+      // Detailed task list (top-level tasks only) with timing, so the AI can
+      // actually reason about the user's day ("I have an event tonight...").
+      const todayStr = new Date().toDateString();
+      const taskDetails = activeTasks
+        .filter(t => !t.parent_task_id && !t.silenced)
+        .slice(0, 10)
+        .map(t => {
+          const when = t.event_time || t.due_date || t.next_reminder;
+          let timing = 'no set time';
+          if (when) {
+            const d = new Date(when);
+            const isToday = d.toDateString() === todayStr;
+            timing = `${isToday ? 'TODAY' : d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })} ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+            if (t.due_date && new Date(t.due_date) < new Date()) timing += ' (OVERDUE)';
+          }
+          return `- "${t.title}" (${t.classification || 'task'}, ${t.urgency || 'medium'} priority, ${timing})`;
+        });
+
       return {
         userName: user.full_name,
         activeTasks: activeTasks.length,
         completedToday: completedToday.length,
         currentEnergy: latestEnergy,
         currentStreak: currentStreak,
-        taskTitles: activeTasks.slice(0, 5).map(t => t.title)
+        taskDetails
       };
     } catch (error) {
       return null;
@@ -101,6 +119,9 @@ ${context ? `CONTEXT ABOUT THE USER (use ONLY if genuinely relevant to what they
 - Completed today: ${context.completedToday}
 - Current energy: ${context.currentEnergy}
 - Current streak: ${context.currentStreak}
+
+THEIR CURRENT TASKS & EVENTS (with timing):
+${context.taskDetails && context.taskDetails.length > 0 ? context.taskDetails.join('\n') : '(none)'}
 
 IMPORTANT: Only mention their tasks, energy, or productivity if they're specifically talking about:
 - Being overwhelmed with work

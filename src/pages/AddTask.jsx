@@ -1115,6 +1115,7 @@ Return JSON:
       }
     }
     setIsProcessing(false);
+    setOptimisticTasks([]);
     if (advanceEligible.length > 0) {
       setAdvanceQueue(advanceEligible.slice(1));
       setPendingTask(advanceEligible[0]);
@@ -1140,6 +1141,8 @@ Return JSON:
     });
 
     if (response?.data?.text) {
+        // Optimistic UI — show the transcribed task immediately while the AI parses it
+        setOptimisticTasks([{ id: `temp-${Date.now()}`, title: response.data.text.trim(), isProcessing: true }]);
         // Detect if multiple tasks
         const taskList = await detectMultipleTasks(response.data.text);
         console.log('🎤 [VOICE] Detected', taskList.length, 'task(s)');
@@ -1168,6 +1171,9 @@ Return JSON:
     setIsProcessing(true);
     const input = textInput;
     setTextInput('');
+
+    // Optimistic UI — show the task immediately while the AI parses it
+    setOptimisticTasks([{ id: `temp-${Date.now()}`, title: input.trim(), isProcessing: true }]);
 
     try {
       // Detect if multiple tasks
