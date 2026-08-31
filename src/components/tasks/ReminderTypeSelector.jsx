@@ -43,7 +43,10 @@ export function getCurrentReminderType(task) {
   if (task.classification === 'event') return 'event';
   if (task.recurrence_pattern && task.recurrence_pattern !== 'none') return 'repeat';
   if (task.reminder_interval && task.reminder_interval !== 'once') return 'interval';
-  if (task.reminder_interval === 'once' || task.next_reminder) return 'once';
+  if (task.reminder_interval === 'once') return 'once';
+  // A day-only task (tied to a day, no specific time) is run by the smart-nudge
+  // system — its next_reminder is just the day anchor, not a one-time reminder.
+  if (task.next_reminder && !task.day_only_task) return 'once';
   return 'smart';
 }
 
