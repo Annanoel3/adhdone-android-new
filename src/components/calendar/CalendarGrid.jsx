@@ -294,64 +294,66 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
         <h2 className={`text-lg font-bold ${textPrimary}`}>
           {viewMode === 'month' ? `${MONTH_NAMES[month]} ${year}` : weekHeaderLabel}
         </h2>
-        <div className="flex items-center gap-2">
-          <div className={`flex items-center rounded-lg border overflow-hidden ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+        <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
+          <div className={`flex items-center rounded-lg border overflow-hidden flex-shrink-0 ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
             <button
               onClick={() => setView('month')}
-              className={`px-2 py-1 text-xs font-medium transition-colors ${viewMode === 'month' ? 'bg-blue-500 text-white' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors ${viewMode === 'month' ? 'bg-blue-500 text-white' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               Month
             </button>
             <button
               onClick={() => setView('week')}
-              className={`px-2 py-1 text-xs font-medium transition-colors ${viewMode === 'week' ? 'bg-blue-500 text-white' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors ${viewMode === 'week' ? 'bg-blue-500 text-white' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               Week
             </button>
           </div>
-          <div className={`flex items-center rounded-lg border overflow-hidden ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
+          <div className={`flex items-center rounded-lg border overflow-hidden flex-shrink-0 ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
             <button
               onClick={() => toggleEmojiMode(true)}
-              className={`px-2 py-1 text-xs font-medium transition-colors ${useEmoji ? 'bg-blue-500 text-white' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors ${useEmoji ? 'bg-blue-500 text-white' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               😀 Emoji
             </button>
             <button
               onClick={() => toggleEmojiMode(false)}
-              className={`px-2 py-1 text-xs font-medium transition-colors ${!useEmoji ? 'bg-blue-500 text-white' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`px-2.5 py-1 text-xs font-medium whitespace-nowrap transition-colors ${!useEmoji ? 'bg-blue-500 text-white' : isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
             >
               Aa Text
             </button>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => viewMode === 'month' ? setCursor(new Date(year, month - 1, 1)) : setWeekCursor(new Date(weekCursor.getFullYear(), weekCursor.getMonth(), weekCursor.getDate() - 7))}
-            className={isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}
-          >
-            <ChevronLeft className="w-5 h-5" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              const n = new Date();
-              setCursor(new Date(n.getFullYear(), n.getMonth(), 1));
-              setWeekCursor(new Date(n.getFullYear(), n.getMonth(), n.getDate()));
-              setSelected(n);
-            }}
-            className={isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}
-          >
-            Today
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => viewMode === 'month' ? setCursor(new Date(year, month + 1, 1)) : setWeekCursor(new Date(weekCursor.getFullYear(), weekCursor.getMonth(), weekCursor.getDate() + 7))}
-            className={isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}
-          >
-            <ChevronRight className="w-5 h-5" />
-          </Button>
+          <div className="flex items-center gap-0.5 ml-auto flex-shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => viewMode === 'month' ? setCursor(new Date(year, month - 1, 1)) : setWeekCursor(new Date(weekCursor.getFullYear(), weekCursor.getMonth(), weekCursor.getDate() - 7))}
+              className={`h-8 w-8 ${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const n = new Date();
+                setCursor(new Date(n.getFullYear(), n.getMonth(), 1));
+                setWeekCursor(new Date(n.getFullYear(), n.getMonth(), n.getDate()));
+                setSelected(n);
+              }}
+              className={`h-8 px-2 text-xs ${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              Today
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => viewMode === 'month' ? setCursor(new Date(year, month + 1, 1)) : setWeekCursor(new Date(weekCursor.getFullYear(), weekCursor.getMonth(), weekCursor.getDate() + 7))}
+              className={`h-8 w-8 ${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
