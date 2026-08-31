@@ -1498,9 +1498,12 @@ Return JSON:
                 </div>
               )}
 
-              {/* First-reminder date & time — shown for one-time, interval, and
-                   repeat tasks. Smart reminders and events have their own controls. */}
-              {(currentType === 'once' || currentType === 'interval' || currentType === 'repeat') && (
+              {/* First-reminder date & time — only for tasks whose reminders
+                   are NOT run by the smart schedule. When a Smart Reminder
+                   Schedule exists it already shows (and owns) the times, so a
+                   separate date/time pill just duplicates it. */}
+              {(currentType === 'once' || currentType === 'interval' || currentType === 'repeat') &&
+                !(task.reminder_schedule && task.reminder_schedule.length > 0) && (
                 <Popover>
                   <PopoverTrigger asChild>
                     <button className="cursor-pointer hover:opacity-80 transition-opacity bg-purple-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
