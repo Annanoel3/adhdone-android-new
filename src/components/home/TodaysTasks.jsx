@@ -33,7 +33,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
   const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
   const upcomingTasks = tasks
     .filter(t => {
-      if (t.status !== 'active' || t.parent_task_id) return false;
+      if (t.status !== 'active' || t.parent_task_id || t.silenced) return false;
       if (!isUpcomingTask(t)) return false;
       const due = new Date(t.due_date || t.next_reminder);
       return due - now <= SEVEN_DAYS_MS;
