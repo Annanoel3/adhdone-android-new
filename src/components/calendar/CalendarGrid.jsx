@@ -66,20 +66,13 @@ function sameDayKey(a, b) {
 }
 
 export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOpen }) {
+  // Always open on today — browsing into the past/future never sticks between
+  // app opens.
   const [cursor, setCursor] = useState(() => {
-    const saved = localStorage.getItem('calendar_cursor');
-    if (saved) {
-      const d = new Date(saved);
-      if (!isNaN(d)) return new Date(d.getFullYear(), d.getMonth(), 1);
-    }
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
-  const [selected, setSelected] = useState(() => {
-    const saved = localStorage.getItem('calendar_selected');
-    if (saved) { const d = new Date(saved); if (!isNaN(d)) return d; }
-    return new Date();
-  });
+  const [selected, setSelected] = useState(() => new Date());
   const [useEmoji, setUseEmoji] = useState(() => {
     const stored = localStorage.getItem('calendar_use_emoji');
     return stored === null ? true : stored === 'true';
@@ -89,20 +82,11 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
     localStorage.setItem('calendar_use_emoji', String(val));
   };
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('calendar_view_mode') || 'month');
-  const [weekCursor, setWeekCursor] = useState(() => {
-    const saved = localStorage.getItem('calendar_week_cursor');
-    if (saved) { const d = new Date(saved); if (!isNaN(d)) return d; }
-    return new Date();
-  });
+  const [weekCursor, setWeekCursor] = useState(() => new Date());
   const setView = (mode) => {
     setViewMode(mode);
     localStorage.setItem('calendar_view_mode', mode);
   };
-
-  // Persist the user's calendar position so it survives leaving and returning.
-  useEffect(() => { localStorage.setItem('calendar_cursor', cursor.toISOString()); }, [cursor]);
-  useEffect(() => { localStorage.setItem('calendar_week_cursor', weekCursor.toISOString()); }, [weekCursor]);
-  useEffect(() => { localStorage.setItem('calendar_selected', selected.toISOString()); }, [selected]);
 
   // Group all items by local-date key.
   const itemsByDate = useMemo(() => {
@@ -135,7 +119,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
         const startD = new Date(spanStart);
         const endD = new Date(spanEnd);
         if (startD.toDateString() === endD.toDateString()) {
-          push(startD, { kind, silenced: !!t.silenced, title: t.title, id: t.id, taskId: t.id, task: t });
+          push(startD, { kind, silenced: !!t.silenced, at: t.event_time || null, title: t.title, id: t.id, taskId: t.id, task: t });
         } else {
           const dayCursor = new Date(startD.getFullYear(), startD.getMonth(), startD.getDate());
           const last = new Date(endD.getFullYear(), endD.getMonth(), endD.getDate());
@@ -143,7 +127,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           while (dayCursor <= last) {
             const isLast = dayCursor.toDateString() === last.toDateString();
             push(new Date(dayCursor), {
-              kind, silenced: !!t.silenced, title: t.title, id: t.id, taskId: t.id, task: t,
+              kind, silenced: !!t.silenced, at: t.event_time || null, title: t.title, id: t.id, taskId: t.id, task: t,
               spanPos: isLast ? 'end' : isFirst ? 'start' : 'middle',
             });
             isFirst = false;
@@ -167,7 +151,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           const dayCursor = new Date(dueDay);
           while (dayCursor <= todayDay) {
             push(new Date(dayCursor), {
-              kind, silenced: !!t.silenced, title: t.title, id: t.id, taskId: t.id, task: t,
+              kind, silenced: !!t.silenced, at: t.event_time || null, title: t.title, id: t.id, taskId: t.id, task: t,
               overdue: true,
             });
             dayCursor.setDate(dayCursor.getDate() + 1);
@@ -175,7 +159,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           return;
         }
       }
-      push(new Date(raw), { kind, silenced: !!t.silenced, title: t.title, id: t.id, taskId: t.id, task: t });
+      push(new Date(raw), { kind, silenced: !!t.silenced, at: t.event_time || null, title: t.title, id: t.id, taskId: t.id, task: t });
     });
     events.forEach((e) => {
       if (!e.start_time) return;
@@ -186,6 +170,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           : 'imported_event');
       const item = {
         kind, title: e.title, id: e.id,
+        at: e.is_all_day ? null : e.start_time,
         taskId: e.adhd_task_id || null,
         task: linkedTask || null,
       };
@@ -333,7 +318,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
               <ChevronLeft className="w-4 h-4" />
             </Button>
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={() => {
                 const n = new Date();
@@ -341,7 +326,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                 setWeekCursor(new Date(n.getFullYear(), n.getMonth(), n.getDate()));
                 setSelected(n);
               }}
-              className={`h-8 px-2 text-xs ${isDark ? 'text-gray-300 hover:bg-gray-700' : 'text-gray-600 hover:bg-gray-100'}`}
+              className={`h-8 px-3 text-xs font-semibold ${isDark ? 'border-gray-600 text-gray-200 hover:bg-gray-700 bg-transparent' : 'border-gray-300 text-gray-700 hover:bg-gray-100'}`}
             >
               Today
             </Button>

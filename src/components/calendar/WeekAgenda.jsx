@@ -1,4 +1,5 @@
 import React from 'react';
+import WeekAgendaRow from '@/components/calendar/WeekAgendaRow';
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -62,34 +63,19 @@ export default function WeekAgenda({
             {dayItems.length === 0 ? (
               <p className={`text-xs ${textSecondary}`}>Nothing scheduled.</p>
             ) : (
-              <div className="space-y-1">
-                {dayItems.map((it, i) => {
-                  const clickable = !!(it.task || it.taskId);
-                  return (
-                    <button
-                      key={i}
-                      onClick={(e) => { e.stopPropagation(); if (clickable) onItemOpen?.(it); }}
-                      disabled={!clickable}
-                      className={`flex items-center gap-2 w-full text-left rounded-lg px-2 py-1.5 transition-colors ${
-                        it.overdue
-                          ? isDark ? 'bg-red-900/40' : 'bg-red-50'
-                          : clickable
-                            ? isDark ? 'hover:bg-gray-700' : 'hover:bg-blue-50'
-                            : 'cursor-default opacity-70'
-                      }`}
-                    >
-                      {useEmoji && <span className="text-base flex-shrink-0">{emojiFor(it)}</span>}
-                      <span
-                        className={`text-sm flex-1 truncate ${
-                          it.overdue ? (isDark ? 'text-red-300' : 'text-red-700') + ' font-medium' : textPrimary
-                        }`}
-                        title={it.title}
-                      >
-                        {it.title}
-                      </span>
-                    </button>
-                  );
-                })}
+              <div className={`divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-100'}`}>
+                {dayItems.map((it, i) => (
+                  <WeekAgendaRow
+                    key={i}
+                    item={it}
+                    emojiFor={emojiFor}
+                    useEmoji={useEmoji}
+                    isDark={isDark}
+                    onItemOpen={onItemOpen}
+                    textPrimary={textPrimary}
+                    textSecondary={textSecondary}
+                  />
+                ))}
               </div>
             )}
           </div>
