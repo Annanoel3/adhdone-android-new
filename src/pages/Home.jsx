@@ -11,6 +11,7 @@ import BirthdayTextDialog from "../components/birthdays/BirthdayTextDialog";
 import MotivationCoach from "../components/home/MotivationCoach";
 import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import MomentumCelebration from "../components/shared/MomentumCelebration";
+import TaskCompletionCelebration from "../components/tasks/TaskCompletionCelebration";
 import { isTodayTask } from "../components/utils/todayTasks";
 import { ensureBirthdayReminders } from "../components/utils/birthdayScheduler";
 
@@ -22,6 +23,7 @@ export default function Home() {
   const [selectedTask, setSelectedTask] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [birthdayTextTask, setBirthdayTextTask] = useState(null);
+  const [showCelebration, setShowCelebration] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const specialMode = localStorage.getItem('special_mode') || 'normal'; // v2
@@ -101,6 +103,14 @@ export default function Home() {
   };
 
   const handleTaskComplete = async (task) => {
+    // Confetti fires immediately — before any awaits — so it never gets held up
+    // by the save. Only for real tasks, not subtasks.
+    if (!task.parent_task_id) {
+      setShowCelebration(false);
+      requestAnimationFrame(() => setShowCelebration(true));
+      setTimeout(() => setShowCelebration(false), 2200);
+    }
+
     const now = new Date();
     const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
     
@@ -202,6 +212,7 @@ export default function Home() {
     }`} style={{
       paddingBottom: 'max(8rem, calc(8rem + env(safe-area-inset-bottom)))'
     }}>
+      {showCelebration && <TaskCompletionCelebration theme={theme} />}
       <div className="max-w-7xl mx-auto">
         <MomentumCelebration 
           completedCount={todayCompleted.length}

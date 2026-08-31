@@ -20,6 +20,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
 import TaskSortDropdown from "../components/tasks/TaskSortDropdown";
 import TaskSections from "../components/tasks/TaskSections";
+import TaskCompletionCelebration from "../components/tasks/TaskCompletionCelebration";
 
 export default function Tasks() {
   const navigate = useNavigate();
@@ -37,6 +38,7 @@ export default function Tasks() {
   const [completedThisWeek, setCompletedThisWeek] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('tasks_view_mode') || 'sections');
+  const [showCelebration, setShowCelebration] = useState(false);
   const { sortBy } = useTaskSort();
 
   useEffect(() => {
@@ -113,6 +115,13 @@ export default function Tasks() {
   };
 
   const handleComplete = async (task) => {
+    // Confetti fires immediately — before any awaits. Only for real tasks.
+    if (!task.parent_task_id) {
+      setShowCelebration(false);
+      requestAnimationFrame(() => setShowCelebration(true));
+      setTimeout(() => setShowCelebration(false), 2200);
+    }
+
     const now = new Date();
     const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
 
@@ -227,6 +236,7 @@ export default function Tasks() {
         ? 'bg-gradient-to-br from-red-300 via-orange-300 to-red-400'
         : ''
     }`}>
+      {showCelebration && <TaskCompletionCelebration theme={theme} />}
       <div className="max-w-6xl mx-auto">
         <Card className={`${isSeasonalTheme() ? `${specialMode}-card` : ''} border-none shadow-lg mb-6 ${
           !isSeasonalTheme() ? (
