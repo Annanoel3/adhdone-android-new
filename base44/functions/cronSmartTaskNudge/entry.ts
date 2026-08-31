@@ -304,7 +304,8 @@ async function generateDailySchedule(
   timeZone: string,
   quietStartMin: number,
   quietEndMin: number,
-  subtasksByParent: Record<string, any[]>
+  subtasksByParent: Record<string, any[]>,
+  todaysEvents: any[] = []
 ): Promise<any[] | null> {
   const hour = Math.floor(localMin / 60);
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
@@ -349,6 +350,16 @@ async function generateDailySchedule(
 
   const urgentCount = tasks.filter(t => t.urgency === 'urgent').length;
 
+  // Fixed appointments today — context only, never nudged here.
+  const eventList = todaysEvents.map((e) => {
+    const when = e.event_time || e.next_reminder;
+    let t = '';
+    try {
+      t = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(when));
+    } catch { t = ''; }
+    return `- "${e.title}" at ${t}`;
+  }).join('\n');
+
   const prompt = `You are the personal assistant to a brilliant but disorganized ADHD boss. Your job: look at their full task list and decide what reminders they need TODAY — what to surface, when, and what to say.
 
 You're not annoying. You don't flood them. You make sure everything gets done and all deadlines are met. You intelligently figure out what to bring in front of them and when — like a great assistant who knows when to push and when to back off.
@@ -360,7 +371,7 @@ CURRENT CONTEXT:
 
 FULL TASK LIST (you decide what's relevant today — you have the week ahead):
 ${taskList}
-${alreadyNudgedTitles.length > 0 ? `\nTASKS ALREADY NUDGED TODAY (use check-in style — "Have you done X yet?"):\n${alreadyNudgedTitles.map(t => `- "${t}"`).join('\n')}\n` : ''}
+${eventList ? `\nFIXED APPOINTMENTS TODAY (context only — do NOT nudge these, they have their own reminders):\n${eventList}\n` : ''}${alreadyNudgedTitles.length > 0 ? `\nTASKS ALREADY NUDGED TODAY (use check-in style — "Have you done X yet?"):\n${alreadyNudgedTitles.map(t => `- "${t}"`).join('\n')}\n` : ''}
 YOUR APPROACH:
 - You can see the whole week. Plan TODAY's reminders — what to surface, when, what to say.
 - MEET ALL DEADLINES: if something is due today or tomorrow, it must be surfaced. If something is overdue, surface it with urgency.
@@ -376,6 +387,7 @@ ${urgentCount >= 2 ? `- There are ${urgentCount} URGENT tasks. Consider one noti
 - NEVER INVENT PROGRESS: only ✓ steps are done. If 0 steps are done, do NOT imply they've started ("you're halfway there", "next up") — point at the FIRST step instead. Never name a step as "next" unless every step before it is ✓.
 - SUB-TASK PROGRESS: when a task shows step progress (✓/○), use it to acknowledge where they are — e.g. "you've got the laundry going — don't forget to move it to the dryer" or "great progress on printing — just the label left to ship". Never list every step; just acknowledge the current spot naturally.
 - PUSHED TASKS: when a task shows "pushed Nx" (the user moved its due date later N times), it's being avoided. Don't shame — gently name it: "this one's been bumped a few times — want to break it into a tiny first step?" or "no rush, but this keeps getting pushed — is it still something you actually want to do?" Higher push counts deserve more attention but never guilt.
+- BATCH ERRANDS (two birds, one trip): high-energy tasks usually mean "get in the car and go somewhere." If two or more out-of-the-house tasks are open, or one lines up with a FIXED APPOINTMENT today, suggest combining them into one trip — and time that nudge shortly BEFORE the appointment so they can plan. You do NOT know the distances, so always frame it as a question they can decline: "If RideNow is near Jennifer's office, you could knock both out in one trip — worth it?" Never assume things are close, never state a drive time, and list every task you mention in task_indexes.
 - delay_minutes: minutes from NOW to send this nudge (e.g., 30 = 30 min from now, 120 = 2 hours from now).
 - Don't schedule past quiet hours start (${quietStartStr}).
 - You decide HOW MANY nudges. There's no cap, no formula. Use your judgment — some days need 2, some need 6.
