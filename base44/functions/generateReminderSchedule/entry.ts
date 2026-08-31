@@ -55,11 +55,13 @@ function getDeterministicSchedule(taskType) {
         { days_before: 1, hour: 9, minute: 0, relative_minutes_before: null, label: '1 day before' },
         { days_before: 0, hour: 9, minute: 0, relative_minutes_before: null, label: 'morning of' },
         { days_before: null, hour: null, minute: null, relative_minutes_before: 60, label: '1 hour before' },
+        { days_before: null, hour: null, minute: null, relative_minutes_before: 0, label: 'right now' },
       ];
     case 'event':
       return [
         { days_before: 1, hour: 20, minute: 0, relative_minutes_before: null, label: 'night before' },
         { days_before: null, hour: null, minute: null, relative_minutes_before: 60, label: '1 hour before' },
+        { days_before: null, hour: null, minute: null, relative_minutes_before: 0, label: 'right now' },
       ];
     case 'payment':
       return [
@@ -82,10 +84,12 @@ function getDeterministicNotificationText(taskType, label, title) {
       '1 day before': { title: `${emoji} ${t}`, body: `Tomorrow's the day! Your "${t}" is tomorrow. Don't forget to prep! ✨` },
       'morning of': { title: `${emoji} ${t}`, body: `Good morning! Your "${t}" is today. You got this! 🚀` },
       '1 hour before': { title: `⏰ ${t}`, body: `Almost time! Your "${t}" is in about an hour. Time to head out! 🚗` },
+      'right now': { title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` },
     },
     event: {
       'night before': { title: `${emoji} ${t}`, body: `Heads up! Your "${t}" is tomorrow. Don't forget to prep! ✨` },
       '1 hour before': { title: `⏰ ${t}`, body: `Almost time! Your "${t}" is in about an hour. Time to head out! 🚗` },
+      'right now': { title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` },
     },
     payment: {
       'morning reminder': { title: `${emoji} ${t}`, body: `Good morning! Your "${t}" is due today. You got this! ✨` },

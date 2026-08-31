@@ -65,9 +65,10 @@ export async function scheduleReminder({
   taskId,
   data,
   android_channel_id,
-  buttons
+  buttons,
+  exact
 }) {
-  console.log('[scheduleReminder] Called with:', { email, title, body, sendAtISO, minutesFromNow, taskId });
+  console.log('[scheduleReminder] Called with:', { email, title, body, sendAtISO, minutesFromNow, taskId, exact });
   
   if (!email) throw new Error("email required");
   if (!title) throw new Error("title required");
@@ -81,8 +82,9 @@ export async function scheduleReminder({
 
   if (sendAtISO) {
     let scheduleTime = new Date(sendAtISO);
-    // Adjust for quiet hours
-    if (isInQuietHours(scheduleTime)) {
+    // Adjust for quiet hours — EXCEPT for exact reminders. When the user asked
+    // for a specific clock time, that reminder fires at that time, period.
+    if (!exact && isInQuietHours(scheduleTime)) {
       scheduleTime = adjustForQuietHours(scheduleTime);
       console.log('[scheduleReminder] Adjusted time to avoid quiet hours:', scheduleTime.toISOString());
     }

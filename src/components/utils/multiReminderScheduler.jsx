@@ -97,6 +97,9 @@ function resolveReminderTimes(reminders, scheduledDateISO, title = '', classific
       }
       return {
         sendAtISO: reminderTime.toISOString(),
+        // The reminder AT the user's chosen time is sacred — it is never
+        // shifted for quiet hours and never deduped away by another reminder.
+        exact: r.relative_minutes_before === 0,
         label: r.label,
         notification_title: r.notification_title || '📅 Upcoming',
         notification_body: r.notification_body || title,
@@ -118,6 +121,7 @@ function resolveReminderTimes(reminders, scheduledDateISO, title = '', classific
     // for each unique time so the user gets one notification at 9am, not two.
     .filter((r, i, arr) => {
       if (i === 0) return true;
+      if (r.exact) return true; // never drop the at-the-chosen-time reminder
       const prevMin = Math.floor(new Date(arr[i - 1].sendAtISO).getTime() / 60000);
       const thisMin = Math.floor(new Date(r.sendAtISO).getTime() / 60000);
       return thisMin !== prevMin;
@@ -143,6 +147,19 @@ export async function scheduleMultiReminders({
     const reminders = await fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification);
     if (!reminders || reminders.length === 0) return null;
 
+    // Safety net: a task set for a specific clock time ALWAYS gets a reminder at
+    // that exact time. Cached or LLM schedules sometimes omit it.
+    if (!dayOnly && new Date(scheduledDateISO).getTime() > Date.now()
+        && !reminders.some(r => r.relative_minutes_before === 0)) {
+      const t = title.length > 40 ? `${title.slice(0, 37)}...` : title;
+      reminders.push({
+        days_before: null, hour: null, minute: null, relative_minutes_before: 0,
+        label: 'right now',
+        notification_title: `🔔 ${t}`,
+        notification_body: `It's time — "${t}". You've got this! 💪`,
+      });
+    }
+
     const reminderTimes = resolveReminderTimes(reminders, scheduledDateISO, title, classification);
     if (reminderTimes.length === 0) return null;
 
@@ -157,6 +174,7 @@ export async function scheduleMultiReminders({
           body: reminder.notification_body,
           sendAtISO: reminder.sendAtISO,
           taskId,
+          exact: reminder.exact,
           data: {
             screen: '/TaskNotification',
             taskId,
