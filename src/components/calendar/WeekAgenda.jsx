@@ -87,12 +87,8 @@ export default function WeekAgenda({
                 })}
                 {backBurner.length > 0 && (
                   <div className={`flex items-center gap-1 px-2 pt-1 text-[11px] ${textSecondary}`}>
-                    {backBurner.slice(0, 5).map((_, i) => (
-                      <span key={`bb-${i}`} className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
-                    ))}
-                    <span className="ml-1">
-                      {backBurner.length} on back burner
-                    </span>
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-700 inline-block" />
+                    <span>{backBurner.length} on back burner</span>
                   </div>
                 )}
               </div>

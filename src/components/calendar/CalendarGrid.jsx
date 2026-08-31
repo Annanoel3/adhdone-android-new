@@ -405,6 +405,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           const regularShown = regularItems.slice(0, 3);
           const spanShown = spanItems.slice(0, 3);
           const totalOverflow = liveItems.length - spanShown.length - regularShown.length;
+          const hasOverdue = liveItems.some((it) => it.overdue);
 
           return (
             <button
@@ -486,11 +487,14 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                       {useEmoji ? `+${totalOverflow}` : `+${totalOverflow} more`}
                     </div>
                   )}
-                  {backBurnerItems.length > 0 && (
-                    <div className="flex flex-wrap gap-0.5" title="Back burner">
-                      {backBurnerItems.slice(0, 5).map((it, i) => (
-                        <span key={`bb-${i}`} className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
-                      ))}
+                  {(hasOverdue || backBurnerItems.length > 0) && (
+                    <div className="flex items-center gap-1">
+                      {hasOverdue && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" title="Something overdue" />
+                      )}
+                      {backBurnerItems.length > 0 && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-700 inline-block" title="On the back burner" />
+                      )}
                     </div>
                   )}
                 </div>
@@ -506,8 +510,8 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
         <span className="flex items-center gap-1"><span>🎂</span> Birthday</span>
         <span className="flex items-center gap-1"><span>📆</span> Event</span>
         <span className="flex items-center gap-1"><span>✅</span> Task</span>
-        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> Overdue</span>
-        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" /> Back burner</span>
+        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" /> Overdue</span>
+        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-700 inline-block" /> Back burner</span>
       </div>
 
       {/* Selected day detail */}
