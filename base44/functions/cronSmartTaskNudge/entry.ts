@@ -345,7 +345,9 @@ async function generateDailySchedule(
       const steps = subs.map((s: any) => s.status === 'completed' ? `✓${s.title}` : `○${s.title}`).join(', ');
       subInfo = ` [${done.length}/${subs.length} steps done: ${steps}]`;
     }
-    return `${i + 1}. "${t.title}" (${dueInfo}${windowInfo}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${pushInfo}${nudged}${subInfo})`;
+    const desc = (t.description || t.notes || '').trim().replace(/\s+/g, ' ').slice(0, 140);
+    const descInfo = desc ? ` — ${desc}` : '';
+    return `${i + 1}. "${t.title}"${descInfo} (${dueInfo}${windowInfo}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${pushInfo}${nudged}${subInfo})`;
   }).join('\n');
 
   const urgentCount = tasks.filter(t => t.urgency === 'urgent').length;
@@ -387,7 +389,8 @@ ${urgentCount >= 2 ? `- There are ${urgentCount} URGENT tasks. Consider one noti
 - NEVER INVENT PROGRESS: only ✓ steps are done. If 0 steps are done, do NOT imply they've started ("you're halfway there", "next up") — point at the FIRST step instead. Never name a step as "next" unless every step before it is ✓.
 - SUB-TASK PROGRESS: when a task shows step progress (✓/○), use it to acknowledge where they are — e.g. "you've got the laundry going — don't forget to move it to the dryer" or "great progress on printing — just the label left to ship". Never list every step; just acknowledge the current spot naturally.
 - PUSHED TASKS: when a task shows "pushed Nx" (the user moved its due date later N times), it's being avoided. Don't shame — gently name it: "this one's been bumped a few times — want to break it into a tiny first step?" or "no rush, but this keeps getting pushed — is it still something you actually want to do?" Higher push counts deserve more attention but never guilt.
-- BATCH ERRANDS (two birds, one trip): high-energy tasks usually mean "get in the car and go somewhere." If two or more out-of-the-house tasks are open, or one lines up with a FIXED APPOINTMENT today, suggest combining them into one trip — and time that nudge shortly BEFORE the appointment so they can plan. You do NOT know the distances, so always frame it as a question they can decline: "If RideNow is near Jennifer's office, you could knock both out in one trip — worth it?" Never assume things are close, never state a drive time, and list every task you mention in task_indexes.
+- FIRST, DECIDE WHICH TASKS MEAN LEAVING THE HOUSE. Read the title and description like a person would. Treat a task as an out-of-the-house errand when it names a business or place (a shop, dealership, bank, clinic, "RideNow", "the DMV"), names a person you'd go see or meet ("Jared", "Jennifer's office"), or uses a going-somewhere verb (drop off, pick up, return, deliver, mail, sign, test drive, stop by, go see, appointment, meeting in person). Do NOT rely on the energy field for this — energy says nothing about location. If it's genuinely unclear, treat it as at-home.
+- BATCH ERRANDS (two birds, one trip): if two or more out-of-the-house errands are open, or one lines up with a FIXED APPOINTMENT today, suggest combining them into one trip — and time that nudge shortly BEFORE the appointment so they can plan. You do NOT know the distances, so always frame it as a question they can decline: "If RideNow is anywhere near Jared, you could knock both out in one trip — worth it?" Never assume things are close, never state a drive time, and list every task you mention in task_indexes.
 - delay_minutes: minutes from NOW to send this nudge (e.g., 30 = 30 min from now, 120 = 2 hours from now).
 - Don't schedule past quiet hours start (${quietStartStr}).
 - You decide HOW MANY nudges. There's no cap, no formula. Use your judgment — some days need 2, some need 6.
