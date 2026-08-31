@@ -119,14 +119,14 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     if (month === 3 && day >= 10 && day <= 20) return 'stpatricks';
     // Fourth of July: Jul 1 - Jul 7
     if (month === 7 && day >= 1 && day <= 7) return 'fourthjuly';
-    // Halloween: Oct 25 - Nov 5
-    if ((month === 10 && day >= 25) || (month === 11 && day <= 5)) return 'halloween';
+    // Halloween: Oct 10 - Nov 1 (through the day after Halloween)
+    if ((month === 10 && day >= 10) || (month === 11 && day === 1)) return 'halloween';
     // Spring: Mar 21 - May 31
     if ((month === 3 && day >= 21) || month === 4 || month === 5) return 'spring';
     // Summer: Jun 1 - Aug 31 (excluding Jul 1-7)
     if (month === 6 || (month === 7 && day > 7) || month === 8) return 'summer';
-    // Fall: Sep 1 - Oct 24, Nov 6 - Nov 30
-    if (month === 9 || (month === 10 && day <= 24) || (month === 11 && day >= 6)) return 'fall';
+    // Fall: Sep 1 - Oct 9, Nov 2 - Nov 30
+    if (month === 9 || (month === 10 && day <= 9) || (month === 11 && day >= 2)) return 'fall';
     // Winter: Dec 1 - Dec 19
     if (month === 12 && day <= 19) return 'winter';
     // Jan 6 - Feb 9, Feb 17 - Mar 9
