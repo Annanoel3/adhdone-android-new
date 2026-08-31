@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { keywordEmojiForTitle, resolveEmojiWithAI, getCachedAiEmoji } from '@/components/utils/calendarEmojiResolver';
+import WeekAgenda from '@/components/calendar/WeekAgenda';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -354,67 +355,35 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
         </div>
       </div>
 
-      {/* Day-of-week header */}
-      <div className="grid grid-cols-7 gap-1">
-        {DAY_LABELS.map((d) => (
-          <div key={d} className={`text-center text-xs font-semibold py-1 ${textSecondary}`}>
-            {d}
-          </div>
-        ))}
-      </div>
+      {/* Day-of-week header (month grid only) */}
+      {viewMode === 'month' && (
+        <div className="grid grid-cols-7 gap-1">
+          {DAY_LABELS.map((d) => (
+            <div key={d} className={`text-center text-xs font-semibold py-1 ${textSecondary}`}>
+              {d}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Calendar grid */}
       {viewMode === 'week' ? (
-        <div className="grid grid-cols-7 gap-1">
-          {weekDays.map((day) => {
-            const k = dateKey(day);
-            const dayItems = itemsByDate.get(k) || [];
-            const isToday = sameDayKey(day, today);
-            const isSelected = sameDayKey(day, selected);
-            return (
-              <div
-                key={k}
-                onClick={() => setSelected(day)}
-                className={`min-h-[300px] rounded-lg border p-2 text-left transition-all flex flex-col cursor-pointer ${
-                  isSelected
-                    ? 'ring-2 ring-blue-400 ' + cellBase
-                    : cellBase + ' hover:border-blue-300'
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className={`text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full ${isToday ? 'bg-blue-500 text-white' : textPrimary}`}>
-                    {day.getDate()}
-                  </span>
-                  {dayItems.length > 0 && (
-                    <span className={`text-[10px] ${textSecondary}`}>{dayItems.length}</span>
-                  )}
-                </div>
-                <div className="flex-1 space-y-1 overflow-hidden">
-                  {dayItems.map((it, i) => {
-                    const clickable = !!(it.task || it.taskId);
-                    return (
-                      <button
-                        key={i}
-                        onClick={(e) => { e.stopPropagation(); clickable && onItemOpen?.(it); }}
-                        disabled={!clickable}
-                        className={`flex items-center gap-1 w-full text-left rounded p-1 transition-colors ${
-                          it.overdue
-                            ? isDark ? 'bg-red-900/40' : 'bg-red-100'
-                            : clickable
-                              ? isDark ? 'hover:bg-gray-700' : 'hover:bg-blue-50'
-                              : 'cursor-default opacity-70'
-                        }`}
-                      >
-                        <span className="text-sm flex-shrink-0">{emojiFor(it)}</span>
-                        <span className={`text-[11px] truncate flex-1 ${it.overdue ? (isDark ? 'text-red-300' : 'text-red-700') + ' font-medium' : textPrimary}`} title={it.title}>{it.title}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        <WeekAgenda
+          weekDays={weekDays}
+          itemsByDate={itemsByDate}
+          dateKey={dateKey}
+          sameDayKey={sameDayKey}
+          today={today}
+          selected={selected}
+          onSelectDay={setSelected}
+          emojiFor={emojiFor}
+          useEmoji={useEmoji}
+          isDark={isDark}
+          onItemOpen={onItemOpen}
+          cellBase={cellBase}
+          textPrimary={textPrimary}
+          textSecondary={textSecondary}
+        />
       ) : (
       <div className="grid grid-cols-7 gap-1">
         {cells.map((cell, idx) => {
