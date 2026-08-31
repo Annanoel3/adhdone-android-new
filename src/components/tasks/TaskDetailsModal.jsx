@@ -37,6 +37,7 @@ import {
 import { Task } from "@/entities/Task";
 import TaskDecompositionModal from "./TaskDecompositionModal";
 import SmartReminderEditor from "./SmartReminderEditor";
+import AddSubTaskCard from "./AddSubTaskCard";
 import ReminderTypeSelector, { getCurrentReminderType } from "./ReminderTypeSelector";
 import VoiceTaskInput from "./VoiceTaskInput";
 import { scheduleReminder, cancelScheduledReminder } from "../utils/reminderScheduler";
@@ -1827,108 +1828,21 @@ Return JSON:
 
               {/* UPDATED: Better visual separation for manual input when no subtasks */}
               {subTasks.length === 0 && (
-                <div className="space-y-4">
-                  {/* Manual subtask input - FIRST and more prominent */}
-                  <div className={`p-4 rounded-lg border-2 ${
-                    theme === 'minimalist'
-                      ? 'border-green-200 bg-green-50/30'
-                      : theme === 'dark'
-                        ? 'border-green-800 bg-green-900/20'
-                        : 'border-green-300 bg-green-100/30'
-                  }`}>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Plus className="w-5 h-5 text-green-600" />
-                      <h4 className="text-sm font-semibold text-gray-900">Add Sub-Tasks Manually</h4>
-                    </div>
-                    <div className="flex gap-2 mb-3">
-                      <Button
-                        variant={subtaskInputMode === 'text' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setSubtaskInputMode('text')}
-                        className="flex-1"
-                      >
-                        <Keyboard className="w-3 h-3 mr-1" />
-                        Type
-                      </Button>
-                      <Button
-                        variant={subtaskInputMode === 'voice' ? 'default' : 'outline'}
-                        size="sm"
-                        onClick={() => setSubtaskInputMode('voice')}
-                        className="flex-1"
-                      >
-                        <Mic className="w-3 h-3 mr-1" />
-                        Voice
-                      </Button>
-                    </div>
-
-                    {subtaskInputMode === 'text' ? (
-                      <div className="space-y-2">
-                        <form onSubmit={handleAddSubTask} className="flex gap-2">
-                          <Input
-                            value={newSubTask}
-                            onChange={(e) => setNewSubTask(e.target.value)}
-                            placeholder="Add a new sub-task..."
-                            className="flex-1"
-                          />
-                          <Button type="submit" size="icon" className="flex-shrink-0">
-                            <Plus className="w-4 h-4" />
-                          </Button>
-                        </form>
-                        <p className="text-xs text-gray-500">💡 Tip: Separate multiple sub-tasks with commas</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-2">
-                        <p className="text-xs text-gray-500 text-center">
-                          {isProcessingVoice ? "Processing..." : "Speak your subtasks (you can say multiple at once)"}
-                        </p>
-                        <div className="flex justify-center">
-                          <VoiceTaskInput
-                            onTranscription={handleVoiceSubtask}
-                            theme={theme}
-                            inline={false}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Divider */}
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <span className="w-full border-t border-gray-300" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className={`px-2 text-gray-500 ${theme === 'dark' ? 'bg-gray-900' : 'bg-white'}`}>Or</span>
-                    </div>
-                  </div>
-
-                  {/* AI suggestion - SECOND */}
-                  <div className={`p-4 rounded-lg border-2 border-dashed text-center ${
-                    theme === 'minimalist'
-                      ? 'border-purple-200 bg-purple-50/30'
-                      : theme === 'dark'
-                        ? 'border-purple-800 bg-purple-900/20'
-                        : 'border-purple-300 bg-purple-100/30'
-                  }`}>
-                    <Sparkles className="w-8 h-8 mx-auto mb-2 text-purple-600" />
-                    <p className="text-sm text-gray-700 mb-3">
-                      Task feels overwhelming? Let AI break it down!
-                    </p>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setPreviousSubTasks(subTasks);
-                        setHasDecomposedSuccessfully(false);
-                        setShowDecomposition(true);
-                      }}
-                      className="border-purple-300 hover:bg-purple-50"
-                    >
-                      <Sparkles className="w-4 h-4 mr-2" />
-                      AI Break Down Task
-                    </Button>
-                  </div>
-                </div>
+                <AddSubTaskCard
+                  theme={theme}
+                  mode={subtaskInputMode}
+                  setMode={setSubtaskInputMode}
+                  newSubTask={newSubTask}
+                  setNewSubTask={setNewSubTask}
+                  onSubmit={handleAddSubTask}
+                  onVoice={handleVoiceSubtask}
+                  isProcessingVoice={isProcessingVoice}
+                  onAIBreakdown={() => {
+                    setPreviousSubTasks(subTasks);
+                    setHasDecomposedSuccessfully(false);
+                    setShowDecomposition(true);
+                  }}
+                />
               )}
 
               {subTasks.length > 0 && (
@@ -1993,58 +1907,17 @@ Return JSON:
                     </div>
                   ))}
 
-                  <div className="pt-2">
-                    <div className="flex gap-2 mb-2">
-                      <Button
-                        variant={subtaskInputMode === 'text' ? 'default' : 'ghost'}
-                        size="sm"
-                        onClick={() => setSubtaskInputMode('text')}
-                        className="flex-1"
-                      >
-                        <Keyboard className="w-3 h-3 mr-1" />
-                        Type
-                      </Button>
-                      <Button
-                        variant={subtaskInputMode === 'voice' ? 'default' : 'ghost'}
-                        size="sm"
-                        onClick={() => setSubtaskInputMode('voice')}
-                        className="flex-1"
-                      >
-                        <Mic className="w-3 h-3 mr-1" />
-                        Voice
-                      </Button>
-                    </div>
-
-                    {subtaskInputMode === 'text' ? (
-                      <div className="space-y-2">
-                        <form onSubmit={handleAddSubTask} className="flex gap-2">
-                          <Input
-                            value={newSubTask}
-                            onChange={(e) => setNewSubTask(e.target.value)}
-                            placeholder="Add a new sub-task..."
-                            className="flex-1"
-                          />
-                          <Button type="submit" size="icon" className="flex-shrink-0">
-                            <Plus className="w-4 h-4" />
-                          </Button>
-                        </form>
-                        <p className="text-xs text-gray-500">💡 Tip: Separate multiple sub-tasks with commas</p>
-                      </div>
-                    ) : (
-                      <div className="flex flex-col gap-2">
-                        <p className="text-xs text-gray-500 text-center">
-                          {isProcessingVoice ? "Processing..." : "Speak your subtasks (you can say multiple at once)"}
-                        </p>
-                        <div className="flex justify-center">
-                          <VoiceTaskInput
-                            onTranscription={handleVoiceSubtask}
-                            theme={theme}
-                            inline={false}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                  <AddSubTaskCard
+                    theme={theme}
+                    boxed={false}
+                    mode={subtaskInputMode}
+                    setMode={setSubtaskInputMode}
+                    newSubTask={newSubTask}
+                    setNewSubTask={setNewSubTask}
+                    onSubmit={handleAddSubTask}
+                    onVoice={handleVoiceSubtask}
+                    isProcessingVoice={isProcessingVoice}
+                  />
                 </div>
               )}
             </div>)}
