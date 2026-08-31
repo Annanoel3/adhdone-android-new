@@ -337,6 +337,20 @@ export function buildTaskParsePrompt(inputText: string): string {
       When in doubt between event and task, ask: "Is the user going somewhere / attending
       something at a scheduled time?" → event. "Is the user doing a thing that needs doing?" → task.
 
+      LEAVING THE HOUSE (drives the energy field — CRITICAL):
+      energy_required is about EFFORT, and getting in the car and going somewhere is
+      real effort. Set energy_required="high" whenever the task means leaving the house:
+      - It names a business, store, or place: "RideNow", "Jared", "the DMV", "Kroger", "the bank".
+      - A BARE NAME WITH NO VERB IS ALMOST ALWAYS A PLACE YOU GO. If the whole title is
+        just a name ("RideNow", "Jared", "Costco"), treat it as an out-of-the-house errand
+        → classification="task", energy_required="high". Do NOT treat it as a low-effort note.
+      - It names a person you'd go see or meet in person ("Jared", "Jennifer's office").
+      - It uses a going-somewhere verb: drop off, pick up, return, deliver, mail, sign,
+        test drive, stop by, go see, go to, appointment, in-person meeting.
+      At-home tasks (dishes, laundry, emails, phone calls, online orders) stay
+      energy_required="low" or "medium". This matters: the app groups high-energy
+      out-of-the-house errands into a single trip, so mislabeling one costs the user a drive.
+
       Extract:
       1. Clean title (strip "remind me to/I need to/in X minutes" — keep inner action)
       2. Urgency: ALWAYS suggest (low/medium/high/urgent)
