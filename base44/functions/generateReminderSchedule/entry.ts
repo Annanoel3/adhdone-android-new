@@ -328,6 +328,50 @@ Examples:
       notification_body: r.notification_body || title,
     }));
 
+    // ── Time-specific tasks: nothing fires after the scheduled time ─────────
+    // A task set for a specific clock time (not day-only) should only be
+    // nudged BEFORE it happens. Reminders after the fact are noise — the
+    // overdue system handles what happens once the time has passed.
+    // Guarantee the two that actually matter: 1 hour before, and at the time.
+    if (!dayOnly) {
+      const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
+      const fireTime = (r) => {
+        if (r.relative_minutes_before != null) {
+          return new Date(scheduled.getTime() - r.relative_minutes_before * 60000);
+        }
+        const d = new Date(scheduled);
+        d.setDate(d.getDate() - (r.days_before || 0));
+        d.setHours(r.hour ?? 9, r.minute ?? 0, 0, 0);
+        return d;
+      };
+
+      const before = reminders.length;
+      reminders = reminders.filter(r => fireTime(r) <= scheduled);
+      if (reminders.length < before) {
+        console.log(`[generateReminderSchedule] Dropped ${before - reminders.length} reminder(s) scheduled after the task time`);
+      }
+
+      const hasOneHourBefore = reminders.some(r => r.relative_minutes_before === 60);
+      const hasAtTime = reminders.some(r => r.relative_minutes_before === 0);
+
+      if (!hasOneHourBefore && new Date(scheduled.getTime() - 60 * 60000) > now) {
+        reminders.push({
+          days_before: null, hour: null, minute: null, relative_minutes_before: 60,
+          label: '1 hour before',
+          notification_title: `⏰ ${t}`,
+          notification_body: `Coming up in about an hour: "${t}". Time to start wrapping up! ✨`,
+        });
+      }
+      if (!hasAtTime && scheduled > now) {
+        reminders.push({
+          days_before: null, hour: null, minute: null, relative_minutes_before: 0,
+          label: 'right now',
+          notification_title: `🔔 ${t}`,
+          notification_body: `It's time — "${t}". You've got this! 💪`,
+        });
+      }
+    }
+
     // Safety cap for events: never schedule a reminder more than 1 day before.
     // The LLM sometimes generates "60 days before" reminders for far-future
     // events, which fires immediately and is completely useless.
