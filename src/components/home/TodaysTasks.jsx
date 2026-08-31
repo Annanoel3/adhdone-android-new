@@ -9,7 +9,6 @@ import { checkAndAwardAchievements } from "../utils/achievementTracker";
 import { awardPoints, getPointsForAction } from "../utils/gamification";
 import { base44 } from "@/api/base44Client";
 import { motion } from "framer-motion";
-import TaskCompletionCelebration from "../tasks/TaskCompletionCelebration";
 import { updateTodaysSummary } from "../utils/dailySummaryHelper";
 import { isTodayTask, isUpcomingTask } from "../utils/todayTasks";
 import {
@@ -823,7 +822,6 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
           See all
         </Button>
       </CardContent>
-      {celebratingTaskId && <TaskCompletionCelebration theme={theme} />}
     </Card>
   );
 }
