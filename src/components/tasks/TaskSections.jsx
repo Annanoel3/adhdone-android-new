@@ -5,12 +5,12 @@ import TaskCard from "./TaskCard";
 
 const SECTIONS = [
   { key: "today", label: "Today" },
+  { key: "backburner", label: "🔥 Back Burner" },
   { key: "tomorrow", label: "Tomorrow" },
   { key: "next7days", label: "Next 7 Days" },
   { key: "upcoming", label: "Upcoming" },
   { key: "later", label: "Later" },
   { key: "recurring", label: "Recurring" },
-  { key: "backburner", label: "🔥 Back Burner" },
 ];
 
 // Shared logic: determine if a task is recurring, and its relevant date.
@@ -104,11 +104,11 @@ function buildDaySections() {
     if (i === 0) label = `${dayName} · Today`;
     else if (i === 1) label = `${dayName} · Tomorrow`;
     sections.push({ key: `day_${i}`, label });
+    if (i === 0) sections.push({ key: "backburner", label: "🔥 Back Burner" });
   }
   sections.push({ key: "upcoming", label: "Upcoming" });
   sections.push({ key: "later", label: "Later" });
   sections.push({ key: "recurring", label: "Recurring" });
-  sections.push({ key: "backburner", label: "🔥 Back Burner" });
   return sections;
 }
 
