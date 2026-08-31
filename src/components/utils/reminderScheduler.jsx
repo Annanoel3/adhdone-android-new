@@ -54,6 +54,17 @@ function adjustForQuietHours(dateTime) {
 }
 
 /**
+ * Returns the time a reminder will ACTUALLY be sent at, after quiet-hour
+ * adjustment. Exact reminders (the user's chosen clock time) are never moved.
+ * Exported so callers can persist/display the real time, not the requested one.
+ */
+export function resolveSendTime(sendAtISO, exact) {
+  const t = new Date(sendAtISO);
+  if (!exact && isInQuietHours(t)) return adjustForQuietHours(t).toISOString();
+  return t.toISOString();
+}
+
+/**
  * Schedules push notifications and returns OneSignal notification ID
  */
 export async function scheduleReminder({

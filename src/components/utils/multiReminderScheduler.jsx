@@ -4,7 +4,7 @@
 // any task. Results are cached by title in localStorage (24h TTL) since the
 // minutes_before values are title-dependent, not date-dependent.
 
-import { scheduleReminder } from './reminderScheduler';
+import { scheduleReminder, resolveSendTime } from './reminderScheduler';
 import { base44 } from '@/api/base44Client';
 
 // ── localStorage cache (24h TTL) ─────────────────────────────────────────────
@@ -165,7 +165,9 @@ export async function scheduleMultiReminders({
 
     console.log(`[multiReminderScheduler] Scheduling ${reminderTimes.length} LLM-determined reminders for "${title}"`);
 
-    const notificationIds = [];
+    // Track each reminder together with the ID it actually got, so the saved
+    // schedule can never claim a reminder exists when scheduling failed.
+    const scheduled = [];
     for (const reminder of reminderTimes) {
       try {
         const id = await scheduleReminder({
@@ -182,26 +184,27 @@ export async function scheduleMultiReminders({
             type: 'task_reminder',
           },
         });
-        if (id) notificationIds.push(id);
+        if (id) scheduled.push({ reminder, id });
       } catch (e) {
         console.error(`[multiReminderScheduler] Failed to schedule "${reminder.label}":`, e);
       }
     }
 
-    console.log(`[multiReminderScheduler] Scheduled ${notificationIds.length}/${reminderTimes.length} reminders`);
+    console.log(`[multiReminderScheduler] Scheduled ${scheduled.length}/${reminderTimes.length} reminders`);
+
+    const notificationIds = scheduled.map((s) => s.id);
 
     // Persist the structured schedule so the task detail popover can let the
-    // user individually cancel or add reminders.
-    if (notificationIds.length > 0) {
-      const structured = reminderTimes
-        .slice(0, notificationIds.length)
-        .map((r, i) => ({
-          notification_id: notificationIds[i],
-          send_at: r.sendAtISO,
-          label: r.label,
-          notification_title: r.notification_title,
-          notification_body: r.notification_body,
-        }));
+    // user individually cancel or add reminders. Each entry is paired with the
+    // notification that was really created, at the time it will really fire.
+    if (scheduled.length > 0) {
+      const structured = scheduled.map(({ reminder: r, id }) => ({
+        notification_id: id,
+        send_at: resolveSendTime(r.sendAtISO, r.exact),
+        label: r.label,
+        notification_title: r.notification_title,
+        notification_body: r.notification_body,
+      }));
       base44.entities.Task.update(taskId, { reminder_schedule: structured }).catch(() => {});
     }
 
