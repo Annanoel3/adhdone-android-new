@@ -299,6 +299,21 @@ Return JSON:
       }
 
       const spoken = response.subtasks || [];
+
+      // OPTIMISTIC: show the parsed steps right away, then create them in the
+      // background — the user shouldn't stare at a spinner after speaking.
+      setSubTasks(prev => [
+        ...prev,
+        ...spoken.map((title, i) => ({
+          id: `temp_${Date.now()}_${i}`,
+          title: title.trim(),
+          parent_task_id: task.id,
+          status: 'active',
+          subtask_order: prev.length + i + 1,
+        })),
+      ]);
+      setIsProcessingVoice(false);
+
       for (let i = 0; i < spoken.length; i++) {
         const subtaskTitle = spoken[i];
         await Task.create({
@@ -350,14 +365,23 @@ Return JSON:
     const previousSubTaskIds = new Set(previousSubTasks.map(st => st.id));
     const tasksToDelete = subTasks.filter(st => !previousSubTaskIds.has(st.id));
 
-    for (const subTaskToDelete of tasksToDelete) {
-      await Task.delete(subTaskToDelete.id);
-    }
-
+    // OPTIMISTIC: revert the list instantly, then delete in the background.
+    setSubTasks(previousSubTasks);
     setPreviousSubTasks(null);
     setHasDecomposedSuccessfully(false);
-    await fetchSubTasks(task.id);
-    onUpdate();
+
+    (async () => {
+      try {
+        for (const subTaskToDelete of tasksToDelete) {
+          await Task.delete(subTaskToDelete.id);
+        }
+        await fetchSubTasks(task.id);
+        onUpdate();
+      } catch (e) {
+        console.error('Error undoing breakdown:', e);
+        fetchSubTasks(task.id);
+      }
+    })();
   };
 
   const handleSaveTitle = async () => {
@@ -648,7 +672,6 @@ Return JSON:
   const handleUpdateReminderTime = async (selectedTime, selectedDate) => {
     if (!task) return;
 
-    setIsSavingReminder(true);
     try {
       const currentTaskTime = getCurrentReminderTime(task);
       const currentTaskDate = getCurrentReminderDate(task);
@@ -667,9 +690,39 @@ Return JSON:
       const [hours, minutes] = finalEffectiveTime.split(':').map(n => parseInt(n, 10));
       let nextReminder = new Date(year, month - 1, day, hours, minutes, 0, 0);
 
-      // Optimistic update — user sees the new date/time instantly
-      onUpdate({ ...task, next_reminder: nextReminder.toISOString() });
+      // Past-date guard runs FIRST (synchronously) so we never optimistically
+      // show a save that we're about to reject.
+      const intervalMsGuard = {
+        '10min': 10 * 60 * 1000, '20min': 20 * 60 * 1000, '30min': 30 * 60 * 1000,
+        '1hour': 60 * 60 * 1000, '2hours': 2 * 60 * 60 * 1000, '4hours': 4 * 60 * 60 * 1000,
+        'daily': 24 * 60 * 60 * 1000, 'every_other_day': 2 * 24 * 60 * 60 * 1000,
+      };
+      const guardNowSync = new Date();
+      if (nextReminder <= new Date(guardNowSync.getTime() + 2 * 60 * 1000)) {
+        const iv = task.reminder_interval;
+        if (iv && iv !== 'once' && intervalMsGuard[iv]) {
+          nextReminder = new Date(guardNowSync.getTime() + intervalMsGuard[iv]);
+        } else {
+          alert("⚠️ The date and time you picked is in the past.\n\nPlease choose a future date and time, then tap Save again.");
+          return;
+        }
+      }
 
+      // OPTIMISTIC: show the new time + confirmation immediately, then do all
+      // the cancel/reschedule network work in the background.
+      onUpdate({ ...task, next_reminder: nextReminder.toISOString() });
+      const savedRdNow = `${nextReminder.getFullYear()}-${String(nextReminder.getMonth()+1).padStart(2,'0')}-${String(nextReminder.getDate()).padStart(2,'0')}`;
+      const savedRtNow = `${String(nextReminder.getHours()).padStart(2,'0')}:${String(nextReminder.getMinutes()).padStart(2,'0')}`;
+      setReminderDate(savedRdNow);
+      setReminderTime(savedRtNow);
+      reminderDateRef.current = savedRdNow;
+      reminderTimeRef.current = savedRtNow;
+      toast({
+        title: "Reminder saved ✓",
+        description: `We'll remind you ${nextReminder.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`,
+      });
+
+      (async () => {
       // Cancel existing reminders — include every notification ID we know about
       // (both onesignal_notification_ids and any IDs stored on individual
       // reminder_schedule entries) so no stale reminder survives a date/time
@@ -702,18 +755,6 @@ Return JSON:
       try {
         const currentUser = await base44.auth.me();
         const interval = task.reminder_interval;
-
-        // Future guard: never schedule a reminder in the past or immediate
-        const guardNow = new Date();
-        const guardTwoMin = new Date(guardNow.getTime() + 2 * 60 * 1000);
-        if (nextReminder <= guardTwoMin) {
-          if (interval && interval !== 'once' && intervalMs[interval]) {
-            nextReminder = new Date(guardNow.getTime() + intervalMs[interval]);
-          } else {
-            alert("⚠️ The date and time you picked is in the past.\n\nPlease choose a future date and time, then tap Save again.");
-            return;
-          }
-        }
 
         if (interval && interval !== 'once' && intervalMs[interval]) {
           // Recurring: schedule 10 future occurrences (same as creation)
@@ -792,22 +833,9 @@ Return JSON:
       } catch (error) {
         console.error("Failed to reschedule reminder:", error);
       }
-
-      // Sync local state
-      const savedRd = `${nextReminder.getFullYear()}-${String(nextReminder.getMonth()+1).padStart(2,'0')}-${String(nextReminder.getDate()).padStart(2,'0')}`;
-      const savedRt = `${String(nextReminder.getHours()).padStart(2,'0')}:${String(nextReminder.getMinutes()).padStart(2,'0')}`;
-      setReminderDate(savedRd);
-      setReminderTime(savedRt);
-      reminderDateRef.current = savedRd;
-      reminderTimeRef.current = savedRt;
-
-      onUpdate({ ...task, next_reminder: nextReminder.toISOString(), onesignal_notification_ids: newNotificationIds });
-      toast({
-        title: "Reminder saved ✓",
-        description: `We'll remind you ${nextReminder.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`,
-      });
-    } finally {
-      setIsSavingReminder(false);
+      })();
+    } catch (error) {
+      console.error("Error saving reminder time:", error);
     }
   };
 
@@ -858,15 +886,17 @@ Return JSON:
   // old lead-time reminders and regenerates a fresh schedule from the new time.
   const handleUpdateEventTime = async (selectedDate, selectedTime) => {
     if (!task || !selectedDate || !selectedTime) return;
-    setIsSavingEvent(true);
-    try {
-      const [year, month, day] = selectedDate.split('-').map(n => parseInt(n, 10));
-      const [hours, minutes] = selectedTime.split(':').map(n => parseInt(n, 10));
-      const eventTime = new Date(year, month - 1, day, hours, minutes, 0, 0);
+    const [year, month, day] = selectedDate.split('-').map(n => parseInt(n, 10));
+    const [hours, minutes] = selectedTime.split(':').map(n => parseInt(n, 10));
+    const eventTime = new Date(year, month - 1, day, hours, minutes, 0, 0);
 
-      // Optimistic update — user sees the new event time instantly
-      onUpdate({ ...task, event_time: eventTime.toISOString(), next_reminder: eventTime.toISOString() });
+    // OPTIMISTIC: show the new event time + confirmation immediately, then
+    // cancel/reschedule in the background instead of blocking on the network.
+    onUpdate({ ...task, event_time: eventTime.toISOString(), next_reminder: eventTime.toISOString() });
+    toast({ title: 'Event time saved ✓' });
 
+    (async () => {
+      try {
       const allOldIds = Array.from(new Set([
         ...(task.onesignal_notification_ids || []),
         ...((task.reminder_schedule || []).map(r => r.notification_id).filter(Boolean)),
@@ -902,12 +932,10 @@ Return JSON:
       } else {
         onUpdate({ ...task, event_time: eventTime.toISOString(), next_reminder: eventTime.toISOString() });
       }
-      toast({ title: 'Event time saved ✓' });
-    } catch (e) {
-      console.error('Error updating event time:', e);
-    } finally {
-      setIsSavingEvent(false);
-    }
+      } catch (e) {
+        console.error('Error updating event time:', e);
+      }
+    })();
   };
 
   const handleComplete = async () => {
@@ -1172,7 +1200,8 @@ Return JSON:
   };
 
   const handleNotesUpdate = async () => {
-    // Update in background without calling onUpdate to avoid reload
+    // Instant confirmation; the write happens in the background.
+    toast({ title: 'Notes saved ✓' });
     Task.update(task.id, { notes: taskNotes }).catch(error => {
       console.error("Error updating task notes:", error);
     });
