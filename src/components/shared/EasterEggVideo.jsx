@@ -46,11 +46,39 @@ export default function EasterEggVideo() {
     "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif", // Sparkles
   ];
 
-  // Track which GIF was shown last for each type using ref to persist across renders
-  const lastGifIndexRef = React.useRef({
-    ideas: -1,
-    awesome: -1
-  });
+  // Remember every GIF already shown (persisted across sessions) so the user
+  // cycles through the whole list before any GIF repeats.
+  const seenKey = (type) => `easter_egg_seen_${type}`;
+
+  const readSeen = (type) => {
+    try {
+      const raw = localStorage.getItem(seenKey(type));
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const pickFreshGif = (type, gifList) => {
+    const unique = [...new Set(gifList)];
+    let seen = readSeen(type).filter((g) => unique.includes(g));
+    let pool = unique.filter((g) => !seen.includes(g));
+
+    // Everything's been seen — start a new cycle, but never repeat the very
+    // last GIF back-to-back.
+    if (pool.length === 0) {
+      const last = seen[seen.length - 1];
+      pool = unique.filter((g) => g !== last);
+      if (pool.length === 0) pool = unique;
+      seen = [];
+    }
+
+    const gif = pool[Math.floor(Math.random() * pool.length)];
+    try {
+      localStorage.setItem(seenKey(type), JSON.stringify([...seen, gif]));
+    } catch {}
+    return gif;
+  };
 
   // Track current week to know when to refresh
   const weekRef = React.useRef(getWeekNumber());
@@ -71,8 +99,6 @@ export default function EasterEggVideo() {
       // Check if week has changed
       if (currentWeek !== weekRef.current) {
         weekRef.current = currentWeek;
-        // Reset GIF tracking when week changes
-        lastGifIndexRef.current = { ideas: -1, awesome: -1 };
         localStorage.setItem('lastGifWeek', currentWeek.toString());
       }
 
@@ -95,23 +121,12 @@ export default function EasterEggVideo() {
         gifList = type === 'ideas' ? defaultIdeasGifs : defaultAwesomeGifs;
       }
       
-      let lastIndex = lastGifIndexRef.current[type];
-      
-      // Pick a random GIF that's different from the last one
-      let randomIndex;
-      do {
-        randomIndex = Math.floor(Math.random() * gifList.length);
-      } while (randomIndex === lastIndex && gifList.length > 1);
-      
-      // Update the ref directly
-      lastGifIndexRef.current[type] = randomIndex;
-      
+      selectedGif = pickFreshGif(type, gifList);
+
       if (type === 'ideas') {
-        selectedGif = gifList[randomIndex];
         selectedTitle = "🧠💥 Too many ideas! 💥🧠";
         selectedSubtitle = "That's what the Parking Lot is for! 🚗💡";
       } else {
-        selectedGif = gifList[randomIndex];
         selectedTitle = "🎉 You're crushing it! 🎉";
         selectedSubtitle = "Keep being amazing! ✨";
       }
