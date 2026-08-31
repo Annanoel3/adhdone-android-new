@@ -190,7 +190,19 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   // Sync theme preferences from user profile (source of truth for cross-device persistence)
   useEffect(() => {
     if (user && user.email && authCheckComplete) {
-      const userSpecialMode = user.special_mode || 'normal';
+      const savedSpecialMode = user.special_mode || 'normal';
+      // Seasonal themes are date-driven: re-derive the current season on every
+      // app open so a user who turned it on in July isn't stuck in summer
+      // forever. Kawaii is a manual choice, so it's never overridden.
+      const DATE_DRIVEN = ['christmas', 'newyears', 'valentines', 'stpatricks', 'fourthjuly', 'summer', 'spring', 'halloween', 'fall', 'winter'];
+      let userSpecialMode = savedSpecialMode;
+      if (DATE_DRIVEN.includes(savedSpecialMode)) {
+        const current = getDateBasedMode();
+        if (current !== savedSpecialMode) {
+          userSpecialMode = current;
+          base44.auth.updateMe({ special_mode: current }).catch(() => {});
+        }
+      }
       setSpecialMode(userSpecialMode);
       localStorage.setItem('special_mode', userSpecialMode);
       // A seasonal/special mode always uses the clean minimalist base — never
