@@ -6,7 +6,7 @@
 
 const SEASONAL = [
   'christmas', 'valentines', 'newyears', 'stpatricks', 'fourthjuly',
-  'summer', 'spring', 'kawaii', 'halloween', 'fall', 'winter',
+  'summer', 'spring', 'kawaii', 'halloween', 'harvest', 'fall', 'winter',
 ];
 
 export function readThemeState() {

@@ -71,6 +71,7 @@ import {
 import KawaiiMode from "./components/shared/KawaiiMode";
 import HalloweenMode from "./components/shared/HalloweenMode";
 import FallMode from "./components/shared/FallMode";
+import HarvestMode from "./components/shared/HarvestMode";
 import WinterMode from "./components/shared/WinterMode";
 import ChristmasMode from "./components/shared/ChristmasMode";
 import ValentinesMode from "./components/shared/ValentinesMode";
@@ -125,7 +126,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     if ((month === 3 && day >= 21) || month === 4 || month === 5) return 'spring';
     // Summer: Jun 1 - Aug 31 (excluding Jul 1-7)
     if (month === 6 || (month === 7 && day > 7) || month === 8) return 'summer';
-    // Fall: Sep 1 - Oct 9, Nov 2 - Nov 30
+    // Harvest: Nov 22 - Nov 26
+    if (month === 11 && day >= 22 && day <= 26) return 'harvest';
+    // Fall: Sep 1 - Oct 9, Nov 2 - Nov 21, Nov 27 - Nov 30
     if (month === 9 || (month === 10 && day <= 9) || (month === 11 && day >= 2)) return 'fall';
     // Winter: Dec 1 - Dec 19
     if (month === 12 && day <= 19) return 'winter';
@@ -194,7 +197,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       // Seasonal themes are date-driven: re-derive the current season on every
       // app open so a user who turned it on in July isn't stuck in summer
       // forever. Kawaii is a manual choice, so it's never overridden.
-      const DATE_DRIVEN = ['christmas', 'newyears', 'valentines', 'stpatricks', 'fourthjuly', 'summer', 'spring', 'halloween', 'fall', 'winter'];
+      const DATE_DRIVEN = ['christmas', 'newyears', 'valentines', 'stpatricks', 'fourthjuly', 'summer', 'spring', 'halloween', 'harvest', 'fall', 'winter'];
       let userSpecialMode = savedSpecialMode;
       if (DATE_DRIVEN.includes(savedSpecialMode)) {
         const current = getDateBasedMode();
@@ -318,7 +321,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   };
 
   const isSeasonalTheme = () => {
-    return ['christmas', 'valentines', 'newyears', 'stpatricks', 'fourthjuly', 'summer', 'spring', 'kawaii', 'halloween', 'fall', 'winter'].includes(specialMode);
+    return ['christmas', 'valentines', 'newyears', 'stpatricks', 'fourthjuly', 'summer', 'spring', 'kawaii', 'halloween', 'harvest', 'fall', 'winter'].includes(specialMode);
   };
 
   const getBackgroundClass = () => {
@@ -338,6 +341,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       kawaii: null,
       halloween: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/ba3d7eb0b_c9c617da-1d0c-4fed-9830-7f692c5bac3d.png')",
       fall: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/01f77998a_ChatGPTImageOct15202504_16_28PM.png')",
+      harvest: "url('https://media.base44.com/images/public/68dd79726fce6eca73056b9b/738c06129_generated_image.png')",
       winter: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/d7ecb6583_ChatGPTImageOct15202504_16_31PM.png')",
       christmas: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/8e296b8ab_1ChatGPTImageOct15202504_16_05PM.png')",
       valentines: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/c990d460e_2ChatGPTImageOct15202504_16_09PM.png')",
@@ -469,6 +473,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       {specialMode === 'kawaii' && <KawaiiMode />}
       {specialMode === 'halloween' && <HalloweenMode />}
       {specialMode === 'fall' && <FallMode />}
+      {specialMode === 'harvest' && <HarvestMode />}
       {specialMode === 'winter' && <WinterMode />}
       {specialMode === 'christmas' && <ChristmasMode />}
       {specialMode === 'valentines' && <ValentinesMode />}
@@ -479,7 +484,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       {specialMode === 'spring' && <SpringMode />}
       <EasterEggVideo />
 
-      {isSeasonalTheme() && !['summer', 'spring', 'valentines', 'stpatricks', 'kawaii', 'halloween', 'fall', 'winter'].includes(specialMode) && (
+      {isSeasonalTheme() && !['summer', 'spring', 'valentines', 'stpatricks', 'kawaii', 'halloween', 'harvest', 'fall', 'winter'].includes(specialMode) && (
         <div
           style={{
             position: 'fixed',
@@ -494,7 +499,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         />
       )}
 
-      {['summer', 'spring', 'valentines', 'stpatricks', 'fall'].includes(specialMode) && (
+      {['summer', 'spring', 'valentines', 'stpatricks', 'fall', 'harvest'].includes(specialMode) && (
         <div
           style={{
             position: 'fixed',
@@ -627,6 +632,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           .kawaii-card,
           .halloween-card,
           .fall-card,
+          .harvest-card,
           .winter-card,
           .valentines-card,
           .newyears-card,
