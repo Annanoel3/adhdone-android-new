@@ -24,7 +24,10 @@ export default function WeekAgenda({
     <div className="space-y-2">
       {weekDays.map((day) => {
         const k = dateKey(day);
-        const dayItems = itemsByDate.get(k) || [];
+        const allItems = itemsByDate.get(k) || [];
+        // Back-burner tasks collapse to red dots instead of full rows.
+        const dayItems = allItems.filter((it) => !it.silenced);
+        const backBurner = allItems.filter((it) => it.silenced);
         const isToday = sameDayKey(day, today);
         const isSelected = sameDayKey(day, selected);
         return (
@@ -51,7 +54,7 @@ export default function WeekAgenda({
               )}
             </div>
 
-            {dayItems.length === 0 ? (
+            {dayItems.length === 0 && backBurner.length === 0 ? (
               <p className={`text-xs ${textSecondary}`}>Nothing scheduled.</p>
             ) : (
               <div className="space-y-1">
@@ -82,6 +85,16 @@ export default function WeekAgenda({
                     </button>
                   );
                 })}
+                {backBurner.length > 0 && (
+                  <div className={`flex items-center gap-1 px-2 pt-1 text-[11px] ${textSecondary}`}>
+                    {backBurner.slice(0, 5).map((_, i) => (
+                      <span key={`bb-${i}`} className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+                    ))}
+                    <span className="ml-1">
+                      {backBurner.length} on back burner
+                    </span>
+                  </div>
+                )}
               </div>
             )}
           </div>

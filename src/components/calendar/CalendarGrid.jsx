@@ -135,7 +135,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
         const startD = new Date(spanStart);
         const endD = new Date(spanEnd);
         if (startD.toDateString() === endD.toDateString()) {
-          push(startD, { kind, title: t.title, id: t.id, taskId: t.id, task: t });
+          push(startD, { kind, silenced: !!t.silenced, title: t.title, id: t.id, taskId: t.id, task: t });
         } else {
           const dayCursor = new Date(startD.getFullYear(), startD.getMonth(), startD.getDate());
           const last = new Date(endD.getFullYear(), endD.getMonth(), endD.getDate());
@@ -143,7 +143,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           while (dayCursor <= last) {
             const isLast = dayCursor.toDateString() === last.toDateString();
             push(new Date(dayCursor), {
-              kind, title: t.title, id: t.id, taskId: t.id, task: t,
+              kind, silenced: !!t.silenced, title: t.title, id: t.id, taskId: t.id, task: t,
               spanPos: isLast ? 'end' : isFirst ? 'start' : 'middle',
             });
             isFirst = false;
@@ -167,7 +167,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           const dayCursor = new Date(dueDay);
           while (dayCursor <= todayDay) {
             push(new Date(dayCursor), {
-              kind, title: t.title, id: t.id, taskId: t.id, task: t,
+              kind, silenced: !!t.silenced, title: t.title, id: t.id, taskId: t.id, task: t,
               overdue: true,
             });
             dayCursor.setDate(dayCursor.getDate() + 1);
@@ -175,7 +175,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           return;
         }
       }
-      push(new Date(raw), { kind, title: t.title, id: t.id, taskId: t.id, task: t });
+      push(new Date(raw), { kind, silenced: !!t.silenced, title: t.title, id: t.id, taskId: t.id, task: t });
     });
     events.forEach((e) => {
       if (!e.start_time) return;
@@ -395,12 +395,16 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           const isToday = sameDayKey(cell, today);
           const isSelected = sameDayKey(cell, selected);
 
+          // Back-burner (silenced) tasks collapse to small red dots so they
+          // don't eat the cell space that active items need.
+          const backBurnerItems = dayItems.filter((it) => it.silenced);
+          const liveItems = dayItems.filter((it) => !it.silenced);
           // Separate multi-day span bars from regular items for cleaner rendering.
-          const spanItems = dayItems.filter((it) => it.spanPos);
-          const regularItems = dayItems.filter((it) => !it.spanPos);
+          const spanItems = liveItems.filter((it) => it.spanPos);
+          const regularItems = liveItems.filter((it) => !it.spanPos);
           const regularShown = regularItems.slice(0, 3);
           const spanShown = spanItems.slice(0, 3);
-          const totalOverflow = dayItems.length - spanShown.length - regularShown.length;
+          const totalOverflow = liveItems.length - spanShown.length - regularShown.length;
 
           return (
             <button
@@ -482,6 +486,13 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                       {useEmoji ? `+${totalOverflow}` : `+${totalOverflow} more`}
                     </div>
                   )}
+                  {backBurnerItems.length > 0 && (
+                    <div className="flex flex-wrap gap-0.5" title="Back burner">
+                      {backBurnerItems.slice(0, 5).map((it, i) => (
+                        <span key={`bb-${i}`} className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </button>
@@ -496,6 +507,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
         <span className="flex items-center gap-1"><span>📆</span> Event</span>
         <span className="flex items-center gap-1"><span>✅</span> Task</span>
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400 inline-block" /> Overdue</span>
+        <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" /> Back burner</span>
       </div>
 
       {/* Selected day detail */}
