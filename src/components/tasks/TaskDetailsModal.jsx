@@ -861,6 +861,60 @@ Return JSON:
         updates.due_date_pushes = (task.due_date_pushes || 0) + 1;
       }
     }
+    // One-time tasks with a Smart Reminder Schedule: the schedule is anchored
+    // to the old date, so a due-date change MUST cancel every old OneSignal
+    // notification and regenerate a fresh schedule at the new date. (Recurring
+    // interval tasks are rescheduled by the backend onTaskUpdate automation.)
+    const hasSmartSchedule = (task.reminder_schedule && task.reminder_schedule.length > 0);
+    const isOneTime = !task.reminder_interval || task.reminder_interval === 'once';
+
+    if (isOneTime && (hasSmartSchedule || dueDateValue)) {
+      if (dueDateValue) updates.next_reminder = dueDateValue;
+      // Optimistic — show the new date and a schedule that's being rebuilt
+      onUpdate({ ...task, ...updates, reminder_schedule: [], onesignal_notification_ids: [] });
+      toast({ title: 'Due date saved ✓', description: dueDateValue ? 'Rebuilding your reminder schedule…' : undefined });
+
+      (async () => {
+        try {
+          // Cancel every notification we know about — batch IDs and per-entry IDs
+          const allOldIds = Array.from(new Set([
+            ...(task.onesignal_notification_ids || []),
+            ...((task.reminder_schedule || []).map(r => r.notification_id).filter(Boolean)),
+          ]));
+          if (allOldIds.length > 0) {
+            await cancelScheduledReminder(allOldIds).catch(e => console.error('Failed to cancel old reminders:', e));
+          }
+
+          await Task.update(task.id, {
+            ...updates,
+            onesignal_notification_ids: [],
+            reminder_schedule: [],
+          });
+
+          if (dueDateValue) {
+            const currentUser = await base44.auth.me();
+            const { scheduleMultiReminders } = await import('../utils/multiReminderScheduler');
+            const multiIds = await scheduleMultiReminders({
+              email: currentUser.email,
+              title: task.title,
+              scheduledDateISO: dueDateValue,
+              taskId: task.id,
+              urgency: task.urgency,
+              classification: task.classification,
+            });
+            if (multiIds && multiIds.length > 0) {
+              await Task.update(task.id, { onesignal_notification_ids: multiIds });
+            }
+            const refreshed = await Task.filter({ id: task.id });
+            if (refreshed[0]) onUpdate(refreshed[0]);
+          }
+        } catch (error) {
+          console.error('Error rescheduling reminders for new due date:', error);
+        }
+      })();
+      return;
+    }
+
     Task.update(task.id, updates).catch(error => {
       console.error("Error updating due date:", error);
     });
