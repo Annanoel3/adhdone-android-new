@@ -35,6 +35,10 @@ Deno.serve(async (req) => {
     // 2. Get all tasks — group smart-nudge tasks by recipient, track completed/silenced
     const allTasks = await base44.asServiceRole.entities.Task.list('-updated_date', 500);
     const tasksByUser: Record<string, any[]> = {};
+    // Today's fixed appointments/events per user — NOT nudged (they have their own
+    // reminder flow), but given to the LLM as context so it can suggest batching
+    // errands around a trip the user is already making.
+    const eventsByUser: Record<string, any[]> = {};
     const completedTaskIds = new Set<string>();
     const silencedTaskIds = new Set<string>();
 
@@ -77,6 +81,16 @@ Deno.serve(async (req) => {
       }
       const email = task.notification_recipient_email;
       if (!email) continue;
+      if (
+        task.status === 'active' &&
+        !task.silenced &&
+        !task.parent_task_id &&
+        task.classification === 'event' &&
+        (task.event_time || task.next_reminder)
+      ) {
+        if (!eventsByUser[email]) eventsByUser[email] = [];
+        eventsByUser[email].push(task);
+      }
       if (isSmartNudgeTask(task)) {
         if (!tasksByUser[email]) tasksByUser[email] = [];
         tasksByUser[email].push(task);
@@ -127,7 +141,10 @@ Deno.serve(async (req) => {
           timeZone,
           startMin,
           endMin,
-          subtasksByParent
+          subtasksByParent,
+          (eventsByUser[email] || []).filter(e =>
+            isSameLocalDay(new Date(e.event_time || e.next_reminder), now, timeZone)
+          )
         );
 
         if (!newEntries || newEntries.length === 0) continue;
