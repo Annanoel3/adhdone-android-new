@@ -23,6 +23,16 @@ export default function EasterEggVideo() {
     "https://media.giphy.com/media/Um3ljJl8jrnHy/giphy.gif", // Hamster wheel brain
     "https://media.giphy.com/media/3og0IMJcSI8p6hYQXS/giphy.gif", // Mind blown cat
     "https://media.giphy.com/media/26xBI73gWquCBBCDe/giphy.gif", // Brain freeze
+    "https://media.giphy.com/media/l2Sq2vCtLmpXhKQ3K/giphy.gif", // Spinning thoughts
+    "https://media.giphy.com/media/3o7TKMt1VVNkHV2PaE/giphy.gif", // Confused math lady
+    "https://media.giphy.com/media/l3q2K5jinAlChoCLS/giphy.gif", // Static brain
+    "https://media.giphy.com/media/QMkPpxPDYY0fu/giphy.gif", // Overloaded
+    "https://media.giphy.com/media/xT9DPpf0zTqbcgy8xy/giphy.gif", // Sparks flying
+    "https://media.giphy.com/media/l0HlHFRbmaZtBRhXG/giphy.gif", // Wait what
+    "https://media.giphy.com/media/3o6Zt481isNVuQI1l6/giphy.gif", // Head spinning
+    "https://media.giphy.com/media/26tPplGWjN0xLybiU/giphy.gif", // So many tabs open
+    "https://media.giphy.com/media/l46Cy1rHbQ92uuLXa/giphy.gif", // Chaotic energy
+    "https://media.giphy.com/media/3oEjHV0z8S7WM2QqIE/giphy.gif", // Brain buffering
   ];
 
   const defaultAwesomeGifs = [
@@ -43,7 +53,18 @@ export default function EasterEggVideo() {
     "https://media.giphy.com/media/l2R032V7qRAF8J6sU/giphy.gif", // Happy dance
     "https://media.giphy.com/media/IwAZ6dvvvaTtdI8SD5/giphy.gif", // You're a star
     "https://media.giphy.com/media/3o6ZtaO9BZHcOjmErm/giphy.gif", // High five
-    "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif", // Sparkles
+    "https://media.giphy.com/media/3ohzdIuqJoo8QdKlnW/giphy.gif", // Proud clapping
+    "https://media.giphy.com/media/l4FGuhL4U2WyjdkaY/giphy.gif", // Confetti burst
+    "https://media.giphy.com/media/xUOwGmPWXjcvS9j0BW/giphy.gif", // Nailed it
+    "https://media.giphy.com/media/l0MYGb1LuZ3n7dRnO/giphy.gif", // Standing ovation
+    "https://media.giphy.com/media/3oz8xLd9DJq2l2VFtu/giphy.gif", // Happy jump
+    "https://media.giphy.com/media/l3q2XhfQ8oCkm1Ts4/giphy.gif", // Dog excited
+    "https://media.giphy.com/media/3o72F8t9TDi2xVnxOE/giphy.gif", // Victory spin
+    "https://media.giphy.com/media/13GIgrGdslD9oQ/giphy.gif", // Thumbs up
+    "https://media.giphy.com/media/xThuWvOZuMcHNiozOw/giphy.gif", // Sparkle finish
+    "https://media.giphy.com/media/1ffkLXpKDKfr2/giphy.gif", // Little win dance
+    "https://media.giphy.com/media/26FmQd5DjKQnQrWzu/giphy.gif", // Celebration cheer
+    "https://media.giphy.com/media/QAsBwSjx9zVKh2NlOB/giphy.gif", // Well done
   ];
 
   // Remember every GIF already shown (persisted across sessions) so the user
@@ -59,8 +80,33 @@ export default function EasterEggVideo() {
     }
   };
 
+  // A GIF URL that fails to load is remembered and never offered again.
+  const brokenKey = 'easter_egg_broken';
+  const readBroken = () => {
+    try {
+      const raw = localStorage.getItem(brokenKey);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const currentTypeRef = React.useRef('ideas');
+
+  const handleGifError = () => {
+    const dead = videoUrl;
+    try {
+      localStorage.setItem(brokenKey, JSON.stringify([...new Set([...readBroken(), dead])]));
+    } catch {}
+    const type = currentTypeRef.current;
+    const list = type === 'ideas' ? defaultIdeasGifs : defaultAwesomeGifs;
+    const replacement = pickFreshGif(type, list);
+    if (replacement && replacement !== dead) setVideoUrl(replacement);
+  };
+
   const pickFreshGif = (type, gifList) => {
-    const unique = [...new Set(gifList)];
+    const broken = readBroken();
+    const unique = [...new Set(gifList)].filter((g) => !broken.includes(g));
     let seen = readSeen(type).filter((g) => unique.includes(g));
     let pool = unique.filter((g) => !seen.includes(g));
 
@@ -121,6 +167,7 @@ export default function EasterEggVideo() {
         gifList = type === 'ideas' ? defaultIdeasGifs : defaultAwesomeGifs;
       }
       
+      currentTypeRef.current = type;
       selectedGif = pickFreshGif(type, gifList);
 
       if (type === 'ideas') {
@@ -184,6 +231,7 @@ export default function EasterEggVideo() {
                   alt="Easter egg GIF"
                   className="w-full h-auto"
                   style={{ maxHeight: '400px', objectFit: 'contain' }}
+                  onError={handleGifError}
                 />
               </div>
               
