@@ -47,14 +47,19 @@ export default function WeekAgenda({
                 {day.getDate()}
               </span>
               <span className={`text-sm font-semibold ${textPrimary}`}>{DAY_NAMES[day.getDay()]}</span>
-              {dayItems.length > 0 && (
-                <span className={`ml-auto text-[11px] ${textSecondary}`}>
-                  {dayItems.length} item{dayItems.length !== 1 ? 's' : ''}
-                </span>
-              )}
+              <div className="ml-auto flex items-center gap-1.5">
+                {dayItems.length > 0 && (
+                  <span className={`text-[11px] ${textSecondary}`}>
+                    {dayItems.length} item{dayItems.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+                {backBurner.length > 0 && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-700 inline-block" title="On the back burner" />
+                )}
+              </div>
             </div>
 
-            {dayItems.length === 0 && backBurner.length === 0 ? (
+            {dayItems.length === 0 ? (
               <p className={`text-xs ${textSecondary}`}>Nothing scheduled.</p>
             ) : (
               <div className="space-y-1">
@@ -85,12 +90,6 @@ export default function WeekAgenda({
                     </button>
                   );
                 })}
-                {backBurner.length > 0 && (
-                  <div className={`flex items-center gap-1 px-2 pt-1 text-[11px] ${textSecondary}`}>
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-700 inline-block" />
-                    <span>{backBurner.length} on back burner</span>
-                  </div>
-                )}
               </div>
             )}
           </div>
