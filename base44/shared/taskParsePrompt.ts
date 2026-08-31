@@ -59,12 +59,19 @@ export function buildTaskParsePrompt(inputText: string): string {
       TITLE EXTRACTION RULES (CRITICAL):
       - ALWAYS strip the outer "remind me to" or "remind me" wrapper from the title.
       - The title should be the actual action the user needs to do, not the meta-instruction.
+      - The time/date phrase can appear BEFORE the action ("remind me at 12:50 tomorrow to go to X").
+        Strip ONLY the wrapper and the time/date words — keep the ENTIRE action phrase, including
+        the verb's object/destination. NEVER cut the title down to just the verb.
       - Examples:
         "remind me to call dentist tomorrow" → title: "Call dentist"
+        "remind me at 12:50 tomorrow to go to RideNow" → title: "Go to RideNow" (NOT "Go")
+        "remind me tomorrow at 3 to pick up the cake from Kroger" → title: "Pick up the cake from Kroger"
         "remind me to remind my dad to check the door tomorrow" → title: "Remind dad to check the door"
         "remind me to take my medicine" → title: "Take medicine"
       - Keep the inner action intact; only strip the outermost "remind me to" phrase.
       - Capitalize the first word. Remove time/date references from the title.
+      - SANITY CHECK: a title must contain the action AND what it applies to. Single-word titles
+        like "Go", "Call", "Pick" are ALWAYS wrong — include the destination/object.
 
       ═══════════════════════════════════════════════════════════════════════
       REMINDER INTERVAL RULES (CRITICAL — read carefully)
