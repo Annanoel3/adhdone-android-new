@@ -190,6 +190,10 @@ Deno.serve(async (req) => {
           nudgesSent++;
           results.push({ email, title: entry.title, type: entry.type });
           console.log(`[SMART NUDGE] Sent to ${email}: "${entry.title}" (${entry.type})`);
+          // ONE nudge per user per run. Two notifications arriving in the same
+          // minute is exactly the flood this system exists to prevent — any
+          // other due entries wait for the next run instead of stacking.
+          break;
         }
       }
 
@@ -423,6 +427,22 @@ Return ONLY valid JSON:
         sent_at: null,
       };
     }).filter((e: any) => new Date(e.send_at).getTime() > nowMs); // drop any that landed in the past
+
+    // Space nudges out so two never land at (or near) the same time. The LLM
+    // sometimes gives several nudges the same delay_minutes, which arrives as a
+    // stack of notifications — overwhelming instead of helpful.
+    const MIN_GAP_MS = 45 * 60 * 1000;
+    entries.sort((a: any, b: any) => new Date(a.send_at).getTime() - new Date(b.send_at).getTime());
+    for (let i = 1; i < entries.length; i++) {
+      const prev = new Date(entries[i - 1].send_at).getTime();
+      const cur = new Date(entries[i].send_at).getTime();
+      if (cur - prev < MIN_GAP_MS) {
+        let pushed = new Date(prev + MIN_GAP_MS);
+        pushed = adjustForQuietHours(pushed, quietStartMin, quietEndMin, timeZone);
+        entries[i].send_at = pushed.toISOString();
+        entries[i].title = fixTitleTimeOfDay(entries[i].title, pushed, timeZone);
+      }
+    }
 
     return entries;
   } catch (e) {
