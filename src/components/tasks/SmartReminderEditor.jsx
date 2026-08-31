@@ -15,9 +15,15 @@ export default function SmartReminderEditor({ task, theme, onUpdate }) {
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [deletingId, setDeletingId] = useState(null);
+  // Optimistically-removed reminder ids — hidden from the list the instant the
+  // user taps ×, so they never sit there waiting on OneSignal + the DB write.
+  const [removedIds, setRemovedIds] = useState([]);
+  // Optimistic pending reminder the user just added (no notification id yet).
+  const [pendingAdd, setPendingAdd] = useState(null);
 
-  const schedule = task.reminder_schedule || [];
+  const schedule = (task.reminder_schedule || []).filter(
+    r => !removedIds.includes(r.notification_id)
+  );
 
   const formatDateTime = (iso) => {
     const d = new Date(iso);
@@ -33,25 +39,36 @@ export default function SmartReminderEditor({ task, theme, onUpdate }) {
     return `${formatted} (${relative})`;
   };
 
-  const handleDelete = async (reminder) => {
-    setDeletingId(reminder.notification_id);
-    try {
-      if (reminder.notification_id) {
-        await cancelScheduledReminder([reminder.notification_id]);
+  const handleDelete = (reminder) => {
+    // OPTIMISTIC: remove it from the list right away, then cancel + persist in
+    // the background. Waiting on the network made turning off a bad reminder
+    // feel broken.
+    setRemovedIds(prev => [...prev, reminder.notification_id]);
+
+    const newSchedule = (task.reminder_schedule || []).filter(
+      r => r.notification_id !== reminder.notification_id
+    );
+    const newIds = (task.onesignal_notification_ids || []).filter(
+      id => id !== reminder.notification_id
+    );
+    onUpdate({ ...task, reminder_schedule: newSchedule, onesignal_notification_ids: newIds });
+
+    (async () => {
+      try {
+        if (reminder.notification_id) {
+          await cancelScheduledReminder([reminder.notification_id]);
+        }
+        await base44.entities.Task.update(task.id, {
+          reminder_schedule: newSchedule,
+          onesignal_notification_ids: newIds,
+        });
+      } catch (e) {
+        console.error('Failed to delete reminder:', e);
+        // Put it back so the UI reflects reality.
+        setRemovedIds(prev => prev.filter(id => id !== reminder.notification_id));
+        alert('Failed to cancel that reminder. Please try again.');
       }
-      const newSchedule = schedule.filter(r => r.notification_id !== reminder.notification_id);
-      const newIds = (task.onesignal_notification_ids || []).filter(id => id !== reminder.notification_id);
-      await base44.entities.Task.update(task.id, {
-        reminder_schedule: newSchedule,
-        onesignal_notification_ids: newIds,
-      });
-      onUpdate({ ...task, reminder_schedule: newSchedule, onesignal_notification_ids: newIds });
-    } catch (e) {
-      console.error('Failed to delete reminder:', e);
-      alert('Failed to cancel that reminder. Please try again.');
-    } finally {
-      setDeletingId(null);
-    }
+    })();
   };
 
   const handleAdd = async () => {
@@ -64,6 +81,12 @@ export default function SmartReminderEditor({ task, theme, onUpdate }) {
       alert('Please choose a future date and time.');
       return;
     }
+
+    // OPTIMISTIC: show the new reminder immediately while it's being scheduled.
+    setPendingAdd({ send_at: sendAt.toISOString(), label: 'Custom' });
+    setIsAdding(false);
+    setNewDate('');
+    setNewTime('');
 
     setIsProcessing(true);
     try {
@@ -105,13 +128,11 @@ export default function SmartReminderEditor({ task, theme, onUpdate }) {
         });
         onUpdate({ ...task, reminder_schedule: newSchedule, onesignal_notification_ids: newIds });
       }
-      setIsAdding(false);
-      setNewDate('');
-      setNewTime('');
     } catch (e) {
       console.error('Failed to add reminder:', e);
       alert('Failed to schedule that reminder. Please try again.');
     } finally {
+      setPendingAdd(null);
       setIsProcessing(false);
     }
   };
@@ -162,16 +183,27 @@ export default function SmartReminderEditor({ task, theme, onUpdate }) {
             variant="ghost"
             className="h-7 w-7 flex-shrink-0 text-red-500 hover:bg-red-100 hover:text-red-600"
             onClick={() => handleDelete(reminder)}
-            disabled={deletingId === reminder.notification_id}
           >
-            {deletingId === reminder.notification_id ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <X className="w-3.5 h-3.5" />
-            )}
+            <X className="w-3.5 h-3.5" />
           </Button>
         </div>
       ))}
+
+      {pendingAdd && (
+        <div className={`flex items-center gap-2 p-2 rounded-md opacity-60 ${
+          isDark ? 'bg-gray-800/60' : 'bg-white border border-purple-100'
+        }`}>
+          <Loader2 className={`w-3.5 h-3.5 flex-shrink-0 animate-spin ${isDark ? 'text-purple-300' : 'text-purple-500'}`} />
+          <div className="flex-1 min-w-0">
+            <p className={`text-xs font-medium ${isDark ? 'text-gray-200' : 'text-gray-800'}`}>
+              {pendingAdd.label}
+            </p>
+            <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+              {formatDateTime(pendingAdd.send_at)}
+            </p>
+          </div>
+        </div>
+      )}
 
       {isAdding ? (
         <div className="space-y-2 pt-1">
