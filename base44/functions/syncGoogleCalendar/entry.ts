@@ -4,6 +4,15 @@ import { localReminderUtc } from '../../shared/timezoneReminders.ts';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
 
+// Payment detection for imported calendar items. Calendar payment entries are
+// usually terse ("Discover payment", "$450 rent", "Pay water bill", "Chase"),
+// so keyword-match the title in addition to the AI's classification.
+function isPaymentTitle(title) {
+  if (!title) return false;
+  if (title.includes('$')) return true;
+  return /\b(pay|payment|bill|rent|mortgage|invoice|loan|insurance|credit card|venmo|zelle|paypal|cash ?app|chase|wells ?fargo|discover|amex|american express|capital ?one|citi(bank)?|bank of america|us bank|navy federal|synchrony|affirm|klarna|afterpay)\b/i.test(title);
+}
+
 function isBirthdayEvent(title, recurrenceRule) {
   if (!recurrenceRule) return false;
   const isYearly = recurrenceRule.includes('FREQ=YEARLY');
@@ -91,6 +100,9 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event) {
     if (startChanged && nextReminderDate) {
       patch.next_reminder = nextReminderDate.toISOString();
       patch.due_date = nextReminderDate.toISOString();
+      // Timed events also carry the actual event time — this is what the
+      // task detail view displays as the event's date & time.
+      if (event.start?.dateTime) patch.event_time = nextReminderDate.toISOString();
     }
     if (endRaw) {
       let endDate: Date;
@@ -379,10 +391,14 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
       let dueDateISO = null;
       let endDateISO = null;
       let startDateISO = null;
+      let eventTimeISO = null;
       if (isOnce) {
         // Event: fire the single reminder at the event's start time.
         nextReminderISO = nextReminderDate.toISOString();
         dueDateISO = nextReminderDate.toISOString();
+        // Timed (non-all-day) events: store the actual event time so the
+        // task detail view shows the event's date & time from the calendar.
+        if (event.start?.dateTime) eventTimeISO = nextReminderDate.toISOString();
         // Multi-day events: record the last day so the app shows the full
         // span (calendar grid + Home "Today" + event detail). For all-day
         // events Google's end date is exclusive, so the last day is one
@@ -444,7 +460,10 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
         start_date: startDateISO,
         due_date: dueDateISO,
         end_date: endDateISO,
-        classification: isOnce ? 'event' : 'task',
+        event_time: eventTimeISO,
+        classification: (ai.classification === 'payment' || isPaymentTitle(title))
+          ? 'payment'
+          : (isOnce ? 'event' : 'task'),
         notification_recipient_email: user.email,
         recurrence_pattern: recurrenceRule ? (recurrenceRule.includes('FREQ=DAILY') ? 'daily' : recurrenceRule.includes('FREQ=WEEKLY') ? 'weekly' : recurrenceRule.includes('FREQ=MONTHLY') ? 'monthly' : recurrenceRule.includes('FREQ=YEARLY') ? 'yearly' : 'none') : 'none'
       };

@@ -336,6 +336,10 @@ export function buildTaskParsePrompt(inputText: string): string {
         Examples: "pay rent", "pay the electric bill", "pay credit card", "pay the water bill",
         "transfer money to savings", "pay zx4rr", "renew car insurance payment", "pay daycare",
         "send Venmo to Jake", "pay off the loan".
+        STRONG PAYMENT SIGNALS in the title: the words "pay"/"payment"/"bill"/"rent"/"due",
+        a "$" amount, or the name of a financial institution or payment app (Chase, Wells Fargo,
+        Discover, Amex, Capital One, Citi, Venmo, Zelle, PayPal, Cash App, Klarna, Affirm, etc.).
+        A bare institution name like "Discover" or "$450" as a calendar entry is a payment.
         → classification="payment"
         All OTHER rules still apply exactly as if it were a task: deadlines set due_date +
         day_only_task=true, "today" uses the TODAY OVERRIDE, no deadline → reminder_interval=null.
