@@ -246,6 +246,10 @@ export default function FocusModePrompt({ user, theme }) {
         status: "completed",
         completed_at: localISO,
       });
+      // Re-broadcast AFTER the save lands — the pre-save dispatch above races
+      // the server flip, so pages that reloaded too early still showed the
+      // task as active. This second event refreshes them with the real state.
+      window.dispatchEvent(new CustomEvent("tasks-changed"));
       // Log the focus session using the AUTHORITATIVE focus_mode_entered_at
       // from the server profile — not the local enteredAt state, which can be
       // stale or not yet synced when coming from a sprint handoff. This ensures
