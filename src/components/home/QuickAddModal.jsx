@@ -101,10 +101,13 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
         if (ms) nextReminderTime = new Date(now.getTime() + ms);
       }
 
-      // Build due_date ISO if the parser set one
+      // Build due_date ISO if the parser set one. Day-only tasks ("do X tomorrow",
+      // "do X on Friday") carry their date in target_date, not due_date — map it
+      // over so the task actually shows a due date instead of silently losing it.
       let dueDateISO = null;
-      if (taskData.due_date) {
-        const [dy, dm, dd] = taskData.due_date.split('-').map(n => parseInt(n, 10));
+      const dueDateSource = taskData.due_date || (taskData.day_only_task ? taskData.target_date : null);
+      if (dueDateSource) {
+        const [dy, dm, dd] = dueDateSource.split('-').map(n => parseInt(n, 10));
         if (!isNaN(dy) && !isNaN(dm) && !isNaN(dd)) {
           dueDateISO = new Date(dy, dm - 1, dd, 23, 59, 0, 0).toISOString();
         }
