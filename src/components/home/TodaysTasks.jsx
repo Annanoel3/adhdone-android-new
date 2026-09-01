@@ -360,6 +360,15 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
     });
   };
 
+  // For events, the pill shows date AND time (e.g. "Sep 1, 11:25 AM") — an
+  // event without its time is useless. Uses event_time when set, else due_date.
+  const formatEventDateTime = (task) => {
+    const at = task.event_time || task.due_date;
+    if (!at) return null;
+    const date = new Date(at);
+    return `${formatReminderDate(at)}, ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
+  };
+
   const getSubtasks = (taskId) => {
     return tasks
       .filter(t => t.parent_task_id === taskId)
@@ -614,7 +623,9 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                                 <CalendarClock className="w-3 h-3" />
                                 {new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
                                   ? 'Overdue'
-                                  : `Due ${formatReminderDate(task.due_date)}`}
+                                  : task.classification === 'event'
+                                    ? formatEventDateTime(task)
+                                    : `Due ${formatReminderDate(task.due_date)}`}
                               </button>
                             </PopoverTrigger>
                             <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`} onClick={(e) => e.stopPropagation()}>
