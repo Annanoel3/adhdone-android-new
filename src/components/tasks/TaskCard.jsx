@@ -84,7 +84,7 @@ export default function TaskCard({
   const dueDate = task.next_reminder ? new Date(task.next_reminder) : new Date(task.created_date);
 
   const isEvent = task.classification === 'event';
-  const typeEmoji = task.classification === 'event' ? '📅' : task.classification === 'birthday' ? '🎂' : null;
+  const typeEmoji = task.classification === 'event' ? '📅' : task.classification === 'birthday' ? '🎂' : task.classification === 'payment' ? '💳' : null;
 
   const taskDate = dueDate.toLocaleDateString('en-US', {
     month: 'short',

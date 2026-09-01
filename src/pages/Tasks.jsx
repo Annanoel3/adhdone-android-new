@@ -30,6 +30,7 @@ export default function Tasks() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [statusFilter, setStatusFilter] = useState('active');
   const [urgencyFilter, setUrgencyFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const [selectedTask, setSelectedTask] = useState(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -97,9 +98,18 @@ export default function Tasks() {
       filtered = filtered.filter(t => t.urgency === urgencyFilter);
     }
 
+    if (typeFilter !== 'all') {
+      if (typeFilter === 'task') {
+        // "Tasks" = anything not tagged as an event or payment
+        filtered = filtered.filter(t => !t.classification || t.classification === 'task');
+      } else {
+        filtered = filtered.filter(t => t.classification === typeFilter);
+      }
+    }
+
     // Sort tasks using the shared sort preference
     setFilteredTasks(sortTasks(filtered, sortBy));
-  }, [allTasks, statusFilter, urgencyFilter, sortBy]);
+  }, [allTasks, statusFilter, urgencyFilter, typeFilter, sortBy]);
 
   useEffect(() => {
     applyFilters();
@@ -331,6 +341,18 @@ export default function Tasks() {
               <SelectItem value="high">High</SelectItem>
               <SelectItem value="medium">Medium</SelectItem>
               <SelectItem value="low">Low</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={typeFilter} onValueChange={setTypeFilter}>
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="payment">💳 Payments</SelectItem>
+              <SelectItem value="event">📅 Events</SelectItem>
+              <SelectItem value="task">📌 Tasks</SelectItem>
             </SelectContent>
           </Select>
 

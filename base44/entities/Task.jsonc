@@ -251,9 +251,10 @@
       "enum": [
         "task",
         "event",
-        "birthday"
+        "birthday",
+        "payment"
       ],
-      "description": "User-overridden calendar classification (Event / Task / Birthday). When set, overrides auto-detection in the calendar view."
+      "description": "Calendar/type classification. 'payment' = a bill or financial obligation (pay rent, pay credit card, transfer money) \u2014 behaves like a task everywhere but is visually tagged and filterable so users can review all their bills in one place. When set, overrides auto-detection in the calendar view."
     }
   },
   "required": [

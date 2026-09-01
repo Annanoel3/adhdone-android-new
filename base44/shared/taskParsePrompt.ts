@@ -332,6 +332,14 @@ export function buildTaskParsePrompt(inputText: string): string {
         errands, selling items, cleaning, organizing, calling, researching, buying, cooking,
         fixing, posting, returning. Something you DO and complete, not something you attend.
         → classification="task"
+      - PAYMENT: Any bill or financial obligation — paying money to someone/something.
+        Examples: "pay rent", "pay the electric bill", "pay credit card", "pay the water bill",
+        "transfer money to savings", "pay zx4rr", "renew car insurance payment", "pay daycare",
+        "send Venmo to Jake", "pay off the loan".
+        → classification="payment"
+        All OTHER rules still apply exactly as if it were a task: deadlines set due_date +
+        day_only_task=true, "today" uses the TODAY OVERRIDE, no deadline → reminder_interval=null.
+        Payment is a TAG on top of task behavior, not a different scheduling model.
       - BIRTHDAY: Only when explicitly about someone's birthday.
         → classification="birthday"
       When in doubt between event and task, ask: "Is the user going somewhere / attending
@@ -358,7 +366,7 @@ export function buildTaskParsePrompt(inputText: string): string {
       4. target_date: for "in X" (TODAY), "tomorrow", or specific dates — format YYYY-MM-DD
       5. target_time: for "in X" (calculate), "at X" (specific), or null if no time mentioned
       6. reminder_interval: null UNLESS the user explicitly asked for recurring ("every X"/"daily"/"every other day"), or "once" for a precise one-time moment. NEVER auto-infer a recurring interval.
-      7. classification: "task" | "event" | "birthday"
+      7. classification: "task" | "event" | "birthday" | "payment"
 
       JSON:
       {
