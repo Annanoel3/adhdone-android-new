@@ -1,18 +1,18 @@
 import React from 'react';
 import WeekAgendaRow from '@/components/calendar/WeekAgendaRow';
+import WeekDayHeader from '@/components/calendar/WeekDayHeader';
 
-const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const DAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-// Week view as full-width day rows — narrow 7-column strips leave no room for
-// titles on mobile, so each day gets its own readable card instead.
+// Week view as a vertical stack of day cards. Each day gets a bold header
+// strip; empty days collapse to a single quiet line so busy days stand out.
+// Items are tapped directly — there's no separate "selected day" panel here.
 export default function WeekAgenda({
   weekDays,
   itemsByDate,
   dateKey,
   sameDayKey,
   today,
-  selected,
-  onSelectDay,
   emojiFor,
   useEmoji,
   isDark,
@@ -22,62 +22,58 @@ export default function WeekAgenda({
   textSecondary,
 }) {
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
       {weekDays.map((day) => {
         const k = dateKey(day);
         const allItems = itemsByDate.get(k) || [];
-        // Back-burner tasks collapse to red dots instead of full rows.
         const dayItems = allItems.filter((it) => !it.silenced);
         const backBurner = allItems.filter((it) => it.silenced);
         const isToday = sameDayKey(day, today);
-        const isSelected = sameDayKey(day, selected);
+
+        if (dayItems.length === 0) {
+          return (
+            <div
+              key={k}
+              className={`flex items-center gap-3 rounded-xl border px-3 py-2 ${cellBase} ${isToday ? 'border-blue-400' : 'opacity-70'}`}
+            >
+              <span className={`text-sm font-bold tabular-nums w-8 text-center ${isToday ? 'text-blue-500' : textPrimary}`}>
+                {day.getDate()}
+              </span>
+              <span className={`text-sm font-semibold ${textPrimary}`}>{DAY_SHORT[day.getDay()]}</span>
+              <span className={`text-xs ${textSecondary}`}>{isToday ? 'Today · nothing scheduled' : 'Nothing scheduled'}</span>
+              {backBurner.length > 0 && (
+                <span className="ml-auto w-2 h-2 rounded-full bg-amber-700 inline-block flex-shrink-0" title="On the back burner" />
+              )}
+            </div>
+          );
+        }
+
         return (
           <div
             key={k}
-            onClick={() => onSelectDay(day)}
-            className={`rounded-xl border p-3 cursor-pointer transition-all ${
-              isSelected ? 'ring-2 ring-blue-400 ' + cellBase : cellBase + ' hover:border-blue-300'
-            }`}
+            className={`rounded-xl border overflow-hidden ${cellBase} ${isToday ? 'border-blue-400 shadow-sm' : ''}`}
           >
-            <div className="flex items-center gap-2 mb-2">
-              <span
-                className={`text-xs font-bold w-7 h-7 flex items-center justify-center rounded-full flex-shrink-0 ${
-                  isToday ? 'bg-blue-500 text-white' : isDark ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-700'
-                }`}
-              >
-                {day.getDate()}
-              </span>
-              <span className={`text-sm font-semibold ${textPrimary}`}>{DAY_NAMES[day.getDay()]}</span>
-              <div className="ml-auto flex items-center gap-1.5">
-                {dayItems.length > 0 && (
-                  <span className={`text-[11px] ${textSecondary}`}>
-                    {dayItems.length} item{dayItems.length !== 1 ? 's' : ''}
-                  </span>
-                )}
-                {backBurner.length > 0 && (
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-700 inline-block" title="On the back burner" />
-                )}
-              </div>
+            <WeekDayHeader
+              day={day}
+              isToday={isToday}
+              count={dayItems.length}
+              hasBackBurner={backBurner.length > 0}
+              isDark={isDark}
+            />
+            <div className={`px-2 divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-100'}`}>
+              {dayItems.map((it, i) => (
+                <WeekAgendaRow
+                  key={i}
+                  item={it}
+                  emojiFor={emojiFor}
+                  useEmoji={useEmoji}
+                  isDark={isDark}
+                  onItemOpen={onItemOpen}
+                  textPrimary={textPrimary}
+                  textSecondary={textSecondary}
+                />
+              ))}
             </div>
-
-            {dayItems.length === 0 ? (
-              <p className={`text-xs ${textSecondary}`}>Nothing scheduled.</p>
-            ) : (
-              <div className={`divide-y ${isDark ? 'divide-gray-700' : 'divide-gray-100'}`}>
-                {dayItems.map((it, i) => (
-                  <WeekAgendaRow
-                    key={i}
-                    item={it}
-                    emojiFor={emojiFor}
-                    useEmoji={useEmoji}
-                    isDark={isDark}
-                    onItemOpen={onItemOpen}
-                    textPrimary={textPrimary}
-                    textSecondary={textSecondary}
-                  />
-                ))}
-              </div>
-            )}
           </div>
         );
       })}

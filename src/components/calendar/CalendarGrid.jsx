@@ -361,8 +361,6 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           dateKey={dateKey}
           sameDayKey={sameDayKey}
           today={today}
-          selected={selected}
-          onSelectDay={setSelected}
           emojiFor={emojiFor}
           useEmoji={useEmoji}
           isDark={isDark}
@@ -499,7 +497,8 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
         <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-700 inline-block" /> Back burner</span>
       </div>
 
-      {/* Selected day detail */}
+      {/* Selected day detail (month view only — week cards already list everything) */}
+      {viewMode === 'month' && (
       <div className={`rounded-xl border p-4 ${cellBase}`}>
         <div className="flex items-center gap-2 mb-3">
           <CalendarDays className="w-4 h-4 text-blue-500" />
@@ -541,6 +540,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           </ul>
         )}
       </div>
+      )}
     </div>
   );
 }
