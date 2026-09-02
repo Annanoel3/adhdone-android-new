@@ -55,6 +55,25 @@ export default function AddTask() {
     return () => clearInterval(interval);
   }, []);
 
+  // Text shared from another app (or typed into the quick-capture notification)
+  // arrives via navigation state — run it through the normal pipeline as if the
+  // user typed it. sharedAt keys the effect so two shares in a row both fire.
+  const sharedText = location.state?.sharedText;
+  const sharedAt = location.state?.sharedAt;
+  React.useEffect(() => {
+    if (!sharedText) return;
+    setInputMode('text');
+    setIsProcessing(true);
+    setOptimisticTasks([{ id: `temp-${Date.now()}`, title: sharedText, isProcessing: true }]);
+    detectMultipleTasks(sharedText)
+      .then((taskList) => processTaskList(taskList))
+      .catch((error) => {
+        console.error('📤 [SHARED] Failed:', error);
+        setIsProcessing(false);
+        alert('Failed to create task: ' + error.message);
+      });
+  }, [sharedAt]);
+
   // When the LLM splits a multi-task input, it sometimes drops shared date
   // words like "today" from some split tasks. This propagates the original
   // input's date word to any split task that's missing one, so "do the dishes,
