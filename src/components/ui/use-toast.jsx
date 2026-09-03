@@ -2,7 +2,10 @@
 import { useState, useEffect, createContext, useContext } from "react";
 
 const TOAST_LIMIT = 20;
-const TOAST_REMOVE_DELAY = 1000000;
+// Time between "close" and removing the toast from the DOM. Must be short —
+// at 1,000,000ms a dismissed toast (auto or via the X) stayed mounted forever,
+// so any toast that didn't animate out stayed visibly stuck on screen.
+const TOAST_REMOVE_DELAY = 300;
 const TOAST_AUTO_DISMISS_DEFAULT = 4000; // auto-dismiss after 4s unless duration is Infinity
 
 const actionTypes = {
