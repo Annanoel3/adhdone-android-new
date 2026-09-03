@@ -342,11 +342,12 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, reactivated: true });
     }
 
-    // Smart nudge reassessment: when urgency changes to "urgent", mark the daily
-    // nudge schedule as dirty so the next hourly cron regenerates it with the
-    // urgent task included (surfaces it sooner, with appropriate urgency).
-    if (old_data?.urgency !== 'urgent' && data.urgency === 'urgent') {
-      console.log('[onTaskUpdate] Urgency changed to urgent — marking smart nudge schedule dirty');
+    // Smart nudge reassessment: ANY change to priority or energy changes how the
+    // nudge cron should rank and word this task, so mark the schedule dirty and
+    // let the next run re-plan it. (Fixed-interval reminders are deliberately not
+    // touched here — priority must never wipe a schedule the user asked for.)
+    if (old_data?.urgency !== data.urgency || old_data?.energy_required !== data.energy_required) {
+      console.log('[onTaskUpdate] Priority/energy changed — marking smart nudge schedule dirty');
       try {
         await base44.asServiceRole.entities.User.update(user.id, {
           smart_nudge_schedule_dirty: true
