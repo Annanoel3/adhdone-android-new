@@ -127,6 +127,9 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
         // "on Friday" (happens that day) vs "by Friday" (deadline — reminders
         // start in advance). Drives how the smart-nudge system paces reminders.
         deadline_style: taskData.deadline_style === 'by' ? 'by' : 'on',
+        // Repeating dates ("every month on the 1st", "first Thursday of every
+        // month") — the task comes back on this rhythm after completion.
+        recurrence_pattern: taskData.recurrence_pattern || 'none',
       });
 
       // Only schedule per-task push notifications for explicit recurring tasks.

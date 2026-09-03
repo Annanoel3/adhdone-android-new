@@ -47,6 +47,65 @@ export function buildTaskParsePrompt(inputText: string): string {
   const nextSaturdayISO = nextWeekdayISO(6);
   const nextSundayISO = nextWeekdayISO(0);
 
+  // ── Precomputed date table ──────────────────────────────────────────────
+  // The model is bad at calendar arithmetic, so every phrasing the user might
+  // use ("this Wednesday", "next Wednesday", "the first Wednesday of next
+  // month", "the 28th of next month") gets a literal date computed here and
+  // handed over as a lookup table. Nothing is left for the model to calculate.
+  const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const fmt = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+  // "this <weekday>" = the next upcoming occurrence within the next 7 days.
+  // "next <weekday>" = the occurrence one week after that.
+  const weekdayTable = WEEKDAY_NAMES.map((name, i) => {
+    const thisOne = new Date(now);
+    let diff = i - now.getDay();
+    if (diff <= 0) diff += 7;
+    thisOne.setDate(now.getDate() + diff);
+    const nextOne = new Date(thisOne);
+    nextOne.setDate(thisOne.getDate() + 7);
+    return `      this ${name}: ${fmt(thisOne)}   |   next ${name}: ${fmt(nextOne)}`;
+  }).join('\n');
+
+  // Nth <weekday> of a month (n = 1..4, or -1 for last)
+  function nthWeekdayOfMonth(year: number, monthIndex: number, weekday: number, n: number): string {
+    if (n === -1) {
+      const d = new Date(year, monthIndex + 1, 0); // last day of month
+      while (d.getDay() !== weekday) d.setDate(d.getDate() - 1);
+      return fmt(d);
+    }
+    const d = new Date(year, monthIndex, 1);
+    while (d.getDay() !== weekday) d.setDate(d.getDate() + 1);
+    d.setDate(d.getDate() + (n - 1) * 7);
+    return fmt(d);
+  }
+
+  const thisMonthIndex = now.getMonth();
+  const thisMonthYear = now.getFullYear();
+  const nextMonthDate = new Date(thisMonthYear, thisMonthIndex + 1, 1);
+  const nextMonthIndex = nextMonthDate.getMonth();
+  const nextMonthYear = nextMonthDate.getFullYear();
+  const monthName = (y: number, m: number) =>
+    new Date(y, m, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+
+  const ordinalWeekdayTable = WEEKDAY_NAMES.map((name, i) => {
+    const parts = [1, 2, 3, 4, -1].map((n) => {
+      const label = n === -1 ? 'last' : `${n}${['st', 'nd', 'rd', 'th'][n - 1] || 'th'}`;
+      return `${label}=${nthWeekdayOfMonth(thisMonthYear, thisMonthIndex, i, n)}`;
+    });
+    const nextParts = [1, 2, 3, 4, -1].map((n) => {
+      const label = n === -1 ? 'last' : `${n}${['st', 'nd', 'rd', 'th'][n - 1] || 'th'}`;
+      return `${label}=${nthWeekdayOfMonth(nextMonthYear, nextMonthIndex, i, n)}`;
+    });
+    return `      ${name} — this month: ${parts.join(', ')}\n      ${name} — next month: ${nextParts.join(', ')}`;
+  }).join('\n');
+
+  const thisMonthPrefix = `${thisMonthYear}-${String(thisMonthIndex + 1).padStart(2, '0')}`;
+  const nextMonthPrefix = `${nextMonthYear}-${String(nextMonthIndex + 1).padStart(2, '0')}`;
+  const daysInThisMonth = new Date(thisMonthYear, thisMonthIndex + 1, 0).getDate();
+  const daysInNextMonth = new Date(nextMonthYear, nextMonthIndex + 1, 0).getDate();
+
   return `Parse task: "${inputText}"
 
       TODAY IS: ${todayISO} (YYYY-MM-DD) — ${dayOfWeek}
@@ -55,6 +114,60 @@ export function buildTaskParsePrompt(inputText: string): string {
       END OF NEXT WEEK (Sunday): ${endOfNextWeekISO}
       NEXT FRIDAY: ${nextFridayISO}
       CURRENT TIME: ${currentTime}
+
+      ═══════════════════════════════════════════════════════════════════════
+      DATE LOOKUP TABLE — USE THESE EXACT DATES, NEVER CALCULATE YOUR OWN
+      ═══════════════════════════════════════════════════════════════════════
+      Every date below is already computed for you. If the user names a day in
+      ANY form, copy the matching date out of this table. Never do calendar math
+      yourself, and NEVER return a null date when the user named a day — a
+      dropped date is a hard failure.
+
+      DAY NAMES ("this Wednesday" / "next Wednesday"):
+${weekdayTable}
+      - "this <day>" = the next upcoming one (within 7 days). "next <day>" = one week later.
+      - A bare day name with no this/next ("do it Wednesday", "on Friday") = the "this <day>" value.
+      - "a week from Wednesday" = the "next <day>" value.
+
+      ORDINAL WEEKDAYS ("the first Wednesday of next month", "last Friday of the month"):
+${ordinalWeekdayTable}
+      - "this month" / "the month" = the this-month row. "next month" = the next-month row.
+      - If the "this month" date has ALREADY PASSED, use the next-month value instead.
+
+      DAY NUMBERS ("the 28th", "the 28th of next month"):
+      - THIS MONTH (${monthName(thisMonthYear, thisMonthIndex)}, ${daysInThisMonth} days) → "${thisMonthPrefix}-DD"
+      - NEXT MONTH (${monthName(nextMonthYear, nextMonthIndex)}, ${daysInNextMonth} days) → "${nextMonthPrefix}-DD"
+      - Zero-pad the day: the 5th → "-05", the 28th → "-28".
+      - "the 28th" / "on the 28th" with no month → this month, UNLESS that day already
+        passed (today is day ${now.getDate()}), in which case use next month.
+      - "the 28th of next month" / "next month on the 28th" → next-month prefix.
+      - If the day number does not exist in that month (e.g. the 31st of a 30-day
+        month, the 30th of February), use the LAST day of that month.
+
+      MONTH + DAY ("March 15th", "Dec 24", "the 3rd of January", "11/1", "1/5/27"):
+      - Build "YYYY-MM-DD" for that month/day.
+      - YEAR: current year (${now.getFullYear()}) if still in the future; otherwise NEXT year (${now.getFullYear() + 1}).
+      - Numeric dates are US order: MM/DD or MM/DD/YY.
+      - If the user gave an explicit year, use it as given.
+
+      ANY OF THESE + A TIME ("next Wednesday at 3", "the 28th at 9am", "March 15 at 5:30pm"):
+      - Resolve the date from the table above AND set target_time (24h "HH:MM").
+      - target_time="15:00" for "at 3" / "3pm"; "09:00" for "9am"; "17:30" for "5:30pm".
+      - A bare hour with no am/pm: pick the interpretation within normal waking hours
+        (7am–9pm) — "at 3" → 15:00, "at 8" → 08:00 if morning context, else 20:00.
+      - With a time set: reminder_interval="once", needs_date_pick=false, day_only_task=false.
+      - Without a time: day_only_task=true (task) or needs_date_pick=true (event), per the rules below.
+
+      REPEATING DATES ("every month on the 1st", "the first Thursday of every month",
+      "every Wednesday", "every year on June 3rd"):
+      - Set target_date (and due_date) to the NEXT occurrence from the table above, so the
+        first one is never lost.
+      - Set recurrence_pattern to the repeat rhythm: "monthly" (every month / first-X-of-every-month
+        / the Nth of every month), "weekly" (every <weekday>), "every_other_week" (every other
+        <weekday> / biweekly), "yearly" (every year on <date>), "daily" (every day).
+      - Do NOT use reminder_interval for these — reminder_interval stays null (or "once" if a
+        clock time was given). recurrence_pattern is what makes the task come back after completion.
+      ═══════════════════════════════════════════════════════════════════════
 
       TITLE EXTRACTION RULES (CRITICAL):
       - ALWAYS strip the outer "remind me to" or "remind me" wrapper from the title.
@@ -456,6 +569,7 @@ export function buildTaskParsePrompt(inputText: string): string {
       "is_flexible": false,
       "needs_date_pick": false,
       "day_only_task": false,
+      "recurrence_pattern": "none|daily|weekly|every_other_week|monthly|yearly — 'none' unless the user described a REPEATING date ('every month on the 1st', 'the first Thursday of every month', 'every Wednesday', 'every year on June 3rd'). Always also set target_date/due_date to the NEXT occurrence.",
       "deadline_style": "on|by — 'on' when the task happens ON that specific day, 'by' when the date is a deadline the task must be finished by (work can start earlier). See the ON vs BY rules above. Default 'on'."
       }`;
 }

@@ -669,6 +669,9 @@ Return JSON:
         reminder_interval: actualReminderInterval,
         day_only_task: !!parsed.day_only_task,
         deadline_style: parsed.deadline_style === 'by' ? 'by' : 'on',
+        // Repeating dates ("the first Thursday of every month", "every Wednesday")
+        // — target_date holds the next occurrence, this holds the rhythm.
+        recurrence_pattern: parsed.recurrence_pattern || 'none',
         reminder_count: 0,
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
         due_date: dueDateISO,
