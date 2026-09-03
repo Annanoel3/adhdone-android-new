@@ -1,39 +1,47 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import confetti from 'canvas-confetti';
 
-// Real, unmissable confetti burst on task completion — uses canvas-confetti
-// (the same library the Focus Mode celebration uses) instead of a handful of
-// tiny animated divs that were too small to notice.
-// Android WebView can't render the library's OffscreenCanvas worker path — it
-// paints a blank white full-screen canvas for the whole animation. Force the
-// main-thread renderer so the confetti is actually visible.
-const fire = confetti.create(null, { resize: true, useWorker: false });
-
+// Confetti is drawn on our OWN canvas with useWorker:false. The library's
+// default global instance renders in an OffscreenCanvas worker, which on
+// Android WebView paints a blank white full-screen layer instead of confetti.
 export default function TaskCompletionCelebration({ theme }) {
+  const canvasRef = useRef(null);
+
   useEffect(() => {
-    const confetti = fire;
+    if (!canvasRef.current) return;
+
+    const fire = confetti.create(canvasRef.current, { resize: true, useWorker: false });
     const colors =
       theme === 'minimalist'
         ? ['#10b981', '#3b82f6', '#8b5cf6']
         : ['#a855f7', '#ec4899', '#f97316', '#06b6d4'];
 
-    confetti({ particleCount: 90, spread: 75, origin: { y: 0.65 }, colors });
+    fire({ particleCount: 90, spread: 75, origin: { y: 0.65 }, colors });
     const t1 = setTimeout(
-      () => confetti({ particleCount: 50, angle: 60, spread: 55, origin: { x: 0, y: 0.7 }, colors }),
+      () => fire({ particleCount: 50, angle: 60, spread: 55, origin: { x: 0, y: 0.7 }, colors }),
       150
     );
     const t2 = setTimeout(
-      () => confetti({ particleCount: 50, angle: 120, spread: 55, origin: { x: 1, y: 0.7 }, colors }),
+      () => fire({ particleCount: 50, angle: 120, spread: 55, origin: { x: 1, y: 0.7 }, colors }),
       300
     );
-    return () => { clearTimeout(t1); clearTimeout(t2); };
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      fire.reset();
+    };
   }, [theme]);
 
   return (
     <div className="fixed inset-0 pointer-events-none z-[9999] flex items-center justify-center">
+      <canvas
+        ref={canvasRef}
+        className="absolute inset-0 w-full h-full pointer-events-none"
+        style={{ background: 'transparent' }}
+      />
       <motion.div
-        className={`px-5 py-2.5 rounded-full font-bold text-white shadow-lg ${
+        className={`relative px-5 py-2.5 rounded-full font-bold text-white shadow-lg ${
           theme === 'minimalist'
             ? 'bg-green-600'
             : 'bg-gradient-to-r from-purple-600 to-orange-600'
