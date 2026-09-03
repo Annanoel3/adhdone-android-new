@@ -5,8 +5,14 @@ import confetti from 'canvas-confetti';
 // Real, unmissable confetti burst on task completion — uses canvas-confetti
 // (the same library the Focus Mode celebration uses) instead of a handful of
 // tiny animated divs that were too small to notice.
+// Android WebView can't render the library's OffscreenCanvas worker path — it
+// paints a blank white full-screen canvas for the whole animation. Force the
+// main-thread renderer so the confetti is actually visible.
+const fire = confetti.create(null, { resize: true, useWorker: false });
+
 export default function TaskCompletionCelebration({ theme }) {
   useEffect(() => {
+    const confetti = fire;
     const colors =
       theme === 'minimalist'
         ? ['#10b981', '#3b82f6', '#8b5cf6']

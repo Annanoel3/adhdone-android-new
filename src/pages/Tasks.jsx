@@ -429,6 +429,7 @@ export default function Tasks() {
             setSelectedTask(null);
           }}
           onUpdate={handleTaskUpdate}
+          onComplete={handleComplete}
           onDelete={() => {
             loadTasks();
             setIsDetailsModalOpen(false);

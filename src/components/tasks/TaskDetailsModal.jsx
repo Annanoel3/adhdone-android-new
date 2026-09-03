@@ -60,7 +60,7 @@ import {
 import LaunchButtons from "../launch/LaunchButtons";
 import { useToast } from "@/components/ui/use-toast";
 
-export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete, theme, itemClassification }) {
+export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete, onComplete, theme, itemClassification }) {
   const { toast } = useToast();
   const [subTasks, setSubTasks] = useState([]);
   const [newSubTask, setNewSubTask] = useState("");
@@ -995,6 +995,14 @@ Return JSON:
 
   const handleComplete = async () => {
     if (!task) return;
+
+    // When the parent page owns completion (Home/Tasks), hand off so its
+    // confetti celebration fires and its save/recurrence logic runs once.
+    if (onComplete) {
+      onClose();
+      onComplete(task);
+      return;
+    }
 
     // CRITICAL FIX: Store local date/time, not UTC
     const now = new Date();

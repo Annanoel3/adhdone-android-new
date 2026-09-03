@@ -267,6 +267,7 @@ export default function Home() {
             setSelectedTask(null);
           }}
           onUpdate={handleTaskUpdate}
+          onComplete={handleTaskComplete}
           onDelete={() => {
             // Remove deleted task from state
             if (selectedTask) {
