@@ -37,7 +37,11 @@ const toastVariants = cva(
   }
 );
 
-const Toast = React.forwardRef(({ className, variant, ...props }, ref) => {
+// `open`, `duration` and `onOpenChange` are toast-state props, not DOM
+// attributes — they must be pulled off before spreading onto the div. Honoring
+// `open` here is what actually makes a dismissed toast disappear from screen.
+const Toast = React.forwardRef(({ className, variant, open, duration, onOpenChange, ...props }, ref) => {
+  if (open === false) return null;
   return (
     <div
       ref={ref}
