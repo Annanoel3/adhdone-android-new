@@ -102,10 +102,14 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
         const d = new Date(task.next_reminder);
         const rd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
         const rt = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+        // Day-only tasks have no user-chosen time (we anchor them at 9 AM
+        // internally) — leave the time field blank so reopening and re-saving
+        // doesn't silently turn "due that day" into "due at 9:00 AM".
+        const rtShown = task.day_only_task ? '' : rt;
         setReminderDate(rd);
-        setReminderTime(rt);
+        setReminderTime(rtShown);
         reminderDateRef.current = rd;
-        reminderTimeRef.current = rt;
+        reminderTimeRef.current = rtShown;
       } else {
         setReminderDate('');
         setReminderTime('');
@@ -685,9 +689,14 @@ Return JSON:
 
       const _now = new Date();
       const localToday = `${_now.getFullYear()}-${String(_now.getMonth()+1).padStart(2,'0')}-${String(_now.getDate()).padStart(2,'0')}`;
-      if (!effectiveTime) return; // No hidden time default — require user to set time
+      if (!effectiveDate && !effectiveTime) return;
+      // No time given = "get this done by that DAY." We anchor the record at
+      // 9 AM so it sorts sensibly, flag it day_only_task, and let the smart
+      // reminder system decide when to nudge (night before + day of) instead
+      // of pretending the user picked 9 AM as a deadline.
+      const dayOnly = !effectiveTime;
       const finalEffectiveDate = effectiveDate || localToday;
-      const finalEffectiveTime = effectiveTime;
+      const finalEffectiveTime = effectiveTime || '09:00';
 
       // Parse date components explicitly to avoid UTC midnight crossing (same as task creation)
       const [year, month, day] = finalEffectiveDate.split('-').map(n => parseInt(n, 10));
@@ -702,7 +711,10 @@ Return JSON:
         'daily': 24 * 60 * 60 * 1000, 'every_other_day': 2 * 24 * 60 * 60 * 1000,
       };
       const guardNowSync = new Date();
-      if (nextReminder <= new Date(guardNowSync.getTime() + 2 * 60 * 1000)) {
+      // Day-only tasks are allowed to sit "in the past" (9 AM today when it's
+      // already noon) — the day is what matters, and smart nudges take over.
+      const dayOnlyStillValid = dayOnly && finalEffectiveDate >= localToday;
+      if (!dayOnlyStillValid && nextReminder <= new Date(guardNowSync.getTime() + 2 * 60 * 1000)) {
         const iv = task.reminder_interval;
         if (iv && iv !== 'once' && intervalMsGuard[iv]) {
           nextReminder = new Date(guardNowSync.getTime() + intervalMsGuard[iv]);
@@ -714,16 +726,18 @@ Return JSON:
 
       // OPTIMISTIC: show the new time + confirmation immediately, then do all
       // the cancel/reschedule network work in the background.
-      onUpdate({ ...task, next_reminder: nextReminder.toISOString(), due_date: nextReminder.toISOString() });
+      onUpdate({ ...task, next_reminder: nextReminder.toISOString(), due_date: nextReminder.toISOString(), day_only_task: dayOnly });
       const savedRdNow = `${nextReminder.getFullYear()}-${String(nextReminder.getMonth()+1).padStart(2,'0')}-${String(nextReminder.getDate()).padStart(2,'0')}`;
       const savedRtNow = `${String(nextReminder.getHours()).padStart(2,'0')}:${String(nextReminder.getMinutes()).padStart(2,'0')}`;
       setReminderDate(savedRdNow);
-      setReminderTime(savedRtNow);
+      setReminderTime(dayOnly ? '' : savedRtNow);
       reminderDateRef.current = savedRdNow;
-      reminderTimeRef.current = savedRtNow;
+      reminderTimeRef.current = dayOnly ? '' : savedRtNow;
       toast({
-        title: "Reminder saved ✓",
-        description: `We'll remind you ${nextReminder.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`,
+        title: "Due date saved ✓",
+        description: dayOnly
+          ? `Due ${nextReminder.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — we'll nudge you the night before and that day.`
+          : `We'll remind you an hour before and at ${nextReminder.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`,
       });
 
       (async () => {
@@ -788,6 +802,7 @@ Return JSON:
           Task.update(task.id, {
             next_reminder: nextReminder.toISOString(),
             due_date: nextReminder.toISOString(),
+            day_only_task: dayOnly,
             onesignal_notification_ids: newNotificationIds,
             reminder_schedule: null,
             ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
@@ -801,6 +816,7 @@ Return JSON:
             scheduledDateISO: nextReminder.toISOString(),
             taskId: task.id,
             urgency: task.urgency,
+            dayOnly,
           });
 
           let scheduleData = null;
@@ -832,6 +848,7 @@ Return JSON:
           Task.update(task.id, {
             next_reminder: nextReminder.toISOString(),
             due_date: nextReminder.toISOString(),
+            day_only_task: dayOnly,
             onesignal_notification_ids: newNotificationIds,
             reminder_schedule: scheduleData,
           }).catch(err => console.error("Error updating task:", err));
@@ -1583,9 +1600,11 @@ Return JSON:
                       {task.next_reminder ? (
                         new Date(task.next_reminder).getTime() < Date.now() && task.status !== 'completed'
                           ? `Overdue • ${formatReminderDate(task.next_reminder)}`
-                          : `Due ${isEvent ? formatEventDateRange() : formatReminderDate(task.next_reminder)} • ${formatReminderTime(task.next_reminder)}`
+                          : task.day_only_task
+                            ? `Due ${formatReminderDate(task.next_reminder)}`
+                            : `Due ${isEvent ? formatEventDateRange() : formatReminderDate(task.next_reminder)} • ${formatReminderTime(task.next_reminder)}`
                       ) : (
-                        'Add due date & time'
+                        'Add due date'
                       )}
                     </button>
                   </PopoverTrigger>
@@ -1603,22 +1622,35 @@ Return JSON:
                         />
                       </div>
                       <div>
-                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Time:</label>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Time (optional):</label>
                         <input
                           type="time"
                           value={reminderTime}
                           onChange={(e) => { setReminderTime(e.target.value); reminderTimeRef.current = e.target.value; }}
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
+                        <p className="text-xs text-gray-500 mt-1">
+                          {reminderTime
+                            ? 'Set a time: you get a heads-up an hour before, then a reminder at that exact time.'
+                            : 'No time? Then it just needs to be done that day — smart reminders nudge you the night before and that day.'}
+                        </p>
                       </div>
                       <Button
                         type="button"
                         onClick={() => handleUpdateReminderTime(reminderTime, reminderDate)}
-                        disabled={!reminderDate || !reminderTime || isSavingReminder}
+                        disabled={!reminderDate || isSavingReminder}
                         className="w-full bg-green-600 hover:bg-green-700 text-white"
                       >
-                        {isSavingReminder ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Date & Time</>}
+                        {isSavingReminder ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Due Date</>}
                       </Button>
+                      {reminderTime && (
+                        <button
+                          onClick={() => { setReminderTime(''); reminderTimeRef.current = ''; handleUpdateReminderTime('', reminderDate); }}
+                          className="w-full text-center px-3 py-2 text-sm hover:bg-gray-50 rounded text-gray-600 font-medium"
+                        >
+                          Clear time — just due that day
+                        </button>
+                      )}
                     </div>
                   </PopoverContent>
                 </Popover>
