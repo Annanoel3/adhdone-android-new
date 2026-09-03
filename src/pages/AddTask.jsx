@@ -668,6 +668,7 @@ Return JSON:
         classification: parsed.classification || 'task',
         reminder_interval: actualReminderInterval,
         day_only_task: !!parsed.day_only_task,
+        deadline_style: parsed.deadline_style === 'by' ? 'by' : 'on',
         reminder_count: 0,
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
         due_date: dueDateISO,
@@ -726,6 +727,7 @@ Return JSON:
               taskId: createdTask.id,
               urgency: createdTask.urgency,
               dayOnly: !!parsed.day_only_task,
+              deadlineStyle: parsed.deadline_style === 'by' ? 'by' : 'on',
               classification: createdTask.classification,
             }))
             .then(multiIds => {

@@ -320,8 +320,13 @@ async function generateDailySchedule(
     let dueInfo = 'no due date';
     if (t.due_date) {
       const days = daysUntil(t.due_date, now, timeZone);
-      if (t.day_only_task) {
-        dueInfo = days === 0 ? 'due today' : days === 1 ? 'due tomorrow' : days > 0 ? `due in ${days} days (${formatDateShort(t.due_date, timeZone)})` : `OVERDUE by ${Math.abs(days)} day(s)`;
+      if (t.day_only_task && t.deadline_style === 'by') {
+        // DEADLINE: the work can happen any time before this date, so lead-up
+        // nudges are appropriate and expected.
+        dueInfo = days === 0 ? 'DEADLINE: must be finished TODAY' : days === 1 ? 'DEADLINE: must be finished by tomorrow' : days > 0 ? `DEADLINE in ${days} days (${formatDateShort(t.due_date, timeZone)}) — can be worked on any time before then` : `OVERDUE by ${Math.abs(days)} day(s)`;
+      } else if (t.day_only_task) {
+        // "ON that day": nothing can be done sooner — do not nudge early.
+        dueInfo = days === 0 ? 'HAPPENS TODAY (tied to today only)' : days === 1 ? 'happens TOMORROW (tied to that day — do not nudge before then except a night-before heads-up)' : days > 0 ? `happens in ${days} days on ${formatDateShort(t.due_date, timeZone)} (tied to that specific day — cannot be done sooner)` : `OVERDUE by ${Math.abs(days)} day(s)`;
       } else {
         dueInfo = days === 0 ? 'deadline today' : days === 1 ? 'deadline tomorrow' : days > 0 ? `deadline in ${days} days (${formatDateShort(t.due_date, timeZone)})` : `OVERDUE by ${Math.abs(days)} day(s)`;
       }
@@ -378,6 +383,9 @@ YOUR APPROACH:
 - You can see the whole week. Plan TODAY's reminders — what to surface, when, what to say.
 - MEET ALL DEADLINES: if something is due today or tomorrow, it must be surfaced. If something is overdue, surface it with urgency.
 - DON'T LET THINGS SNEAK UP: if a deadline is 2-3 days out and the task is high-priority, a heads-up today is smart. If it's a week+ out, hold off unless it's urgent.
+- "DEADLINE in N days" vs "happens on [day]" — TREAT THESE COMPLETELY DIFFERENTLY:
+  * DEADLINE tasks can be worked on ahead of time, so give them RUNWAY. How much runway depends on how much work the task actually is — judge that from the task itself: a one-step thing (pay a bill, send an email, book something online) needs 1-2 days; an errand or anything involving another person, an office, or paperwork needs 3-5 days; a genuinely big multi-step job (taxes, a report, applications, packing, cleaning out a room) deserves nudges starting a week or two out, framed around ONE small first step. Never let a big deadline task get its first nudge the day before.
+  * "happens on [day]" tasks are tied to that specific day and CANNOT be done sooner — do not nudge in the days leading up (at most a heads-up the night before). Nudging early just makes the user feel behind on something they can't act on yet.
 - NOT EVERY TASK NEEDS A NUDGE TODAY: a low-priority task with no deadline can wait. Use judgment — you're the assistant, you decide what matters now.
 - DON'T BE ANNOYING: fewer, well-timed, meaningful nudges. Not one per hour. Not one per task. If only low-priority stuff remains, ONE combined heads-up is better than a nudge per task.
 - For tasks ALREADY NUDGED: check-in style ("Have you done X yet?") — supportive, never shaming.

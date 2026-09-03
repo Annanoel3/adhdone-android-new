@@ -43,7 +43,7 @@ function setCachedSchedule(title, urgency, data) {
 }
 
 // ── Core: get reminder times (minutes_before + label) from LLM or cache ──────
-async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification) {
+async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle) {
   // Day-only schedules have absolute clock times — never use the cache.
   let reminders = dayOnly ? null : getCachedSchedule(title, urgency);
 
@@ -55,6 +55,7 @@ async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, 
       urgency,
       dayOnly,
       classification,
+      deadlineStyle,
     });
 
     const data = response.data || response;
@@ -142,9 +143,10 @@ export async function scheduleMultiReminders({
   urgency,
   dayOnly,
   classification,
+  deadlineStyle,
 }) {
   try {
-    const reminders = await fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification);
+    const reminders = await fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle);
     if (!reminders || reminders.length === 0) return null;
 
     // Safety net: a task set for a specific clock time ALWAYS gets a reminder at

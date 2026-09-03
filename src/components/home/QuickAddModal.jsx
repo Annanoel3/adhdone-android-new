@@ -124,6 +124,9 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
         next_reminder: nextReminderTime ? nextReminderTime.toISOString() : null,
         due_date: dueDateISO,
         day_only_task: taskData.day_only_task || false,
+        // "on Friday" (happens that day) vs "by Friday" (deadline — reminders
+        // start in advance). Drives how the smart-nudge system paces reminders.
+        deadline_style: taskData.deadline_style === 'by' ? 'by' : 'on',
       });
 
       // Only schedule per-task push notifications for explicit recurring tasks.
