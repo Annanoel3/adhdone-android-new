@@ -72,6 +72,17 @@ export function buildTaskParsePrompt(inputText: string): string {
       - Capitalize the first word. Remove time/date references from the title.
       - SANITY CHECK: a title must contain the action AND what it applies to. Single-word titles
         like "Go", "Call", "Pick" are ALWAYS wrong — include the destination/object.
+      - NEVER DROP THE SUBJECT. Every person, place, business, provider, or thing the user named
+        MUST stay in the title. Only the wrapper ("remind me to") and date/time words are removed.
+        Generic titles like "Make an appointment", "Call them", "Schedule it", "Pick it up",
+        "Send the email" are ALWAYS wrong when the user said who/where/what — without that the
+        user won't know what the task is for when they see it later.
+        "remind me to make an appointment for Skyler at the dentist next week" → "Make an appointment for Skyler at the dentist"
+        "make an appointment with Dr. Patel tomorrow" → "Make an appointment with Dr. Patel"
+        "call the vet about Max's meds" → "Call the vet about Max's meds"
+        "schedule the oil change at Firestone" → "Schedule the oil change at Firestone"
+      - If the user genuinely gave no subject ("make an appointment", nothing else), keep the title
+        as-is — do not invent one.
 
       ═══════════════════════════════════════════════════════════════════════
       REMINDER INTERVAL RULES (CRITICAL — read carefully)
