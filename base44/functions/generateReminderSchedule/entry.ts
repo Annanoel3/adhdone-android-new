@@ -108,7 +108,11 @@ export default async function(req) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const bodyText = await req.text();
-    const { title, scheduledDateISO, urgency, dayOnly, classification } = JSON.parse(bodyText);
+    const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle } = JSON.parse(bodyText);
+    // "on Friday" (happens that day) vs "by Friday" (deadline — work can start
+    // earlier). Only meaningful for day-only tasks, and they behave differently:
+    // 'on' = night-before + day-of only, 'by' = lead-up reminders in advance.
+    const isDeadline = dayOnly && deadlineStyle === 'by';
 
     if (!title || !scheduledDateISO) {
       return Response.json({ error: 'title and scheduledDateISO required' }, { status: 400 });
@@ -153,7 +157,7 @@ export default async function(req) {
     // ── Day-only tasks ("remind me to do X on [day]") ──────────────────────
     // One "heads up, due tomorrow" the night before, then hourly nudges on the
     // day of based on priority. No reminders fire in the days leading up.
-    if (dayOnly) {
+    if (dayOnly && !isDeadline) {
       // Day-only tasks get ONE night-before heads-up. The day-of hourly nudges
       // are handled by cronSmartTaskNudge, which looks at ALL the user's due-today
       // day-only tasks and uses the LLM to pick ONE to surface at a time — instead
@@ -190,7 +194,16 @@ SCHEDULED FOR: ${scheduledStr}
 CURRENT TIME: ${nowStr}
 TASK TIMING: ${isSameDay ? 'SAME-DAY TASK — this task is scheduled for TODAY. The scheduled time may have already passed, but the task is still owed today. Generate reminders for the remaining hours of today using days_before: 0.' : 'FUTURE TASK — this task is scheduled for a future date. Use days_before to schedule advance reminders.'}
 ${isSameDay ? `HOURS REMAINING TODAY: ~${hoursRemainingToday} hours until end of day. Spread reminders across these remaining hours.` : ''}
-${classification === 'event' ? 'CRITICAL EVENT RULE: This is an EVENT (a scheduled occurrence the user attends — meeting, concert, appointment, party, class, meetup). NEVER schedule a reminder AFTER the event start time. The event is over once it starts — a "coming up in an hour" reminder 4 hours after the event is useless and confusing. All reminders must fire BEFORE the scheduled time. If the event time has already passed, do NOT schedule any reminders at all.' : ''}
+${isDeadline ? `CRITICAL DEADLINE RULE: The user said this must be done BY ${scheduledStr} — that is a DEADLINE, not an appointment. There is NO clock time; the work can be done any time before the deadline, so reminders MUST start IN ADVANCE and build toward the due day.
+- YOU decide how far ahead to start, based on how much actual work this specific task takes:
+  * Quick one-step things (pay a bill, send an email, make a call, order something): start 1-2 days before.
+  * Errands or things that need a trip, a form, or another person (DMV, doctor's office, mail something, get a signature): start 3-5 days before.
+  * Multi-step or heavy tasks (taxes, a report, a big cleanout, applications, packing for a trip, anything with paperwork or research): start 1-2 weeks before — long tasks need runway.
+- Use ABSOLUTE reminders only (days_before + hour, typically hour 9 or 18). NEVER use relative_minutes_before — there is no clock time to be relative to.
+- ALWAYS include a reminder the day before (days_before: 1) and one on the due day (days_before: 0).
+- Total 2-5 reminders spread across the runway; escalate the tone as the deadline gets close.
+- The body should reference how much time is LEFT ("you've got about a week", "this is due tomorrow") and, for bigger tasks, nudge toward a small first step.
+` : ''}${classification === 'event' ? 'CRITICAL EVENT RULE: This is an EVENT (a scheduled occurrence the user attends — meeting, concert, appointment, party, class, meetup). NEVER schedule a reminder AFTER the event start time. The event is over once it starts — a "coming up in an hour" reminder 4 hours after the event is useless and confusing. All reminders must fire BEFORE the scheduled time. If the event time has already passed, do NOT schedule any reminders at all.' : ''}
 
 Based on ADHD research and behavioral psychology, determine the optimal reminder schedule for this specific task.
 
@@ -331,6 +344,30 @@ Examples:
       notification_title: r.notification_title || title,
       notification_body: r.notification_body || title,
     }));
+
+    // Deadlines have no clock time, so a "45 minutes before" reminder is
+    // meaningless — convert/drop anything relative and guarantee a day-before
+    // heads-up so a deadline can never sneak up silently.
+    if (isDeadline) {
+      const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
+      reminders = reminders.filter(r => r.relative_minutes_before == null);
+      if (!reminders.some(r => r.days_before === 1)) {
+        reminders.push({
+          days_before: 1, hour: 18, minute: 0, relative_minutes_before: null,
+          label: 'day before deadline',
+          notification_title: `Due tomorrow ⏳ ${t}`,
+          notification_body: `Heads up — "${t}" needs to be done by tomorrow. Even a small start counts. ✨`,
+        });
+      }
+      if (!reminders.some(r => r.days_before === 0)) {
+        reminders.push({
+          days_before: 0, hour: 9, minute: 0, relative_minutes_before: null,
+          label: 'deadline day',
+          notification_title: `Deadline day 🔔 ${t}`,
+          notification_body: `Today's the deadline for "${t}". You've got this! 💪`,
+        });
+      }
+    }
 
     // ── Time-specific tasks: nothing fires after the scheduled time ─────────
     // A task set for a specific clock time (not day-only) should only be

@@ -69,6 +69,15 @@
       "default": false,
       "description": "True when the task is tied to a specific day with NO specific time (e.g. 'remind me to do X on Friday'). Gets a single night-before heads-up, then smart hourly nudges from cronSmartTaskNudge (which picks ONE task to surface at a time with an LLM-written message) instead of per-task hourly notifications that flood the notification tray."
     },
+    "deadline_style": {
+      "type": "string",
+      "enum": [
+        "on",
+        "by"
+      ],
+      "default": "on",
+      "description": "For day-only tasks, HOW the date was expressed \u2014 these behave very differently. 'on' = the task must happen ON that specific day ('remind me to do X on Friday'): no reminders in the days leading up, just a night-before heads-up plus day-of nudges. 'by' = the date is a DEADLINE the task must be finished by ('get X done by Friday'): the task can be worked on any time before then, so reminders start in advance \u2014 days or even a couple of weeks out depending on how much work the task actually takes \u2014 and continue up through the due day."
+    },
     "last_scheduled_until": {
       "type": "string",
       "format": "date-time",

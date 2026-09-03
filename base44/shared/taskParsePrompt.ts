@@ -180,6 +180,7 @@ export function buildTaskParsePrompt(inputText: string): string {
         → target_time = null
         → needs_date_pick = false (do NOT ask for a time — the user wants day-of nudges)
         → day_only_task = true
+        → deadline_style = "on"
         → classification = "task"
         → is_flexible = false
       - The app sends ONE "heads up, X is due tomorrow" reminder the night before, then the
@@ -188,6 +189,25 @@ export function buildTaskParsePrompt(inputText: string): string {
       - This does NOT apply to EVENTS/appointments (dentist, concert, party) → those use needs_date_pick.
       - This does NOT apply to "by Friday" deadlines → those are DEADLINES (due_date set, day_only_task=true).
       - This does NOT apply to "today" tasks → those use the TODAY rule (day_only_task=true, due_date=today).
+
+      "ON [date]" vs "BY [date]" — deadline_style (CRITICAL, they are NOT the same):
+      Both are day-only tasks with no clock time, but they get completely different reminders.
+      - "ON that day" → deadline_style="on". The user is saying the thing HAPPENS that day and
+        can't be done sooner ("mail the package on Friday", "pay the babysitter on the 1st",
+        "water the neighbor's plants on Saturday"). Nothing fires in the days leading up —
+        just a night-before heads-up and day-of nudges.
+        Trigger words: "on", "this Friday", "the 28th", "November 1st" with no "by"/"before".
+      - "BY that day" → deadline_style="by". The user gave a DEADLINE — the work can (and often
+        should) start earlier ("get the taxes done by the 15th", "finish the report by Friday",
+        "renew the registration before the end of the month"). Reminders start IN ADVANCE and
+        build toward the due day.
+        Trigger words: "by", "before", "no later than", "due", "deadline", "end of the week",
+        "sometime this week", "at some point before".
+      - When the user gives a window rather than a day ("this week", "next week", "sometime
+        before the 15th") that is ALWAYS deadline_style="by".
+      - If it's genuinely ambiguous, use "on" for a single named day and "by" for anything
+        phrased as a limit or a window.
+      - deadline_style only matters when day_only_task=true. For events and timed tasks, return "on".
 
       MULTI-DAY EVENTS / DATE RANGES (CRITICAL):
       - If the user describes a SPAN of days, set target_date to the FIRST day and
@@ -221,6 +241,7 @@ export function buildTaskParsePrompt(inputText: string): string {
       - day_only_task=true (so the night-before heads-up + day-of LLM nudges apply).
       - Do NOT set needs_date_pick — the deadline was already specified by the user.
       - Do NOT set target_date/target_time — due_date is the deadline field.
+      - deadline_style="by" (these are DEADLINES — reminders start in advance, not just day-of).
       - Set is_flexible=false (a deadline was mentioned).
       - urgency: "high" if the deadline is soon (within 2-3 days), otherwise "medium".
 
@@ -434,6 +455,7 @@ export function buildTaskParsePrompt(inputText: string): string {
       "priority_uninferrable": false,
       "is_flexible": false,
       "needs_date_pick": false,
-      "day_only_task": false
+      "day_only_task": false,
+      "deadline_style": "on|by — 'on' when the task happens ON that specific day, 'by' when the date is a deadline the task must be finished by (work can start earlier). See the ON vs BY rules above. Default 'on'."
       }`;
 }
