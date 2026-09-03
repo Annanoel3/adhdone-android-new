@@ -144,11 +144,39 @@ export function buildTaskParsePrompt(inputText: string): string {
       - "on the 1st" → same DAY-ONLY logic as "on the 28th".
       - If it's an EVENT/appointment on that day (dentist, concert) → needs_date_pick=true, day_only_task=false.
 
+      NAMED CALENDAR DATE — "on November 1st" (CRITICAL — NEVER DROP THE DATE):
+      - Any explicit month + day the user names must ALWAYS become a real date. This covers every
+        form: "November 1st", "Nov 1", "November 1", "on the 1st of November", "11/1", "Jan 3rd",
+        "March 15th", "Dec 24".
+        → target_date = "YYYY-MM-DD" for that month/day
+        → YEAR: use the CURRENT year (${now.getFullYear()}) if that date is still in the future.
+          If it has ALREADY PASSED this year, use NEXT year (${now.getFullYear() + 1}).
+        → A TASK on that day (fill out forms, pay something, drop something off) → day_only_task=true,
+          reminder_interval=null, target_time=null, needs_date_pick=false
+        → An EVENT/appointment on that day (concert, dentist, wedding) → reminder_interval="once",
+          needs_date_pick=true, day_only_task=false
+        → Example: today is ${todayISO}. "remind me to fill out travel forms for the Dominican
+          Republic on November 1st" → title="Fill out the Dominican Republic travel forms",
+          target_date="${now.getFullYear()}-11-01", due_date="${now.getFullYear()}-11-01",
+          day_only_task=true, reminder_interval=null, target_time=null, needs_date_pick=false,
+          classification="task"
+      - Dropping a date the user explicitly said is a HARD FAILURE. If the user named any day at all,
+        target_date MUST NOT be null.
+
+      DATED DAY-ONLY TASKS MUST ALSO SET due_date (CRITICAL):
+      - Whenever day_only_task=true AND you set a target_date, set due_date to that SAME date.
+        due_date is the field the app displays and uses to know when the task comes due; a day-only
+        task with a target_date but no due_date shows up with no date on it at all, which looks
+        broken to the user.
+      - NEVER return day_only_task=true with both target_date=null AND due_date=null when the user
+        named a specific day.
+
       "ON [specific day]" TASKS — DAY-ONLY RULE (CRITICAL):
       - If the user says "remind me to do X on Friday", "remind me to do X on the 20th",
         "remind me to do X next Monday" — a TASK (not event) tied to a specific future day with NO time:
         → reminder_interval=null
         → target_date = that day (YYYY-MM-DD)
+        → due_date = that SAME day (so the task actually shows its date and comes due correctly)
         → target_time = null
         → needs_date_pick = false (do NOT ask for a time — the user wants day-of nudges)
         → day_only_task = true
@@ -402,7 +430,7 @@ export function buildTaskParsePrompt(inputText: string): string {
       "target_time": "HH:MM or null",
       "end_date": "YYYY-MM-DD or null (LAST day of a multi-day event span; only when the user gave a date range; null for single-day)",
       "reminder_interval": "10min|20min|30min|1hour|2hours|4hours|daily|every_other_day|once|null",
-      "due_date": "YYYY-MM-DD or null — set when the user mentions a DEADLINE (e.g., 'by Friday', 'end of the week', 'by tomorrow', 'by the 15th', 'today' tasks). For 'today' tasks, set due_date=today. For relative deadline phrases, use the calculated date from the RELATIVE DEADLINES rules above.",
+      "due_date": "YYYY-MM-DD or null — ALSO set this to target_date whenever day_only_task=true and the user named a specific day (e.g. 'on November 1st', 'on Friday', 'on the 28th'). Set when the user mentions a DEADLINE (e.g., 'by Friday', 'end of the week', 'by tomorrow', 'by the 15th', 'today' tasks). For 'today' tasks, set due_date=today. For relative deadline phrases, use the calculated date from the RELATIVE DEADLINES rules above.",
       "priority_uninferrable": false,
       "is_flexible": false,
       "needs_date_pick": false,
