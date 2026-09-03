@@ -196,11 +196,50 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
   const existingByGoogleId = {};
   for (const s of existingSynced) existingByGoogleId[s.google_event_id] = s;
 
-  // Load existing tasks to check if adhd_task_id still exists (user-scoped so RLS applies).
   let created = 0, updated = 0, skipped = 0;
   const results = [];
 
-  for (const event of events) {
+  // Split events into already-synced (fast path) and new (needs AI).
+  const alreadySynced = events.filter(e => existingByGoogleId[e.id]?.adhd_task_id);
+  const newEvents = events.filter(e => !existingByGoogleId[e.id]?.adhd_task_id);
+
+  // Batch-load every linked task by ID in one go (service role, so no
+  // recipient-email mismatch can hide a task) instead of one serial fetch per
+  // event — that per-event loop was the bulk of the sync time.
+  const linkedIds = Array.from(new Set(alreadySynced.map(e => existingByGoogleId[e.id].adhd_task_id)));
+  const tasksById: Record<string, any> = {};
+  const CHUNK = 100;
+  await Promise.all(
+    Array.from({ length: Math.ceil(linkedIds.length / CHUNK) }, (_, i) => linkedIds.slice(i * CHUNK, (i + 1) * CHUNK))
+      .map(async (chunk) => {
+        const rows = await base44.asServiceRole.entities.Task.filter({ id: { $in: chunk } });
+        for (const t of rows) tasksById[t.id] = t;
+      })
+  );
+
+  // Already-synced events: patch dates if Google changed them, or mark a
+  // user-deleted task as seen. Run in parallel batches.
+  const PARALLEL = 10;
+  for (let i = 0; i < alreadySynced.length; i += PARALLEL) {
+    await Promise.all(alreadySynced.slice(i, i + PARALLEL).map(async (event) => {
+      const existing = existingByGoogleId[event.id];
+      const existingTask = tasksById[existing.adhd_task_id];
+      if (existingTask) {
+        const didUpdate = await patchExistingTaskDates(base44, existing, existingTask, event);
+        if (didUpdate) { updated++; } else { skipped++; }
+        return;
+      }
+      // The user deleted this task in the app. Respect that deletion — don't
+      // re-import the Google event. Refresh last_synced_at so we don't keep
+      // re-checking it every sync.
+      await base44.asServiceRole.entities.CalendarSyncedEvent.update(existing.id, {
+        last_synced_at: new Date().toISOString(),
+      });
+      skipped++;
+    }));
+  }
+
+  for (const event of newEvents) {
     const googleId = event.id;
     const title = event.summary || 'Untitled event';
     const recurrenceRule = (event.recurrence || []).join(';');
@@ -210,36 +249,6 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
     const attendeeCount = (event.attendees || []).length;
 
     let existing = existingByGoogleId[googleId];
-
-    // If already synced, directly verify the task still exists by fetching it
-    // by ID. This is reliable — a batch-loaded ID set (filtered by email) can
-    // miss tasks created with a different recipient email or from older sync
-    // runs, which would make the sync skip re-creating deleted tasks.
-    if (existing && existing.adhd_task_id) {
-      let taskStillExists = false;
-      let existingTask = null;
-      try {
-        existingTask = await base44.asServiceRole.entities.Task.get(existing.adhd_task_id);
-        taskStillExists = !!existingTask;
-      } catch (e) {
-        // Task.get throws when the record doesn't exist → was deleted
-      }
-      if (taskStillExists) {
-        // Event still exists + task still exists → only re-sync if the Google
-        // event's dates changed (e.g. user extended a multi-day stay).
-        const didUpdate = await patchExistingTaskDates(base44, existing, existingTask, event);
-        if (didUpdate) { updated++; } else { skipped++; }
-        continue;
-      }
-      // The user deleted this task in the app. Respect that deletion — don't
-      // re-import the Google event. Refresh last_synced_at so we don't keep
-      // re-checking it every sync, then skip.
-      await base44.asServiceRole.entities.CalendarSyncedEvent.update(existing.id, {
-        last_synced_at: new Date().toISOString(),
-      });
-      skipped++;
-      continue;
-    }
 
     // Run AI classification
     let ai;
