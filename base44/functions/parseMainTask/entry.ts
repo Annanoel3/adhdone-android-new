@@ -1,6 +1,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.25";
 import OpenAI from "npm:openai";
 import { TASK_PARSE_SYSTEM_PROMPT } from "../../shared/taskParsePrompt.ts";
+import { fixParsedTaskTitles } from "../../shared/fixMisheardVerbs.ts";
 
 Deno.serve(async (req) => {
   await createClientFromRequest(req);
@@ -18,6 +19,6 @@ Deno.serve(async (req) => {
     response_format: { type: "json_object" },
     temperature: 0.1
   });
-  const response = JSON.parse(completion.choices[0].message.content);
+  const response = fixParsedTaskTitles(JSON.parse(completion.choices[0].message.content));
   return Response.json({ response });
 });

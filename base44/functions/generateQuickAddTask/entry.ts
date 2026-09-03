@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import OpenAI from 'npm:openai';
 import { TASK_PARSE_SYSTEM_PROMPT } from '../../shared/taskParsePrompt.ts';
+import { fixParsedTaskTitles } from '../../shared/fixMisheardVerbs.ts';
 
 const openai = new OpenAI({
   apiKey: Deno.env.get('OPENAI_API_KEY')
@@ -32,7 +33,7 @@ Deno.serve(async (req) => {
       response_format: { type: 'json_object' }
     });
 
-    const taskData = JSON.parse(response.choices[0].message.content);
+    const taskData = fixParsedTaskTitles(JSON.parse(response.choices[0].message.content));
 
     return Response.json({
       taskData
