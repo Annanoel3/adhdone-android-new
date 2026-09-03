@@ -540,7 +540,9 @@ export default function TaskCard({
             </button>
           )}
 
-          {collapsedDate && (
+          {/* Back-burnered tasks show the title only — no date, status, or
+              priority pills. They're parked, so the row stays quiet. */}
+          {collapsedDate && !task.silenced && (
             <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${
               collapsedDate.overdue
                 ? theme === 'dark' ? 'border-red-700 bg-red-900/30 text-red-300' : 'border-red-300 bg-red-50 text-red-700'
@@ -552,16 +554,7 @@ export default function TaskCard({
             </span>
           )}
 
-          {task.silenced && (
-            <span className={`shrink min-w-0 text-xs px-2 py-1 rounded border flex items-center gap-1 ${
-              theme === 'dark' ? 'border-amber-700 bg-amber-900/30 text-amber-300' : 'border-amber-300 bg-amber-50 text-amber-700'
-            }`}>
-              <BellOff className="w-3 h-3 flex-shrink-0" />
-              <span className="truncate">Back Burner</span>
-            </span>
-          )}
-
-          {isInProgress && (
+          {isInProgress && !task.silenced && (
             <span className={`shrink min-w-0 text-xs px-2 py-1 rounded border flex items-center gap-1 ${
               theme === 'dark'
                 ? 'border-blue-700 bg-blue-900/30 text-blue-300'
@@ -581,11 +574,13 @@ export default function TaskCard({
             {typeEmoji && <span className="mr-1">{typeEmoji}</span>}{task.title}
           </h3>
 
-          <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${getUrgencyColor(task.urgency)}`}>
-            {task.urgency === 'medium' ? 'med' : task.urgency}
-          </span>
+          {!task.silenced && (
+            <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${getUrgencyColor(task.urgency)}`}>
+              {task.urgency === 'medium' ? 'med' : task.urgency}
+            </span>
+          )}
 
-          {task.status !== 'completed' && !isEvent && (
+          {task.status !== 'completed' && !isEvent && !task.silenced && (
             <Popover>
               <PopoverTrigger asChild>
                 <button
