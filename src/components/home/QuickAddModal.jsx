@@ -172,6 +172,9 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
             taskId: createdTask.id,
             urgency: taskData.urgency,
             classification: taskData.classification || 'task',
+            // Timed tasks get no reminders after their time; day-only tasks do.
+            dayOnly: taskData.day_only_task || false,
+            deadlineStyle: taskData.deadline_style === 'by' ? 'by' : 'on',
           });
         }).then(multiIds => {
           if (multiIds) {

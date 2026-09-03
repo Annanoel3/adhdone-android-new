@@ -75,14 +75,15 @@ async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, 
 // Supports two reminder types from the LLM:
 //   ABSOLUTE: { days_before, hour, minute } — a specific clock time on a day
 //   RELATIVE: { relative_minutes_before } — N minutes before the event time
-function resolveReminderTimes(reminders, scheduledDateISO, title = '', classification) {
+function resolveReminderTimes(reminders, scheduledDateISO, title = '', classification, dayOnly) {
   const scheduled = new Date(scheduledDateISO);
   const bufferMs = Date.now() + 2 * 60 * 1000;
-  // For EVENTS (meetings, concerts, appointments, parties), a reminder that
-  // fires AFTER the event start time is useless — the event is already over or
-  // in progress. Filter those out so the user never gets a "coming up in an
-  // hour" notification 4 hours after the event already happened.
-  const isEvent = classification === 'event';
+  // Anything tied to a specific clock time — an event OR a task the user set
+  // for an exact time ("drink water at 11:30 AM") — must never be reminded
+  // about AFTER that time. A "coming up in an hour" ping an hour late is worse
+  // than useless. Once the time passes, the overdue system takes over.
+  // Only day-only tasks (no clock time) may be nudged later in the day.
+  const enforceBeforeTime = !dayOnly;
 
   return reminders
     .map(r => {
@@ -108,9 +109,8 @@ function resolveReminderTimes(reminders, scheduledDateISO, title = '', classific
     })
     .filter(r => new Date(r.sendAtISO).getTime() > bufferMs)
     .filter(r => {
-      // For events, never schedule a reminder after the event start time.
-      if (isEvent && new Date(r.sendAtISO).getTime() > scheduled.getTime()) {
-        console.log(`[multiReminderScheduler] Dropping post-event reminder "${r.label}" at ${r.sendAtISO} (event at ${scheduledDateISO})`);
+      if (enforceBeforeTime && new Date(r.sendAtISO).getTime() > scheduled.getTime()) {
+        console.log(`[multiReminderScheduler] Dropping post-time reminder "${r.label}" at ${r.sendAtISO} (task at ${scheduledDateISO})`);
         return false;
       }
       return true;
@@ -162,7 +162,7 @@ export async function scheduleMultiReminders({
       });
     }
 
-    const reminderTimes = resolveReminderTimes(reminders, scheduledDateISO, title, classification);
+    const reminderTimes = resolveReminderTimes(reminders, scheduledDateISO, title, classification, dayOnly);
     if (reminderTimes.length === 0) return null;
 
     console.log(`[multiReminderScheduler] Scheduling ${reminderTimes.length} LLM-determined reminders for "${title}"`);
