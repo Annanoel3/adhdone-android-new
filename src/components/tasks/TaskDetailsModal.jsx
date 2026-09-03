@@ -714,7 +714,7 @@ Return JSON:
 
       // OPTIMISTIC: show the new time + confirmation immediately, then do all
       // the cancel/reschedule network work in the background.
-      onUpdate({ ...task, next_reminder: nextReminder.toISOString() });
+      onUpdate({ ...task, next_reminder: nextReminder.toISOString(), due_date: nextReminder.toISOString() });
       const savedRdNow = `${nextReminder.getFullYear()}-${String(nextReminder.getMonth()+1).padStart(2,'0')}-${String(nextReminder.getDate()).padStart(2,'0')}`;
       const savedRtNow = `${String(nextReminder.getHours()).padStart(2,'0')}:${String(nextReminder.getMinutes()).padStart(2,'0')}`;
       setReminderDate(savedRdNow);
@@ -787,6 +787,7 @@ Return JSON:
 
           Task.update(task.id, {
             next_reminder: nextReminder.toISOString(),
+            due_date: nextReminder.toISOString(),
             onesignal_notification_ids: newNotificationIds,
             reminder_schedule: null,
             ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
@@ -830,6 +831,7 @@ Return JSON:
 
           Task.update(task.id, {
             next_reminder: nextReminder.toISOString(),
+            due_date: nextReminder.toISOString(),
             onesignal_notification_ids: newNotificationIds,
             reminder_schedule: scheduleData,
           }).catch(err => console.error("Error updating task:", err));
@@ -1572,14 +1574,18 @@ Return JSON:
                 !(task.reminder_schedule && task.reminder_schedule.length > 0) && (
                 <Popover>
                   <PopoverTrigger asChild>
-                    <button className="cursor-pointer hover:opacity-80 transition-opacity bg-purple-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
+                    <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
+                      task.next_reminder && new Date(task.next_reminder).getTime() < Date.now() && task.status !== 'completed'
+                        ? theme === 'dark' ? 'bg-red-900 text-red-300' : 'bg-red-100 text-red-700'
+                        : 'bg-purple-500 text-white'
+                    }`}>
                       <Clock className="w-3 h-3" />
                       {task.next_reminder ? (
-                        <>
-                          {isEvent ? formatEventDateRange() : formatReminderDate(task.next_reminder)} • {formatReminderTime(task.next_reminder)}
-                        </>
+                        new Date(task.next_reminder).getTime() < Date.now() && task.status !== 'completed'
+                          ? `Overdue • ${formatReminderDate(task.next_reminder)}`
+                          : `Due ${isEvent ? formatEventDateRange() : formatReminderDate(task.next_reminder)} • ${formatReminderTime(task.next_reminder)}`
                       ) : (
-                        'Add reminder'
+                        'Add due date & time'
                       )}
                     </button>
                   </PopoverTrigger>
@@ -1588,7 +1594,7 @@ Return JSON:
                   }`}>
                     <div className="space-y-3">
                       <div>
-                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Reminder Date:</label>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Due Date:</label>
                         <input
                           type="date"
                           value={reminderDate}
@@ -1597,7 +1603,7 @@ Return JSON:
                         />
                       </div>
                       <div>
-                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Reminder Time:</label>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Time:</label>
                         <input
                           type="time"
                           value={reminderTime}
@@ -1618,9 +1624,12 @@ Return JSON:
                 </Popover>
               )}
 
-              {/* Due date — editable for one-time, interval, and repeat tasks.
-                   Events use the Event Date control above instead. */}
-              {(currentType === 'once' || currentType === 'interval' || currentType === 'repeat') && (
+              {/* Due date — only shown when the combined "Due <date> • <time>"
+                   pill above ISN'T rendered (i.e. the task's times are owned by
+                   a Smart Reminder Schedule). Otherwise the reminder pill IS
+                   the due date, so a second date pill just confuses things. */}
+              {(currentType === 'once' || currentType === 'interval' || currentType === 'repeat') &&
+                (task.reminder_schedule && task.reminder_schedule.length > 0) && (
                 task.due_date ? (
                   <Popover open={dueDatePopoverOpen} onOpenChange={setDueDatePopoverOpen}>
                     <PopoverTrigger asChild>
