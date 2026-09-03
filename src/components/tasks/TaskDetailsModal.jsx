@@ -522,9 +522,12 @@ Return JSON:
     try {
       const updates = { [field]: value };
       
-      // CRITICAL: Don't cancel reminders when only updating recurrence_pattern
-      const shouldCancelReminders = field !== 'recurrence_pattern' && 
-        task.onesignal_notification_ids && 
+      // CRITICAL: Only cancel reminders for the ONE field that actually
+      // reschedules them below (reminder_interval). Cancelling on any other
+      // field — urgency, energy, notes — silently killed the task's live
+      // notifications with nothing to replace them.
+      const shouldCancelReminders = field === 'reminder_interval' &&
+        task.onesignal_notification_ids &&
         task.onesignal_notification_ids.length > 0;
       
       if (shouldCancelReminders) {
