@@ -35,6 +35,7 @@ export default function QuickAddModal({ isOpen, onClose, theme }) {
       // The user sees the task card right away — no waiting for LLM parsing.
       const createdTask = await base44.entities.Task.create({
         title: transcription,
+        original_input: transcription,
         classification: 'task',
         urgency: 'medium',
         energy_required: 'medium',

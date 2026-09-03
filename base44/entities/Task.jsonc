@@ -6,6 +6,10 @@
       "type": "string",
       "description": "Task title"
     },
+    "original_input": {
+      "type": "string",
+      "description": "The user's VERBATIM input (typed or transcribed) that created this task, stored exactly as spoken/typed with no cleanup. Used to audit AI parsing errors \u2014 e.g. when a date, subject, or misheard word ends up wrong, the raw phrasing can be compared against what the parser produced."
+    },
     "description": {
       "type": "string",
       "description": "Detailed task description"

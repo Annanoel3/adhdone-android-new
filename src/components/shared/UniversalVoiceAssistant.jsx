@@ -281,6 +281,7 @@ Return JSON:
 
         const createdTask = await Task.create({
           title: taskData.title,
+          original_input: command,
           urgency: taskData.urgency || 'medium',
           energy_required: taskData.energy_required || 'medium',
           status: 'active',

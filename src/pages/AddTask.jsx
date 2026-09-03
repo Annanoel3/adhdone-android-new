@@ -270,6 +270,7 @@ Return JSON:
         // Create parent task
         const parentTask = await base44.entities.Task.create({
           title: subtaskCheck.main_task,
+          original_input: inputText,
           description: '',
           reminder_interval: mainTaskParsed.reminder_interval || null,
           due_date: presetDueDateISO,
@@ -467,6 +468,7 @@ Return JSON:
         console.log('🔄 [PROCESS] Priority uninferrable and flexible — showing priority picker');
         setPendingPriorityTask({
           title: parsed.title || inputText.trim(),
+          original_input: inputText,
           energy_required: parsed.energy_required || 'medium',
           classification: parsed.classification || 'task',
           currentUser
@@ -480,6 +482,7 @@ Return JSON:
         console.log('🔄 [PROCESS] needs_date_pick — showing date picker');
         setPendingDateTask({
           title: parsed.title || inputText.trim(),
+          original_input: inputText,
           energy_required: parsed.energy_required || 'medium',
           urgency: parsed.urgency || 'medium',
           fallbackInterval: null,
@@ -570,6 +573,7 @@ Return JSON:
           // creates a separate task for each segment instead of only the last.
           const taskData = {
             title: parsed.title || inputText.trim(),
+            original_input: inputText,
             description: '',
             classification: parsed.classification || 'task',
             reminder_interval: actualReminderInterval,
@@ -659,6 +663,7 @@ Return JSON:
       
       const createdTask = await base44.entities.Task.create({
         title: parsed.title || inputText.trim(),
+        original_input: inputText,
         description: '',
         classification: parsed.classification || 'task',
         reminder_interval: actualReminderInterval,
@@ -915,6 +920,7 @@ Return JSON:
 
       const createdTask = await base44.entities.Task.create({
         title,
+        original_input: pendingPriorityTask.original_input || null,
         description: '',
         classification: pendingPriorityTask.classification || 'task',
         reminder_interval: null, // smart nudge — no hardcoded interval
@@ -966,6 +972,7 @@ Return JSON:
 
       const createdTask = await base44.entities.Task.create({
         title,
+        original_input: pendingDateTask.original_input || null,
         description: '',
         classification: pendingDateTask.classification || 'task',
         reminder_interval: 'once',
@@ -1032,6 +1039,7 @@ Return JSON:
       // when to remind — no hardcoded recurring interval.
       const createdTask = await base44.entities.Task.create({
         title,
+        original_input: pendingDateTask.original_input || null,
         description: '',
         classification: pendingDateTask.classification || 'task',
         reminder_interval: null, // smart nudge — no hardcoded interval
