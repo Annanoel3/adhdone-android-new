@@ -72,6 +72,15 @@ export function buildTaskParsePrompt(inputText: string): string {
       - Capitalize the first word. Remove time/date references from the title.
       - SANITY CHECK: a title must contain the action AND what it applies to. Single-word titles
         like "Go", "Call", "Pick" are ALWAYS wrong — include the destination/object.
+      - FIX SPEECH-TO-TEXT MIS-HEARS OF THE ACTION VERB. Voice input often turns the verb into a
+        homophone. A title must start with a real action verb — never a conjunction/preposition
+        like "But", "By", "Bye", "To", "Two", "For", "Four". When the first word is one of those
+        and the sentence clearly means an action, correct it to the intended verb:
+        "but Trevi" → "Buy Trevi"    "by cat food" → "Buy cat food"
+        "bye milk" → "Buy milk"      "cal the vet" → "Call the vet"
+        "pick of the kids" → "Pick up the kids"
+        Correct ONLY the mis-heard function word — never change or drop the subject/object
+        ("Trevi" stays "Trevi", even if it's an unfamiliar name).
       - NEVER DROP THE SUBJECT. Every person, place, business, provider, or thing the user named
         MUST stay in the title. Only the wrapper ("remind me to") and date/time words are removed.
         Generic titles like "Make an appointment", "Call them", "Schedule it", "Pick it up",
