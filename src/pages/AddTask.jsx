@@ -133,6 +133,15 @@ export default function AddTask() {
   - "Monday: dentist at 9am, lunch with mom at 12pm, pick up kids at 3pm" → 3 tasks (one per timed event)
   GROUPING RULE: Sub-actions that belong to the SAME outing (arriving early, check-in, the activity itself, the ride home) stay together in ONE task. Only split when there are separate activities/destinations at different times.
 
+  NEVER OUTPUT THE SAME TASK TWICE. Each action from the input appears in the
+  output EXACTLY ONCE. Do not restate an action with different wording as a
+  second task, and do not add a summary/umbrella task alongside the split tasks.
+  - "do the dishes" → ["do the dishes"] — NEVER ["do dishes", "do the dishes"]
+  - "clean the kitchen and do the dishes" → 2 tasks ONLY if they are genuinely
+    different actions; if one restates the other, return just one.
+  Before returning, re-read your "tasks" array and delete any entry that means
+  the same thing as another entry.
+
   CRITICAL: When splitting, PRESERVE any time/date words (e.g., "today", "tomorrow",
   "tonight") on EACH split task so the user's timing intent is not lost.
   - "clean the dishes and the floor today" → ["clean the dishes today", "clean the floor today"]
