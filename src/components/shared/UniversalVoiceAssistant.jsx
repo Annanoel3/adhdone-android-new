@@ -147,26 +147,6 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
       }
     }
 
-    // Task creation
-    if (lowerCommand.includes('remind me') ||
-        lowerCommand.includes('create a task') ||
-        lowerCommand.includes('add a task') ||
-        lowerCommand.includes('make a task') ||
-        lowerCommand.includes('new task')) {
-
-      // Hand off to the SAME background pipeline that Add Task uses, so voice
-      // tasks get identical parsing (location, event type, dates, smart nudges)
-      // instead of this screen's own stripped-down prompt.
-      enqueueCapture({ text: command });
-      setFeedbackMessage("✅ Got it — adding your task...");
-      setIsProcessing(false);
-      setTimeout(() => {
-        setIsOpen(false);
-        navigate(createPageUrl("Home"), { state: { reload: true } });
-      }, 1200);
-      return;
-    }
-
     // Parking lot idea
     if (lowerCommand.includes('save this idea') ||
         lowerCommand.includes('parking lot') ||
@@ -200,9 +180,16 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
       }
     }
 
-    // If nothing matched
-    setFeedbackMessage("❓ I didn't quite catch that. Try:\n• 'Remind me to...'\n• 'Go to tasks'\n• 'Save this idea...'");
+    // Everything else is a task — hand the raw transcript to the SAME background
+    // pipeline Add Task uses, so voice tasks get identical parsing (location,
+    // event type, dates, smart nudges) with no separate prompt of their own.
+    enqueueCapture({ text: command });
+    setFeedbackMessage("✅ Got it — adding your task...");
     setIsProcessing(false);
+    setTimeout(() => {
+      setIsOpen(false);
+      navigate(createPageUrl("Home"), { state: { reload: true } });
+    }, 1200);
   };
 
   const handleClose = () => {
