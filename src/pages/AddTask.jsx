@@ -1050,14 +1050,27 @@ Return JSON:
     setIsProcessing(true);
 
     try {
-      // "Any day" = flexible task with no fixed time. Smart nudge handles
-      // when to remind — no hardcoded recurring interval.
+      // "Any day" = no fixed clock time. If the parser already knew the day
+      // (e.g. "tomorrow"), keep it as a day-only due date so the date the user
+      // actually said isn't thrown away — smart nudge handles the timing.
+      let anyDayDueISO = presetDueDateISO;
+      let dayOnly = false;
+      if (pendingDateTask.initialDate) {
+        const [ay, am, ad] = pendingDateTask.initialDate.split('-').map(n => parseInt(n, 10));
+        if (!isNaN(ay) && !isNaN(am) && !isNaN(ad)) {
+          anyDayDueISO = new Date(ay, am - 1, ad, 23, 59, 0, 0).toISOString();
+          dayOnly = true;
+        }
+      }
+
       const createdTask = await base44.entities.Task.create({
         title,
         original_input: pendingDateTask.original_input || null,
         description: '',
         classification: pendingDateTask.classification || 'task',
         reminder_interval: null, // smart nudge — no hardcoded interval
+        due_date: anyDayDueISO,
+        day_only_task: dayOnly,
         reminder_count: 0,
         next_reminder: null,
         urgency,

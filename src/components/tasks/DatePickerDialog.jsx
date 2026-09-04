@@ -45,7 +45,9 @@ export default function DatePickerDialog({ isOpen, onClose, onSelect, onAnyDay, 
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="max-w-md w-[calc(100vw-2rem)]">
         <DialogHeader>
-          <DialogTitle>Is this for a specific date?</DialogTitle>
+          <DialogTitle>
+            {initialDate ? 'What time is this?' : 'Is this for a specific date?'}
+          </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-4">
           {taskTitle && (
