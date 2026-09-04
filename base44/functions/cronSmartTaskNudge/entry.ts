@@ -15,6 +15,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
 import { localMinutesOfDay, parseHHMM, isInQuietHours, adjustForQuietHours } from '../../shared/quietHours.ts';
+import { getProximity, formatProximityNotes } from '../../shared/mapsDistance.ts';
 
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 
@@ -370,6 +371,16 @@ async function generateDailySchedule(
 
   const urgentCount = tasks.filter(t => t.urgency === 'urgent').length;
 
+  // Measured driving distances between the locations the user explicitly typed
+  // in. Without this the LLM can only ask "if these are near each other…";
+  // with it, it can say whether they actually are.
+  let proximityNotes = '';
+  const locatedTasks = tasks.filter(t => (t.location || '').trim());
+  if (locatedTasks.length >= 2 || (locatedTasks.length === 1 && homeZip)) {
+    const prox = await getProximity(locatedTasks.map(t => t.location.trim()), homeZip);
+    proximityNotes = formatProximityNotes(prox);
+  }
+
   // Fixed appointments today — context only, never nudged here.
   const eventList = todaysEvents.map((e) => {
     const when = e.event_time || e.next_reminder;
@@ -391,7 +402,7 @@ CURRENT CONTEXT:
 
 FULL TASK LIST (you decide what's relevant today — you have the week ahead):
 ${taskList}
-${eventList ? `\nFIXED APPOINTMENTS TODAY (context only — do NOT nudge these, they have their own reminders):\n${eventList}\n` : ''}${alreadyNudgedTitles.length > 0 ? `\nTASKS ALREADY NUDGED TODAY (use check-in style — "Have you done X yet?"):\n${alreadyNudgedTitles.map(t => `- "${t}"`).join('\n')}\n` : ''}
+${eventList ? `\nFIXED APPOINTMENTS TODAY (context only — do NOT nudge these, they have their own reminders):\n${eventList}\n` : ''}${proximityNotes ? `\n${proximityNotes}\n` : ''}${alreadyNudgedTitles.length > 0 ? `\nTASKS ALREADY NUDGED TODAY (use check-in style — "Have you done X yet?"):\n${alreadyNudgedTitles.map(t => `- "${t}"`).join('\n')}\n` : ''}
 YOUR APPROACH:
 - You can see the whole week. Plan TODAY's reminders — what to surface, when, what to say.
 - MEET ALL DEADLINES: if something is due today or tomorrow, it must be surfaced. If something is overdue, surface it with urgency.
@@ -413,7 +424,9 @@ ${urgentCount >= 2 ? `- There are ${urgentCount} URGENT tasks. Consider one noti
 - PUSHED TASKS: when a task shows "pushed Nx" (the user moved its due date later N times), it's being avoided. Don't shame — gently name it: "this one's been bumped a few times — want to break it into a tiny first step?" or "no rush, but this keeps getting pushed — is it still something you actually want to do?" Higher push counts deserve more attention but never guilt.
 - LOCATION IS DATA, NOT A GUESS. A task has a location ONLY if the task line shows an explicit "LOCATION: ..." value (the user typed it in themselves). No LOCATION field = no location, period. Tasks with no LOCATION field NEVER get a "combine errands" / same-trip suggestion, no matter what their title sounds like.${homeZip ? ` The user's home base is zip ${homeZip} — you may use it to judge roughly whether two locations are in the same area.` : ''}
 - NEVER ASSUME A TASK MEANS LEAVING THE HOUSE. Most things can be done online, by phone, or at home — ordering, booking, paying, renewing, even "getting" something. A task only counts as an out-of-the-house errand when the wording SAYS SO: it explicitly uses a go-somewhere verb ("drop off", "pick up in store", "return to the store", "mail", "go to", "stop by", "drive to", "test drive", "in-person appointment"), or it explicitly names a physical place the user is going to ("at the DMV", "the dealership on Main"). A bare name, a brand, a store name, or a person's name is NOT enough — "Get Trevi" or "Men's Warehouse" could easily be an online order or a phone call. Energy level says nothing about location. If it's not explicit, it is NOT an errand.
-- BATCH ERRANDS (two birds, one trip): only ever suggest this when TWO OR MORE tasks each carry an explicit LOCATION field (or one located task lines up with a FIXED APPOINTMENT today) — time it shortly BEFORE the appointment so they can plan. If you're inferring the location from a name or from the task's wording, do NOT send this nudge at all. You also do not know distances, so frame it as a decline-able question ("If the dealership is anywhere near your dentist, you could knock both out in one trip — worth it?"), never state a drive time, and list every task you mention in task_indexes.
+- BATCH ERRANDS (two birds, one trip): only ever suggest this when TWO OR MORE tasks each carry an explicit LOCATION field (or one located task lines up with a FIXED APPOINTMENT today) — time it shortly BEFORE the appointment so they can plan. If you're inferring the location from a name or from the task's wording, do NOT send this nudge at all. List every task you mention in task_indexes.
+  * If a REAL DRIVING DISTANCES block is present above, USE IT — it's measured. Only suggest combining when the pair is marked "SAME TRIP" or "reasonable to combine", and you may state the real number ("they're only 6 minutes apart"). Never suggest combining a pair marked "NOT worth combining", and never state a distance that isn't in that block.
+  * If there is NO distances block, frame it as a decline-able question ("If the dealership is anywhere near your dentist, you could knock both out in one trip — worth it?") and never state a drive time.
 - delay_minutes: minutes from NOW to send this nudge (e.g., 30 = 30 min from now, 120 = 2 hours from now).
 - Don't schedule past quiet hours start (${quietStartStr}).
 - You decide HOW MANY nudges. There's no cap, no formula. Use your judgment — some days need 2, some need 6.
