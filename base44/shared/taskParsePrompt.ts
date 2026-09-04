@@ -170,6 +170,9 @@ classification — what KIND of thing this is:
   "birthday" only when it's genuinely about someone's birthday.
 
 target_date / target_time — WHEN the thing happens (YYYY-MM-DD / 24h "HH:MM").
+  target_date must ALWAYS be a real calendar date copied from the table above —
+  "2026-09-05", never a day word like "Saturday" or "tomorrow". Repeating the
+  user's wording here is a broken answer; look the day up and write the date.
   Time only if the user actually said one.
 
 end_date — for a stated multi-day range, the LAST day. Otherwise null.
