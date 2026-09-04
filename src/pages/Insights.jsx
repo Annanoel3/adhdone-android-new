@@ -82,9 +82,18 @@ export default function Insights() {
       morningCompletions > afternoonCompletions && morningCompletions > eveningCompletions ? 'Morning' :
       afternoonCompletions > eveningCompletions ? 'Afternoon' : 'Evening';
 
-    // Average completion rate
-    const avgCompletionRate = summaries.length > 0
-      ? Math.round(summaries.reduce((sum, s) => sum + (s.completion_rate || 0), 0) / summaries.length)
+    // Avg tasks finished per active day — computed from real completion
+    // timestamps. (The old "completion rate" divided by every open task you
+    // had, including ones not due yet, so a backlog made it meaningless.)
+    const completionsByDay = {};
+    completedTasks.forEach(t => {
+      const d = new Date(t.completed_at);
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      completionsByDay[key] = (completionsByDay[key] || 0) + 1;
+    });
+    const activeDays = Object.values(completionsByDay);
+    const avgPerActiveDay = activeDays.length > 0
+      ? Math.round((activeDays.reduce((a, b) => a + b, 0) / activeDays.length) * 10) / 10
       : 0;
 
     // Most productive day
@@ -116,7 +125,8 @@ export default function Insights() {
       afternoonCompletions,
       eveningCompletions,
       bestTime,
-      avgCompletionRate,
+      avgPerActiveDay,
+      activeDayCount: activeDays.length,
       mostProductiveDay,
       totalTasksCompleted: completedTasks.length,
       currentStreak: summaries[0]?.streak_days || 0,
@@ -275,8 +285,9 @@ export default function Insights() {
                   : 'bg-gradient-to-br from-green-100 to-teal-100'
               }`}>
                 <Target className="w-8 h-8 mx-auto mb-2 text-green-600" />
-                <div className="text-2xl font-bold text-gray-900">{insights.avgCompletionRate}%</div>
-                <p className="text-xs text-gray-600 mt-1">Avg. Completion</p>
+                <div className="text-2xl font-bold text-gray-900">{insights.avgPerActiveDay}</div>
+                <p className="text-xs text-gray-600 mt-1">Avg. Tasks/Day</p>
+                <p className="text-[10px] text-gray-500">on days you got stuff done</p>
               </div>
 
               <div className={`p-4 rounded-xl text-center ${
@@ -401,7 +412,7 @@ export default function Insights() {
                 </p>
               </div>
             )}
-            {insights.avgCompletionRate < 50 && (
+            {insights.avgPerActiveDay > 0 && insights.avgPerActiveDay < 2 && (
               <div className="flex items-start gap-3">
                 <div className="w-2 h-2 rounded-full bg-purple-600 mt-2 flex-shrink-0" />
                 <p className="text-gray-700">
