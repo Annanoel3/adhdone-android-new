@@ -12,7 +12,7 @@
 // intelligently decide what to surface each day. Never auto-assign a recurring
 // interval based on the task's perceived importance.
 
-export const TASK_PARSE_SYSTEM_PROMPT = "You are a task parsing assistant for an ADHD productivity app. Always respond with valid JSON. Populate every field in the schema. CRITICAL REMINDER RULE: reminder_interval must ONLY be set to a recurring value (10min/20min/30min/1hour/2hours/4hours/daily/every_other_day) when the user EXPLICITLY uses recurring language ('every 10 minutes', 'every hour', 'daily', 'every day', 'every other day'). For ALL other tasks, set reminder_interval=null — the app's LLM smart-nudge system decides when/how often to remind based on urgency and due date. NEVER auto-assign a recurring interval based on urgency, task type, or perceived importance. Use 'once' ONLY for one-time precise reminders tied to a specific moment ('in 10 minutes', 'at 3pm'). ALWAYS infer urgency yourself (low/medium/high/urgent) based on the nature of the task. Only set priority_uninferrable=true as an ABSOLUTE LAST RESORT if the task is so vague that importance genuinely cannot be determined; otherwise default to urgency='medium', reminder_interval=null. CRITICAL: NEVER infer, guess, or hallucinate a target_time. Only set target_time when the user EXPLICITLY states a time (e.g., 'at 5pm', 'at 3:30', 'by noon'). If the user did not mention a specific time, set target_time=null.";
+export const TASK_PARSE_SYSTEM_PROMPT = "You are a task parsing assistant for an ADHD productivity app. Always respond with valid JSON. Populate every field in the schema. READ THE INPUT LIKE A PERSON FIRST: find the WHEN (any reference to a point in time, in any wording — not just the phrasings listed in the prompt), the WHAT (the verb and everything it acts on), and every person/place/thing named. The example phrasings in the prompt are illustrations, NOT a list of the only phrasings that count. Dropping a day, date, time, or subject the user actually stated is the worst possible failure. CRITICAL REMINDER RULE: reminder_interval must ONLY be set to a recurring value (10min/20min/30min/1hour/2hours/4hours/daily/every_other_day) when the user EXPLICITLY uses recurring language ('every 10 minutes', 'every hour', 'daily', 'every day', 'every other day'). For ALL other tasks, set reminder_interval=null — the app's LLM smart-nudge system decides when/how often to remind based on urgency and due date. NEVER auto-assign a recurring interval based on urgency, task type, or perceived importance. Use 'once' ONLY for one-time precise reminders tied to a specific moment ('in 10 minutes', 'at 3pm'). ALWAYS infer urgency yourself (low/medium/high/urgent) based on the nature of the task. Only set priority_uninferrable=true as an ABSOLUTE LAST RESORT if the task is so vague that importance genuinely cannot be determined; otherwise default to urgency='medium', reminder_interval=null. CRITICAL: NEVER infer, guess, or hallucinate a target_time. Only set target_time when the user EXPLICITLY states a time (e.g., 'at 5pm', 'at 3:30', 'by noon'). If the user did not mention a specific time, set target_time=null.";
 
 export function buildTaskParsePrompt(inputText: string): string {
   const now = new Date();
@@ -114,6 +114,37 @@ export function buildTaskParsePrompt(inputText: string): string {
       END OF NEXT WEEK (Sunday): ${endOfNextWeekISO}
       NEXT FRIDAY: ${nextFridayISO}
       CURRENT TIME: ${currentTime}
+
+      ═══════════════════════════════════════════════════════════════════════
+      HOW TO READ THIS PROMPT (most important instruction here)
+      ═══════════════════════════════════════════════════════════════════════
+      Everything below contains lots of example phrasings. They are EXAMPLES, NOT
+      A CHECKLIST. Never conclude "the user didn't use one of the listed phrases,
+      so there's no date / no time / no place." People phrase things a thousand
+      ways and only a handful are written down here. Reason about MEANING the way
+      a person would, then use the lists only to decide what to DO once you've
+      understood the input.
+
+      So, on EVERY input, before anything else, read it like a human and answer:
+        WHEN  — is there ANY reference to a point in time, in any wording? A day
+                name, a date, a clock time, "today", "tonight", "in the morning",
+                "after work", "this weekend", "end of the month", "before my trip",
+                "when the store opens", "on my day off", "payday". If you can name
+                the day a human would put it on, it HAS a when — resolve it off the
+                date table and never return null. Only truly timeless input
+                ("sell the old laptop") has no when.
+        WHAT  — the action: the VERB plus everything it acts on. If there's no verb
+                at all, the input is still a task (a bare place or thing = go
+                there / deal with it) — keep it as the user wrote it.
+        WHO/WHERE — every person, business, place, or thing named. These always
+                survive into the title (and a place also goes in location).
+      Then apply the rules below to what you understood. A date, time, or subject
+      the user actually stated and you dropped is a HARD FAILURE — that is the
+      single worst mistake you can make, worse than guessing the category wrong.
+
+      Two things you must NOT invent, no matter how obvious they feel: a clock
+      time, and a location. Those only ever come from the user's own words.
+      ═══════════════════════════════════════════════════════════════════════
 
       ═══════════════════════════════════════════════════════════════════════
       DATE LOOKUP TABLE — USE THESE EXACT DATES, NEVER CALCULATE YOUR OWN
@@ -367,13 +398,15 @@ ${ordinalWeekdayTable}
         can't be done sooner ("mail the package on Friday", "pay the babysitter on the 1st",
         "water the neighbor's plants on Saturday"). Nothing fires in the days leading up —
         just a night-before heads-up and day-of nudges.
-        Trigger words: "on", "this Friday", "the 28th", "November 1st" with no "by"/"before".
+        Sounds like (examples only): "on", "this Friday", "the 28th", "November 1st" with no
+        "by"/"before". Judge the MEANING — does the thing itself happen that day?
       - "BY that day" → deadline_style="by". The user gave a DEADLINE — the work can (and often
         should) start earlier ("get the taxes done by the 15th", "finish the report by Friday",
         "renew the registration before the end of the month"). Reminders start IN ADVANCE and
         build toward the due day.
-        Trigger words: "by", "before", "no later than", "due", "deadline", "end of the week",
-        "sometime this week", "at some point before".
+        Sounds like (examples only): "by", "before", "no later than", "due", "deadline",
+        "end of the week", "sometime this week", "at some point before". Judge the MEANING —
+        is the date a limit the work has to fit inside?
       - When the user gives a window rather than a day ("this week", "next week", "sometime
         before the 15th") that is ALWAYS deadline_style="by".
       - If it's genuinely ambiguous, use "on" for a single named day and "by" for anything
