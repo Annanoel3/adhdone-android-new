@@ -109,9 +109,12 @@ Deno.serve(async (req) => {
       const timeZone = user.timezone || 'UTC';
 
       // Quiet hours — skip if the user is in their quiet window
+      // Quiet hours are PER USER. If the user hasn't turned them on, there is no
+      // quiet window at all — a 0/0 window makes isInQuietHours/adjustForQuietHours
+      // no-ops, so someone who works until midnight still gets same-day nudges.
       const quietEnabled = !!user.quiet_hours_enabled;
-      const startMin = quietEnabled && user.quiet_hours_start ? parseHHMM(user.quiet_hours_start) : parseHHMM('21:00');
-      const endMin = quietEnabled && user.quiet_hours_end ? parseHHMM(user.quiet_hours_end) : parseHHMM('08:00');
+      const startMin = quietEnabled ? parseHHMM(user.quiet_hours_start || '22:00') : 0;
+      const endMin = quietEnabled ? parseHHMM(user.quiet_hours_end || '08:00') : 0;
       if (isInQuietHours(now, startMin, endMin, timeZone)) continue;
 
       const todayStr = getLocalDateString(now, timeZone);
@@ -313,8 +316,11 @@ async function generateDailySchedule(
   const hour = Math.floor(localMin / 60);
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
   const timeStr = formatTime(localMin);
+  // A 0/0 window means the user has quiet hours turned OFF — the day runs to midnight.
+  const noQuietHours = quietStartMin === quietEndMin;
   const quietStartStr = formatTime(quietStartMin);
   const quietEndStr = formatTime(quietEndMin);
+  const cutoffLabel = noQuietHours ? 'midnight' : `quiet hours (${quietStartStr})`;
   const now = new Date();
 
   // Build the full task list for the LLM — every task with its metadata so the
@@ -329,7 +335,7 @@ async function generateDailySchedule(
     if (t.due_date) {
       const days = daysUntil(t.due_date, now, timeZone);
       if (days === 0) {
-        dueInfo = `⚠️ DUE TODAY — only ${hoursLeftStr} left before quiet hours. Must be nudged in this window.`;
+        dueInfo = `⚠️ DUE TODAY — only ${hoursLeftStr} left before ${cutoffLabel}. Must be nudged in this window.`;
       } else
       if (t.day_only_task && t.deadline_style === 'by') {
         // DEADLINE: the work can happen any time before this date, so lead-up
@@ -398,7 +404,7 @@ You're not annoying. You don't flood them. You make sure everything gets done an
 CURRENT CONTEXT:
 - Current time: ${timeStr} (${timeOfDay})
 - Timezone: ${timeZone}
-- Quiet hours: ${quietStartStr} - ${quietEndStr} (never schedule during these)
+- Quiet hours: ${noQuietHours ? 'NONE — this user has quiet hours turned off and is often up until around midnight, so late-evening nudges are welcome' : `${quietStartStr} - ${quietEndStr} (never schedule during these)`}
 
 FULL TASK LIST (you decide what's relevant today — you have the week ahead):
 ${taskList}
@@ -406,7 +412,7 @@ ${eventList ? `\nFIXED APPOINTMENTS TODAY (context only — do NOT nudge these, 
 YOUR APPROACH:
 - You can see the whole week. Plan TODAY's reminders — what to surface, when, what to say.
 - MEET ALL DEADLINES: if something is due today or tomorrow, it must be surfaced. If something is overdue, surface it with urgency.
-- DUE TODAY IS NON-NEGOTIABLE: every "DUE TODAY" task gets a nudge, and its FIRST nudge lands within the next 30-60 minutes — the boss said it has to happen today, so the window is closing whether the task is dishes or taxes. If less than 2 hours remain before quiet hours, nudge it within 15 minutes and, if it's still open, once more about halfway to quiet hours. The task's stored priority doesn't lower this — a same-day deadline outranks priority.
+- DUE TODAY IS NON-NEGOTIABLE: every "DUE TODAY" task gets a nudge, and its FIRST nudge lands within the next 30-60 minutes — the boss said it has to happen today, so the window is closing whether the task is dishes or taxes. If less than 2 hours remain before ${cutoffLabel}, nudge it within 15 minutes and, if it's still open, once more about halfway to ${cutoffLabel}. The task's stored priority doesn't lower this — a same-day deadline outranks priority.
 - DON'T LET THINGS SNEAK UP: if a deadline is 2-3 days out and the task is high-priority, a heads-up today is smart. If it's a week+ out, hold off unless it's urgent.
 - "DEADLINE in N days" vs "happens on [day]" — TREAT THESE COMPLETELY DIFFERENTLY:
   * DEADLINE tasks can be worked on ahead of time, so give them RUNWAY. How much runway depends on how much work the task actually is — judge that from the task itself: a one-step thing (pay a bill, send an email, book something online) needs 1-2 days; an errand or anything involving another person, an office, or paperwork needs 3-5 days; a genuinely big multi-step job (taxes, a report, applications, packing, cleaning out a room) deserves nudges starting a week or two out, framed around ONE small first step. Never let a big deadline task get its first nudge the day before.
@@ -428,7 +434,7 @@ ${urgentCount >= 2 ? `- There are ${urgentCount} URGENT tasks. Consider one noti
   * If a REAL DRIVING DISTANCES block is present above, USE IT — it's measured. Only suggest combining when the pair is marked "SAME TRIP" or "reasonable to combine", and you may state the real number ("they're only 6 minutes apart"). Never suggest combining a pair marked "NOT worth combining", and never state a distance that isn't in that block.
   * If there is NO distances block, frame it as a decline-able question ("If the dealership is anywhere near your dentist, you could knock both out in one trip — worth it?") and never state a drive time.
 - delay_minutes: minutes from NOW to send this nudge (e.g., 30 = 30 min from now, 120 = 2 hours from now).
-- Don't schedule past quiet hours start (${quietStartStr}).
+- Don't schedule past ${cutoffLabel}.
 - You decide HOW MANY nudges. There's no cap, no formula. Use your judgment — some days need 2, some need 6.
 
 Return ONLY valid JSON:
