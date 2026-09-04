@@ -3,7 +3,8 @@ import { fixParsedTaskTitles } from "./fixMisheardVerbs.ts";
 import { resolveParsedDates } from "./resolveDateWords.ts";
 
 // Single place where task parsing actually runs, shared by parseTask and
-// parseMainTask so both flows are literally the same brain.
+// parseTask — the single parser every add method (typed, voice, quick add,
+// shared text, calendar sync) goes through.
 //
 // Model choice matters here as much as the prompt: reading a pasted text
 // thread and working out "this is an event, on Saturday, at this address,
