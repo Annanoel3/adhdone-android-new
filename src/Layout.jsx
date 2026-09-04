@@ -57,7 +57,6 @@ import PokeNotification from "./components/shared/PokeNotification";
 import NotificationFollowupModal from "./components/shared/NotificationFollowupModal";
 import AppGuideModal from "./components/shared/AppGuideModal";
 import FocusModePrompt from "./components/shared/FocusModePrompt";
-import ParkIdeaButton from "./components/shared/ParkIdeaButton";
 import ScheduledTextSendPopup from "./components/scheduledtexts/ScheduledTextSendPopup";
 import BirthdayTextPromptPopup from "./components/birthdays/BirthdayTextPromptPopup";
 import SharedTextReceiver from "./components/shared/SharedTextReceiver";
@@ -1017,7 +1016,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           <NotificationFollowupModal user={user} theme={theme} />
 
         <FocusModePrompt user={user} theme={theme} />
-        <ParkIdeaButton user={user} theme={theme} currentPageName={currentPageName} />
         <ScheduledTextSendPopup user={user} theme={theme} />
         <BirthdayTextPromptPopup user={user} theme={theme} />
         <SharedTextReceiver />
