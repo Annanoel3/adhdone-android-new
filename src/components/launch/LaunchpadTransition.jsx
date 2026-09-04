@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Rocket, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ConfirmDialog from '@/components/launch/ConfirmDialog';
+import KeepAppOpenNote from '@/components/shared/KeepAppOpenNote';
 import { overlayClasses, isSeasonal } from '@/components/utils/launchTheme';
 
 const TOTAL_MS = 5 * 60 * 1000;
@@ -93,6 +94,8 @@ export default function LaunchpadTransition({ session, onComplete, onCancel, onW
         <p className={`text-xs leading-relaxed mb-4 ${o.muted}`}>
           When the clock hits zero, we'll start a focus session for you automatically. No pressure — you showed up, and that's everything.
         </p>
+
+        <KeepAppOpenNote className="mb-4" text="Keep the app open — closing it stops the countdown." />
 
         <button
           onClick={() => setConfirming(true)}

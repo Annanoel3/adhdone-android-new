@@ -3,6 +3,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Timer, PartyPopper } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ConfirmDialog from '@/components/launch/ConfirmDialog';
+import KeepAppOpenNote from '@/components/shared/KeepAppOpenNote';
 import { speak } from '@/components/utils/speak';
 import {
   surfaceClasses,
@@ -100,6 +101,8 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
             <p className={`text-sm leading-relaxed mb-4 ${muted}`}>
               You're doing it! Work until the timer ends — then you can stop if you want. No guilt either way. 💚
             </p>
+
+            <KeepAppOpenNote className="mb-3" text="Keep the app open — closing it stops the timer." />
 
             <button
               onClick={() => setConfirming(true)}

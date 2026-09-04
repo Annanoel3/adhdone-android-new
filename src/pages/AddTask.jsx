@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
 import { base44 } from "@/api/base44Client";
 import { scheduleReminder } from "../components/utils/reminderScheduler";
+import dedupeSplitTasks from "../components/utils/dedupeSplitTasks";
 import { createBirthdayFromInput } from "../components/utils/birthdayScheduler";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
@@ -153,7 +154,7 @@ export default function AddTask() {
       const result = (await base44.functions.invoke('detectMultipleTasks', { prompt: multiTaskPrompt }))?.data?.response;
 
       console.log('🔍 [DETECT] Result:', result);
-      const tasks = result.tasks || [inputText];
+      const tasks = dedupeSplitTasks(result.tasks || [inputText]);
       return propagateDateWords(inputText, tasks);
     } catch (error) {
       console.error('🔍 [DETECT] Error detecting tasks, treating as single:', error);

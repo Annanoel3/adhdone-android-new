@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import CalendarGrid from '@/components/calendar/CalendarGrid';
 import TaskDetailsModal from '@/components/tasks/TaskDetailsModal';
+import KeepAppOpenNote from '@/components/shared/KeepAppOpenNote';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
 
@@ -328,6 +329,10 @@ export default function Calendar() {
                   Disconnect
                 </Button>
               </div>
+            )}
+
+            {syncing && (
+              <KeepAppOpenNote className="justify-start" text="Keep the app open while syncing — closing it cancels the sync." />
             )}
 
             {/* Auto-sync setting */}
