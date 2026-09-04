@@ -333,10 +333,14 @@ Return JSON:
     // said "every 2 hours" / "every 4 hours" — the smart nudge system handles
     // all non-explicit recurring tasks.
     const inputLower = inputText.toLowerCase();
-    if (parsed.reminder_interval === '2hours' && !/every\s+2\s+hours|every\s+two\s+hours/.test(inputLower)) {
-      parsed.reminder_interval = null;
-    }
-    if (parsed.reminder_interval === '4hours' && !/every\s+4\s+hours|every\s+four\s+hours/.test(inputLower)) {
+    // A recurring interval is ONLY ever valid if the user actually asked for one
+    // in recurring language. Anything else is the model guessing, and a wrong
+    // guess here means the user gets pinged every hour forever.
+    const RECURRING = ['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day'];
+    if (
+      RECURRING.includes(parsed.reminder_interval) &&
+      !/\bevery\b|\bhourly\b|\bdaily\b|\beveryday\b|\beach (day|morning|night|hour)\b/.test(inputLower)
+    ) {
       parsed.reminder_interval = null;
     }
 
