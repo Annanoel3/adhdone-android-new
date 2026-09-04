@@ -316,10 +316,18 @@ async function generateDailySchedule(
 
   // Build the full task list for the LLM — every task with its metadata so the
   // LLM can see the week ahead and decide what's relevant today.
+  // How much of today is left before quiet hours — a due-today task at 8 PM
+  // with quiet hours at 9 PM has ONE hour, not "the rest of the day".
+  const minsLeftToday = Math.max(0, (quietStartMin > localMin ? quietStartMin : 24 * 60) - localMin);
+  const hoursLeftStr = minsLeftToday < 60 ? `${minsLeftToday} minutes` : `${Math.round(minsLeftToday / 60 * 10) / 10} hours`;
+
   const taskList = tasks.map((t, i) => {
     let dueInfo = 'no due date';
     if (t.due_date) {
       const days = daysUntil(t.due_date, now, timeZone);
+      if (days === 0) {
+        dueInfo = `⚠️ DUE TODAY — only ${hoursLeftStr} left before quiet hours. Must be nudged in this window.`;
+      } else
       if (t.day_only_task && t.deadline_style === 'by') {
         // DEADLINE: the work can happen any time before this date, so lead-up
         // nudges are appropriate and expected.
@@ -382,6 +390,7 @@ ${eventList ? `\nFIXED APPOINTMENTS TODAY (context only — do NOT nudge these, 
 YOUR APPROACH:
 - You can see the whole week. Plan TODAY's reminders — what to surface, when, what to say.
 - MEET ALL DEADLINES: if something is due today or tomorrow, it must be surfaced. If something is overdue, surface it with urgency.
+- DUE TODAY IS NON-NEGOTIABLE: every "DUE TODAY" task gets a nudge, and its FIRST nudge lands within the next 30-60 minutes — the boss said it has to happen today, so the window is closing whether the task is dishes or taxes. If less than 2 hours remain before quiet hours, nudge it within 15 minutes and, if it's still open, once more about halfway to quiet hours. The task's stored priority doesn't lower this — a same-day deadline outranks priority.
 - DON'T LET THINGS SNEAK UP: if a deadline is 2-3 days out and the task is high-priority, a heads-up today is smart. If it's a week+ out, hold off unless it's urgent.
 - "DEADLINE in N days" vs "happens on [day]" — TREAT THESE COMPLETELY DIFFERENTLY:
   * DEADLINE tasks can be worked on ahead of time, so give them RUNWAY. How much runway depends on how much work the task actually is — judge that from the task itself: a one-step thing (pay a bill, send an email, book something online) needs 1-2 days; an errand or anything involving another person, an office, or paperwork needs 3-5 days; a genuinely big multi-step job (taxes, a report, applications, packing, cleaning out a room) deserves nudges starting a week or two out, framed around ONE small first step. Never let a big deadline task get its first nudge the day before.

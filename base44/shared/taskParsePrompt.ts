@@ -366,16 +366,23 @@ ${ordinalWeekdayTable}
       ═══════════════════════════════════════════════════════════════════════
       TODAY OVERRIDE (CRITICAL — commonly missed)
       ═══════════════════════════════════════════════════════════════════════
-      If the user says "today" (e.g., "I need to clean the dishes and the floor today",
-      "do laundry today", "pay rent today"), the task needs to get done TODAY.
+      If the user says "today" or "tonight" (e.g., "I need to clean the dishes and the floor today",
+      "do the dishes tonight", "do laundry today", "pay rent today"), the task needs to get done TODAY.
       - reminder_interval=null (NOT a recurring interval — the LLM handles day-of nudges).
       - day_only_task=true (so the LLM smart-nudge system picks it up today, prioritized by urgency).
       - due_date = today's date (${todayISO}) so that if it isn't finished by end of today, it
         becomes an OVERDUE task the next day.
       - This applies to CHORES too: "clean the dishes today", "clean the floor today" → day_only_task=true, reminder_interval=null.
-      - urgency based on the task (chores → "medium", time-sensitive → "high").
+      - URGENCY FLOOR = "high". The user put a same-day deadline on it — that IS the time pressure,
+        no matter how mundane the chore is on its own. Dishes are normally medium; "dishes tonight"
+        is high because the window to do it closes in a few hours. Use "urgent" if the task itself
+        is already time-sensitive (medication, payment due today, someone waiting). NEVER return
+        "medium" or "low" for a today/tonight task.
+      - "tonight" specifically: same as today (due_date=today, day_only_task=true), and the current
+        time is ${currentTime} — if it's already evening, this is the LAST window of the day.
       - "daily" is ONLY for ongoing habits/routines where the user EXPLICITLY said "daily"/"every day".
-      - Example: "clean the dishes today" → reminder_interval=null, day_only_task=true, due_date="${todayISO}", urgency="medium", needs_date_pick=false
+      - Example: "clean the dishes today" → reminder_interval=null, day_only_task=true, due_date="${todayISO}", urgency="high", needs_date_pick=false
+      - Example: "I need to do the dishes tonight" → title="Do the dishes", reminder_interval=null, day_only_task=true, due_date="${todayISO}", urgency="high", needs_date_pick=false
       - Example: "do laundry today" → reminder_interval=null, day_only_task=true, due_date="${todayISO}", urgency="high", needs_date_pick=false
       - Do NOT set due_date for one-time events (those use target_date/target_time instead).
 
