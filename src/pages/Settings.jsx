@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import HomeZipCard from '@/components/settings/HomeZipCard';
+import QuickCaptureCard from '@/components/settings/QuickCaptureCard';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -318,6 +319,8 @@ export default function Settings() {
             )}
           </CardContent>
         </Card>
+
+        <QuickCaptureCard theme={theme} />
 
         <HomeZipCard user={user} theme={theme} />
 
