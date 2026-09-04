@@ -10,6 +10,14 @@ import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule } from "./taskSched
 // records. Pure async functions with no React state, so the pipeline can keep
 // running after the user navigates away from the Add Task screen.
 
+// Fire-and-forget diagnostic trace. Phone console logs aren't reachable, so
+// each decision point is mirrored into the captureTrace function log.
+export function trace(step, detail) {
+  try {
+    base44.functions.invoke('captureTrace', { step, detail }).catch(() => {});
+  } catch (e) {}
+}
+
 // When the LLM splits a multi-task input, it sometimes drops shared date words
 // like "today" from some split tasks. Propagate the original input's date word
 // to any split task missing one.
@@ -173,6 +181,7 @@ Return JSON:
 }`;
 
     const subtaskCheck = (await base44.functions.invoke('checkSubtasks', { prompt: subtaskCheckPrompt }))?.data?.response;
+    trace('subtaskCheck', { input: inputText.slice(0, 80), result: subtaskCheck });
 
     if (subtaskCheck.has_subtasks && subtaskCheck.subtasks && subtaskCheck.subtasks.length > 0) {
       const now = new Date();
@@ -302,6 +311,7 @@ Return JSON:
       }`;
 
     const categoryCheck = (await base44.functions.invoke('checkTaskCategory', { prompt: categoryCheckPrompt }))?.data?.response;
+    trace('categoryCheck', { result: categoryCheck });
 
     if (categoryCheck.category === 'parking_lot') {
       if (categoryCheck.is_list && categoryCheck.items && categoryCheck.items.length > 1) {
@@ -337,6 +347,7 @@ Return JSON:
     }
 
     const parsed = (await base44.functions.invoke('parseTask', { prompt }))?.data?.response;
+    trace('parsed', { title: parsed?.title, classification: parsed?.classification, target_date: parsed?.target_date });
 
     stripGuessedRecurrence(parsed, inputText);
 
@@ -467,6 +478,7 @@ Return JSON:
       }
     }
 
+    trace('mainCreate', { title: parsed.title || inputText.trim(), interval: actualReminderInterval });
     const createdTask = await base44.entities.Task.create({
       title: parsed.title || inputText.trim(),
       original_input: inputText,
@@ -561,6 +573,7 @@ Return JSON:
     return { status: 'done' };
   } catch (error) {
     console.error('🔄 [PROCESS] Error:', error);
+    trace('processError', { message: String(error?.message || error) });
     return { status: 'error', message: error.message };
   }
 }

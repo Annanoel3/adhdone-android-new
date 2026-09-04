@@ -17,6 +17,7 @@ import {
   createTaskWithPriority,
   createTaskWithDate,
   createTaskAnyDay,
+  trace,
 } from "../utils/taskCreationPipeline";
 
 // Lives in the app Layout so task parsing keeps running after the user leaves
@@ -48,7 +49,9 @@ export default function TaskCaptureProcessor() {
         let capture;
         while ((capture = claimNextCapture())) {
           try {
+            trace('captureClaimed', { text: capture.text.slice(0, 200) });
             const taskList = await detectMultipleTasks(capture.text);
+            trace('splitResult', { count: taskList.length, tasks: taskList.map(t => t.slice(0, 60)) });
             for (const text of taskList) {
               const result = await processAndCreateTask(text, {
                 presetDate: capture.presetDate,
@@ -77,6 +80,7 @@ export default function TaskCaptureProcessor() {
               }
             }
           } catch (e) {
+            trace('captureFailed', { message: String(e?.message || e) });
             console.error('[CAPTURE] Failed:', e);
             toast.error('Failed to create task: ' + e.message);
           } finally {

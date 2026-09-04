@@ -90,7 +90,22 @@ Deno.serve(async (req) => {
     const bodyText = await req.text();
     const payload = JSON.parse(bodyText);
     
-    const { event, data, old_data } = payload;
+    const { event, old_data: rawOldData } = payload;
+    let data = payload.data;
+    const old_data = rawOldData || {};
+
+    // The trigger omits record data when the payload is too large. Without this
+    // every field read below throws (Cannot read properties of null), the whole
+    // run 500s, and the task silently keeps its stale notifications.
+    if (!data && event.type !== 'delete') {
+      console.log('[onTaskUpdate] Payload had no data — fetching the task directly');
+      const fetched = await base44.asServiceRole.entities.Task.filter({ id: event.entity_id });
+      if (fetched.length === 0) {
+        console.log('[onTaskUpdate] Task no longer exists — nothing to do');
+        return Response.json({ success: true, skipped: true, reason: 'task_missing' });
+      }
+      data = fetched[0];
+    }
 
     console.log('[onTaskUpdate] Event type:', event.type);
     console.log('[onTaskUpdate] Task ID:', event.entity_id);
