@@ -4,21 +4,11 @@ import { scheduleReminder } from "./reminderScheduler";
 import dedupeSplitTasks from "./dedupeSplitTasks";
 import { createBirthdayFromInput } from "./birthdayScheduler";
 import { toast } from "sonner";
+import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule } from "./taskSchedule";
 
 // Every step of turning raw user input (typed, spoken, or shared) into task
 // records. Pure async functions with no React state, so the pipeline can keep
 // running after the user navigates away from the Add Task screen.
-
-const INTERVAL_MS = {
-  '10min': 10 * 60 * 1000,
-  '20min': 20 * 60 * 1000,
-  '30min': 30 * 60 * 1000,
-  '1hour': 60 * 60 * 1000,
-  '2hours': 2 * 60 * 60 * 1000,
-  '4hours': 4 * 60 * 60 * 1000,
-  'daily': 24 * 60 * 60 * 1000,
-  'every_other_day': 2 * 24 * 60 * 60 * 1000,
-};
 
 // When the LLM splits a multi-task input, it sometimes drops shared date words
 // like "today" from some split tasks. Propagate the original input's date word
@@ -186,22 +176,28 @@ Return JSON:
 
     if (subtaskCheck.has_subtasks && subtaskCheck.subtasks && subtaskCheck.subtasks.length > 0) {
       const now = new Date();
-      const mainTaskPrompt = buildTaskParsePrompt(subtaskCheck.main_task);
+      // Parse the FULL input (not just the short title) so the parent keeps the
+      // date, time and location the user actually gave.
+      const mainTaskPrompt = buildTaskParsePrompt(inputText);
       const mainTaskParsed = (await base44.functions.invoke('parseTask', { prompt: mainTaskPrompt }))?.data?.response;
+      stripGuessedRecurrence(mainTaskParsed, inputText);
 
-      let nextReminder = null;
-      if (mainTaskParsed.reminder_interval && INTERVAL_MS[mainTaskParsed.reminder_interval]) {
-        nextReminder = new Date(now.getTime() + INTERVAL_MS[mainTaskParsed.reminder_interval]);
-      }
+      const sched = deriveSchedule(mainTaskParsed, now);
+      const nextReminder = sched.nextReminder;
 
       const parentTask = await base44.entities.Task.create({
         title: subtaskCheck.main_task,
         original_input: inputText,
+        location: mainTaskParsed.location || null,
         description: '',
-        reminder_interval: mainTaskParsed.reminder_interval || null,
-        due_date: presetDueDateISO,
-        reminder_count: 0,
+        classification: mainTaskParsed.classification || 'task',
+        reminder_interval: sched.interval,
+        day_only_task: !!mainTaskParsed.day_only_task,
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
+        due_date: sched.dueDateISO || presetDueDateISO,
+        end_date: sched.endDateISO,
+        event_time: sched.eventTimeISO,
+        reminder_count: 0,
         urgency: mainTaskParsed.urgency || 'medium',
         energy_required: mainTaskParsed.energy_required || 'medium',
         status: 'active',
@@ -224,13 +220,26 @@ Return JSON:
         });
       }
 
-      if (nextReminder && mainTaskParsed.reminder_interval && INTERVAL_MS[mainTaskParsed.reminder_interval]) {
+      if (nextReminder && sched.interval === 'once') {
+        const { scheduleMultiReminders } = await import('./multiReminderScheduler');
+        scheduleMultiReminders({
+          email: currentUser.email,
+          title: parentTask.title,
+          scheduledDateISO: nextReminder.toISOString(),
+          taskId: parentTask.id,
+          urgency: parentTask.urgency,
+          dayOnly: !!mainTaskParsed.day_only_task,
+          classification: parentTask.classification,
+        }).then(multiIds => {
+          if (multiIds) base44.entities.Task.update(parentTask.id, { onesignal_notification_ids: multiIds });
+        }).catch(error => console.error("Failed to schedule reminders:", error));
+      } else if (nextReminder && INTERVAL_MS[sched.interval]) {
         import('./reminderScheduler').then(module => module.scheduleRecurringReminders({
           email: currentUser.email,
           title: "Task Reminder 📋",
           body: `${parentTask.title}\n\nTap to mark as complete!`,
           startTime: nextReminder.toISOString(),
-          intervalMs: INTERVAL_MS[mainTaskParsed.reminder_interval],
+          intervalMs: INTERVAL_MS[sched.interval],
           count: 10,
           taskId: parentTask.id,
           data: { screen: "/TaskNotification", taskId: parentTask.id, urgency: parentTask.urgency, type: 'task_reminder' },
@@ -329,20 +338,7 @@ Return JSON:
 
     const parsed = (await base44.functions.invoke('parseTask', { prompt }))?.data?.response;
 
-    // DEFENSIVE GUARD: never accept 2hours/4hours unless the user literally
-    // said "every 2 hours" / "every 4 hours" — the smart nudge system handles
-    // all non-explicit recurring tasks.
-    const inputLower = inputText.toLowerCase();
-    // A recurring interval is ONLY ever valid if the user actually asked for one
-    // in recurring language. Anything else is the model guessing, and a wrong
-    // guess here means the user gets pinged every hour forever.
-    const RECURRING = ['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day'];
-    if (
-      RECURRING.includes(parsed.reminder_interval) &&
-      !/\bevery\b|\bhourly\b|\bdaily\b|\beveryday\b|\beach (day|morning|night|hour)\b/.test(inputLower)
-    ) {
-      parsed.reminder_interval = null;
-    }
+    stripGuessedRecurrence(parsed, inputText);
 
     // "Add task" under a specific calendar day pins the task to that date
     if (presetDate) {
