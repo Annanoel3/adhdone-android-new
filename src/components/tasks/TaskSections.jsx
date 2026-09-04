@@ -238,10 +238,13 @@ export default function TaskSections({
         // Back Burner: hidden when empty, collapsed by default so it stays
         // present without taking over the screen.
         if (section.key === "backburner" && sectionTasks.length === 0) return null;
+        // Empty day sections start collapsed too — an expanded empty day is just
+        // noise. Tapping the header still expands it to reveal "Add task...".
         const isCollapsed =
           collapsed[section.key] !== undefined
             ? collapsed[section.key]
-            : section.key === "backburner";
+            : section.key === "backburner" ||
+              (viewMode === "days" && sectionTasks.length === 0);
 
         return (
           <div
