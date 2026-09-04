@@ -33,7 +33,10 @@ export default function Insights() {
 
     // Get last 30 days of data
     const energyLogs = await base44.entities.EnergyLog.list('-logged_at', 100);
+    // Pull completed tasks separately so the "Tasks Done" total isn't silently
+    // capped by a recent-500 window that's mostly still-active tasks.
     const tasks = await base44.entities.Task.list('-created_date', 500);
+    const allCompleted = await base44.entities.Task.filter({ status: 'completed' }, '-completed_at', 2000);
     const summaries = await base44.entities.DailySummary.list('-date', 30);
 
     // Analyze energy patterns
@@ -60,7 +63,8 @@ export default function Insights() {
     };
 
     // Analyze task completion by time
-    const completedTasks = tasks.filter(t => t.status === 'completed' && t.completed_at);
+    // Birthdays aren't tasks you "get done", so they don't belong in these numbers.
+    const completedTasks = allCompleted.filter(t => t.completed_at && !t.birthday_person);
     
     const morningCompletions = completedTasks.filter(t => {
       const hour = new Date(t.completed_at).getHours();
@@ -78,9 +82,11 @@ export default function Insights() {
     }).length;
 
     // Best time of day
-    const bestTime = 
-      morningCompletions > afternoonCompletions && morningCompletions > eveningCompletions ? 'Morning' :
-      afternoonCompletions > eveningCompletions ? 'Afternoon' : 'Evening';
+    const bestTime = [
+      ['Morning', morningCompletions],
+      ['Afternoon', afternoonCompletions],
+      ['Evening', eveningCompletions],
+    ].sort((a, b) => b[1] - a[1])[0][0];
 
     // Avg tasks finished per active day — computed from real completion
     // timestamps. (The old "completion rate" divided by every open task you
@@ -96,16 +102,21 @@ export default function Insights() {
       ? Math.round((activeDays.reduce((a, b) => a + b, 0) / activeDays.length) * 10) / 10
       : 0;
 
-    // Most productive day
-    const tasksByDay = {};
+    // Most productive day — averaged per occurrence of that weekday, not a raw
+    // total. A raw total just crowns whichever weekday you've simply had more of.
+    const dayTotals = {};
+    const dayDates = {};
     completedTasks.forEach(t => {
-      const day = new Date(t.completed_at).getDay();
-      tasksByDay[day] = (tasksByDay[day] || 0) + 1;
+      const d = new Date(t.completed_at);
+      const day = d.getDay();
+      dayTotals[day] = (dayTotals[day] || 0) + 1;
+      (dayDates[day] = dayDates[day] || new Set()).add(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
     });
-    
+
     const dayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-    const mostProductiveDay = Object.keys(tasksByDay).length > 0
-      ? dayNames[Object.keys(tasksByDay).reduce((a, b) => tasksByDay[a] > tasksByDay[b] ? a : b)]
+    const mostProductiveDay = Object.keys(dayTotals).length > 0
+      ? dayNames[Object.keys(dayTotals).reduce((a, b) =>
+          (dayTotals[a] / dayDates[a].size) >= (dayTotals[b] / dayDates[b].size) ? a : b)]
       : 'Not enough data';
 
     // Due date push tracking — how many times the user postponed deadlines.
