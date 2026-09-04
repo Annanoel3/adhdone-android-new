@@ -55,7 +55,9 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event) {
   // Google dates are unchanged returns early and never records end_date, so the
   // event detail never shows the full date range.
   const needsEndBackfill = taskRec.reminder_interval === 'once' && !taskRec.end_date && !!endRaw;
-  if (!startChanged && !endChanged && !needsEndBackfill) return false;
+  // Events synced before the address feature landed have no location stored.
+  const needsLocationBackfill = !!event.location && !taskRec.location;
+  if (!startChanged && !endChanged && !needsEndBackfill && !needsLocationBackfill) return false;
 
   // Recompute the event start the same way the create path does.
   let nextReminderDate: Date | null = null;
@@ -92,6 +94,8 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event) {
   }
 
   const patch: any = {};
+
+  if (needsLocationBackfill) patch.location = event.location;
 
   // One-time events: the event start IS the reminder/due date, and end_date
   // records the multi-day span. Recurring tasks use now+gap for reminders, so
@@ -152,7 +156,12 @@ async function classifyEventWithAI(base44, event) {
     when = ` on ${d.toLocaleDateString('en-US')}`;
   }
   const loc = event.location ? ` at ${event.location}` : '';
-  const inputText = `${summary}${when}${loc}`;
+  // Include the event's notes/description so the parser can judge urgency and
+  // energy from the real details, not just a terse calendar title.
+  const details = event.description
+    ? `\nDetails: ${String(event.description).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 400)}`
+    : '';
+  const inputText = `${summary}${when}${loc}${details}`;
 
   const prompt = buildTaskParsePrompt(inputText);
   const res = await base44.asServiceRole.functions.invoke('parseTask', { prompt });
@@ -459,7 +468,13 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
       taskRecord = {
         title: title,
         description: richDescription,
-        notes: event.location ? `📍 ${event.location}` : (event.description ? event.description.substring(0, 200) : ''),
+        notes: [
+          event.description ? String(event.description).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500) : '',
+          event.location ? `📍 ${event.location}` : '',
+        ].filter(Boolean).join('\n\n'),
+        // Explicit calendar location — safe to store since the user actually
+        // set it on the event. Drives the errand-combining nudges.
+        location: event.location || null,
         urgency: validUrgency,
         energy_required: validEnergy,
         status: 'active',
