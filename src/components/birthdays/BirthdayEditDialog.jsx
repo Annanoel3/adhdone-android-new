@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
-import { Cake, Trash2, Upload, Send } from "lucide-react";
+import { Cake, Trash2, Upload, Send, Sparkles } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +19,7 @@ import {
 import { cancelScheduledReminder } from "../utils/reminderScheduler";
 import SmartReminderEditor from "../tasks/SmartReminderEditor";
 import ContactPickerButton from "./ContactPickerButton";
+import BirthdayTextDialog from "./BirthdayTextDialog";
 
 export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved }) {
   const [name, setName] = useState("");
@@ -30,6 +31,7 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showTextDialog, setShowTextDialog] = useState(false);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -232,12 +234,20 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
             </Button>
           </div>
 
-          {birthday.birthday_text_message && (
-            <div className="space-y-2">
-              <Label>Birthday text</Label>
+          <div className="space-y-2">
+            <Label>Birthday text</Label>
+            {birthday.birthday_text_message ? (
               <div className="rounded-xl border border-gray-200 p-3 bg-pink-50/50">
                 <p className="text-sm text-gray-700 whitespace-pre-wrap">{birthday.birthday_text_message}</p>
               </div>
+            ) : (
+              <p className="text-xs text-gray-500">No message drafted yet — we'll write one for you.</p>
+            )}
+            <Button variant="outline" onClick={() => setShowTextDialog(true)} className="w-full">
+              <Sparkles className="w-4 h-4 mr-2" />
+              {birthday.birthday_text_message ? "Edit birthday text" : "Write birthday text"}
+            </Button>
+            {birthday.birthday_text_message && (
               <Button
                 variant="outline"
                 onClick={async () => {
@@ -255,8 +265,8 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
                 <Send className="w-4 h-4 mr-2" />
                 Send via Messages
               </Button>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="flex gap-2 pt-2">
             <Button
@@ -275,6 +285,13 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
               <Trash2 className="w-4 h-4" />
             </Button>
           </div>
+
+          <BirthdayTextDialog
+            isOpen={showTextDialog}
+            onClose={() => setShowTextDialog(false)}
+            birthdayTask={birthday}
+            onSaved={onSaved}
+          />
         </div>
       </DialogContent>
     </Dialog>
