@@ -154,9 +154,19 @@ export default function UniversalVoiceAssistant({ theme, currentPageName }) {
         lowerCommand.includes('make a task') ||
         lowerCommand.includes('new task')) {
 
-      setIsProcessing(true);
-      setProcessingMessage("Creating your task...");
+      // Hand off to the SAME background pipeline that Add Task uses, so voice
+      // tasks get identical parsing (location, event type, dates, smart nudges)
+      // instead of this screen's own stripped-down prompt.
+      enqueueCapture({ text: command });
+      setFeedbackMessage("✅ Got it — adding your task...");
+      setIsProcessing(false);
+      setTimeout(() => {
+        setIsOpen(false);
+        navigate(createPageUrl("Home"), { state: { reload: true } });
+      }, 1200);
+      return;
 
+      // eslint-disable-next-line no-unreachable
       try {
         const user = await User.me();
         const now = new Date();
