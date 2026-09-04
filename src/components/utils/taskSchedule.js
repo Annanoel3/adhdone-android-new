@@ -31,6 +31,8 @@ export function stripGuessedRecurrence(parsed, inputText) {
   // heads-up, due at the end of that day.
   if (parsed.target_date && !parsed.target_time) {
     parsed.day_only_task = true;
+    // ...and never stop to ask the user for a time. The day IS the answer.
+    parsed.needs_date_pick = false;
   }
 
   return parsed;

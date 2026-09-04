@@ -189,10 +189,11 @@ deadline_style — "on" if the thing happens ON that day and can't be done
   sooner; "by" if the date is a limit the work has to fit inside (so reminders
   can start earlier). Only matters when day_only_task is true.
 
-needs_date_pick — true only when this is a scheduled event/appointment on a
-  known day where the user never said the time, so the app should ask them for
-  it. Never true for flexible tasks or vague windows ("this week", "sometime").
-  When true, leave target_time null — the user picks it.
+needs_date_pick — almost always false. A day with no clock time is an ALL-DAY
+  thing and needs nothing from the user, so never set this just because a time
+  is missing: set day_only_task instead. Only true when the user gave NO day at
+  all and the thing genuinely can't exist without one (an appointment they said
+  they need to schedule). Never true when target_date is filled in.
 
 user_asked_to_repeat_every — answer ONLY this narrow question: did the user
   ask to be pinged OVER AND OVER at a fixed rhythm until they've done it?
