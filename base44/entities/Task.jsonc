@@ -6,6 +6,10 @@
       "type": "string",
       "description": "Task title"
     },
+    "location": {
+      "type": "string",
+      "description": "Optional physical place this task happens at (address, business name + city, or zip). ONLY set when the user explicitly gave a location \u2014 never inferred from the task wording. The smart-nudge system uses this to suggest combining two errands into one trip, so an inferred/guessed value would produce a bad suggestion."
+    },
     "original_input": {
       "type": "string",
       "description": "The user's VERBATIM input (typed or transcribed) that created this task, stored exactly as spoken/typed with no cleanup. Used to audit AI parsing errors \u2014 e.g. when a date, subject, or misheard word ends up wrong, the raw phrasing can be compared against what the parser produced."

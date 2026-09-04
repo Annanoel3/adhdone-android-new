@@ -61,6 +61,7 @@ import ParkIdeaButton from "./components/shared/ParkIdeaButton";
 import ScheduledTextSendPopup from "./components/scheduledtexts/ScheduledTextSendPopup";
 import BirthdayTextPromptPopup from "./components/birthdays/BirthdayTextPromptPopup";
 import SharedTextReceiver from "./components/shared/SharedTextReceiver";
+import HomeZipPrompt from "./components/shared/HomeZipPrompt";
 import { base44 } from "@/api/base44Client";
 import {
   DropdownMenu,
@@ -1018,6 +1019,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <ScheduledTextSendPopup user={user} theme={theme} />
         <BirthdayTextPromptPopup user={user} theme={theme} />
         <SharedTextReceiver />
+        <HomeZipPrompt user={user} theme={theme} />
 
         <AppGuideModal
           isOpen={showAppGuide}

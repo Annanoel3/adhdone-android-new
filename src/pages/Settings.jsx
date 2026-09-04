@@ -20,6 +20,7 @@ import { base44 } from '@/api/base44Client';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import HomeZipCard from '@/components/settings/HomeZipCard';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -317,6 +318,8 @@ export default function Settings() {
             )}
           </CardContent>
         </Card>
+
+        <HomeZipCard user={user} theme={theme} />
 
         {/* Theme Section */}
         <Card className={`mb-6 border-none shadow-lg ${

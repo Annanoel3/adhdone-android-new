@@ -144,7 +144,8 @@ Deno.serve(async (req) => {
           subtasksByParent,
           (eventsByUser[email] || []).filter(e =>
             isSameLocalDay(new Date(e.event_time || e.next_reminder), now, timeZone)
-          )
+          ),
+          user.home_zipcode || ''
         );
 
         if (!newEntries || newEntries.length === 0) continue;
@@ -305,7 +306,8 @@ async function generateDailySchedule(
   quietStartMin: number,
   quietEndMin: number,
   subtasksByParent: Record<string, any[]>,
-  todaysEvents: any[] = []
+  todaysEvents: any[] = [],
+  homeZip: string = ''
 ): Promise<any[] | null> {
   const hour = Math.floor(localMin / 60);
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
@@ -360,7 +362,10 @@ async function generateDailySchedule(
     }
     const desc = (t.description || t.notes || '').trim().replace(/\s+/g, ' ').slice(0, 140);
     const descInfo = desc ? ` — ${desc}` : '';
-    return `${i + 1}. "${t.title}"${descInfo} (${dueInfo}${windowInfo}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${pushInfo}${nudged}${subInfo})`;
+    // Location is only ever present when the user explicitly entered one.
+    const loc = (t.location || '').trim();
+    const locInfo = loc ? `, LOCATION: ${loc}` : '';
+    return `${i + 1}. "${t.title}"${descInfo} (${dueInfo}${windowInfo}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${locInfo}${pushInfo}${nudged}${subInfo})`;
   }).join('\n');
 
   const urgentCount = tasks.filter(t => t.urgency === 'urgent').length;
@@ -406,9 +411,9 @@ ${urgentCount >= 2 ? `- There are ${urgentCount} URGENT tasks. Consider one noti
 - NEVER INVENT PROGRESS: only ✓ steps are done. If 0 steps are done, do NOT imply they've started ("you're halfway there", "next up") — point at the FIRST step instead. Never name a step as "next" unless every step before it is ✓.
 - SUB-TASK PROGRESS: when a task shows step progress (✓/○), use it to acknowledge where they are — e.g. "you've got the laundry going — don't forget to move it to the dryer" or "great progress on printing — just the label left to ship". Never list every step; just acknowledge the current spot naturally.
 - PUSHED TASKS: when a task shows "pushed Nx" (the user moved its due date later N times), it's being avoided. Don't shame — gently name it: "this one's been bumped a few times — want to break it into a tiny first step?" or "no rush, but this keeps getting pushed — is it still something you actually want to do?" Higher push counts deserve more attention but never guilt.
-- LOCATION IS DATA, NOT A GUESS. A task only has a location if a location is explicitly attached to it in the task list. No location attached = no location, period. Tasks with no location NEVER get a "combine errands" / same-trip suggestion. Right now NO task carries a location, so do not send trip-combining nudges at all.
+- LOCATION IS DATA, NOT A GUESS. A task has a location ONLY if the task line shows an explicit "LOCATION: ..." value (the user typed it in themselves). No LOCATION field = no location, period. Tasks with no LOCATION field NEVER get a "combine errands" / same-trip suggestion, no matter what their title sounds like.${homeZip ? ` The user's home base is zip ${homeZip} — you may use it to judge roughly whether two locations are in the same area.` : ''}
 - NEVER ASSUME A TASK MEANS LEAVING THE HOUSE. Most things can be done online, by phone, or at home — ordering, booking, paying, renewing, even "getting" something. A task only counts as an out-of-the-house errand when the wording SAYS SO: it explicitly uses a go-somewhere verb ("drop off", "pick up in store", "return to the store", "mail", "go to", "stop by", "drive to", "test drive", "in-person appointment"), or it explicitly names a physical place the user is going to ("at the DMV", "the dealership on Main"). A bare name, a brand, a store name, or a person's name is NOT enough — "Get Trevi" or "Men's Warehouse" could easily be an online order or a phone call. Energy level says nothing about location. If it's not explicit, it is NOT an errand.
-- BATCH ERRANDS (two birds, one trip): only ever suggest this when TWO OR MORE tasks are EXPLICIT out-of-the-house errands by the rule above (or one explicit errand lines up with a FIXED APPOINTMENT today) — time it shortly BEFORE the appointment so they can plan. If you're inferring the location from a name, do NOT send this nudge at all. You also do not know distances, so frame it as a decline-able question ("If the dealership is anywhere near your dentist, you could knock both out in one trip — worth it?"), never state a drive time, and list every task you mention in task_indexes.
+- BATCH ERRANDS (two birds, one trip): only ever suggest this when TWO OR MORE tasks each carry an explicit LOCATION field (or one located task lines up with a FIXED APPOINTMENT today) — time it shortly BEFORE the appointment so they can plan. If you're inferring the location from a name or from the task's wording, do NOT send this nudge at all. You also do not know distances, so frame it as a decline-able question ("If the dealership is anywhere near your dentist, you could knock both out in one trip — worth it?"), never state a drive time, and list every task you mention in task_indexes.
 - delay_minutes: minutes from NOW to send this nudge (e.g., 30 = 30 min from now, 120 = 2 hours from now).
 - Don't schedule past quiet hours start (${quietStartStr}).
 - You decide HOW MANY nudges. There's no cap, no formula. Use your judgment — some days need 2, some need 6.

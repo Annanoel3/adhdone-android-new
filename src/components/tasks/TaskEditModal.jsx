@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Task } from "@/entities/Task";
-import { Save, RefreshCw } from "lucide-react";
+import { Save, RefreshCw, MapPin } from "lucide-react";
 
 export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }) {
   const [formData, setFormData] = useState({
@@ -28,7 +28,8 @@ export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }
     energy_required: 'medium',
     reminder_interval: '',
     recurrence_pattern: 'none',
-    birthday_person: ''
+    birthday_person: '',
+    location: ''
   });
 
   useEffect(() => {
@@ -40,7 +41,8 @@ export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }
         energy_required: task.energy_required || 'medium',
         reminder_interval: task.reminder_interval || '',
         recurrence_pattern: task.recurrence_pattern || 'none',
-        birthday_person: task.birthday_person || ''
+        birthday_person: task.birthday_person || '',
+        location: task.location || ''
       });
     }
   }, [task, isOpen]);
@@ -92,6 +94,22 @@ export default function TaskEditModal({ task, isOpen, onClose, onUpdate, theme }
               placeholder="Add more details..."
               className={theme === 'dark' ? 'bg-gray-800 text-gray-100 border-gray-700' : ''}
             />
+          </div>
+
+          <div>
+            <Label className={`flex items-center gap-1 ${theme === 'dark' ? 'text-gray-200' : ''}`}>
+              <MapPin className="w-3 h-3" />
+              Location (Optional)
+            </Label>
+            <Input
+              value={formData.location}
+              onChange={(e) => setFormData({...formData, location: e.target.value})}
+              placeholder="Address, store name, or zip"
+              className={theme === 'dark' ? 'bg-gray-800 text-gray-100 border-gray-700' : ''}
+            />
+            <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+              Add a place and errands near each other can be grouped into one trip.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
