@@ -26,6 +26,7 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
 
   const endTime = new Date(session.endTimeISO).getTime();
   const [remaining, setRemaining] = useState(() => Math.max(0, endTime - Date.now()));
+  const [overtime, setOvertime] = useState(() => Math.max(0, Date.now() - endTime));
   const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
@@ -40,6 +41,19 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
     }, 250);
     return () => clearInterval(id);
   }, [endTime, ended]);
+
+  // The clock never actually stops at 5:00 — it keeps counting while the
+  // checkpoint sits on screen (or while the app is backgrounded), so whatever
+  // the user kept working during that gap is counted, not thrown away. "Keep
+  // going" carries the sprint's original start time into Focus Mode, so the
+  // elapsed timer there already includes this overtime.
+  useEffect(() => {
+    if (!ended) return;
+    const tick = () => setOvertime(Math.max(0, Date.now() - endTime));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [ended, endTime]);
 
   // Speak the checkpoint out loud — a quiet chime is easy to miss, and this is
   // the moment the user has to decide whether to keep going.
@@ -56,6 +70,9 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
   const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
   const ss = String(totalSec % 60).padStart(2, '0');
   const progress = ((TOTAL_MS - remaining) / TOTAL_MS) * 100;
+  const overSec = Math.floor(overtime / 1000);
+  const overMM = String(Math.floor(overSec / 60)).padStart(2, '0');
+  const overSS = String(overSec % 60).padStart(2, '0');
   const R = 80;
   const C = 2 * Math.PI * R;
 
@@ -123,6 +140,11 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
             </motion.div>
 
             <h2 className="text-2xl font-bold mb-2">5 minutes done! 🎉</h2>
+
+            <div className={`text-sm tabular-nums mb-3 ${subtle}`}>
+              Still counting · 5:00 <span className="font-semibold">+ {overMM}:{overSS}</span>
+            </div>
+
             <p className={`leading-relaxed mb-6 px-2 ${muted}`}>
               It's okay to stop if you want — you showed up, and that's the win. Or keep the momentum going. Either way, we're proud of you.
             </p>
