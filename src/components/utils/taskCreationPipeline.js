@@ -384,8 +384,9 @@ Return JSON:
     let nextReminder = null;
     let actualReminderInterval = parsed.reminder_interval || null;
 
-    // A specific date AND time = a one-time event, not a recurring task.
-    if (parsed.target_date && parsed.target_time) {
+    // A specific date = a one-time thing, not a recurring task — whether or not
+    // a clock time came with it (an all-day date is still just one day).
+    if (parsed.target_date && (parsed.target_time || parsed.day_only_task)) {
       actualReminderInterval = 'once';
     }
 

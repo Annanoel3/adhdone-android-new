@@ -25,6 +25,14 @@ export function stripGuessedRecurrence(parsed, inputText) {
   ) {
     parsed.reminder_interval = null;
   }
+
+  // A date with no time is an all-day thing, full stop — never let a clock time
+  // get invented for it later. It becomes a day-only task: one morning
+  // heads-up, due at the end of that day.
+  if (parsed.target_date && !parsed.target_time) {
+    parsed.day_only_task = true;
+  }
+
   return parsed;
 }
 
