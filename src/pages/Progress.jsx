@@ -23,9 +23,13 @@ export default function Progress() {
   const [focusLogs, setFocusLogs] = useState([]);
   const [userEmail, setUserEmail] = useState("");
   const [specialMode, setSpecialMode] = useState(() => localStorage.getItem('special_mode') || 'normal');
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadData();
+    // Recalculating + saving today's summary involves several writes, so it runs
+    // in the background instead of blocking the stats from showing.
+    updateTodaysSummary().then((s) => { if (s) setTodaysSummary((prev) => ({ ...(prev || {}), ...s })); });
     const interval = setInterval(() => {
       setTheme(localStorage.getItem('adhd_theme') || 'minimalist');
       setSpecialMode(localStorage.getItem('special_mode') || 'normal');
@@ -35,28 +39,27 @@ export default function Progress() {
 
   const loadData = async () => {
     try {
-      await updateTodaysSummary();
-
-      const allTasks = await base44.entities.Task.list('-updated_date');
-      setTasks(allTasks);
-
       const today = new Date().toISOString().split('T')[0];
-      const todaySummaries = await base44.entities.DailySummary.filter({ date: today });
-      if (todaySummaries.length > 0) setTodaysSummary(todaySummaries[0]);
+      const [allTasks, allSummaries, logs, fLogs, me] = await Promise.all([
+        base44.entities.Task.list('-updated_date', 1000),
+        base44.entities.DailySummary.list('-date', 30),
+        base44.entities.EnergyLog.list('-logged_at', 60),
+        base44.entities.FocusSessionLog.list('-completed_at', 200),
+        base44.auth.me(),
+      ]);
 
-      const allSummaries = await base44.entities.DailySummary.list('-date', 30);
+      setTasks(allTasks);
       setSummaries(allSummaries);
-
-      const logs = await base44.entities.EnergyLog.list('-logged_at', 60);
       setEnergyLogs(logs);
-
-      const fLogs = await base44.entities.FocusSessionLog.list('-completed_at', 200);
       setFocusLogs(fLogs);
-
-      const me = await base44.auth.me();
       setUserEmail(me?.email || "");
+
+      const todaySummary = allSummaries.find(s => s.date === today);
+      if (todaySummary) setTodaysSummary(todaySummary);
     } catch (error) {
       console.error("Error loading data:", error);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -190,7 +193,13 @@ export default function Progress() {
           </CardContent>
         </Card>
 
-        <Tabs defaultValue="overview" className="w-full">
+        {isLoading && (
+          <div className="flex justify-center py-16">
+            <div className="w-8 h-8 border-4 border-gray-300 border-t-green-600 rounded-full animate-spin" />
+          </div>
+        )}
+
+        <Tabs defaultValue="overview" className={`w-full ${isLoading ? 'hidden' : ''}`}>
           <TabsList className={`grid w-full max-w-md grid-cols-2 mb-6 ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4" />
