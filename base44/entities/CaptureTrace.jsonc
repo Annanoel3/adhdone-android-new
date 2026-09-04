@@ -1,0 +1,27 @@
+{
+  "name": "CaptureTrace",
+  "type": "object",
+  "properties": {
+    "step": {
+      "type": "string",
+      "description": "Which point in the capture pipeline emitted this trace (captureClaimed, splitResult, subtaskCheck, categoryCheck, parsed, mainCreate, processError, captureFailed)."
+    },
+    "detail": {
+      "type": "string",
+      "description": "JSON-stringified detail for the step \u2014 the raw text, the LLM decision, or the values about to be written."
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Owner's email, set server-side so traces stay readable to the person who produced them."
+    }
+  },
+  "required": [
+    "step"
+  ],
+  "rls": {
+    "read": {
+      "data.user_email": "{{user.email}}"
+    },
+    "write": false
+  }
+}
