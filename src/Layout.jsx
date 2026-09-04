@@ -62,6 +62,7 @@ import ScheduledTextSendPopup from "./components/scheduledtexts/ScheduledTextSen
 import BirthdayTextPromptPopup from "./components/birthdays/BirthdayTextPromptPopup";
 import SharedTextReceiver from "./components/shared/SharedTextReceiver";
 import HomeZipPrompt from "./components/shared/HomeZipPrompt";
+import QuickCapturePrompt from "./components/shared/QuickCapturePrompt";
 import { base44 } from "@/api/base44Client";
 import {
   DropdownMenu,
@@ -1020,6 +1021,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <BirthdayTextPromptPopup user={user} theme={theme} />
         <SharedTextReceiver />
         <HomeZipPrompt user={user} theme={theme} />
+        <QuickCapturePrompt />
 
         <AppGuideModal
           isOpen={showAppGuide}
