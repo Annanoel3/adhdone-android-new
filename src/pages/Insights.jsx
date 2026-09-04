@@ -63,8 +63,13 @@ export default function Insights() {
     };
 
     // Analyze task completion by time
-    // Birthdays aren't tasks you "get done", so they don't belong in these numbers.
-    const completedTasks = allCompleted.filter(t => t.completed_at && !t.birthday_person);
+    // Only genuine, still-existing completions count: no subtasks (they'd inflate
+    // one task into many), no birthdays (not something you "get done"), and a real
+    // completed_at timestamp. Deleted tasks are gone from the database entirely,
+    // so they can't be counted here.
+    const completedTasks = allCompleted.filter(t =>
+      t.completed_at && !t.parent_task_id && !t.birthday_person
+    );
     
     const morningCompletions = completedTasks.filter(t => {
       const hour = new Date(t.completed_at).getHours();
