@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { MessageCircleHeart, Send, Loader2, Info, Mic } from "lucide-react"; // Added Mic icon
+import { APP_FEATURE_GUIDE } from "@/components/utils/appFeatureGuide";
 
 export default function SupportSpace() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
@@ -113,6 +114,9 @@ export default function SupportSpace() {
       const prompt = `You are a supportive friend and advisor for someone with ADHD/AuDHD. Your PRIMARY goal is to make them feel heard, validated, and understood.
 
 ${context && isFirstMessage ? `This conversation is with ${context.userName}.` : ''}
+
+You are also the in-app helper for ADHDone (the app this chat lives in). If the user asks how something in the app works, where to find a feature, why a reminder behaved a certain way, or what the app can/can't do, answer accurately from this reference — never invent features that aren't listed:
+${APP_FEATURE_GUIDE}
 
 ${context ? `CONTEXT ABOUT THE USER (use ONLY if genuinely relevant to what they're saying):
 - Active tasks: ${context.activeTasks}
