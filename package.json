@@ -14,7 +14,6 @@
     "@base44/sdk": "^0.8.46",
     "@base44/vite-plugin": "^1.0.34",
     "@capacitor-community/admob": "^8.0.0",
-    "@capacitor-community/contacts": "^8.0.0",
     "@capacitor/android": "^8.3.2",
     "@capacitor/camera": "^8.2.0",
     "@capacitor/cli": "^8.3.2",
