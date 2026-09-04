@@ -1,26 +1,13 @@
 import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Sparkles, Mic, Loader2, ListChecks, Zap } from "lucide-react";
+import { ArrowLeft, Sparkles, Mic, Loader2 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { buildTaskParsePrompt } from "../../base44/shared/taskParsePrompt";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { motion, AnimatePresence } from "framer-motion";
 import { base44 } from "@/api/base44Client";
-import { scheduleReminder } from "../components/utils/reminderScheduler";
-import dedupeSplitTasks from "../components/utils/dedupeSplitTasks";
-import { createBirthdayFromInput } from "../components/utils/birthdayScheduler";
-import { Badge } from "@/components/ui/badge";
-import { toast } from "sonner";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import PriorityPickerDialog from "../components/tasks/PriorityPickerDialog";
-import DatePickerDialog from "../components/tasks/DatePickerDialog";
+import { enqueueCapture } from "@/lib/pendingCaptures";
 
 export default function AddTask() {
   const navigate = useNavigate();
@@ -32,29 +19,26 @@ export default function AddTask() {
     if (isNaN(py) || isNaN(pm) || isNaN(pd)) return null;
     return new Date(py, pm - 1, pd, 23, 59, 0, 0).toISOString();
   })();
-  const [tasks, setTasks] = useState([]);
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
-  const [isProcessing, setIsProcessing] = useState(false);
   const [inputMode, setInputMode] = useState('voice');
   const [textInput, setTextInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState(null);
-  const [optimisticTasks, setOptimisticTasks] = useState([]);
-  const [showAdvanceReminderDialog, setShowAdvanceReminderDialog] = useState(false);
-  const [pendingTask, setPendingTask] = useState(null);
-  const [advanceQueue, setAdvanceQueue] = useState([]);
-  const [showPriorityPicker, setShowPriorityPicker] = useState(false);
-  const [pendingPriorityTask, setPendingPriorityTask] = useState(null);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [pendingDateTask, setPendingDateTask] = useState(null);
 
   React.useEffect(() => {
     const interval = setInterval(() => {
-      const newTheme = localStorage.getItem('adhd_theme') || 'minimalist';
-      setTheme(newTheme);
+      setTheme(localStorage.getItem('adhd_theme') || 'minimalist');
     }, 100);
     return () => clearInterval(interval);
   }, []);
+
+  // Hands the input off to the background processor and returns the user Home
+  // immediately — the new task shows there with a spinner until it's ready.
+  const submitCapture = (text) => {
+    enqueueCapture({ text, presetDate, presetDueDateISO });
+    navigate(createPageUrl("Home"), { state: { reload: true } });
+  };
 
   // Text shared from another app (or typed into the quick-capture notification)
   // arrives via navigation state — run it through the normal pipeline as if the
@@ -63,1077 +47,35 @@ export default function AddTask() {
   const sharedAt = location.state?.sharedAt;
   React.useEffect(() => {
     if (!sharedText) return;
-    setInputMode('text');
-    setIsProcessing(true);
-    setOptimisticTasks([{ id: `temp-${Date.now()}`, title: sharedText, isProcessing: true }]);
-    detectMultipleTasks(sharedText)
-      .then((taskList) => processTaskList(taskList))
-      .catch((error) => {
-        console.error('📤 [SHARED] Failed:', error);
-        setIsProcessing(false);
-        alert('Failed to create task: ' + error.message);
-      });
+    submitCapture(sharedText);
   }, [sharedAt]);
-
-  // When the LLM splits a multi-task input, it sometimes drops shared date
-  // words like "today" from some split tasks. This propagates the original
-  // input's date word to any split task that's missing one, so "do the dishes,
-  // laundry, and recycling today" gives all three tasks a "today" due date.
-  const propagateDateWords = (originalInput, splitTasks) => {
-    if (!splitTasks || splitTasks.length <= 1) return splitTasks;
-    const dateWords = [
-      'today', 'tomorrow', 'tonight', 'this morning', 'this afternoon',
-      'this evening', 'this week', 'next week', 'this weekend', 'next weekend',
-    ];
-    const buildRegex = (w) => w.includes(' ')
-      ? new RegExp(w.replace(/ /g, '\\s+'))
-      : new RegExp(`\\b${w}\\b`);
-    const lower = originalInput.toLowerCase();
-    const foundWords = dateWords.filter(w => buildRegex(w).test(lower));
-    // Only propagate when there's exactly one date word (unambiguous)
-    if (foundWords.length !== 1) return splitTasks;
-    const dateWord = foundWords[0];
-    return splitTasks.map(task => {
-      const taskLower = task.toLowerCase();
-      const hasDate = dateWords.some(w => buildRegex(w).test(taskLower));
-      if (hasDate) return task;
-      return `${task} ${dateWord}`;
-    });
-  };
-
-  const detectMultipleTasks = async (inputText) => {
-    console.log('🔍 [DETECT] Checking if input contains multiple tasks...');
-
-    const multiTaskPrompt = `Analyze this input and determine if it contains multiple separate tasks:
-
-  INPUT: "${inputText}"
-
-  CRITICAL RULE: Two UNRELATED actions = SPLIT. Related/dependent parts = KEEP AS ONE.
-
-  Check if the second part DEPENDS on the first:
-  - Uses pronouns (them, they, it, her, him) referring to first part? → ONE task
-  - Requires context from first part to make sense? → ONE task
-  - Completely unrelated actions that can be done independently? → SPLIT
-
-  Examples of MULTIPLE independent tasks (SPLIT THESE):
-  - "clean the dishes and take out the trash" → 2 tasks (unrelated chores)
-  - "call dentist and pay rent" → 2 tasks (completely different)
-  - "buy milk, call mom, and do laundry" → 3 tasks (all independent)
-  - "water the plants and schedule dentist appointment" → 2 tasks (unrelated)
-
-  ITINERARY / SCHEDULED EVENTS (SPLIT THESE):
-  If the input is an itinerary, schedule, or plan with MULTIPLE DISTINCT TIMED EVENTS
-  (travel segments, appointments, or activities at different times/locations), SPLIT
-  each distinct event into its own task — even though the events are part of the same
-  trip or day. Each event = a separate activity or destination with its own start time.
-  - "On Sunday October 4 leave the Airbnb at 12:30 PM for Cañon City. Arrive at the Royal Gorge train depot at 2:30 PM to check in. Train runs 3:30 PM to 5:30 PM." → 2 tasks:
-    1. "On Sunday October 4 leave the Airbnb at 12:30 PM for Cañon City"
-    2. "On Sunday October 4 arrive at the Royal Gorge train depot at 2:30 PM to check in. Train runs 3:30 PM to 5:30 PM"
-    (The 2:30 arrival/check-in and the 3:30-5:30 train ride are ONE event — same outing — so keep them together; only split distinct outings/activities. Do NOT split "check in" from "train runs" — they are the same activity.)
-  - "Monday: dentist at 9am, lunch with mom at 12pm, pick up kids at 3pm" → 3 tasks (one per timed event)
-  GROUPING RULE: Sub-actions that belong to the SAME outing (arriving early, check-in, the activity itself, the ride home) stay together in ONE task. Only split when there are separate activities/destinations at different times.
-
-  NEVER OUTPUT THE SAME TASK TWICE. Each action from the input appears in the
-  output EXACTLY ONCE. Do not restate an action with different wording as a
-  second task, and do not add a summary/umbrella task alongside the split tasks.
-  - "do the dishes" → ["do the dishes"] — NEVER ["do dishes", "do the dishes"]
-  - "clean the kitchen and do the dishes" → 2 tasks ONLY if they are genuinely
-    different actions; if one restates the other, return just one.
-  Before returning, re-read your "tasks" array and delete any entry that means
-  the same thing as another entry.
-
-  CRITICAL: When splitting, PRESERVE any time/date words (e.g., "today", "tomorrow",
-  "tonight") on EACH split task so the user's timing intent is not lost.
-  - "clean the dishes and the floor today" → ["clean the dishes today", "clean the floor today"]
-
-  Examples of SINGLE task (KEEP AS ONE):
-  - "call the mini place and ask them to send recommendations" → ONE ("them" = mini place)
-  - "text Sarah and see if she wants to meet up" → ONE ("she" = Sarah)
-  - "open the document and add the notes" → ONE (same document)
-  - "call dentist about my tooth pain" → ONE (additional detail)
-  - "buy milk and eggs" → ONE (same shopping trip)
-
-  Return JSON:
-  {
-  "is_multiple": true/false,
-  "tasks": ["task 1", "task 2", ...] (if multiple) or ["original input"] (if single)
-  }`;
-
-    try {
-      const result = (await base44.functions.invoke('detectMultipleTasks', { prompt: multiTaskPrompt }))?.data?.response;
-
-      console.log('🔍 [DETECT] Result:', result);
-      const tasks = dedupeSplitTasks(result.tasks || [inputText]);
-      return propagateDateWords(inputText, tasks);
-    } catch (error) {
-      console.error('🔍 [DETECT] Error detecting tasks, treating as single:', error);
-      return [inputText];
-    }
-  };
-
-  const processAndCreateTask = async (inputText) => {
-    console.log('🔄 [PROCESS] ========== START ==========');
-    console.log('🔄 [PROCESS] Input:', inputText);
-
-    if (!inputText.trim()) {
-      console.log('🔄 [PROCESS] ❌ Empty input');
-      return false;
-    }
-
-    try {
-      console.log('🔄 [PROCESS] Getting user...');
-      const currentUser = await base44.auth.me();
-      console.log('🔄 [PROCESS] ✅ User:', currentUser?.email);
-
-      // Birthdays are tracked as their own thing (🎂 card), not as tasks.
-      // If the input looks like a birthday reminder, route it there and stop.
-      if (/birthday|bday|b-day/i.test(inputText)) {
-        try {
-          const birthday = await createBirthdayFromInput(inputText, currentUser.email);
-          if (birthday) {
-            toast.success(`🎂 Added ${birthday.person}'s birthday!`, {
-              description: "We'll remind you 1 week before, the day before, and the day of — every year.",
-              duration: 4000,
-            });
-            console.log('🎂 [PROCESS] Created birthday from input:', birthday.task.id);
-            return true;
-          }
-        } catch (e) {
-          console.error('🎂 [PROCESS] Birthday detection failed, continuing as task', e);
-        }
-      }
-
-      // FIRST: Check if user wants a task with subtasks
-      const subtaskCheckPrompt = `Analyze this input: "${inputText}"
-
-Does the user want to create ONE main task WITH subtasks/steps?
-
-STRONG signals for ONE TASK WITH SUBTASKS:
-- User names a category/goal and then lists specific items under it
-- "I need to pay all my bills: electric, rent, insurance" → main: "Pay bills", subtasks: [electric, rent, insurance]
-- "I need to pay all my bills and then listed the bills [electric, rent, insurance]" → main: "Pay bills", subtasks: each bill
-- "grocery shopping: milk, eggs, bread" → main: "Grocery shopping", subtasks: each item
-- "clean the house: kitchen, bathroom, vacuum" → main: "Clean the house", subtasks: each room
-- "prepare for meeting with steps: review slides, print handouts" → main: "Prepare for meeting", subtasks: steps
-- "call dentist and then schedule appointment and then confirm insurance" → main task with sequential steps
-- ANY time items are listed as children of a main goal/action
-
-NOT subtasks (these are separate independent tasks OR a single event):
-- "call dentist and also buy groceries" (two unrelated actions, neither is a parent of the other)
-- "clean dishes and take out trash" (two equal, unrelated chores)
-- A TIMED SEQUENCE of actions that form ONE event/outing is NOT subtasks — it is ONE task.
-  Example: "arrive at the depot at 2:30 PM to check in. Train runs 3:30 PM to 5:30 PM" → ONE task
-  (a single event with a time span), NOT a parent with subtasks. The "check in" and "train ride"
-  are sequential parts of the same outing, not independent to-do items.
-- Any input where the parts are connected by specific TIMES (arrive at 2:30, activity at 3:30)
-  is a scheduled EVENT, not a parent-with-subtasks. Return has_subtasks=false for these.
-
-KEY RULE: If the items listed are all INSTANCES of the same category named first, they are subtasks.
-Example: "pay my bills" + list of bills = subtasks. "Buy groceries" + list of items = subtasks.
-BUT: a timed itinerary (arrive → check in → activity) is ONE event, NOT subtasks.
-
-Return JSON:
-{
-  "has_subtasks": true/false,
-  "main_task": "concise main task title (e.g. 'Pay bills', not the full sentence)",
-  "subtasks": ["subtask 1", "subtask 2", ...] (if has_subtasks, IN ORDER)
-}`;
-
-      const subtaskCheck = (await base44.functions.invoke('checkSubtasks', { prompt: subtaskCheckPrompt }))?.data?.response;
-
-      console.log('🔄 [PROCESS] Subtask check:', subtaskCheck);
-
-      // If user wants subtasks, create parent + subtasks
-      if (subtaskCheck.has_subtasks && subtaskCheck.subtasks && subtaskCheck.subtasks.length > 0) {
-        console.log('🔄 [PROCESS] Creating task with subtasks...');
-        
-        // Parse the main task for timing/priority
-        const now = new Date();
-        const today = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-        
-        const mainTaskPrompt = buildTaskParsePrompt(subtaskCheck.main_task);
-
-        const mainTaskParsed = (await base44.functions.invoke('parseTask', { prompt: mainTaskPrompt }))?.data?.response;
-
-        // Calculate next_reminder for parent task
-        let nextReminder = null;
-        const intervalMs = {
-          '30min': 30 * 60 * 1000,
-          '1hour': 60 * 60 * 1000,
-          '2hours': 2 * 60 * 60 * 1000,
-          '4hours': 4 * 60 * 60 * 1000,
-          'daily': 24 * 60 * 60 * 1000,
-          'every_other_day': 2 * 24 * 60 * 60 * 1000,
-        };
-
-        if (mainTaskParsed.reminder_interval && intervalMs[mainTaskParsed.reminder_interval]) {
-          nextReminder = new Date(now.getTime());
-          switch (mainTaskParsed.reminder_interval) {
-            case '30min': nextReminder.setMinutes(nextReminder.getMinutes() + 30); break;
-            case '1hour': nextReminder.setHours(nextReminder.getHours() + 1); break;
-            case '2hours': nextReminder.setHours(nextReminder.getHours() + 2); break;
-            case 'daily': nextReminder.setDate(nextReminder.getDate() + 1); break;
-            case 'every_other_day': nextReminder.setDate(nextReminder.getDate() + 2); break;
-          }
-        }
-
-        // Create parent task
-        const parentTask = await base44.entities.Task.create({
-          title: subtaskCheck.main_task,
-          original_input: inputText,
-          description: '',
-          reminder_interval: mainTaskParsed.reminder_interval || null,
-          due_date: presetDueDateISO,
-          reminder_count: 0,
-          next_reminder: nextReminder ? nextReminder.toISOString() : null,
-          urgency: mainTaskParsed.urgency || 'medium',
-          energy_required: mainTaskParsed.energy_required || 'medium',
-          status: 'active',
-          notification_recipient_email: currentUser.email
-        });
-
-        console.log('🔄 [PROCESS] ✅ Parent task created:', parentTask.id);
-
-        // Create subtasks IN ORDER — no notifications on subtasks, only parent gets reminded
-        for (let si = 0; si < subtaskCheck.subtasks.length; si++) {
-          await base44.entities.Task.create({
-            title: subtaskCheck.subtasks[si].trim(),
-            parent_task_id: parentTask.id,
-            urgency: mainTaskParsed.urgency || 'medium',
-            energy_required: mainTaskParsed.energy_required || 'medium',
-            status: 'active',
-            reminder_interval: null,
-            reminder_count: 0,
-            next_reminder: null,
-            notification_recipient_email: null
-          });
-        }
-
-        console.log('🔄 [PROCESS] ✅ Created', subtaskCheck.subtasks.length, 'subtasks');
-
-        // Schedule reminders if needed
-        if (nextReminder && mainTaskParsed.reminder_interval && intervalMs[mainTaskParsed.reminder_interval]) {
-          import('../components/utils/reminderScheduler').then(module => {
-            return module.scheduleRecurringReminders({
-              email: currentUser.email,
-              title: "Task Reminder 📋",
-              body: `${parentTask.title}\n\nTap to mark as complete!`,
-              startTime: nextReminder.toISOString(),
-              intervalMs: intervalMs[mainTaskParsed.reminder_interval],
-              count: 10,
-              taskId: parentTask.id,
-              data: {
-                screen: "/TaskNotification",
-                taskId: parentTask.id,
-                urgency: parentTask.urgency,
-                type: 'task_reminder'
-              },
-              buttons: [
-                { id: "snooze_15", text: "Snooze 15 min" },
-                { id: "snooze_60", text: "Snooze 1 hour" },
-                { id: "complete", text: "✅ Done" }
-              ]
-            });
-          }).then(({ notificationIds, lastScheduledUntil }) => {
-            if (notificationIds && notificationIds.length > 0) {
-              base44.entities.Task.update(parentTask.id, {
-                onesignal_notification_ids: notificationIds,
-                ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
-              });
-            }
-          }).catch(error => {
-            console.error("Failed to schedule reminders:", error);
-          });
-        }
-
-        console.log('🔄 [PROCESS] ========== SUCCESS WITH SUBTASKS ==========');
-        return true;
-      }
-      
-      const now = new Date();
-      const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-      const tomorrow = new Date(now);
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowISO = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
-
-      const prompt = buildTaskParsePrompt(inputText);
-
-      // First, check if this belongs in parking lot vs task
-      console.log('🔄 [PROCESS] Checking if this is a parking lot idea or task...');
-      const categoryCheckPrompt = `Analyze this input: "${inputText}"
-
-      CRITICAL RULES:
-      1. If user explicitly says "parking lot" → ALWAYS parking_lot
-      2. If it's an ACTIONABLE TODO that needs to be done → task
-      Examples: "clean the toilet", "call dentist", "do laundry", "Amazon returns", "pay bills"
-      3. If it's IDEAS, THOUGHTS, INFORMATION, or vague LISTS → parking_lot
-
-      TASKS (concrete actions that need to be done):
-      - Clear actionable todos: "clean the toilet", "call dentist", "Amazon returns", "submit report", "pay rent"
-      - With timing: "Remind me tomorrow", "Call at 2pm", "Do laundry every day"
-      - Deadlines: "Turn in homework Tuesday", "Pay rent by the 1st"
-      - Appointments: "Therapist at 12 p.m.", "Meeting at 9am"
-      - Events: "Martin's wedding on the 30th", "Birthday party Saturday"
-      - Errands: "Pick up dry cleaning", "Drop off package", "Go to post office"
-
-      PARKING LOT (ideas, thoughts, non-actionable information):
-      - Explicit: "add to parking lot", "parking lot idea"
-      - Ideas/thoughts: "Steel guitar strings might be better", "Maybe try meditation"
-      - Planning: "Think about what to tell my professor"
-      - Shopping/reading lists WITHOUT urgency: "I need milk, eggs, paper", "read twilight and cirque du freak"
-      - Information: "Brazilian blowouts cost $200"
-      - Brainstorming: "My project needs hypothesis, summary, references"
-      - Questions: "Not sure if car leak is from transmission or seal"
-      - Research: "Look into meditation apps", "Research vacation spots"
-
-      KEY DISTINCTION: If someone needs to DO it (action verb), it's a TASK. If they're just capturing info/ideas, it's PARKING LOT.
-
-      Return JSON:
-      {
-      "category": "parking_lot" | "task",
-      "is_list": true/false,
-      "main_idea": "short title",
-      "items": ["item 1", "item 2", ...] or []
-      }`;
-
-      const categoryCheck = (await base44.functions.invoke('checkTaskCategory', { prompt: categoryCheckPrompt }))?.data?.response;
-
-      console.log('🔄 [PROCESS] Category check result:', categoryCheck);
-
-      // If it belongs in parking lot, create idea(s)
-      if (categoryCheck.category === 'parking_lot') {
-        console.log('📝 [PROCESS] Creating parking lot entry...');
-        
-        if (categoryCheck.is_list && categoryCheck.items && categoryCheck.items.length > 1) {
-          // Create main parking lot idea with sub-items
-          const mainIdea = await base44.entities.ParkingLotIdea.create({
-            idea: categoryCheck.main_idea,
-            converted_to_task: false,
-            list_format: 'checkbox'
-          });
-
-          // Create sub-ideas as checkboxes
-          for (const item of categoryCheck.items) {
-            await base44.entities.ParkingLotIdea.create({
-              idea: item,
-              parent_idea_id: mainIdea.id,
-              converted_to_task: false,
-              list_format: 'checkbox'
-            });
-          }
-
-          console.log('✅ [PROCESS] Parking lot list created with', categoryCheck.items.length, 'items');
-          toast.success('Added to Parking Lot! 📝', {
-            description: `"${categoryCheck.main_idea}" with ${categoryCheck.items.length} items`,
-            duration: 3000
-          });
-        } else {
-          // Create single parking lot idea
-          await base44.entities.ParkingLotIdea.create({
-            idea: inputText.trim(),
-            converted_to_task: false,
-            list_format: 'plain'
-          });
-
-          console.log('✅ [PROCESS] Parking lot idea created');
-          toast.success('Added to Parking Lot! 📝', {
-            description: inputText.trim().substring(0, 50) + (inputText.length > 50 ? '...' : ''),
-            duration: 3000
-          });
-        }
-        
-        return true;
-      }
-
-      // Otherwise, continue with normal task creation
-      console.log('🔄 [PROCESS] Calling LLM for task parsing...');
-      const parsed = (await base44.functions.invoke('parseTask', { prompt }))?.data?.response;
-      console.log('🔄 [PROCESS] ✅ LLM parsed:', parsed);
-
-      // DEFENSIVE GUARD: Never accept 2hours/4hours from the parser, even if
-      // the LLM disobeys its instructions. These intervals were explicitly
-      // removed per user request — the smart nudge system handles all
-      // non-explicit recurring tasks. Only keep them if the user LITERALLY
-      // said "every 2 hours" or "every 4 hours" in their input.
-      const inputLower = inputText.toLowerCase();
-      const explicit2h = /every\s+2\s+hours|every\s+two\s+hours/.test(inputLower);
-      const explicit4h = /every\s+4\s+hours|every\s+four\s+hours/.test(inputLower);
-      if (parsed.reminder_interval === '2hours' && !explicit2h) {
-        parsed.reminder_interval = null;
-      }
-      if (parsed.reminder_interval === '4hours' && !explicit4h) {
-        parsed.reminder_interval = null;
-      }
-
-      // If the user clicked "Add task" under a specific day, pin the task to that date
-      if (presetDate) {
-        parsed.target_date = presetDate;
-        parsed.due_date = presetDate;
-        if (!parsed.target_time) parsed.target_time = '09:00';
-        parsed.needs_date_pick = false;
-      }
-
-      // If priority can't be inferred and task is flexible, ask the user
-      if (parsed.priority_uninferrable && parsed.is_flexible) {
-        console.log('🔄 [PROCESS] Priority uninferrable and flexible — showing priority picker');
-        setPendingPriorityTask({
-          title: parsed.title || inputText.trim(),
-          original_input: inputText,
-          energy_required: parsed.energy_required || 'medium',
-          classification: parsed.classification || 'task',
-          currentUser
-        });
-        setShowPriorityPicker(true);
-        return false;
-      }
-
-      // If the task is one-time but no date was given, ask the user
-      if (parsed.needs_date_pick) {
-        console.log('🔄 [PROCESS] needs_date_pick — showing date picker');
-        setPendingDateTask({
-          title: parsed.title || inputText.trim(),
-          original_input: inputText,
-          energy_required: parsed.energy_required || 'medium',
-          urgency: parsed.urgency || 'medium',
-          fallbackInterval: null,
-          initialDate: parsed.target_date || null,
-          initialTime: parsed.target_time || null,
-          classification: parsed.classification || 'task',
-          end_date: parsed.end_date || null,
-          currentUser
-        });
-        setShowDatePicker(true);
-        return false;
-      }
-
-      console.log('🔄 [PROCESS] Calculating reminder times...');
-      let nextReminder = null;
-      let actualReminderInterval = parsed.reminder_interval || null;
-
-      // If the parser gave a specific date AND time, this is a one-time event —
-      // not a recurring task. The parser sometimes mislabels events as "2hours"
-      // recurring, which would start reminders 2 hours from NOW instead of at
-      // the event time. Override to "once" so it routes through the one-time
-      // event flow (advance reminder dialog, correct scheduling). Per the
-      // parser's own rules, recurring tasks should never have both
-      // target_date and target_time set.
-      if (parsed.target_date && parsed.target_time) {
-        actualReminderInterval = 'once';
-      }
-
-      const recurringIntervals = ['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day'];
-
-      // Multi-day events: if the parser detected a date range, record the last
-      // day so the event shows on each calendar day from start through end.
-      let endDateISO = null;
-      if (actualReminderInterval === 'once' && parsed.end_date && parsed.end_date !== parsed.target_date) {
-        const [ey, em, ed] = parsed.end_date.split('-').map(n => parseInt(n, 10));
-        if (!isNaN(ey) && !isNaN(em) && !isNaN(ed)) {
-          endDateISO = new Date(ey, em - 1, ed, 9, 0, 0, 0).toISOString();
-        }
-      }
-
-      // Event time (when the event actually happens) — stored separately from
-      // next_reminder so it stays visible on the card even if the user later
-      // edits the reminder time. Only set for events with a specific time.
-      let eventTimeISO = null;
-      if (parsed.classification === 'event' && parsed.target_date && parsed.target_time && actualReminderInterval === 'once') {
-        const [vyy, vmm, vdd] = parsed.target_date.split('-').map(n => parseInt(n, 10));
-        const [vhh, vmin] = parsed.target_time.split(':').map(n => parseInt(n, 10));
-        if (!isNaN(vyy) && !isNaN(vmm) && !isNaN(vdd) && !isNaN(vhh) && !isNaN(vmin)) {
-          eventTimeISO = new Date(vyy, vmm - 1, vdd, vhh, vmin, 0, 0).toISOString();
-        }
-      }
-
-      if (parsed.day_only_task && parsed.target_date && actualReminderInterval === 'once') {
-        // "Remind me to do X on [day]" — night-before heads up + day-of hourly.
-        // Anchor the schedule at 9 AM on the target day.
-        const [y, m, d] = parsed.target_date.split('-').map(n => parseInt(n, 10));
-        nextReminder = new Date(y, m - 1, d, 9, 0, 0, 0);
-        const twoMinFromNow = new Date(now.getTime() + 2 * 60 * 1000);
-        if (nextReminder <= twoMinFromNow) {
-          // Target day is today/past — shouldn't happen for future-day tasks.
-          nextReminder = null;
-        }
-      } else if (parsed.target_date && parsed.target_time && actualReminderInterval === 'once') {
-        // One-time reminder with specific date/time
-        console.log('🔄 [PROCESS] One-time reminder with date/time');
-        // Parse date components to avoid timezone issues
-        const [year, month, day] = parsed.target_date.split('-').map(n => parseInt(n, 10));
-        const [hours, minutes] = parsed.target_time.split(':').map(n => parseInt(n, 10));
-        const targetDate = new Date(year, month - 1, day, hours, minutes, 0, 0);
-
-        // Guard: if the target time is in the past or within 2 minutes, don't schedule
-        const twoMinFromNow = new Date(now.getTime() + 2 * 60 * 1000);
-        if (targetDate <= twoMinFromNow) {
-          console.log('🔄 [PROCESS] ⚠️ Target time in the past or immediate — not scheduling');
-          nextReminder = null;
-        } else {
-          nextReminder = targetDate;
-        }
-        actualReminderInterval = 'once';
-
-        // Check if at least 1 day away
-        const oneDayFromNow = new Date(now.getTime() + (24 * 60 * 60 * 1000));
-        const isAtLeastOneDayAway = nextReminder >= oneDayFromNow;
-
-        if (isAtLeastOneDayAway) {
-          // Task 1+ day away — the caller collects these and shows the advance
-          // reminder dialog once per task (queued), so a multi-event itinerary
-          // creates a separate task for each segment instead of only the last.
-          const taskData = {
-            title: parsed.title || inputText.trim(),
-            original_input: inputText,
-            description: '',
-            classification: parsed.classification || 'task',
-            reminder_interval: actualReminderInterval,
-            reminder_count: 0,
-            next_reminder: nextReminder.toISOString(),
-            end_date: endDateISO,
-            event_time: eventTimeISO,
-            urgency: parsed.urgency || 'medium',
-            energy_required: parsed.energy_required || 'medium',
-            status: 'active',
-            notification_recipient_email: currentUser.email
-          };
-
-          console.log('🔄 [PROCESS] Task 1+ day away - queuing for advance reminder dialog');
-          return { needsAdvance: true, taskData, currentUser };
-        }
-        // Otherwise, continue with normal creation (no advance reminder dialog)
-      } else if (parsed.reminder_interval && recurringIntervals.includes(parsed.reminder_interval)) {
-        // Recurring reminder
-        console.log('🔄 [PROCESS] Recurring reminder:', parsed.reminder_interval);
-        nextReminder = new Date(now.getTime());
-        switch (parsed.reminder_interval) {
-          case '10min':
-            nextReminder.setMinutes(nextReminder.getMinutes() + 10);
-            break;
-          case '20min':
-            nextReminder.setMinutes(nextReminder.getMinutes() + 20);
-            break;
-          case '30min':
-            nextReminder.setMinutes(nextReminder.getMinutes() + 30);
-            break;
-          case '1hour':
-            nextReminder.setHours(nextReminder.getHours() + 1);
-            break;
-          case '2hours':
-            nextReminder.setHours(nextReminder.getHours() + 2);
-            break;
-          case '4hours':
-            nextReminder.setHours(nextReminder.getHours() + 4);
-            break;
-          case 'daily':
-            nextReminder.setDate(nextReminder.getDate() + 1);
-            break;
-          case 'every_other_day':
-            nextReminder.setDate(nextReminder.getDate() + 2);
-            break;
-        }
-      } else if (actualReminderInterval === 'once' && !parsed.target_date && !parsed.target_time) {
-        // LLM said "once" but gave no date/time — don't schedule (needs_date_pick should have caught this)
-        console.log('🔄 [PROCESS] once with no date/time — not scheduling');
-        nextReminder = null;
-      } else if (!parsed.reminder_interval && !parsed.target_time && !parsed.target_date) {
-        // No timing specified at all — don't schedule (needs_date_pick should have caught this)
-        console.log('🔄 [PROCESS] No timing — not scheduling');
-        nextReminder = null;
-      }
-
-      // For "today" recurring tasks the parser sets due_date = today so the task
-      // becomes overdue the next day if it isn't finished. Convert to end-of-day.
-      let dueDateISO = null;
-      if (parsed.due_date && actualReminderInterval !== 'once') {
-        // Honor the parser's due_date for BOTH recurring-interval tasks AND
-        // smart-nudge tasks (reminder_interval=null) — "today"/"by Friday"
-        // deadlines land here. Without this, "do X today" tasks lost their
-        // due date and the smart nudge system saw "no due date".
-        const [dy, dm, dd] = parsed.due_date.split('-').map(n => parseInt(n, 10));
-        if (!isNaN(dy) && !isNaN(dm) && !isNaN(dd)) {
-          dueDateISO = new Date(dy, dm - 1, dd, 23, 59, 0, 0).toISOString();
-        }
-      } else if (parsed.day_only_task && parsed.target_date && actualReminderInterval === 'once') {
-        // Day-only tasks: set due_date to end-of-day on the target date so the
-        // smart nudge cron can find tasks "due today" in the user's timezone.
-        const [dy, dm, dd] = parsed.target_date.split('-').map(n => parseInt(n, 10));
-        if (!isNaN(dy) && !isNaN(dm) && !isNaN(dd)) {
-          dueDateISO = new Date(dy, dm - 1, dd, 23, 59, 0, 0).toISOString();
-        }
-      }
-
-      console.log('🔄 [PROCESS] Creating task with data:', {
-        title: parsed.title || inputText.trim(),
-        reminder_interval: actualReminderInterval,
-        next_reminder: nextReminder ? nextReminder.toISOString() : null,
-        due_date: dueDateISO,
-        urgency: parsed.urgency || 'medium',
-        energy_required: parsed.energy_required || 'medium'
-      });
-      
-      const createdTask = await base44.entities.Task.create({
-        title: parsed.title || inputText.trim(),
-        original_input: inputText,
-        description: '',
-        classification: parsed.classification || 'task',
-        reminder_interval: actualReminderInterval,
-        day_only_task: !!parsed.day_only_task,
-        deadline_style: parsed.deadline_style === 'by' ? 'by' : 'on',
-        // Repeating dates ("the first Thursday of every month", "every Wednesday")
-        // — target_date holds the next occurrence, this holds the rhythm.
-        recurrence_pattern: parsed.recurrence_pattern || 'none',
-        reminder_count: 0,
-        next_reminder: nextReminder ? nextReminder.toISOString() : null,
-        due_date: dueDateISO,
-        end_date: endDateISO,
-        event_time: eventTimeISO,
-        urgency: parsed.urgency || 'medium',
-        energy_required: parsed.energy_required || 'medium',
-        status: 'active',
-        notification_recipient_email: currentUser.email
-      });
-
-      console.log('🔄 [PROCESS] ✅ Task created:', createdTask.id);
-
-      // Future guard: never schedule a reminder in the past or immediate
-      if (nextReminder) {
-        const twoMinFromNow = new Date(now.getTime() + 2 * 60 * 1000);
-        if (nextReminder <= twoMinFromNow) {
-          if (actualReminderInterval && actualReminderInterval !== 'once') {
-            const guardIntervalMs = {
-              '10min': 10 * 60 * 1000, '20min': 20 * 60 * 1000, '30min': 30 * 60 * 1000,
-              '1hour': 60 * 60 * 1000, '2hours': 2 * 60 * 60 * 1000, '4hours': 4 * 60 * 60 * 1000,
-              'daily': 24 * 60 * 60 * 1000, 'every_other_day': 2 * 24 * 60 * 60 * 1000,
-            };
-            if (guardIntervalMs[actualReminderInterval]) {
-              nextReminder = new Date(now.getTime() + guardIntervalMs[actualReminderInterval]);
-            } else {
-              nextReminder = null;
-            }
-          } else {
-            nextReminder = null;
-          }
-        }
-      }
-
-      // Schedule reminders
-      if (nextReminder) {
-        const intervalMs = {
-          '10min': 10 * 60 * 1000,
-          '20min': 20 * 60 * 1000,
-          '30min': 30 * 60 * 1000,
-          '1hour': 60 * 60 * 1000,
-          '2hours': 2 * 60 * 60 * 1000,
-          '4hours': 4 * 60 * 60 * 1000,
-          'daily': 24 * 60 * 60 * 1000,
-          'every_other_day': 2 * 24 * 60 * 60 * 1000,
-        };
-
-        if (actualReminderInterval === 'once') {
-          // One-time reminder — check for multi-reminder category first
-          console.log('📅 [SCHEDULE] One-time reminder at', nextReminder.toISOString());
-          import('../components/utils/multiReminderScheduler')
-            .then(module => module.scheduleMultiReminders({
-              email: currentUser.email,
-              title: createdTask.title,
-              scheduledDateISO: nextReminder.toISOString(),
-              taskId: createdTask.id,
-              urgency: createdTask.urgency,
-              dayOnly: !!parsed.day_only_task,
-              deadlineStyle: parsed.deadline_style === 'by' ? 'by' : 'on',
-              classification: createdTask.classification,
-            }))
-            .then(multiIds => {
-              if (multiIds) {
-                base44.entities.Task.update(createdTask.id, {
-                  onesignal_notification_ids: multiIds
-                });
-                return;
-              }
-              // No multi-reminder match — single reminder
-              return scheduleReminder({
-                email: currentUser.email,
-                title: "Task Reminder 📋",
-                body: `${createdTask.title}\n\nTap to mark as complete!`,
-                sendAtISO: nextReminder.toISOString(),
-                taskId: createdTask.id,
-                data: {
-                  screen: "/TaskNotification",
-                  taskId: createdTask.id,
-                  urgency: createdTask.urgency,
-                  type: 'task_reminder'
-                },
-                buttons: [
-                  { id: "snooze_15", text: "Snooze 15 min" },
-                  { id: "snooze_60", text: "Snooze 1 hour" },
-                  { id: "complete", text: "✅ Done" }
-                ]
-              }).then(notificationId => {
-                if (notificationId) {
-                  base44.entities.Task.update(createdTask.id, {
-                    onesignal_notification_ids: [notificationId]
-                  });
-                }
-              });
-            })
-            .catch(error => {
-              console.error("Failed to schedule reminder:", error);
-            });
-        } else if (intervalMs[actualReminderInterval]) {
-          // Recurring reminder - schedule next 10 occurrences
-          console.log('🔄 [SCHEDULE] Recurring reminder:', actualReminderInterval);
-          import('../components/utils/reminderScheduler').then(module => {
-            return module.scheduleRecurringReminders({
-              email: currentUser.email,
-              title: "Task Reminder 📋",
-              body: `${createdTask.title}\n\nTap to mark as complete!`,
-              startTime: nextReminder.toISOString(),
-              intervalMs: intervalMs[actualReminderInterval],
-              count: 10,
-              taskId: createdTask.id,
-              data: {
-                screen: "/TaskNotification",
-                taskId: createdTask.id,
-                urgency: createdTask.urgency,
-                type: 'task_reminder'
-              },
-              buttons: [
-                { id: "snooze_15", text: "Snooze 15 min" },
-                { id: "snooze_60", text: "Snooze 1 hour" },
-                { id: "complete", text: "✅ Done" }
-              ]
-            });
-          }).then(({ notificationIds, lastScheduledUntil }) => {
-            if (notificationIds && notificationIds.length > 0) {
-              base44.entities.Task.update(createdTask.id, {
-                onesignal_notification_ids: notificationIds,
-                ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
-              });
-            }
-          }).catch(error => {
-            console.error("Failed to schedule recurring reminders:", error);
-          });
-        }
-      }
-      
-      console.log('🔄 [PROCESS] ========== SUCCESS - RETURNING TRUE ==========');
-      return true;
-    } catch (error) {
-      console.error('🔄 [PROCESS] ========== ERROR ==========');
-      console.error('🔄 [PROCESS] Error:', error);
-      console.error('🔄 [PROCESS] Error message:', error.message);
-      console.error('🔄 [PROCESS] Error stack:', error.stack);
-      alert("Failed to create task: " + error.message);
-      return false;
-    }
-  };
-
-  // Creates one advance-eligible task with the user's chosen lead time.
-  // The reminder fires `minutesBefore` before the event (or at the event time
-  // if they chose "just on time"). The event time itself is preserved on
-  // taskData.event_time so it stays visible on the card.
-  const createAdvanceTask = async (taskData, currentUser, minutesBefore) => {
-    const eventTime = new Date(taskData.next_reminder);
-    const reminderTime = minutesBefore > 0
-      ? new Date(eventTime.getTime() - (minutesBefore * 60 * 1000))
-      : eventTime;
-
-    // Never schedule a past reminder — fall back to the event time.
-    let effectiveReminderTime = reminderTime;
-    if (reminderTime.getTime() <= Date.now() + 2 * 60 * 1000) {
-      effectiveReminderTime = eventTime;
-    }
-
-    const createdTask = await base44.entities.Task.create({
-      ...taskData,
-      next_reminder: effectiveReminderTime.toISOString(),
-    });
-
-    if (effectiveReminderTime.getTime() > Date.now()) {
-      try {
-        const notificationId = await scheduleReminder({
-          email: currentUser.email,
-          title: minutesBefore > 0 ? "📋 Upcoming Task" : "Task Reminder 📋",
-          body: minutesBefore > 0
-            ? `In ${minutesBefore >= 60 ? `${minutesBefore / 60} hour${minutesBefore > 60 ? 's' : ''}` : `${minutesBefore} min`}: ${createdTask.title}\n\nTap to view details.`
-            : `${createdTask.title}\n\nTap to mark as complete!`,
-          sendAtISO: effectiveReminderTime.toISOString(),
-          taskId: createdTask.id,
-          data: {
-            screen: "/TaskNotification",
-            taskId: createdTask.id,
-            urgency: createdTask.urgency,
-            type: minutesBefore > 0 ? 'advance_reminder' : 'task_reminder'
-          },
-          buttons: [
-            { id: "snooze_15", text: "Snooze 15 min" },
-            { id: "snooze_60", text: "Snooze 1 hour" },
-            { id: "complete", text: "✅ Done" }
-          ]
-        });
-        if (notificationId) {
-          base44.entities.Task.update(createdTask.id, {
-            onesignal_notification_ids: [notificationId]
-          });
-        }
-      } catch (error) {
-        console.error("Failed to schedule reminder:", error);
-      }
-    }
-    return createdTask;
-  };
-
-  const handleAdvanceReminderChoice = async (minutesBefore) => {
-    if (!pendingTask) return;
-
-    const { taskData, currentUser } = pendingTask;
-
-    setShowAdvanceReminderDialog(false);
-    setIsProcessing(true);
-
-    try {
-      await createAdvanceTask(taskData, currentUser, minutesBefore);
-
-      // If more advance-eligible tasks are queued (e.g. a multi-event
-      // itinerary), show the dialog for the next one.
-      if (advanceQueue.length > 0) {
-        const next = advanceQueue[0];
-        setAdvanceQueue(prev => prev.slice(1));
-        setPendingTask(next);
-        setShowAdvanceReminderDialog(true);
-      } else {
-        setPendingTask(null);
-        navigate(createPageUrl("Home"), { state: { reload: true } });
-      }
-    } catch (error) {
-      console.error("Error creating task with advance reminder:", error);
-      alert("Failed to create task with advance reminder. Please try again.");
-      setPendingTask(null);
-      setAdvanceQueue([]);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handlePriorityChoice = async (priority) => {
-    if (!pendingPriorityTask) return;
-
-    const { title, energy_required, currentUser } = pendingPriorityTask;
-    setShowPriorityPicker(false);
-    setIsProcessing(true);
-
-    try {
-      // Priority sets URGENCY ONLY — no recurring interval. The smart nudge
-      // cron decides when/how often to remind based on urgency and due date.
-      const urgencyMap = {
-        high: 'high',
-        medium: 'medium',
-        low: 'low',
-      };
-
-      const urgency = urgencyMap[priority] || 'medium';
-
-      const createdTask = await base44.entities.Task.create({
-        title,
-        original_input: pendingPriorityTask.original_input || null,
-        description: '',
-        classification: pendingPriorityTask.classification || 'task',
-        reminder_interval: null, // smart nudge — no hardcoded interval
-        due_date: presetDueDateISO,
-        reminder_count: 0,
-        next_reminder: null,
-        urgency,
-        energy_required,
-        status: 'active',
-        notification_recipient_email: currentUser.email
-      });
-
-      navigate(createPageUrl("Home"), { state: { reload: true } });
-    } catch (error) {
-      console.error("Error creating task with priority:", error);
-      alert("Failed to create task. Please try again.");
-    } finally {
-      setPendingPriorityTask(null);
-      setIsProcessing(false);
-    }
-  };
-
-  const handleDateChoice = async (date, time) => {
-    if (!pendingDateTask) return;
-    const { title, energy_required, urgency, currentUser } = pendingDateTask;
-    setShowDatePicker(false);
-    setIsProcessing(true);
-
-    try {
-      const [year, month, day] = date.split('-').map(n => parseInt(n, 10));
-      const [hours, minutes] = time.split(':').map(n => parseInt(n, 10));
-      const nextReminder = new Date(year, month - 1, day, hours, minutes, 0, 0);
-      const now = new Date();
-      if (nextReminder <= new Date(now.getTime() + 2 * 60 * 1000)) {
-        alert('The selected time is in the past or too soon. Please pick a future time.');
-        setIsProcessing(false);
-        return;
-      }
-
-      // Preserve a multi-day span end date from the parsed range, guarding
-      // that it's on or after the picked start day.
-      let endDateISO = null;
-      if (pendingDateTask.end_date && pendingDateTask.end_date !== date) {
-        const [ey, em, ed] = pendingDateTask.end_date.split('-').map(n => parseInt(n, 10));
-        if (!isNaN(ey) && !isNaN(em) && !isNaN(ed) && pendingDateTask.end_date >= date) {
-          endDateISO = new Date(ey, em - 1, ed, 9, 0, 0, 0).toISOString();
-        }
-      }
-
-      const createdTask = await base44.entities.Task.create({
-        title,
-        original_input: pendingDateTask.original_input || null,
-        description: '',
-        classification: pendingDateTask.classification || 'task',
-        reminder_interval: 'once',
-        reminder_count: 0,
-        next_reminder: nextReminder.toISOString(),
-        end_date: endDateISO,
-        urgency,
-        energy_required,
-        status: 'active',
-        notification_recipient_email: currentUser.email
-      });
-
-      // Check for multi-reminder category first (appointments, events, payments)
-      const { scheduleMultiReminders } = await import('../components/utils/multiReminderScheduler');
-      const multiIds = await scheduleMultiReminders({
-        email: currentUser.email,
-        title: createdTask.title,
-        scheduledDateISO: nextReminder.toISOString(),
-        taskId: createdTask.id,
-        urgency,
-        classification: pendingDateTask.classification || 'task',
-      });
-
-      if (multiIds) {
-        base44.entities.Task.update(createdTask.id, { onesignal_notification_ids: multiIds });
-      } else {
-        scheduleReminder({
-          email: currentUser.email,
-          title: "Task Reminder 📋",
-          body: `${createdTask.title}\n\nTap to mark as complete!`,
-          sendAtISO: nextReminder.toISOString(),
-          taskId: createdTask.id,
-          data: { screen: "/TaskNotification", taskId: createdTask.id, urgency, type: 'task_reminder' },
-          buttons: [
-            { id: "snooze_15", text: "Snooze 15 min" },
-            { id: "snooze_60", text: "Snooze 1 hour" },
-            { id: "complete", text: "✅ Done" }
-          ]
-        }).then(notificationId => {
-          if (notificationId) {
-            base44.entities.Task.update(createdTask.id, { onesignal_notification_ids: [notificationId] });
-          }
-        }).catch(error => console.error("Failed to schedule reminder:", error));
-      }
-
-      navigate(createPageUrl("Home"), { state: { reload: true } });
-    } catch (error) {
-      console.error("Error creating task with date:", error);
-      alert("Failed to create task. Please try again.");
-    } finally {
-      setPendingDateTask(null);
-      setIsProcessing(false);
-    }
-  };
-
-  const handleDateAnyDay = async () => {
-    if (!pendingDateTask) return;
-    const { title, energy_required, urgency, fallbackInterval, currentUser } = pendingDateTask;
-    setShowDatePicker(false);
-    setIsProcessing(true);
-
-    try {
-      // "Any day" = no fixed clock time. If the parser already knew the day
-      // (e.g. "tomorrow"), keep it as a day-only due date so the date the user
-      // actually said isn't thrown away — smart nudge handles the timing.
-      let anyDayDueISO = presetDueDateISO;
-      let dayOnly = false;
-      if (pendingDateTask.initialDate) {
-        const [ay, am, ad] = pendingDateTask.initialDate.split('-').map(n => parseInt(n, 10));
-        if (!isNaN(ay) && !isNaN(am) && !isNaN(ad)) {
-          anyDayDueISO = new Date(ay, am - 1, ad, 23, 59, 0, 0).toISOString();
-          dayOnly = true;
-        }
-      }
-
-      const createdTask = await base44.entities.Task.create({
-        title,
-        original_input: pendingDateTask.original_input || null,
-        description: '',
-        classification: pendingDateTask.classification || 'task',
-        reminder_interval: null, // smart nudge — no hardcoded interval
-        due_date: anyDayDueISO,
-        day_only_task: dayOnly,
-        reminder_count: 0,
-        next_reminder: null,
-        urgency,
-        energy_required,
-        status: 'active',
-        notification_recipient_email: currentUser.email
-      });
-
-      navigate(createPageUrl("Home"), { state: { reload: true } });
-    } catch (error) {
-      console.error("Error creating task with any day:", error);
-      alert("Failed to create task. Please try again.");
-    } finally {
-      setPendingDateTask(null);
-      setIsProcessing(false);
-    }
-  };
 
   const startVoiceRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 44100
-        }
+        audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 44100 }
       });
 
       let mimeType = 'audio/webm;codecs=opus';
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/webm';
-      }
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/mp4';
-      }
-      if (!MediaRecorder.isTypeSupported(mimeType)) {
-        mimeType = 'audio/ogg;codecs=opus';
-      }
+      if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'audio/mp4';
+      if (!MediaRecorder.isTypeSupported(mimeType)) mimeType = 'audio/ogg;codecs=opus';
 
-      const recorder = new MediaRecorder(stream, {
-        mimeType: mimeType,
-        audioBitsPerSecond: 128000
-      });
+      const recorder = new MediaRecorder(stream, { mimeType, audioBitsPerSecond: 128000 });
       const chunks = [];
 
       recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          chunks.push(e.data);
-        }
+        if (e.data.size > 0) chunks.push(e.data);
       };
 
       recorder.onstop = async () => {
         window.__microphoneActive = false;
         const audioBlob = new Blob(chunks, { type: mimeType });
         stream.getTracks().forEach(track => track.stop());
-
         if (audioBlob.size === 0) {
-          setIsProcessing(false);
           setIsRecording(false);
           return;
         }
-
-        setIsProcessing(true);
         await handleVoiceTranscription(audioBlob);
       };
 
@@ -1144,7 +86,6 @@ Return JSON:
     } catch (error) {
       console.error("Microphone error:", error);
       alert("Could not access microphone");
-      setIsProcessing(false);
     }
   };
 
@@ -1155,112 +96,38 @@ Return JSON:
     }
   };
 
-  // Runs detectMultipleTasks' split list through processAndCreateTask, collecting
-  // any advance-eligible tasks and queueing them for the advance-reminder dialog
-  // (one at a time) so a multi-event itinerary creates a task per segment.
-  const processTaskList = async (taskList) => {
-    const advanceEligible = [];
-    let allSuccess = true;
-    for (const taskText of taskList) {
-      const result = await processAndCreateTask(taskText);
-      if (result && typeof result === 'object' && result.needsAdvance) {
-        advanceEligible.push(result);
-      } else if (result !== true) {
-        allSuccess = false;
-      }
-    }
-    setIsProcessing(false);
-    setOptimisticTasks([]);
-    if (advanceEligible.length > 0) {
-      setAdvanceQueue(advanceEligible.slice(1));
-      setPendingTask(advanceEligible[0]);
-      setShowAdvanceReminderDialog(true);
-    } else if (allSuccess) {
-      navigate(createPageUrl("Home"), { state: { reload: true } });
-    }
-  };
-
   const handleVoiceTranscription = async (audioBlob) => {
+    setIsTranscribing(true);
     try {
-    // Convert audio to base64 for transcription
-    const audioBase64 = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(audioBlob);
-    });
+      const audioBase64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(audioBlob);
+      });
 
-    const response = await base44.functions.invoke('transcribeAudio', {
-      audio_base64: audioBase64,
-      filename: `voice-${Date.now()}.webm`
-    });
+      const response = await base44.functions.invoke('transcribeAudio', {
+        audio_base64: audioBase64,
+        filename: `voice-${Date.now()}.webm`
+      });
 
-    if (response?.data?.text) {
-        // Optimistic UI — show the transcribed task immediately while the AI parses it
-        setOptimisticTasks([{ id: `temp-${Date.now()}`, title: response.data.text.trim(), isProcessing: true }]);
-        // Detect if multiple tasks
-        const taskList = await detectMultipleTasks(response.data.text);
-        console.log('🎤 [VOICE] Detected', taskList.length, 'task(s)');
-
-        await processTaskList(taskList);
-      } else {
-        throw new Error('Failed to transcribe audio');
-      }
+      if (!response?.data?.text) throw new Error('Failed to transcribe audio');
+      submitCapture(response.data.text.trim());
     } catch (error) {
       console.error("Voice processing error:", error);
       alert("Failed to process voice input. Please try again.");
     } finally {
-      setIsProcessing(false);
+      setIsTranscribing(false);
     }
   };
 
-  const handleTextSubmit = async (e) => {
-    console.log('📝 [TEXT INPUT] ========== SUBMIT START ==========');
+  const handleTextSubmit = (e) => {
     e.preventDefault();
-    if (!textInput.trim()) {
-      console.log('📝 [TEXT INPUT] ❌ Empty input, returning');
-      return;
-    }
-
-    console.log('📝 [TEXT INPUT] Input text:', textInput);
-    setIsProcessing(true);
+    if (!textInput.trim()) return;
     const input = textInput;
     setTextInput('');
-
-    // Optimistic UI — show the task immediately while the AI parses it
-    setOptimisticTasks([{ id: `temp-${Date.now()}`, title: input.trim(), isProcessing: true }]);
-
-    try {
-      // Detect if multiple tasks
-      const taskList = await detectMultipleTasks(input);
-      console.log('📝 [TEXT INPUT] Detected', taskList.length, 'task(s)');
-
-      await processTaskList(taskList);
-    } catch (error) {
-      console.error('📝 [TEXT INPUT] ❌ ERROR:', error);
-      setIsProcessing(false);
-      alert('Failed to create task: ' + error.message);
-    }
+    submitCapture(input);
   };
-
-  const getCardClasses = () => {
-    if (theme === 'dark') return 'bg-gray-800 border-gray-700';
-    if (theme === 'minimalist') return 'bg-white border-gray-200';
-    if (theme === 'spicybrains') return 'bg-gradient-to-br from-red-100 via-orange-100 to-yellow-100 border-red-200';
-    return 'bg-gradient-to-br from-purple-50 via-white to-orange-50 border-purple-200';
-  };
-
-  const getUrgencyColor = (urgency) => {
-    switch (urgency) {
-      case 'urgent': return 'bg-red-500 text-white';
-      case 'high': return 'bg-orange-500 text-white';
-      case 'medium': return 'bg-yellow-500 text-white';
-      case 'low': return 'bg-green-500 text-white';
-      default: return 'bg-gray-400 text-white';
-    }
-  };
-
-  const displayTasks = [...optimisticTasks, ...tasks.filter(t => t.status === 'active' && !t.parent_task_id)];
 
   return (
     <div className={`h-full flex flex-col overflow-hidden p-3 md:p-4 ${
@@ -1361,7 +228,7 @@ Return JSON:
                   </div>
                   <div className="text-center space-y-3 max-w-md">
                     <h2 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                      {isProcessing ? 'Creating your task...' : isRecording ? 'Listening...' : 'Ready to capture your tasks?'}
+                      {isTranscribing ? 'Got it...' : isRecording ? 'Listening...' : 'Ready to capture your tasks?'}
                     </h2>
                     <p className={`text-base ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
                       {isRecording
@@ -1372,11 +239,11 @@ Return JSON:
                   </div>
                   <button
                     onClick={isRecording ? stopVoiceRecording : startVoiceRecording}
-                    disabled={isProcessing}
+                    disabled={isTranscribing}
                     className={`w-24 h-24 rounded-full flex items-center justify-center transition-all ${
                       isRecording
                         ? 'bg-red-500 animate-pulse'
-                        : isProcessing
+                        : isTranscribing
                           ? 'bg-gray-400 cursor-not-allowed'
                           : theme === 'minimalist'
                             ? 'bg-purple-600 hover:bg-purple-700 hover:scale-110'
@@ -1385,14 +252,14 @@ Return JSON:
                               : 'bg-gradient-to-br from-purple-600 to-pink-600 hover:scale-110'
                     } shadow-2xl`}
                   >
-                    {isProcessing ? (
+                    {isTranscribing ? (
                       <Loader2 className="w-12 h-12 text-white animate-spin" />
                     ) : (
                       <Mic className="w-12 h-12 text-white" />
                     )}
                   </button>
                   <p className="text-sm text-gray-500 text-center">
-                    {isProcessing ? 'Processing...' : isRecording ? 'Tap to Stop' : 'Tap to Speak'}
+                    {isTranscribing ? 'One sec...' : isRecording ? 'Tap to Stop' : 'Tap to Speak'}
                   </p>
                 </motion.div>
               ) : (
@@ -1419,11 +286,10 @@ Return JSON:
                         placeholder='e.g., "Call dentist tomorrow at 2pm" or "Water plants every day"'
                         className="h-14 text-lg flex-1"
                         autoFocus
-                        disabled={isProcessing}
                       />
                       <Button
                         type="submit"
-                        disabled={!textInput.trim() || isProcessing}
+                        disabled={!textInput.trim()}
                         className={`h-14 px-8 ${
                           theme === 'minimalist'
                             ? 'bg-green-600 hover:bg-green-700'
@@ -1432,7 +298,7 @@ Return JSON:
                               : 'bg-gradient-to-r from-purple-600 to-orange-600'
                         }`}
                       >
-                        {isProcessing ? 'Adding...' : 'Add'}
+                        Add
                       </Button>
                     </div>
                   </form>
@@ -1442,117 +308,6 @@ Return JSON:
           </CardContent>
         </Card>
       </div>
-
-      {displayTasks.length > 0 && (
-        <Card className={`mt-8 border-none shadow-2xl overflow-hidden ${getCardClasses()}`}>
-          <CardHeader>
-            <CardTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-              <ListChecks className="w-5 h-5" />
-              Your Tasks
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {displayTasks.slice(0, 10).map((task) => (
-              <div
-                key={task.id}
-                className={`p-4 rounded-xl border transition-all ${
-                  task.isProcessing
-                    ? 'opacity-60 animate-pulse'
-                    : theme === 'minimalist'
-                      ? 'bg-white border-gray-200 hover:border-gray-300'
-                      : theme === 'dark'
-                        ? 'bg-gray-900/50 border-gray-700 hover:border-gray-600'
-                        : theme === 'spicybrains'
-                          ? 'bg-gradient-to-r from-red-50/50 to-yellow-50/50 border-red-200 hover:border-red-300'
-                          : 'bg-gradient-to-r from-purple-50/50 to-orange-50/50 border-purple-200 hover:border-purple-300'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h4 className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                        {task.title}
-                      </h4>
-                      {task.isProcessing && (
-                        <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                      )}
-                    </div>
-                    {!task.isProcessing && (
-                      <div className="flex flex-wrap gap-2">
-                        {task.urgency && (
-                          <Badge className={getUrgencyColor(task.urgency)}>
-                            {task.urgency}
-                          </Badge>
-                        )}
-                        {task.energy_required && (
-                          <Badge variant="outline" className="flex items-center gap-1">
-                            <Zap className="w-3 h-3" />
-                            {task.energy_required} energy
-                          </Badge>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
-
-      <DatePickerDialog
-        isOpen={showDatePicker}
-        onClose={() => { setShowDatePicker(false); setPendingDateTask(null); setIsProcessing(false); }}
-        onSelect={handleDateChoice}
-        onAnyDay={handleDateAnyDay}
-        taskTitle={pendingDateTask?.title}
-        initialDate={pendingDateTask?.initialDate}
-        initialTime={pendingDateTask?.initialTime}
-      />
-
-      <PriorityPickerDialog
-        isOpen={showPriorityPicker}
-        onClose={() => {
-          setShowPriorityPicker(false);
-          setPendingPriorityTask(null);
-          setIsProcessing(false);
-        }}
-        onSelect={handlePriorityChoice}
-      />
-
-      <Dialog open={showAdvanceReminderDialog} onOpenChange={setShowAdvanceReminderDialog}>
-        <DialogContent className="max-w-md w-[calc(100vw-2rem)]">
-          <DialogHeader>
-            <DialogTitle>Would you like an advance reminder?</DialogTitle>
-            {pendingTask?.taskData?.title && (
-              <p className="text-sm font-medium text-gray-700 pt-1">
-                📌 {pendingTask.taskData.title}
-              </p>
-            )}
-          </DialogHeader>
-          <div className="space-y-3 py-4">
-            <p className="text-sm text-gray-600">Get notified before the task is due:</p>
-            <div className="grid grid-cols-2 gap-2">
-              <Button onClick={() => handleAdvanceReminderChoice(30)} variant="outline" className="h-auto py-3 flex flex-col">
-                <span className="font-semibold">30 minutes</span>
-                <span className="text-xs text-gray-500">before</span>
-              </Button>
-              <Button onClick={() => handleAdvanceReminderChoice(60)} variant="outline" className="h-auto py-3 flex flex-col">
-                <span className="font-semibold">1 hour</span>
-                <span className="text-xs text-gray-500">before</span>
-              </Button>
-              <Button onClick={() => handleAdvanceReminderChoice(1440)} variant="outline" className="h-auto py-3 flex flex-col">
-                <span className="font-semibold">1 day</span>
-                <span className="text-xs text-gray-500">before</span>
-              </Button>
-              <Button onClick={() => handleAdvanceReminderChoice(0)} variant="outline" className="h-auto py-3 flex flex-col">
-                <span className="font-semibold">No thanks</span>
-                <span className="text-xs text-gray-500">just on time</span>
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import WelcomeCard from "../components/home/WelcomeCard";
 import DailyTipCard from "../components/home/DailyTipCard";
 import QuickActions from "../components/home/QuickActions";
 import TodaysTasks from "../components/home/TodaysTasks";
+import PendingTaskCards from "../components/home/PendingTaskCards";
 import EndOfDayReview from "../components/home/EndOfDayReview";
 import UpcomingBirthdayCard from "../components/home/UpcomingBirthdayCard";
 import BirthdayTextDialog from "../components/birthdays/BirthdayTextDialog";
@@ -227,6 +228,8 @@ export default function Home() {
 
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6 min-w-0">
+              <PendingTaskCards theme={theme} />
+
               <TodaysTasks
                 tasks={tasks}
                 theme={theme}

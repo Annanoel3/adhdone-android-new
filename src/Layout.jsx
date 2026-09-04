@@ -63,6 +63,7 @@ import BirthdayTextPromptPopup from "./components/birthdays/BirthdayTextPromptPo
 import SharedTextReceiver from "./components/shared/SharedTextReceiver";
 import HomeZipPrompt from "./components/shared/HomeZipPrompt";
 import QuickCapturePrompt from "./components/shared/QuickCapturePrompt";
+import TaskCaptureProcessor from "./components/shared/TaskCaptureProcessor";
 import { base44 } from "@/api/base44Client";
 import {
   DropdownMenu,
@@ -1022,6 +1023,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <SharedTextReceiver />
         <HomeZipPrompt user={user} theme={theme} />
         <QuickCapturePrompt />
+        <TaskCaptureProcessor />
 
         <AppGuideModal
           isOpen={showAppGuide}
