@@ -373,17 +373,32 @@ ${ordinalWeekdayTable}
       - due_date = today's date (${todayISO}) so that if it isn't finished by end of today, it
         becomes an OVERDUE task the next day.
       - This applies to CHORES too: "clean the dishes today", "clean the floor today" → day_only_task=true, reminder_interval=null.
-      - URGENCY FLOOR = "high". The user put a same-day deadline on it — that IS the time pressure,
-        no matter how mundane the chore is on its own. Dishes are normally medium; "dishes tonight"
-        is high because the window to do it closes in a few hours. Use "urgent" if the task itself
-        is already time-sensitive (medication, payment due today, someone waiting). NEVER return
-        "medium" or "low" for a today/tonight task.
+      - URGENCY: "today" is a WINDOW, not automatically an emergency. Judge urgency by what actually
+        HAPPENS IF IT DOESN'T GET DONE TODAY — the real-world consequence, not the fact that a date
+        was attached. Ask: does something spoil, stink, break, cost money, get missed, or does a
+        person go without?
+        * "urgent" → a real deadline or someone/something depends on it today: medication, a payment
+          due today, picking someone up, a form that closes today, food left out that will spoil.
+        * "high" → genuine same-day consequences that pile up or get worse: make dinner (nobody eats),
+          take out the trash (it stinks), do the dishes (they get crusty/gross), put the groceries
+          away, move the wet laundry, feed the pets, water the plants.
+        * "medium" → should happen today but nothing bad happens if it slides: tidy the desk, reply
+          to a non-urgent message, vacuum, return an email.
+        * "low" → an errand or nice-to-have the user just hoped to get to today: "buy Skittles",
+          "look up that show", "grab a coffee", "check the mail".
+        Do NOT inflate a low-stakes task to high just because the user said "today" — a day full of
+        fake-urgent tasks makes the real ones invisible.
+      - "tonight" leans one step higher than the same task would be earlier in the day, since the
+        window is closing — but a genuinely low-stakes task ("buy Skittles tonight") still stays low.
       - "tonight" specifically: same as today (due_date=today, day_only_task=true), and the current
         time is ${currentTime} — if it's already evening, this is the LAST window of the day.
       - "daily" is ONLY for ongoing habits/routines where the user EXPLICITLY said "daily"/"every day".
       - Example: "clean the dishes today" → reminder_interval=null, day_only_task=true, due_date="${todayISO}", urgency="high", needs_date_pick=false
-      - Example: "I need to do the dishes tonight" → title="Do the dishes", reminder_interval=null, day_only_task=true, due_date="${todayISO}", urgency="high", needs_date_pick=false
-      - Example: "do laundry today" → reminder_interval=null, day_only_task=true, due_date="${todayISO}", urgency="high", needs_date_pick=false
+      - Example: "make dinner tonight" → day_only_task=true, due_date="${todayISO}", urgency="high" (nobody eats otherwise)
+      - Example: "take the trash out today" → day_only_task=true, due_date="${todayISO}", urgency="high" (it stinks otherwise)
+      - Example: "buy Skittles today" → day_only_task=true, due_date="${todayISO}", urgency="low" (nothing happens if it waits)
+      - Example: "vacuum today" → day_only_task=true, due_date="${todayISO}", urgency="medium"
+      - Example: "do laundry today" → reminder_interval=null, day_only_task=true, due_date="${todayISO}", urgency="medium"
       - Do NOT set due_date for one-time events (those use target_date/target_time instead).
 
       ONE-TIME PRECISE (single notification at a specific moment) — ONLY for these cases:
