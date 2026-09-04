@@ -169,6 +169,64 @@ ${ordinalWeekdayTable}
         clock time was given). recurrence_pattern is what makes the task come back after completion.
       ═══════════════════════════════════════════════════════════════════════
 
+      ═══════════════════════════════════════════════════════════════════════
+      MESSY / PASTED / SHARED TEXT (CRITICAL — read this FIRST)
+      ═══════════════════════════════════════════════════════════════════════
+      The input is NOT always a clean single instruction. Users paste and share raw
+      text straight out of other apps: text-message threads, group chats, emails,
+      event pages, screenshots-turned-text. That text is messy, out of order, and
+      full of things that are not the task.
+
+      When the input looks like a CONVERSATION or a PASTED BLOCK (multiple lines,
+      back-and-forth messages, quoted replies, "Hey ...?" questions, timestamps,
+      names as labels), DO NOT try to read it as one sentence. Instead SCAN THE WHOLE
+      THING for the four facts a task needs, wherever they appear:
+        WHAT  — the actual plan/activity being discussed ("the Renaissance Festival",
+                "dinner", "the concert", "helping move")
+        WHEN  — any day, date, or clock time anywhere in the text ("this Saturday",
+                "the 14th", "4:08 PM", "next Friday at 7")
+        WHERE — any address, business, or place anywhere in the text. An address does
+                NOT need "at" in front of it and is usually on its OWN line with no
+                other words ("1234 Any Street Dr.", "Kroger on Elm", "their house").
+        WHO   — the other person involved, if a name is present (the contact name at
+                the top of a thread, or whoever is being replied to).
+
+      Rules for assembling the task from messy text:
+      - The facts are SCATTERED. The day may be in the first message and the address
+        three messages later. Collect them from anywhere in the input — never assume
+        they're in one sentence.
+      - TWO SPEAKERS. Half the text is the user, half is someone else. Questions like
+        "are you still down to go?" or "where are we meeting again?" are CONVERSATION,
+        not the task. Never let a question become the title.
+      - IGNORE JUNK. Strip app chrome and anything that isn't the plan: phone-carrier
+        text ("Sprint LTE", "75%"), clock/battery readouts, message timestamps,
+        "Messages"/"Details"/"Search" buttons, website names/URLs, phone-number
+        placeholders like "EX: (888) 555-0100", "Tutorial", ads, signatures,
+        "Sent from my iPhone", reply headers ("On Tue, X wrote:").
+      - BUILD A CLEAN TITLE yourself — do NOT copy a whole message in as the title.
+        Write the short action the user needs to do, and include WHO when a name is
+        there: "Meet Sarah at the Renaissance Festival".
+      - SET location to the address/place you found, EXACTLY as written in the text
+        ("1234 Any Street Dr."). Leave location null only if the text truly names no
+        place. This is the one case where a location may be pulled from surrounding
+        text instead of an explicit "at <place>" — because the user shared the whole
+        conversation precisely so the address wouldn't get lost.
+      - Apply all the normal date/time/classification rules to the WHEN you found:
+        "this Saturday" resolves off the DATE LOOKUP TABLE, a day with no clock time
+        for an outing → needs_date_pick=true, etc.
+      - A pasted conversation about ONE plan is ONE task, no matter how many messages
+        it contains. Do not create a task per message.
+      - Example. Input (a pasted thread):
+          "Sarah
+           Hey, are you still down to go to the Renaissance Festival this Saturday?
+           Yeah! I've got my outfit picked out! Where are we meeting again?
+           1234 any street dr. See you!"
+        → title="Meet Sarah at the Renaissance Festival",
+          location="1234 any street dr.", target_date=<this Saturday from the table>,
+          target_time=null, classification="event", needs_date_pick=true,
+          energy_required="high"
+      ═══════════════════════════════════════════════════════════════════════
+
       TITLE EXTRACTION RULES (CRITICAL):
       - ALWAYS strip the outer "remind me to" or "remind me" wrapper from the title.
       - The title should be the actual action the user needs to do, not the meta-instruction.
@@ -579,6 +637,7 @@ ${ordinalWeekdayTable}
       JSON:
       {
       "title": "clean title",
+      "location": "address, business name, or place — or null. Set this when the user EXPLICITLY named a place, and ALSO when scanning messy/pasted/shared text that contains an address or venue anywhere in it (see MESSY TEXT rules). Copy it as written. NEVER invent or infer a place that isn't in the text.",
       "urgency": "medium",
       "energy_required": "medium",
       "classification": "task",

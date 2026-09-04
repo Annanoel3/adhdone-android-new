@@ -85,6 +85,14 @@ export async function detectMultipleTasks(inputText) {
   "tonight") on EACH split task so the user's timing intent is not lost.
   - "clean the dishes and the floor today" → ["clean the dishes today", "clean the floor today"]
 
+  PASTED CONVERSATIONS / SHARED TEXT (KEEP AS ONE):
+  If the input looks like a copied text-message thread, chat, or email (multiple
+  lines, back-and-forth messages, questions like "are you still down to go?", a
+  bare address on its own line, timestamps, app chrome), it is describing ONE plan
+  spread across several messages — return is_multiple=false with the whole text as
+  the single task. Do NOT create a task per message or per line. Only split if the
+  conversation genuinely covers two unrelated plans.
+
   Examples of SINGLE task (KEEP AS ONE):
   - "call the mini place and ask them to send recommendations" → ONE ("them" = mini place)
   - "text Sarah and see if she wants to meet up" → ONE ("she" = Sarah)
@@ -360,6 +368,7 @@ Return JSON:
         data: {
           title: parsed.title || inputText.trim(),
           original_input: inputText,
+          location: parsed.location || null,
           energy_required: parsed.energy_required || 'medium',
           urgency: parsed.urgency || 'medium',
           initialDate: parsed.target_date || null,
@@ -422,6 +431,7 @@ Return JSON:
           taskData: {
             title: parsed.title || inputText.trim(),
             original_input: inputText,
+            location: parsed.location || null,
             description: '',
             classification: parsed.classification || 'task',
             reminder_interval: actualReminderInterval,
@@ -459,6 +469,7 @@ Return JSON:
     const createdTask = await base44.entities.Task.create({
       title: parsed.title || inputText.trim(),
       original_input: inputText,
+      location: parsed.location || null,
       description: '',
       classification: parsed.classification || 'task',
       reminder_interval: actualReminderInterval,
@@ -639,6 +650,7 @@ export async function createTaskWithDate(data, date, time) {
   const createdTask = await base44.entities.Task.create({
     title: data.title,
     original_input: data.original_input || null,
+    location: data.location || null,
     description: '',
     classification: data.classification || 'task',
     reminder_interval: 'once',
@@ -702,6 +714,7 @@ export async function createTaskAnyDay(data) {
   return base44.entities.Task.create({
     title: data.title,
     original_input: data.original_input || null,
+    location: data.location || null,
     description: '',
     classification: data.classification || 'task',
     reminder_interval: null,
