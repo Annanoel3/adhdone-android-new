@@ -91,7 +91,7 @@ export default function ContactPickerButton({ onContactPicked, theme }) {
       }
     } catch (e) {
       console.error("Contact picker failed:", e);
-      setError("Couldn't open contacts on this device — you can type the number instead.");
+      setError(`Couldn't open contacts: ${e?.message || e}`);
     } finally {
       setLoading(false);
     }
