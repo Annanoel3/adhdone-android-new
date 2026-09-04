@@ -36,7 +36,11 @@ THEMES: the theme button in the menu cycles Light → Dark → Colorful → Spic
 
 SETTINGS: quiet hours, home zip code (for errand grouping), notification settings, Quick Capture (Android: a pinned notification you tap to add a task from anywhere — needs the notification permission), profile, account, subscription, delete data/account.
 
-ANDROID EXTRAS: share any text into ADHDone from another app and it becomes a task; Quick Capture pinned notification with inline reply; native contact picker for birthdays; back button navigates back or exits on Home.
+ANDROID EXTRAS: share any text into ADHDone from another app and it becomes a task; Quick Capture pinned notification with inline reply (type "test task due Saturday" right in the notification and it's parsed like any other task); native contact picker for birthdays; back button navigates back or exits on Home.
+
+QUICK CAPTURE SETUP: on first open the app asks once whether to turn on the Quick Capture pinned notification. It uses the same Android notification permission as reminders — if notifications are already allowed there's no second prompt, it just pins the shortcut. It can be toggled any time in Settings. Each captured text creates exactly one task.
+
+DATE PICKER "ANY DAY": when a task is added with a date but no time, choosing "Any day" keeps the date you gave — it only means "no specific time", not "no date". If a date is already known, the picker only asks about the time.
 
 THINGS THE APP DOES NOT DO: email-to-task, sending texts/emails on your behalf, completing tasks from notification buttons, inventing locations or recurring schedules you didn't state.
 `;
