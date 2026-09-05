@@ -191,7 +191,7 @@ export default function ScheduledTextsList({ tasks, user, theme, specialMode, on
                   </p>
                 </div>
                 <div className="flex items-center gap-1 flex-shrink-0">
-                  {hasMessage && !item.sent && (
+                  {hasMessage && !item.sent && daysUntil(item.dateIso) <= 0 && (
                     <Button
                       size="sm"
                       onClick={() => handleSend(item)}
