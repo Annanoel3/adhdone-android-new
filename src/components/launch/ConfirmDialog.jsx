@@ -20,7 +20,7 @@ export default function ConfirmDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) onClose?.(); }}>
-      <DialogContent className={`max-w-sm w-[calc(100vw-2rem)] text-center overflow-hidden ${surface}`}>
+      <DialogContent className={`z-[200] max-w-sm w-[calc(100vw-2rem)] text-center overflow-hidden ${surface}`}>
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">{title}</DialogTitle>
           {description && (
