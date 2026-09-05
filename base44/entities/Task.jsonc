@@ -6,6 +6,10 @@
       "type": "string",
       "description": "Task title"
     },
+    "capture_id": {
+      "type": "string",
+      "description": "Idempotency key for captures that arrive from OUTSIDE the app (the native share sheet / quick capture). Native generates one UUID per capture attempt and resends the same one on retry, so a lost response can't double-create: the capture endpoint looks for an existing task with this id and returns it instead of creating a second one. Empty for tasks created inside the app."
+    },
     "location": {
       "type": "string",
       "description": "Optional physical place this task happens at (address, business name + city, or zip). ONLY set when the user explicitly gave a location \u2014 never inferred from the task wording. The smart-nudge system uses this to suggest combining two errands into one trip, so an inferred/guessed value would produce a bad suggestion."

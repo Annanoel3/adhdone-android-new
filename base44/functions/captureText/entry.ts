@@ -24,13 +24,29 @@ Deno.serve(async (req) => {
       return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    const { text, timezone } = await req.json();
+    const { text, timezone, capture_id } = await req.json();
     if (!text || !String(text).trim()) {
       return Response.json({ success: false, error: "text is required" }, { status: 400 });
     }
 
     const raw = String(text).trim();
     const tz = timezone || user.timezone || "America/Chicago";
+
+    // Idempotency: native retries after a network failure, and a lost response
+    // would otherwise double-create. The same capture_id returns what the first
+    // attempt already made instead of parsing and creating all over again.
+    if (capture_id) {
+      const existing = await base44.entities.Task.filter({ capture_id });
+      if (existing?.length) {
+        return Response.json({
+          success: true,
+          duplicate: true,
+          kind: "task",
+          count: existing.length,
+          tasks: existing.map((t: any) => ({ id: t.id, title: t.title })),
+        });
+      }
+    }
 
     const split = await splitCapture(base44, raw);
     // When it's a single task, parse the ORIGINAL text — never the splitter's
@@ -51,6 +67,7 @@ Deno.serve(async (req) => {
         email: user.email,
         tz,
       });
+      if (capture_id) record.capture_id = capture_id;
 
       // Created as the USER, not the service role: Task RLS keys off created_by,
       // so a service-role insert saves a record the user can never see.
@@ -70,7 +87,15 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[captureText] ${created.length} task(s) from ${raw.length} chars`);
-    return Response.json({ success: true, tasks: created });
+    // kind/count let the phone show an honest confirmation without inspecting
+    // the array itself. Everything this endpoint creates is a Task today.
+    return Response.json({
+      success: true,
+      duplicate: false,
+      kind: "task",
+      count: created.length,
+      tasks: created,
+    });
   } catch (error) {
     console.error("[captureText] error:", error);
     return Response.json({ success: false, error: error.message }, { status: 500 });
