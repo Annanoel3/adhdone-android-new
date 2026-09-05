@@ -383,7 +383,7 @@ async function generateDailySchedule(
   // Today's appointments count too: an errand near a place the user is already
   // driving to is the strongest same-trip suggestion there is, so event
   // locations go into the same matrix as task locations.
-  // Only appointments at a normal errand hour (8 AM – 7 PM local) can anchor a
+  // Only appointments at a normal errand hour (8 AM – 6 PM local) can anchor a
   // "stop by on the way" suggestion — nobody wants to be told to grab cat food
   // on the way to a 9 PM event.
   const eventLocalHour = (e: any) => {
@@ -392,7 +392,7 @@ async function generateDailySchedule(
       return parseInt(new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hour12: false }).format(new Date(when)), 10);
     } catch { return -1; }
   };
-  const isErrandFriendly = (e: any) => { const h = eventLocalHour(e); return h >= 8 && h < 19; };
+  const isErrandFriendly = (e: any) => { const h = eventLocalHour(e); return h >= 8 && h < 18; };
 
   let proximityNotes = '';
   const located = [...tasks, ...todaysEvents.filter(isErrandFriendly)]
@@ -452,7 +452,7 @@ ${urgentCount >= 2 ? `- There are ${urgentCount} URGENT tasks. Consider one noti
   * If a REAL DRIVING DISTANCES block is present above, USE IT — it's measured, and it covers APPOINTMENT locations as well as task locations, so "that's 5 minutes from your dentist" is a fact you can state when the pair is listed. Only suggest combining when the pair is marked "SAME TRIP" or "reasonable to combine", and you may state the real number ("they're only 6 minutes apart"). Never suggest combining a pair marked "NOT worth combining", and never state a distance that isn't in that block.
   * If there is NO distances block, frame it as a decline-able question ("If the dealership is anywhere near your dentist, you could knock both out in one trip — worth it?") and never state a drive time.
   * NEVER suggest combining two FIXED APPOINTMENTS with each other — they have set times and can't be "knocked out" together. Pairing is only ever an errand (a TASK with a LOCATION) tacked onto ONE appointment, on the way there or on the way back.
-  * TIME OF DAY MATTERS: only pair an errand with an appointment that falls at a normal errand hour (roughly 8 AM – 7 PM). An appointment marked OFF-HOURS is never an anchor — stores are closed or it's just a weird time to run errands. Don't suggest an errand for a moment when the place is likely closed.
+  * TIME OF DAY MATTERS: only pair an errand with an appointment that falls at a normal errand hour (8 AM – 6 PM). Assume a business could be closed outside that window — many close by 6 PM, and we don't know the specific store's hours. An appointment marked OFF-HOURS is never an anchor — stores are closed or it's just a weird time to run errands. Don't suggest an errand for a moment when the place is likely closed.
 - delay_minutes: minutes from NOW to send this nudge (e.g., 30 = 30 min from now, 120 = 2 hours from now).
 - Don't schedule past ${cutoffLabel}.
 - You decide HOW MANY nudges. There's no cap, no formula. Use your judgment — some days need 2, some need 6.
