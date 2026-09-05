@@ -21,11 +21,23 @@ export function openSmsApp(phone, message) {
     } catch (e) { /* fall through to anchor */ }
   }
 
-  const a = document.createElement('a');
-  a.href = url;
-  a.rel = 'noopener';
-  a.style.display = 'none';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(() => a.remove(), 0);
+  // Web / unknown wrapper: navigate a throwaway iframe instead of the top
+  // frame. The OS still picks up the sms: intent, but the visible page never
+  // navigates — so no blank white screen if the scheme isn't renderable.
+  const frame = document.createElement('iframe');
+  frame.style.display = 'none';
+  document.body.appendChild(frame);
+  try {
+    frame.contentWindow.location.href = url;
+  } catch (e) {
+    const a = document.createElement('a');
+    a.href = url;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.style.display = 'none';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => a.remove(), 0);
+  }
+  setTimeout(() => frame.remove(), 3000);
 }
