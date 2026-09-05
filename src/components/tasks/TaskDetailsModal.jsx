@@ -58,6 +58,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import LaunchButtons from "../launch/LaunchButtons";
+import LocationField from "./LocationField";
 import { useToast } from "@/components/ui/use-toast";
 
 export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete, onComplete, theme, itemClassification }) {
@@ -116,10 +117,16 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
         reminderDateRef.current = '';
         reminderTimeRef.current = '';
       }
-      if (task.event_time) {
-        const ed = new Date(task.event_time);
+      // Events captured by the parser store the date on next_reminder and may
+      // have no separate event_time yet — fall back to it so the pickers open
+      // pre-filled with the date the event already has.
+      const eventSource = task.event_time || task.next_reminder;
+      if (eventSource) {
+        const ed = new Date(eventSource);
         setEventDate(`${ed.getFullYear()}-${String(ed.getMonth()+1).padStart(2,'0')}-${String(ed.getDate()).padStart(2,'0')}`);
-        setEventTime(`${String(ed.getHours()).padStart(2,'0')}:${String(ed.getMinutes()).padStart(2,'0')}`);
+        setEventTime(task.day_only_task && !task.event_time
+          ? ''
+          : `${String(ed.getHours()).padStart(2,'0')}:${String(ed.getMinutes()).padStart(2,'0')}`);
       } else {
         setEventDate('');
         setEventTime('');
@@ -1774,6 +1781,16 @@ Return JSON:
                 )
               )}
 
+              {/* Location — where this happens. Available for anything that
+                   can have a place: events and regular tasks/errands. */}
+              {currentClassification !== 'birthday' && (
+                <LocationField
+                  task={task}
+                  theme={theme}
+                  onSave={(loc) => handleUpdateField('location', loc)}
+                />
+              )}
+
               {/* Event date & time — editable for event tasks. Setting it
                    regenerates the lead-time reminder schedule automatically. */}
               {currentType === 'event' && (
@@ -1781,9 +1798,17 @@ Return JSON:
                   <PopoverTrigger asChild>
                     <button className="cursor-pointer hover:opacity-80 transition-opacity bg-indigo-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
                       <CalendarClock className="w-3 h-3" />
-                      {task.event_time
-                        ? `Event ${formatReminderDate(task.event_time)} • ${formatReminderTime(task.event_time)}`
-                        : 'Set Event Date & Time'}
+                      {(() => {
+                        // The event's date may live on next_reminder (that's
+                        // what the parser sets) — showing "Set Event Date &
+                        // Time" when a date is already known was just wrong.
+                        const when = task.event_time || task.next_reminder;
+                        if (!when) return 'Set Event Date & Time';
+                        const dateStr = isEvent ? formatEventDateRange() : formatReminderDate(when);
+                        return task.day_only_task && !task.event_time
+                          ? `Event ${dateStr} • Add time`
+                          : `Event ${dateStr} • ${formatReminderTime(when)}`;
+                      })()}
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className={`w-[22rem] max-w-[calc(100vw-1.5rem)] max-h-[85vh] overflow-y-auto p-4 ${
