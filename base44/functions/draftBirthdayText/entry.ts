@@ -8,7 +8,7 @@ export default async function(req) {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { personName, instructions, formal } = await req.json();
+    const { personName, instructions, formal, relationship } = await req.json();
     if (!personName) return Response.json({ error: 'personName is required' }, { status: 400 });
 
     const tone = formal
@@ -19,8 +19,13 @@ export default async function(req) {
       ? `The sender wants to include this idea: "${instructions.trim()}". Incorporate it naturally into the message.`
       : '';
 
+    const relationshipContext = relationship?.trim()
+      ? `This person is the sender's ${relationship.trim()}. Let that relationship shape the warmth, wording, and what's appropriate to say — do NOT literally state the relationship label in the message unless it sounds natural.`
+      : '';
+
     const prompt = `Write a short birthday text message for ${personName}.
 
+${relationshipContext}
 ${tone}
 ${userGuidance}
 

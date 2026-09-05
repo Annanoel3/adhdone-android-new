@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import ContactPickerButton from "./ContactPickerButton";
+import BirthdayRelationshipDialog from "./BirthdayRelationshipDialog";
 import { openSmsApp } from "@/components/utils/openSmsApp";
 
 /**
@@ -32,6 +33,8 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
   const [aiFormal, setAiFormal] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
   const [phone, setPhone] = useState("");
+  const [relationship, setRelationship] = useState("");
+  const [askRelationship, setAskRelationship] = useState(false);
 
   const personName = birthdayTask?.birthday_person || "Birthday";
 
@@ -46,36 +49,33 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
       return;
     }
 
-    let cancelled = false;
-
-    const fetchDraft = async () => {
-      setLoading(true);
-      try {
-        const response = await base44.functions.invoke('draftBirthdayText', {
-          personName,
-        });
-        const data = response.data || response;
-        if (!cancelled && data.message) {
-          setDraft(data.message);
-        }
-      } catch (e) {
-        console.error('[BirthdayTextDialog] Failed to draft:', e);
-        if (!cancelled) {
-          setDraft(`Happy Birthday ${personName}! Hope you have a great day!`);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    };
-    fetchDraft();
-    return () => { cancelled = true; };
+    // Ask how they're related first — the tone of the message depends on it.
+    setAskRelationship(true);
   }, [isOpen, birthdayTask]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const fetchDraft = async (rel) => {
+    setLoading(true);
+    try {
+      const response = await base44.functions.invoke('draftBirthdayText', {
+        personName,
+        relationship: rel || "",
+      });
+      const data = response.data || response;
+      if (data.message) setDraft(data.message);
+    } catch (e) {
+      console.error('[BirthdayTextDialog] Failed to draft:', e);
+      setDraft(`Happy Birthday ${personName}! Hope you have a great day!`);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleRegenerate = async () => {
     setRegenerating(true);
     try {
       const response = await base44.functions.invoke('draftBirthdayText', {
         personName,
+        relationship,
         instructions: aiInstructions,
         formal: aiFormal,
       });
@@ -126,6 +126,17 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
 
   return (
     <>
+      <BirthdayRelationshipDialog
+        isOpen={askRelationship}
+        personName={personName}
+        onClose={() => setAskRelationship(false)}
+        onConfirm={(rel) => {
+          setRelationship(rel);
+          setAskRelationship(false);
+          fetchDraft(rel);
+        }}
+      />
+
       <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
