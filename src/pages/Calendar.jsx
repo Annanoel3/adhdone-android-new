@@ -432,8 +432,8 @@ export default function Calendar() {
 
         {/* Calendar view — in-app tasks + imported events */}
         <Card className={`border-none shadow-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
-          <CardContent className="p-4 md:p-6">
-            <CalendarGrid tasks={tasks} events={syncedEvents} isDark={isDark} onItemOpen={handleItemOpen} />
+          <CardContent className="p-2 md:p-6">
+            <CalendarGrid tasks={tasks} events={syncedEvents} isDark={isDark} onItemOpen={handleItemOpen} user={user} />
           </CardContent>
         </Card>
 

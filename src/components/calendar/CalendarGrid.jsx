@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { base44 } from '@/api/base44Client';
 import { keywordEmojiForTitle, resolveEmojiWithAI, getCachedAiEmoji } from '@/components/utils/calendarEmojiResolver';
 import WeekAgenda from '@/components/calendar/WeekAgenda';
 
@@ -65,7 +66,7 @@ function sameDayKey(a, b) {
   return dateKey(a) === dateKey(b);
 }
 
-export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOpen }) {
+export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOpen, user }) {
   // Always open on today — browsing into the past/future never sticks between
   // app opens.
   const [cursor, setCursor] = useState(() => {
@@ -77,9 +78,18 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
     const stored = localStorage.getItem('calendar_use_emoji');
     return stored === null ? true : stored === 'true';
   });
+  // Profile is the source of truth so the choice survives app restarts and
+  // follows the user across devices; localStorage is just a fast first paint.
+  useEffect(() => {
+    if (typeof user?.calendar_use_emoji === 'boolean') {
+      setUseEmoji(user.calendar_use_emoji);
+      localStorage.setItem('calendar_use_emoji', String(user.calendar_use_emoji));
+    }
+  }, [user]);
   const toggleEmojiMode = (val) => {
     setUseEmoji(val);
     localStorage.setItem('calendar_use_emoji', String(val));
+    base44.auth.updateMe({ calendar_use_emoji: val }).catch(() => {});
   };
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('calendar_view_mode') || 'month');
   const [weekCursor, setWeekCursor] = useState(() => new Date());
@@ -344,7 +354,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
 
       {/* Day-of-week header (month grid only) */}
       {viewMode === 'month' && (
-        <div className="grid grid-cols-7 gap-1">
+        <div className="grid grid-cols-7 gap-0.5">
           {DAY_LABELS.map((d) => (
             <div key={d} className={`text-center text-xs font-semibold py-1 ${textSecondary}`}>
               {d}
@@ -370,7 +380,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           textSecondary={textSecondary}
         />
       ) : (
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-0.5">
         {cells.map((cell, idx) => {
           if (!cell) return <div key={`b-${idx}`} className={`min-h-[58px] rounded-lg border ${cellMuted}`} />;
           const k = dateKey(cell);
@@ -394,7 +404,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
             <button
               key={k}
               onClick={() => setSelected(cell)}
-              className={`min-h-[58px] rounded-lg border p-1 text-left transition-all ${
+              className={`min-h-[58px] rounded-lg border px-0.5 py-1 text-left transition-all overflow-hidden ${
                 isSelected
                   ? 'ring-2 ring-blue-400 ' + cellBase
                   : cellBase + ' hover:border-blue-300'
@@ -432,15 +442,15 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                         return (
                           <div
                             key={`span-${i}`}
-                            className={`flex items-center gap-0.5 text-[10px] truncate ${colors.pill} ${colors.text} ${
-                              isStart ? 'rounded-l-full pl-1 -mr-1' : 'rounded-r-full pr-1 -ml-1'
+                            className={`flex items-center gap-0.5 text-[9px] leading-tight tracking-tight overflow-hidden whitespace-nowrap ${colors.pill} ${colors.text} ${
+                              isStart ? 'rounded-l-full pl-0.5 -mr-0.5' : 'rounded-r-full pr-0.5 -ml-0.5'
                             }`}
                             title={it.title}
                           >
                             {useEmoji ? (
                               <span className="text-xs flex-shrink-0">{emojiFor(it)}</span>
                             ) : (
-                              <span className="truncate flex-1">{it.title}</span>
+                              <span className="overflow-hidden whitespace-nowrap flex-1">{it.title}</span>
                             )}
                           </div>
                         );
@@ -458,7 +468,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                     ) : (
                       <div className="space-y-0.5">
                         {regularShown.map((it, i) => (
-                          <div key={i} className={`text-[10px] truncate rounded px-1 ${it.overdue ? 'bg-red-100 text-red-700 font-medium' : textSecondary}`} title={it.title}>
+                          <div key={i} className={`text-[9px] leading-tight tracking-tight overflow-hidden whitespace-nowrap rounded px-0.5 ${it.overdue ? 'bg-red-100 text-red-700 font-medium' : textSecondary}`} title={it.title}>
                             {it.title}
                           </div>
                         ))}
