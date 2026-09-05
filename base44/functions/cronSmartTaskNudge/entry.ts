@@ -380,10 +380,15 @@ async function generateDailySchedule(
   // Measured driving distances between the locations the user explicitly typed
   // in. Without this the LLM can only ask "if these are near each other…";
   // with it, it can say whether they actually are.
+  // Today's appointments count too: an errand near a place the user is already
+  // driving to is the strongest same-trip suggestion there is, so event
+  // locations go into the same matrix as task locations.
   let proximityNotes = '';
-  const locatedTasks = tasks.filter(t => (t.location || '').trim());
-  if (locatedTasks.length >= 2 || (locatedTasks.length === 1 && homeZip)) {
-    const prox = await getProximity(locatedTasks.map(t => t.location.trim()), homeZip);
+  const located = [...tasks, ...todaysEvents]
+    .map(t => (t.location || '').trim())
+    .filter(Boolean);
+  if (located.length >= 2 || (located.length === 1 && homeZip)) {
+    const prox = await getProximity(located, homeZip);
     proximityNotes = formatProximityNotes(prox);
   }
 
@@ -394,7 +399,8 @@ async function generateDailySchedule(
     try {
       t = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(when));
     } catch { t = ''; }
-    return `- "${e.title}" at ${t}`;
+    const loc = (e.location || '').trim();
+    return `- "${e.title}" at ${t}${loc ? `, LOCATION: ${loc}` : ''}`;
   }).join('\n');
 
   const prompt = `You are the personal assistant to a brilliant but disorganized ADHD boss. Your job: look at their full task list and decide what reminders they need TODAY — what to surface, when, and what to say.
@@ -431,7 +437,7 @@ ${urgentCount >= 2 ? `- There are ${urgentCount} URGENT tasks. Consider one noti
 - LOCATION IS DATA, NOT A GUESS. A task has a location ONLY if the task line shows an explicit "LOCATION: ..." value (the user typed it in themselves). No LOCATION field = no location, period. Tasks with no LOCATION field NEVER get a "combine errands" / same-trip suggestion, no matter what their title sounds like.${homeZip ? ` The user's home base is zip ${homeZip} — you may use it to judge roughly whether two locations are in the same area.` : ''}
 - NEVER ASSUME A TASK MEANS LEAVING THE HOUSE. Most things can be done online, by phone, or at home — ordering, booking, paying, renewing, even "getting" something. A task only counts as an out-of-the-house errand when the wording SAYS SO: it explicitly uses a go-somewhere verb ("drop off", "pick up in store", "return to the store", "mail", "go to", "stop by", "drive to", "test drive", "in-person appointment"), or it explicitly names a physical place the user is going to ("at the DMV", "the dealership on Main"). A bare name, a brand, a store name, or a person's name is NOT enough — "Get Trevi" or "Men's Warehouse" could easily be an online order or a phone call. Energy level says nothing about location. If it's not explicit, it is NOT an errand.
 - BATCH ERRANDS (two birds, one trip): only ever suggest this when TWO OR MORE tasks each carry an explicit LOCATION field (or one located task lines up with a FIXED APPOINTMENT today) — time it shortly BEFORE the appointment so they can plan. If you're inferring the location from a name or from the task's wording, do NOT send this nudge at all. List every task you mention in task_indexes.
-  * If a REAL DRIVING DISTANCES block is present above, USE IT — it's measured. Only suggest combining when the pair is marked "SAME TRIP" or "reasonable to combine", and you may state the real number ("they're only 6 minutes apart"). Never suggest combining a pair marked "NOT worth combining", and never state a distance that isn't in that block.
+  * If a REAL DRIVING DISTANCES block is present above, USE IT — it's measured, and it covers APPOINTMENT locations as well as task locations, so "that's 5 minutes from your dentist" is a fact you can state when the pair is listed. Only suggest combining when the pair is marked "SAME TRIP" or "reasonable to combine", and you may state the real number ("they're only 6 minutes apart"). Never suggest combining a pair marked "NOT worth combining", and never state a distance that isn't in that block.
   * If there is NO distances block, frame it as a decline-able question ("If the dealership is anywhere near your dentist, you could knock both out in one trip — worth it?") and never state a drive time.
 - delay_minutes: minutes from NOW to send this nudge (e.g., 30 = 30 min from now, 120 = 2 hours from now).
 - Don't schedule past ${cutoffLabel}.
