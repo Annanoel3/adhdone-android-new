@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import ScheduledTextDialog from "./ScheduledTextDialog";
 import BirthdayTextDialog from "../birthdays/BirthdayTextDialog";
 import { cancelScheduledTextReminders } from "../utils/scheduledTextScheduler";
+import { openSmsApp } from "../utils/openSmsApp";
 
 function daysUntil(iso) {
   return Math.ceil((new Date(iso) - new Date()) / (1000 * 60 * 60 * 24));
@@ -93,7 +94,6 @@ export default function ScheduledTextsList({ tasks, user, theme, specialMode, on
   }, [birthdays, scheduledTexts]);
 
   const handleSend = async (item) => {
-    const body = encodeURIComponent(item.message);
     if (item.kind === "birthday") {
       try {
         await base44.entities.Task.update(item.id, { birthday_text_sent: true });
@@ -104,8 +104,7 @@ export default function ScheduledTextsList({ tasks, user, theme, specialMode, on
         await base44.entities.ScheduledText.update(item.id, { sent: true });
       } catch (e) { /* ignore */ }
     }
-    const cleanPhone = (item.phone || "").replace(/[^0-9+]/g, "");
-    window.location.href = cleanPhone ? `sms:${cleanPhone}?body=${body}` : `sms:?&body=${body}`;
+    openSmsApp(item.phone, item.message);
     onRefresh?.();
     loadScheduledTexts();
   };

@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import ContactPickerButton from "./ContactPickerButton";
+import { openSmsApp } from "@/components/utils/openSmsApp";
 
 /**
  * Prompts the user to draft a birthday text message when a birthday is created.
@@ -110,7 +111,6 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
 
   const handleSendText = async () => {
     if (!draft.trim()) return;
-    const body = encodeURIComponent(draft.trim());
     if (birthdayTask?.id) {
       try {
         await base44.entities.Task.update(birthdayTask.id, {
@@ -121,8 +121,7 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
         console.error('[BirthdayTextDialog] Failed to mark text as sent:', e);
       }
     }
-    const cleanPhone = phone.trim().replace(/[^0-9+]/g, "");
-    window.location.href = cleanPhone ? `sms:${cleanPhone}?body=${body}` : `sms:?&body=${body}`;
+    openSmsApp(phone, draft.trim());
   };
 
   return (

@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { scheduleReminder, cancelScheduledReminder } from "@/components/utils/reminderScheduler";
 import { cancelScheduledTextReminders } from "@/components/utils/scheduledTextScheduler";
+import { openSmsApp } from "@/components/utils/openSmsApp";
 
 /**
  * Morning-of "time to send your text" popup. Appears when a scheduled text
@@ -112,11 +113,7 @@ export default function ScheduledTextSendPopup({ user, theme }) {
     };
   }, [user?.email, check]);
 
-  const openSms = (item) => {
-    const body = encodeURIComponent(item.message);
-    const cleanPhone = (item.phone || "").replace(/[^0-9+]/g, "");
-    window.location.href = cleanPhone ? `sms:${cleanPhone}?body=${body}` : `sms:?&body=${body}`;
-  };
+  const openSms = (item) => openSmsApp(item.phone, item.message);
 
   const handleSend = async () => {
     if (!current) return;
