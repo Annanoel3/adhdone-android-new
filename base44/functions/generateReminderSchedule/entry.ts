@@ -46,8 +46,14 @@ function getEventNotificationText(label, title) {
 export default async function(req) {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    // No user-specific data is read here — this only turns a title + date into a
+    // reminder plan. It must therefore also answer service-role calls from other
+    // backend functions (captureText), which have no end-user session.
+    let user = null;
+    try { user = await base44.auth.me(); } catch { /* service-role call */ }
+    if (!user && !req.headers.get('Authorization')) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     const bodyText = await req.text();
     const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle } = JSON.parse(bodyText);
