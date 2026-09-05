@@ -373,11 +373,13 @@ Deno.serve(async (req) => {
       // message, so this is the only nudge they get when nothing is written.
       let pushTitle = entry.notification_title;
       let pushBody = entry.notification_body;
-      if (!task.birthday_text_message && (entry.kind === 'day_before' || entry.kind === 'day_of')) {
+      if (!task.birthday_text_message && (entry.kind === 'week_before' || entry.kind === 'day_before' || entry.kind === 'day_of')) {
         const person = task.birthday_person || 'Someone';
         const dateStr = new Date(nextReminderIso).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
         pushTitle = `🎂 Write a text for ${person}`;
-        pushBody = entry.kind === 'day_before'
+        pushBody = entry.kind === 'week_before'
+          ? `${person}'s birthday is in a week (${dateStr}) and you haven't written a text yet. Tap to draft one now.`
+          : entry.kind === 'day_before'
           ? `It's ${person}'s birthday tomorrow (${dateStr}) — you haven't written a text yet. Tap to draft one now.`
           : `It's ${person}'s birthday today (${dateStr}) — you haven't written a text yet. Tap to draft one now.`;
         entry.notification_title = pushTitle;
@@ -422,7 +424,7 @@ Deno.serve(async (req) => {
     const isDayOf = bdayDate.getFullYear() === now.getFullYear() &&
                     bdayDate.getMonth() === now.getMonth() &&
                     bdayDate.getDate() === now.getDate();
-    if (isDayOf && task.birthday_text_message && task.birthday_text_sent !== true) {
+    if (isDayOf && task.birthday_text_sent !== true) {
       const owner = userMap[task.notification_recipient_email];
       const timeZone = owner?.timezone || null;
       if (timeZone) {
@@ -444,8 +446,10 @@ Deno.serve(async (req) => {
             const playerIds = owner?.onesignal_player_ids || [];
             const pushPayload: any = {
               app_id: bAppId,
-              headings: { en: `🎂 Text ${task.birthday_person}!` },
-              contents: { en: `It's ${task.birthday_person}'s birthday today — don't forget to send your birthday text!` },
+              headings: { en: task.birthday_text_message ? `🎂 Text ${task.birthday_person}!` : `🎂 Write a text for ${task.birthday_person}` },
+              contents: { en: task.birthday_text_message
+                ? `It's ${task.birthday_person}'s birthday today — don't forget to send your birthday text!`
+                : `It's ${task.birthday_person}'s birthday today and you haven't written a text yet. Tap to draft one now.` },
               data: { screen: '/TaskNotification', taskId: task.id, type: 'birthday_text_reminder' },
             };
             if (playerIds.length > 0) {
