@@ -59,6 +59,7 @@ import AppGuideModal from "./components/shared/AppGuideModal";
 import FocusModePrompt from "./components/shared/FocusModePrompt";
 import ScheduledTextSendPopup from "./components/scheduledtexts/ScheduledTextSendPopup";
 import BirthdayTextPromptPopup from "./components/birthdays/BirthdayTextPromptPopup";
+import OwnBirthdayPopup from "./components/birthdays/OwnBirthdayPopup";
 import SharedTextReceiver from "./components/shared/SharedTextReceiver";
 import HomeZipPrompt from "./components/shared/HomeZipPrompt";
 import QuickCapturePrompt from "./components/shared/QuickCapturePrompt";
@@ -1018,6 +1019,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <FocusModePrompt user={user} theme={theme} />
         <ScheduledTextSendPopup user={user} theme={theme} />
         <BirthdayTextPromptPopup user={user} theme={theme} />
+        <OwnBirthdayPopup user={user} theme={theme} />
         <SharedTextReceiver />
         <HomeZipPrompt user={user} theme={theme} />
         <QuickCapturePrompt />

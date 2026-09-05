@@ -234,6 +234,11 @@
       "type": "string",
       "description": "Name of the person whose birthday this is (for yearly birthday reminders)"
     },
+    "is_own_birthday": {
+      "type": "boolean",
+      "default": false,
+      "description": "True when this birthday is the USER'S OWN, not someone else's. Google Calendar almost always contains the account owner's birthday as a nameless yearly 'Happy birthday!' event, which would otherwise become a birthday with no name sitting in the text list asking the user to text themselves. When true the birthday is excluded from the scheduled-texts list and all 'write/send their text' prompts, and instead triggers a celebration popup for the user on the day."
+    },
     "birthday_remind_week_before": {
       "type": "boolean",
       "default": false,

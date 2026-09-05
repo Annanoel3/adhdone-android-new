@@ -40,6 +40,19 @@ function extractBirthdayPerson(title) {
   return t;
 }
 
+// Is this yearly birthday event the USER'S OWN birthday? Google auto-creates
+// the account owner's birthday as a nameless "Happy birthday!" / "🎂" event, and
+// some accounts store it as "<Owner's full name>'s birthday". Either way it must
+// NOT become a "text this person" entry — the user isn't texting themselves.
+function isOwnBirthday(title, personName, user) {
+  if (!personName) return true; // nameless birthday = the account owner's
+  const person = personName.toLowerCase().trim();
+  const fullName = (user?.full_name || '').toLowerCase().trim();
+  if (fullName && (person === fullName || fullName.startsWith(person) || person.startsWith(fullName))) return true;
+  // "my birthday" / "me"
+  return /^(my|me|mine|myself)$/.test(person);
+}
+
 // When an already-synced event's task still exists, check whether the Google
 // event's start/end changed since the last sync. If so, patch the task's
 // event dates (next_reminder, due_date, end_date for one-time events) and
@@ -371,9 +384,13 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
     let reminderInterval = 'once';
     if (isBirthday) {
       const birthdayPerson = extractBirthdayPerson(title);
-      const birthdayDisplay = birthdayPerson ? `${birthdayPerson}'s Birthday` : 'Happy Birthday';
+      const ownBirthday = isOwnBirthday(title, birthdayPerson, user);
+      const birthdayDisplay = ownBirthday
+        ? 'Your Birthday'
+        : `${birthdayPerson}'s Birthday`;
       taskRecord = {
         title: `🎂 ${birthdayDisplay}`,
+        is_own_birthday: ownBirthday,
         description: richDescription || `Imported from Google Calendar (${connectedEmail})`,
         notes: event.description || '',
         urgency: 'medium',
@@ -381,9 +398,9 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
         status: 'active',
         reminder_interval: 'once',
         recurrence_pattern: 'yearly',
-        birthday_person: birthdayPerson || null,
-        birthday_remind_week_before: true,
-        birthday_remind_day_before: true,
+        birthday_person: ownBirthday ? null : birthdayPerson,
+        birthday_remind_week_before: !ownBirthday,
+        birthday_remind_day_before: !ownBirthday,
         birthday_remind_day_of: true,
         classification: 'birthday',
         next_reminder: nextReminderDate.toISOString(),

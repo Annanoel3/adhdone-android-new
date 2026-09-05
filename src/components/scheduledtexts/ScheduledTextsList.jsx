@@ -53,7 +53,8 @@ export default function ScheduledTextsList({ tasks, user, theme, specialMode, on
   const birthdays = useMemo(
     () =>
       (tasks || [])
-        .filter((t) => (t.birthday_person || t.classification === "birthday") && t.status === "active" && t.next_reminder)
+        // The user's own birthday is a celebration, not someone to text.
+        .filter((t) => !t.is_own_birthday && (t.birthday_person || t.classification === "birthday") && t.status === "active" && t.next_reminder)
         .sort((a, b) => new Date(a.next_reminder) - new Date(b.next_reminder)),
     [tasks]
   );

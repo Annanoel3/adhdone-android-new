@@ -71,6 +71,7 @@ export default function ScheduledTextSendPopup({ user, theme }) {
       const tasks = await base44.entities.Task.filter({ status: "active" }, "-next_reminder", 500);
       const dueBirthdays = (tasks || [])
         .filter((t) => {
+          if (t.is_own_birthday) return false;
           if (!t.birthday_person || !t.birthday_text_message || t.birthday_text_sent) return false;
           if (!t.next_reminder) return false;
           const bd = new Date(t.next_reminder);
