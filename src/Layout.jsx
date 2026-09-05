@@ -238,6 +238,17 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           const { App } = window.Capacitor.Plugins;
           
           App.addListener('backButton', ({ canGoBack }) => {
+            // A popup/dialog/sheet is open — back should close it, never exit
+            // the app. Dialogs don't push history entries, so without this the
+            // back press on Home while a modal is open would quit the app.
+            const openOverlay = document.querySelector(
+              '[data-state="open"][role="dialog"], [data-state="open"][role="alertdialog"], [data-radix-popper-content-wrapper] [data-state="open"]'
+            );
+            if (openOverlay) {
+              document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+              openOverlay.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+              return;
+            }
             if (location.pathname === createPageUrl('Home') || !canGoBack) {
               App.exitApp();
             } else {
