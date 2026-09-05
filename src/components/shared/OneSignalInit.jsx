@@ -19,20 +19,30 @@ function isRunningInCapacitor() {
     return window.Capacitor?.isNativePlatform?.() ?? false;
 }
 
-// Handle incoming notification data and route to the correct in-app screen
+// Server-side breadcrumb so we can see whether a notification tap actually
+// reached the web layer (phone console logs aren't reachable).
+function traceOpen(source, data) {
+  base44.functions.invoke('captureTrace', {
+    step: `notificationOpened:${source}`,
+    detail: data || null,
+  }).catch(() => {});
+}
+
+// Handle incoming notification data and route to the correct in-app screen.
+// Every task-bearing notification navigates to the task's own screen so the tap
+// lands somewhere unmistakable instead of just opening the app on Home.
 function handleNotificationData(data, navigate) {
   if (!data) return;
   const taskId = data.taskId || data.task_id;
   if (!taskId) return;
 
-  // Birthday notifications open the task directly so the user can draft/send the text
-  const isBirthdayType = data.type === 'birthday_reminder' || data.type === 'birthday_text_reminder';
-  if (isBirthdayType && data.screen && navigate) {
-    navigate(`${data.screen}?taskId=${taskId}`);
+  if (navigate) {
+    const screen = data.screen || '/TaskNotification';
+    navigate(`${screen}?taskId=${taskId}`);
     return;
   }
 
-  // Other notifications: dispatch event for modal-based follow-up
+  // No router available — fall back to the modal-based follow-up
   sessionStorage.setItem('pending_task_followup', taskId);
   window.dispatchEvent(new CustomEvent('show-task-followup', { detail: { taskId } }));
 }
@@ -48,11 +58,13 @@ export default function OneSignalInit({ user }) {
       if (NotifyBridge) {
         NotifyBridge.addListener?.('notificationOpened', (event) => {
           const data = event?.notification?.data || event?.data;
+          traceOpen('warm', data);
           handleNotificationData(data, navigate);
         });
         // Also check for launch notification
         NotifyBridge.getLaunchNotification?.().then((result) => {
           if (result?.notification?.data) {
+            traceOpen('cold', result.notification.data);
             handleNotificationData(result.notification.data, navigate);
           }
         }).catch(() => {});
