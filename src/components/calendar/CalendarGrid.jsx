@@ -18,6 +18,7 @@ const KIND_EMOJI = {
   imported_event: '📆',
   imported_task: '✅',
   task: '✅',
+  payment: '💳',
 };
 
 
@@ -27,6 +28,7 @@ const KIND_BADGE = {
   imported_event: 'bg-indigo-100 text-indigo-700 border-indigo-200',
   imported_task: 'bg-blue-100 text-blue-700 border-blue-200',
   task: 'bg-amber-100 text-amber-700 border-amber-200',
+  payment: 'bg-emerald-100 text-emerald-700 border-emerald-200',
 };
 
 const KIND_LABEL = {
@@ -34,6 +36,7 @@ const KIND_LABEL = {
   imported_event: 'Event',
   imported_task: 'Task',
   task: 'Task',
+  payment: 'Payment',
 };
 
 // Distinct color palette for multi-day span bars so overlapping spans are
@@ -114,6 +117,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
       c === 'event' ? 'imported_event'
         : c === 'birthday' ? 'birthday'
         : c === 'task' ? 'task'
+        : c === 'payment' ? 'payment'
         : null;
 
     tasks.forEach((t) => {
@@ -503,6 +507,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
         <span className="flex items-center gap-1"><span>🎂</span> Birthday</span>
         <span className="flex items-center gap-1"><span>📆</span> Event</span>
         <span className="flex items-center gap-1"><span>✅</span> Task</span>
+        <span className="flex items-center gap-1"><span>💳</span> Payment</span>
         <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" /> Overdue</span>
         <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-700 inline-block" /> Back burner</span>
       </div>
