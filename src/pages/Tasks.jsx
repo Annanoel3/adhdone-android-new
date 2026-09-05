@@ -49,7 +49,13 @@ export default function Tasks() {
   useEffect(() => {
     loadTasks();
     const handleTasksChanged = () => loadTasks();
+    // Tasks captured from the native share sheet land while the app is in the
+    // background — refetch whenever the app comes back to the foreground.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') loadTasks();
+    };
     window.addEventListener('tasks-changed', handleTasksChanged);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     const interval = setInterval(() => {
       const newTheme = localStorage.getItem('adhd_theme') || 'minimalist';
       setTheme(newTheme);
@@ -58,6 +64,7 @@ export default function Tasks() {
     }, 100);
     return () => {
       window.removeEventListener('tasks-changed', handleTasksChanged);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(interval);
     };
   }, []);
