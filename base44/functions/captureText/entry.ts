@@ -56,7 +56,7 @@ Deno.serve(async (req) => {
     const created: Record<string, unknown>[] = [];
 
     for (const piece of pieces) {
-      const parsed = await runTaskParse(base44, buildTaskParsePrompt(piece));
+      const parsed = await runTaskParse(base44, buildTaskParsePrompt(piece, tz), tz);
       if (!parsed?.title) continue;
 
       // original_input keeps the user's verbatim words (the whole shared text

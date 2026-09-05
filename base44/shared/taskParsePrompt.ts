@@ -23,8 +23,23 @@ export const TASK_PARSE_SYSTEM_PROMPT =
   "text like '[Name]', 'TBD' or 'someone' must never appear. " +
   "Respond with valid JSON only, populating every field in the requested schema.";
 
-export function buildTaskParsePrompt(inputText: string): string {
-  const now = new Date();
+// The server runs in UTC, but "today" has to be the USER's today. At 9pm
+// Friday in Central America it's already Saturday in UTC — so without this,
+// "this Saturday" resolved to a week out. Returns a Date whose local getters
+// (getDay/getDate/getHours) read the wall-clock in the given zone.
+export function nowInTimezone(tz?: string): Date {
+  if (!tz) return new Date();
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz, hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date());
+  const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  return new Date(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
+}
+
+export function buildTaskParsePrompt(inputText: string, tz?: string): string {
+  const now = nowInTimezone(tz);
   const fmt = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 

@@ -1,4 +1,4 @@
-import { TASK_PARSE_SYSTEM_PROMPT, buildTaskParsePrompt } from "./taskParsePrompt.ts";
+import { TASK_PARSE_SYSTEM_PROMPT, buildTaskParsePrompt, nowInTimezone } from "./taskParsePrompt.ts";
 import { fixParsedTaskTitles } from "./fixMisheardVerbs.ts";
 import { resolveParsedDates } from "./resolveDateWords.ts";
 
@@ -26,7 +26,7 @@ const REPEAT_VALUES = [
   'daily', 'every_other_day',
 ];
 
-export async function runTaskParse(base44: any, prompt: string) {
+export async function runTaskParse(base44: any, prompt: string, tz?: string) {
   // Callers are supposed to pass a prompt already built by
   // buildTaskParsePrompt, which carries the one thing the model cannot work out
   // for itself: today's real calendar. If raw text arrives instead, build it
@@ -34,7 +34,7 @@ export async function runTaskParse(base44: any, prompt: string) {
   // without the calendar it answers "Saturday" (or nothing) instead of a date.
   const fullPrompt = prompt?.includes('THE CALENDAR')
     ? prompt
-    : buildTaskParsePrompt(prompt || '');
+    : buildTaskParsePrompt(prompt || '', tz);
 
   const raw = await base44.asServiceRole.integrations.Core.InvokeLLM({
     prompt: `${TASK_PARSE_SYSTEM_PROMPT}\n\n${fullPrompt}`,
@@ -73,6 +73,6 @@ export async function runTaskParse(base44: any, prompt: string) {
     : null;
   // A day the user actually stated must never be lost to wording — "Saturday"
   // becomes a real date here rather than dying in the scheduler.
-  resolveParsedDates(parsed);
+  resolveParsedDates(parsed, nowInTimezone(tz));
   return fixParsedTaskTitles(parsed);
 }
