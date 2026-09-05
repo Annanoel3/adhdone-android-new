@@ -579,49 +579,61 @@ Return JSON:
 }
 
 // Creates one advance-eligible task with the user's chosen lead time.
+// The task KEEPS the time the user actually said (next_reminder = the real
+// time); the advance lead is an extra push, not a shift of the task itself.
+// Shifting next_reminder made "12 pm + 1 hour before" show up as an 11 AM task.
 export async function createAdvanceTask(taskData, currentUser, minutesBefore) {
   const eventTime = new Date(taskData.next_reminder);
-  const reminderTime = minutesBefore > 0
+  const advanceTime = minutesBefore > 0
     ? new Date(eventTime.getTime() - (minutesBefore * 60 * 1000))
-    : eventTime;
+    : null;
 
-  const effectiveReminderTime = reminderTime.getTime() <= Date.now() + 2 * 60 * 1000
-    ? eventTime
-    : reminderTime;
+  const createdTask = await base44.entities.Task.create({ ...taskData });
 
-  const createdTask = await base44.entities.Task.create({
-    ...taskData,
-    next_reminder: effectiveReminderTime.toISOString(),
-  });
+  const buttons = [
+    { id: "snooze_15", text: "Snooze 15 min" },
+    { id: "snooze_60", text: "Snooze 1 hour" },
+    { id: "complete", text: "✅ Done" }
+  ];
+  const pushes = [];
 
-  if (effectiveReminderTime.getTime() > Date.now()) {
-    try {
+  if (advanceTime && advanceTime.getTime() > Date.now() + 2 * 60 * 1000) {
+    const lead = minutesBefore >= 60 ? `${minutesBefore / 60} hour${minutesBefore > 60 ? 's' : ''}` : `${minutesBefore} min`;
+    pushes.push({
+      title: "📋 Upcoming Task",
+      body: `In ${lead}: ${createdTask.title}\n\nTap to view details.`,
+      sendAtISO: advanceTime.toISOString(),
+      type: 'advance_reminder',
+    });
+  }
+  if (eventTime.getTime() > Date.now()) {
+    pushes.push({
+      title: "Task Reminder 📋",
+      body: `${createdTask.title}\n\nTap to mark as complete!`,
+      sendAtISO: eventTime.toISOString(),
+      type: 'task_reminder',
+    });
+  }
+
+  try {
+    const ids = [];
+    for (const p of pushes) {
       const notificationId = await scheduleReminder({
         email: currentUser.email,
-        title: minutesBefore > 0 ? "📋 Upcoming Task" : "Task Reminder 📋",
-        body: minutesBefore > 0
-          ? `In ${minutesBefore >= 60 ? `${minutesBefore / 60} hour${minutesBefore > 60 ? 's' : ''}` : `${minutesBefore} min`}: ${createdTask.title}\n\nTap to view details.`
-          : `${createdTask.title}\n\nTap to mark as complete!`,
-        sendAtISO: effectiveReminderTime.toISOString(),
+        title: p.title,
+        body: p.body,
+        sendAtISO: p.sendAtISO,
         taskId: createdTask.id,
-        data: {
-          screen: "/TaskNotification",
-          taskId: createdTask.id,
-          urgency: createdTask.urgency,
-          type: minutesBefore > 0 ? 'advance_reminder' : 'task_reminder'
-        },
-        buttons: [
-          { id: "snooze_15", text: "Snooze 15 min" },
-          { id: "snooze_60", text: "Snooze 1 hour" },
-          { id: "complete", text: "✅ Done" }
-        ]
+        data: { screen: "/TaskNotification", taskId: createdTask.id, urgency: createdTask.urgency, type: p.type },
+        buttons,
       });
-      if (notificationId) {
-        base44.entities.Task.update(createdTask.id, { onesignal_notification_ids: [notificationId] });
-      }
-    } catch (error) {
-      console.error("Failed to schedule reminder:", error);
+      if (notificationId) ids.push(notificationId);
     }
+    if (ids.length) {
+      base44.entities.Task.update(createdTask.id, { onesignal_notification_ids: ids });
+    }
+  } catch (error) {
+    console.error("Failed to schedule reminder:", error);
   }
   return createdTask;
 }

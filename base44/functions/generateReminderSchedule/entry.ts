@@ -27,7 +27,7 @@ function getEventSchedule() {
   return [
     { days_before: 1, hour: 20, minute: 0, relative_minutes_before: null, label: 'night before' },
     { days_before: null, hour: null, minute: null, relative_minutes_before: 60, label: '1 hour before' },
-    { days_before: null, hour: null, minute: null, relative_minutes_before: 0, label: 'right now' },
+    { days_before: null, hour: null, minute: null, relative_minutes_before: 0, label: 'at the time' },
   ];
 }
 
@@ -37,7 +37,7 @@ function getEventNotificationText(label, title) {
   const templates = {
     'night before': { title: `🎉 ${t}`, body: `Heads up! Your "${t}" is tomorrow. Don't forget to prep! ✨` },
     '1 hour before': { title: `⏰ ${t}`, body: `Almost time! Your "${t}" is in about an hour. Time to head out! 🚗` },
-    'right now': { title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` },
+    'at the time': { title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` },
   };
 
   return templates[label] || { title: `🎉 ${t}`, body: `Reminder: ${t}` };
@@ -351,7 +351,7 @@ Examples:
       if (!hasAtTime && scheduled > now) {
         reminders.push({
           days_before: null, hour: null, minute: null, relative_minutes_before: 0,
-          label: 'right now',
+          label: 'at the time',
           notification_title: `🔔 ${t}`,
           notification_body: `It's time — "${t}". You've got this! 💪`,
         });
