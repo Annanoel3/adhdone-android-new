@@ -383,8 +383,19 @@ async function generateDailySchedule(
   // Today's appointments count too: an errand near a place the user is already
   // driving to is the strongest same-trip suggestion there is, so event
   // locations go into the same matrix as task locations.
+  // Only appointments at a normal errand hour (8 AM – 7 PM local) can anchor a
+  // "stop by on the way" suggestion — nobody wants to be told to grab cat food
+  // on the way to a 9 PM event.
+  const eventLocalHour = (e: any) => {
+    const when = e.event_time || e.next_reminder;
+    try {
+      return parseInt(new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', hour12: false }).format(new Date(when)), 10);
+    } catch { return -1; }
+  };
+  const isErrandFriendly = (e: any) => { const h = eventLocalHour(e); return h >= 8 && h < 19; };
+
   let proximityNotes = '';
-  const located = [...tasks, ...todaysEvents]
+  const located = [...tasks, ...todaysEvents.filter(isErrandFriendly)]
     .map(t => (t.location || '').trim())
     .filter(Boolean);
   if (located.length >= 2 || (located.length === 1 && homeZip)) {
@@ -400,7 +411,8 @@ async function generateDailySchedule(
       t = new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(when));
     } catch { t = ''; }
     const loc = (e.location || '').trim();
-    return `- "${e.title}" at ${t}${loc ? `, LOCATION: ${loc}` : ''}`;
+    const offHours = loc && !isErrandFriendly(e) ? ' — OFF-HOURS: never pair an errand with this one' : '';
+    return `- "${e.title}" at ${t}${loc ? `, LOCATION: ${loc}` : ''}${offHours}`;
   }).join('\n');
 
   const prompt = `You are the personal assistant to a brilliant but disorganized ADHD boss. Your job: look at their full task list and decide what reminders they need TODAY — what to surface, when, and what to say.
@@ -439,6 +451,8 @@ ${urgentCount >= 2 ? `- There are ${urgentCount} URGENT tasks. Consider one noti
 - BATCH ERRANDS (two birds, one trip): only ever suggest this when TWO OR MORE tasks each carry an explicit LOCATION field (or one located task lines up with a FIXED APPOINTMENT today) — time it shortly BEFORE the appointment so they can plan. If you're inferring the location from a name or from the task's wording, do NOT send this nudge at all. List every task you mention in task_indexes.
   * If a REAL DRIVING DISTANCES block is present above, USE IT — it's measured, and it covers APPOINTMENT locations as well as task locations, so "that's 5 minutes from your dentist" is a fact you can state when the pair is listed. Only suggest combining when the pair is marked "SAME TRIP" or "reasonable to combine", and you may state the real number ("they're only 6 minutes apart"). Never suggest combining a pair marked "NOT worth combining", and never state a distance that isn't in that block.
   * If there is NO distances block, frame it as a decline-able question ("If the dealership is anywhere near your dentist, you could knock both out in one trip — worth it?") and never state a drive time.
+  * NEVER suggest combining two FIXED APPOINTMENTS with each other — they have set times and can't be "knocked out" together. Pairing is only ever an errand (a TASK with a LOCATION) tacked onto ONE appointment, on the way there or on the way back.
+  * TIME OF DAY MATTERS: only pair an errand with an appointment that falls at a normal errand hour (roughly 8 AM – 7 PM). An appointment marked OFF-HOURS is never an anchor — stores are closed or it's just a weird time to run errands. Don't suggest an errand for a moment when the place is likely closed.
 - delay_minutes: minutes from NOW to send this nudge (e.g., 30 = 30 min from now, 120 = 2 hours from now).
 - Don't schedule past ${cutoffLabel}.
 - You decide HOW MANY nudges. There's no cap, no formula. Use your judgment — some days need 2, some need 6.
