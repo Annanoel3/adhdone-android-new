@@ -23,7 +23,8 @@ import {
   Cake,
   Rocket,
   Moon,
-  Sparkles
+  Sparkles,
+  LayoutGrid
 } from "lucide-react";
 
 export default function AppGuideModal({ isOpen, onClose, theme }) {
@@ -36,7 +37,7 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
     {
       icon: Plus,
       title: "Adding a task — pick whatever's easiest",
-      description: "Say it, type it, snap it, or send it. The AI figures out the date, the steps, and how often to bug you:",
+      description: "Say it, type it, or share it in. You don't have to open the app to get a thought out of your head — the AI figures out the date, the steps, and how often to bug you:",
       subItems: [
         {
           icon: Mic,
@@ -44,19 +45,24 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
           description: "Tap the mic and just say it — 'remind me to call the dentist Friday'"
         },
         {
-          icon: Camera,
-          title: "Snap a photo",
-          description: "Take a picture of a flyer, form, invite, or handwritten list and it becomes a task"
+          icon: Share2,
+          title: "Share highlighted text",
+          description: "Highlight text anywhere — a message, an email, a website — hit Share and pick ADHDone. It becomes a task, idea, or event"
         },
         {
-          icon: Share2,
-          title: "Share from any app",
-          description: "Share a text, email, or link into ADHDone and it turns into a task"
+          icon: Camera,
+          title: "Share a screenshot or photo",
+          description: "Screenshot anything (an invite, a flyer, a receipt) and share it into the app — it reads it and makes the task for you"
         },
         {
           icon: Zap,
-          title: "Quick Capture",
-          description: "A pinned notification shortcut so you can dump a thought without opening the app (turn it on in Settings)"
+          title: "The pinned notification",
+          description: "With Quick Capture on, just expand the notification and dump a task in without opening the app (turn it on in Settings)"
+        },
+        {
+          icon: LayoutGrid,
+          title: "The home screen widget",
+          description: "Add a task straight from the widget — and see today's tasks right on your home screen"
         }
       ]
     },
