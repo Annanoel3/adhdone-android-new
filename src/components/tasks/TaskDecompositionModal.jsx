@@ -53,6 +53,12 @@ Sorting clothes, adding detergent, and pressing start are all one uninterrupted 
 that is ONE step, not three. But the laundry then SITS in the washer while you go do something else,
 so moving it to the dryer IS its own step.
 
+HARD RULE — pressing start is never its own step. "Start the washer", "start the dryer", "turn on the
+dishwasher", "press go" happen in the same breath as loading the machine, so they always fold into the
+loading step ("Get a load into the washer and start it", "Move the load to the dryer and start it").
+The same goes for any step whose whole content is one obvious motion the user cannot forget because
+they are already standing there doing it.
+
 WORKED EXAMPLE — "do laundry" (type B):
 BAD (motions, not steps — every one of these is a needless notification):
   Sort clothes / Load washer / Add detergent / Start washer / Transfer to dryer / Fold clothes / Put away clothes
