@@ -17,6 +17,19 @@ const norm = (s) =>
     .join(' ')
     .trim();
 
+// "Put up Antonio's laundry" is still the laundry habit. If a key contains every
+// word of a shorter key ("antonios laundry" ⊇ "laundry"), fold it into that one.
+const canonicalizer = (keys) => {
+  const uniq = [...new Set(keys)].sort((a, b) => a.split(' ').length - b.split(' ').length);
+  const map = {};
+  uniq.forEach((k) => {
+    const words = k.split(' ');
+    const parent = uniq.find((p) => p !== k && p.split(' ').length < words.length && p.split(' ').every((w) => words.includes(w)));
+    map[k] = parent ? map[parent] || parent : k;
+  });
+  return (k) => map[k] || k;
+};
+
 const fmtDuration = (secs) => {
   const m = Math.round(secs / 60);
   if (m < 1) return 'under a minute';
@@ -63,10 +76,15 @@ export default function HabitPatterns({ theme }) {
     const completed = await base44.entities.Task.filter({ status: 'completed' }, '-completed_at', 2000);
     const logs = await base44.entities.FocusSessionLog.list('-completed_at', 1000);
 
+    const canon = canonicalizer([
+      ...completed.map(t => norm(t.title)),
+      ...logs.map(l => norm(l.task_title)),
+    ].filter(Boolean));
+
     const groups = {};
     completed.forEach(t => {
       if (!t.completed_at || t.parent_task_id || t.birthday_person) return;
-      const key = norm(t.title);
+      const key = canon(norm(t.title));
       if (!key) return;
       const g = groups[key] || (groups[key] = { title: t.title, days: new Set() });
       // One per calendar day — repeated completions the same day are the same
@@ -77,7 +95,7 @@ export default function HabitPatterns({ theme }) {
 
     const durations = {};
     logs.forEach(l => {
-      const key = norm(l.task_title);
+      const key = canon(norm(l.task_title));
       if (!key || !l.duration_seconds) return;
       (durations[key] = durations[key] || []).push(l.duration_seconds);
     });
