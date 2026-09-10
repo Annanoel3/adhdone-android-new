@@ -68,6 +68,7 @@ import HomeZipPrompt from "./components/shared/HomeZipPrompt";
 import QuickCapturePrompt from "./components/shared/QuickCapturePrompt";
 import PageIntroTour from "./components/onboarding/PageIntroTour";
 import WelcomeDialog from "./components/onboarding/WelcomeDialog";
+import { applyOnboardingReplay } from "./components/onboarding/onboardingReplay";
 import TaskCaptureProcessor from "./components/shared/TaskCaptureProcessor";
 import { base44 } from "@/api/base44Client";
 import {
@@ -1136,6 +1137,7 @@ export default function Layout({ children, currentPageName }) {
 
     try {
       const currentUser = await base44.auth.me();
+      applyOnboardingReplay(currentUser);
       setUser(currentUser);
       setAuthCheckComplete(true);
 
