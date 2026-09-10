@@ -449,6 +449,11 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           url: createPageUrl("Birthdays"),
           icon: Cake,
         },
+        {
+          title: "Talk It Out",
+          url: createPageUrl("SupportSpace"),
+          icon: MessageCircleHeart,
+        },
       ],
     },
     {
@@ -460,11 +465,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           title: "Insights",
           url: createPageUrl("Progress"),
           icon: TrendingUp,
-        },
-        {
-          title: "Talk It Out",
-          url: createPageUrl("SupportSpace"),
-          icon: MessageCircleHeart,
         },
         {
           title: "Community",
