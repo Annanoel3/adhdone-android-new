@@ -462,7 +462,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           icon: TrendingUp,
         },
         {
-          title: "Support Space",
+          title: "Talk It Out",
           url: createPageUrl("SupportSpace"),
           icon: MessageCircleHeart,
         },

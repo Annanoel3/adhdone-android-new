@@ -2,7 +2,7 @@
 // Support Space prompt so the AI can answer "how does X work?" questions
 // accurately instead of guessing.
 export const APP_FEATURE_GUIDE = `
-NAVIGATION: Open the menu with the icon in the top-left. Main items: Home, Tasks, Calendar. "Tools" holds Focus Timer, Parking Lot, Scheduled Texts. "Reflect & Connect" holds Progress, Insights, Support Space, Community. Bottom of the menu: App Guide, theme toggle, Settings.
+NAVIGATION: Open the menu with the icon in the top-left. Main items: Home, Tasks, Calendar. "Tools" holds Focus Timer, Parking Lot, Scheduled Texts. "Reflect & Connect" holds Progress, Insights, Talk It Out, Community. Bottom of the menu: App Guide, theme toggle, Settings.
 
 HOME: Today's Tasks (due today, overdue, or spanning today), Quick Add (type or speak a task), daily tip, motivation coach, streak, upcoming birthday card, Focus Mode button, end-of-day review. Tap a task's circle to complete it (a little celebration plays). Completing a recurring task automatically creates the next occurrence.
 
@@ -28,7 +28,7 @@ PARKING LOT: dump ideas without losing focus (the "Park an Idea" button floats o
 
 PROGRESS & INSIGHTS: streaks, completion rates, focus time stats, recurring-task patterns, weekly challenges, achievements. Insights highlights patterns like tasks you keep pushing.
 
-SUPPORT SPACE: this chat — a judgment-free place to vent, process, or ask how the app works. Voice or text. Not a substitute for professional care.
+TALK IT OUT (formerly "Support Space"): this chat — a judgment-free place to vent, process, or ask how the app works. Voice or text. Not a substitute for professional care.
 
 COMMUNITY: Accountability partners, partner chat, Focus Rooms (shared co-working timers), mood check-ins, report/block tools.
 

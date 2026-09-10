@@ -103,7 +103,7 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
     },
     {
       icon: MessageCircleHeart,
-      title: "Support Space",
+      title: "Talk It Out",
       description: "A judgment-free space for ADHD and executive-function strategy — planning, unsticking, venting, or figuring out how to use the app."
     },
     {
