@@ -179,8 +179,10 @@ Return JSON with this structure:
           subtask_order: index + 1, // Preserve the LLM's sequential step order
           urgency: task.urgency,
           energy_required: suggestion.energy_required || task.energy_required,
-          reminder_interval: suggestion.reminder_interval || task.reminder_interval,
-          reminder_count: 0, // Remind until completed
+          // Subtasks are checklist steps only — the parent task does the reminding,
+          // so subtasks never get their own reminder schedule.
+          reminder_interval: 'once',
+          reminder_count: 0,
           status: 'active'
         };
       });
@@ -248,11 +250,6 @@ Return JSON with this structure:
                         💡 {suggestion.reasoning}
                       </p>
                       <div className="flex flex-wrap gap-2">
-                        <span className={`text-xs px-2 py-1 rounded ${
-                          theme === 'dark' ? 'bg-blue-900/30 text-blue-400' : 'bg-blue-100 text-blue-700'
-                        }`}>
-                          Remind every {suggestion.reminder_interval?.replace('_', ' ')}
-                        </span>
                         <span className={`text-xs px-2 py-1 rounded ${
                           theme === 'dark' ? 'bg-purple-900/30 text-purple-400' : 'bg-purple-100 text-purple-700'
                         }`}>
