@@ -4,7 +4,7 @@ export const PAGE_TOURS = {
   Home: [
     {
       title: "Welcome to your home page! 👋",
-      body: "This is your starting point every day — a quick look at what's going on and the fastest way to get things out of your head.",
+      body: "This is your starting point every day. Here you can add tasks and ideas, see today's tasks and what's coming up at a glance, and get a push to start when you're stuck.",
     },
     {
       selector: '[data-tour="add-task"]',
@@ -19,11 +19,6 @@ export const PAGE_TOURS = {
       selector: '[data-tour="launch"]',
       title: "Launch 🚀",
       body: "Stuck? Launch gives you a push. A Sprint is a short timed burst on one thing, and the Launchpad walks you through picking something and actually starting it.",
-    },
-    {
-      selector: '[data-tour="todays-tasks"]',
-      title: "Today at a glance",
-      body: "See today's tasks and what's coming up next, all in one place.",
     },
   ],
   Calendar: [
