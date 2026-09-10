@@ -200,6 +200,7 @@ Return JSON:
       // date, time and location the user actually gave.
       const mainTaskPrompt = buildTaskParsePrompt(inputText);
       const mainTaskParsed = (await base44.functions.invoke('parseTask', { prompt: mainTaskPrompt }))?.data?.response;
+      trace('parsed', { title: mainTaskParsed?.title, classification: mainTaskParsed?.classification, target_date: mainTaskParsed?.target_date, due_date: mainTaskParsed?.due_date, deadline_style: mainTaskParsed?.deadline_style });
       stripGuessedRecurrence(mainTaskParsed, inputText);
 
       const sched = deriveSchedule(mainTaskParsed, now);
@@ -213,6 +214,7 @@ Return JSON:
         classification: mainTaskParsed.classification || 'task',
         reminder_interval: sched.interval,
         day_only_task: !!mainTaskParsed.day_only_task,
+        deadline_style: mainTaskParsed.deadline_style === 'by' ? 'by' : 'on',
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
         due_date: sched.dueDateISO || presetDueDateISO,
         end_date: sched.endDateISO,

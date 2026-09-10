@@ -205,6 +205,9 @@ end_date — for a stated multi-day range, the LAST day. Otherwise null.
 due_date — when the thing must be DONE by. Set it for deadlines ("by Friday",
   "this week", "today"), and also mirror target_date into it whenever
   day_only_task is true, so the task actually shows a date in the app.
+  For a deadline phrased "by / before / no later than X" with no clock time,
+  target_date is X itself (the last allowed day) — NEVER today. "Do an oil
+  change before this Sunday" → target_date = that Sunday, deadline_style "by".
 
 day_only_task — true when this is tied to a specific day but has NO time in any
   form (so never true when target_time is filled in).
