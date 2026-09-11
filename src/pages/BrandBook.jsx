@@ -26,9 +26,9 @@ export default function BrandBook() {
             Not another<br />checklist app.
           </h1>
           <p className="text-xl text-[#5A5252] max-w-2xl leading-relaxed">
-            ADHDone was built by someone with ADHD, for people with ADHD. It's the friend who knows a
-            reminder at 3pm doesn't guarantee anything gets done — and helps anyway. Flexible, a little
-            spicy, and always in your corner.
+            ADHDone was built by someone with ADHD, for people with ADHD. It's the assistant who knows a
+            reminder at 3pm doesn't guarantee anything gets done — and makes sure it still gets done.
+            Flexible, a little spicy, and always in your corner.
           </p>
           <div className="mt-8 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/80 backdrop-blur text-[#D9667A] text-sm font-semibold shadow-sm">
             <Heart className="w-4 h-4" /> You've got this.
