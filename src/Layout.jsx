@@ -31,6 +31,7 @@ import {
   ArrowLeft,
   Cake,
   Shuffle,
+  BookLock,
 } from "lucide-react";
 import {
   Sidebar,
@@ -454,6 +455,11 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           title: "Decision Maker",
           url: createPageUrl("DecisionMaker"),
           icon: Shuffle,
+        },
+        {
+          title: "Diary",
+          url: createPageUrl("Diary"),
+          icon: BookLock,
         },
         {
           title: "Talk It Out",

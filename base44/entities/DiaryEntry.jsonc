@@ -1,0 +1,44 @@
+{
+  "name": "DiaryEntry",
+  "type": "object",
+  "properties": {
+    "entry_date": {
+      "type": "string",
+      "format": "date",
+      "description": "The local calendar day this entry belongs to (YYYY-MM-DD). One entry per day per user."
+    },
+    "content": {
+      "type": "string",
+      "description": "The diary body, exactly as the user wrote it. Never read by AI, never shared with accountability partners \u2014 this is a sealed, user-only field."
+    },
+    "mood_answer": {
+      "type": "string",
+      "description": "The user's answer to the opening 'how do you feel your day went' prompt, kept separately so it can head the entry without being lost if the body is rewritten. Only set when the user opted into autofill and answered."
+    },
+    "autofilled_tasks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Titles of the tasks the user completed on this day, captured at the moment the entry was started (autofill option only). Snapshotted rather than looked up later so the entry stays a true record of that day."
+    }
+  },
+  "required": [
+    "entry_date"
+  ],
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}
