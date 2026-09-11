@@ -23,6 +23,7 @@ import Community from '@/pages/Community';
 import BrandBook from '@/pages/BrandBook';
 import About from '@/pages/About';
 import Birthdays from '@/pages/Birthdays';
+import DecisionMaker from '@/pages/DecisionMaker';
 import { LaunchProvider } from '@/context/LaunchContext';
 
 // Sentry loaded via CDN in index.html
@@ -100,6 +101,7 @@ const AuthenticatedApp = () => {
       <Route path="/Community" element={<LayoutWrapper currentPageName="Community"><Community /></LayoutWrapper>} />
       <Route path="/About" element={<LayoutWrapper currentPageName="About"><About /></LayoutWrapper>} />
       <Route path="/Birthdays" element={<LayoutWrapper currentPageName="Birthdays"><Birthdays /></LayoutWrapper>} />
+      <Route path="/DecisionMaker" element={<LayoutWrapper currentPageName="DecisionMaker"><DecisionMaker /></LayoutWrapper>} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
     </LaunchProvider>

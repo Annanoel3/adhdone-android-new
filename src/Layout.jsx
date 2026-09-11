@@ -30,6 +30,7 @@ import {
   Shield,
   ArrowLeft,
   Cake,
+  Shuffle,
 } from "lucide-react";
 import {
   Sidebar,
@@ -448,6 +449,11 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           title: "Birthdays",
           url: createPageUrl("Birthdays"),
           icon: Cake,
+        },
+        {
+          title: "Decision Maker",
+          url: createPageUrl("DecisionMaker"),
+          icon: Shuffle,
         },
         {
           title: "Talk It Out",
