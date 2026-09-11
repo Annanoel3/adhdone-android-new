@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { ledgerCancel } from '../../shared/sendLedger.ts';
 
 Deno.serve(async (req) => {
   try {
@@ -87,6 +88,11 @@ Deno.serve(async (req) => {
         }
       }
     }
+
+    await ledgerCancel(base44, [
+      ...(task.onesignal_notification_ids || []),
+      ...((task.reminder_schedule || []).map((e: any) => e?.notification_id)),
+    ]);
 
     // Clear the notification IDs, reminder_schedule, and last_scheduled_until from the task
     await base44.asServiceRole.entities.Task.update(taskId, {

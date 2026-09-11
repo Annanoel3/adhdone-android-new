@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
+import { ledgerCancel } from '../../shared/sendLedger.ts';
 
 Deno.serve(async (req) => {
   try {
@@ -35,6 +36,7 @@ Deno.serve(async (req) => {
     const result = await response.json().catch(() => ({}));
     
     console.log(`[cancelScheduled] OneSignal response:`, result);
+    await ledgerCancel(createClientFromRequest(req), [notificationId]);
 
     return Response.json({ 
       success: response.ok,

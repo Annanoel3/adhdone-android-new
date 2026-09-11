@@ -92,6 +92,7 @@ Deno.serve(async (req) => {
               title: '💪 Your Daily Check-In',
               body: message,
               screen: '/Home',
+              data: { type: 'motivation' },
             });
 
             console.log(`[SMART MOTIVATION] notifySend response:`, r?.data);

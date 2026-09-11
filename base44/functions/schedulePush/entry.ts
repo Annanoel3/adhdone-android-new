@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 
 Deno.serve(async (req) => {
     console.log('[schedulePush] ========== FUNCTION START ==========');
@@ -44,6 +45,16 @@ Deno.serve(async (req) => {
         // Safety guard: never allow instant delivery by accident
         if (!resolvedSendAt || new Date(resolvedSendAt).getTime() <= Date.now()) {
             return Response.json({ success: false, error: 'Refusing to schedule: send time missing or in the past' }, { status: 400 });
+        }
+
+        // Send ledger — every sender books through here, so this is where two
+        // systems booking the same task minutes apart get caught.
+        const base44 = createClientFromRequest(req);
+        const ledgerKind = data?.type || 'task_reminder';
+        const ledgerTaskId = data?.taskId || data?.scheduledTextId || null;
+        const gate = await ledgerCheck(base44, { email: String(toUserExternalId), taskId: ledgerTaskId, kind: ledgerKind, sendAt: resolvedSendAt });
+        if (!gate.allowed) {
+            return Response.json({ success: true, skipped: true, reason: gate.reason, notificationId: null });
         }
 
         const notificationPayload = {
@@ -94,6 +105,7 @@ Deno.serve(async (req) => {
         }
 
         console.log('[schedulePush] ========== SUCCESS ==========', oneSignalResult.id);
+        await ledgerRecord(base44, { email: String(toUserExternalId), taskId: ledgerTaskId, kind: ledgerKind, source: 'schedulePush', sendAt: resolvedSendAt, notificationId: oneSignalResult.id, title });
         return Response.json({ success: true, notificationId: oneSignalResult.id, onesignal_response: oneSignalResult });
 
     } catch (error) {

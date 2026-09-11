@@ -16,6 +16,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
 import { localMinutesOfDay, parseHHMM, isInQuietHours, adjustForQuietHours } from '../../shared/quietHours.ts';
 import { getProximity, formatProximityNotes } from '../../shared/mapsDistance.ts';
+import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 
@@ -209,8 +210,18 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // Send ledger: if another push (a pre-booked reminder, the digest, a
+        // text follow-up) lands within ~20 min, hold this nudge for the next
+        // run rather than stacking two notifications.
+        const gate = await ledgerCheck(base44, { email, taskId: entry.task_id, kind: 'smart_nudge' });
+        if (!gate.allowed) {
+          console.log(`[SMART NUDGE] Held nudge for ${email} (${gate.reason}) — will retry next run`);
+          break;
+        }
+
         const sent = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id);
         if (sent) {
+          await ledgerRecord(base44, { email, taskId: entry.task_id, kind: 'smart_nudge', source: 'cronSmartTaskNudge', notificationId: sent, title: entry.title });
           entry.sent = true;
           entry.sent_at = now.toISOString();
           updated = true;
@@ -582,7 +593,7 @@ async function sendNudgeNotification(
   title: string,
   body: string,
   taskId: string
-): Promise<boolean> {
+): Promise<string | false> {
   const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
   const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
   if (!appId || !restApiKey) return false;
@@ -611,7 +622,7 @@ async function sendNudgeNotification(
       console.error(`[SMART NUDGE] OneSignal error for ${email}:`, result);
       return false;
     }
-    return true;
+    return result.id || 'sent';
   } catch (e) {
     console.error(`[SMART NUDGE] Failed to send to ${email}:`, e);
     return false;

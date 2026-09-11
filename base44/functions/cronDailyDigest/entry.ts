@@ -9,6 +9,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
 import { localMinutesOfDay, parseHHMM } from '../../shared/quietHours.ts';
+import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 
 const openai = new OpenAI({
   apiKey: Deno.env.get('OPENAI_API_KEY')
@@ -90,12 +91,23 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // Send ledger: don't stack the digest on top of another push landing in
+      // the same window — release the claim so a later run this morning retries.
+      const gate = await ledgerCheck(base44, { email, kind: 'daily_digest' });
+      if (!gate.allowed) {
+        try {
+          await base44.asServiceRole.entities.User.update(user.id, { last_digest_date: user.last_digest_date || null });
+        } catch {}
+        continue;
+      }
+
       // Generate + send the digest
       const firstName = (user.full_name || '').split(' ')[0] || 'friend';
       const message = await generateDigestMessage(todaysTasks, firstName);
       const sent = await sendDigestNotification(email, user, message);
 
       if (sent) {
+        await ledgerRecord(base44, { email, kind: 'daily_digest', source: 'cronDailyDigest', notificationId: typeof sent === 'string' ? sent : null, title: message.title });
         digestsSent.push({ email, taskCount: todaysTasks.length });
       } else {
         // Release the claim so a later run today can retry.
@@ -190,7 +202,7 @@ Return only the notification body text, nothing else.`
 }
 
 // ── Helper: send the digest push via OneSignal (immediate, not scheduled) ─────
-async function sendDigestNotification(email: string, user: any, message: { title: string; body: string }): Promise<boolean> {
+async function sendDigestNotification(email: string, user: any, message: { title: string; body: string }): Promise<string | false> {
   const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
   const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
 
@@ -232,7 +244,7 @@ async function sendDigestNotification(email: string, user: any, message: { title
     }
 
     console.log(`[DIGEST] Sent to ${email}: ${result.recipients || 0} recipients`);
-    return true;
+    return result.id || 'sent';
   } catch (e) {
     console.error(`[DIGEST] Failed to send to ${email}:`, e);
     return false;

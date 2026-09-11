@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
+import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 
 Deno.serve(async (req) => {
     try {
@@ -38,6 +39,13 @@ Deno.serve(async (req) => {
         const targetUsers = await base44.asServiceRole.entities.User.filter({ email: userEmail });
         const targetUser = targetUsers[0];
         const playerIds = targetUser?.onesignal_player_ids || [];
+
+        const ledgerKind = data?.type || 'general';
+        const ledgerTaskId = data?.taskId || null;
+        const gate = await ledgerCheck(base44, { email: userEmail, taskId: ledgerTaskId, kind: ledgerKind });
+        if (!gate.allowed) {
+            return Response.json({ success: false, skipped: true, reason: gate.reason });
+        }
 
         const payload = {
             app_id: appId.trim(),
@@ -80,6 +88,7 @@ Deno.serve(async (req) => {
         }
 
         console.log('[sendOneSignalPush] ✅ Notification sent successfully! Recipients:', result.recipients || 0);
+        await ledgerRecord(base44, { email: userEmail, taskId: ledgerTaskId, kind: ledgerKind, source: 'sendOneSignalPush', notificationId: result.id, title });
         return Response.json({ 
             success: true,
             recipients: result.recipients || 0,

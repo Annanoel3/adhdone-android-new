@@ -1,0 +1,45 @@
+{
+  "name": "NotificationLedger",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "description": "Recipient of the push. Every sender (pre-booked reminders, refill cron, smart nudge, digest, motivation, texts) logs here so no two of them can land on top of each other."
+    },
+    "task_id": {
+      "type": "string",
+      "description": "Task / birthday / scheduled-text id the push is about. Empty for user-level pushes (digest, motivation)."
+    },
+    "kind": {
+      "type": "string",
+      "description": "task_reminder, event_reminder, birthday_reminder, birthday_text_reminder, scheduled_text, smart_nudge, daily_digest, motivation, general."
+    },
+    "source": {
+      "type": "string",
+      "description": "Which sender booked it (schedulePush, notifySend, cronSmartTaskNudge, cronDailyDigest, cronRefillReminders, onTaskUpdate)."
+    },
+    "send_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the push fires (or fired, for immediate sends)."
+    },
+    "notification_id": {
+      "type": "string",
+      "description": "OneSignal notification id. Used to drop the entry when the booking is cancelled."
+    },
+    "title": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_email",
+    "kind",
+    "send_at"
+  ],
+  "rls": {
+    "read": {
+      "data.user_email": "{{user.email}}"
+    },
+    "write": false
+  }
+}

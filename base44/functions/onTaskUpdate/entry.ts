@@ -1,15 +1,21 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent } from '../../shared/reminderTitle.ts';
 import { adjustForQuietHours, parseHHMM, localMinutesOfDay } from '../../shared/quietHours.ts';
+import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID');
 const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY');
+
+// Set per request so the module-level helpers below can reach the send ledger.
+let ledgerClient: any = null;
 
 async function cancelOneSignalNotification(notificationId) {
   if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
     console.log('[onTaskUpdate] OneSignal credentials missing, skipping cancel');
     return false;
   }
+
+  if (ledgerClient) await ledgerCancel(ledgerClient, [notificationId]);
 
   try {
     const response = await fetch(`https://onesignal.com/api/v1/notifications/${notificationId}?app_id=${ONESIGNAL_APP_ID}`, {
@@ -36,6 +42,11 @@ async function scheduleOneSignalNotification(email, title, body, sendAfterIsoStr
   if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
     console.log('[onTaskUpdate] OneSignal credentials missing, skipping schedule');
     return null;
+  }
+
+  if (ledgerClient) {
+    const gate = await ledgerCheck(ledgerClient, { email, taskId, kind: 'task_reminder', sendAt: sendAfterIsoString });
+    if (!gate.allowed) return null;
   }
 
   try {
@@ -69,6 +80,7 @@ async function scheduleOneSignalNotification(email, title, body, sendAfterIsoStr
 
     const result = await response.json();
     console.log(`[onTaskUpdate] Scheduled OneSignal notification, ID: ${result.id}`);
+    if (ledgerClient) await ledgerRecord(ledgerClient, { email, taskId, kind: 'task_reminder', source: 'onTaskUpdate', sendAt: sendAfterIsoString, notificationId: result.id, title });
     return result.id;
   } catch (error) {
     console.error('[onTaskUpdate] Error scheduling OneSignal notification:', error);
@@ -81,6 +93,7 @@ Deno.serve(async (req) => {
     console.log('[onTaskUpdate] ========== FUNCTION START ==========');
     
     const base44 = createClientFromRequest(req);
+    ledgerClient = base44;
     const user = await base44.auth.me();
 
     if (!user) {

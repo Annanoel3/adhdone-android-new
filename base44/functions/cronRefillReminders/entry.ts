@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent } from '../../shared/reminderTitle.ts';
 import { adjustForQuietHours, parseHHMM, localMinutesOfDay } from '../../shared/quietHours.ts';
 import { getFocusModeContent } from '../../shared/focusMode.ts';
+import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 const BATCH_SIZE = 10;
@@ -29,6 +30,7 @@ Deno.serve(async (req) => {
     // CRON_SECRET, so a secret gate here would 401 every scheduled run and get
     // the automation disabled. The POST check is sufficient.
     const base44 = createClientFromRequest(req);
+    await ledgerPrune(base44);
 
     const allTasks = await base44.asServiceRole.entities.Task.list('-updated_date', 500);
     console.log(`📦 [REFILL] Total tasks fetched: ${allTasks.length}`);
@@ -124,6 +126,7 @@ Deno.serve(async (req) => {
               headers: { Authorization: `Basic ${restApiKey}` }
             })
           ));
+          await ledgerCancel(base44, oldIds);
           console.log(`🗑 [REFILL] Cancelled ${oldIds.length} old notifications for "${task.title}"`);
         }
 
@@ -335,6 +338,7 @@ Deno.serve(async (req) => {
         headers: { Authorization: `Basic ${restApiKey}` },
       })
     ));
+    await ledgerCancel(base44, ids);
   }
 
   let birthdayScheduled = 0;
@@ -496,7 +500,10 @@ Deno.serve(async (req) => {
         const lastRemindedMs = task.birthday_text_last_reminded_at
           ? new Date(task.birthday_text_last_reminded_at).getTime() : 0;
         const dedupMs = 50 * 60 * 1000;
-        if (!inQuiet && !inDefaultSleep && (now.getTime() - lastRemindedMs) > dedupMs) {
+        const bdayGate = (!inQuiet && !inDefaultSleep && (now.getTime() - lastRemindedMs) > dedupMs)
+          ? await ledgerCheck(base44, { email: task.notification_recipient_email, taskId: task.id, kind: 'birthday_text_reminder' })
+          : { allowed: false };
+        if (bdayGate.allowed) {
           try {
             const bAppId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
             const bRestKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
@@ -521,6 +528,7 @@ Deno.serve(async (req) => {
             });
             const pushResult = await pushRes.json();
             if (pushRes.ok && !pushResult.errors) {
+              await ledgerRecord(base44, { email: task.notification_recipient_email, taskId: task.id, kind: 'birthday_text_reminder', source: 'cronRefillReminders', notificationId: pushResult.id, title: pushPayload.headings.en });
               await base44.asServiceRole.entities.Task.update(task.id, {
                 birthday_text_last_reminded_at: now.toISOString(),
               });
@@ -653,6 +661,9 @@ Deno.serve(async (req) => {
       const dedupMs = 50 * 60 * 1000;
       if (now.getTime() - lastRemindedMs < dedupMs) continue;
 
+      const textGate = await ledgerCheck(base44, { email: text.notification_recipient_email, taskId: text.id, kind: 'scheduled_text' });
+      if (!textGate.allowed) continue;
+
       try {
         const sAppId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
         const sRestKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
@@ -675,6 +686,7 @@ Deno.serve(async (req) => {
         });
         const pushResult = await pushRes.json();
         if (pushRes.ok && !pushResult.errors) {
+          await ledgerRecord(base44, { email: text.notification_recipient_email, taskId: text.id, kind: 'scheduled_text', source: 'cronRefillReminders', notificationId: pushResult.id, title: pushPayload.headings.en });
           await base44.asServiceRole.entities.ScheduledText.update(text.id, {
             last_reminded_at: now.toISOString(),
           });

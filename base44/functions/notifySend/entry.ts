@@ -1,5 +1,6 @@
 // functions/notifySend.js
 import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
+import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 
 Deno.serve(async (req) => {
   try {
@@ -53,6 +54,13 @@ Deno.serve(async (req) => {
 
     const soundFile = soundMap[notificationSound] || 'joyful_melody';
 
+    const ledgerKind = data?.type || 'general';
+    const ledgerTaskId = data?.taskId || null;
+    const gate = await ledgerCheck(base44, { email: toUserId, taskId: ledgerTaskId, kind: ledgerKind });
+    if (!gate.allowed) {
+      return Response.json({ success: false, skipped: true, reason: gate.reason });
+    }
+
     const payload = {
       app_id: ONESIGNAL_APP_ID,
       include_player_ids: playerIds,
@@ -86,6 +94,8 @@ Deno.serve(async (req) => {
       console.error(`[notifySend] OneSignal errors:`, result.errors);
       return Response.json({ success: false, error: result.errors }, { status: 500 });
     }
+
+    await ledgerRecord(base44, { email: toUserId, taskId: ledgerTaskId, kind: ledgerKind, source: 'notifySend', notificationId: result.id, title });
 
     return Response.json({ 
       success: true, 
