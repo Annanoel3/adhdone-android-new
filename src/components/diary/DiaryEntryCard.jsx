@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Share2, Loader2 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { shareEntryImage } from "./shareEntryImage";
+import DiaryMediaStrip from "./DiaryMediaStrip";
 
 export default function DiaryEntryCard({ entry }) {
   const shotRef = useRef(null);
@@ -28,6 +29,7 @@ export default function DiaryEntryCard({ entry }) {
           <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">
             {entry.content || "(empty)"}
           </p>
+          <DiaryMediaStrip images={entry.images} stickers={entry.stickers} />
         </div>
         <Button variant="outline" size="sm" onClick={share} disabled={sharing}>
           {sharing ? (

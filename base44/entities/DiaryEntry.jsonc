@@ -22,6 +22,22 @@
       },
       "default": [],
       "description": "Titles of the tasks the user completed on this day, captured at the moment the entry was started (autofill option only). Snapshotted rather than looked up later so the entry stays a true record of that day."
+    },
+    "images": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "PRIVATE file URIs of pictures the user attached to this entry. Stored in private storage (never public URLs) so a diary photo can't be viewed by anyone holding a link \u2014 the app resolves a short-lived signed URL each time it displays one."
+    },
+    "stickers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Sticker characters the user added to this entry, in the order they were added."
     }
   },
   "required": [

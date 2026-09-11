@@ -88,14 +88,14 @@ export default function Diary() {
     setShowMoodPrompt(false);
   };
 
-  const saveTodayContent = async (content) => {
+  const saveTodayContent = async (patch) => {
     if (todayEntry) {
-      const updated = await base44.entities.DiaryEntry.update(todayEntry.id, { content });
+      const updated = await base44.entities.DiaryEntry.update(todayEntry.id, patch);
       setTodayEntry(updated);
     } else {
       const created = await base44.entities.DiaryEntry.create({
         entry_date: todayKey(),
-        content,
+        ...patch,
       });
       setTodayEntry(created);
     }

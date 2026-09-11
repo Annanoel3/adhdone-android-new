@@ -4,6 +4,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Check, Loader2 } from "lucide-react";
 import { format } from "date-fns";
+import DiaryAddMenu from "./DiaryAddMenu";
+import DiaryMediaStrip from "./DiaryMediaStrip";
 
 export default function DiaryEditor({ entry, onSave }) {
   const [content, setContent] = useState(entry?.content || "");
@@ -15,9 +17,12 @@ export default function DiaryEditor({ entry, onSave }) {
     setSavedAt(null);
   }, [entry?.id]);
 
+  const images = entry?.images || [];
+  const stickers = entry?.stickers || [];
+
   const save = async () => {
     setSaving(true);
-    await onSave(content);
+    await onSave({ content });
     setSaving(false);
     setSavedAt(new Date());
   };
@@ -37,6 +42,19 @@ export default function DiaryEditor({ entry, onSave }) {
           rows={12}
           className="text-base leading-relaxed"
         />
+
+        <DiaryAddMenu
+          onAddImage={(uri) => onSave({ content, images: [...images, uri] })}
+          onAddSticker={(char) => onSave({ content, stickers: [...stickers, char] })}
+        />
+
+        <DiaryMediaStrip
+          images={images}
+          stickers={stickers}
+          onRemoveImage={(uri) => onSave({ content, images: images.filter((u) => u !== uri) })}
+          onRemoveSticker={(i) => onSave({ content, stickers: stickers.filter((_, idx) => idx !== i) })}
+        />
+
         <div className="flex items-center gap-3">
           <Button onClick={save} disabled={saving || !dirty}>
             {saving ? (
