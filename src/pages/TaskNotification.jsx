@@ -9,6 +9,7 @@ import BirthdayTextDialog from "../components/birthdays/BirthdayTextDialog";
 import { createPageUrl } from "@/utils";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { scheduleReminder, cancelScheduledReminder } from "../components/utils/reminderScheduler";
+import { getReminderCopy, smartSnoozeTime } from "../components/utils/reminderCopy";
 
 const SNOOZE_OPTIONS = [
   { label: "10 min", minutes: 10 },
@@ -94,7 +95,7 @@ export default function TaskNotification() {
 
     try {
       const user = await base44.auth.me();
-      const snoozeUntil = new Date(Date.now() + minutes * 60 * 1000);
+      const snoozeUntil = smartSnoozeTime(task, new Date(Date.now() + minutes * 60 * 1000));
 
       // Cancel existing notifications so we don't get double-reminded
       if (task.onesignal_notification_ids?.length > 0) {
@@ -104,8 +105,7 @@ export default function TaskNotification() {
       // Schedule a new reminder at the snoozed time (same as task creation pattern)
       const notificationId = await scheduleReminder({
         email: user.email,
-        title: "Task Reminder 📋",
-        body: `${task.title}\n\nTap to mark as complete!`,
+        ...getReminderCopy(task, snoozeUntil),
         sendAtISO: snoozeUntil.toISOString(),
         taskId: task.id,
         data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency, type: 'task_reminder' },

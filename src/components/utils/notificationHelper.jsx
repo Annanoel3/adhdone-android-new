@@ -1,4 +1,5 @@
 import { base44 } from "@/api/base44Client";
+import { getReminderCopy } from "./reminderCopy";
 
 /**
  * Send a notification using the /notifySend endpoint
@@ -25,8 +26,7 @@ export async function sendNotification({ toUserId, title, body, screen }) {
 export async function sendTaskReminder(task, userEmail) {
   return sendNotification({
     toUserId: userEmail,
-    title: "Task Reminder 📋",
-    body: task.title,
+    ...getReminderCopy(task, new Date()),
     screen: "/Tasks"
   });
 }

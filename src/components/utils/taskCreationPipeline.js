@@ -1,6 +1,7 @@
 import { base44 } from "@/api/base44Client";
 import { buildTaskParsePrompt } from "../../../base44/shared/taskParsePrompt";
 import { scheduleReminder } from "./reminderScheduler";
+import { getReminderCopy } from "./reminderCopy";
 import dedupeSplitTasks from "./dedupeSplitTasks";
 import { createBirthdayFromInput } from "./birthdayScheduler";
 import { toast } from "sonner";
@@ -260,8 +261,7 @@ Return JSON:
       } else if (nextReminder && INTERVAL_MS[sched.interval]) {
         import('./reminderScheduler').then(module => module.scheduleRecurringReminders({
           email: currentUser.email,
-          title: "Task Reminder 📋",
-          body: `${parentTask.title}\n\nTap to mark as complete!`,
+          ...getReminderCopy(parentTask, nextReminder),
           startTime: nextReminder.toISOString(),
           intervalMs: INTERVAL_MS[sched.interval],
           count: 10,
@@ -555,8 +555,7 @@ Return JSON:
             }
             return scheduleReminder({
               email: currentUser.email,
-              title: "Task Reminder 📋",
-              body: `${createdTask.title}\n\nTap to mark as complete!`,
+              ...getReminderCopy(createdTask, nextReminder),
               sendAtISO: nextReminder.toISOString(),
               taskId: createdTask.id,
               data: { screen: "/TaskNotification", taskId: createdTask.id, urgency: createdTask.urgency, type: 'task_reminder' },
@@ -575,8 +574,7 @@ Return JSON:
       } else if (INTERVAL_MS[actualReminderInterval]) {
         import('./reminderScheduler').then(module => module.scheduleRecurringReminders({
           email: currentUser.email,
-          title: "Task Reminder 📋",
-          body: `${createdTask.title}\n\nTap to mark as complete!`,
+          ...getReminderCopy(createdTask, nextReminder),
           startTime: nextReminder.toISOString(),
           intervalMs: INTERVAL_MS[actualReminderInterval],
           count: 10,
@@ -636,8 +634,7 @@ export async function createAdvanceTask(taskData, currentUser, minutesBefore) {
   }
   if (eventTime.getTime() > Date.now()) {
     pushes.push({
-      title: "Task Reminder 📋",
-      body: `${createdTask.title}\n\nTap to mark as complete!`,
+      ...getReminderCopy(createdTask, eventTime),
       sendAtISO: eventTime.toISOString(),
       type: 'task_reminder',
     });
@@ -732,8 +729,7 @@ export async function createTaskWithDate(data, date, time) {
   } else {
     scheduleReminder({
       email: data.currentUser.email,
-      title: "Task Reminder 📋",
-      body: `${createdTask.title}\n\nTap to mark as complete!`,
+      ...getReminderCopy(createdTask, nextReminder),
       sendAtISO: nextReminder.toISOString(),
       taskId: createdTask.id,
       data: { screen: "/TaskNotification", taskId: createdTask.id, urgency: data.urgency, type: 'task_reminder' },

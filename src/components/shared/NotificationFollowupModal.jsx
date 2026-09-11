@@ -15,6 +15,7 @@ import {
   cancelScheduledReminder,
 } from "@/components/utils/reminderScheduler";
 import { updateTodaysSummary } from "@/components/utils/dailySummaryHelper";
+import { getReminderCopy, smartSnoozeTime } from "@/components/utils/reminderCopy";
 import { useLaunch } from "@/context/LaunchContext";
 
 const SNOOZE_OPTIONS = [
@@ -201,7 +202,7 @@ export default function NotificationFollowupModal({ user, theme }) {
         tomorrow.setHours(9, 0, 0, 0);
         snoozeUntil = tomorrow;
       } else {
-        snoozeUntil = new Date(Date.now() + option.minutes * 60 * 1000);
+        snoozeUntil = smartSnoozeTime(currentTask, new Date(Date.now() + option.minutes * 60 * 1000));
       }
 
       if (currentTask.onesignal_notification_ids?.length > 0) {
@@ -212,8 +213,7 @@ export default function NotificationFollowupModal({ user, theme }) {
 
       const notificationId = await scheduleReminder({
         email: user.email,
-        title: "Task Reminder 📋",
-        body: `${currentTask.title}\n\nTap to mark as complete!`,
+        ...getReminderCopy(currentTask, snoozeUntil),
         sendAtISO: snoozeUntil.toISOString(),
         taskId: currentTask.id,
         data: {

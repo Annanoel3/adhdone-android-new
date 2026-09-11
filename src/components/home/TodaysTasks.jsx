@@ -12,6 +12,7 @@ import { motion } from "framer-motion";
 import { updateTodaysSummary } from "../utils/dailySummaryHelper";
 import { isTodayTask, isUpcomingTask } from "../utils/todayTasks";
 import { pushWidgetTasks } from "../utils/widgetBridge";
+import { getReminderCopy } from "../utils/reminderCopy";
 import {
   Popover,
   PopoverContent,
@@ -245,8 +246,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
         const { scheduleReminder } = await import('../utils/reminderScheduler');
         const notificationId = await scheduleReminder({
           email: currentUser.email,
-          title: "Task Reminder 📋",
-          body: `${task.title}\n\nTap to mark as complete!`,
+          ...getReminderCopy(task, nextReminder),
           sendAtISO: nextReminder.toISOString(),
           taskId: task.id,
           data: {
@@ -265,8 +265,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
         const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
         const recurringResult = await scheduleRecurringReminders({
           email: currentUser.email,
-          title: "Task Reminder 📋",
-          body: `${task.title}\n\nTap to mark as complete!`,
+          ...getReminderCopy(task, nextReminder),
           startTime: nextReminder.toISOString(),
           intervalMs: intervalMs[newInterval],
           count: 10,

@@ -432,10 +432,10 @@ Return JSON:
 
           if (intervalMs[task.reminder_interval] && task.next_reminder) {
             const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
+            const { getReminderCopy } = await import('../utils/reminderCopy');
             const { notificationIds: newNotificationIds } = await scheduleRecurringReminders({
               email: currentUser.email,
-              title: "Task Reminder 📋",
-              body: `${editedTitle.trim()}\n\nTap to mark as complete!`,
+              ...getReminderCopy({ ...task, title: editedTitle.trim() }, task.next_reminder),
               startTime: task.next_reminder,
               intervalMs: intervalMs[task.reminder_interval],
               count: 10,
@@ -591,10 +591,10 @@ Return JSON:
 
           // Schedule single one-time reminder
           try {
+            const { getReminderCopy } = await import('../utils/reminderCopy');
             const notificationId = await scheduleReminder({
               email: currentUser.email,
-              title: "Task Reminder 📋",
-              body: `${task.title}\n\nTap to mark as complete!`,
+              ...getReminderCopy(task, nextReminderDate),
               sendAtISO: nextReminderDate.toISOString(),
               taskId: task.id,
               data: {
@@ -651,10 +651,10 @@ Return JSON:
           // Schedule recurring reminders (10 at a time)
           try {
             const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
+            const { getReminderCopy } = await import('../utils/reminderCopy');
             const { notificationIds: newNotificationIds } = await scheduleRecurringReminders({
               email: currentUser.email,
-              title: "Task Reminder 📋",
-              body: `${task.title}\n\nTap to mark as complete!`,
+              ...getReminderCopy(task, nextReminderDate),
               startTime: nextReminderDate.toISOString(),
               intervalMs: intervalMs[value],
               count: 10,
@@ -786,10 +786,10 @@ Return JSON:
         if (interval && interval !== 'once' && intervalMs[interval]) {
           // Recurring: schedule 10 future occurrences (same as creation)
           const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
+          const { getReminderCopy } = await import('../utils/reminderCopy');
           const { notificationIds, lastScheduledUntil } = await scheduleRecurringReminders({
             email: currentUser.email,
-            title: "Task Reminder 📋",
-            body: `${task.title}\n\nTap to mark as complete!`,
+            ...getReminderCopy(task, nextReminder),
             startTime: nextReminder.toISOString(),
             intervalMs: intervalMs[interval],
             count: 10,
@@ -833,10 +833,10 @@ Return JSON:
             newNotificationIds = multiIds;
           } else {
             // No multi-reminder match — single reminder at the scheduled time
+            const { getReminderCopy } = await import('../utils/reminderCopy');
             const notificationId = await scheduleReminder({
               email: currentUser.email,
-              title: "Task Reminder 📋",
-              body: `${task.title}\n\nTap to mark as complete!`,
+              ...getReminderCopy(task, nextReminder),
               sendAtISO: nextReminder.toISOString(),
               taskId: task.id,
               data: {
@@ -1128,10 +1128,10 @@ Return JSON:
         if (task.reminder_interval && task.reminder_interval !== 'once' && intervalMs[task.reminder_interval]) {
           try {
             const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
+            const { getReminderCopy } = await import('../utils/reminderCopy');
             const { notificationIds } = await scheduleRecurringReminders({
               email: currentUser.email,
-              title: "Task Reminder 📋",
-              body: `${task.title}\n\nTap to mark as complete!`,
+              ...getReminderCopy(task, nextReminder),
               startTime: nextReminder.toISOString(),
               intervalMs: intervalMs[task.reminder_interval],
               count: 10,

@@ -416,10 +416,10 @@ export default function TaskCard({
               notificationIds = multiIds;
             } else {
               const { scheduleReminder } = await import('../utils/reminderScheduler');
+              const { getReminderCopy } = await import('../utils/reminderCopy');
               const notificationId = await scheduleReminder({
                 email: currentUser.email,
-                title: "Task Reminder 📋",
-                body: `${task.title}\n\nTap to mark as complete!`,
+                ...getReminderCopy(task, nextReminder),
                 sendAtISO: nextReminder.toISOString(),
                 taskId: task.id,
                 data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency, type: 'task_reminder' },
