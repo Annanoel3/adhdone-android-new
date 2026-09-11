@@ -14,6 +14,7 @@ import MomentumCelebration from "../components/shared/MomentumCelebration";
 import TaskCompletionCelebration from "../components/tasks/TaskCompletionCelebration";
 import { isTodayTask, isCompletedToday } from "../components/utils/todayTasks";
 import { ensureBirthdayReminders } from "../components/utils/birthdayScheduler";
+import BirthdayStrip from "../components/home/BirthdayStrip";
 
 export default function Home() {
   const [tasks, setTasks] = useState([]);
@@ -244,6 +245,14 @@ export default function Home() {
                 />
               </div>
 
+              {/* Birthdays get their own compact spot right under Today's Focus */}
+              <BirthdayStrip
+                tasks={tasks}
+                theme={theme}
+                specialMode={specialMode}
+                onWriteText={setBirthdayTextTask}
+                onRefresh={loadTasks}
+              />
             </div>
             
             <div className="min-w-0">

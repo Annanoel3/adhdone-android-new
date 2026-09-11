@@ -21,6 +21,7 @@ import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
 import TaskSortDropdown from "../components/tasks/TaskSortDropdown";
 import TaskSections from "../components/tasks/TaskSections";
 import TaskCompletionCelebration from "../components/tasks/TaskCompletionCelebration";
+import { passesBirthdayDayFilter } from "../components/utils/birthdayHelpers";
 
 export default function Tasks() {
   const navigate = useNavigate();
@@ -98,7 +99,8 @@ export default function Tasks() {
   }, [allTasks]);
 
   const applyFilters = useCallback(() => {
-    let topLevelTasks = allTasks.filter(t => !t.parent_task_id && !t.birthday_person);
+    // Birthdays surface in the task list only on the day they happen.
+    let topLevelTasks = allTasks.filter(t => !t.parent_task_id && passesBirthdayDayFilter(t));
     let filtered = topLevelTasks.filter(t => t.status === statusFilter);
     
     if (urgencyFilter !== 'all') {

@@ -11,6 +11,7 @@ import { base44 } from "@/api/base44Client";
 import { motion } from "framer-motion";
 import { updateTodaysSummary } from "../utils/dailySummaryHelper";
 import { isTodayTask, isUpcomingTask } from "../utils/todayTasks";
+import { isBirthdayTask, passesBirthdayDayFilter } from "../utils/birthdayHelpers";
 import { pushWidgetTasks } from "../utils/widgetBridge";
 import { getReminderCopy } from "../utils/reminderCopy";
 import {
@@ -27,7 +28,8 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
   const [reminderPopoverTaskId, setReminderPopoverTaskId] = useState(null);
   // Filter out subtasks, sort by the shared preference, then take the top 5.
   const activeTasks = sortTasks(
-    tasks.filter(t => t.status === 'active' && !t.parent_task_id && isTodayTask(t) && !t.birthday_person),
+    // Birthdays only join the list on the day itself — never before.
+    tasks.filter(t => t.status === 'active' && !t.parent_task_id && isTodayTask(t) && passesBirthdayDayFilter(t)),
     sortBy
   ).slice(0, 5);
   const now = new Date();
@@ -450,7 +452,11 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
               <motion.div
                 initial={{ opacity: 1, scale: 1 }}
                 className={`p-4 rounded-xl border transition-all duration-200 hover:shadow-md ${
-                  theme === 'minimalist' 
+                  isBirthdayTask(task)
+                    ? theme === 'dark'
+                      ? 'bg-pink-950/40 border-pink-800'
+                      : 'bg-gradient-to-r from-pink-50 to-amber-50 border-pink-300'
+                  : theme === 'minimalist' 
                     ? 'bg-white border-gray-100 hover:border-gray-200' 
                     : theme === 'dark'
                       ? 'bg-gray-900/50 border-gray-700 hover:border-gray-600'
@@ -460,7 +466,10 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex-1 cursor-pointer" onClick={() => onViewDetails(task)}>
                     <div className="flex items-center gap-2 mb-2">
-                      <h4 className={`font-medium flex-1 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>{task.title}</h4>
+                      <h4 className={`font-medium flex-1 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
+                        {isBirthdayTask(task) && !/🎂/.test(task.title) && <span className="mr-1">🎂</span>}
+                        {task.title}
+                      </h4>
                       <Button
                         size="icon"
                         variant="ghost"

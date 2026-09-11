@@ -447,11 +447,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           icon: Lightbulb,
         },
         {
-          title: "Birthdays",
-          url: createPageUrl("Birthdays"),
-          icon: Cake,
-        },
-        {
           title: "Decision Maker",
           url: createPageUrl("DecisionMaker"),
           icon: Shuffle,

@@ -512,7 +512,11 @@ export default function TaskCard({
     <Card
       className={`relative overflow-hidden border transition-all duration-200 hover:shadow-lg ${
         isSeasonalTheme() ? `${specialMode}-card` :
-        theme === 'minimalist'
+        (task.birthday_person || task.classification === 'birthday')
+          ? theme === 'dark'
+            ? 'bg-pink-950/40 border-pink-800'
+            : 'bg-gradient-to-r from-pink-50 to-amber-50 border-pink-300'
+        : theme === 'minimalist'
           ? 'bg-white border-gray-200 hover:border-gray-300'
           : theme === 'dark'
             ? 'bg-gray-800 border-gray-700 hover:border-gray-600'

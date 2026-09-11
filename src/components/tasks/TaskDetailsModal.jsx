@@ -60,9 +60,12 @@ import {
 import LaunchButtons from "../launch/LaunchButtons";
 import LocationField from "./LocationField";
 import { useToast } from "@/components/ui/use-toast";
+import { useNavigate } from "react-router-dom";
+import { Cake } from "lucide-react";
 
 export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete, onComplete, theme, itemClassification }) {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [subTasks, setSubTasks] = useState([]);
   const [newSubTask, setNewSubTask] = useState("");
   const [showDecomposition, setShowDecomposition] = useState(false);
@@ -2082,6 +2085,17 @@ Return JSON:
           </div>
 
           <DialogFooter className="gap-2 flex-wrap">
+            {/* Birthdays aren't in the menu any more — this is the way to the full list */}
+            {currentClassification === 'birthday' && (
+              <Button
+                variant="outline"
+                onClick={() => { onClose(); navigate('/Birthdays'); }}
+                className="w-full border-pink-300 text-pink-700 hover:bg-pink-50"
+              >
+                <Cake className="w-4 h-4 mr-2" />
+                See all birthdays
+              </Button>
+            )}
             {task.status !== 'completed' && !isEvent && (
               <div className="w-full mb-1">
                 <LaunchButtons task={task} theme={theme} />
