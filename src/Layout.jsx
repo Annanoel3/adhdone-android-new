@@ -457,11 +457,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           icon: Shuffle,
         },
         {
-          title: "Diary",
-          url: createPageUrl("Diary"),
-          icon: BookLock,
-        },
-        {
           title: "Talk It Out",
           url: createPageUrl("SupportSpace"),
           icon: MessageCircleHeart,
@@ -469,7 +464,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       ],
     },
     {
-      title: "Reflect & Connect",
+      title: "Reflect",
       isCollapsible: true,
       icon: Sparkles,
       subItems: [
@@ -479,9 +474,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           icon: TrendingUp,
         },
         {
-          title: "Community",
-          url: createPageUrl("Community"),
-          icon: Users,
+          title: "Diary",
+          url: createPageUrl("Diary"),
+          icon: BookLock,
         },
       ],
     },
@@ -777,11 +772,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                                   <div className="flex items-center gap-3 py-3 w-full">
                                     <item.icon className="w-5 h-5" />
                                     <span className="flex-1">{item.title}</span>
-                                    {item.title === "Reflect & Connect" && accountabilityNotifications > 0 && (
-                                      <span className="bg-red-500 text-white text-xs rounded-full min-w-[1.25rem] h-5 flex items-center justify-center font-bold px-1">
-                                        {accountabilityNotifications}
-                                      </span>
-                                    )}
                                     {isOpen ? (
                                       <ChevronDown className="w-4 h-4" />
                                     ) : (
