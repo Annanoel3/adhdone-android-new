@@ -3,6 +3,7 @@ import { PAGE_TOURS } from "./pageIntros";
 import TourStepCard from "./TourStepCard";
 import OtherWaysStepCard from "./OtherWaysStepCard";
 import { ONBOARDING_STEPS, markStepDone, waitForStep } from "./onboardingGate";
+import { setTourActive } from "./tourActive";
 
 // Bumping this replays every page tour once for everyone (existing users
 // included), then it goes back to being one-time per page.
@@ -31,6 +32,12 @@ export default function PageIntroTour({ currentPageName }) {
     });
     return () => { cancelled = true; if (t) clearTimeout(t); };
   }, [currentPageName]);
+
+  // Nothing else may pop up while a tour card is on screen.
+  useEffect(() => {
+    setTourActive(!!steps);
+    return () => setTourActive(false);
+  }, [steps]);
 
   const finish = () => {
     localStorage.setItem(seenKey(currentPageName), "1");

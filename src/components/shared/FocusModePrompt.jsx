@@ -12,6 +12,7 @@ import { Target, Info, CheckCircle2, Timer, Dices, X } from "lucide-react";
 import confetti from "canvas-confetti";
 import { isTodayTask } from "@/components/utils/todayTasks";
 import ConfirmDialog from "@/components/launch/ConfirmDialog";
+import { waitForTourEnd } from "@/components/onboarding/tourActive";
 
 function formatElapsed(ms) {
   const totalSec = Math.floor(ms / 1000);
@@ -168,12 +169,14 @@ export default function FocusModePrompt({ user, theme }) {
     // Already focusing (e.g. the sprint "keep going" handoff) — show it
     // immediately. A delay here left the user staring at Home first.
     if (focusTaskId) {
-      setOpen(true);
+      // …unless a page tour is on screen — never open behind a tour card.
+      waitForTourEnd().then(() => setOpen(true));
       return;
     }
     if (localStorage.getItem("focus_intro_seen") === "1" || user?.focus_intro_seen) return;
     if (pickableTasks.length < 2) return;
-    const t = setTimeout(() => {
+    const t = setTimeout(async () => {
+      await waitForTourEnd();
       setOpen(true);
       localStorage.setItem("focus_intro_seen", "1");
       window.dispatchEvent(new CustomEvent("focus-intro-seen"));

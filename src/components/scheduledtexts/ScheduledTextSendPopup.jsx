@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { scheduleReminder, cancelScheduledReminder } from "@/components/utils/reminderScheduler";
 import { cancelScheduledTextReminders } from "@/components/utils/scheduledTextScheduler";
 import { openSmsApp } from "@/components/utils/openSmsApp";
+import { isTourActive } from "@/components/onboarding/tourActive";
 
 /**
  * Morning-of "time to send your text" popup. Appears when a scheduled text
@@ -42,6 +43,7 @@ export default function ScheduledTextSendPopup({ user, theme }) {
 
   const check = useCallback(async () => {
     if (!user?.email) return;
+    if (isTourActive()) return; // never pop up behind a page tour
     try {
       const now = new Date();
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());

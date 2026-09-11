@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import BirthdayTextDialog from "./BirthdayTextDialog";
+import { isTourActive } from "@/components/onboarding/tourActive";
 
 function todayKey() {
   const d = new Date();
@@ -37,6 +38,7 @@ export default function BirthdayTextPromptPopup({ user, theme }) {
   const check = useCallback(async () => {
     if (!user?.email) return;
     if (isOpenRef.current) return;
+    if (isTourActive()) return; // never pop up behind a page tour
     try {
       const tasks = await base44.entities.Task.filter({ status: "active" }, "-next_reminder", 500);
       const candidate = (tasks || [])

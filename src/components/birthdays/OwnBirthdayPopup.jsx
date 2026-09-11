@@ -9,6 +9,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { waitForTourEnd } from "@/components/onboarding/tourActive";
 
 function todayKey() {
   const d = new Date();
@@ -32,6 +33,7 @@ export default function OwnBirthdayPopup({ user, theme }) {
 
   const check = useCallback(async () => {
     if (!user?.email) return;
+    await waitForTourEnd(); // never pop up behind a page tour
     try {
       const tasks = await base44.entities.Task.filter({ is_own_birthday: true }, "-next_reminder", 20);
       const todays = (tasks || []).find((t) => t.next_reminder && isToday(t.next_reminder));

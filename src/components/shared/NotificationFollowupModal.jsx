@@ -17,6 +17,7 @@ import {
 import { updateTodaysSummary } from "@/components/utils/dailySummaryHelper";
 import { getReminderCopy, smartSnoozeTime } from "@/components/utils/reminderCopy";
 import { useLaunch } from "@/context/LaunchContext";
+import { waitForTourEnd } from "@/components/onboarding/tourActive";
 
 const SNOOZE_OPTIONS = [
   { label: "1 hour", minutes: 60 },
@@ -54,6 +55,7 @@ export default function NotificationFollowupModal({ user, theme }) {
   const loadTaskById = useCallback(
     async (taskId, { onlyIfDue = false } = {}) => {
       if (!taskId) return;
+      await waitForTourEnd(); // never pop up behind a page tour
       try {
         const tasks = await base44.entities.Task.filter({ id: taskId });
         if (tasks.length > 0 && tasks[0].status === "active") {
@@ -90,6 +92,7 @@ export default function NotificationFollowupModal({ user, theme }) {
 
     const checkOverdueTasks = async () => {
       if (loadingRef.current) return;
+      await waitForTourEnd(); // never pop up behind a page tour
       loadingRef.current = true;
       try {
         const tasks = await base44.entities.Task.filter({ status: "active" });
