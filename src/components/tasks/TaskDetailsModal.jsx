@@ -1445,12 +1445,39 @@ Return JSON:
     });
   };
 
+  // Switching to a repeating cadence throws away any lead-time / smart reminder
+  // plan the task picked up earlier — a repeat just fires on its schedule.
+  const handleSetRepeat = async (pattern) => {
+    if (!task) return;
+    const oldIds = Array.from(new Set([
+      ...(task.onesignal_notification_ids || []),
+      ...((task.reminder_schedule || []).map((r) => r.notification_id).filter(Boolean)),
+    ]));
+    const updates = {
+      recurrence_pattern: pattern,
+      reminder_schedule: [],
+      onesignal_notification_ids: [],
+    };
+    onUpdate({ ...task, ...updates });
+    toast({ title: 'Repeat saved ✓', description: `Repeats ${pattern} — one reminder each time, nothing extra.` });
+    (async () => {
+      try {
+        if (oldIds.length > 0) {
+          await cancelScheduledReminder(oldIds).catch(e => console.error('Failed to cancel reminders:', e));
+        }
+        await Task.update(task.id, updates);
+      } catch (e) {
+        console.error('Error setting repeat:', e);
+      }
+    })();
+  };
+
   // One entry point for the ReminderTypeSelector — routes each type to the
   // right existing handler so all the cancel/reschedule logic stays in one place.
   const handleChangeReminderType = (type, sub) => {
     if (type === 'smart') return handleSetSmartReminders();
     if (type === 'interval') return handleUpdateField('reminder_interval', sub);
-    if (type === 'repeat') return handleUpdateField('recurrence_pattern', sub);
+    if (type === 'repeat') return handleSetRepeat(sub);
     if (type === 'once') return handleUpdateField('reminder_interval', 'once');
     if (type === 'event') return handleSelectEvent();
     if (type === 'birthday') return handleClassificationChange('birthday');
@@ -1594,7 +1621,9 @@ Return JSON:
 
               {/* Intelligent notification schedule — visible directly, not buried in a popover.
                   Always shown for events so the future-reminder list is visible. */}
-              {((task.reminder_schedule && task.reminder_schedule.length > 0) || task.classification === 'event') && (
+              {/* A repeating task is black and white: it fires on its cadence.
+                   No smart/lead-time reminder plan. */}
+              {currentType !== 'repeat' && ((task.reminder_schedule && task.reminder_schedule.length > 0) || task.classification === 'event') && (
                 <div className="w-full mt-2">
                   <SmartReminderEditor task={task} theme={theme} onUpdate={onUpdate} />
                 </div>
