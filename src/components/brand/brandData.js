@@ -59,7 +59,7 @@ export const FEATURES = [
 ];
 
 export const VOICE_PRINCIPLES = [
-  { title: "Built by one of us", desc: "ADHDone was built by someone with ADHD, for people with ADHD. The voice comes from lived experience, not a textbook." },
+  { title: "Made by someone with ADHD, for people with ADHD", desc: "The voice comes from lived experience, not a textbook." },
   { title: "Not another checklist app", desc: "We don't sell productivity. We sell actually getting the thing done — and we're honest that reminders alone don't do that." },
   { title: "Like texting a friend", desc: "Short, warm, a little cheeky. We're the friend who says 'hey, the Roomba isn't going to run itself' — not a clinician with a clipboard." },
   { title: "A little spicy", desc: "Real, funny when it fits, a touch of attitude. Never sterile, never corporate." },

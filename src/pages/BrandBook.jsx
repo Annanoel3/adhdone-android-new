@@ -37,7 +37,7 @@ export default function BrandBook() {
 
         {/* Story */}
         <section className="mb-20">
-          <SectionTitle kicker="Where it comes from" title="Made by one of us.">
+          <SectionTitle kicker="Where it comes from" title="Made by someone with ADHD, for people with ADHD.">
             This isn't a productivity company that discovered ADHD as a market. It's one person with ADHD
             who got tired of apps that assume you'll just… do the thing when the notification says so.
             Every feature exists because it solved a real problem on a real Tuesday: the idea that flew
