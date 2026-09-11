@@ -43,10 +43,12 @@ export function getCurrentReminderType(task) {
   if (task.classification === 'event') return 'event';
   if (task.recurrence_pattern && task.recurrence_pattern !== 'none') return 'repeat';
   if (task.reminder_interval && task.reminder_interval !== 'once') return 'interval';
+  // A day-only task (tied to a day, no specific clock time) is run by the
+  // smart-nudge system even when stored as 'once' — its next_reminder is just
+  // the day anchor. Only a task pinned to an actual clock time is One-Time.
+  if (task.day_only_task) return 'smart';
   if (task.reminder_interval === 'once') return 'once';
-  // A day-only task (tied to a day, no specific time) is run by the smart-nudge
-  // system — its next_reminder is just the day anchor, not a one-time reminder.
-  if (task.next_reminder && !task.day_only_task) return 'once';
+  if (task.next_reminder) return 'once';
   return 'smart';
 }
 
