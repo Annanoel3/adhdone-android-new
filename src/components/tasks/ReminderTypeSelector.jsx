@@ -32,6 +32,7 @@ const INTERVAL_OPTIONS = [
 
 const REPEAT_OPTIONS = [
   { value: 'daily', label: 'Daily' },
+  { value: 'weekdays', label: 'Weekdays only (Mon–Fri)' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
   { value: 'yearly', label: 'Yearly' },
@@ -75,7 +76,11 @@ export default function ReminderTypeSelector({ task, theme, onChangeType }) {
 
   let pillLabel = meta.label;
   if (currentType === 'interval') pillLabel = formatIntervalLabel(task.reminder_interval);
-  if (currentType === 'repeat') pillLabel = `Repeats ${task.recurrence_pattern}`;
+  if (currentType === 'repeat') {
+    pillLabel = task.recurrence_pattern === 'weekdays'
+      ? 'Repeats weekdays'
+      : `Repeats ${task.recurrence_pattern}`;
+  }
   if (currentType === 'once' && task.next_reminder) {
     const d = new Date(task.next_reminder);
     const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -153,7 +158,7 @@ export default function ReminderTypeSelector({ task, theme, onChangeType }) {
               ))}
             </div>
           )}
-          {renderRow('repeat', Repeat, 'Repeat on Completion', 'Recreates daily / weekly / monthly / yearly', true, () => setExpanded(expanded === 'repeat' ? null : 'repeat'))}
+          {renderRow('repeat', Repeat, 'Repeat on Completion', 'Recreates daily / weekdays / weekly / monthly / yearly', true, () => setExpanded(expanded === 'repeat' ? null : 'repeat'))}
           {expanded === 'repeat' && (
             <div className="ml-6 space-y-0.5">
               {REPEAT_OPTIONS.map((o) => (

@@ -230,13 +230,14 @@
       "enum": [
         "none",
         "daily",
+        "weekdays",
         "weekly",
         "every_other_week",
         "monthly",
         "yearly"
       ],
       "default": "none",
-      "description": "How often this task should recur after completion"
+      "description": "How often this task should recur after completion. 'weekdays' = business days only (Mon\u2013Fri): the next occurrence skips Saturday and Sunday."
     },
     "birthday_person": {
       "type": "string",

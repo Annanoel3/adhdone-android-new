@@ -1,36 +1,35 @@
 import { base44 } from '@/api/base44Client';
 
+// Advance a date by one cycle of the pattern. 'weekdays' steps forward a day
+// and then skips Saturday/Sunday, so a business-days habit never lands on the
+// weekend.
+function advance(date, pattern) {
+  const d = new Date(date);
+  if (pattern === 'daily') {
+    d.setDate(d.getDate() + 1);
+  } else if (pattern === 'weekdays') {
+    d.setDate(d.getDate() + 1);
+    while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  } else if (pattern === 'weekly') {
+    d.setDate(d.getDate() + 7);
+  } else if (pattern === 'every_other_week') {
+    d.setDate(d.getDate() + 14);
+  } else if (pattern === 'monthly') {
+    d.setMonth(d.getMonth() + 1);
+  } else if (pattern === 'yearly') {
+    d.setFullYear(d.getFullYear() + 1);
+  }
+  return d;
+}
+
 function getNextRecurrenceDate(task) {
   const baseDate = task.next_reminder ? new Date(task.next_reminder) : new Date();
   const now = new Date();
-  let nextDate = new Date(baseDate);
-
-  if (task.recurrence_pattern === 'daily') {
-    nextDate.setDate(nextDate.getDate() + 1);
-  } else if (task.recurrence_pattern === 'weekly') {
-    nextDate.setDate(nextDate.getDate() + 7);
-  } else if (task.recurrence_pattern === 'every_other_week') {
-    nextDate.setDate(nextDate.getDate() + 14);
-  } else if (task.recurrence_pattern === 'monthly') {
-    nextDate.setMonth(nextDate.getMonth() + 1);
-  } else if (task.recurrence_pattern === 'yearly') {
-    nextDate.setFullYear(nextDate.getFullYear() + 1);
-  }
+  let nextDate = advance(baseDate, task.recurrence_pattern);
 
   // If computed date is still in the past, calculate from now
   if (nextDate <= now) {
-    nextDate = new Date(now);
-    if (task.recurrence_pattern === 'daily') {
-      nextDate.setDate(nextDate.getDate() + 1);
-    } else if (task.recurrence_pattern === 'weekly') {
-      nextDate.setDate(nextDate.getDate() + 7);
-    } else if (task.recurrence_pattern === 'every_other_week') {
-      nextDate.setDate(nextDate.getDate() + 14);
-    } else if (task.recurrence_pattern === 'monthly') {
-      nextDate.setMonth(nextDate.getMonth() + 1);
-    } else if (task.recurrence_pattern === 'yearly') {
-      nextDate.setFullYear(nextDate.getFullYear() + 1);
-    }
+    nextDate = advance(now, task.recurrence_pattern);
   }
 
   return nextDate;
@@ -77,6 +76,7 @@ export function getRecurrenceLabel(pattern) {
   const labels = {
     none: '',
     daily: '🔁 Daily',
+    weekdays: '🔁 Weekdays (Mon–Fri)',
     weekly: '🔁 Weekly',
     every_other_week: '🔁 Every other week',
     monthly: '🔁 Monthly',

@@ -137,6 +137,25 @@ export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDe
         setEventTime('');
       }
       setTimeout(() => { isInitializingRef.current = false; }, 100);
+
+      // Self-heal tasks created before repeats and smart schedules were kept
+      // separate: a repeating task must never carry a lead-time reminder plan,
+      // so drop it (and its live notifications) the first time it's opened.
+      if (task.recurrence_pattern && task.recurrence_pattern !== 'none' && (task.reminder_schedule || []).length > 0) {
+        const staleIds = Array.from(new Set([
+          ...(task.onesignal_notification_ids || []),
+          ...task.reminder_schedule.map((r) => r.notification_id).filter(Boolean),
+        ]));
+        (async () => {
+          try {
+            if (staleIds.length > 0) await cancelScheduledReminder(staleIds).catch(() => {});
+            await Task.update(task.id, { reminder_schedule: [], onesignal_notification_ids: [] });
+            onUpdate({ ...task, reminder_schedule: [], onesignal_notification_ids: [] });
+          } catch (e) {
+            console.error('Failed to clear stale schedule on repeating task:', e);
+          }
+        })();
+      }
     }
   }, [task?.id, isOpen]);
 
