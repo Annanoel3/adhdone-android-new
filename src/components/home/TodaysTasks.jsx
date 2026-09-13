@@ -372,11 +372,13 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
   // For events, the pill shows date AND time (e.g. "Sep 1, 11:25 AM") — an
   // event without its time is useless. Uses event_time when set, else due_date.
   const formatEventDateTime = (task) => {
-    const at = task.event_time || task.due_date;
+    const at = task.event_time || task.due_date || task.next_reminder;
     if (!at) return null;
     const date = new Date(at);
+    if (task.day_only_task) return `${formatReminderDate(at)} • all day`;
     return `${formatReminderDate(at)}, ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
   };
+  const isEvent = (task) => task.classification === 'event';
 
   const getSubtasks = (taskId) => {
     return tasks
@@ -619,8 +621,21 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                         )
                       )}
 
-                      {/* Due date pill for one-time and no-reminder tasks — THE prominent date on the closed card */}
-                      {(!task.reminder_interval || task.reminder_interval === 'once') && (
+                      {/* Events: the pill IS the event date/time — never a "due date", never an empty "Add Due Date" prompt. */}
+                      {isEvent(task) && formatEventDateTime(task) && (
+                        <span className={`flex items-center gap-1 border px-2 py-1 rounded text-xs ${
+                          theme === 'dark'
+                            ? 'bg-purple-900 text-purple-300 border-purple-700'
+                            : 'border-purple-300 bg-purple-50 text-purple-700'
+                        }`}>
+                          <Calendar className="w-3 h-3" />
+                          {formatEventDateTime(task)}
+                        </span>
+                      )}
+
+                      {/* Due date pill for one-time and no-reminder TASKS — THE prominent date on the closed card.
+                          Events and birthdays have their own date treatment above/below. */}
+                      {!isEvent(task) && !isBirthdayTask(task) && (!task.reminder_interval || task.reminder_interval === 'once') && (
                         task.due_date ? (
                           <Popover>
                             <PopoverTrigger asChild>
@@ -639,9 +654,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                                 <CalendarClock className="w-3 h-3" />
                                 {new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
                                   ? 'Overdue'
-                                  : task.classification === 'event'
-                                    ? formatEventDateTime(task)
-                                    : `Due ${formatReminderDate(task.due_date)}`}
+                                  : `Due ${formatReminderDate(task.due_date)}`}
                               </button>
                             </PopoverTrigger>
                             <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`} onClick={(e) => e.stopPropagation()}>
@@ -699,8 +712,9 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                         </span>
                       )}
 
-                      {/* Smart Reminders badge — the task is handled by the LLM smart-nudge system */}
-                      {!task.reminder_interval && (
+                      {/* Smart Reminders badge — the task is handled by the LLM smart-nudge system.
+                          Events and birthdays have fixed reminder ladders, so the badge would be wrong for them. */}
+                      {!task.reminder_interval && !isEvent(task) && !isBirthdayTask(task) && (
                         <Popover>
                           <PopoverTrigger asChild>
                             <button
