@@ -54,6 +54,7 @@ export default function LandingPage() {
         <span className="inline-flex items-center gap-2 bg-white/80 backdrop-blur text-[#D9667A] text-sm font-semibold px-4 py-1.5 rounded-full mb-6 shadow-sm">
           <Sparkles className="w-4 h-4" /> Not another checklist app
         </span>
+        <DeveloperCredit compact className="mb-5" />
         <h1 className="text-4xl md:text-5xl font-extrabold leading-[1.1] tracking-tight mb-5">
           Built by someone with ADHD,<br />for people with ADHD.
         </h1>
@@ -87,7 +88,6 @@ export default function LandingPage() {
       </section>
 
       <section className="px-6 pb-12 max-w-2xl mx-auto w-full">
-        <DeveloperCredit className="mb-8" />
         <GoogleDisclosure />
       </section>
 
