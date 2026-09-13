@@ -1239,11 +1239,14 @@ Return JSON:
   };
 
   // For multi-day events, show "Aug 1 – Aug 3" instead of just the start.
+  // The event's date can live on ANY of these three fields depending on which
+  // code path created it — reading only next_reminder produced "Event null".
   const formatEventDateRange = () => {
-    if (!task.next_reminder) return null;
-    const startStr = formatReminderDate(task.next_reminder);
+    const start = task.event_time || task.next_reminder || task.due_date;
+    if (!start) return null;
+    const startStr = formatReminderDate(start);
     if (!task.end_date) return startStr;
-    const startDay = new Date(task.next_reminder).toDateString();
+    const startDay = new Date(start).toDateString();
     const endDay = new Date(task.end_date).toDateString();
     if (startDay === endDay) return startStr;
     return `${startStr} – ${formatReminderDate(task.end_date)}`;
@@ -1571,12 +1574,14 @@ Return JSON:
             {/* Task Type — the primary control that determines notification behavior.
                 Pulled into its own row above the other pills so it stands out. */}
             <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold uppercase tracking-wide ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Task Type</span>
+              <span className={`text-xs font-bold uppercase tracking-wide ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Type</span>
               <ReminderTypeSelector task={task} theme={theme} onChangeType={handleChangeReminderType} />
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {/* Back Burner — silence all notifications for this task */}
+              {/* Back Burner — a fixed-time event still happens whether or not
+                   you silence it, so this only belongs on tasks. */}
+              {!isEvent && (
               <Button
                 variant="outline"
                 size="sm"
@@ -1592,8 +1597,11 @@ Return JSON:
                 {task.silenced ? <BellOff className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
                 {task.silenced ? 'Back Burner 🔇' : 'Back Burner'}
               </Button>
+              )}
 
-              {/* Energy Badge - Clickable */}
+              {/* Energy Badge — energy is for picking which task to start next.
+                   An event isn't a choice, so it doesn't get one. */}
+              {!isEvent && (
               <Popover>
                 <PopoverTrigger asChild>
                   <button className={`cursor-pointer hover:opacity-80 transition-opacity ${
@@ -1615,6 +1623,7 @@ Return JSON:
                   </div>
                 </PopoverContent>
               </Popover>
+              )}
 
               {/* Priority Badge - Clickable */}
               <Popover>
@@ -1644,7 +1653,7 @@ Return JSON:
                    No smart/lead-time reminder plan. */}
               {currentType !== 'repeat' && ((task.reminder_schedule && task.reminder_schedule.length > 0) || task.classification === 'event') && (
                 <div className="w-full mt-2">
-                  <SmartReminderEditor task={task} theme={theme} onUpdate={onUpdate} />
+                  <SmartReminderEditor task={task} theme={theme} onUpdate={onUpdate} isEvent={isEvent} />
                 </div>
               )}
 
@@ -2202,7 +2211,7 @@ Return JSON:
               }
             >
               <CheckCircle2 className="w-4 h-4 mr-2" />
-              Mark as Complete
+              {isEvent ? 'Went' : 'Mark as Complete'}
             </Button>
           </DialogFooter>
         </DialogContent>

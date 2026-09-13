@@ -10,7 +10,7 @@ import { scheduleReminder, cancelScheduledReminder } from '../utils/reminderSche
  * Lets the user turn off individual reminders or add custom ones.
  * Each reminder maps to a single OneSignal scheduled notification.
  */
-export default function SmartReminderEditor({ task, theme, onUpdate }) {
+export default function SmartReminderEditor({ task, theme, onUpdate, isEvent = false }) {
   const [isAdding, setIsAdding] = useState(false);
   const [newDate, setNewDate] = useState('');
   const [newTime, setNewTime] = useState('');
@@ -145,7 +145,7 @@ export default function SmartReminderEditor({ task, theme, onUpdate }) {
     }`}>
       <p className={`font-semibold text-xs flex items-center gap-1 ${isDark ? 'text-purple-200' : 'text-purple-800'}`}>
         <Sparkles className="w-3 h-3" />
-        Smart Reminder Schedule
+        {isEvent ? 'Event Reminders' : 'Smart Reminder Schedule'}
       </p>
 
       {schedule.length === 0 && task.reminder_schedule_summary && (
@@ -158,7 +158,9 @@ export default function SmartReminderEditor({ task, theme, onUpdate }) {
 
       {schedule.length === 0 && !task.reminder_schedule_summary && (
         <p className={`text-xs ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>
-          No reminders scheduled yet. Add one below, or save a new date &amp; time above to let the AI build a full schedule.
+          {isEvent
+            ? 'No reminders yet — set the event date & time below and you\'ll get the night-before, morning-of, and leave-by heads-ups.'
+            : 'No reminders scheduled yet. Add one below, or save a new date & time above to let the AI build a full schedule.'}
         </p>
       )}
 
@@ -259,7 +261,9 @@ export default function SmartReminderEditor({ task, theme, onUpdate }) {
       )}
 
       <p className={`text-xs italic ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>
-        Tap × to turn off a reminder. Save a new date &amp; time above to regenerate the full schedule.
+        {isEvent
+          ? 'Tap × to turn off a reminder. Changing the event date & time rebuilds them all.'
+          : 'Tap × to turn off a reminder. Save a new date & time above to regenerate the full schedule.'}
       </p>
     </div>
   );
