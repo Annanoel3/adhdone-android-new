@@ -9,10 +9,11 @@ const LOGO = "https://media.base44.com/images/public/68dd79726fce6eca73056b9b/e1
 export default function DeveloperCredit({ className = "", compact = false }) {
   if (compact) {
     return (
-      <div className={`inline-flex items-center gap-2.5 rounded-full bg-white/80 backdrop-blur border border-white/70 shadow-sm pl-1.5 pr-4 py-1.5 ${className}`}>
-        <img src={LOGO} alt="Mediocre at Best Dev" className="w-7 h-7 rounded-full" />
-        <span className="text-sm text-[#5A5252]">
-          An app by <span className="font-bold text-[#2F2A2A]">Mediocre at Best Dev</span>
+      <div className={`inline-flex items-center gap-3 rounded-2xl bg-white/80 backdrop-blur border border-white/70 shadow-sm pl-2 pr-5 py-2 ${className}`}>
+        <img src={LOGO} alt="Mediocre at Best Dev" className="w-11 h-11 rounded-xl shadow" />
+        <span className="text-left leading-tight">
+          <span className="block text-[11px] font-bold tracking-widest uppercase text-[#B4A6A6]">An app by</span>
+          <span className="block text-base font-extrabold text-[#2F2A2A]">Mediocre at Best Dev</span>
         </span>
       </div>
     );
