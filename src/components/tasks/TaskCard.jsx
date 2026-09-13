@@ -317,6 +317,18 @@ export default function TaskCard({
     return `${startStr} – ${formatReminderDate(task.end_date)}`;
   };
 
+  // Events: the pill IS the event date/time — from event_time, else due_date,
+  // else next_reminder. Never a "due date", never an empty "add" prompt.
+  const eventDateTimeLabel = (() => {
+    if (!isEvent) return null;
+    const at = task.event_time || task.due_date || task.next_reminder;
+    if (!at) return null;
+    const range = task.end_date && new Date(at).toDateString() !== new Date(task.end_date).toDateString()
+      ? `${formatReminderDate(at)} – ${formatReminderDate(task.end_date)}`
+      : formatReminderDate(at);
+    return task.day_only_task ? `${range} • all day` : `${range} • ${formatReminderTime(at)}`;
+  })();
+
   const shortInterval = (interval) => {
     const m = { '10min':'10m','20min':'20m','30min':'30m','1hour':'1h','2hours':'2h','4hours':'4h','daily':'Daily','every_other_day':'2 days','once':'Once' };
     return m[interval] || interval;
@@ -326,6 +338,16 @@ export default function TaskCard({
   // the date the user picked — it must win over a stale due_date.  For
   // recurring tasks the due_date (deadline) still takes priority.
   const collapsedDate = (() => {
+    if (isEvent) {
+      const at = task.event_time || task.due_date || task.next_reminder;
+      if (!at) return null;
+      const d = new Date(at);
+      const evToday = d.toDateString() === today.toDateString();
+      if (task.end_date && d.toDateString() !== new Date(task.end_date).toDateString()) {
+        return { label: `${formatReminderDate(at)} – ${formatReminderDate(task.end_date)}`, overdue: false, isTodayLabel: false };
+      }
+      return { label: evToday ? 'Today' : formatReminderDate(at), overdue: false, isTodayLabel: evToday };
+    }
     if (task.reminder_interval === 'once' && task.next_reminder) {
       // Multi-day events show the full span (e.g. "Dec 3 – Dec 7") on the
       // collapsed card instead of just the start date.
@@ -868,6 +890,18 @@ export default function TaskCard({
                 )
               )}
 
+              {/* Events with no editable reminder anchor still show their date/time */}
+              {isEvent && eventDateTimeLabel && !(task.reminder_interval === 'once' && task.next_reminder) && (
+                <span className={`border px-2 py-1 rounded text-xs flex items-center gap-1 ${
+                  theme === 'dark'
+                    ? 'border-purple-700 bg-purple-900/30 text-purple-300'
+                    : 'border-purple-300 bg-purple-50 text-purple-700'
+                }`}>
+                  <Calendar className="w-3 h-3" />
+                  {eventDateTimeLabel}
+                </span>
+              )}
+
               {/* Show date badge for one-time reminders with a date set */}
               {task.reminder_interval === 'once' && task.next_reminder && (
                 <Popover>
@@ -941,8 +975,8 @@ export default function TaskCard({
                 </Popover>
               )}
 
-              {/* Show "Add Reminder" button if no reminder is set */}
-              {!task.reminder_interval && !task.next_reminder && (
+              {/* Show "Add Reminder" button if no reminder is set — tasks only; events and birthdays have fixed ladders */}
+              {!task.reminder_interval && !task.next_reminder && !isEvent && task.classification !== 'birthday' && !task.birthday_person && (
                 <Popover>
                   <PopoverTrigger asChild>
                     <button
