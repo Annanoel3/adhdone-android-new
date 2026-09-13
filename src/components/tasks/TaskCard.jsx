@@ -889,7 +889,7 @@ export default function TaskCard({
                   <PopoverContent className={`w-72 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                     <div className="space-y-4 p-2">
                       <div>
-                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>{isEvent ? 'Event Date:' : 'Reminder Date:'}</label>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>{isEvent ? 'Event Date:' : 'Due Date:'}</label>
                         <input
                           type="date"
                           ref={dateInputRef}
@@ -902,7 +902,7 @@ export default function TaskCard({
                         />
                       </div>
                       <div>
-                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>{isEvent ? 'Event Time:' : 'Reminder Time:'}</label>
+                        <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>{isEvent ? 'Event Time:' : 'Due Time:'}</label>
                         <input
                           type="time"
                           ref={timeInputRef}
@@ -936,17 +936,6 @@ export default function TaskCard({
                           </p>
                         </div>
                       )}
-                      <div className={`border-t pt-2 ${theme === 'dark' ? 'border-gray-700' : ''}`}>
-                        <p className={`text-xs font-semibold uppercase mb-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Or switch to repeating</p>
-                        <p className={`text-xs mb-0.5 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Frequent nudges</p>
-                        <button onClick={() => handleIntervalChange('10min')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 10 min</button>
-                        <button onClick={() => handleIntervalChange('30min')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 30 min</button>
-                        <button onClick={() => handleIntervalChange('1hour')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button>
-                        <button onClick={() => handleIntervalChange('2hours')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button>
-                        <p className={`text-xs mt-1.5 mb-0.5 ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}>Daily check-ins</p>
-                        <button onClick={() => handleIntervalChange('daily')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Daily</button>
-                        <button onClick={() => handleIntervalChange('every_other_day')} className={`w-full text-left px-3 py-1.5 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every other day</button>
-                      </div>
                     </div>
                   </PopoverContent>
                 </Popover>
