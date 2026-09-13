@@ -14,6 +14,7 @@ export default function DeveloperCredit({ className = "", compact = false }) {
         <span className="text-left leading-tight">
           <span className="block text-[11px] font-bold tracking-widest uppercase text-[#B4A6A6]">An app by</span>
           <span className="block text-base font-extrabold text-[#2F2A2A]">Mediocre at Best Dev</span>
+          <span className="block text-xs text-[#7A6F6F] mt-0.5">One woman, building her way out of her own chaos.</span>
         </span>
       </div>
     );
