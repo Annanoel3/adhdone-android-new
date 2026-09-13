@@ -9,9 +9,16 @@
 //  - SAME TASK, SAME TIME: another live push about the same task within
 //    SAME_TASK_GAP_MS is a duplicate → block. The gap is under 10 minutes so an
 //    explicit "every 10 minutes" reminder still passes.
-//  - DON'T STACK: proactive pushes (nudge / digest / motivation / general) hold
-//    off when ANY other push to that user lands within STACK_GAP_MS. They aren't
-//    time-critical, so they yield to reminders the user explicitly set.
+//  - DON'T STACK: proactive pushes (nudge / digest / motivation / general, and
+//    'task_checkin' = a clock-time check-in like "morning of 9 AM" / "night
+//    before") hold off when ANY other push to that user lands within
+//    STACK_GAP_MS. They aren't time-critical, so they yield to reminders tied
+//    to a real moment ("1 hour before", "at the time", recurring cadence).
+//  - EVICT: when a time-critical push is booked and a *pending* proactive push
+//    already sits in its window, the proactive one is cancelled instead — so
+//    the order the two were booked in never decides which one the user gets.
+//    Two pushes were landing in the same minute because the check-in happened
+//    to be booked first; staggering was ruled out, so the softer one goes.
 //
 // A conflicting entry is verified against OneSignal before it blocks anything:
 // if that booking was cancelled (many cancel paths don't touch the ledger), the
@@ -19,10 +26,41 @@
 
 const SAME_TASK_GAP_MS = 9 * 60 * 1000;
 const STACK_GAP_MS = 20 * 60 * 1000;
-const PROACTIVE_KINDS = new Set(['smart_nudge', 'daily_digest', 'motivation', 'general']);
+const PROACTIVE_KINDS = new Set(['smart_nudge', 'daily_digest', 'motivation', 'general', 'task_checkin']);
 
 function ledger(base44: any) {
   return base44.asServiceRole.entities.NotificationLedger;
+}
+
+// Cancel a pending proactive booking so a time-critical one can take its slot.
+// The owning task's saved schedule is trimmed too — otherwise the refill cron
+// would see an entry with no live id and book the check-in right back.
+async function evict(base44: any, entry: any): Promise<void> {
+  const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+  const key = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+  if (entry.notification_id && appId && key) {
+    try {
+      await fetch(`https://onesignal.com/api/v1/notifications/${entry.notification_id}?app_id=${appId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Basic ${key}` },
+      });
+    } catch {}
+  }
+  try { await ledger(base44).delete(entry.id); } catch {}
+  if (entry.task_id && entry.notification_id) {
+    try {
+      const task = await base44.asServiceRole.entities.Task.get(entry.task_id);
+      if (task) {
+        await base44.asServiceRole.entities.Task.update(task.id, {
+          onesignal_notification_ids: (task.onesignal_notification_ids || []).filter((id: string) => id !== entry.notification_id),
+          reminder_schedule: (task.reminder_schedule || []).filter((r: any) => r.notification_id !== entry.notification_id),
+        });
+      }
+    } catch (e) {
+      console.error('[sendLedger] evict: could not trim task schedule:', e);
+    }
+  }
+  console.log(`[sendLedger] EVICTED ${entry.kind} "${entry.title || ''}" at ${entry.send_at} to make room for a time-critical push`);
 }
 
 async function stillLive(notificationId: string | undefined): Promise<boolean> {
@@ -74,10 +112,18 @@ export async function ledgerCheck(
     const sameTask = !!taskId && entry.task_id === taskId;
     const duplicate = sameTask && diff < SAME_TASK_GAP_MS;
     const stacked = proactive && diff < STACK_GAP_MS;
-    if (!duplicate && !stacked) continue;
+    // A time-critical push wins its slot: a pending proactive push already
+    // booked there is cancelled rather than letting the two land together.
+    const entryPending = new Date(entry.send_at).getTime() > Date.now() && !!entry.notification_id;
+    const evicts = !proactive && PROACTIVE_KINDS.has(entry.kind) && entryPending && diff < STACK_GAP_MS;
+    if (!duplicate && !stacked && !evicts) continue;
 
     if (!(await stillLive(entry.notification_id))) {
       try { await ledger(base44).delete(entry.id); } catch {}
+      continue;
+    }
+    if (evicts) {
+      await evict(base44, entry);
       continue;
     }
     const reason = duplicate ? 'same_task_duplicate' : 'stacked_on_other_push';

@@ -106,6 +106,9 @@ function resolveReminderTimes(reminders, scheduledDateISO, title = '', classific
         // The reminder AT the user's chosen time is sacred — it is never
         // shifted for quiet hours and never deduped away by another reminder.
         exact: r.relative_minutes_before === 0,
+        // Clock-time reminders ("morning of", "night before") are check-ins:
+        // they yield to time-critical pushes in the collision ledger.
+        checkin: r.relative_minutes_before == null,
         label: r.label,
         notification_title: r.notification_title || '📅 Upcoming',
         notification_body: r.notification_body || title,
@@ -198,7 +201,7 @@ export async function scheduleMultiReminders({
             screen: '/TaskNotification',
             taskId,
             urgency: urgency || 'medium',
-            type: 'task_reminder',
+            type: reminder.checkin ? 'task_checkin' : 'task_reminder',
           },
         });
         if (id) scheduled.push({ reminder, id });

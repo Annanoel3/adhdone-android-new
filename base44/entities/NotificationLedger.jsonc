@@ -12,7 +12,7 @@
     },
     "kind": {
       "type": "string",
-      "description": "task_reminder, event_reminder, birthday_reminder, birthday_text_reminder, scheduled_text, smart_nudge, daily_digest, motivation, general."
+      "description": "task_reminder (time-critical: at-the-time, lead, recurring cadence), task_checkin (clock-time check-in like 'morning of' / 'night before' \u2014 yields to and is evicted by time-critical pushes), event_reminder, birthday_reminder, birthday_text_reminder, scheduled_text, smart_nudge, daily_digest, motivation, general."
     },
     "source": {
       "type": "string",

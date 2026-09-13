@@ -199,12 +199,21 @@ export async function scheduleTaskReminders(
     const sendAt = new Date(sendAtISO);
     if (sendAt.getTime() <= Date.now()) continue;
 
+    // Same payload shape as every other booking path: schedulePush reads
+    // data.taskId / data.type for the collision ledger, and the tap-through
+    // handler reads screen + taskId. A clock-time reminder ("morning of",
+    // "night before") is a check-in — it yields to time-critical pushes.
     const res = await callFunction(base44, "schedulePush", {
       toUserExternalId: email,
       title: r.notification_title || task.title,
       body: r.notification_body || task.title,
       sendAtISO: sendAt.toISOString(),
-      data: { task_id: task.id },
+      data: {
+        screen: "/TaskNotification",
+        taskId: task.id,
+        urgency: task.urgency || "medium",
+        type: r.relative_minutes_before != null ? "task_reminder" : "task_checkin",
+      },
     });
 
     if (res?.notificationId) {
