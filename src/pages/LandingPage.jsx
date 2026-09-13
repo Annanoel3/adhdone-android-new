@@ -10,7 +10,7 @@ import { Card } from "@/components/brand/BrandSection";
 
 const BLURBS = [
   { icon: Bell, tint: "#DCF5E4", color: "#2E8B57", title: "Smart reminders that actually work", desc: "ADHDone figures out what deserves your attention and when — so the important stuff doesn't get buried." },
-  { icon: Share2, tint: "#E9E4FF", color: "#7C5CE6", title: "Create tasks from any text", desc: "Highlight a text from Mom, share it to the app, and it's a task. No retyping." },
+  { icon: Share2, tint: "#E9E4FF", color: "#7C5CE6", title: "Add tasks without opening the app", desc: "However it reaches you, it becomes a task.", fine: "Highlight text · Screenshots · Home-screen widget · Pinned notification" },
   { icon: Rocket, tint: "#FFE6D6", color: "#E0743F", title: "Launch into a task", desc: "A 5-minute countdown to liftoff, or a no-pressure sprint. Whichever gets you moving." },
   { icon: Lightbulb, tint: "#FFF3D6", color: "#D69A1E", title: "A parking lot for 2am ideas", desc: "Random idea you don't want to lose? Toss it in the Parking Lot and come back when you're ready." },
   { icon: Cake, tint: "#FFE0E8", color: "#E05A7A", title: "Never forget birthdays again", desc: "Reminders plus a drafted text ready to send. You just tap." },
@@ -70,13 +70,14 @@ export default function LandingPage() {
 
       <section className="px-6 pb-12 max-w-3xl mx-auto w-full">
         <div className="grid sm:grid-cols-2 gap-4">
-          {BLURBS.map(({ icon: Icon, tint, color, title, desc }) => (
+          {BLURBS.map(({ icon: Icon, tint, color, title, desc, fine }) => (
             <Card key={title} className="p-6 text-left">
               <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4" style={{ background: tint }}>
                 <Icon className="w-5 h-5" style={{ color }} />
               </div>
               <h3 className="font-bold mb-1.5">{title}</h3>
               <p className="text-sm text-[#5A5252] leading-relaxed">{desc}</p>
+              {fine && <p className="text-xs text-[#9A8F8F] mt-2 leading-relaxed">{fine}</p>}
             </Card>
           ))}
         </div>
