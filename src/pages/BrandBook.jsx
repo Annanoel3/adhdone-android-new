@@ -2,6 +2,7 @@ import React from "react";
 import { Brain, Heart, Bell, Timer, TrendingUp, Lightbulb, CalendarDays, Mic, Rocket, Cake, Share2, MessageCircleHeart, Sparkles } from "lucide-react";
 import BrandBackdrop from "@/components/brand/BrandBackdrop";
 import { SectionTitle, Card, Swatch } from "@/components/brand/BrandSection";
+import DeveloperCredit from "@/components/brand/DeveloperCredit";
 import { MARKETING_PALETTE, CORE_THEMES, SEASONAL_MODES, FEATURES, VOICE_PRINCIPLES, SAY_THIS, SIGNATURE_PHRASES } from "@/components/brand/brandData";
 
 export default function BrandBook() {
@@ -49,6 +50,7 @@ export default function BrandBook() {
               feel okay about it, and move on with your day. Showing up is the win."
             </p>
           </Card>
+          <DeveloperCredit className="mt-6" />
         </section>
 
         {/* Voice */}
@@ -246,6 +248,7 @@ export default function BrandBook() {
             <span className="font-bold">ADHDone</span>
           </div>
           <p className="text-sm text-[#7A6F6F]">Built by someone with ADHD, for people with ADHD. You've got this.</p>
+          <p className="text-sm text-[#7A6F6F] mt-1">An app by <span className="font-semibold text-[#4A4242]">Mediocre at Best Dev</span>.</p>
           <p className="text-xs text-[#B4A6A6] mt-2">Private brand reference — not linked in the app, share by URL only.</p>
         </footer>
       </div>

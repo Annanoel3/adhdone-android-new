@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Brain, CheckCircle2, Sparkles, Bell, Lightbulb, Rocket, Cake, Share2, TrendingUp } from "lucide-react";
 import BrandBackdrop from "@/components/brand/BrandBackdrop";
 import GoogleDisclosure from "@/components/brand/GoogleDisclosure";
+import DeveloperCredit from "@/components/brand/DeveloperCredit";
 import { Card } from "@/components/brand/BrandSection";
 
 const BLURBS = [
@@ -85,6 +86,7 @@ export default function LandingPage() {
       </section>
 
       <section className="px-6 pb-12 max-w-2xl mx-auto w-full">
+        <DeveloperCredit className="mb-8" />
         <GoogleDisclosure />
       </section>
 
@@ -94,7 +96,7 @@ export default function LandingPage() {
           <span>·</span>
           <Link to="/Terms" className="hover:text-[#2F2A2A] hover:underline">Terms of Service</Link>
         </div>
-        <p className="mt-2">© {new Date().getFullYear()} ADHDone. All rights reserved.</p>
+        <p className="mt-2">© {new Date().getFullYear()} ADHDone by Mediocre at Best Dev. All rights reserved.</p>
       </footer>
     </BrandBackdrop>
   );
