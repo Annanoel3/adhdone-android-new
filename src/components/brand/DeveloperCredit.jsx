@@ -14,7 +14,7 @@ export default function DeveloperCredit({ className = "", compact = false }) {
         <span className="text-left leading-tight">
           <span className="block text-[11px] font-bold tracking-widest uppercase text-[#B4A6A6]">An app by</span>
           <span className="block text-base font-extrabold text-[#2F2A2A]">Mediocre at Best Dev</span>
-          <span className="block text-xs text-[#7A6F6F] mt-0.5">A one-woman studio, making the tools she needed herself.</span>
+          <span className="block text-xs text-[#7A6F6F] mt-0.5">A one-woman studio, building apps to cure the chaos.</span>
         </span>
       </div>
     );
@@ -27,7 +27,7 @@ export default function DeveloperCredit({ className = "", compact = false }) {
         <p className="text-xs font-bold tracking-widest uppercase text-[#B4A6A6] mb-1">An app by</p>
         <p className="text-xl font-extrabold tracking-tight text-[#2F2A2A]">Mediocre at Best Dev</p>
         <p className="text-sm text-[#5A5252] mt-1.5 leading-relaxed">
-          A one-woman studio behind ADHDone — making the tools she needed herself, then sharing them.
+          A one-woman studio, building apps to cure the chaos.
         </p>
       </div>
     </div>
