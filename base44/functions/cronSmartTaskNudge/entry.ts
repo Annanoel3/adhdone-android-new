@@ -505,7 +505,7 @@ Return ONLY valid JSON:
       "task_index": <1-based index of the task, or 0 for a combined/multiple-urgent message>,
       "task_indexes": [<REQUIRED: the 1-based index of EVERY task this message refers to. For a single-task nudge this is just [that index]. For a combined message it MUST list all of them — if the body says "recycling and dishes", list both. Never omit a task you named in the body; a task left out here can be completed and still get nudged>],
       "delay_minutes": <minutes from now>,
-      "title": "<2-6 words with emoji>",
+      "title": "<2-6 words with emoji — the emoji must only reflect what the task literally says. Never guess what a name is: 'feed Tabitha' could be a cat, a baby, or a sourdough starter, so a proper name or ambiguous subject gets a neutral emoji (📌 ⏰ ✨ 🔔), never a species/gender/object guess>",
       "body": "<one supportive sentence>",
       "rationale": "<one short phrase: why this nudge, why this time>"
     }

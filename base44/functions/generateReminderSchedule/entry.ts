@@ -279,6 +279,7 @@ NOTIFICATION TEXT:
 For each reminder, also write a personalized, friendly notification title and body.
 TONE: Warm, supportive, and encouraging — like a friend giving a gentle nudge. Never cold, dry, or demanding. Match the ADHD-friendly vibe of the app.
 - notification_title: Short (2-6 words), warm, include a relevant emoji. Use the task name or a friendly reference.
+  - EMOJI = ONLY WHAT THE WORDS SAY. Never guess what a name refers to: "feed Tabitha" could be a cat, a baby, or a sourdough starter — a wrong guess (🐱) feels like the app isn't listening. If the task's subject is a proper name or otherwise ambiguous, use a neutral emoji (📌 ⏰ ✨ 🔔) instead of a species, gender, or object emoji.
 - notification_body: Supportive and encouraging. Reference the RELATIVE timing (e.g. "due today", "coming up in 2 days", "in about an hour") — do NOT mention the specific calendar date.
   - For advance reminders (future task, days before): be gentle and anticipatory ("Heads up!", "Don't forget", "Just a nudge")
   - For same-day reminders: be motivating and confident, as a supportive friend ("You got this!", "Hey, don't forget to...", "Quick nudge — time to...")
