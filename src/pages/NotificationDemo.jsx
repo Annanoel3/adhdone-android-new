@@ -53,9 +53,15 @@ export default function NotificationDemo() {
 
   useEffect(() => {
     setVisible(0);
-    const timers = SCRIPT.map((_, i) =>
-      setTimeout(() => setVisible(i + 1), 1000 + i * 1800)
-    );
+    // Each notification stays up long enough to actually be read: a base beat
+    // plus reading time for its own text, so longer messages linger.
+    let elapsed = 900;
+    const timers = SCRIPT.map((item, i) => {
+      const chars = `${item.title} ${item.body} ${item.why || ""}`.length;
+      const t = setTimeout(() => setVisible(i + 1), elapsed);
+      elapsed += 1100 + chars * 28;
+      return t;
+    });
     return () => timers.forEach(clearTimeout);
   }, [runId]);
 
