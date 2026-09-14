@@ -13,10 +13,18 @@ export interface ProximityPair {
   minutes: number;
 }
 
+export interface DriveTime {
+  miles: number;
+  minutes: number;
+  // True when the minutes came back as duration_in_traffic — i.e. Google had
+  // real traffic data for that departure time. False = free-flow estimate.
+  inTraffic: boolean;
+}
+
 export interface ProximityResult {
   pairs: ProximityPair[];
   // Drive time from home to each location, when a home zip is known.
-  fromHome: Record<string, { miles: number; minutes: number }>;
+  fromHome: Record<string, DriveTime>;
 }
 
 const MAX_LOCATIONS = 8; // keeps the matrix small (and the bill at zero)
@@ -29,7 +37,11 @@ const MAX_LOCATIONS = 8; // keeps the matrix small (and the bill at zero)
  */
 export async function getProximity(
   locations: string[],
-  homeZip: string = ''
+  homeZip: string = '',
+  // When given, Google returns the drive time predicted for THAT moment's
+  // traffic instead of a free-flow average. Ignored if it's in the past —
+  // the API rejects past departure times.
+  departureAt?: Date | null,
 ): Promise<ProximityResult> {
   const empty: ProximityResult = { pairs: [], fromHome: {} };
 
@@ -59,6 +71,11 @@ export async function getProximity(
   url.searchParams.set('destinations', destinations.join('|'));
   url.searchParams.set('units', 'imperial');
   url.searchParams.set('mode', 'driving');
+  const depMs = departureAt ? departureAt.getTime() : 0;
+  if (depMs > Date.now()) {
+    url.searchParams.set('departure_time', String(Math.floor(depMs / 1000)));
+    url.searchParams.set('traffic_model', 'best_guess');
+  }
   url.searchParams.set('key', apiKey);
 
   let data: any;
@@ -79,8 +96,9 @@ export async function getProximity(
     const el = row?.elements?.[colIndex];
     if (!el || el.status !== 'OK') return null;
     const miles = Math.round((el.distance?.value ?? 0) / 1609.34 * 10) / 10;
-    const minutes = Math.round((el.duration?.value ?? 0) / 60);
-    return { miles, minutes };
+    const traffic = el.duration_in_traffic?.value;
+    const minutes = Math.round((traffic ?? el.duration?.value ?? 0) / 60);
+    return { miles, minutes, inTraffic: traffic != null };
   };
 
   const result: ProximityResult = { pairs: [], fromHome: {} };

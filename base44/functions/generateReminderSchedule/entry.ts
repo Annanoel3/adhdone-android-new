@@ -32,6 +32,16 @@ function getEventSchedule(lead) {
   ];
 }
 
+// The "leave now" wording. Only claims traffic was accounted for when Google
+// actually returned a traffic-adjusted duration — otherwise it's a plain drive
+// time and saying "with traffic" would be a lie.
+function leaveNowBody(t, lead) {
+  if (!lead) return `Time to head out for "${t}". 🚗`;
+  return lead.inTraffic
+    ? `"${t}" is about ${lead.driveMinutes} min away with traffic right now — head out to get there on time. 🚗`
+    : `"${t}" is about a ${lead.driveMinutes} min drive, so head out now to get there on time. 🚗`;
+}
+
 function getEventNotificationText(label, title, lead) {
   const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
 
@@ -42,9 +52,7 @@ function getEventNotificationText(label, title, lead) {
     '1 hour before': { title: `⏰ ${t}`, body: `Almost time! Your "${t}" is in about an hour. Start wrapping up ✨` },
     'leave now': {
       title: `🚗 Time to leave — ${t}`,
-      body: lead
-        ? `"${t}" is about a ${lead.driveMinutes} min drive, so head out now to get there on time. 🚗`
-        : `Time to head out for "${t}". 🚗`,
+      body: leaveNowBody(t, lead),
     },
     'at the time': { title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` },
   };
@@ -70,9 +78,9 @@ export default async function(req) {
     // of a blanket hour: measured drive time from the user's home zip + cushion.
     const lead = dayOnly
       ? null
-      : await getTravelLead(location || '', homeZip || user?.home_zipcode || '');
+      : await getTravelLead(location || '', homeZip || user?.home_zipcode || '', scheduledDateISO);
     if (lead) {
-      console.log(`[generateReminderSchedule] Travel lead for "${title}" → ${lead.leadMinutes} min (${lead.driveMinutes} min drive)`);
+      console.log(`[generateReminderSchedule] Travel lead for "${title}" → ${lead.leadMinutes} min (${lead.driveMinutes} min drive${lead.inTraffic ? ', in traffic' : ''})`);
     }
     // The server runs in UTC. Without the user's zone, a 2:21 PM Chicago task
     // was described to the LLM as "7:21 PM", so its absolute clock-time
@@ -271,7 +279,7 @@ RULES:
 - For clock-time reminders (morning, afternoon, evening, X days before at Y AM): use ABSOLUTE
 - For "N minutes/hours before" reminders: use RELATIVE with just the number of minutes
 ${lead
-  ? `- TRAVEL: this task happens at a place that is a measured ${lead.driveMinutes} minute drive from the user's home. The "leave now" reminder is ${lead.leadMinutes} minutes before — use exactly that number, and do NOT add any other "time to head out" reminder.`
+  ? `- TRAVEL: this task happens at a place that is a measured ${lead.driveMinutes} minute drive from the user's home${lead.inTraffic ? ", measured against the traffic predicted for that time of day (you MAY say 'with traffic')" : " (free-flow estimate — do NOT mention traffic)"}. The "leave now" reminder is ${lead.leadMinutes} minutes before — use exactly that number, and do NOT add any other "time to head out" reminder.`
   : `- TRAVEL: no location is known for this task, so NEVER tell the user to leave or head out. Say "coming up" / "start wrapping up" instead.`}
 - Only include reminders that would fire AFTER the current time (${nowStr})
 
@@ -391,7 +399,7 @@ Examples:
           label: lead ? 'leave now' : '1 hour before',
           notification_title: lead ? `🚗 Time to leave — ${t}` : `⏰ ${t}`,
           notification_body: lead
-            ? `"${t}" is about a ${lead.driveMinutes} min drive, so head out now to get there on time. 🚗`
+            ? leaveNowBody(t, lead)
             : `Coming up in about an hour: "${t}". Time to start wrapping up! ✨`,
         });
       }
