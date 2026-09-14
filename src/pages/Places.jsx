@@ -6,6 +6,7 @@ import WorkAddressCard from '@/components/places/WorkAddressCard';
 import ScheduleCard from '@/components/places/ScheduleCard';
 import WorkQuietCard from '@/components/places/WorkQuietCard';
 import RemoteWorkCard from '@/components/places/RemoteWorkCard';
+import PlacesPrivacyNote from '@/components/places/PlacesPrivacyNote';
 import { base44 } from '@/api/base44Client';
 
 export default function Places() {
@@ -28,6 +29,8 @@ export default function Places() {
           "leave now" with an actual drive time behind it instead of a guess.
         </p>
       </div>
+
+      <PlacesPrivacyNote theme={theme} />
 
       <Card className={`border-none shadow-lg ${dark ? 'bg-gray-800' : 'bg-white'}`}>
         <CardHeader>
