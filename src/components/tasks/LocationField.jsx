@@ -15,12 +15,31 @@ export default function LocationField({ task, theme, onSave }) {
   const [value, setValue] = useState(task.location || '');
   // Local copy so add/remove shows instantly, before the parent's save round-trips.
   const [loc, setLoc] = useState(task.location || '');
+  // The user must confirm a location from the list before it can be saved —
+  // otherwise a half-typed (or, on Android, an invisibly-pasted) value saved
+  // nothing at all with no explanation.
+  const [confirmed, setConfirmed] = useState('');
   const wrapRef = React.useRef(null);
+  const inputRef = React.useRef(null);
 
   useEffect(() => {
     setValue(task.location || '');
     setLoc(task.location || '');
+    setConfirmed('');
   }, [task.id, task.location]);
+
+  // Android WebView paste (long-press → Paste) writes straight to the DOM node
+  // without firing React's change event, so `value` stayed empty: no
+  // suggestions appeared and Save wrote nothing. Poll the node while editing so
+  // pasted text is picked up the same as typed text.
+  useEffect(() => {
+    if (!editing) return;
+    const id = setInterval(() => {
+      const dom = inputRef.current?.value;
+      if (dom !== undefined && dom !== value) setValue(dom);
+    }, 200);
+    return () => clearInterval(id);
+  }, [editing, value]);
 
   useEffect(() => {
     if (editing) {
@@ -32,6 +51,7 @@ export default function LocationField({ task, theme, onSave }) {
     const next = v.trim();
     setLoc(next);
     setValue(next);
+    setConfirmed('');
     onSave(next ? next : null);
     setEditing(false);
   };
@@ -49,15 +69,33 @@ export default function LocationField({ task, theme, onSave }) {
       }`}>
         <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Location:</label>
         <Input
+          ref={inputRef}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => { setValue(e.target.value); setConfirmed(''); }}
+          onPaste={(e) => {
+            const pasted = e.clipboardData?.getData('text');
+            if (pasted) { e.preventDefault(); setValue(pasted.trim()); setConfirmed(''); }
+          }}
           placeholder="Address, business name, or city"
-          onKeyDown={(e) => { if (e.key === 'Enter') save(value); }}
           autoFocus
         />
-        <LocationSuggestions query={value} theme={theme} onPick={(s) => save(s)} />
+        <LocationSuggestions
+          query={value}
+          theme={theme}
+          onPick={(s) => { setValue(s); setConfirmed(s.trim()); }}
+        />
+        {value.trim() && value.trim() !== confirmed && (
+          <p className={`text-xs ${theme === 'dark' ? 'text-amber-300' : 'text-amber-600'}`}>
+            Pick a match from the list above to save it.
+          </p>
+        )}
         <div className="flex gap-2">
-          <Button type="button" onClick={() => save(value)} className="flex-1 bg-teal-600 hover:bg-teal-700 text-white">
+          <Button
+            type="button"
+            disabled={!value.trim() || value.trim() !== confirmed}
+            onClick={() => save(value)}
+            className="flex-1 bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50"
+          >
             Save Location
           </Button>
           <Button type="button" variant="outline" onClick={() => { setValue(task.location || ''); setEditing(false); }}>
