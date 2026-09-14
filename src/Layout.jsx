@@ -68,6 +68,7 @@ import SharedImageReceiver from "./components/shared/SharedImageReceiver";
 import WidgetTaskSync from "./components/shared/WidgetTaskSync";
 import WidgetOpenReceiver from "./components/shared/WidgetOpenReceiver";
 import HomeZipPrompt from "./components/shared/HomeZipPrompt";
+import EventConflictWarning from "./components/shared/EventConflictWarning";
 import QuickCapturePrompt from "./components/shared/QuickCapturePrompt";
 import PageIntroTour from "./components/onboarding/PageIntroTour";
 import WelcomeDialog from "./components/onboarding/WelcomeDialog";
@@ -1038,6 +1039,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <WidgetTaskSync />
         <WidgetOpenReceiver />
         <HomeZipPrompt user={user} theme={theme} />
+        <EventConflictWarning theme={theme} />
         <QuickCapturePrompt />
         <TaskCaptureProcessor />
         <WelcomeDialog />

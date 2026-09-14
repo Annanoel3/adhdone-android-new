@@ -6,6 +6,7 @@ import dedupeSplitTasks from "./dedupeSplitTasks";
 import { createBirthdayFromInput } from "./birthdayScheduler";
 import { toast } from "sonner";
 import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule } from "./taskSchedule";
+import { announceEventConflict } from "./eventConflicts";
 
 // Every step of turning raw user input (typed, spoken, or shared) into task
 // records. Pure async functions with no React state, so the pipeline can keep
@@ -527,6 +528,7 @@ Return JSON:
     });
 
     maybeAskForHomeZip(`${createdTask.title} ${inputText}`, parsed.location);
+    announceEventConflict(createdTask);
 
     // Never schedule a reminder in the past or immediate
     if (nextReminder && nextReminder <= new Date(now.getTime() + 2 * 60 * 1000)) {
@@ -615,6 +617,7 @@ export async function createAdvanceTask(taskData, currentUser, minutesBefore) {
     : null;
 
   const createdTask = await base44.entities.Task.create({ ...taskData });
+  announceEventConflict(createdTask);
 
   const buttons = [
     { id: "snooze_15", text: "Snooze 15 min" },
@@ -713,6 +716,8 @@ export async function createTaskWithDate(data, date, time) {
     status: 'active',
     notification_recipient_email: data.currentUser.email
   });
+
+  announceEventConflict(createdTask);
 
   const { scheduleMultiReminders } = await import('./multiReminderScheduler');
   const multiIds = await scheduleMultiReminders({
