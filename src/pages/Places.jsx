@@ -4,6 +4,7 @@ import { MapPin } from 'lucide-react';
 import HomeBaseFields from '@/components/settings/HomeBaseFields';
 import WorkAddressCard from '@/components/places/WorkAddressCard';
 import ScheduleCard from '@/components/places/ScheduleCard';
+import WorkQuietCard from '@/components/places/WorkQuietCard';
 import { base44 } from '@/api/base44Client';
 
 export default function Places() {
@@ -44,6 +45,7 @@ export default function Places() {
 
       <WorkAddressCard user={user} theme={theme} onSaved={load} />
       <ScheduleCard user={user} theme={theme} />
+      <WorkQuietCard user={user} theme={theme} />
     </div>
   );
 }

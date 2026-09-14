@@ -24,6 +24,8 @@
 // if that booking was cancelled (many cancel paths don't touch the ledger), the
 // stale entry is dropped and the send goes through.
 
+import { isWithinWorkHours } from './workHours.ts';
+
 const SAME_TASK_GAP_MS = 9 * 60 * 1000;
 const STACK_GAP_MS = 20 * 60 * 1000;
 const PROACTIVE_KINDS = new Set(['smart_nudge', 'daily_digest', 'motivation', 'general', 'task_checkin']);
@@ -81,6 +83,23 @@ async function stillLive(notificationId: string | undefined): Promise<boolean> {
   }
 }
 
+// Never lets a lookup failure silence a push — on error we assume "not at work".
+async function atWork(base44: any, email: string, at: Date): Promise<boolean> {
+  try {
+    const users = await base44.asServiceRole.entities.User.filter({ email });
+    const user = users?.[0];
+    if (!user?.work_quiet_enabled) return false;
+    let shifts: any[] = [];
+    if (user.work_schedule_mode === 'varies') {
+      shifts = await base44.asServiceRole.entities.WorkShift.filter({ created_by: email }, '-shift_date', 30);
+    }
+    return isWithinWorkHours(user, shifts, at);
+  } catch (e) {
+    console.error('[sendLedger] work-hours check failed, allowing send:', e);
+    return false;
+  }
+}
+
 export async function ledgerCheck(
   base44: any,
   opts: { email: string; taskId?: string | null; kind?: string; sendAt?: string | Date }
@@ -107,6 +126,15 @@ export async function ledgerCheck(
   }
 
   const proactive = PROACTIVE_KINDS.has(kind);
+
+  // "Don't send me notifications at work": the soft pushes stay quiet during a
+  // saved shift. Time-critical reminders are never touched — silencing those is
+  // how people miss things.
+  if (proactive && (await atWork(base44, email, new Date(sendAtMs)))) {
+    console.log(`[sendLedger] BLOCKED ${kind} for ${email} (at work)`);
+    return { allowed: false, reason: 'at_work' };
+  }
+
   for (const entry of entries) {
     const diff = Math.abs(new Date(entry.send_at).getTime() - sendAtMs);
     const sameTask = !!taskId && entry.task_id === taskId;

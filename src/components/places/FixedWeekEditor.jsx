@@ -10,7 +10,7 @@ const DAYS = [
 ];
 
 // Same days and times every week — stored on the profile as
-// [{ day: 0-6, arrive_by: 'HH:MM' }].
+// [{ day: 0-6, arrive_by: 'HH:MM', ends_at: 'HH:MM' }].
 export default function FixedWeekEditor({ user, theme }) {
   const [days, setDays] = useState({});
   const [saving, setSaving] = useState(false);
@@ -18,7 +18,9 @@ export default function FixedWeekEditor({ user, theme }) {
 
   useEffect(() => {
     const map = {};
-    (user?.work_fixed_days || []).forEach((d) => { map[d.day] = d.arrive_by || '09:00'; });
+    (user?.work_fixed_days || []).forEach((d) => {
+      map[d.day] = { arrive_by: d.arrive_by || '09:00', ends_at: d.ends_at || '17:00' };
+    });
     setDays(map);
   }, [user]);
 
@@ -28,15 +30,24 @@ export default function FixedWeekEditor({ user, theme }) {
     setSaved(false);
     setDays((prev) => {
       const next = { ...prev };
-      if (i in next) delete next[i]; else next[i] = '09:00';
+      if (i in next) delete next[i]; else next[i] = { arrive_by: '09:00', ends_at: '17:00' };
       return next;
     });
+  };
+
+  const setField = (i, field, value) => {
+    setSaved(false);
+    setDays((p) => ({ ...p, [i]: { ...p[i], [field]: value } }));
   };
 
   const save = async () => {
     setSaving(true);
     try {
-      const list = Object.entries(days).map(([day, arrive_by]) => ({ day: Number(day), arrive_by }));
+      const list = Object.entries(days).map(([day, v]) => ({
+        day: Number(day),
+        arrive_by: v.arrive_by,
+        ends_at: v.ends_at,
+      }));
       await base44.auth.updateMe({ work_fixed_days: list });
       setSaved(true);
     } finally {
@@ -53,13 +64,20 @@ export default function FixedWeekEditor({ user, theme }) {
             {label}
           </label>
           {i in days ? (
-            <div className="flex items-center gap-2 flex-1">
-              <span className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>be there by</span>
+            <div className="flex items-center gap-2 flex-1 flex-wrap">
+              <span className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>by</span>
               <Input
                 type="time"
-                value={days[i]}
-                onChange={(e) => { setSaved(false); setDays((p) => ({ ...p, [i]: e.target.value })); }}
-                className={`w-32 ${dark ? 'bg-gray-700 text-white border-gray-600' : ''}`}
+                value={days[i].arrive_by}
+                onChange={(e) => setField(i, 'arrive_by', e.target.value)}
+                className={`w-28 ${dark ? 'bg-gray-700 text-white border-gray-600' : ''}`}
+              />
+              <span className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>until</span>
+              <Input
+                type="time"
+                value={days[i].ends_at}
+                onChange={(e) => setField(i, 'ends_at', e.target.value)}
+                className={`w-28 ${dark ? 'bg-gray-700 text-white border-gray-600' : ''}`}
               />
             </div>
           ) : (
