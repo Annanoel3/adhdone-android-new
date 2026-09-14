@@ -3,30 +3,43 @@ import { RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DemoNotification from "@/components/demo/DemoNotification";
 
+// Every line here is something the app actually sends. No invented features.
 const SCRIPT = [
   {
     when: "Wed 8:30 PM",
-    title: "Dentist tomorrow at 9am 🦷",
-    body: "Just so tomorrow morning isn't a surprise.",
-    why: "Night-before heads up",
+    title: "Dentist tomorrow at 9:00 AM 🦷",
+    body: "So tomorrow morning isn't a surprise.",
+    why: "Night-before heads-up for day-only plans",
   },
   {
-    when: "Thu 8:05 AM",
-    title: "Time to head out 🚗",
-    body: "It's 14 minutes away — leave in about 20.",
-    why: "Real drive time, not a guess",
+    when: "Thu 7:20 AM",
+    title: "🚧 Traffic is worse than usual",
+    body: "Your drive is running about 26 min instead of the usual 14. Leaving by 8:24 keeps you on time.",
+    why: "Live Google traffic on your saved route",
+  },
+  {
+    when: "Thu 8:24 AM",
+    title: "🚗 Time to leave for work",
+    body: "It's about 26 min with traffic right now — leaving now gets you there by 9:00 AM.",
+    why: "Measured drive time + 10 min to get out the door",
+  },
+  {
+    when: "Thu 11:40 AM",
+    title: "(quiet — you're on shift)",
+    body: "Nudges and check-ins hold until you're off. Anything tied to a real time still comes through.",
+    why: "Work hours you set, respected",
   },
   {
     when: "Sat 6:00 PM",
     title: "Mom's birthday is tomorrow 🎂",
-    body: "Your text is already written — just hit send.",
-    why: "Shows up with the work done",
+    body: "Her text is already drafted — open it and hit send.",
+    why: "Birthday text written ahead of time",
   },
   {
     when: "Sun 2:15 PM",
     title: "One thing: fold the laundry 🧺",
     body: "Not the whole list. Just this one.",
-    why: "One nudge, never a pile-up",
+    why: "One nudge at a time, never a pile-up",
   },
 ];
 
@@ -60,7 +73,7 @@ export default function NotificationDemo() {
           </p>
         </div>
 
-        <div className="flex-1 flex flex-col justify-start gap-2.5 min-h-0">
+        <div className="flex-1 flex flex-col justify-start gap-2.5 min-h-0 overflow-y-auto">
           {SCRIPT.slice(0, visible).map((item, i) => (
             <DemoNotification key={`${runId}-${i}`} item={item} index={i} />
           ))}
