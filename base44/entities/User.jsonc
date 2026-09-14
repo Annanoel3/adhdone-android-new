@@ -46,6 +46,11 @@
       "default": false,
       "description": "Whether the user has already been shown (and dismissed or answered) the one-time home base ask. Stored on the profile so a new device doesn't re-ask."
     },
+    "work_remote": {
+      "type": "boolean",
+      "default": false,
+      "description": "True when the user works from home. There is no drive, so commute watch skips them entirely (no 'leave now' or traffic alerts) and no work address is asked for \u2014 but their work hours still count, so the 'don't notify me at work' quiet window works exactly the same."
+    },
     "onboarding_flags": {
       "type": "array",
       "items": {

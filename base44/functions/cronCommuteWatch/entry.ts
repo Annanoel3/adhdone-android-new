@@ -83,7 +83,8 @@ export default async function (req: Request): Promise<Response> {
     const sent: any[] = [];
 
     const users = await base44.asServiceRole.entities.User.list();
-    const commuters = users.filter((u: any) => u?.email && u?.work_address && getHomeOrigin(u));
+    // Remote workers have hours but no drive — never send them a "leave now".
+    const commuters = users.filter((u: any) => u?.email && !u?.work_remote && u?.work_address && getHomeOrigin(u));
     if (commuters.length === 0) {
       return Response.json({ success: true, checked: 0, sent: [] });
     }
