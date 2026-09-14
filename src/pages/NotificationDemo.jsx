@@ -43,6 +43,10 @@ const SCRIPT = [
   },
 ];
 
+// How many fit on one phone screen. When a batch is full, the tray clears and
+// the remaining notifications pop up on a fresh screen — never scrolling.
+const PER_SCREEN = 3;
+
 export default function NotificationDemo() {
   const [visible, setVisible] = useState(0);
   const [runId, setRunId] = useState(0);
@@ -54,6 +58,10 @@ export default function NotificationDemo() {
     );
     return () => timers.forEach(clearTimeout);
   }, [runId]);
+
+  // Only the current screenful is on display.
+  const batchStart = Math.floor(Math.max(visible - 1, 0) / PER_SCREEN) * PER_SCREEN;
+  const shown = SCRIPT.slice(batchStart, visible);
 
   return (
     <div className="h-screen w-full overflow-hidden bg-[#FDF6EC] flex flex-col items-center px-5 py-5">
@@ -73,9 +81,13 @@ export default function NotificationDemo() {
           </p>
         </div>
 
-        <div className="flex-1 flex flex-col justify-start gap-2.5 min-h-0 overflow-y-auto">
-          {SCRIPT.slice(0, visible).map((item, i) => (
-            <DemoNotification key={`${runId}-${i}`} item={item} index={i} />
+        <div className="flex-1 flex flex-col justify-start gap-2.5 min-h-0 overflow-hidden">
+          {shown.map((item, i) => (
+            <DemoNotification
+              key={`${runId}-${batchStart + i}`}
+              item={item}
+              index={i}
+            />
           ))}
         </div>
 
