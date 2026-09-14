@@ -29,11 +29,14 @@ export interface TravelLead {
  */
 export async function getTravelLead(
   location: string,
-  homeZip: string,
+  // The user's home base: a full street address when they saved one, otherwise
+  // their zip code. An address is materially better — Google measures a zip from
+  // its center point, so a large zip can be 10+ minutes off in either direction.
+  homeOrigin: string,
   eventTimeISO?: string,
 ): Promise<TravelLead | null> {
   const place = (location || '').trim();
-  const zip = (homeZip || '').trim();
+  const zip = (homeOrigin || '').trim();
   if (!place || !zip) return null;
 
   let departureAt: Date | null = null;

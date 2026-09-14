@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 import { localReminderUtc, wallClockToUtc } from '../../shared/timezoneReminders.ts';
 import { isRecurringInterval, INTERVAL_MS } from '../../shared/reminderIntervalDecision.ts';
+import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
 
@@ -527,7 +528,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
           // Lets the "leave now" reminder be based on real drive time from home
           // instead of a blanket hour before.
           location: (createdTask as any).location || (taskRecord as any).location || '',
-          homeZip: (user as any)?.home_zipcode || '',
+          homeZip: getHomeOrigin(user),
           timezone: (user as any)?.timezone || undefined,
         });
         const scheduleData = scheduleRes?.data || scheduleRes || {};

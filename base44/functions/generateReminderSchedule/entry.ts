@@ -6,6 +6,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
 import { getTravelLead } from '../../shared/travelLead.ts';
+import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 
 const openai = new OpenAI({
   apiKey: Deno.env.get('OPENAI_API_KEY')
@@ -78,7 +79,9 @@ export default async function(req) {
     // of a blanket hour: measured drive time from the user's home zip + cushion.
     const lead = dayOnly
       ? null
-      : await getTravelLead(location || '', homeZip || user?.home_zipcode || '', scheduledDateISO);
+      // Full home address when the user saved one, zip only as a fallback —
+      // measuring from a zip's center point can be 10+ minutes off.
+      : await getTravelLead(location || '', getHomeOrigin(user) || homeZip || '', scheduledDateISO);
     if (lead) {
       console.log(`[generateReminderSchedule] Travel lead for "${title}" → ${lead.leadMinutes} min (${lead.driveMinutes} min drive${lead.inTraffic ? ', in traffic' : ''})`);
     }
