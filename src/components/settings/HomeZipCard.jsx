@@ -1,9 +1,13 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { MapPin } from 'lucide-react';
+import { MapPin, ArrowRight } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
 import HomeBaseFields from './HomeBaseFields';
 
 export default function HomeZipCard({ user, theme }) {
+  const navigate = useNavigate();
+
   return (
     <Card className={`mb-6 border-none shadow-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
       <CardHeader>
@@ -12,14 +16,17 @@ export default function HomeZipCard({ user, theme }) {
           Home Base
         </CardTitle>
       </CardHeader>
-      <CardContent>
-        <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+      <CardContent className="space-y-4">
+        <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
           Optional. Your starting point for two things: telling you when to actually leave for
           something (based on real drive time and traffic), and grouping errands that are near
-          each other into one trip. No GPS, no tracking — just a fixed address you type in
-          once. Leave it blank if you'd rather not.
+          each other into one trip. No GPS, no tracking — just an address you type in once.
         </p>
         <HomeBaseFields user={user} theme={theme} />
+        <Button variant="outline" onClick={() => navigate('/Places')} className="w-full">
+          Work address &amp; schedule
+          <ArrowRight className="w-4 h-4" />
+        </Button>
       </CardContent>
     </Card>
   );

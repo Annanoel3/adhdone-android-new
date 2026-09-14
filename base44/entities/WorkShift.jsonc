@@ -1,0 +1,35 @@
+{
+  "name": "WorkShift",
+  "type": "object",
+  "properties": {
+    "shift_date": {
+      "type": "string",
+      "format": "date",
+      "description": "The local calendar day (YYYY-MM-DD) this shift falls on. One shift per day per user \u2014 retail/service schedules are published week by week, so shifts are stored as individual dated entries rather than a repeating weekly pattern."
+    },
+    "arrive_by": {
+      "type": "string",
+      "description": "Clock time (HH:MM, 24h, local) the user needs to BE at work \u2014 not when they leave home. Travel time is subtracted from this to decide when to tell them to head out."
+    },
+    "ends_at": {
+      "type": "string",
+      "description": "Optional clock time (HH:MM, 24h, local) the shift ends. Only used for display so the user can sanity-check the week they entered."
+    },
+    "place_label": {
+      "type": "string",
+      "description": "Optional label for WHERE this shift is, for people who rotate between locations (e.g. 'Store 412', 'North campus'). Empty means the saved work address."
+    }
+  },
+  "required": [
+    "shift_date",
+    "arrive_by"
+  ],
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}
