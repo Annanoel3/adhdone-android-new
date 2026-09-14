@@ -18,6 +18,7 @@ import { localMinutesOfDay, parseHHMM, isInQuietHours, adjustForQuietHours } fro
 import { getProximity, formatProximityNotes } from '../../shared/mapsDistance.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
+import { buildCompletionPattern } from '../../shared/completionPattern.ts';
 
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 
@@ -157,7 +158,11 @@ Deno.serve(async (req) => {
           (eventsByUser[email] || []).filter(e =>
             isSameLocalDay(new Date(e.event_time || e.next_reminder), now, timeZone)
           ),
-          getHomeOrigin(user)
+          getHomeOrigin(user),
+          // Learned timing: only shifts optional lead-up nudges toward hours
+          // this person actually finishes things in. Deadline reminders are
+          // untouched by it.
+          buildCompletionPattern(allTasks, email, timeZone).note
         );
 
         if (!newEntries || newEntries.length === 0) continue;
@@ -329,7 +334,8 @@ async function generateDailySchedule(
   quietEndMin: number,
   subtasksByParent: Record<string, any[]>,
   todaysEvents: any[] = [],
-  homeZip: string = ''
+  homeZip: string = '',
+  patternNote: string = ''
 ): Promise<any[] | null> {
   const hour = Math.floor(localMin / 60);
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
@@ -465,7 +471,7 @@ CURRENT CONTEXT:
 
 FULL TASK LIST (you decide what's relevant today — you have the week ahead):
 ${taskList}
-${eventList ? `\nFIXED APPOINTMENTS TODAY (context only — do NOT nudge these, they have their own reminders):\n${eventList}\n` : ''}${proximityNotes ? `\n${proximityNotes}\n` : ''}${alreadyNudgedTitles.length > 0 ? `\nTASKS ALREADY NUDGED TODAY (use check-in style — "Have you done X yet?"):\n${alreadyNudgedTitles.map(t => `- "${t}"`).join('\n')}\n` : ''}
+${patternNote ? `\n${patternNote}\n` : ''}${eventList ? `\nFIXED APPOINTMENTS TODAY (context only — do NOT nudge these, they have their own reminders):\n${eventList}\n` : ''}${proximityNotes ? `\n${proximityNotes}\n` : ''}${alreadyNudgedTitles.length > 0 ? `\nTASKS ALREADY NUDGED TODAY (use check-in style — "Have you done X yet?"):\n${alreadyNudgedTitles.map(t => `- "${t}"`).join('\n')}\n` : ''}
 YOUR APPROACH:
 - You can see the whole week. Plan TODAY's reminders — what to surface, when, what to say.
 - MEET ALL DEADLINES: if something is due today or tomorrow, it must be surfaced. If something is overdue, surface it with urgency.
@@ -474,6 +480,9 @@ YOUR APPROACH:
 - "DEADLINE in N days" vs "happens on [day]" — TREAT THESE COMPLETELY DIFFERENTLY:
   * DEADLINE tasks can be worked on ahead of time, so give them RUNWAY. How much runway depends on how much work the task actually is — judge that from the task itself: a one-step thing (pay a bill, send an email, book something online) needs 1-2 days; an errand or anything involving another person, an office, or paperwork needs 3-5 days; a genuinely big multi-step job (taxes, a report, applications, packing, cleaning out a room) deserves nudges starting a week or two out, framed around ONE small first step. Never let a big deadline task get its first nudge the day before.
   * "happens on [day]" tasks are tied to that specific day and CANNOT be done sooner — do not nudge in the days leading up (at most a heads-up the night before). Nudging early just makes the user feel behind on something they can't act on yet.
+- USE THEIR REAL RHYTHM (only if a "WHEN THIS PERSON ACTUALLY GETS THINGS DONE" block appears above): for OPTIONAL, ahead-of-deadline nudges — heads-ups, runway on a deadline days out, check-ins, no-due-date tasks — aim the send time INSIDE one of those windows, because that's when they have the capacity to act. Pick the window that still gives the task enough runway.
+  * THIS NEVER MOVES OR REMOVES A DEADLINE REMINDER. A task due today, due tomorrow, or overdue gets its nudge when the deadline needs it — even if that's an hour they rarely finish things in. The pattern only improves the timing of the extra, earlier nudges; it can never be a reason to nudge later than a deadline requires or to skip one.
+  * Don't mention the pattern in the notification text. Never say "you usually do this in the evening" — it's creepy and it reads as being watched. Just quietly pick the better time.
 - NOT EVERY TASK NEEDS A NUDGE TODAY: a low-priority task with no deadline can wait. Use judgment — you're the assistant, you decide what matters now.
 - NO EMPTY NOTIFICATIONS: every nudge must be about at least one specific task and name it in the body. Never send generic filler like "quick check on your tasks", "nothing urgent today", or an "energy boost" — a notification that doesn't tell the boss what to do is noise. If nothing genuinely needs surfacing today, return {"nudges": []}.
 - DON'T BE ANNOYING: fewer, well-timed, meaningful nudges. Not one per hour. Not one per task. If only low-priority stuff remains, ONE combined heads-up is better than a nudge per task.
