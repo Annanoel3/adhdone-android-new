@@ -45,7 +45,7 @@ const SCRIPT = [
 
 // How many fit on one phone screen. When a batch is full, the tray clears and
 // the remaining notifications pop up on a fresh screen — never scrolling.
-const PER_SCREEN = 3;
+const PER_SCREEN = 4;
 
 export default function NotificationDemo() {
   const [visible, setVisible] = useState(0);
