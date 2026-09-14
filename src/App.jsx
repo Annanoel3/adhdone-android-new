@@ -21,6 +21,7 @@ import LandingPage from '@/pages/LandingPage';
 import Home from '@/pages/Home';
 import Community from '@/pages/Community';
 import BrandBook from '@/pages/BrandBook';
+import NotificationDemo from '@/pages/NotificationDemo';
 import About from '@/pages/About';
 import Birthdays from '@/pages/Birthdays';
 import DecisionMaker from '@/pages/DecisionMaker';
@@ -91,6 +92,7 @@ const AuthenticatedApp = () => {
       <Route path="/privacypolicy" element={<PrivacyPolicyPublic />} />
       <Route path="/Terms" element={<TermsPublic />} />
       <Route path="/BrandBook" element={<BrandBook />} />
+      <Route path="/NotificationDemo" element={<NotificationDemo />} />
 
       {/* Authenticated app with layout */}
       <Route path="/Home" element={<LayoutWrapper currentPageName="Home"><Home /></LayoutWrapper>} />
