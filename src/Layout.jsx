@@ -167,12 +167,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   useEffect(() => {
     localStorage.setItem('special_mode', specialMode);
     document.documentElement.setAttribute('data-theme', specialMode);
-    
-    // Reset theme to minimalist when switching to a special mode
-    if (specialMode !== 'normal' && theme !== 'minimalist') {
-      setTheme('minimalist');
-      localStorage.setItem('adhd_theme', 'minimalist');
-    }
   }, [specialMode]);
 
   const loadAccountabilityNotifications = async () => {
@@ -296,11 +290,13 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   };
 
   const toggleTheme = () => {
-    // If in seasonal/kawaii mode, exit back to light
+    // If in seasonal/kawaii mode, exit back to light. No page reload — the
+    // seasonal overlays and the theme CSS both render off state, so reloading
+    // was pure jank (and could land before the profile save finished).
     if (specialMode !== 'normal') {
       setSpecialMode('normal');
       setTheme('minimalist');
-      saveThemeToProfile('minimalist', 'normal', seasonalUnlocked).finally(() => window.location.reload());
+      saveThemeToProfile('minimalist', 'normal', seasonalUnlocked);
       return;
     }
 
@@ -314,7 +310,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         const seasonal = getDateBasedMode();
         setSpecialMode(seasonal);
         setTheme('minimalist');
-        saveThemeToProfile('minimalist', seasonal, seasonalUnlocked).finally(() => window.location.reload());
+        saveThemeToProfile('minimalist', seasonal, seasonalUnlocked);
         return;
       }
       // Not unlocked — wrap to minimalist
