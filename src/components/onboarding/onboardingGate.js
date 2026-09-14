@@ -1,3 +1,5 @@
+import { persistOnboardingFlag } from './onboardingSync';
+
 // First-run sequencing. Everything on a fresh install happens in order:
 // welcome note → page tours → notification permission → pinned quick capture.
 // Each step marks itself done and later steps wait on it.
@@ -23,6 +25,7 @@ export const isStepDone = (key) =>
 
 export const markStepDone = (key) => {
   localStorage.setItem(key, '1');
+  persistOnboardingFlag(key);
   window.dispatchEvent(new CustomEvent(EVENT, { detail: key }));
 };
 

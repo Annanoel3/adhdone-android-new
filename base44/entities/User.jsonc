@@ -46,6 +46,14 @@
       "default": false,
       "description": "Whether the user has already been shown (and dismissed or answered) the one-time home base ask. Stored on the profile so a new device doesn't re-ask."
     },
+    "onboarding_flags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "First-run steps this ACCOUNT has already completed (welcome note, per-page tours). These flags used to live only in localStorage, so signing in again in a fresh session or on another device replayed the whole welcome + tour sequence. Kept on the profile so onboarding follows the person, not the device."
+    },
     "quiet_hours_enabled": {
       "type": "boolean",
       "default": false,

@@ -73,6 +73,7 @@ import QuickCapturePrompt from "./components/shared/QuickCapturePrompt";
 import PageIntroTour from "./components/onboarding/PageIntroTour";
 import WelcomeDialog from "./components/onboarding/WelcomeDialog";
 import { applyOnboardingReplay } from "./components/onboarding/onboardingReplay";
+import { hydrateOnboardingFlags, clearOnboardingFlags } from "./components/onboarding/onboardingSync";
 import TaskCaptureProcessor from "./components/shared/TaskCaptureProcessor";
 import { base44 } from "@/api/base44Client";
 import {
@@ -1138,7 +1139,14 @@ export default function Layout({ children, currentPageName }) {
 
     try {
       const currentUser = await base44.auth.me();
-      applyOnboardingReplay(currentUser);
+      // Onboarding state belongs to the ACCOUNT, not the device — copy the
+      // saved flags down before anything first-run can decide to show itself.
+      // A replay request wipes both sides so the sequence really does re-run.
+      if (applyOnboardingReplay(currentUser)) {
+        clearOnboardingFlags();
+      } else {
+        hydrateOnboardingFlags(currentUser);
+      }
       setUser(currentUser);
       setAuthCheckComplete(true);
 

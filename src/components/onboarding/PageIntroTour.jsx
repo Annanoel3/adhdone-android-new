@@ -4,6 +4,7 @@ import TourStepCard from "./TourStepCard";
 import OtherWaysStepCard from "./OtherWaysStepCard";
 import { ONBOARDING_STEPS, markStepDone, waitForStep } from "./onboardingGate";
 import { setTourActive } from "./tourActive";
+import { persistOnboardingFlag } from "./onboardingSync";
 
 // Bumping this replays every page tour once for everyone (existing users
 // included), then it goes back to being one-time per page.
@@ -41,6 +42,7 @@ export default function PageIntroTour({ currentPageName }) {
 
   const finish = () => {
     localStorage.setItem(seenKey(currentPageName), "1");
+    persistOnboardingFlag(seenKey(currentPageName));
     setSteps(null);
     // Finishing the Home tour releases the notification-permission prompt.
     if (currentPageName === "Home") markStepDone(ONBOARDING_STEPS.homeTour);
