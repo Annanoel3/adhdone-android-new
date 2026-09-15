@@ -1,4 +1,5 @@
 import { persistOnboardingFlag } from './onboardingSync';
+import { seenKey } from './tourVersion';
 
 // First-run sequencing. Everything on a fresh install happens in order:
 // welcome note → page tours → notification permission → pinned quick capture.
@@ -10,18 +11,28 @@ export const ONBOARDING_STEPS = {
 
 const EVENT = 'adhd_onboarding_step';
 
-// Existing users already went through the tours — they must never be stuck
-// waiting on a step flag that was introduced after they installed.
-const isReturningUser = () => {
+// A step is done when THAT step's own flag is set — never because some other
+// tour finished. The one exception is precise: users who completed the
+// CURRENT-version Home tour before these flags existed already sat through the
+// welcome note and the tour, so those two specific steps count as done. A
+// stale older-version tour key means nothing here.
+const legacyDone = (key) => {
+  if (key !== ONBOARDING_STEPS.welcome && key !== ONBOARDING_STEPS.homeTour) return false;
   try {
-    return Object.keys(localStorage).some((k) => k.startsWith('tour_seen_'));
+    return localStorage.getItem(seenKey('Home')) === '1';
   } catch (e) {
     return false;
   }
 };
 
-export const isStepDone = (key) =>
-  localStorage.getItem(key) === '1' || isReturningUser();
+export const isStepDone = (key) => {
+  try {
+    if (localStorage.getItem(key) === '1') return true;
+  } catch (e) {
+    return false;
+  }
+  return legacyDone(key);
+};
 
 export const markStepDone = (key) => {
   localStorage.setItem(key, '1');

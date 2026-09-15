@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
+import OnboardingCard from "./OnboardingCard";
 
 // One tour step: dims the screen, optionally rings the element it's talking
 // about, and shows the explanation near it.
@@ -12,8 +12,13 @@ export default function TourStepCard({ step, isLast, stepNumber, totalSteps, onN
     const el = document.querySelector(step.selector);
     if (!el) return;
     el.scrollIntoView({ block: "center", behavior: "smooth" });
-    const t = setTimeout(() => setRect(el.getBoundingClientRect()), 450);
-    return () => clearTimeout(t);
+    const measure = () => setRect(el.getBoundingClientRect());
+    const t = setTimeout(measure, 450);
+    window.addEventListener("resize", measure);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", measure);
+    };
   }, [step]);
 
   const spaceBelow = rect ? window.innerHeight - rect.bottom : 0;
@@ -21,7 +26,7 @@ export default function TourStepCard({ step, isLast, stepNumber, totalSteps, onN
   // the status bar and clipped — clamp it so it always keeps room to render.
   const SAFE_TOP = 72;
   const MIN_CARD = 190;
-  const cardStyle = rect
+  const panelStyle = rect
     ? spaceBelow > 240
       ? { top: Math.max(SAFE_TOP, rect.bottom + 16) }
       : {
@@ -33,39 +38,17 @@ export default function TourStepCard({ step, isLast, stepNumber, totalSteps, onN
     : { top: "50%", transform: "translateY(-50%)" };
 
   return (
-    <div className="fixed inset-0 z-[100]">
-      {/* No tap-to-dismiss — the tour only advances via the button, so a stray
-          tap on the screen can't skip an intro the user hasn't read yet. */}
-      <div className="absolute inset-0 bg-black/60" />
-
-      {rect && (
-        <div
-          className="absolute rounded-2xl ring-4 ring-white pointer-events-none"
-          style={{
-            top: rect.top - 6,
-            left: rect.left - 6,
-            width: rect.width + 12,
-            height: rect.height + 12,
-            boxShadow: "0 0 0 9999px rgba(0,0,0,0.35)",
-          }}
-        />
-      )}
-
-      <div
-        className="absolute left-4 right-4 mx-auto max-w-md bg-white rounded-2xl shadow-2xl p-5"
-        style={cardStyle}
-      >
-        <h3 className="text-lg font-bold text-gray-900">{step.title}</h3>
-        <p className="text-sm text-gray-700 mt-2 leading-relaxed">{step.body}</p>
-        <div className="flex items-center justify-between mt-5">
-          <span className="text-xs text-gray-400">
-            {totalSteps > 1 ? `${stepNumber} of ${totalSteps}` : ""}
-          </span>
-          <Button onClick={onNext} className="bg-green-600 hover:bg-green-700">
-            {isLast ? "OK! Sounds good" : "Next"}
-          </Button>
-        </div>
-      </div>
-    </div>
+    <OnboardingCard
+      title={step.title}
+      stepNumber={stepNumber}
+      totalSteps={totalSteps}
+      isLast={isLast}
+      onNext={onNext}
+      onSkip={onSkip}
+      spotlight={rect}
+      panelStyle={panelStyle}
+    >
+      <p className="text-sm text-muted-foreground leading-relaxed">{step.body}</p>
+    </OnboardingCard>
   );
 }

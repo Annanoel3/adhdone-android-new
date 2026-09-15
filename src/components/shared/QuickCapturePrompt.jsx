@@ -9,6 +9,11 @@ import {
 } from '@/components/ui/dialog';
 import { Zap } from 'lucide-react';
 import { ONBOARDING_STEPS, waitForStep } from '@/components/onboarding/onboardingGate';
+import {
+  waitForCalm,
+  enterOnboardingSurface,
+  exitOnboardingSurface,
+} from '@/components/onboarding/onboardingSurface';
 
 const SEEN_KEY = 'quick_capture_prompt_seen';
 
@@ -30,40 +35,44 @@ export default function QuickCapturePrompt() {
     if (localStorage.getItem(SEEN_KEY)) return;
 
     let cancelled = false;
-    let showTimer = null;
 
-    // The native bridge usually isn't attached yet on first mount. Previously
-    // the effect just bailed out and only re-ran on some incidental re-render,
-    // so the prompt could land minutes late. Poll briefly for the bridge, then
-    // hold off ~10s so this doesn't stack on top of the OS notification
-    // permission dialog that fires on first launch.
+    // The native bridge usually isn't attached yet on first mount, so poll for
+    // it. Everything after that is readiness-driven, not timed: this is the
+    // LAST step of the sequence (welcome → tour → notification permission →
+    // this), and it waits for a calm screen — nothing else open, and the user
+    // not mid-typing or mid-tap.
     const start = Date.now();
     const poll = setInterval(() => {
       const { ShareBridge } = getPlugins();
       if (ShareBridge?.setQuickCaptureEnabled) {
         clearInterval(poll);
-        // Last in the first-run sequence: welcome → tour → notification
-        // permission → this. Small gap so it doesn't stack on the OS dialog.
-        waitForStep(ONBOARDING_STEPS.homeTour).then(() => {
-        showTimer = setTimeout(() => {
-          if (cancelled) return;
-          ShareBridge.isQuickCaptureEnabled?.()
-            .then((res) => {
-              if (cancelled) return;
-              if (res?.enabled) localStorage.setItem(SEEN_KEY, 'true');
-              else setOpen(true);
-            })
-            .catch(() => { if (!cancelled) setOpen(true); });
-        }, 6000);
-        });
+        waitForStep(ONBOARDING_STEPS.homeTour)
+          .then(waitForCalm)
+          .then(() => {
+            if (cancelled) return;
+            ShareBridge.isQuickCaptureEnabled?.()
+              .then((res) => {
+                if (cancelled) return;
+                if (res?.enabled) localStorage.setItem(SEEN_KEY, 'true');
+                else setOpen(true);
+              })
+              .catch(() => { if (!cancelled) setOpen(true); });
+          });
       } else if (Date.now() - start > 15000) {
         // Not a native build (or no bridge) — nothing to offer.
         clearInterval(poll);
       }
     }, 500);
 
-    return () => { cancelled = true; clearInterval(poll); if (showTimer) clearTimeout(showTimer); };
+    return () => { cancelled = true; clearInterval(poll); };
   }, []);
+
+  // Registered as an onboarding surface so nothing can stack on top of it.
+  useEffect(() => {
+    if (!open) return;
+    enterOnboardingSurface();
+    return exitOnboardingSurface;
+  }, [open]);
 
   const handleEnable = async () => {
     setBusy(true);
