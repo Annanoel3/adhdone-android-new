@@ -38,14 +38,28 @@ export default function AdVariantB() {
         {!calm ? (
           <motion.div
             key="flood"
-            animate={shown >= 6 ? { x: [0, -4, 4, -3, 3, 0] } : {}}
-            transition={{ duration: 0.4, repeat: Infinity }}
-            exit={{ opacity: 0, scale: 0.8, filter: "blur(8px)" }}
-            className="space-y-1.5"
+            exit={{ opacity: 0, scale: 0.9, filter: "blur(8px)" }}
+            transition={{ duration: 0.4 }}
+            className="relative"
           >
-            {FLOOD.slice(0, shown).map((n, i) => (
-              <AdPlainNotification key={i} when={n.when} text={n.text} shake={shown >= 6} />
-            ))}
+            {/* Pressure reads as a slow, steady red build — no jitter. */}
+            <motion.div
+              animate={{ opacity: shown >= 5 ? 0.45 : 0.12 }}
+              transition={{ duration: 1.6, ease: "easeOut" }}
+              className="pointer-events-none absolute -inset-12 rounded-full bg-red-600/30 blur-3xl"
+            />
+            <div className="relative space-y-1.5">
+              {FLOOD.slice(0, shown).map((n, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: i < shown - 3 ? 0.4 : 1, y: 0 }}
+                  transition={{ duration: 0.35, ease: "easeOut" }}
+                >
+                  <AdPlainNotification when={n.when} text={n.text} />
+                </motion.div>
+              ))}
+            </div>
           </motion.div>
         ) : (
           <motion.div
