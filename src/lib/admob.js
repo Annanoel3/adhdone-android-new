@@ -42,6 +42,12 @@ export function initAdMob() {
   return initPromise;
 }
 
+// A "launch" is no longer only a cold start — returning after a long time away
+// counts too, so the once-per-launch guard has to be clearable.
+export function resetAdLaunchState() {
+  shownThisLaunch = false;
+}
+
 export async function showInterstitialAd() {
   if (shownThisLaunch || adInFlight) return false;   // once per launch, single-flight
   const ready = await initAdMob();                   // never request before init+consent

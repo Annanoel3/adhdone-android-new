@@ -1,7 +1,12 @@
 import { useEffect, useState, useRef } from 'react';
-import { initAdMob, showInterstitialAd } from '@/lib/admob';
+import { initAdMob, showInterstitialAd, resetAdLaunchState } from '@/lib/admob';
 
 const AD_OPEN_KEY = 'admgr_open_count';
+const LAST_LAUNCH_KEY = 'admgr_last_launch_at';
+// Coming back after this long away counts as a fresh launch. Android keeps
+// frequently-used apps alive in memory, so cold starts alone were rare enough
+// that qualifying launches almost never came around.
+const NEW_LAUNCH_GAP_MS = 30 * 60 * 1000;
 
 function isCapacitor() {
   return window.Capacitor?.isNativePlatform?.() ?? false;
@@ -32,55 +37,75 @@ export default function AdManager() {
   useEffect(() => {
     if (!isCapacitor()) return;
     initAdMob().catch(() => {});
-    // Count once per app launch, not once per page navigation (this component
-    // remounts with the layout on every route change).
-    let count = parseInt(localStorage.getItem(AD_OPEN_KEY) || '0', 10);
-    if (!sessionStorage.getItem('admgr_counted_this_launch')) {
-      count += 1;
-      localStorage.setItem(AD_OPEN_KEY, String(count));
-      sessionStorage.setItem('admgr_counted_this_launch', '1');
-    }
-    if (!shouldShowAd(count)) return;
-    delayRef.current = setTimeout(() => tryShowAd(), 30000);
-    return () => {
+
+    function clearTimers() {
       if (delayRef.current) clearTimeout(delayRef.current);
       if (countRef.current) clearInterval(countRef.current);
-    };
-  }, []);
-
-  function tryShowAd() {
-    if (isUserBusy()) {
-      delayRef.current = setTimeout(() => tryShowAd(), 5000);
-      return;
+      delayRef.current = null;
+      countRef.current = null;
     }
-    startCountdown();
-  }
 
-  function startCountdown() {
-    let c = 5;
-    setCountdown(c);
-    countRef.current = setInterval(() => {
-      // Cancel the ad if the user became busy (e.g. started recording) during the countdown
+    function tryShowAd() {
       if (isUserBusy()) {
-        clearInterval(countRef.current);
-        setCountdown(null);
-        delayRef.current = setTimeout(() => tryShowAd(), 30000);
+        delayRef.current = setTimeout(tryShowAd, 5000);
         return;
       }
-      c -= 1;
-      if (c <= 0) {
-        clearInterval(countRef.current);
-        setCountdown(null);
-        fireAd();
-      } else {
-        setCountdown(c);
-      }
-    }, 1000);
-  }
+      let c = 5;
+      setCountdown(c);
+      countRef.current = setInterval(() => {
+        // Cancel if the user became busy (e.g. started recording) mid-countdown
+        if (isUserBusy()) {
+          clearInterval(countRef.current);
+          setCountdown(null);
+          delayRef.current = setTimeout(tryShowAd, 30000);
+          return;
+        }
+        c -= 1;
+        if (c <= 0) {
+          clearInterval(countRef.current);
+          setCountdown(null);
+          showInterstitialAd().catch(() => {});
+        } else {
+          setCountdown(c);
+        }
+      }, 1000);
+    }
 
-  function fireAd() {
-    showInterstitialAd().catch(() => {});
-  }
+    // Counts a launch at most once per gap window, so route changes (which
+    // remount this component) never inflate the count.
+    function registerLaunch() {
+      const lastRaw = localStorage.getItem(LAST_LAUNCH_KEY);
+      const lastMs = lastRaw ? parseInt(lastRaw, 10) : 0;
+      if (Date.now() - lastMs < NEW_LAUNCH_GAP_MS) return;
+
+      localStorage.setItem(LAST_LAUNCH_KEY, String(Date.now()));
+      const count = parseInt(localStorage.getItem(AD_OPEN_KEY) || '0', 10) + 1;
+      localStorage.setItem(AD_OPEN_KEY, String(count));
+
+      resetAdLaunchState();
+      clearTimers();
+      setCountdown(null);
+      if (!shouldShowAd(count)) return;
+      delayRef.current = setTimeout(tryShowAd, 30000);
+    }
+
+    registerLaunch();
+
+    let handle = null;
+    (async () => {
+      try {
+        const { App } = window.Capacitor.Plugins;
+        handle = await App.addListener('appStateChange', ({ isActive }) => {
+          if (isActive) registerLaunch();
+        });
+      } catch (e) {}
+    })();
+
+    return () => {
+      clearTimers();
+      handle?.remove?.();
+    };
+  }, []);
 
   if (countdown === null) return null;
 
