@@ -70,7 +70,7 @@ export default function AdVariantB() {
             className="space-y-6"
           >
             <AdSmartNotification
-              title="One thing: fold the laundry 🧺"
+              title="One thing: pay the electric bill 💡"
               body="Not the whole list. Just this one."
             />
             {step >= CALM_STEP + 1 && (

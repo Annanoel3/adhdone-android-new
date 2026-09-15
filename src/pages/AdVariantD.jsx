@@ -26,7 +26,7 @@ export default function AdVariantD() {
           >
             I built this because a reminder at 3pm
             <br />
-            never once made me fold the laundry.
+            never once made me mail that package.
           </motion.p>
         )}
 
@@ -43,7 +43,7 @@ export default function AdVariantD() {
 
         {step >= 3 && (
           <AdSmartNotification
-            title="One thing: fold the laundry 🧺"
+            title="One thing: mail the package 📦"
             body="Not the whole list. Just this one."
           />
         )}

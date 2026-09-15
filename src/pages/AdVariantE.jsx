@@ -21,7 +21,7 @@ const DAY = [
   },
   {
     when: "2:15 PM",
-    title: "One thing: fold the laundry 🧺",
+    title: "One thing: unload the dishwasher 🍽️",
     body: "Not the whole list. Just this one.",
   },
   {

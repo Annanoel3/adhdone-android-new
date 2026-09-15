@@ -11,9 +11,9 @@ import { useAdLoop, useAdSteps } from "@/components/ads/useAdLoop";
 // VARIANT A — Before / After, played out on a phone lock screen.
 // Hypothesis: seeing your own pain is the hook.
 const IGNORED = [
-  { when: "3:00 PM", text: "Reminder: fold the laundry" },
-  { when: "4:00 PM", text: "Reminder: fold the laundry" },
-  { when: "5:00 PM", text: "Reminder: fold the laundry" },
+  { when: "3:00 PM", text: "Reminder: refill your prescription" },
+  { when: "4:00 PM", text: "Reminder: refill your prescription" },
+  { when: "5:00 PM", text: "Reminder: refill your prescription" },
 ];
 
 const MARKS = [400, 1300, 2200, 3100, 4400, 4900, 7200];
@@ -84,7 +84,7 @@ export default function AdVariantA() {
                 >
                   <AdSmartNotification
                     when="now"
-                    title="One thing: fold the laundry 🧺"
+                    title="One thing: call the pharmacy 💊"
                     body="Not the whole list. Just this one."
                     why="One nudge at a time, never a pile-up"
                   />
@@ -106,7 +106,7 @@ export default function AdVariantA() {
                 transition={{ duration: 0.45 }}
                 className="text-center text-[26px] font-extrabold text-gray-500 leading-tight"
               >
-                Still not folded.
+                Still not refilled.
               </motion.p>
             )}
             {after && step >= AFTER_STEP + 1 && (
