@@ -24,6 +24,12 @@ export default function PlacesPrivacyNote({ theme }) {
             that position is never saved.
           </p>
           <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
+            Picking your home area happens on OpenStreetMap, not Google — so Google never sees you
+            browsing the map or searching for your city. Only the final point you save is ever used,
+            and only to measure drive times. (Typing a work address is the one place Google helps,
+            for the suggestions.)
+          </p>
+          <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
             No one else can see them, they're never sold or shared, and you can clear or change them
             here any time.
           </p>

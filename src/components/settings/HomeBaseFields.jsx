@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Check } from 'lucide-react';
-import HomeAreaMap from './HomeAreaMap';
+import HomeAreaMap, { MIN_SAVE_ZOOM } from './HomeAreaMap';
 import useApproxCenter from './useApproxCenter';
 import { base44 } from '@/api/base44Client';
 
@@ -15,12 +15,17 @@ export default function HomeBaseFields({ user, theme, onSaved, compact = false }
   const [saving, setSaving] = useState(false);
   const showMap = editing || !hasHome;
   const start = useApproxCenter(user, showMap);
+  // Zoom guard: a save from a continent-wide view could be 100+ miles off, so
+  // Save stays disabled until the circle is actually meaningful on screen.
+  const [zoom, setZoom] = useState(null);
+  const effectiveZoom = zoom ?? start?.zoom ?? MIN_SAVE_ZOOM;
+  const tooFarOut = effectiveZoom < MIN_SAVE_ZOOM;
 
   const dark = theme === 'dark';
 
   const save = async () => {
     const c = center || (start && { lat: start.lat, lng: start.lng });
-    if (!c) return;
+    if (!c || tooFarOut) return;
     setSaving(true);
     try {
       await base44.auth.updateMe({ home_lat: c.lat, home_lng: c.lng });
@@ -50,10 +55,16 @@ export default function HomeBaseFields({ user, theme, onSaved, compact = false }
   return (
     <div className="space-y-3">
       <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-        Drag the map so the circle covers roughly where you live. No exact address needed.
+        Drag the map so the circle covers roughly where you live, or search for your city to get
+        there fast. No exact address needed.
       </p>
       {start ? (
-        <HomeAreaMap start={start} onCenterChange={setCenter} />
+        <HomeAreaMap
+          start={start}
+          onCenterChange={setCenter}
+          onZoomChange={setZoom}
+          dark={dark}
+        />
       ) : (
         <div className={`h-[260px] rounded-xl flex items-center justify-center text-sm ${
           dark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-500'
@@ -61,13 +72,18 @@ export default function HomeBaseFields({ user, theme, onSaved, compact = false }
           Finding your general area…
         </div>
       )}
+      {start && tooFarOut && (
+        <p className={`text-xs ${dark ? 'text-amber-400' : 'text-amber-600'}`}>
+          Zoom in to your area first
+        </p>
+      )}
       <div className="flex gap-2">
         {hasHome && (
           <Button variant="outline" onClick={() => setEditing(false)} className="flex-1">Cancel</Button>
         )}
         <Button
           onClick={save}
-          disabled={saving || !start}
+          disabled={saving || !start || tooFarOut}
           className="flex-1 bg-green-600 hover:bg-green-700 text-white"
         >
           {saving ? 'Saving...' : compact ? 'Save' : 'Save home area'}
