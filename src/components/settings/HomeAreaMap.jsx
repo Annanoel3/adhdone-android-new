@@ -7,39 +7,57 @@ import AreaSearchBox from './AreaSearchBox';
 // is the exact CENTER, and every drive-time lookup measures from that point.
 export const HOME_RADIUS_METERS = 8047;
 
-// How much of the map's shorter side the circle fills. Below 1.0 so the edges
-// always sit comfortably inside the viewport instead of touching them.
+// How much of the map's shorter side the circle fills when zoomed all the way
+// in. Below 1.0 so the edges always sit inside the viewport instead of touching
+// them — this is the CLOSEST allowed zoom, so the circle can never clip.
 const FILL = 0.8;
+
+// How many zoom levels out the user may go for context. Each level halves the
+// circle on screen, so 2 levels takes it from 80% of the view down to 20% —
+// still clearly a circle, never a dot.
+const ZOOM_OUT_LEVELS = 2;
 
 // Web-Mercator resolution at the equator (metres per pixel at zoom 0).
 const EQUATOR_M_PER_PX = 156543.03392;
 
-// The circle can never clip or shrink to a dot, because the zoom is pinned to
-// whatever value frames the real 5-mile circle at FILL of the viewport. Mercator
-// scale changes with latitude and the container can be resized, so this is
-// recomputed on pan, on resize, and once after layout settles.
-//
-// The result is a single locked zoom: positioning is by panning and the search
-// box, and there is deliberately no zoom control, wheel zoom, or pinch zoom —
-// any of them would break the "always fully framed" guarantee.
-function FixedFrame() {
+// Zooming stays available, but only inside a range where the whole circle is
+// always on screen: the closest zoom frames it at FILL of the viewport (so the
+// edges can never leave the view) and the furthest is ZOOM_OUT_LEVELS out (so it
+// can never shrink to a dot). Mercator scale changes with latitude and the
+// container can be resized, so the range is recomputed on move, on resize, and
+// once after layout settles.
+function FrameZoomRange() {
   const map = useMap();
 
   useEffect(() => {
+    let first = true;
+
     const apply = () => {
       const size = map.getSize();
       const minDim = Math.min(size.x, size.y);
       if (!minDim) return;
       const desiredMetersPerPx = (HOME_RADIUS_METERS * 2) / (minDim * FILL);
       const lat = map.getCenter().lat;
-      const z = Math.log2(
+      const zIn = Math.log2(
         (EQUATOR_M_PER_PX * Math.cos((lat * Math.PI) / 180)) / desiredMetersPerPx
       );
-      if (!Number.isFinite(z)) return;
-      map.setMinZoom(z);
-      map.setMaxZoom(z);
-      // Guard against a setZoom → zoomend → setZoom loop on tiny float drift.
-      if (Math.abs(map.getZoom() - z) > 0.01) map.setZoom(z);
+      if (!Number.isFinite(zIn)) return;
+      const zOut = zIn - ZOOM_OUT_LEVELS;
+
+      map.setMinZoom(zOut);
+      map.setMaxZoom(zIn);
+
+      // Open at the closest zoom, then leave the user's chosen zoom alone —
+      // only pull it back when it has drifted outside the safe range.
+      const current = map.getZoom();
+      if (first) {
+        first = false;
+        if (Math.abs(current - zIn) > 0.01) map.setZoom(zIn);
+      } else if (current > zIn + 0.01) {
+        map.setZoom(zIn);
+      } else if (current < zOut - 0.01) {
+        map.setZoom(zOut);
+      }
     };
 
     apply();
@@ -98,14 +116,10 @@ export default function HomeAreaMap({ start, onCenterChange, dark }) {
         // Fractional zoom, so the frame can land exactly on the circle instead
         // of snapping to an integer level that clips it or shrinks it.
         zoomSnap={0}
-        zoomControl={false}
-        scrollWheelZoom={false}
-        doubleClickZoom={false}
-        touchZoom={false}
         boxZoom={false}
       >
         <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-        <FixedFrame />
+        <FrameZoomRange />
         <CenterTracker onMove={handleMove} />
         <SearchFlyTo dark={dark} onMoved={handleMove} />
         <Circle

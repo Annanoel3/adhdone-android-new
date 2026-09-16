@@ -53,7 +53,7 @@ export default function HomeBaseFields({ user, theme, onSaved, compact = false }
     <div className="space-y-3">
       <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
         Drag the map so the circle covers roughly where you live, or search for your city to get
-        there fast. The circle is always 5 miles across. No exact address needed.
+        there fast. No exact address needed.
       </p>
       {start ? (
         <HomeAreaMap start={start} onCenterChange={setCenter} dark={dark} />
