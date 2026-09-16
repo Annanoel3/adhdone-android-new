@@ -278,6 +278,42 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
 
     let existing = existingByGoogleId[googleId];
 
+    // CLAIM this event BEFORE any slow work. AI classification takes seconds,
+    // and two syncs can run at once (a brand-new account's first connect fires
+    // the background sync AND the connect-time sync together). Both used to
+    // pass the "already imported?" check inside that window and both created a
+    // task — every event duplicated. Now each run writes its claim row first,
+    // then both resolve the SAME winner deterministically and the loser bails.
+    let claim = existing || null;
+    if (!claim) {
+      claim = await base44.asServiceRole.entities.CalendarSyncedEvent.create({
+        google_event_id: googleId,
+        title,
+        user_email: user.email,
+        last_synced_at: new Date().toISOString(),
+      });
+      const rivals = await base44.asServiceRole.entities.CalendarSyncedEvent.filter({
+        google_event_id: googleId,
+        user_email: user.email,
+      });
+      if (rivals.length > 1) {
+        // A rival that already finished (has a task) wins outright; otherwise
+        // the oldest claim wins. Never delete a rival's claim — it may still be
+        // working, and removing it would make it think it won.
+        const finished = rivals.find(r => r.adhd_task_id);
+        const winner = finished || rivals.slice().sort((a, b) =>
+          String(a.created_date || '').localeCompare(String(b.created_date || '')) ||
+          String(a.id).localeCompare(String(b.id))
+        )[0];
+        if (winner.id !== claim.id) {
+          console.log('[syncGoogleCalendar] lost claim race, skipping:', googleId);
+          await base44.asServiceRole.entities.CalendarSyncedEvent.delete(claim.id).catch(() => {});
+          skipped++;
+          continue;
+        }
+      }
+    }
+
     // Run AI classification
     let ai;
     try {
@@ -287,45 +323,6 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
       // Fallback if AI fails — default to a one-time event so we don't spam
       // recurring reminders for something we couldn't classify.
       ai = { urgency: 'medium', energy_required: 'medium', reminder_interval: 'once', needs_date_pick: false, target_date: null };
-    }
-
-    // Re-check if this event was already synced (race condition guard with retry)
-    let recheck = await base44.asServiceRole.entities.CalendarSyncedEvent.filter({ 
-      google_event_id: googleId, 
-      user_email: user.email 
-    });
-    if (recheck.length === 0) {
-      // Sleep briefly and retry to catch concurrent writes
-      await new Promise(r => setTimeout(r, 150));
-      recheck = await base44.asServiceRole.entities.CalendarSyncedEvent.filter({ 
-        google_event_id: googleId, 
-        user_email: user.email 
-      });
-    }
-    if (recheck.length > 0) {
-      const rec = recheck[0];
-      // Direct-existence check: only skip if the previously-synced task still
-      // exists. If the user deleted it, respect the deletion and don't re-import.
-      if (rec.adhd_task_id) {
-        let recTaskExists = false;
-        let recTask = null;
-        try {
-          recTask = await base44.asServiceRole.entities.Task.get(rec.adhd_task_id);
-          recTaskExists = !!recTask;
-        } catch (e) { /* deleted */ }
-        if (recTaskExists) {
-          const didUpdate = await patchExistingTaskDates(base44, rec, recTask, event, userTz);
-          if (didUpdate) { updated++; } else { skipped++; }
-          continue;
-        }
-        // User deleted the synced task — respect the deletion, don't re-import.
-        await base44.asServiceRole.entities.CalendarSyncedEvent.update(rec.id, {
-          last_synced_at: new Date().toISOString(),
-        });
-        skipped++;
-        continue;
-      }
-      existing = rec;
     }
 
     const isBirthday = isBirthdayEvent(title, recurrenceRule);
@@ -662,7 +659,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
       }
     }
 
-    const syncRecord = {
+    const syncRecord: any = {
       google_event_id: googleId,
       title,
       start_time: startRaw || null,
@@ -679,17 +676,10 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
       user_email: user.email
     };
 
-    if (existing) {
-      // The previous task was deleted — create a brand-new task so fresh
-      // scheduling (LLM reminders, OneSignal notifications) applies to it.
-      console.log('[syncGoogleCalendar] RE-CREATING (old task was deleted):', googleId, '| old task=', existing.adhd_task_id, '| new task=', createdTask.id);
-      await base44.asServiceRole.entities.CalendarSyncedEvent.delete(existing.id);
-      await base44.asServiceRole.entities.CalendarSyncedEvent.create(syncRecord);
-      created++;
-    } else {
-      await base44.asServiceRole.entities.CalendarSyncedEvent.create(syncRecord);
-      created++;
-    }
+    // Finish the claim row we already reserved for this event — never create a
+    // second row, which is what produced the duplicates.
+    await base44.asServiceRole.entities.CalendarSyncedEvent.update(claim.id, syncRecord);
+    created++;
 
     results.push({ googleId, title, routedAs, urgency: ai.urgency });
   }
