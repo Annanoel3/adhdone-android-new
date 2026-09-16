@@ -185,7 +185,23 @@ async function classifyEventWithAI(base44, event) {
   return parsed;
 }
 
+// A claim row whose adhd_task_id looks like "claiming:<runId>:<ms>" is being
+// worked on RIGHT NOW by a sync run — it is not an imported task. Two syncs can
+// overlap (a first connect fires the connect-time sync and the background sync
+// together), and a leftover claim with no task used to be a free-for-all: both
+// runs walked past it and both created a task. Now a run has to take the lock,
+// re-read it, and see its OWN marker before it may create anything.
+// Notification budget for a single sync run (see use site).
+const MAX_REMINDERS_PER_EVENT = 2;
+const MAX_REMINDERS_PER_SYNC = 30;
+
+const CLAIM_PREFIX = 'claiming:';
+const STALE_CLAIM_MS = 10 * 60 * 1000;
+const isClaimSentinel = (v) => typeof v === 'string' && v.startsWith(CLAIM_PREFIX);
+const claimAgeMs = (v) => Date.now() - (Number(String(v).split(':')[2]) || 0);
+
 async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
+  const runId = crypto.randomUUID().slice(0, 8);
   const authHeader = { Authorization: `Bearer ${accessToken}` };
   // All-day calendar items have no clock time, so we anchor them at 9 AM in the
   // USER'S timezone. Without this the server's UTC clock made that 9 AM UTC,
@@ -216,16 +232,46 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
   }
 
   const calData = await calRes.json();
-  const events = (calData.items || []).filter(e => e.status !== 'cancelled');
-  console.log('[syncGoogleCalendar] calendar fetch OK for=', connectedEmail, '| raw items=', (calData.items || []).length, '| active events=', events.length);
+  const allItems = calData.items || [];
+  const events = allItems.filter(e => e.status !== 'cancelled');
+  const cancelledItems = allItems.filter(e => e.status === 'cancelled');
+  console.log('[syncGoogleCalendar] calendar fetch OK for=', connectedEmail, '| raw items=', allItems.length, '| active events=', events.length, '| cancelled=', cancelledItems.length);
 
   // Load all existing synced events for this user
   const existingSynced = await base44.asServiceRole.entities.CalendarSyncedEvent.filter({ user_email: user.email });
   const existingByGoogleId = {};
   for (const s of existingSynced) existingByGoogleId[s.google_event_id] = s;
 
-  let created = 0, updated = 0, skipped = 0;
+  let created = 0, updated = 0, skipped = 0, cancelledRemoved = 0;
+  let pushBudget = MAX_REMINDERS_PER_SYNC;
   const results = [];
+
+  // --- Cancelled in Google → skip it here too ---
+  // A cancelled event is not happening. If it was never imported there's
+  // nothing to do; if it WAS imported, the task and every scheduled push for
+  // it are removed, so no reminder ever fires for an event that's off.
+  for (const item of cancelledItems) {
+    const row = existingByGoogleId[item.id];
+    if (!row) continue;
+    if (row.adhd_task_id && !isClaimSentinel(row.adhd_task_id)) {
+      const task = await base44.asServiceRole.entities.Task.get(row.adhd_task_id).catch(() => null);
+      if (task) {
+        for (const nid of task.onesignal_notification_ids || []) {
+          await base44.asServiceRole.functions.invoke('cancelScheduled', { notificationId: nid }).catch(() => {});
+        }
+        for (const entry of task.reminder_schedule || []) {
+          if (entry?.notification_id && !String(entry.notification_id).startsWith('planned_')) {
+            await base44.asServiceRole.functions.invoke('cancelScheduled', { notificationId: entry.notification_id }).catch(() => {});
+          }
+        }
+        await base44.asServiceRole.entities.Task.delete(task.id).catch(() => {});
+      }
+    }
+    await base44.asServiceRole.entities.CalendarSyncedEvent.delete(row.id).catch(() => {});
+    delete existingByGoogleId[item.id];
+    cancelledRemoved++;
+    console.log('[syncGoogleCalendar] event cancelled in Google, removed import:', item.id);
+  }
 
   // Google returns a recurring series' master record AND any individual
   // occurrences that were modified. Both used to become tasks, so a series
@@ -241,9 +287,15 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
     (seriesInstanceDays[baseId] ||= new Set()).add(new Date(raw).toISOString().slice(0, 10));
   }
 
-  // Split events into already-synced (fast path) and new (needs AI).
-  const alreadySynced = events.filter(e => existingByGoogleId[e.id]?.adhd_task_id);
-  const newEvents = events.filter(e => !existingByGoogleId[e.id]?.adhd_task_id);
+  // Split events into already-synced (fast path) and new (needs AI). A claim
+  // marker is NOT an imported task, so those fall to the new-event path where
+  // the lock below decides who may actually import them.
+  const isImported = (e) => {
+    const linked = existingByGoogleId[e.id]?.adhd_task_id;
+    return !!linked && !isClaimSentinel(linked);
+  };
+  const alreadySynced = events.filter(isImported);
+  const newEvents = events.filter(e => !isImported(e));
 
   // Batch-load every linked task by ID in one go (service role, so no
   // recipient-email mismatch can hide a task) instead of one serial fetch per
@@ -325,7 +377,29 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
           skipped++;
           continue;
         }
+        claim = winner;
       }
+    }
+
+    // Take the working lock on this claim. A fresh marker from another run means
+    // that run is mid-import — stand down rather than import a second copy.
+    const held = claim.adhd_task_id;
+    if (held && !isClaimSentinel(held)) { skipped++; continue; }   // finished elsewhere
+    if (isClaimSentinel(held) && claimAgeMs(held) < STALE_CLAIM_MS) {
+      console.log('[syncGoogleCalendar] another run holds this event, skipping:', googleId);
+      skipped++;
+      continue;
+    }
+    const sentinel = `${CLAIM_PREFIX}${runId}:${Date.now()}`;
+    await base44.asServiceRole.entities.CalendarSyncedEvent.update(claim.id, { adhd_task_id: sentinel });
+    // Let a simultaneous run's write land before reading back, so the two runs
+    // agree on a single winner instead of both reading their own marker.
+    await new Promise((r) => setTimeout(r, 400));
+    const confirmed = await base44.asServiceRole.entities.CalendarSyncedEvent.get(claim.id).catch(() => null);
+    if (confirmed?.adhd_task_id !== sentinel) {
+      console.log('[syncGoogleCalendar] lost working lock, skipping:', googleId);
+      skipped++;
+      continue;
     }
 
     // Run AI classification
@@ -608,7 +682,14 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
           });
 
         const notificationIds = [];
-        for (const reminder of reminderTimes) {
+        // Notification budget. A first-time sync can pull in a year of events —
+        // booking every reminder the LLM suggests for every one of them buries
+        // the user under pushes. Two per event, and a hard ceiling for the whole
+        // sync run; anything past that relies on the normal reminder refill.
+        const perEvent = reminderTimes.slice(0, MAX_REMINDERS_PER_EVENT);
+        for (const reminder of (pushBudget > 0 ? perEvent : [])) {
+          if (pushBudget <= 0) break;
+          pushBudget--;
           try {
             const res = await base44.asServiceRole.functions.invoke('schedulePush', {
               toUserExternalId: user.email,
@@ -635,9 +716,10 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
         }
 
         // Fallback: if no reminders were scheduled, send a single one at event start
-        if (notificationIds.length === 0) {
+        if (notificationIds.length === 0 && pushBudget > 0) {
           const sendAt = new Date(createdTask.next_reminder);
           if (sendAt.getTime() > Date.now() + 2 * 60 * 1000) {
+            pushBudget--;
             const res = await base44.asServiceRole.functions.invoke('schedulePush', {
               toUserExternalId: user.email,
               title: `📅 ${title}`,
@@ -663,7 +745,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
         }
 
         if (notificationIds.length > 0) {
-          const structured = reminderTimes
+          const structured = perEvent
             .slice(0, notificationIds.length)
             .map((r, i) => ({
               notification_id: notificationIds[i],
@@ -707,7 +789,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
     results.push({ googleId, title, routedAs, urgency: ai.urgency });
   }
 
-  return { created, updated, skipped, total_events: events.length, results, connectedEmail };
+  return { created, updated, skipped, cancelledRemoved, total_events: events.length, results, connectedEmail };
 }
 
 Deno.serve(async (req) => {
@@ -779,6 +861,7 @@ Deno.serve(async (req) => {
       created: result.created,
       updated: result.updated,
       skipped: result.skipped,
+      cancelled_removed: result.cancelledRemoved,
       connected_email: result.connectedEmail,
       results: result.results
     });
