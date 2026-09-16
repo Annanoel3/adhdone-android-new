@@ -33,13 +33,13 @@
       "type": "string",
       "description": "User's IANA timezone (set once on first login) for timezone-aware quiet hours"
     },
-    "home_zipcode": {
-      "type": "string",
-      "description": "Optional home zip code, used as the origin for drive-time and 'combine these errands' calculations when no full home address is saved. A zip can span many miles, so distances measured from it are approximate \u2014 home_address is preferred when present."
+    "home_lat": {
+      "type": "number",
+      "description": "Latitude of the CENTER of the ~5-mile home circle the user placed on the map. This exact point is the origin for every drive-time / 'leave now' / commute calculation \u2014 the circle's radius is visual reassurance only and is never used to fuzz the math. Never used for tracking."
     },
-    "home_address": {
-      "type": "string",
-      "description": "Optional full home street address. Preferred over home_zipcode as the origin for drive-time math: Google measures from the zip's center point, so someone living at the far edge of a large zip can be told to leave 10-15 minutes too late. Never used for tracking \u2014 only as a fixed starting point for distance lookups."
+    "home_lng": {
+      "type": "number",
+      "description": "Longitude of the center of the user's home circle. See home_lat."
     },
     "home_zip_prompt_seen_v2": {
       "type": "boolean",

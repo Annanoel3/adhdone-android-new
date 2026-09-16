@@ -41,7 +41,7 @@ export default function Places() {
         </CardHeader>
         <CardContent>
           <p className={`text-sm mb-4 ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-            Where you usually start from. No GPS, no tracking — just an address you type once.
+            Where you usually start from. Just a circle over your general area — no exact address, no tracking.
           </p>
           <HomeBaseFields user={user} theme={theme} onSaved={load} />
         </CardContent>

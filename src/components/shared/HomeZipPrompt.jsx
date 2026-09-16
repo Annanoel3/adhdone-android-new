@@ -34,7 +34,7 @@ export default function HomeZipPrompt({ user, theme }) {
     // Saved on the profile too, so a new device / cleared browser storage
     // doesn't start asking all over again.
     if (localStorage.getItem(SEEN_KEY) === 'true' || user.home_zip_prompt_seen_v2) return;
-    if (user.home_address || user.home_zipcode) {
+    if (user.home_lat != null && user.home_lng != null) {
       localStorage.setItem(SEEN_KEY, 'true');
       return;
     }
@@ -91,9 +91,9 @@ export default function HomeZipPrompt({ user, theme }) {
             Where's home base?
           </DialogTitle>
           <DialogDescription className={theme === 'dark' ? 'text-gray-400' : ''}>
-            With a starting point I can tell you when to actually leave for things — real drive
-            time, real traffic — and group errands near each other into one trip. No GPS, no
-            tracking.
+            Drop a circle over your general area and I can tell you when to actually leave for
+            things — real drive time, real traffic — and group errands near each other into one
+            trip. No exact address, no tracking.
           </DialogDescription>
         </DialogHeader>
 

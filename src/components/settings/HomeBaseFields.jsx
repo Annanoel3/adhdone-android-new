@@ -1,39 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, Check } from 'lucide-react';
-import LocationSuggestions from '@/components/tasks/LocationSuggestions';
+import { Check } from 'lucide-react';
+import HomeAreaMap from './HomeAreaMap';
+import useApproxCenter from './useApproxCenter';
 import { base44 } from '@/api/base44Client';
 
-// Shared home-base editor: a full street address (best) with a zip-only
-// fallback. The disclaimer is not decoration — a zip is measured from its
-// center point, so "leave now" can be well off for anyone near its edge.
+// Shared home-base editor: a map with a soft ~5-mile circle the user drags
+// over their general area. The circle's CENTER is what gets saved, and it's the
+// exact origin for every drive-time / "leave now" calculation.
 export default function HomeBaseFields({ user, theme, onSaved, compact = false }) {
-  const [address, setAddress] = useState('');
-  const [zip, setZip] = useState('');
-  const [typing, setTyping] = useState('');
+  const hasHome = user?.home_lat != null && user?.home_lng != null;
+  const [editing, setEditing] = useState(false);
+  const [center, setCenter] = useState(null);
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  useEffect(() => {
-    if (!user) return;
-    setAddress(user.home_address || '');
-    setZip(user.home_zipcode || '');
-  }, [user]);
+  const showMap = editing || !hasHome;
+  const start = useApproxCenter(user, showMap);
 
   const dark = theme === 'dark';
-  const inputClass = dark ? 'bg-gray-700 text-white border-gray-600' : '';
 
   const save = async () => {
+    const c = center || (start && { lat: start.lat, lng: start.lng });
+    if (!c) return;
     setSaving(true);
-    setSaved(false);
     try {
-      await base44.auth.updateMe({
-        home_address: address.trim(),
-        home_zipcode: zip.trim(),
-      });
-      setSaved(true);
+      await base44.auth.updateMe({ home_lat: c.lat, home_lng: c.lng });
+      setEditing(false);
       onSaved?.();
     } catch (e) {
       console.error('Failed to save home base:', e);
@@ -42,76 +33,46 @@ export default function HomeBaseFields({ user, theme, onSaved, compact = false }
     }
   };
 
+  if (!showMap) {
+    return (
+      <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
+        dark ? 'bg-gray-700 text-gray-100' : 'bg-teal-50 text-gray-800'
+      }`}>
+        <Check className="w-4 h-4 flex-shrink-0 text-teal-600" />
+        <span className="flex-1">Home area set</span>
+        <button type="button" onClick={() => setEditing(true)} className="text-xs underline flex-shrink-0">
+          Change
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-4">
-      <div>
-        <Label className={dark ? 'text-gray-200' : ''}>Home address (most accurate)</Label>
-        {address ? (
-          <div className={`mt-1 flex items-start gap-2 rounded-lg px-3 py-2 text-sm ${
-            dark ? 'bg-gray-700 text-gray-100' : 'bg-teal-50 text-gray-800'
-          }`}>
-            <Check className="w-4 h-4 mt-0.5 flex-shrink-0 text-teal-600" />
-            <span className="flex-1 break-words">{address}</span>
-            <button
-              type="button"
-              onClick={() => { setAddress(''); setTyping(''); setSaved(false); }}
-              className="text-xs underline flex-shrink-0"
-            >
-              Change
-            </button>
-          </div>
-        ) : (
-          <>
-            <Input
-              value={typing}
-              onChange={(e) => { setTyping(e.target.value); setSaved(false); }}
-              placeholder="Start typing your street address"
-              className={`mt-1 mb-2 ${inputClass}`}
-            />
-            <LocationSuggestions
-              query={typing}
-              theme={theme}
-              onPick={(v) => { setAddress(v); setTyping(''); setSaved(false); }}
-            />
-          </>
-        )}
-      </div>
-
-      <div>
-        <Label htmlFor="home-zip" className={dark ? 'text-gray-200' : ''}>
-          Or just a zip code
-        </Label>
-        <Input
-          id="home-zip"
-          value={zip}
-          onChange={(e) => { setZip(e.target.value); setSaved(false); }}
-          placeholder="e.g. 78701"
-          inputMode="numeric"
-          className={`mt-1 ${inputClass}`}
-        />
-      </div>
-
-      {!address && zip.trim() && (
-        <div className={`flex items-start gap-2 rounded-lg p-3 text-xs ${
-          dark ? 'bg-amber-950/40 text-amber-200' : 'bg-amber-50 text-amber-800'
+    <div className="space-y-3">
+      <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
+        Drag the map so the circle covers roughly where you live. No exact address needed.
+      </p>
+      {start ? (
+        <HomeAreaMap start={start} onCenterChange={setCenter} />
+      ) : (
+        <div className={`h-[260px] rounded-xl flex items-center justify-center text-sm ${
+          dark ? 'bg-gray-700 text-gray-300' : 'bg-gray-100 text-gray-500'
         }`}>
-          <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-          <span>
-            Heads up: a zip code can cover a lot of ground, and drive times get measured from
-            the middle of it. If you live near the edge, "time to leave" could be off by 10-15
-            minutes — so treat it as a rough estimate and pad anything you can't be late for.
-            A full address fixes that.
-          </span>
+          Finding your general area…
         </div>
       )}
-
-      <Button
-        onClick={save}
-        disabled={saving || (!address.trim() && !zip.trim())}
-        className="w-full bg-green-600 hover:bg-green-700 text-white"
-      >
-        {saving ? 'Saving...' : saved ? 'Saved ✓' : compact ? 'Save' : 'Save home base'}
-      </Button>
+      <div className="flex gap-2">
+        {hasHome && (
+          <Button variant="outline" onClick={() => setEditing(false)} className="flex-1">Cancel</Button>
+        )}
+        <Button
+          onClick={save}
+          disabled={saving || !start}
+          className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+        >
+          {saving ? 'Saving...' : compact ? 'Save' : 'Save home area'}
+        </Button>
+      </div>
     </div>
   );
 }

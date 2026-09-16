@@ -20,7 +20,7 @@ export default function HomeZipCard({ user, theme }) {
         <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
           Optional. Your starting point for two things: telling you when to actually leave for
           something (based on real drive time and traffic), and grouping errands that are near
-          each other into one trip. No GPS, no tracking — just an address you type in once.
+          each other into one trip. No exact address, no tracking — just a circle over your general area.
         </p>
         <HomeBaseFields user={user} theme={theme} />
         <Button variant="outline" onClick={() => navigate('/Places')} className="w-full">

@@ -74,14 +74,14 @@ export default async function(req) {
     }
 
     const bodyText = await req.text();
-    const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, timezone, location, homeZip } = JSON.parse(bodyText);
+    const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, timezone, location, homeOrigin } = JSON.parse(bodyText);
     // A task with a real place attached gets a travel-aware "leave now" instead
-    // of a blanket hour: measured drive time from the user's home zip + cushion.
+    // of a blanket hour: measured drive time from the user's home circle center
+    // + cushion. Service-role callers (captureToTasks) have no session, so they
+    // pass the origin explicitly.
     const lead = dayOnly
       ? null
-      // Full home address when the user saved one, zip only as a fallback —
-      // measuring from a zip's center point can be 10+ minutes off.
-      : await getTravelLead(location || '', getHomeOrigin(user) || homeZip || '', scheduledDateISO);
+      : await getTravelLead(location || '', getHomeOrigin(user) || homeOrigin || '', scheduledDateISO);
     if (lead) {
       console.log(`[generateReminderSchedule] Travel lead for "${title}" → ${lead.leadMinutes} min (${lead.driveMinutes} min drive${lead.inTraffic ? ', in traffic' : ''})`);
     }

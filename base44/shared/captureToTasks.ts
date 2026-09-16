@@ -12,6 +12,7 @@
 
 import { runTaskParse } from "./runTaskParse.ts";
 import { decideReminderInterval } from "./reminderIntervalDecision.ts";
+import { getHomeOrigin } from "./homeOrigin.ts";
 
 // ── Calling sibling functions ──────────────────────────────────────────────
 // generateReminderSchedule and schedulePush are HTTP entrypoints, not
@@ -146,15 +147,15 @@ export async function scheduleTaskReminders(
 ) {
   if (!task.next_reminder) return { scheduled: 0 };
 
-  // Service-role calls have no end-user session, so the home zip the travel-aware
-  // "leave now" reminder needs has to be looked up and passed explicitly.
-  let homeZip = "";
+  // Service-role calls have no end-user session, so the home origin the
+  // travel-aware "leave now" reminder needs has to be looked up and passed.
+  let homeOrigin = "";
   if (task.location) {
     try {
       const users = await base44.asServiceRole.entities.User.filter({ email });
-      homeZip = users?.[0]?.home_zipcode || "";
+      homeOrigin = getHomeOrigin(users?.[0]);
     } catch (e) {
-      console.error("[captureToTasks] home zip lookup failed:", e);
+      console.error("[captureToTasks] home origin lookup failed:", e);
     }
   }
 
@@ -166,7 +167,7 @@ export async function scheduleTaskReminders(
     classification: task.classification,
     deadlineStyle: task.deadline_style,
     location: task.location || '',
-    homeZip,
+    homeOrigin,
     timezone: tz,
   });
 

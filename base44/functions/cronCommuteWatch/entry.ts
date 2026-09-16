@@ -117,7 +117,7 @@ export default async function (req: Request): Promise<Response> {
       const withTraffic = await getProximity([commute.place], home, commute.arriveUtc);
       const drive = withTraffic.fromHome[commute.place];
       if (!drive?.minutes) {
-        console.log(`[COMMUTE] Could not measure ${home} → ${commute.place} for ${email}`);
+        console.log(`[COMMUTE] Could not measure home → ${commute.place} for ${email}`);
         continue;
       }
 

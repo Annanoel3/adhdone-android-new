@@ -3,8 +3,8 @@
 // trip" suggestion is based on actual proximity instead of a guess.
 //
 // Uses the Google Distance Matrix API, which accepts free-form address strings
-// ("Kroger on Main St, Austin TX", "78701"), so no separate geocoding step is
-// needed. One request covers every pair.
+// ("Kroger on Main St, Austin TX") and "lat,lng" pairs, so no separate geocoding
+// step is needed. One request covers every pair.
 
 export interface ProximityPair {
   from: string;
@@ -23,48 +23,11 @@ export interface DriveTime {
 
 export interface ProximityResult {
   pairs: ProximityPair[];
-  // Drive time from home to each location, when a home zip is known.
+  // Drive time from home to each location, when a home origin is known.
   fromHome: Record<string, DriveTime>;
 }
 
 const MAX_LOCATIONS = 8; // keeps the matrix small (and the bill at zero)
-
-/**
- * A zip code isn't a point — Google measures it from its center, so someone
- * living at the far edge of a wide zip gets a drive time that's short by ten
- * minutes or more, and a "leave now" reminder that's already late.
- *
- * When home is only a zip, we geocode it, take the corners of the area Google
- * reports for it, and send all of them as origins. The caller then keeps the
- * LONGEST drive — i.e. we assume the user lives at the furthest part of their
- * zip. Being a few minutes early is survivable; being late isn't.
- *
- * A full street address (or anything that isn't a bare zip) is returned as-is.
- */
-async function zipWorstCaseOrigins(home: string, apiKey: string): Promise<string[]> {
-  if (!/^\d{5}(-\d{4})?$/.test(home)) return [home];
-  try {
-    const url = new URL('https://maps.googleapis.com/maps/api/geocode/json');
-    url.searchParams.set('components', `postal_code:${home}`);
-    url.searchParams.set('key', apiKey);
-    const res = await fetch(url.toString());
-    const data = await res.json();
-    const geo = data?.results?.[0]?.geometry;
-    const box = geo?.bounds || geo?.viewport;
-    if (!box?.northeast || !box?.southwest) return [home];
-    const { lat: nLat, lng: eLng } = box.northeast;
-    const { lat: sLat, lng: wLng } = box.southwest;
-    return [
-      `${nLat},${eLng}`,
-      `${nLat},${wLng}`,
-      `${sLat},${eLng}`,
-      `${sLat},${wLng}`,
-    ];
-  } catch (e) {
-    console.error('[MAPS] zip bounds lookup failed:', e);
-    return [home];
-  }
-}
 
 /**
  * Look up driving distance between every pair of the given locations.
@@ -74,7 +37,9 @@ async function zipWorstCaseOrigins(home: string, apiKey: string): Promise<string
  */
 export async function getProximity(
   locations: string[],
-  homeZip: string = '',
+  // The user's home origin — the exact "lat,lng" center of their home circle
+  // (see homeOrigin.ts). Measured as-is; never widened or fuzzed.
+  homeOrigin: string = '',
   // When given, Google returns the drive time predicted for THAT moment's
   // traffic instead of a free-flow average. Ignored if it's in the past —
   // the API rejects past departure times.
@@ -97,11 +62,10 @@ export async function getProximity(
     places.push(loc);
     if (places.length >= MAX_LOCATIONS) break;
   }
-  if (places.length < 2 && !(places.length === 1 && homeZip)) return empty;
+  if (places.length < 2 && !(places.length === 1 && homeOrigin)) return empty;
 
   // Home goes in as an origin only, so we learn how far each errand is from base.
-  // A bare zip becomes several origins (its corners) — see zipWorstCaseOrigins.
-  const homeOrigins = homeZip ? await zipWorstCaseOrigins(homeZip, apiKey) : [];
+  const homeOrigins = homeOrigin ? [homeOrigin] : [];
   const origins = [...homeOrigins, ...places];
   const destinations = places;
 
@@ -144,14 +108,8 @@ export async function getProximity(
 
   if (homeOrigins.length > 0) {
     destinations.forEach((dest, di) => {
-      // Worst case across every home origin: for a zip that's the far edge, so
-      // the "leave now" reminder can't be late for someone living at the corner.
-      let worst: DriveTime | null = null;
-      for (let hi = 0; hi < homeOrigins.length; hi++) {
-        const v = read(data.rows[hi], di);
-        if (v && (!worst || v.minutes > worst.minutes)) worst = v;
-      }
-      if (worst) result.fromHome[dest] = worst;
+      const v = read(data.rows[0], di);
+      if (v) result.fromHome[dest] = v;
     });
   }
 

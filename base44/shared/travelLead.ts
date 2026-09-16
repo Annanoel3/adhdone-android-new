@@ -3,7 +3,7 @@
 // directions — it's late for a 50-minute drive and it's an hour of pointless
 // anxiety for a place 6 minutes away.
 //
-// Lead = driving time from the user's home zip to the task's location, measured
+// Lead = driving time from the user's home circle center to the task's location, measured
 // for the traffic predicted AT THE TIME THEY'D BE DRIVING, plus a small cushion
 // for the getting-out-the-door part (finding keys, shoes, etc.). The cushion is
 // deliberately small because the traffic itself is now accounted for.
@@ -20,7 +20,7 @@ export interface TravelLead {
 }
 
 /**
- * Returns null when we can't measure it (no location, no home zip, no API key,
+ * Returns null when we can't measure it (no location, no home origin, no API key,
  * or Google can't resolve the place) — callers then fall back to their default.
  *
  * `eventTimeISO` is when the user needs to arrive; it's used as the departure
@@ -29,15 +29,13 @@ export interface TravelLead {
  */
 export async function getTravelLead(
   location: string,
-  // The user's home base: a full street address when they saved one, otherwise
-  // their zip code. An address is materially better — Google measures a zip from
-  // its center point, so a large zip can be 10+ minutes off in either direction.
+  // The user's home base: the exact "lat,lng" center of their home circle.
   homeOrigin: string,
   eventTimeISO?: string,
 ): Promise<TravelLead | null> {
   const place = (location || '').trim();
-  const zip = (homeOrigin || '').trim();
-  if (!place || !zip) return null;
+  const home = (homeOrigin || '').trim();
+  if (!place || !home) return null;
 
   let departureAt: Date | null = null;
   if (eventTimeISO) {
@@ -46,7 +44,7 @@ export async function getTravelLead(
   }
 
   try {
-    const proximity = await getProximity([place], zip, departureAt);
+    const proximity = await getProximity([place], home, departureAt);
     const drive = proximity.fromHome[place];
     if (!drive || !drive.minutes) return null;
 

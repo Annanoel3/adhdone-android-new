@@ -329,7 +329,7 @@ async function generateDailySchedule(
   quietEndMin: number,
   subtasksByParent: Record<string, any[]>,
   todaysEvents: any[] = [],
-  homeZip: string = ''
+  homeOrigin: string = ''
 ): Promise<any[] | null> {
   const hour = Math.floor(localMin / 60);
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
@@ -437,8 +437,8 @@ async function generateDailySchedule(
   const located = [...tasks, ...todaysEvents.filter(isErrandFriendly)]
     .map(t => (t.location || '').trim())
     .filter(Boolean);
-  if (located.length >= 2 || (located.length === 1 && homeZip)) {
-    const prox = await getProximity(located, homeZip);
+  if (located.length >= 2 || (located.length === 1 && homeOrigin)) {
+    const prox = await getProximity(located, homeOrigin);
     proximityNotes = formatProximityNotes(prox);
   }
 
@@ -487,7 +487,7 @@ ${urgentCount >= 2 ? `- There are ${urgentCount} URGENT tasks. Consider one noti
 - NEVER INVENT PROGRESS: only ✓ steps are done. If 0 steps are done, do NOT imply they've started ("you're halfway there", "next up") — point at the FIRST step instead. Never name a step as "next" unless every step before it is ✓.
 - SUB-TASK PROGRESS: when a task shows step progress (✓/○), use it to acknowledge where they are — e.g. "you've got the laundry going — don't forget to move it to the dryer" or "great progress on printing — just the label left to ship". Never list every step; just acknowledge the current spot naturally.
 - PUSHED TASKS: when a task shows "pushed Nx" (the user moved its due date later N times), it's being avoided. Don't shame — gently name it: "this one's been bumped a few times — want to break it into a tiny first step?" or "no rush, but this keeps getting pushed — is it still something you actually want to do?" Higher push counts deserve more attention but never guilt.
-- LOCATION IS DATA, NOT A GUESS. A task has a location ONLY if the task line shows an explicit "LOCATION: ..." value (the user typed it in themselves). No LOCATION field = no location, period. Tasks with no LOCATION field NEVER get a "combine errands" / same-trip suggestion, no matter what their title sounds like.${homeZip ? ` The user's home base is ${homeZip} — you may use it to judge roughly whether two locations are in the same area, but never repeat the home address itself in a notification.` : ''}
+- LOCATION IS DATA, NOT A GUESS. A task has a location ONLY if the task line shows an explicit "LOCATION: ..." value (the user typed it in themselves). No LOCATION field = no location, period. Tasks with no LOCATION field NEVER get a "combine errands" / same-trip suggestion, no matter what their title sounds like.${homeOrigin ? ` The user's home base is known and the "home →" distances above are measured from it — use them, and never mention coordinates or the home location itself in a notification.` : ''}
 - NEVER ASSUME A TASK MEANS LEAVING THE HOUSE. Most things can be done online, by phone, or at home — ordering, booking, paying, renewing, even "getting" something. A task only counts as an out-of-the-house errand when the wording SAYS SO: it explicitly uses a go-somewhere verb ("drop off", "pick up in store", "return to the store", "mail", "go to", "stop by", "drive to", "test drive", "in-person appointment"), or it explicitly names a physical place the user is going to ("at the DMV", "the dealership on Main"). A bare name, a brand, a store name, or a person's name is NOT enough — "Get Trevi" or "Men's Warehouse" could easily be an online order or a phone call. Energy level says nothing about location. If it's not explicit, it is NOT an errand.
 - BATCH ERRANDS (two birds, one trip): only ever suggest this when TWO OR MORE tasks each carry an explicit LOCATION field (or one located task lines up with a FIXED APPOINTMENT today) — time it shortly BEFORE the appointment so they can plan. If you're inferring the location from a name or from the task's wording, do NOT send this nudge at all. List every task you mention in task_indexes.
   * If a REAL DRIVING DISTANCES block is present above, USE IT — it's measured, and it covers APPOINTMENT locations as well as task locations, so "that's 5 minutes from your dentist" is a fact you can state when the pair is listed. Only suggest combining when the pair is marked "SAME TRIP" or "reasonable to combine", and you may state the real number ("they're only 6 minutes apart"). Never suggest combining a pair marked "NOT worth combining", and never state a distance that isn't in that block.
