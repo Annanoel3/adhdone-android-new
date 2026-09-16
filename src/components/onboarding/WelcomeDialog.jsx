@@ -34,18 +34,10 @@ export default function WelcomeDialog() {
           <h2 className="text-2xl font-bold text-foreground">Hey, welcome to ADHDone! 👋</h2>
           <div className="space-y-3 text-[15px] leading-relaxed text-muted-foreground">
             <p>
-              I'm Anna. I built this app because I wanted a productivity app that did more than
-              give me another checklist to ignore.
+              I'm Anna. I built this because I was sick of another checklist to ignore.
             </p>
             <p>
-              I'm a solo developer, so if something bugs you or you think of something cool, I want
-              to hear it. The feedback form is in Settings.
-            </p>
-            <p>
-              This app has helped me a lot, and I hope it helps you too.
-            </p>
-            <p>
-              Also, there may be a few Easter eggs hiding around. 😉
+              It's helped my brain a lot — I hope it helps you too.
             </p>
           </div>
           <Button onClick={handleClose} className="w-full">

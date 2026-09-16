@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import OnboardingCard from "./OnboardingCard";
+import TourPointOuts from "./TourPointOuts";
 
 // One tour step: dims the screen, optionally rings the element it's talking
 // about, and shows the explanation near it.
@@ -49,6 +50,7 @@ export default function TourStepCard({ step, isLast, stepNumber, totalSteps, onN
       panelStyle={panelStyle}
     >
       <p className="text-sm text-muted-foreground leading-relaxed">{step.body}</p>
+      <TourPointOuts points={step.points} />
     </OnboardingCard>
   );
 }

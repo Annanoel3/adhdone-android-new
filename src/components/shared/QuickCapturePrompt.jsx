@@ -99,18 +99,18 @@ export default function QuickCapturePrompt() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Zap className="w-5 h-5 text-green-600" />
-            Want a one-tap way to dump a task?
+            One last thing: a one-tap way to catch a thought
           </DialogTitle>
           <DialogDescription>
-            We can keep a shortcut pinned in your notification tray, so when a thought hits
-            you can capture it from anywhere — no opening the app, no losing the thought.
+            Pin a shortcut in your notification tray. Thought hits, you tap it, it's saved — no
+            opening the app, no losing it.
           </DialogDescription>
         </DialogHeader>
 
         {declined ? (
           <div className="space-y-4 pt-2">
             <p className="text-sm text-gray-600">
-              No problem — Quick Capture is always waiting for you in Settings whenever you want it.
+              No problem — it's waiting in Settings whenever you want it.
             </p>
             <Button onClick={() => setOpen(false)} className="w-full">Got it</Button>
           </div>

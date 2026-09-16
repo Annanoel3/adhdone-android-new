@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { PAGE_TOURS } from "./pageIntros";
 import TourStepCard from "./TourStepCard";
-import OtherWaysStepCard from "./OtherWaysStepCard";
 import { ONBOARDING_STEPS, markStepDone, waitForStep } from "./onboardingGate";
 import { persistOnboardingFlag } from "./onboardingSync";
 import { waitForCalm } from "./onboardingSurface";
@@ -44,15 +43,14 @@ export default function PageIntroTour({ currentPageName }) {
   const step = steps[index];
   const next = () => (isLast ? finish() : setIndex((i) => i + 1));
 
-  const shared = {
-    isLast,
-    stepNumber: index + 1,
-    totalSteps: steps.length,
-    onNext: next,
-    onSkip: finish,
-  };
-
-  if (step.variant === "otherWays") return <OtherWaysStepCard {...shared} />;
-
-  return <TourStepCard step={step} {...shared} />;
+  return (
+    <TourStepCard
+      step={step}
+      isLast={isLast}
+      stepNumber={index + 1}
+      totalSteps={steps.length}
+      onNext={next}
+      onSkip={finish}
+    />
+  );
 }
