@@ -123,7 +123,7 @@ export default function HomeAreaMap({ start, onCenterChange, dark }) {
             requests from apps (403 "Access blocked"), and both licences require
             the attribution line, so it stays on. */}
         <TileLayer
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png?key=cb1_3nxd_1_128cb2348f7554073b3833f4"
           subdomains="abcd"
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
         />
