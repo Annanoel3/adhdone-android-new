@@ -1,0 +1,44 @@
+{
+  "name": "Duplicate Watch",
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "duplicate_watch",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "sweep_duplicates": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "cronDuplicateWatch"
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Sweep duplicates",
+            "description": "Heal + report"
+          }
+        }
+      }
+    ]
+  },
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "20 * * * *",
+      "one_time_date": null,
+      "timezone": "America/Chicago",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "description": "Every hour, across all users: finds duplicate calendar imports and duplicate tasks, deletes the extras, cancels their scheduled notifications, and emails the owner a report so regressions surface before users notice them."
+}
