@@ -2,11 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { MapContainer, TileLayer, Circle, ZoomControl, useMap, useMapEvents } from 'react-leaflet';
 import AreaSearchBox from './AreaSearchBox';
 
-// 2.5-mile radius — a circle 5 miles EDGE TO EDGE. Given as a true geographic
-// radius in meters, so Leaflet draws it in real-world units and it spans the same
-// 5 miles at every zoom. The saved value is the exact CENTER, and every drive-time
+// ~1.25-mile radius — a circle 2.5 miles EDGE TO EDGE. Given as a true geographic
+// radius in meters, so Leaflet draws it in real-world units and it covers the same
+// ground at every zoom. The saved value is the exact CENTER, and every drive-time
 // lookup measures from that point.
-export const HOME_RADIUS_METERS = 4023;
+export const HOME_RADIUS_METERS = 2011;
 
 // How much of the map's shorter side the circle fills when zoomed all the way
 // in. Below 1.0 so the edges always sit inside the viewport instead of touching
