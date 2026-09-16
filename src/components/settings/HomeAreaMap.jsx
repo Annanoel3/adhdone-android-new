@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Circle, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Circle, ZoomControl, useMap, useMapEvents } from 'react-leaflet';
 import AreaSearchBox from './AreaSearchBox';
 
 // 2.5-mile radius — a circle 5 miles EDGE TO EDGE. Given as a true geographic
@@ -113,13 +113,22 @@ export default function HomeAreaMap({ start, onCenterChange, dark }) {
         center={[start.lat, start.lng]}
         zoom={start.zoom ?? 10}
         style={{ height: '100%', width: '100%' }}
-        attributionControl={false}
         // Fractional zoom, so the frame can land exactly on the circle instead
         // of snapping to an integer level that clips it or shrinks it.
         zoomSnap={0}
         boxZoom={false}
+        zoomControl={false}
       >
-        <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+        {/* OpenStreetMap data served by CARTO. OSM's own tile servers refuse
+            requests from apps (403 "Access blocked"), and both licences require
+            the attribution line, so it stays on. */}
+        <TileLayer
+          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+          subdomains="abcd"
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        />
+        {/* Bottom-right so the buttons don't sit under the search box. */}
+        <ZoomControl position="bottomright" />
         <FrameZoomRange />
         <CenterTracker onMove={handleMove} />
         <SearchFlyTo dark={dark} onMoved={handleMove} />

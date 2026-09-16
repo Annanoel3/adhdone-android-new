@@ -28,7 +28,8 @@ export default function PlacesPrivacyNote({ theme }) {
             is not stored — the only thing saved is wherever you drag the circle and press Save.
           </p>
           <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-            The map itself isn't Google — browsing and searching stay on OpenStreetMap. Google only
+            The map itself isn't Google — it's OpenStreetMap data (served by CARTO), and searching
+            stays on OpenStreetMap. Google only
             ever gets the point you save, just to time the drive, plus your work address for
             suggestions.
           </p>
