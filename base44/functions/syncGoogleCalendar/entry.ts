@@ -227,6 +227,20 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
   let created = 0, updated = 0, skipped = 0;
   const results = [];
 
+  // Google returns a recurring series' master record AND any individual
+  // occurrences that were modified. Both used to become tasks, so a series
+  // showed up twice on the same day. Map each series to the days its own
+  // occurrences already cover, so the master can stand down for those days.
+  const masterIds = new Set(events.filter(e => (e.recurrence || []).length).map(e => e.id));
+  const seriesInstanceDays: Record<string, Set<string>> = {};
+  for (const e of events) {
+    const baseId = String(e.id || '').includes('_') ? String(e.id).split('_')[0] : null;
+    if (!baseId || !masterIds.has(baseId)) continue;
+    const raw = e.start?.dateTime || e.start?.date;
+    if (!raw) continue;
+    (seriesInstanceDays[baseId] ||= new Set()).add(new Date(raw).toISOString().slice(0, 10));
+  }
+
   // Split events into already-synced (fast path) and new (needs AI).
   const alreadySynced = events.filter(e => existingByGoogleId[e.id]?.adhd_task_id);
   const newEvents = events.filter(e => !existingByGoogleId[e.id]?.adhd_task_id);
@@ -381,6 +395,15 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
           nextReminderDate.setDate(nextReminderDate.getDate() + freqDays);
         }
       }
+    }
+
+    // This series already has its own occurrence imported for this day — don't
+    // let the master create a second, identical task on the same date.
+    if (recurrenceRule && seriesInstanceDays[googleId]?.has(nextReminderDate.toISOString().slice(0, 10))) {
+      console.log('[syncGoogleCalendar] master occurrence already covered by an instance, skipping:', googleId);
+      await base44.asServiceRole.entities.CalendarSyncedEvent.delete(claim.id).catch(() => {});
+      skipped++;
+      continue;
     }
 
     let taskRecord;
