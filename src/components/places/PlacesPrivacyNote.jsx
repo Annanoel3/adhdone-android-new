@@ -20,8 +20,12 @@ export default function PlacesPrivacyNote({ theme }) {
             Nothing here tracks your phone. Your home circle and work address are saved to your own
             account, and the only time they leave the app is a Google Maps lookup — to fill in
             address suggestions as you type, and to measure the drive so "leave now" is a real time
-            instead of a guess. The map may ask for your location once, only to open near you —
-            that position is never saved.
+            instead of a guess.
+          </p>
+          <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
+            When you first set your home circle, your phone may ask to share your location. That's
+            just so the map opens on your area instead of the whole world. Where you actually are
+            is not stored — the only thing saved is wherever you drag the circle and press Save.
           </p>
           <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
             The map itself isn't Google — browsing and searching stay on OpenStreetMap. Google only
