@@ -18,24 +18,13 @@ export default function PlacesPrivacyNote({ theme }) {
           </p>
           <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
             Nothing here tracks your phone. Your home circle and work address are saved to your own
-            account, and the only time they leave the app is a Google Maps lookup — to fill in
-            address suggestions as you type, and to measure the drive so "leave now" is a real time
-            instead of a guess.
-          </p>
-          <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-            When you first set your home circle, your phone may ask to share your location. That's
-            just so the map opens on your area instead of the whole world. Where you actually are
-            is not stored — the only thing saved is wherever you drag the circle and press Save.
-          </p>
-          <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-            The map itself isn't Google — it's OpenStreetMap data (served by CARTO), and searching
-            stays on OpenStreetMap. Google only
-            ever gets the point you save, just to time the drive, plus your work address for
-            suggestions.
-          </p>
-          <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-            No one else can see them, they're never sold or shared, and you can clear or change them
-            here any time.
+            account. The map and map search run on OpenStreetMap, but your saved info never goes
+            there. The only place it's sent is Google Maps, which gets your work address to suggest
+            matches as you type and the spot you saved to time the drive, so "leave now" is a real
+            time instead of a guess. When you first set your home circle, the app may ask for your
+            general location so the map opens on your area, but where you actually are isn't stored
+            nor tracked, only the spot where you drag the circle and press Save. No one else can see
+            this info, it's never sold or shared, and you can change or clear it here any time.
           </p>
         </div>
       </CardContent>
