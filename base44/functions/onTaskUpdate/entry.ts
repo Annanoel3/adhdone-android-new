@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent } from '../../shared/reminderTitle.ts';
-import { adjustForQuietHours, parseHHMM, localMinutesOfDay } from '../../shared/quietHours.ts';
+import { adjustForQuietHours, parseHHMM, localMinutesOfDay, resolveQuietHours } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID');
@@ -344,10 +344,8 @@ Deno.serve(async (req) => {
       const RECURRING = new Set(['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day']);
       const email = data.notification_recipient_email || user.email;
       const now = Date.now();
-      const quietEnabled = !!(user && user.quiet_hours_enabled);
+      const { enabled: quietEnabled, startMin, endMin } = resolveQuietHours(user);
       const timeZone = user && user.timezone ? user.timezone : null;
-      const startMin = user && user.quiet_hours_start ? parseHHMM(user.quiet_hours_start) : parseHHMM('22:00');
-      const endMin = user && user.quiet_hours_end ? parseHHMM(user.quiet_hours_end) : parseHHMM('08:00');
 
       // Restore the priority the task had before it went to the Back Burner
       // (it was forced to low while silenced). Merged into each branch's update
@@ -493,10 +491,8 @@ Deno.serve(async (req) => {
         // Owner quiet hours (local "HH:MM"). Apply only when enabled AND the owner
         // has a recorded timezone — otherwise we can't convert local wall-time to UTC.
         // Mirrors cronRefillReminders so a reschedule here never fires at 4 AM.
-        const quietEnabled = !!(user && user.quiet_hours_enabled);
+        const { enabled: quietEnabled, startMin, endMin } = resolveQuietHours(user);
         const timeZone = user && user.timezone ? user.timezone : null;
-        const startMin = user && user.quiet_hours_start ? parseHHMM(user.quiet_hours_start) : parseHHMM('22:00');
-        const endMin = user && user.quiet_hours_end ? parseHHMM(user.quiet_hours_end) : parseHHMM('08:00');
         const useQuiet = quietEnabled && !!timeZone;
 
         // Schedule the next 10 notifications with updated title

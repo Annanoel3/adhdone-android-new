@@ -3,6 +3,21 @@
 // as local "HH:MM" wall-clock strings, so every comparison is done in the user's
 // own timezone (via Intl) rather than the backend's UTC runtime.
 
+// Quiet hours DEFAULT TO ON. A profile that has never touched the setting has
+// `quiet_hours_enabled` undefined — treating that as "off" is what let daily
+// interval reminders fire at 3 AM local for brand-new users. Only an explicit
+// `false` (the user turned it off in Settings) disables the overnight window.
+export const DEFAULT_QUIET_START = '22:00';
+export const DEFAULT_QUIET_END = '07:00';
+
+export function resolveQuietHours(user: any): { enabled: boolean; startMin: number; endMin: number } {
+  return {
+    enabled: user?.quiet_hours_enabled !== false,
+    startMin: parseHHMM(user?.quiet_hours_start || DEFAULT_QUIET_START),
+    endMin: parseHHMM(user?.quiet_hours_end || DEFAULT_QUIET_END),
+  };
+}
+
 function localParts(utcDate: Date, timeZone: string) {
   const fmt = new Intl.DateTimeFormat('en-US', {
     timeZone,

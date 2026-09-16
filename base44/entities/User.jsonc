@@ -61,16 +61,18 @@
     },
     "quiet_hours_enabled": {
       "type": "boolean",
-      "default": false,
-      "description": "Whether quiet hours are active for the user"
+      "default": true,
+      "description": "Whether quiet hours are active. Defaults to ON: a reminder is worthless at 3 AM and actively harmful to trust in the app, so overnight silence is opt-OUT, not opt-in. Users who genuinely want middle-of-the-night pushes can turn it off in Settings."
     },
     "quiet_hours_start": {
       "type": "string",
-      "description": "Quiet hours start in local HH:MM"
+      "default": "22:00",
+      "description": "Quiet hours start in local HH:MM. Defaults to 22:00 so a user who never opens Settings still gets overnight silence."
     },
     "quiet_hours_end": {
       "type": "string",
-      "description": "Quiet hours end in local HH:MM"
+      "default": "07:00",
+      "description": "Quiet hours end in local HH:MM. Defaults to 07:00; anything that would have fired overnight is delivered at this time instead."
     },
     "focus_mode_task_id": {
       "type": "string",

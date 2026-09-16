@@ -1159,15 +1159,20 @@ export default function Layout({ children, currentPageName }) {
       if (!currentUser.timezone) {
         updates.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
       }
+      // Quiet hours are ON by default. A profile that has never touched the
+      // setting gets the overnight window written in on first load, so every
+      // backend cron sees a real value instead of "undefined" (which used to
+      // read as disabled and let daily reminders fire at 3 AM local).
+      if (typeof currentUser.quiet_hours_enabled !== 'boolean') updates.quiet_hours_enabled = true;
+      if (!currentUser.quiet_hours_start) updates.quiet_hours_start = '22:00';
+      if (!currentUser.quiet_hours_end) updates.quiet_hours_end = '07:00';
       await base44.auth.updateMe(updates);
 
       // Keep quiet hours in localStorage so the client-side reminder scheduler
       // (used for one-time/event reminders) follows the profile values.
-      if (typeof currentUser.quiet_hours_enabled === 'boolean') {
-        localStorage.setItem('quiet_hours_enabled', currentUser.quiet_hours_enabled ? 'true' : 'false');
-      }
-      if (currentUser.quiet_hours_start) localStorage.setItem('quiet_hours_start', currentUser.quiet_hours_start);
-      if (currentUser.quiet_hours_end) localStorage.setItem('quiet_hours_end', currentUser.quiet_hours_end);
+      localStorage.setItem('quiet_hours_enabled', currentUser.quiet_hours_enabled === false ? 'false' : 'true');
+      localStorage.setItem('quiet_hours_start', currentUser.quiet_hours_start || '22:00');
+      localStorage.setItem('quiet_hours_end', currentUser.quiet_hours_end || '07:00');
 
       // Background Google Calendar auto-sync — runs in the user's session so
       // the app-user OAuth token is available (a scheduled cron can't access

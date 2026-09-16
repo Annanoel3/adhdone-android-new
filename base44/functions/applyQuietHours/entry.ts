@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
-import { isInQuietHours, parseHHMM } from '../../shared/quietHours.ts';
+import { isInQuietHours, parseHHMM, resolveQuietHours } from '../../shared/quietHours.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
 const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
@@ -26,11 +26,15 @@ Deno.serve(async (req) => {
     // Prefer the user's profile (source of truth) for the enabled flag + timezone;
     // fall back to the values sent from the Settings page for start/end.
     const timeZone = user.timezone || null;
-    const quietEnabled = user.quiet_hours_enabled === true;
-    const startStr = user.quiet_hours_start || quietStart || '22:00';
-    const endStr = user.quiet_hours_end || quietEnd || '08:00';
-    const startMin = parseHHMM(startStr);
-    const endMin = parseHHMM(endStr);
+    // Quiet hours default to ON — only an explicit false counts as disabled.
+    const resolved = resolveQuietHours({
+      ...user,
+      quiet_hours_start: user.quiet_hours_start || quietStart,
+      quiet_hours_end: user.quiet_hours_end || quietEnd,
+    });
+    const quietEnabled = resolved.enabled;
+    const startMin = resolved.startMin;
+    const endMin = resolved.endMin;
 
     if (!quietEnabled || !timeZone) {
       return Response.json({ success: true, skipped: 'quiet hours disabled or no timezone on profile' });

@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent } from '../../shared/reminderTitle.ts';
-import { adjustForQuietHours, parseHHMM, localMinutesOfDay } from '../../shared/quietHours.ts';
+import { adjustForQuietHours, parseHHMM, localMinutesOfDay, resolveQuietHours } from '../../shared/quietHours.ts';
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 
@@ -143,11 +143,12 @@ Deno.serve(async (req) => {
 
       // Owner's quiet hours (local "HH:MM"). Apply only when enabled AND the owner
       // has a recorded timezone — otherwise we can't convert local wall-time to UTC.
+      // Quiet hours default to ON — a profile that never touched the setting is
+      // silenced overnight, not left wide open (that's how daily reminders ended
+      // up firing at 3 AM local for new users).
       const owner = userMap[email];
-      const quietEnabled = !!(owner && owner.quiet_hours_enabled);
+      const { enabled: quietEnabled, startMin, endMin } = resolveQuietHours(owner);
       const timeZone = owner && owner.timezone ? owner.timezone : null;
-      const startMin = owner && owner.quiet_hours_start ? parseHHMM(owner.quiet_hours_start) : parseHHMM('22:00');
-      const endMin = owner && owner.quiet_hours_end ? parseHHMM(owner.quiet_hours_end) : parseHHMM('08:00');
       const useQuiet = quietEnabled && !!timeZone;
 
       // Focus Mode: while the owner has an active focus task, only that task
@@ -490,9 +491,7 @@ Deno.serve(async (req) => {
       const timeZone = owner?.timezone || null;
       if (timeZone) {
         const localMin = localMinutesOfDay(now, timeZone);
-        const quietEnabled = !!(owner && owner.quiet_hours_enabled);
-        const qStart = owner?.quiet_hours_start ? parseHHMM(owner.quiet_hours_start) : parseHHMM('22:00');
-        const qEnd = owner?.quiet_hours_end ? parseHHMM(owner.quiet_hours_end) : parseHHMM('08:00');
+        const { enabled: quietEnabled, startMin: qStart, endMin: qEnd } = resolveQuietHours(owner);
         const inQuiet = quietEnabled && (qStart < qEnd
           ? (localMin >= qStart && localMin < qEnd)
           : (localMin >= qStart || localMin < qEnd));
@@ -648,9 +647,7 @@ Deno.serve(async (req) => {
       if (dueLocalStr !== nowLocalStr) continue;
 
       const localMin = localMinutesOfDay(now, timeZone);
-      const quietEnabled = !!(owner && owner.quiet_hours_enabled);
-      const qStart = owner?.quiet_hours_start ? parseHHMM(owner.quiet_hours_start) : parseHHMM('22:00');
-      const qEnd = owner?.quiet_hours_end ? parseHHMM(owner.quiet_hours_end) : parseHHMM('08:00');
+      const { enabled: quietEnabled, startMin: qStart, endMin: qEnd } = resolveQuietHours(owner);
       const inQuiet = quietEnabled && (qStart < qEnd
         ? (localMin >= qStart && localMin < qEnd)
         : (localMin >= qStart || localMin < qEnd));
