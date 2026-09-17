@@ -387,7 +387,10 @@ async function generateDailySchedule(
         // "ON that day": nothing can be done sooner — do not nudge early.
         dueInfo = days === 0 ? 'HAPPENS TODAY (tied to today only)' : days === 1 ? 'happens TOMORROW (tied to that day — do not nudge before then except a night-before heads-up)' : days > 0 ? `happens in ${days} days on ${formatDateShort(t.due_date, timeZone)} (tied to that specific day — cannot be done sooner)` : `OVERDUE by ${Math.abs(days)} day(s)`;
       } else {
-        dueInfo = days === 0 ? 'deadline today' : days === 1 ? 'deadline tomorrow' : days > 0 ? `deadline in ${days} days (${formatDateShort(t.due_date, timeZone)})` : `OVERDUE by ${Math.abs(days)} day(s)`;
+        // A plain due date is a DEADLINE too — the work can start any time
+        // before it — so label it the same way the day-only deadlines are
+        // labelled, or the runway rules below never applied to it.
+        dueInfo = days === 0 ? 'DEADLINE: must be finished TODAY' : days === 1 ? 'DEADLINE: must be finished by tomorrow' : days > 0 ? `DEADLINE in ${days} days (${formatDateShort(t.due_date, timeZone)}) — can be worked on any time before then` : `OVERDUE by ${Math.abs(days)} day(s)`;
       }
     }
     let windowInfo = '';
@@ -473,6 +476,12 @@ YOUR APPROACH:
 - You can see the whole week. Plan TODAY's reminders — what to surface, when, what to say.
 - MEET ALL DEADLINES: if something is due today or tomorrow, it must be surfaced. If something is overdue, surface it with urgency.
 - DUE TODAY IS NON-NEGOTIABLE: every "DUE TODAY" task gets a nudge, and its FIRST nudge lands within the next 30-60 minutes — the boss said it has to happen today, so the window is closing whether the task is dishes or taxes. If less than 2 hours remain before ${cutoffLabel}, nudge it within 15 minutes and, if it's still open, once more about halfway to ${cutoffLabel}. The task's stored priority doesn't lower this — a same-day deadline outranks priority.
+- WEIGH THE WHOLE TASK, EVERY TIME. Whether to nudge it today, at what time of day, and how many times all come out of the same four things together:
+  * THE DUE DATE — how many days are left, and whether it's a deadline (work can start early) or tied to one day. Closer = more often; nothing due for a week+ gets at most an occasional heads-up.
+  * THE PRIORITY the boss set — urgent/high earns more frequent and earlier nudges than low/medium at the same distance. A low-priority thing due in 5 days can wait; an urgent one due in 5 days gets started now.
+  * WHAT THE TITLE AND DESCRIPTION ACTUALLY SAY — how much work it is, and whether it depends on a business, an office, or another person (those need daytime hours and more lead time than something doable from the couch).
+  * THE ENERGY LEVEL — high-energy tasks belong earlier in the day; low-energy ones fit fine in the evening.
+  A close due date on a big or business-dependent task can mean several nudges across today; a far-off low-priority one-liner means none. Never pick a frequency from the due date alone or the priority alone.
 - DON'T LET THINGS SNEAK UP: if a deadline is 2-3 days out and the task is high-priority, a heads-up today is smart. If it's a week+ out, hold off unless it's urgent.
 - "DEADLINE in N days" vs "happens on [day]" — TREAT THESE COMPLETELY DIFFERENTLY:
   * DEADLINE tasks can be worked on ahead of time, so give them RUNWAY. How much runway depends on how much work the task actually is — judge that from the task itself: a one-step thing (pay a bill, send an email, book something online) needs 1-2 days; an errand or anything involving another person, an office, or paperwork needs 3-5 days; a genuinely big multi-step job (taxes, a report, applications, packing, cleaning out a room) deserves nudges starting a week or two out, framed around ONE small first step. Never let a big deadline task get its first nudge the day before.
