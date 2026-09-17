@@ -7,6 +7,15 @@ let initPromise = null;      // the actual init promise, so callers can await it
 let adInFlight = false;      // single-flight: one prepare/show at a time
 let shownThisLaunch = false; // at most one interstitial per app launch
 
+// Every ad failure used to be swallowed, so "I'm getting no ads" was
+// undiagnosable. Each attempt now records WHY it ended the way it did.
+export function getLastAdStatus() {
+  return localStorage.getItem('admob_last_status') || 'no attempt yet';
+}
+function setStatus(msg) {
+  localStorage.setItem('admob_last_status', `${new Date().toLocaleTimeString()} — ${msg}`);
+}
+
 export function initAdMob() {
   if (initPromise) return initPromise;
   initPromise = (async () => {
@@ -23,6 +32,7 @@ export function initAdMob() {
         }
       } catch (e) {
         console.warn('[AdMob] consent step failed, skipping ads:', e);
+        setStatus(`consent step failed: ${e?.message || e}`);
         return false;
       }
 
@@ -35,6 +45,7 @@ export function initAdMob() {
       return true;
     } catch (e) {
       console.warn('[AdMob] init failed:', e);
+      setStatus(`init failed: ${e?.message || e}`);
       AdMob = null;
       return false;
     }
@@ -49,19 +60,27 @@ export function resetAdLaunchState() {
 }
 
 export async function showInterstitialAd() {
-  if (shownThisLaunch || adInFlight) return false;   // once per launch, single-flight
+  if (shownThisLaunch || adInFlight) {
+    setStatus(shownThisLaunch ? 'skipped: already shown this launch' : 'skipped: another attempt in flight');
+    return false;
+  }
   const ready = await initAdMob();                   // never request before init+consent
-  if (!ready || !AdMob) return false;
+  if (!ready || !AdMob) {
+    setStatus('skipped: AdMob not initialized');
+    return false;
+  }
 
   adInFlight = true;
   try {
     await AdMob.prepareInterstitial({ adId: AD_UNIT_ID, isTesting: false });
     shownThisLaunch = true;              // set before show so a retry can't double-show
     await AdMob.showInterstitial();
+    setStatus('shown');
     return true;
   } catch (e) {
     // No-fill / load failure / consent refusal all land here: just don't show.
     console.warn('[AdMob] interstitial skipped:', e);
+    setStatus(`ad request failed: ${e?.message || e}`);
     return false;
   } finally {
     adInFlight = false;

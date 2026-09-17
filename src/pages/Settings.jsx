@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import HomeZipCard from '@/components/settings/HomeZipCard';
 import QuickCaptureCard from '@/components/settings/QuickCaptureCard';
+import AdDiagnosticsCard from '@/components/settings/AdDiagnosticsCard';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -323,6 +324,8 @@ export default function Settings() {
         <QuickCaptureCard theme={theme} />
 
         <HomeZipCard user={user} theme={theme} />
+
+        <AdDiagnosticsCard user={user} theme={theme} />
 
         {/* Theme Section */}
         <Card className={`mb-6 border-none shadow-lg ${
