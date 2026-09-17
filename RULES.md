@@ -41,9 +41,9 @@ Before finishing ANY task involving AI/LLM, run a codebase search for `InvokeLLM
 payload.include_external_user_ids = [userEmail];
 ```
 
-Some senders still contain a legacy `include_player_ids` branch with an external-ID fallback (`sendOneSignalPush`, `cronDailyDigest`, `cronCommuteWatch`, and the two direct pushes in `cronRefillReminders`), and `notifySend` still returns `{ success: false, error: 'No player IDs' }` when the field is empty.
+As of 2026-09-17 EVERY sender targets by external id only. The legacy `include_player_ids` branches in `sendOneSignalPush`, `cronDailyDigest`, `cronCommuteWatch` and the two direct pushes in `cronRefillReminders` were removed at Anna's explicit request. `notifySend` is switched OFF on purpose: it answers `{ success: false, disabled: true }` and sends nothing, so achievement, partner-request, chat-message and challenge pushes stay off — they had been silent for ~11 months and Anna chose to keep them that way.
 
-**DO NOT "fix" any of that unless Anna explicitly asks.** Rewriting those branches changes live delivery for real users, and removing the `notifySend` guard would REVIVE pushes that have been silent for ~11 months. This is knowledge for explaining behavior, NOT a license to refactor.
+**Do not bring a player-id branch back, and do not turn `notifySend` back on, unless Anna explicitly asks.** The app still SAVES `onesignal_player_ids` on the user; nothing uses it to target a push (only the `checkMyOneSignalStatus` diagnostic reads it).
 
 ## 3. NOTIFICATION SENDERS THAT ACTUALLY EXIST
 
@@ -51,13 +51,13 @@ Do not describe, revive, or reference removed crons. The live senders are:
 
 | Sender | Trigger | Role |
 |---|---|---|
-| `cronRefillReminders` | hourly | Books recurring-task pushes, promotes event/birthday reminders into OneSignal's ~30-day window, yearly birthday rollover, hourly day-of text follow-ups |
+| `cronRefillReminders` | hourly | Books recurring-task pushes, writes the reminder plan for one-time tasks dated more than ~30 days out, promotes planned event/birthday reminders into OneSignal's ~30-day window, yearly birthday rollover, hourly day-of text follow-ups |
 | `cronSmartTaskNudge` | every 30 min | One LLM-planned nudge per user per run, for day-only / no-time tasks |
 | `cronDailyDigest` | every 30 min | One morning summary per user after quiet hours end |
 | `cronCommuteWatch` | every 15 min | "Time to leave" + traffic heads-up |
-| `onTaskUpdate` | Task entity events | Cancels / re-books on complete, snooze, delete, back-burner, un-complete, reminder-field edits |
+| `onTaskUpdate` | Task entity events | Cancels / re-books on complete, delete, back-burner, un-complete, reminder-field edits. Leaves a snoozed task and a task in Focus Mode alone |
 | `cronDuplicateWatch` | hourly | Cleans duplicates, emails the owner — sends no user pushes |
-| `schedulePush` / `notifySend` | called by the above | The actual OneSignal calls |
+| `schedulePush` | called by the above | The actual OneSignal call (`notifySend` is switched off — see §2) |
 
 `cronTaskReminders` sends NOTHING — it only advances `next_reminder` bookkeeping. Never describe it as a notification sender.
 
@@ -110,7 +110,13 @@ Before proposing ANY mechanism below, assume it exists and go read it.
 | Per-user sync locking | `calendar_sync_in_progress_since` + heartbeat | One active Google Calendar sync per account |
 | Guessed-recurrence stripping | `stripGuessedRecurrence` in `taskSchedule.js` | Kills recurrence the user never asked for |
 | Quiet hours | `base44/shared/quietHours.ts` + `applyQuietHours` | Timezone-aware overnight suppression |
-| Far-future scheduling | `planned_` placeholder entries, promoted by `cronRefillReminders` | OneSignal can't book past ~30 days; placeholders bridge it |
+| Far-future scheduling | `base44/shared/eventReminderPlan.ts` + `planned_` placeholder entries, promoted by `cronRefillReminders` | OneSignal can't book past ~30 days; the plan is saved with placeholders and booked once inside the window. Used by calendar import AND by the hourly job for far-out tasks made in the app. `Task.reminder_plan_built_at` = the server wrote this task's plan once; never rebuild it (an empty plan can be the user's own choice) |
+| Refused bookings | `Task.reminder_retry_after` | When OneSignal refuses (device not subscribed) the hourly job stops at the first refusal, never marks the task "covered", skips that owner for the run and waits 2 hours |
+| Reading whole tables | `base44/shared/listAll.ts` (`listAll`, `filterAll`) | `list()`/`filter()` return only 50 rows by default. Any job that needs every row pages through here |
+| Daytime anchor (hard rule 3) | `anchorToDaytime` in `base44/shared/quietHours.ts` and `src/components/utils/taskSchedule.js` | A daily / every-other-day reminder first booked overnight is pinned to the 9 AM hour. Shorter intervals and running schedules are left alone |
+| Lost-capture recovery | `src/lib/pendingCaptures.js` + `TaskCaptureProcessor` | The in-app capture queue is mirrored to localStorage and finished on the next app open by the same account. Owner-stamped, heartbeat, per-part progress, no double-create |
+| Snooze | `src/components/utils/snoozeTask.js` | Shared by the Tasks page and the notification screen (the "Did you do it?" popup has its own, working, handler). Books one push, never sets `status: 'snoozed'` |
+| Focus Mode check-ins | `Task.focus_mode_notification_ids` | Kept apart from a task's own reminders so leaving Focus Mode cancels only the check-ins and never invents an interval |
 | Reminder interval decision | `base44/shared/reminderIntervalDecision.ts` | The single place interval classification happens |
 | Server-side task parsing | `base44/shared/runTaskParse.ts` + `taskParsePrompt.ts` | One parser. Never add a second one (native-side parsing was tried and rejected) |
 
