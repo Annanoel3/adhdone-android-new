@@ -10,7 +10,10 @@ export default function AdDiagnosticsCard({ user, theme }) {
   const [status, setStatus] = useState(getLastAdStatus());
   const [testing, setTesting] = useState(false);
 
-  if (user?.role !== 'admin') return null;
+  // Owner + admins only. The owner is matched by email too, since the account
+  // role isn't always what the dashboard shows.
+  const isOwner = user?.email === 's2kap2chick@gmail.com';
+  if (user?.role !== 'admin' && !isOwner) return null;
 
   const runTest = async () => {
     setTesting(true);
