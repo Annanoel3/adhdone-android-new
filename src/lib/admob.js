@@ -31,9 +31,11 @@ export function initAdMob() {
           await plugin.showConsentForm();
         }
       } catch (e) {
-        console.warn('[AdMob] consent step failed, skipping ads:', e);
-        setStatus(`consent step failed: ${e?.message || e}`);
-        return false;
+        // A missing/misconfigured UMP form is NOT a reason to stop serving ads —
+        // consent is only required for EEA/UK users, and the form lives in the
+        // AdMob console, not here. Note it and carry on with the ad request.
+        console.warn('[AdMob] consent step skipped:', e);
+        setStatus(`consent unavailable (continuing): ${e?.message || e}`);
       }
 
       // The plugin dispatches MobileAds.initialize() without awaiting it,
