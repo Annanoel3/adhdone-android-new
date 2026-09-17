@@ -266,11 +266,38 @@ Deno.serve(async (req) => {
               : {})
           });
 
-          console.log(`✅ [REFILL] Scheduled ${notificationIds.length} reminders for "${task.title}", last at: ${newLastScheduledUntil.toISOString()}`);
+          // newLastScheduledUntil is ALREADY an ISO string — calling .toISOString()
+          // on it threw a TypeError here, which the catch below swallowed as
+          // "Failed to refill", so `refilled` never incremented and every real
+          // refill was reported as a failure. Do not re-add the conversion.
+          console.log(`✅ [REFILL] Scheduled ${notificationIds.length} reminders for "${task.title}", last at: ${newLastScheduledUntil}`);
           refilled++;
         } else {
           // All notifications landed in the digest window — update last_scheduled_until
           // to prevent infinite retry loops. The daily digest will cover these tasks.
+          //
+          // We're about to clear the id list. Anything another writer booked on this
+          // task (the creator's fire-and-forget landing late, or onTaskUpdate) must be
+          // CANCELLED first — blindly wiping the list left those pushes live in
+          // OneSignal with nothing pointing at them, so they kept firing forever and
+          // completing the task couldn't stop them.
+          const freshDigest = await base44.asServiceRole.entities.Task.get(task.id).catch(() => null);
+          const strandedIds: string[] = Array.isArray(freshDigest?.onesignal_notification_ids)
+            ? freshDigest.onesignal_notification_ids.filter((id: string) => !oldIds.includes(id))
+            : [];
+          if (strandedIds.length > 0) {
+            const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+            const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+            await Promise.allSettled(strandedIds.map(id =>
+              fetch(`https://onesignal.com/api/v1/notifications/${id}?app_id=${appId}`, {
+                method: 'DELETE',
+                headers: { Authorization: `Basic ${restApiKey}` }
+              })
+            ));
+            await ledgerCancel(base44, strandedIds);
+            console.log(`🧹 [REFILL] Cancelled ${strandedIds.length} stranded push(es) on "${task.title}" before handing it to the digest`);
+          }
+
           const batchEnd = new Date(batchStart.getTime() + interval * (BATCH_SIZE - 1));
           await base44.asServiceRole.entities.Task.update(task.id, {
             onesignal_notification_ids: [],
