@@ -104,3 +104,29 @@ export function adjustForQuietHours(
   }
   return new Date(quietEndUtc);
 }
+
+// RULES.md hard rule 3: a reminder that repeats at the same time of day (daily,
+// every other day) must not inherit the clock time it happened to be created
+// at. "Every day", made at 2:57 AM, used to mean 2:57 AM forever — and with
+// quiet hours on, that task never got a push of its own at all, only the digest.
+//
+// If `utcDate` falls inside the user's overnight window, move it to the first
+// daytime slot after that window: 9 AM local (the same anchor the app uses for
+// day-only tasks), or an hour after the window ends if that is later. The
+// minutes are kept, so tasks made on the same night don't all land on 9:00.
+// The window is the quiet-hours window even when quiet hours are switched off —
+// "off" means "don't hold pushes back", not "3 AM is daytime".
+const DAYTIME_ANCHOR_MIN = 9 * 60;
+
+export function anchorToDaytime(
+  utcDate: Date,
+  startMin: number,
+  endMin: number,
+  timeZone: string
+): Date {
+  if (!isInQuietHours(utcDate, startMin, endMin, timeZone)) return utcDate;
+  const windowEnd = adjustForQuietHours(utcDate, startMin, endMin, timeZone);
+  const slotMin = Math.max(DAYTIME_ANCHOR_MIN, endMin + 60);
+  const keepMinutes = localMinutesOfDay(utcDate, timeZone) % 60;
+  return new Date(windowEnd.getTime() + (slotMin - endMin + keepMinutes) * 60000);
+}

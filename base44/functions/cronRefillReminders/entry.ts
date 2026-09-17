@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent } from '../../shared/reminderTitle.ts';
-import { adjustForQuietHours, parseHHMM, localMinutesOfDay, resolveQuietHours } from '../../shared/quietHours.ts';
+import { adjustForQuietHours, parseHHMM, localMinutesOfDay, resolveQuietHours, anchorToDaytime } from '../../shared/quietHours.ts';
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
       const idHash = task.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
       const staggerMs = (idHash % 50) * 60 * 1000; // 0–49 minute stagger
 
-      const batchStart = scheduledUntil > now
+      let batchStart = scheduledUntil > now
           ? new Date(scheduledUntil.getTime() + interval + staggerMs)
           : new Date(now.getTime() + interval + staggerMs);
 
@@ -193,6 +193,16 @@ Deno.serve(async (req) => {
       const { enabled: quietEnabled, startMin, endMin } = resolveQuietHours(owner);
       const timeZone = owner && owner.timezone ? owner.timezone : null;
       const useQuiet = quietEnabled && !!timeZone;
+
+      // RULES.md hard rule 3. A schedule that is starting from scratch (a task the
+      // server created, or one whose bookings had lapsed) takes its time of day
+      // from "now" — so a daily task first booked at 2:57 AM stayed at 2:57 AM
+      // forever. Pin that first slot to a daytime hour. Only for reminders that
+      // repeat at the same time of day, and never for a task that already has a
+      // running schedule — that one keeps the time it has.
+      if (interval >= 24 * 60 * 60 * 1000 && scheduledUntil <= now && timeZone) {
+        batchStart = anchorToDaytime(batchStart, startMin, endMin, timeZone);
+      }
 
       // Focus Mode: while the owner has an active focus task, only that task
       // gets recurring reminders — everything else stays silent until they exit.

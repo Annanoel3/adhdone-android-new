@@ -18,6 +18,50 @@ export const INTERVAL_MS = {
 
 const RECURRING = Object.keys(INTERVAL_MS);
 
+// RULES.md hard rule 3: a reminder that repeats at the same time of day (daily,
+// every other day) must not inherit the clock time it happened to be created
+// at. "Every day", typed at 2:57 AM, used to mean 2:57 AM forever.
+//
+// If the first reminder would land inside the user's overnight window, move it
+// to the first daytime slot after it: 9 AM (the same anchor day-only tasks use),
+// or an hour after the window ends if that is later. The minutes are kept, so
+// tasks made on the same night don't all land on 9:00. The window is the
+// quiet-hours window even when quiet hours are switched off — "off" means
+// "don't hold pushes back", not "3 AM is daytime". Shorter intervals are left
+// alone: they have no fixed time of day, and "every 10 minutes" means now.
+// The server twin is anchorToDaytime in base44/shared/quietHours.ts.
+const DAYTIME_ANCHOR_MIN = 9 * 60;
+const SAME_TIME_EVERY_DAY = ['daily', 'every_other_day'];
+
+const hhmmToMin = (value, fallback) => {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(String(value || ''));
+  return match ? Number(match[1]) * 60 + Number(match[2]) : fallback;
+};
+
+export function anchorToDaytime(date, interval) {
+  const at = new Date(date);
+  if (!SAME_TIME_EVERY_DAY.includes(interval)) return at;
+
+  let startMin = 22 * 60;
+  let endMin = 7 * 60;
+  try {
+    startMin = hhmmToMin(localStorage.getItem('quiet_hours_start'), startMin);
+    endMin = hhmmToMin(localStorage.getItem('quiet_hours_end'), endMin);
+  } catch (e) { /* storage unavailable — defaults stand */ }
+  if (startMin === endMin) return at;
+
+  const m = at.getHours() * 60 + at.getMinutes();
+  const overnight = startMin > endMin ? (m >= startMin || m < endMin) : (m >= startMin && m < endMin);
+  if (!overnight) return at;
+
+  const slotMin = Math.max(DAYTIME_ANCHOR_MIN, endMin + 60);
+  const out = new Date(at);
+  // Evening side of a window that spans midnight → tomorrow morning.
+  if (startMin > endMin && m >= startMin) out.setDate(out.getDate() + 1);
+  out.setHours(Math.floor(slotMin / 60), (slotMin % 60) + at.getMinutes(), 0, 0);
+  return out;
+}
+
 // A recurring interval is ONLY valid when the user actually used recurring
 // language. Anything else is the model guessing — and a wrong guess means the
 // user gets pinged every hour forever.
@@ -80,7 +124,7 @@ export function deriveSchedule(parsed, now = new Date()) {
     const at = iso ? new Date(iso) : null;
     out.nextReminder = at && at > new Date(now.getTime() + 2 * 60 * 1000) ? at : null;
   } else if (INTERVAL_MS[out.interval]) {
-    out.nextReminder = new Date(now.getTime() + INTERVAL_MS[out.interval]);
+    out.nextReminder = anchorToDaytime(new Date(now.getTime() + INTERVAL_MS[out.interval]), out.interval);
   }
 
   if (!out.dueDateISO && parsed.due_date && out.interval !== 'once') {

@@ -5,7 +5,7 @@ import { getReminderCopy } from "./reminderCopy";
 import dedupeSplitTasks from "./dedupeSplitTasks";
 import { createBirthdayFromInput } from "./birthdayScheduler";
 import { toast } from "sonner";
-import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule } from "./taskSchedule";
+import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule, anchorToDaytime } from "./taskSchedule";
 import { announceEventConflict } from "./eventConflicts";
 import { commitNotificationIds } from "./notificationOwnership";
 
@@ -486,7 +486,7 @@ Return JSON:
         };
       }
     } else if (parsed.reminder_interval && recurringIntervals.includes(parsed.reminder_interval)) {
-      nextReminder = new Date(now.getTime() + INTERVAL_MS[parsed.reminder_interval]);
+      nextReminder = anchorToDaytime(new Date(now.getTime() + INTERVAL_MS[parsed.reminder_interval]), parsed.reminder_interval);
     } else {
       nextReminder = null;
     }
@@ -534,7 +534,7 @@ Return JSON:
     // Never schedule a reminder in the past or immediate
     if (nextReminder && nextReminder <= new Date(now.getTime() + 2 * 60 * 1000)) {
       nextReminder = (actualReminderInterval && actualReminderInterval !== 'once' && INTERVAL_MS[actualReminderInterval])
-        ? new Date(now.getTime() + INTERVAL_MS[actualReminderInterval])
+        ? anchorToDaytime(new Date(now.getTime() + INTERVAL_MS[actualReminderInterval]), actualReminderInterval)
         : null;
     }
 
