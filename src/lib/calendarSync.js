@@ -45,19 +45,32 @@ export function runCalendarSync() {
 
   const previous = localStorage.getItem(GATE_KEY);
   localStorage.setItem(GATE_KEY, new Date().toISOString());
+  const undoOptimisticGate = () => {
+    if (previous) localStorage.setItem(GATE_KEY, previous);
+    else localStorage.removeItem(GATE_KEY);
+  };
 
   inFlight = base44.functions
     .invoke('syncGoogleCalendar', {})
     .then((res) => {
       const data = res?.data || {};
-      if (data.synced_at) localStorage.setItem(GATE_KEY, data.synced_at);
+      if (data.synced_at) {
+        localStorage.setItem(GATE_KEY, data.synced_at);
+      } else {
+        // No sync finished in THIS call — another run holds the server lock
+        // ({ in_progress: true }). That run may be a crashed one whose lock has
+        // not gone stale yet, so the optimistic marker must not stand in for a
+        // finished sync (it would switch auto-sync off for a whole interval).
+        // Put back what was there; the next trigger simply asks again, which is
+        // one cheap call while the lock is held.
+        undoOptimisticGate();
+      }
       return data;
     })
     .catch((err) => {
       // Not connected / network error: undo the optimistic marker so the next
       // legitimate trigger (e.g. right after connecting) isn't gated out.
-      if (previous) localStorage.setItem(GATE_KEY, previous);
-      else localStorage.removeItem(GATE_KEY);
+      undoOptimisticGate();
       throw err;
     })
     .finally(() => {

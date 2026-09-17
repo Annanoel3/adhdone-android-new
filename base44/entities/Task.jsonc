@@ -100,6 +100,16 @@
       "format": "date-time",
       "description": "Timestamp of the last (furthest-out) scheduled reminder \u2014 used by cron to know when to refill"
     },
+    "reminder_retry_after": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Set by cronRefillReminders when OneSignal refuses to book this task's reminders (most often: the user's device is no longer subscribed). The job leaves the task alone until this time instead of retrying every run, and never marks it as covered. A time in the past has no effect."
+    },
+    "reminder_plan_built_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the SERVER wrote this task's reminder_schedule (the Google Calendar import, or cronRefillReminders for a task dated more than ~30 days out). Once set, cronRefillReminders never builds a plan for this task again, so a plan the user clears in the app stays cleared."
+    },
     "onesignal_notification_ids": {
       "type": "array",
       "items": {

@@ -4,6 +4,7 @@ import { adjustForQuietHours, parseHHMM, localMinutesOfDay, resolveQuietHours } 
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
+import { buildEventReminderPlan, isBookableNow, isBookedId, BOOKABLE_WINDOW_MS } from '../../shared/eventReminderPlan.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 const BATCH_SIZE = 10;
@@ -19,6 +20,18 @@ const isBeingScheduledElsewhere = (t: any, nowMs: number) => {
   const created = t.created_date ? new Date(t.created_date).getTime() : 0;
   return (since && nowMs - since < CREATION_GRACE_MS) || (created && nowMs - created < CREATION_GRACE_MS);
 };
+
+// When OneSignal refuses a booking (most often: the user's device is no longer
+// subscribed), wait this long before trying that task again. Without it the job
+// either claimed the task was "covered" for days (it wasn't) or would re-try
+// every run forever and burn function calls.
+const RETRY_AFTER_MS = 2 * 60 * 60 * 1000;
+const isInRetryBackoff = (t: any, nowMs: number) =>
+  !!t.reminder_retry_after && new Date(t.reminder_retry_after).getTime() > nowMs;
+
+// Far-out dated tasks get their reminder plan written here (one schedule-
+// generator call each); cap that work per run.
+const MAX_PLANS_BUILT_PER_RUN = 10;
 
 const intervalMsMap = {
   '10min':           10 * 60 * 1000,
@@ -80,6 +93,10 @@ Deno.serve(async (req) => {
     let refilled = 0;
     let skipped = 0;
     let staleStopped = 0;
+    // Owners OneSignal refused during THIS run. If one booking for a user is
+    // refused (device not subscribed), every other booking for them would be too
+    // — skip the rest of their tasks until the next run instead of asking again.
+    const refusedEmails = new Set<string>();
 
     // Short intervals that become spam if a task is never completed
     const shortIntervals = new Set(['10min', '20min', '30min', '1hour', '2hours', '4hours']);
@@ -90,6 +107,11 @@ Deno.serve(async (req) => {
 
       if (isBeingScheduledElsewhere(task, now.getTime())) {
         console.log(`⏳ [REFILL] Skipping "${task.title}" — created/scheduling within the last few minutes`);
+        skipped++;
+        continue;
+      }
+
+      if (isInRetryBackoff(task, now.getTime()) || refusedEmails.has(task.notification_recipient_email)) {
         skipped++;
         continue;
       }
@@ -183,6 +205,7 @@ Deno.serve(async (req) => {
 
       const notificationIds = [];
       let lastScheduledAt: Date | null = null; // de-dupe quiet-hour slots that collapse to the same time
+      let rejected = false; // OneSignal refused a booking — not the same as "the digest covers it"
 
       for (let i = 0; i < BATCH_SIZE; i++) {
         let sendAt = new Date(batchStart.getTime() + interval * i);
@@ -228,9 +251,16 @@ Deno.serve(async (req) => {
           if (result?.notificationId) {
             notificationIds.push(result.notificationId);
             lastScheduledAt = sendAt;
+          } else if (result && result.success === false) {
+            // Refused outright. The other nine would be refused too — stop here.
+            console.warn(`[REFILL] OneSignal refused a reminder for "${task.title}": ${result.error || 'unknown error'}`);
+            rejected = true;
+            break;
           }
         } catch (e) {
           console.error(`[REFILL] Failed to schedule reminder #${i + 1} for task ${task.id}:`, e);
+          rejected = true;
+          break;
         }
       }
 
@@ -264,6 +294,7 @@ Deno.serve(async (req) => {
         await base44.asServiceRole.entities.Task.update(task.id, {
           onesignal_notification_ids: notificationIds,
           last_scheduled_until: newLastScheduledUntil,
+          reminder_retry_after: null,
             ...(!task.next_reminder || new Date(task.next_reminder) <= now
               ? { next_reminder: batchStart.toISOString() }
               : {})
@@ -275,6 +306,15 @@ Deno.serve(async (req) => {
           // refill was reported as a failure. Do not re-add the conversion.
           console.log(`✅ [REFILL] Scheduled ${notificationIds.length} reminders for "${task.title}", last at: ${newLastScheduledUntil}`);
           refilled++;
+        } else if (rejected) {
+          // Nothing was booked because OneSignal refused it. Nothing is "covered".
+          // Leave last_scheduled_until alone and try again after the backoff.
+          refusedEmails.add(task.notification_recipient_email);
+          await base44.asServiceRole.entities.Task.update(task.id, {
+            onesignal_notification_ids: [],
+            reminder_retry_after: new Date(now.getTime() + RETRY_AFTER_MS).toISOString(),
+          });
+          console.warn(`📵 [REFILL] Could not book "${task.title}" — will retry after ${new Date(now.getTime() + RETRY_AFTER_MS).toISOString()}`);
         } else {
           // All notifications landed in the digest window — update last_scheduled_until
           // to prevent infinite retry loops. The daily digest will cover these tasks.
@@ -592,32 +632,115 @@ Deno.serve(async (req) => {
   // schedule (payments, deadlines with a specific date but no classification) —
   // they all use the same planned-entry promotion mechanics. Birthdays with a
   // birthday_person are handled by the birthday pass above, so exclude them.
-  const eventTasks = allTasks.filter(t =>
+  const datedTasks = allTasks.filter(t =>
     t.status === 'active' &&
     !t.silenced &&
     !t.birthday_person &&
     !t.is_own_birthday &&
     t.classification !== 'birthday' &&
     (t.classification === 'event' || t.reminder_interval === 'once') &&
-    t.notification_recipient_email &&
-    Array.isArray(t.reminder_schedule) && t.reminder_schedule.length > 0
+    t.notification_recipient_email
   );
 
+  // ── Far-out dated tasks: write the plan the app could not ───────────────────
+  // OneSignal refuses anything more than ~30 days ahead. So a one-time task or
+  // event created further out than that (in the app, by capture, or by calendar
+  // import) had every reminder refused, was left with no plan and nothing
+  // booked, and this pass — which only reads plans — never saw it again. It got
+  // no reminder at all.
+  //
+  // The rule is deliberately narrow, because an EMPTY plan is also what the app
+  // saves when the user removes every reminder from a task themselves, and that
+  // choice must stand:
+  //   • only a task whose date is still beyond the bookable window — nothing
+  //     could have been booked for it yet, so there was nothing to remove;
+  //   • only once per task — reminder_plan_built_at records that the server has
+  //     written its plan, so a plan the user clears later is never rebuilt;
+  //   • never a repeating task (those carry no lead-time plan).
+  // Entries are written PLANNED (placeholder ids). The promotion loop below is
+  // the only thing that books, and only inside the window. Nothing is booked early.
+  let plansBuilt = 0;
+  for (const task of datedTasks) {
+    if (plansBuilt >= MAX_PLANS_BUILT_PER_RUN) break;
+    if (task.reminder_plan_built_at) continue;
+    if (task.recurrence_pattern && task.recurrence_pattern !== 'none') continue;
+    const hasPlan = Array.isArray(task.reminder_schedule) && task.reminder_schedule.length > 0;
+    const hasIds = Array.isArray(task.onesignal_notification_ids) && task.onesignal_notification_ids.length > 0;
+    if (hasPlan || hasIds) continue;
+    if (!task.next_reminder) continue;
+    if (new Date(task.next_reminder).getTime() - now.getTime() <= BOOKABLE_WINDOW_MS) continue;
+    if (isBeingScheduledElsewhere(task, now.getTime()) || isInRetryBackoff(task, now.getTime())) continue;
+
+    plansBuilt++;
+    try {
+      const owner = userMap[task.notification_recipient_email];
+      const timeZone = owner && owner.timezone ? owner.timezone : null;
+      const res = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
+        title: task.title,
+        scheduledDateISO: task.next_reminder,
+        urgency: task.urgency,
+        dayOnly: !!task.day_only_task,
+        classification: task.classification || 'event',
+        deadlineStyle: task.deadline_style,
+        timezone: timeZone || undefined,
+      });
+      const data = res?.data || res || {};
+      const plan = buildEventReminderPlan({
+        taskId: task.id,
+        rawReminders: data.reminders || [],
+        eventStartISO: task.next_reminder,
+        title: task.title,
+        // A calendar import with no event_time is an all-day item (9 AM anchor).
+        isAllDay: !!task.day_only_task || (!task.event_time && task.classification === 'event'),
+        isEvent: task.classification === 'event',
+        timeZone,
+      });
+      if (plan.length > 0) {
+        await base44.asServiceRole.entities.Task.update(task.id, {
+          reminder_schedule: plan,
+          reminder_plan_built_at: now.toISOString(),
+        });
+        task.reminder_schedule = plan; // so the promotion loop below sees it this run
+        console.log(`🗓 [REFILL] Built a reminder plan for "${task.title}" (${plan.length} entr${plan.length === 1 ? 'y' : 'ies'})`);
+      }
+    } catch (e) {
+      console.error(`[REFILL] Could not build a reminder plan for ${task.id}:`, e);
+      await base44.asServiceRole.entities.Task.update(task.id, {
+        reminder_retry_after: new Date(now.getTime() + RETRY_AFTER_MS).toISOString(),
+      }).catch(() => {});
+    }
+  }
+
+  const eventTasks = datedTasks.filter(t =>
+    Array.isArray(t.reminder_schedule) && t.reminder_schedule.length > 0
+  );
+  // Soonest first, and stop well inside the function's time limit. A big first
+  // calendar import can leave hundreds of planned entries; whatever is not
+  // booked this run is picked up by the next one, an hour later.
+  eventTasks.sort((a, b) => new Date(a.next_reminder || 0).getTime() - new Date(b.next_reminder || 0).getTime());
+  const EVENT_PASS_BUDGET_MS = 3 * 60 * 1000;
+
   for (const task of eventTasks) {
-    if (isBeingScheduledElsewhere(task, now.getTime())) continue;
+    if (Date.now() - now.getTime() > EVENT_PASS_BUDGET_MS) {
+      console.warn('[REFILL] Event pass reached its time budget — the rest will be booked next run');
+      break;
+    }
+    if (isBeingScheduledElsewhere(task, now.getTime()) || isInRetryBackoff(task, now.getTime())) continue;
+    if (refusedEmails.has(task.notification_recipient_email)) continue;
     const schedule = [...task.reminder_schedule];
     const ids = Array.isArray(task.onesignal_notification_ids) ? [...task.onesignal_notification_ids] : [];
     let dirty = false;
     const newIds: string[] = [];
 
+    let eventRejected = false;
     for (const entry of schedule) {
-      // Skip entries already scheduled with a real OneSignal ID.
-      // Check notification_id alone — older entries may not have the `scheduled` flag.
-      if (entry.notification_id) continue;
+      // Skip entries already booked with a real OneSignal id. A missing id OR a
+      // `planned_…` placeholder both mean "not booked yet" (the birthday pass
+      // already reads it this way; this pass used to skip placeholders forever).
+      if (isBookedId(entry.notification_id)) continue;
 
-      const sendAtMs = new Date(entry.send_at).getTime();
-      if (sendAtMs <= now.getTime()) continue;
-      if (sendAtMs - now.getTime() > BIRTHDAY_WINDOW_MS) continue;
+      // Only inside OneSignal's window, never in the past. Nothing is booked early.
+      if (!isBookableNow(entry.send_at, now.getTime())) continue;
 
       try {
         const res = await base44.asServiceRole.functions.invoke('schedulePush', {
@@ -634,10 +757,25 @@ Deno.serve(async (req) => {
           newIds.push(result.notificationId);
           dirty = true;
           eventScheduled++;
+        } else if (result && result.success === false) {
+          console.warn(`[REFILL] OneSignal refused an event reminder for "${task.title}": ${result.error || 'unknown error'}`);
+          eventRejected = true;
+          break;
         }
       } catch (e) {
         console.error(`[REFILL] Event schedule failed for ${task.id}:`, e);
+        eventRejected = true;
+        break;
       }
+    }
+
+    if (eventRejected) {
+      refusedEmails.add(task.notification_recipient_email);
+      // Same rule as recurring tasks: don't hammer OneSignal every run for a
+      // device that can't be reached. Anything booked above is still saved below.
+      await base44.asServiceRole.entities.Task.update(task.id, {
+        reminder_retry_after: new Date(now.getTime() + RETRY_AFTER_MS).toISOString(),
+      }).catch(() => {});
     }
 
     if (dirty) {

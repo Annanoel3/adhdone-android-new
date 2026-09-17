@@ -1,9 +1,10 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
-import { localReminderUtc, wallClockToUtc } from '../../shared/timezoneReminders.ts';
+import { wallClockToUtc } from '../../shared/timezoneReminders.ts';
 import { isRecurringInterval, INTERVAL_MS } from '../../shared/reminderIntervalDecision.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { filterAll } from '../../shared/listAll.ts';
+import { buildEventReminderPlan, isBookableNow, isBookedId } from '../../shared/eventReminderPlan.ts';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
 
@@ -197,7 +198,7 @@ async function classifyEventWithAI(base44, event) {
 // runs walked past it and both created a task. Now a run has to take the lock,
 // re-read it, and see its OWN marker before it may create anything.
 // Notification budget for a single sync run (see use site).
-const MAX_REMINDERS_PER_EVENT = 2;
+// (The per-event cap of 2 lives in shared/eventReminderPlan.ts.)
 const MAX_REMINDERS_PER_SYNC = 30;
 
 const CLAIM_PREFIX = 'claiming:';
@@ -714,93 +715,55 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     // clearing the in-progress marker.
     const finalPatch: any = { reminder_scheduling_since: null };
 
-    // For one-time events, use the LLM-powered reminder schedule generator
-    // to determine optimal reminder times based on ADHD principles.
-    // Cron only handles recurring tasks, so events must be scheduled here.
+    // One-time events get their reminder plan from the shared planner — the same
+    // one cronRefillReminders uses for a task dated too far out to book. The
+    // WHOLE plan is always saved. An entry is booked right now only if it is
+    // inside OneSignal's ~30-day window AND this run still has push budget;
+    // everything else stays planned (a `planned_…` placeholder id) and the hourly
+    // event pass books it later. No imported event is ever left without a plan.
     if (!isBirthday && reminderInterval === 'once' && createdTask.next_reminder) {
       try {
-        const scheduleRes = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
-          title,
-          scheduledDateISO: createdTask.next_reminder,
-          urgency: createdTask.urgency,
-          classification: createdTask.classification || 'event',
-          // Lets the "leave now" reminder be based on real drive time from home
-          // instead of a blanket hour before.
-          location: (createdTask as any).location || (taskRecord as any).location || '',
-          homeZip: getHomeOrigin(user),
-          timezone: (user as any)?.timezone || undefined,
-        });
-        const scheduleData = scheduleRes?.data || scheduleRes || {};
-        const rawReminders = scheduleData.reminders || [];
-
-        // Convert reminder specs (ABSOLUTE: days_before/hour/minute or RELATIVE: relative_minutes_before)
-        // to ISO times and filter past reminders
-        const scheduledDate = new Date(createdTask.next_reminder);
-        const bufferMs = Date.now() + 2 * 60 * 1000;
-        const userTimeZone = (user as any)?.timezone || null;
-        const reminderTimes = rawReminders
-          .map(r => {
-            let reminderTime;
-            if (r.relative_minutes_before != null) {
-              reminderTime = new Date(scheduledDate.getTime() - r.relative_minutes_before * 60 * 1000);
-            } else {
-              // ABSOLUTE reminders specify a local wall-clock time (e.g. 9 AM).
-              // Convert via the user's timezone so a "morning of" reminder fires
-              // at 9 AM local, not 9 AM UTC (which would be 4 AM US-Central).
-              reminderTime = localReminderUtc(scheduledDate, r.days_before || 0, r.hour || 0, r.minute || 0, userTimeZone);
-            }
-            return { sendAtISO: reminderTime.toISOString(), label: r.label, notification_title: r.notification_title || '📅 Upcoming', notification_body: r.notification_body || title, isRelative: r.relative_minutes_before != null };
-          })
-          // All-day items have no real clock time — only a 9 AM anchor — so a
-          // "1 hour before" nudge is meaningless and just fires before dawn.
-          .filter(r => !(isAllDay && r.isRelative))
-          .filter(r => new Date(r.sendAtISO).getTime() > bufferMs)
-          .filter(r => {
-            // For events, never schedule a reminder after the event start time.
-            // A "coming up in an hour" nudge 4 hours into the event is useless.
-            if (createdTask.classification === 'event' && new Date(r.sendAtISO).getTime() > scheduledDate.getTime()) {
-              console.log(`[syncGoogleCalendar] Dropping post-event reminder "${r.label}" at ${r.sendAtISO} (event at ${createdTask.next_reminder})`);
-              return false;
-            }
-            // For events, never schedule a reminder more than 1 day before —
-            // nobody wants a "2 months before" notification for a far-future event.
-            if (createdTask.classification === 'event') {
-              const advanceMs = scheduledDate.getTime() - new Date(r.sendAtISO).getTime();
-              if (advanceMs > 24 * 60 * 60 * 1000) {
-                console.log(`[syncGoogleCalendar] Dropping far-out event reminder "${r.label}" at ${r.sendAtISO} (${Math.round(advanceMs / 86400000)}d before event)`);
-                return false;
-              }
-            }
-            return true;
-          })
-          .sort((a, b) => new Date(a.sendAtISO).getTime() - new Date(b.sendAtISO).getTime())
-          // Deduplicate by send time: the LLM sometimes returns two reminders
-          // that resolve to the same (or near-same) clock time — e.g. "1 day
-          // before at 6pm" + "evening before at 6pm" both land at 6:00 PM.
-          // Keep only the first reminder within a 5-minute window so the user
-          // gets one notification, not two near-identical duplicates.
-          .filter((r, i, arr) => {
-            if (i === 0) return true;
-            const prevMs = new Date(arr[i - 1].sendAtISO).getTime();
-            const thisMs = new Date(r.sendAtISO).getTime();
-            return (thisMs - prevMs) > 5 * 60 * 1000;
+        // If the schedule generator fails, the planner still gives the event one
+        // reminder at its start — never nothing.
+        let rawReminders: any[] = [];
+        try {
+          const scheduleRes = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
+            title,
+            scheduledDateISO: createdTask.next_reminder,
+            urgency: createdTask.urgency,
+            classification: createdTask.classification || 'event',
+            // Lets the "leave now" reminder be based on real drive time from home
+            // instead of a blanket hour before.
+            location: (createdTask as any).location || (taskRecord as any).location || '',
+            homeZip: getHomeOrigin(user),
+            timezone: (user as any)?.timezone || undefined,
           });
+          const scheduleData = scheduleRes?.data || scheduleRes || {};
+          rawReminders = scheduleData.reminders || [];
+        } catch (e) {
+          console.log('[syncGoogleCalendar] schedule generator failed, using the at-the-time fallback:', e.message);
+        }
 
-        const notificationIds = [];
-        // Notification budget. A first-time sync can pull in a year of events —
-        // booking every reminder the LLM suggests for every one of them buries
-        // the user under pushes. Two per event, and a hard ceiling for the whole
-        // sync run; anything past that relies on the normal reminder refill.
-        const perEvent = reminderTimes.slice(0, MAX_REMINDERS_PER_EVENT);
-        for (const reminder of (pushBudget > 0 ? perEvent : [])) {
-          if (pushBudget <= 0) break;
+        const plan = buildEventReminderPlan({
+          taskId: createdTask.id,
+          rawReminders,
+          eventStartISO: createdTask.next_reminder,
+          title,
+          isAllDay,
+          isEvent: createdTask.classification === 'event',
+          timeZone: (user as any)?.timezone || null,
+        });
+
+        for (const entry of plan) {
+          // Out of budget or outside the window → stays planned for the hourly job.
+          if (pushBudget <= 0 || !isBookableNow(entry.send_at)) continue;
           pushBudget--;
           try {
             const res = await base44.asServiceRole.functions.invoke('schedulePush', {
               toUserExternalId: user.email,
-              title: reminder.notification_title,
-              body: reminder.notification_body,
-              sendAtISO: reminder.sendAtISO,
+              title: entry.notification_title,
+              body: entry.notification_body,
+              sendAtISO: entry.send_at,
               data: {
                 screen: '/TaskNotification',
                 taskId: createdTask.id,
@@ -814,53 +777,24 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
               ],
             });
             const result = res?.data || res;
-            if (result?.notificationId) notificationIds.push(result.notificationId);
+            // The id goes on the entry it belongs to — never matched up by position.
+            if (result?.notificationId) entry.notification_id = result.notificationId;
+            // Refused (device not subscribed, OneSignal down): every other booking
+            // this run would be refused too. Stop booking — the plans are still
+            // saved, and the hourly job books them when it can.
+            else if (result && result.success === false) pushBudget = 0;
           } catch (e) {
             console.log('[syncGoogleCalendar] reminder scheduling failed:', e.message);
           }
         }
 
-        // Fallback: if no reminders were scheduled, send a single one at event start
-        if (notificationIds.length === 0 && pushBudget > 0) {
-          const sendAt = new Date(createdTask.next_reminder);
-          if (sendAt.getTime() > Date.now() + 2 * 60 * 1000) {
-            pushBudget--;
-            const res = await base44.asServiceRole.functions.invoke('schedulePush', {
-              toUserExternalId: user.email,
-              title: `📅 ${title}`,
-              body: `You've got this! ${title} is coming up.`,
-              sendAtISO: sendAt.toISOString(),
-              data: {
-                screen: '/TaskNotification',
-                taskId: createdTask.id,
-                urgency: createdTask.urgency || 'medium',
-                type: 'task_reminder',
-              },
-              buttons: [
-                { id: 'snooze_15', text: 'Snooze 15 min' },
-                { id: 'snooze_60', text: 'Snooze 1 hour' },
-                { id: 'complete', text: '✅ Done' },
-              ],
-            });
-            const result = res?.data || res;
-            if (result?.notificationId) {
-              notificationIds.push(result.notificationId);
-            }
-          }
-        }
-
-        if (notificationIds.length > 0) {
-          const structured = perEvent
-            .slice(0, notificationIds.length)
-            .map((r, i) => ({
-              notification_id: notificationIds[i],
-              send_at: r.sendAtISO,
-              label: r.label,
-              notification_title: r.notification_title,
-              notification_body: r.notification_body,
-            }));
-          finalPatch.onesignal_notification_ids = notificationIds;
-          finalPatch.reminder_schedule = structured;
+        if (plan.length > 0) {
+          finalPatch.reminder_schedule = plan;
+          // Tells cronRefillReminders this task already has its server-written
+          // plan, so it never rebuilds one the user later clears.
+          finalPatch.reminder_plan_built_at = new Date().toISOString();
+          // Only real OneSignal ids go in the id list — never a placeholder.
+          finalPatch.onesignal_notification_ids = plan.map((e) => e.notification_id).filter(isBookedId);
         }
       } catch (e) {
         console.log('[syncGoogleCalendar] event reminder scheduling failed:', e.message);
