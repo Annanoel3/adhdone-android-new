@@ -3,6 +3,7 @@ import { getReminderContent } from '../../shared/reminderTitle.ts';
 import { adjustForQuietHours, parseHHMM, localMinutesOfDay, resolveQuietHours } from '../../shared/quietHours.ts';
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
+import { listAll, filterAll } from '../../shared/listAll.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 const BATCH_SIZE = 10;
@@ -44,8 +45,10 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     await ledgerPrune(base44);
 
-    const allTasks = await base44.asServiceRole.entities.Task.list('-updated_date', 500);
-    console.log(`📦 [REFILL] Total tasks fetched: ${allTasks.length}`);
+    // EVERY active task, paged — not "the 500 most recently updated". Every pass
+    // below only ever looks at active tasks.
+    const allTasks = await filterAll(base44.asServiceRole.entities.Task, { status: 'active' });
+    console.log(`📦 [REFILL] Active tasks fetched: ${allTasks.length}`);
 
     // Tasks with no due date, no event time, and no start date are handled by
     // cronSmartTaskNudge (one intelligent nudge per hour) instead of interval
@@ -69,7 +72,7 @@ Deno.serve(async (req) => {
 
     // Fetch all users once so we can apply each task owner's quiet hours in their
     // local timezone (quiet hours are stored as local "HH:MM" on the user profile).
-    const allUsers = await base44.asServiceRole.entities.User.list();
+    const allUsers = await listAll(base44.asServiceRole.entities.User);
     const userMap: Record<string, any> = {};
     for (const u of allUsers) if (u && u.email) userMap[u.email] = u;
 

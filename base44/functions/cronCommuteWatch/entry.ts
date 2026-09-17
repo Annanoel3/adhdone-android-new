@@ -23,6 +23,7 @@ import { getTodaysCommute, localDateKey } from '../../shared/commuteSchedule.ts'
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { getProximity } from '../../shared/mapsDistance.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
+import { listAll } from '../../shared/listAll.ts';
 
 const CUSHION_MINUTES = 10;       // finding keys / shoes / getting in the car
 const LEAVE_WINDOW_MINUTES = 16;  // one cron tick, so departure is never missed
@@ -81,7 +82,7 @@ export default async function (req: Request): Promise<Response> {
     const now = new Date();
     const sent: any[] = [];
 
-    const users = await base44.asServiceRole.entities.User.list();
+    const users = await listAll(base44.asServiceRole.entities.User);
     // Remote workers have hours but no drive — never send them a "leave now".
     const commuters = users.filter((u: any) => u?.email && !u?.work_remote && u?.work_address && getHomeOrigin(u));
     if (commuters.length === 0) {

@@ -3,6 +3,7 @@ import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 import { localReminderUtc, wallClockToUtc } from '../../shared/timezoneReminders.ts';
 import { isRecurringInterval, INTERVAL_MS } from '../../shared/reminderIntervalDecision.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
+import { filterAll } from '../../shared/listAll.ts';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
 
@@ -285,7 +286,10 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
   console.log('[syncGoogleCalendar] calendar fetch OK for=', connectedEmail, '| raw items=', allItems.length, '| active events=', events.length, '| cancelled=', cancelledItems.length);
 
   // Load all existing synced events for this user
-  const existingSynced = await base44.asServiceRole.entities.CalendarSyncedEvent.filter({ user_email: user.email });
+  // EVERY import row for this user, paged. With no limit, filter() returns only
+  // 50 rows, so a calendar with more than 50 imported events had most of them
+  // looking "not imported yet" on every sync.
+  const existingSynced = await filterAll(base44.asServiceRole.entities.CalendarSyncedEvent, { user_email: user.email });
   const existingByGoogleId = {};
   for (const s of existingSynced) existingByGoogleId[s.google_event_id] = s;
 
@@ -353,7 +357,8 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
   await Promise.all(
     Array.from({ length: Math.ceil(linkedIds.length / CHUNK) }, (_, i) => linkedIds.slice(i * CHUNK, (i + 1) * CHUNK))
       .map(async (chunk) => {
-        const rows = await base44.asServiceRole.entities.Task.filter({ id: { $in: chunk } });
+        // Explicit limit: without one, filter() returns at most 50 of the 100 ids asked for.
+        const rows = await base44.asServiceRole.entities.Task.filter({ id: { $in: chunk } }, '-created_date', CHUNK);
         for (const t of rows) tasksById[t.id] = t;
       })
   );

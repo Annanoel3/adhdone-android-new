@@ -10,6 +10,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
 import { localMinutesOfDay, parseHHMM } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
+import { listAll, filterAll } from '../../shared/listAll.ts';
 
 const openai = new OpenAI({
   apiKey: Deno.env.get('OPENAI_API_KEY')
@@ -26,12 +27,13 @@ Deno.serve(async (req) => {
     const todayStr = now.toISOString().slice(0, 10);
 
     // 1. Get all users (for timezone + quiet hours + de-dup tracking)
-    const allUsers = await base44.asServiceRole.entities.User.list();
+    const allUsers = await listAll(base44.asServiceRole.entities.User);
     const userMap: Record<string, any> = {};
     for (const u of allUsers) if (u && u.email) userMap[u.email] = u;
 
     // 2. Get all active non-birthday tasks, grouped by recipient email
-    const allTasks = await base44.asServiceRole.entities.Task.list('-updated_date', 500);
+    // EVERY active task, paged — not "the 500 most recently updated".
+    const allTasks = await filterAll(base44.asServiceRole.entities.Task, { status: 'active' });
     const activeTasksByUser: Record<string, any[]> = {};
     for (const task of allTasks) {
       if (task.status !== 'active' || !task.notification_recipient_email) continue;

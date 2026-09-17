@@ -18,6 +18,7 @@ import { localMinutesOfDay, parseHHMM, isInQuietHours, adjustForQuietHours } fro
 import { getProximity, formatProximityNotes } from '../../shared/mapsDistance.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
+import { listAll } from '../../shared/listAll.ts';
 
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 
@@ -31,12 +32,14 @@ Deno.serve(async (req) => {
     const now = new Date();
 
     // 1. Get all users
-    const allUsers = await base44.asServiceRole.entities.User.list();
+    const allUsers = await listAll(base44.asServiceRole.entities.User);
     const userMap: Record<string, any> = {};
     for (const u of allUsers) if (u && u.email) userMap[u.email] = u;
 
     // 2. Get all tasks — group smart-nudge tasks by recipient, track completed/silenced
-    const allTasks = await base44.asServiceRole.entities.Task.list('-updated_date', 500);
+    // EVERY task, paged — not "the 500 most recently updated". Completed tasks
+    // are needed too (completedTaskIds below), so this is not filtered to active.
+    const allTasks = await listAll(base44.asServiceRole.entities.Task);
     const tasksByUser: Record<string, any[]> = {};
     // Today's fixed appointments/events per user — NOT nudged (they have their own
     // reminder flow), but given to the LLM as context so it can suggest batching
