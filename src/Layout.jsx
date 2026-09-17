@@ -1043,7 +1043,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <HomeZipPrompt user={user} theme={theme} />
         <EventConflictWarning theme={theme} />
         <QuickCapturePrompt />
-        <TaskCaptureProcessor />
+        <TaskCaptureProcessor userEmail={user?.email} />
         <WelcomeDialog />
         <PageIntroTour currentPageName={currentPageName} />
 
