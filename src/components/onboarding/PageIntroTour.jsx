@@ -34,6 +34,11 @@ export default function PageIntroTour({ currentPageName }) {
       )
       .then(() => {
         if (cancelled) return;
+        // Mark the page's tour seen the MOMENT it appears, not when the last
+        // step is tapped. A user who opened Home, saw step 1 and left got the
+        // whole thing again on every single app open.
+        localStorage.setItem(seenKey(currentPageName), "1");
+        persistOnboardingFlag(seenKey(currentPageName));
         setIndex(0);
         setSteps(tour);
       });
@@ -41,8 +46,6 @@ export default function PageIntroTour({ currentPageName }) {
   }, [currentPageName]);
 
   const finish = () => {
-    localStorage.setItem(seenKey(currentPageName), "1");
-    persistOnboardingFlag(seenKey(currentPageName));
     setSteps(null);
     // Finishing the Home tour releases the notification-permission prompt.
     if (currentPageName === "Home") markStepDone(ONBOARDING_STEPS.homeTour);
