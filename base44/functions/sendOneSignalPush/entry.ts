@@ -34,12 +34,6 @@ Deno.serve(async (req) => {
 
         console.log('[sendOneSignalPush] ✅ OneSignal credentials loaded');
 
-        // Get target user's player IDs
-        console.log('[sendOneSignalPush] 🔍 Fetching player IDs for user:', userEmail);
-        const targetUsers = await base44.asServiceRole.entities.User.filter({ email: userEmail });
-        const targetUser = targetUsers[0];
-        const playerIds = targetUser?.onesignal_player_ids || [];
-
         const ledgerKind = data?.type || 'general';
         const ledgerTaskId = data?.taskId || null;
         const gate = await ledgerCheck(base44, { email: userEmail, taskId: ledgerTaskId, kind: ledgerKind });
@@ -47,25 +41,15 @@ Deno.serve(async (req) => {
             return Response.json({ success: false, skipped: true, reason: gate.reason });
         }
 
+        // HARD RULE: target by external id (the user's email) only. Never player ids.
         const payload = {
             app_id: appId.trim(),
+            include_external_user_ids: [userEmail],
+            channel_for_external_user_ids: 'push',
             headings: { en: title },
             contents: { en: message },
             data: data || {}
         };
-
-        if (playerIds.length > 0) {
-            // Send to specific player IDs (preferred — per-device)
-            payload.include_player_ids = playerIds;
-            console.log('[sendOneSignalPush] ✅ Found', playerIds.length, 'device(s) for user:', userEmail);
-            console.log('[sendOneSignalPush] 📤 Sending by player IDs - Title:', title, '| Player IDs:', playerIds);
-        } else {
-            // Fallback: deliver via the external user ID (email) that the device
-            // was registered with through OneSignal.login(). This covers users
-            // whose player ID hasn't been synced to our DB yet.
-            payload.include_external_user_ids = [userEmail];
-            console.log('[sendOneSignalPush] ⚠️ No stored player IDs — sending by external user ID:', userEmail);
-        }
 
         const response = await fetch("https://onesignal.com/api/v1/notifications", {
             method: "POST",

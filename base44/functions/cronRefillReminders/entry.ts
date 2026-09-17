@@ -555,12 +555,8 @@ Deno.serve(async (req) => {
                 : `It's ${task.birthday_person}'s birthday today and you haven't written a text yet. Tap to draft one now.` },
               data: { screen: '/TaskNotification', taskId: task.id, type: 'birthday_text_reminder' },
             };
-            const playerIds = owner?.onesignal_player_ids || [];
-            if (playerIds.length > 0) {
-              pushPayload.include_player_ids = playerIds;
-            } else {
-              pushPayload.include_external_user_ids = [task.notification_recipient_email];
-            }
+            // HARD RULE: external id (email) only. Never player ids.
+            pushPayload.include_external_user_ids = [task.notification_recipient_email];
             const pushRes = await fetch('https://onesignal.com/api/v1/notifications', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${bRestKey}` },
@@ -712,12 +708,8 @@ Deno.serve(async (req) => {
           contents: { en: text.message || `Don't forget to send your text to ${text.recipient_name}.` },
           data: { screen: '/Home', type: 'scheduled_text', scheduledTextId: text.id },
         };
-        const playerIds = owner?.onesignal_player_ids || [];
-        if (playerIds.length > 0) {
-          pushPayload.include_player_ids = playerIds;
-        } else {
-          pushPayload.include_external_user_ids = [text.notification_recipient_email];
-        }
+        // HARD RULE: external id (email) only. Never player ids.
+        pushPayload.include_external_user_ids = [text.notification_recipient_email];
         const pushRes = await fetch('https://onesignal.com/api/v1/notifications', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${sRestKey}` },

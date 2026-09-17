@@ -47,16 +47,15 @@ async function sendPush(email: string, user: any, title: string, body: string) {
     return false;
   }
 
-  const playerIds = user?.onesignal_player_ids || [];
+  // HARD RULE: target by external id (the user's email) only. Never player ids.
   const payload: any = {
     app_id: appId,
+    include_external_user_ids: [email],
     headings: { en: title },
     contents: { en: body },
     data: { screen: '/Places', type: 'commute' },
     channel_for_external_user_ids: 'push',
   };
-  if (playerIds.length > 0) payload.include_player_ids = playerIds;
-  else payload.include_external_user_ids = [email];
 
   try {
     const res = await fetch('https://onesignal.com/api/v1/notifications', {
