@@ -543,7 +543,6 @@ Deno.serve(async (req) => {
           try {
             const bAppId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
             const bRestKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
-            const playerIds = owner?.onesignal_player_ids || [];
             const pushPayload: any = {
               app_id: bAppId,
               headings: { en: task.birthday_text_message ? `🎂 Text ${task.birthday_person}!` : `🎂 Write a text for ${task.birthday_person}` },
@@ -552,11 +551,12 @@ Deno.serve(async (req) => {
                 : `It's ${task.birthday_person}'s birthday today and you haven't written a text yet. Tap to draft one now.` },
               data: { screen: '/TaskNotification', taskId: task.id, type: 'birthday_text_reminder' },
             };
-            if (playerIds.length > 0) {
-              pushPayload.include_player_ids = playerIds;
-            } else {
-              pushPayload.include_external_user_ids = [task.notification_recipient_email];
-            }
+            // ALWAYS target by EXTERNAL ID (the user's email). Player IDs are not a
+            // valid target in this app: devices register through OneSignal.login()
+            // with the email as their external id, and any stored player id goes
+            // stale the moment the app is reinstalled. See RULES.md.
+            pushPayload.include_external_user_ids = [task.notification_recipient_email];
+            pushPayload.channel_for_external_user_ids = 'push';
             const pushRes = await fetch('https://onesignal.com/api/v1/notifications', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${bRestKey}` },
@@ -702,18 +702,15 @@ Deno.serve(async (req) => {
       try {
         const sAppId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
         const sRestKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
-        const playerIds = owner?.onesignal_player_ids || [];
         const pushPayload: any = {
           app_id: sAppId,
           headings: { en: `📞 Time to text ${text.recipient_name}` },
           contents: { en: text.message || `Don't forget to send your text to ${text.recipient_name}.` },
           data: { screen: '/Home', type: 'scheduled_text', scheduledTextId: text.id },
         };
-        if (playerIds.length > 0) {
-          pushPayload.include_player_ids = playerIds;
-        } else {
-          pushPayload.include_external_user_ids = [text.notification_recipient_email];
-        }
+        // ALWAYS target by EXTERNAL ID (the user's email) — never player ids. See RULES.md.
+        pushPayload.include_external_user_ids = [text.notification_recipient_email];
+        pushPayload.channel_for_external_user_ids = 'push';
         const pushRes = await fetch('https://onesignal.com/api/v1/notifications', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${sRestKey}` },

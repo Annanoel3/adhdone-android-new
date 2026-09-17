@@ -211,8 +211,6 @@ async function sendDigestNotification(email: string, user: any, message: { title
     return false;
   }
 
-  const playerIds = user?.onesignal_player_ids || [];
-
   const payload: any = {
     app_id: appId,
     headings: { en: message.title },
@@ -221,11 +219,8 @@ async function sendDigestNotification(email: string, user: any, message: { title
     channel_for_external_user_ids: 'push',
   };
 
-  if (playerIds.length > 0) {
-    payload.include_player_ids = playerIds;
-  } else {
-    payload.include_external_user_ids = [email];
-  }
+  // ALWAYS target by EXTERNAL ID (the user's email) — never player ids. See RULES.md.
+  payload.include_external_user_ids = [email];
 
   try {
     const response = await fetch('https://onesignal.com/api/v1/notifications', {
