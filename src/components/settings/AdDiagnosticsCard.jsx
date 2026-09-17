@@ -6,11 +6,9 @@ import { showInterstitialAd, resetAdLaunchState, getLastAdStatus } from '@/lib/a
 
 // Owner-only diagnostics: ad failures are silent by design (a failed ad must
 // never interrupt the user), which made "I never see ads" impossible to debug.
-export default function AdDiagnosticsCard({ user, theme }) {
+export default function AdDiagnosticsCard({ theme }) {
   const [status, setStatus] = useState(getLastAdStatus());
   const [testing, setTesting] = useState(false);
-
-  if (user?.role !== 'admin') return null;
 
   const runTest = async () => {
     setTesting(true);
