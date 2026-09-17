@@ -12,6 +12,7 @@ import { motion } from "framer-motion";
 import { updateTodaysSummary } from "../utils/dailySummaryHelper";
 import { isTodayTask, isUpcomingTask } from "../utils/todayTasks";
 import { isBirthdayTask, passesBirthdayDayFilter } from "../utils/birthdayHelpers";
+import { isSmartReminderTask } from "../utils/smartReminderTask";
 import { pushWidgetTasks } from "../utils/widgetBridge";
 import { getReminderCopy } from "../utils/reminderCopy";
 import {
@@ -714,7 +715,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
 
                       {/* Smart Reminders badge — the task is handled by the LLM smart-nudge system.
                           Events and birthdays have fixed reminder ladders, so the badge would be wrong for them. */}
-                      {!task.reminder_interval && !isEvent(task) && !isBirthdayTask(task) && (
+                      {isSmartReminderTask(task) && !isEvent(task) && !isBirthdayTask(task) && (
                         <Popover>
                           <PopoverTrigger asChild>
                             <button
