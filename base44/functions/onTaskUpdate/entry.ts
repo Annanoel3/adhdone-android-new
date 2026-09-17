@@ -199,14 +199,24 @@ Deno.serve(async (req) => {
       }
     }
 
-    // CRITICAL: If task is completed or snoozed, cancel ALL notifications and wipe
-    // all scheduling fields. This MUST come before the empty-notification-IDs early
+    // A SNOOZE IS NOT A COMPLETION. The snooze handler has just booked the one
+    // reminder the user asked for and written its id plus the new next_reminder.
+    // Treating 'snoozed' like 'completed' cancelled that reminder and wiped the
+    // task's reminder time, interval and recipient, so a snoozed task went silent
+    // for good. Leave it exactly as the snooze handler wrote it.
+    if (data.status === 'snoozed') {
+      console.log('[onTaskUpdate] Task snoozed — leaving its snooze reminder and fields untouched');
+      return Response.json({ success: true, skipped: true, reason: 'task_snoozed' });
+    }
+
+    // CRITICAL: If task is completed, cancel ALL notifications and wipe all
+    // scheduling fields. This MUST come before the empty-notification-IDs early
     // return below — otherwise a task whose onesignal_notification_ids was already
     // cleared (e.g. by the frontend or by setFocusMode exit) would skip this block
     // and keep its reminder_interval / next_reminder set, leaving orphaned push
     // notifications in OneSignal that fire long after completion.
-    if (data.status === 'completed' || data.status === 'snoozed') {
-      console.log(`[onTaskUpdate] Task status is "${data.status}" — cancelling all notifications and clearing scheduling fields`);
+    if (data.status === 'completed') {
+      console.log('[onTaskUpdate] Task completed — cancelling all notifications and clearing scheduling fields');
       // Fall back to old_data IDs when the update cleared them — otherwise the
       // real OneSignal notifications would be orphaned and keep firing forever.
       const ids = (data.onesignal_notification_ids?.length
@@ -240,7 +250,7 @@ Deno.serve(async (req) => {
 
       // GUARD: Only update if there's actually something to clear. Without this,
       // the Task.update() call below re-triggers this very automation (entity
-      // update event), which sees the same completed/snoozed status, enters this
+      // update event), which sees the same completed status, enters this
       // block again, and calls update again — an infinite self-triggering loop
       // that burns integration credits (48k+ in 9 days).
       const needsClearing =
@@ -270,7 +280,7 @@ Deno.serve(async (req) => {
         console.log('[onTaskUpdate] Scheduling fields already clear — skipping update to prevent loop');
       }
 
-      return Response.json({ success: true, cancelled: true, reason: 'task_completed_or_snoozed' });
+      return Response.json({ success: true, cancelled: true, reason: 'task_completed' });
     }
 
     // Un-completing a task (completed → active): the completed branch above wipes

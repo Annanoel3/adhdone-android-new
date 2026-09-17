@@ -16,6 +16,7 @@ import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import TaskEditModal from "../components/tasks/TaskEditModal";
 import HelpfulRemindersSuggestions from "../components/tasks/HelpfulRemindersSuggestions";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
+import { snoozeTask } from "../components/utils/snoozeTask";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
 import TaskSortDropdown from "../components/tasks/TaskSortDropdown";
@@ -207,19 +208,20 @@ export default function Tasks() {
     const nextReminder = new Date();
     nextReminder.setMinutes(nextReminder.getMinutes() + minutes);
 
-    // Optimistic — update UI instantly
+    // Optimistic — update UI instantly. The task stays ACTIVE: a snooze moves
+    // the reminder, it doesn't hide the task.
     setAllTasks(prev => prev.map(t =>
       t.id === task.id
-        ? { ...t, snooze_count: (t.snooze_count || 0) + 1, consecutive_snoozes: (t.consecutive_snoozes || 0) + 1, status: 'snoozed', next_reminder: nextReminder.toISOString() }
+        ? { ...t, snooze_count: (t.snooze_count || 0) + 1, consecutive_snoozes: (t.consecutive_snoozes || 0) + 1, next_reminder: nextReminder.toISOString() }
         : t
     ));
 
-    Task.update(task.id, {
-      snooze_count: (task.snooze_count || 0) + 1,
-      consecutive_snoozes: (task.consecutive_snoozes || 0) + 1,
-      status: 'snoozed',
-      next_reminder: nextReminder.toISOString()
-    }).catch(error => console.error("Failed to snooze task:", error));
+    // Shared helper: cancels what's booked, books ONE reminder at the snoozed
+    // time and saves it. (This button used to book nothing at all.)
+    snoozeTask(task, minutes).catch(error => {
+      console.error("Failed to snooze task:", error);
+      loadTasks();
+    });
   };
 
   const handleDelete = async (task) => {
