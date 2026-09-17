@@ -23,6 +23,14 @@ Deno.serve(async (req) => {
     }
 
     const user = targetUser[0];
+    const playerIds = user.onesignal_player_ids || [];
+
+    if (playerIds.length === 0) {
+      console.log(`[notifySend] No OneSignal player IDs for ${toUserId}`);
+      return Response.json({ success: false, error: 'No player IDs' }, { status: 400 });
+    }
+
+    console.log(`[notifySend] Found ${playerIds.length} player IDs for ${toUserId}`);
 
     // FIXED: Use notification_sound instead of notification_tone (matching NotificationSettings page)
     const notificationSound = user.notification_sound || 'joyful_melody';
@@ -55,11 +63,7 @@ Deno.serve(async (req) => {
 
     const payload = {
       app_id: ONESIGNAL_APP_ID,
-      // ALWAYS target by EXTERNAL ID (the user's email) — never player ids. This
-      // function used to REQUIRE stored player ids and hard-fail without them,
-      // which silently killed every push it sent for ~11 months. See RULES.md.
-      include_external_user_ids: [toUserId],
-      channel_for_external_user_ids: 'push',
+      include_player_ids: playerIds,
       headings: { en: title || 'ADHDone' },
       contents: { en: body || 'You have a notification' },
       data: {

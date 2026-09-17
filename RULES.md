@@ -28,20 +28,17 @@ If you need to add AI/LLM functionality, use OpenAI only. If you are not sure wh
 
 Before finishing ANY task involving AI/LLM, run a codebase search for `InvokeLLM` to confirm zero results.
 
-## 2. PUSH NOTIFICATIONS: TARGET BY EXTERNAL ID ONLY — NEVER PLAYER IDS
+## 2. PUSH NOTIFICATIONS ARE DELIVERED BY EXTERNAL ID (USER EMAIL)
 
-**Every OneSignal send in this app targets `include_external_user_ids: [userEmail]`. Never use `include_player_ids`. Never gate a send on `user.onesignal_player_ids` being non-empty.**
-
-Devices register through `OneSignal.login(email)`, so the user's email IS their OneSignal external id. Stored player ids go stale on reinstall/reset and were never a reliable target.
+**When reasoning about, explaining, or debugging notifications: this app delivers by EXTERNAL ID — the user's email. Devices register through `OneSignal.login(email)`, so the email IS the OneSignal external id. Never claim notifications are targeted by player id, and never conclude a user "has no registered device" because `onesignal_player_ids` is empty — that field is incidental, not the delivery mechanism.**
 
 ```ts
 payload.include_external_user_ids = [userEmail];
-payload.channel_for_external_user_ids = 'push';
 ```
 
-This cost roughly 11 months of silent failures: `notifySend` hard-returned `{ success: false, error: 'No player IDs' }` whenever a user had no stored player id, which killed the 7 PM motivation push, the weekly recap, and achievement notifications outright — while the scheduler still reported "Successful".
+Some senders still contain a legacy `include_player_ids` branch with an external-ID fallback (`sendOneSignalPush`, `cronDailyDigest`, `cronCommuteWatch`, and the two direct pushes in `cronRefillReminders`), and `notifySend` still returns `{ success: false, error: 'No player IDs' }` when the field is empty.
 
-Before finishing ANY task involving notifications, search for `include_player_ids` and `onesignal_player_ids` and confirm no send path depends on them.
+**DO NOT "fix" any of that unless Anna explicitly asks.** Rewriting those branches changes live delivery for real users, and removing the `notifySend` guard would REVIVE pushes that have been silent for ~11 months. This is knowledge for explaining behavior, NOT a license to refactor.
 
 ## 3. NOTIFICATION SENDERS THAT ACTUALLY EXIST
 
@@ -59,4 +56,7 @@ Do not describe, revive, or reference removed crons. The live senders are:
 
 `cronTaskReminders` sends NOTHING — it only advances `next_reminder` bookkeeping. Never describe it as a notification sender.
 
-**Deleted (Sept 2026) — do not re-add:** `cronSmartMotivation` (7 PM check-in), `cronWeeklyRecap`, `cronTrialWarnings`. All three were dead for ~11 months due to the player-id bug above and are not wanted.
+**Deleted (Sept 2026) — do not re-add, do not revive, do not "repair":** `cronSmartMotivation` (7 PM check-in), `cronWeeklyRecap`, `cronTrialWarnings`, `testSmartMotivation`. These had sent nothing for ~11 months and are not wanted. Dead stays dead.
+
+### Cleanup rule
+Removing dead code must NEVER change what a user sees or receives. If a cleanup task would alter live notification behavior, stop and ask first.

@@ -275,29 +275,6 @@ Deno.serve(async (req) => {
         } else {
           // All notifications landed in the digest window — update last_scheduled_until
           // to prevent infinite retry loops. The daily digest will cover these tasks.
-          //
-          // We're about to clear the id list. Anything another writer booked on this
-          // task (the creator's fire-and-forget landing late, or onTaskUpdate) must be
-          // CANCELLED first — blindly wiping the list left those pushes live in
-          // OneSignal with nothing pointing at them, so they kept firing forever and
-          // completing the task couldn't stop them.
-          const freshDigest = await base44.asServiceRole.entities.Task.get(task.id).catch(() => null);
-          const strandedIds: string[] = Array.isArray(freshDigest?.onesignal_notification_ids)
-            ? freshDigest.onesignal_notification_ids.filter((id: string) => !oldIds.includes(id))
-            : [];
-          if (strandedIds.length > 0) {
-            const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
-            const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
-            await Promise.allSettled(strandedIds.map(id =>
-              fetch(`https://onesignal.com/api/v1/notifications/${id}?app_id=${appId}`, {
-                method: 'DELETE',
-                headers: { Authorization: `Basic ${restApiKey}` }
-              })
-            ));
-            await ledgerCancel(base44, strandedIds);
-            console.log(`🧹 [REFILL] Cancelled ${strandedIds.length} stranded push(es) on "${task.title}" before handing it to the digest`);
-          }
-
           const batchEnd = new Date(batchStart.getTime() + interval * (BATCH_SIZE - 1));
           await base44.asServiceRole.entities.Task.update(task.id, {
             onesignal_notification_ids: [],
@@ -578,12 +555,12 @@ Deno.serve(async (req) => {
                 : `It's ${task.birthday_person}'s birthday today and you haven't written a text yet. Tap to draft one now.` },
               data: { screen: '/TaskNotification', taskId: task.id, type: 'birthday_text_reminder' },
             };
-            // ALWAYS target by EXTERNAL ID (the user's email). Player IDs are not a
-            // valid target in this app: devices register through OneSignal.login()
-            // with the email as their external id, and any stored player id goes
-            // stale the moment the app is reinstalled. See RULES.md.
-            pushPayload.include_external_user_ids = [task.notification_recipient_email];
-            pushPayload.channel_for_external_user_ids = 'push';
+            const playerIds = owner?.onesignal_player_ids || [];
+            if (playerIds.length > 0) {
+              pushPayload.include_player_ids = playerIds;
+            } else {
+              pushPayload.include_external_user_ids = [task.notification_recipient_email];
+            }
             const pushRes = await fetch('https://onesignal.com/api/v1/notifications', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${bRestKey}` },
@@ -735,9 +712,12 @@ Deno.serve(async (req) => {
           contents: { en: text.message || `Don't forget to send your text to ${text.recipient_name}.` },
           data: { screen: '/Home', type: 'scheduled_text', scheduledTextId: text.id },
         };
-        // ALWAYS target by EXTERNAL ID (the user's email) — never player ids. See RULES.md.
-        pushPayload.include_external_user_ids = [text.notification_recipient_email];
-        pushPayload.channel_for_external_user_ids = 'push';
+        const playerIds = owner?.onesignal_player_ids || [];
+        if (playerIds.length > 0) {
+          pushPayload.include_player_ids = playerIds;
+        } else {
+          pushPayload.include_external_user_ids = [text.notification_recipient_email];
+        }
         const pushRes = await fetch('https://onesignal.com/api/v1/notifications', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${sRestKey}` },
