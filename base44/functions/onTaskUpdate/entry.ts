@@ -127,7 +127,11 @@ Deno.serve(async (req) => {
 
     // On delete: cancel any lingering OneSignal notifications using old_data
     if (event.type === 'delete') {
-      const ids = old_data?.onesignal_notification_ids || [];
+      // Focus Mode check-ins live in their own field — cancel those too.
+      const ids = Array.from(new Set([
+        ...(old_data?.onesignal_notification_ids || []),
+        ...(old_data?.focus_mode_notification_ids || []),
+      ]));
       if (ids.length > 0) {
         console.log(`[onTaskUpdate] Task deleted — cancelling ${ids.length} notifications`);
         for (const notificationId of ids) {
@@ -225,6 +229,15 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Focus Mode check-ins are tracked in their own field — a task finished
+      // mid-focus must not keep pinging "How's it going?".
+      const focusCheckinIds = (data.focus_mode_notification_ids?.length
+        ? data.focus_mode_notification_ids
+        : (old_data?.focus_mode_notification_ids || []));
+      for (const notificationId of focusCheckinIds) {
+        await cancelOneSignalNotification(notificationId);
+      }
+
       // GUARD: Only update if there's actually something to clear. Without this,
       // the Task.update() call below re-triggers this very automation (entity
       // update event), which sees the same completed/snoozed status, enters this
@@ -236,7 +249,9 @@ Deno.serve(async (req) => {
         data.last_scheduled_until ||
         data.next_reminder ||
         data.reminder_interval ||
-        data.notification_recipient_email;
+        data.notification_recipient_email ||
+        (data.focus_mode_notification_ids?.length > 0) ||
+        data.focus_mode_original_interval;
 
       if (needsClearing) {
         await base44.asServiceRole.entities.Task.update(event.entity_id, {
@@ -245,7 +260,10 @@ Deno.serve(async (req) => {
           last_scheduled_until: null,
           next_reminder: null,
           reminder_interval: null,
-          notification_recipient_email: null
+          notification_recipient_email: null,
+          focus_mode_notification_ids: [],
+          focus_mode_original_interval: null,
+          focus_mode_original_next_reminder: null
         });
         console.log('[onTaskUpdate] Cleared scheduling fields');
       } else {
@@ -426,6 +444,15 @@ Deno.serve(async (req) => {
       } catch (e) {
         console.error('[onTaskUpdate] Failed to mark smart nudge schedule dirty:', e);
       }
+    }
+
+    // Focus Mode owns this task's reminders for the length of the session, and
+    // the enter/exit writes themselves change reminder_interval. Rescheduling
+    // here cancelled the focus check-ins, booked ten generic hourly pushes in
+    // their place, and raced the exit write. Stand down for all of it.
+    if (data.focus_mode_original_interval || old_data?.focus_mode_original_interval) {
+      console.log('[onTaskUpdate] Focus Mode owns this task right now — not rescheduling');
+      return Response.json({ success: true, skipped: true, reason: 'focus_mode_owned' });
     }
 
     // Check if there are scheduled notifications for this task

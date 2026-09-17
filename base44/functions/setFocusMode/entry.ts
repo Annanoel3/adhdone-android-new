@@ -5,6 +5,11 @@ import { FOCUS_MODE_INTERVAL, FOCUS_MODE_INTERVAL_MS, getFocusModeContent } from
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
 const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
 
+// The only intervals that count as "this task repeats". A task with no interval
+// (smart reminder) or 'once' (a dated one-time task or event) is NOT recurring,
+// and Focus Mode must never turn it into one.
+const RECURRING = new Set(['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day']);
+
 async function cancelOneSignal(ids: string[]) {
   if (!ids.length) return;
   await Promise.allSettled(ids.map(id =>
@@ -33,14 +38,16 @@ export default async function(req: Request): Promise<Response> {
     if (action === 'enter') {
       if (!taskId) return Response.json({ error: 'taskId required' }, { status: 400 });
 
-      // ── Focus task: switch to hourly check-ins with focus-mode text ──
       const focusTask = await base44.asServiceRole.entities.Task.get(taskId);
       if (!focusTask) return Response.json({ error: 'Task not found' }, { status: 404 });
 
-      const focusIds = Array.isArray(focusTask.onesignal_notification_ids) ? focusTask.onesignal_notification_ids : [];
-      if (focusIds.length) await cancelOneSignal(focusIds);
+      const wasRecurring = RECURRING.has(focusTask.reminder_interval);
+      const ownIds = Array.isArray(focusTask.onesignal_notification_ids) ? focusTask.onesignal_notification_ids : [];
 
-      const originalInterval = focusTask.reminder_interval || 'daily';
+      // A recurring task's own nags are replaced by hourly check-ins for the
+      // session. A smart-reminder or one-time task keeps its own reminders —
+      // cancelling them here is how a dated task lost its reminders for good.
+      if (wasRecurring && ownIds.length) await cancelOneSignal(ownIds);
 
       // Owner quiet hours (applied to the focus check-in batch)
       const quietEnabled = !!(user && user.quiet_hours_enabled);
@@ -50,7 +57,7 @@ export default async function(req: Request): Promise<Response> {
       const useQuiet = quietEnabled && !!timeZone;
 
       const now = Date.now();
-      const notificationIds: string[] = [];
+      const checkinIds: string[] = [];
       let lastScheduledAt: Date | null = null;
       let scheduleTime = now + FOCUS_MODE_INTERVAL_MS;
 
@@ -78,7 +85,7 @@ export default async function(req: Request): Promise<Response> {
           });
           const r = res?.data || res;
           if (r?.notificationId) {
-            notificationIds.push(r.notificationId);
+            checkinIds.push(r.notificationId);
             lastScheduledAt = sendAt;
           }
         } catch (e) {
@@ -87,17 +94,30 @@ export default async function(req: Request): Promise<Response> {
         scheduleTime += FOCUS_MODE_INTERVAL_MS;
       }
 
-      const newLastScheduledUntil = lastScheduledAt
-        ? lastScheduledAt.toISOString()
-        : new Date(now + FOCUS_MODE_INTERVAL_MS * 6).toISOString();
+      if (wasRecurring) {
+        const newLastScheduledUntil = lastScheduledAt
+          ? lastScheduledAt.toISOString()
+          : new Date(now + FOCUS_MODE_INTERVAL_MS * 6).toISOString();
 
-      await base44.asServiceRole.entities.Task.update(taskId, {
-        reminder_interval: FOCUS_MODE_INTERVAL,
-        focus_mode_original_interval: originalInterval,
-        onesignal_notification_ids: notificationIds,
-        last_scheduled_until: newLastScheduledUntil,
-        next_reminder: new Date(now + FOCUS_MODE_INTERVAL_MS).toISOString()
-      });
+        // Recurring task: switch to the hourly focus cadence for the session and
+        // remember exactly what it had, so exit can put it back.
+        await base44.asServiceRole.entities.Task.update(taskId, {
+          reminder_interval: FOCUS_MODE_INTERVAL,
+          focus_mode_original_interval: focusTask.reminder_interval,
+          focus_mode_original_next_reminder: focusTask.next_reminder || null,
+          focus_mode_notification_ids: checkinIds,
+          onesignal_notification_ids: checkinIds,
+          last_scheduled_until: newLastScheduledUntil,
+          next_reminder: new Date(now + FOCUS_MODE_INTERVAL_MS).toISOString()
+        });
+      } else {
+        // Smart-reminder or one-time task: its interval, its date/time and its
+        // own reminders are left exactly as they are. Only the check-ins are
+        // tracked, in their own field, so exit can cancel them and nothing else.
+        await base44.asServiceRole.entities.Task.update(taskId, {
+          focus_mode_notification_ids: checkinIds
+        });
+      }
 
       // ── Non-focus recurring tasks: silence until Focus Mode ends ──
       const tasks = await base44.asServiceRole.entities.Task.filter({
@@ -128,21 +148,39 @@ export default async function(req: Request): Promise<Response> {
     }
 
     if (action === 'exit') {
-      // Restore the focus task's original interval + clear its focus check-ins.
       const focusTaskId = user.focus_mode_task_id;
       if (focusTaskId) {
         const focusTask = await base44.asServiceRole.entities.Task.get(focusTaskId).catch(() => null);
         if (focusTask) {
-          const ids = Array.isArray(focusTask.onesignal_notification_ids) ? focusTask.onesignal_notification_ids : [];
-          if (ids.length) await cancelOneSignal(ids);
-          const orig = focusTask.focus_mode_original_interval || focusTask.reminder_interval || 'daily';
-          await base44.asServiceRole.entities.Task.update(focusTaskId, {
-            reminder_interval: orig,
-            focus_mode_original_interval: null,
-            onesignal_notification_ids: [],
-            last_scheduled_until: null,
-            next_reminder: null
-          });
+          const checkinIds = Array.isArray(focusTask.focus_mode_notification_ids) ? focusTask.focus_mode_notification_ids : [];
+          const savedInterval = focusTask.focus_mode_original_interval;
+
+          if (savedInterval) {
+            // Recurring task (or a session started before check-ins were tracked
+            // separately): everything booked on it right now is a focus check-in.
+            const ownIds = Array.isArray(focusTask.onesignal_notification_ids) ? focusTask.onesignal_notification_ids : [];
+            const toCancel = Array.from(new Set([...ownIds, ...checkinIds]));
+            if (toCancel.length) await cancelOneSignal(toCancel);
+
+            // Put back what the task actually had. Never invent an interval.
+            const savedNext = focusTask.focus_mode_original_next_reminder;
+            const nextStillAhead = !!savedNext && new Date(savedNext).getTime() > Date.now();
+            await base44.asServiceRole.entities.Task.update(focusTaskId, {
+              reminder_interval: savedInterval,
+              focus_mode_original_interval: null,
+              focus_mode_original_next_reminder: null,
+              focus_mode_notification_ids: [],
+              onesignal_notification_ids: [],
+              last_scheduled_until: null,
+              next_reminder: nextStillAhead ? savedNext : null
+            });
+          } else if (checkinIds.length) {
+            // Smart-reminder or one-time task: cancel the check-ins, touch nothing else.
+            await cancelOneSignal(checkinIds);
+            await base44.asServiceRole.entities.Task.update(focusTaskId, {
+              focus_mode_notification_ids: []
+            });
+          }
         }
       }
 

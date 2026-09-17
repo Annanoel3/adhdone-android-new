@@ -217,6 +217,18 @@
       "type": "string",
       "description": "The reminder_interval this task had before entering Focus Mode. Restored when the user exits Focus Mode."
     },
+    "focus_mode_original_next_reminder": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The next_reminder a recurring task had before entering Focus Mode. Restored on exit if it is still in the future. Only set for recurring-interval tasks; smart-reminder and one-time tasks are never rewritten by Focus Mode."
+    },
+    "focus_mode_notification_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "OneSignal ids of the hourly Focus Mode check-ins booked for this task. Kept separate from onesignal_notification_ids so exiting Focus Mode cancels only the check-ins and never a task's own reminders."
+    },
     "completed_at": {
       "type": "string",
       "format": "date-time",

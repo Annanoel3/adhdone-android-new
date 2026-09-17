@@ -162,28 +162,13 @@ export default function FocusModePrompt({ user, theme }) {
     })();
   }, [user?.email, focusTaskId]);
 
-  // One-time Focus Mode intro: fires exactly once — the first time the user has
-  // 2+ tasks that qualify for Focus Mode. After that, the Home button is the entry point.
+  // Already focusing (e.g. the sprint "keep going" handoff) — show the active
+  // session right away, but never behind a page tour card. There is NO automatic
+  // intro popup: Focus Mode only ever opens from the Home button.
   useEffect(() => {
-    if (!user?.email) return;
-    // Already focusing (e.g. the sprint "keep going" handoff) — show it
-    // immediately. A delay here left the user staring at Home first.
-    if (focusTaskId) {
-      // …unless a page tour is on screen — never open behind a tour card.
-      waitForTourEnd().then(() => setOpen(true));
-      return;
-    }
-    if (localStorage.getItem("focus_intro_seen") === "1" || user?.focus_intro_seen) return;
-    if (pickableTasks.length < 2) return;
-    const t = setTimeout(async () => {
-      await waitForTourEnd();
-      setOpen(true);
-      localStorage.setItem("focus_intro_seen", "1");
-      window.dispatchEvent(new CustomEvent("focus-intro-seen"));
-      base44.auth.updateMe({ focus_intro_seen: true }).catch(() => {});
-    }, 15000);
-    return () => clearTimeout(t);
-  }, [user?.email, focusTaskId, pickableTasks, user?.focus_intro_seen]);
+    if (!user?.email || !focusTaskId) return;
+    waitForTourEnd().then(() => setOpen(true));
+  }, [user?.email, focusTaskId]);
 
   // Manual open from the Home Focus button.
   useEffect(() => {
