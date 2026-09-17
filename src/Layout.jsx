@@ -76,6 +76,7 @@ import { applyOnboardingReplay } from "./components/onboarding/onboardingReplay"
 import { hydrateOnboardingFlags, clearOnboardingFlags } from "./components/onboarding/onboardingSync";
 import TaskCaptureProcessor from "./components/shared/TaskCaptureProcessor";
 import { base44 } from "@/api/base44Client";
+import { maybeAutoSync } from "@/lib/calendarSync";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1176,25 +1177,9 @@ export default function Layout({ children, currentPageName }) {
 
       // Background Google Calendar auto-sync — runs in the user's session so
       // the app-user OAuth token is available (a scheduled cron can't access
-      // per-user tokens). Syncs at most once per the user's chosen interval,
-      // on any app open — not just when the Calendar page is visited.
-      try {
-        const interval = localStorage.getItem('calendar_auto_sync_interval') || 'daily';
-        if (interval !== 'never') {
-          const thresholds = { '6hours': 6 * 3600000, 'daily': 24 * 3600000, 'weekly': 7 * 24 * 3600000 };
-          const threshold = thresholds[interval];
-          const lastRaw = localStorage.getItem('calendar_last_synced_at');
-          const lastMs = lastRaw ? new Date(lastRaw).getTime() : 0;
-          if (Date.now() - lastMs > threshold) {
-            base44.functions.invoke('syncGoogleCalendar', {})
-              .then((res) => {
-                const syncedAt = res?.data?.synced_at;
-                if (syncedAt) localStorage.setItem('calendar_last_synced_at', syncedAt);
-              })
-              .catch(() => {});
-          }
-        }
-      } catch (e) {}
+      // per-user tokens). This Layout remounts on every navigation; the shared
+      // sync module makes that safe — one in-flight run, gate set at start.
+      maybeAutoSync();
     } catch (error) {
       console.error("Error checking user status:", error);
       base44.auth.redirectToLogin(window.location.href);

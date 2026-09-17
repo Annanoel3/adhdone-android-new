@@ -22,6 +22,7 @@ import {
 import CalendarGrid from '@/components/calendar/CalendarGrid';
 import TaskDetailsModal from '@/components/tasks/TaskDetailsModal';
 import KeepAppOpenNote from '@/components/shared/KeepAppOpenNote';
+import { runCalendarSync, maybeAutoSync, getInFlightSync } from '@/lib/calendarSync';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
 
@@ -113,10 +114,10 @@ export default function Calendar() {
     loadSyncedEvents();
   };
 
-  const attemptSync = useCallback(async () => {
-    const res = await base44.functions.invoke('syncGoogleCalendar', {});
-    return res.data;
-  }, []);
+  // All sync starts go through the shared module: it joins a run that's
+  // already in flight (from the layout, or from this page before a navigation)
+  // instead of launching a second one.
+  const attemptSync = useCallback(() => runCalendarSync(), []);
 
   // Lightweight connection check — does NOT trigger a full sync, so a sync
   // error for any other reason can't be mistaken for "not connected".
@@ -144,18 +145,23 @@ export default function Calendar() {
         setUser(me);
         await Promise.all([loadSyncedEvents(), loadTasks()]);
         const isConnected = await probeConnection();
-        // Background auto-sync — at most once per the user's chosen interval.
-        // Manual "Sync now" still works anytime; this just keeps things fresh
-        // without requiring the user to tap anything.
-        if (isConnected && autoSyncInterval !== 'never') {
-          const thresholds = { '6hours': 6 * 3600_000, 'daily': 24 * 3600_000, 'weekly': 7 * 24 * 3600_000 };
-          const threshold = thresholds[autoSyncInterval];
-          const lastMs = lastSyncedAt ? new Date(lastSyncedAt).getTime() : 0;
-          if (Date.now() - lastMs > threshold) {
-            attemptSync()
-              .then(async () => { await Promise.all([loadSyncedEvents(), loadTasks()]); })
-              .catch(() => {});
-          }
+        // Background auto-sync — at most once per the user's chosen interval,
+        // via the shared module (joins any run already in flight). If a sync
+        // is running when this page opens, surface it as "Syncing…" and
+        // refresh the grid when it lands.
+        const running = isConnected ? (getInFlightSync() || maybeAutoSync()) : null;
+        if (running) {
+          setSyncing(true);
+          running
+            .then(async (result) => {
+              if (result?.synced_at) {
+                setLastSyncedAt(result.synced_at);
+                localStorage.setItem('calendar_last_synced_at', result.synced_at);
+              }
+              await Promise.all([loadSyncedEvents(), loadTasks()]);
+            })
+            .catch(() => {})
+            .finally(() => setSyncing(false));
         }
       }
       setLoading(false);
@@ -220,7 +226,11 @@ export default function Calendar() {
         setSyncError('Google Calendar disconnected. Please reconnect.');
       } else {
         const result = await attemptSync();
-        setSyncResult(result);
+        if (result?.in_progress) {
+          setSyncError('A sync is already running for your account — give it a minute and it will finish on its own.');
+        } else {
+          setSyncResult(result);
+        }
         if (result?.synced_at) {
           setLastSyncedAt(result.synced_at);
           localStorage.setItem('calendar_last_synced_at', result.synced_at);

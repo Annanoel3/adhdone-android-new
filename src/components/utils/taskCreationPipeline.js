@@ -7,6 +7,7 @@ import { createBirthdayFromInput } from "./birthdayScheduler";
 import { toast } from "sonner";
 import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule } from "./taskSchedule";
 import { announceEventConflict } from "./eventConflicts";
+import { commitNotificationIds } from "./notificationOwnership";
 
 // Every step of turning raw user input (typed, spoken, or shared) into task
 // records. Pure async functions with no React state, so the pipeline can keep
@@ -225,7 +226,10 @@ Return JSON:
         urgency: mainTaskParsed.urgency || 'medium',
         energy_required: mainTaskParsed.energy_required || 'medium',
         status: 'active',
-        notification_recipient_email: currentUser.email
+        notification_recipient_email: currentUser.email,
+        // Reminders are booked fire-and-forget below; this tells the refill
+        // cron to stay out until the ids land (see commitNotificationIds).
+        reminder_scheduling_since: nextReminder ? new Date().toISOString() : null
       });
 
       maybeAskForHomeZip(`${subtaskCheck.main_task} ${inputText}`, mainTaskParsed.location);
@@ -257,7 +261,7 @@ Return JSON:
           dayOnly: !!mainTaskParsed.day_only_task,
           classification: parentTask.classification,
         }).then(multiIds => {
-          if (multiIds) base44.entities.Task.update(parentTask.id, { onesignal_notification_ids: multiIds });
+          return commitNotificationIds(parentTask.id, multiIds || []);
         }).catch(error => console.error("Failed to schedule reminders:", error));
       } else if (nextReminder && INTERVAL_MS[sched.interval]) {
         import('./reminderScheduler').then(module => module.scheduleRecurringReminders({
@@ -274,12 +278,8 @@ Return JSON:
             { id: "complete", text: "✅ Done" }
           ]
         })).then(({ notificationIds, lastScheduledUntil }) => {
-          if (notificationIds && notificationIds.length > 0) {
-            base44.entities.Task.update(parentTask.id, {
-              onesignal_notification_ids: notificationIds,
-              ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
-            });
-          }
+          return commitNotificationIds(parentTask.id, notificationIds || [],
+            lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {});
         }).catch(error => console.error("Failed to schedule reminders:", error));
       }
 
@@ -524,7 +524,8 @@ Return JSON:
       urgency: parsed.urgency || 'medium',
       energy_required: parsed.energy_required || 'medium',
       status: 'active',
-      notification_recipient_email: currentUser.email
+      notification_recipient_email: currentUser.email,
+      reminder_scheduling_since: nextReminder ? new Date().toISOString() : null
     });
 
     maybeAskForHomeZip(`${createdTask.title} ${inputText}`, parsed.location);
@@ -552,8 +553,7 @@ Return JSON:
           }))
           .then(multiIds => {
             if (multiIds) {
-              base44.entities.Task.update(createdTask.id, { onesignal_notification_ids: multiIds });
-              return;
+              return commitNotificationIds(createdTask.id, multiIds);
             }
             return scheduleReminder({
               email: currentUser.email,
@@ -567,9 +567,7 @@ Return JSON:
                 { id: "complete", text: "✅ Done" }
               ]
             }).then(notificationId => {
-              if (notificationId) {
-                base44.entities.Task.update(createdTask.id, { onesignal_notification_ids: [notificationId] });
-              }
+              return commitNotificationIds(createdTask.id, notificationId ? [notificationId] : []);
             });
           })
           .catch(error => console.error("Failed to schedule reminder:", error));
@@ -588,14 +586,13 @@ Return JSON:
             { id: "complete", text: "✅ Done" }
           ]
         })).then(({ notificationIds, lastScheduledUntil }) => {
-          if (notificationIds && notificationIds.length > 0) {
-            base44.entities.Task.update(createdTask.id, {
-              onesignal_notification_ids: notificationIds,
-              ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
-            });
-          }
+          return commitNotificationIds(createdTask.id, notificationIds || [],
+            lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {});
         }).catch(error => console.error("Failed to schedule recurring reminders:", error));
       }
+    } else {
+      // Nothing to book — release the marker so the cron isn't held off.
+      base44.entities.Task.update(createdTask.id, { reminder_scheduling_since: null }).catch(() => {});
     }
 
     return { status: 'done' };
@@ -616,7 +613,7 @@ export async function createAdvanceTask(taskData, currentUser, minutesBefore) {
     ? new Date(eventTime.getTime() - (minutesBefore * 60 * 1000))
     : null;
 
-  const createdTask = await base44.entities.Task.create({ ...taskData });
+  const createdTask = await base44.entities.Task.create({ ...taskData, reminder_scheduling_since: new Date().toISOString() });
   announceEventConflict(createdTask);
 
   const buttons = [
@@ -657,9 +654,7 @@ export async function createAdvanceTask(taskData, currentUser, minutesBefore) {
       });
       if (notificationId) ids.push(notificationId);
     }
-    if (ids.length) {
-      base44.entities.Task.update(createdTask.id, { onesignal_notification_ids: ids });
-    }
+    await commitNotificationIds(createdTask.id, ids);
   } catch (error) {
     console.error("Failed to schedule reminder:", error);
   }
@@ -714,7 +709,8 @@ export async function createTaskWithDate(data, date, time) {
     urgency: data.urgency,
     energy_required: data.energy_required,
     status: 'active',
-    notification_recipient_email: data.currentUser.email
+    notification_recipient_email: data.currentUser.email,
+    reminder_scheduling_since: new Date().toISOString()
   });
 
   announceEventConflict(createdTask);
@@ -730,7 +726,7 @@ export async function createTaskWithDate(data, date, time) {
   });
 
   if (multiIds) {
-    base44.entities.Task.update(createdTask.id, { onesignal_notification_ids: multiIds });
+    await commitNotificationIds(createdTask.id, multiIds);
   } else {
     scheduleReminder({
       email: data.currentUser.email,
@@ -744,9 +740,7 @@ export async function createTaskWithDate(data, date, time) {
         { id: "complete", text: "✅ Done" }
       ]
     }).then(notificationId => {
-      if (notificationId) {
-        base44.entities.Task.update(createdTask.id, { onesignal_notification_ids: [notificationId] });
-      }
+      return commitNotificationIds(createdTask.id, notificationId ? [notificationId] : []);
     }).catch(error => console.error("Failed to schedule reminder:", error));
   }
 

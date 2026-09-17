@@ -10,6 +10,15 @@
       "type": "string",
       "description": "Idempotency key for captures that arrive from OUTSIDE the app (the native share sheet / quick capture). Native generates one UUID per capture attempt and resends the same one on retry, so a lost response can't double-create: the capture endpoint looks for an existing task with this id and returns it instead of creating a second one. Empty for tasks created inside the app."
     },
+    "google_event_id": {
+      "type": "string",
+      "description": "Idempotency key for tasks imported from Google Calendar: the Google event id. Together with notification_recipient_email it identifies one imported event for one user. The sync checks for an existing task with this key BEFORE creating, so an interrupted or overlapping sync can never produce a second copy of the same event. Empty for tasks created inside the app."
+    },
+    "reminder_scheduling_since": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Set at the moment a task is created whose reminders are about to be booked (client fire-and-forget or server-side). Cleared once the notification ids are written. The refill cron skips any task with a fresh value here so it can't book a second batch of pushes while the creator is still booking the first. Timestamp, not a boolean, so a crash that never clears it self-expires."
+    },
     "location": {
       "type": "string",
       "description": "Optional physical place this task happens at (address, business name + city, or zip). ONLY set when the user explicitly gave a location \u2014 never inferred from the task wording. The smart-nudge system uses this to suggest combining two errands into one trip, so an inferred/guessed value would produce a bad suggestion."

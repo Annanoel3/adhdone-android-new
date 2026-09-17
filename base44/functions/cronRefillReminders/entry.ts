@@ -7,6 +7,18 @@ import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shar
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 const BATCH_SIZE = 10;
 
+// Grace window. A task whose creator is still booking its first reminders
+// (reminder_scheduling_since set, or simply created moments ago) looks exactly
+// like an orphan — no ids yet — and the cron used to book a second batch on top.
+// Both markers are timestamps, so a creator that crashed mid-booking only holds
+// the cron off for these few minutes, never forever.
+const CREATION_GRACE_MS = 10 * 60 * 1000;
+const isBeingScheduledElsewhere = (t: any, nowMs: number) => {
+  const since = t.reminder_scheduling_since ? new Date(t.reminder_scheduling_since).getTime() : 0;
+  const created = t.created_date ? new Date(t.created_date).getTime() : 0;
+  return (since && nowMs - since < CREATION_GRACE_MS) || (created && nowMs - created < CREATION_GRACE_MS);
+};
+
 const intervalMsMap = {
   '10min':           10 * 60 * 1000,
   '20min':           20 * 60 * 1000,
@@ -72,6 +84,12 @@ Deno.serve(async (req) => {
 
     for (const task of recurringTasks) {
       const interval = intervalMsMap[task.reminder_interval];
+
+      if (isBeingScheduledElsewhere(task, now.getTime())) {
+        console.log(`⏳ [REFILL] Skipping "${task.title}" — created/scheduling within the last few minutes`);
+        skipped++;
+        continue;
+      }
 
       // Skip and silence tasks that are old and on short intervals — they've become pure spam.
       // Base staleness on last ACTIVITY (updated_date), not creation date, and only silence
@@ -219,7 +237,26 @@ Deno.serve(async (req) => {
         const newLastScheduledUntil = lastScheduledAt
           ? lastScheduledAt.toISOString()
           : new Date(batchStart.getTime() + interval * (notificationIds.length - 1)).toISOString();
-        const existingIds = Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : [];
+
+        // Reconcile before overwriting: if anything else booked ids on this
+        // task while we were working (the creator's fire-and-forget landing
+        // late), cancel those pushes rather than silently drop the ids and
+        // leave them live and untracked.
+        const fresh = await base44.asServiceRole.entities.Task.get(task.id).catch(() => null);
+        const freshIds: string[] = Array.isArray(fresh?.onesignal_notification_ids) ? fresh.onesignal_notification_ids : [];
+        const foreign = freshIds.filter(id => !oldIds.includes(id) && !notificationIds.includes(id));
+        if (foreign.length > 0) {
+          const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+          const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+          await Promise.allSettled(foreign.map(id =>
+            fetch(`https://onesignal.com/api/v1/notifications/${id}?app_id=${appId}`, {
+              method: 'DELETE',
+              headers: { Authorization: `Basic ${restApiKey}` }
+            })
+          ));
+          await ledgerCancel(base44, foreign);
+          console.log(`🧹 [REFILL] Cancelled ${foreign.length} push(es) another writer booked on "${task.title}" mid-refill`);
+        }
 
         await base44.asServiceRole.entities.Task.update(task.id, {
           onesignal_notification_ids: notificationIds,
@@ -564,6 +601,7 @@ Deno.serve(async (req) => {
   );
 
   for (const task of eventTasks) {
+    if (isBeingScheduledElsewhere(task, now.getTime())) continue;
     const schedule = [...task.reminder_schedule];
     const ids = Array.isArray(task.onesignal_notification_ids) ? [...task.onesignal_notification_ids] : [];
     let dirty = false;

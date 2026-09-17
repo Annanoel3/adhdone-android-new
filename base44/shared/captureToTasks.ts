@@ -124,6 +124,9 @@ export function buildTaskRecord(
     day_only_task: dayOnly,
     deadline_style: parsed.deadline_style === "by" ? "by" : "on",
     notification_recipient_email: email,
+    // Booked right after create by scheduleTaskReminders; keeps the refill
+    // cron off this task until the ids are written.
+    reminder_scheduling_since: new Date().toISOString(),
   };
 
   if (parsed.location) record.location = parsed.location;
@@ -145,7 +148,10 @@ export async function scheduleTaskReminders(
   email: string,
   tz: string,
 ) {
-  if (!task.next_reminder) return { scheduled: 0 };
+  if (!task.next_reminder) {
+    await base44.asServiceRole.entities.Task.update(task.id, { reminder_scheduling_since: null });
+    return { scheduled: 0 };
+  }
 
   // Service-role calls have no end-user session, so the home origin the
   // travel-aware "leave now" reminder needs has to be looked up and passed.
@@ -229,13 +235,18 @@ export async function scheduleTaskReminders(
     }
   }
 
-  if (ids.length) {
-    await base44.asServiceRole.entities.Task.update(task.id, {
-      onesignal_notification_ids: ids,
-      reminder_schedule: entries,
-      last_scheduled_until: entries[entries.length - 1].send_at,
-    });
-  }
+  // One write: the ids (if any) land together with clearing the in-progress
+  // marker, so the cron can never see "scheduling" without the ids, or vice versa.
+  await base44.asServiceRole.entities.Task.update(task.id, {
+    reminder_scheduling_since: null,
+    ...(ids.length
+      ? {
+          onesignal_notification_ids: ids,
+          reminder_schedule: entries,
+          last_scheduled_until: entries[entries.length - 1].send_at,
+        }
+      : {}),
+  });
 
   // planned vs scheduled differ when OneSignal rejects a send (e.g. the device
   // isn't subscribed) — worth reporting rather than silently claiming success.

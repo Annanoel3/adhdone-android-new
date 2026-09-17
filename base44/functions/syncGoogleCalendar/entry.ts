@@ -72,7 +72,10 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone)
   const needsEndBackfill = taskRec.reminder_interval === 'once' && !taskRec.end_date && !!endRaw;
   // Events synced before the address feature landed have no location stored.
   const needsLocationBackfill = !!event.location && !taskRec.location;
-  if (!startChanged && !endChanged && !needsEndBackfill && !needsLocationBackfill) return false;
+  // Tasks imported before the task-level dedupe key existed get it stamped on
+  // resync, so the "already have this event?" check covers legacy imports too.
+  const needsKeyBackfill = !taskRec.google_event_id;
+  if (!startChanged && !endChanged && !needsEndBackfill && !needsLocationBackfill && !needsKeyBackfill) return false;
 
   // Recompute the event start the same way the create path does.
   let nextReminderDate: Date | null = null;
@@ -110,6 +113,7 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone)
 
   const patch: any = {};
 
+  if (needsKeyBackfill) patch.google_event_id = event.id;
   if (needsLocationBackfill) patch.location = event.location;
 
   // One-time events: the event start IS the reminder/due date, and end_date
@@ -200,7 +204,50 @@ const STALE_CLAIM_MS = 10 * 60 * 1000;
 const isClaimSentinel = (v) => typeof v === 'string' && v.startsWith(CLAIM_PREFIX);
 const claimAgeMs = (v) => Date.now() - (Number(String(v).split(':')[2]) || 0);
 
-async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
+// Per-user run lock. One sync per account at a time, whatever triggered it —
+// layout auto-sync, the Calendar page, Sync-now, or a second device. The lock
+// is a heartbeat timestamp on the user: a live run refreshes it as it works, so
+// a long first import keeps the lock, while a crashed run's lock goes stale
+// and the next trigger can take over.
+const SYNC_LOCK_STALE_MS = 10 * 60 * 1000;
+const HEARTBEAT_EVERY = 5;
+
+async function acquireSyncLock(base44, user) {
+  const users = base44.asServiceRole.entities.User;
+  const fresh = (await users.filter({ email: user.email }))?.[0] || user;
+  const since = fresh?.calendar_sync_in_progress_since;
+  if (since && Date.now() - new Date(since).getTime() < SYNC_LOCK_STALE_MS) {
+    return { acquired: false, since };
+  }
+  const runId = crypto.randomUUID();
+  await users.update(fresh.id, {
+    calendar_sync_in_progress_since: new Date().toISOString(),
+    calendar_sync_run_id: runId,
+  });
+  // Two triggers that both saw "no lock" both write; after a short settle the
+  // one whose run id survived owns the lock and the other stands down.
+  await new Promise((r) => setTimeout(r, 400));
+  const confirmed = (await users.filter({ email: user.email }))?.[0];
+  if (confirmed?.calendar_sync_run_id !== runId) {
+    return { acquired: false, since: confirmed?.calendar_sync_in_progress_since };
+  }
+  return {
+    acquired: true,
+    userId: fresh.id,
+    runId,
+    heartbeat: async () => {
+      await users.update(fresh.id, { calendar_sync_in_progress_since: new Date().toISOString() }).catch(() => {});
+    },
+    release: async () => {
+      // Only release our own lock — never wipe one a newer run has taken.
+      const current = (await users.filter({ email: user.email }).catch(() => []))?.[0];
+      if (current && current.calendar_sync_run_id !== runId) return;
+      await users.update(fresh.id, { calendar_sync_in_progress_since: null, calendar_sync_run_id: null }).catch(() => {});
+    },
+  };
+}
+
+async function syncCalendarAccount(base44, user, accessToken, calendarEmail, heartbeat = async () => {}) {
   const runId = crypto.randomUUID().slice(0, 8);
   const authHeader = { Authorization: `Bearer ${accessToken}` };
   // All-day calendar items have no clock time, so we anchor them at 9 AM in the
@@ -333,7 +380,9 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
     }));
   }
 
+  let processedNew = 0;
   for (const event of newEvents) {
+    if (++processedNew % HEARTBEAT_EVERY === 0) await heartbeat();
     const googleId = event.id;
     const title = event.summary || 'Untitled event';
     const recurrenceRule = (event.recurrence || []).join(';');
@@ -606,8 +655,59 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
       };
     }
 
+    // Sync-record fields that don't depend on the task — built up front so the
+    // claim row can be finished the moment a task exists.
+    const syncMeta: any = {
+      google_event_id: googleId,
+      title,
+      start_time: startRaw || null,
+      end_time: endRaw || null,
+      is_all_day: isAllDay,
+      attendee_count: attendeeCount,
+      recurrence_rule: recurrenceRule || null,
+      ai_importance: ai.urgency === 'urgent' || ai.urgency === 'high' ? 'high' : ai.urgency === 'low' ? 'low' : 'medium',
+      ai_reminder_interval: reminderInterval,
+      item_type: isBirthday ? 'event' : (reminderInterval === 'once' ? 'event' : 'task'),
+      routed_as: routedAs,
+      last_synced_at: new Date().toISOString(),
+      user_email: user.email,
+    };
+
+    // TASK-LEVEL IDEMPOTENCY. The claim row is a lock, not a record of truth —
+    // a run killed after Task.create but before finishing its claim left a task
+    // with a "claiming" row that re-imported once the lock went stale. The task
+    // itself now carries (google_event_id, recipient): if one already exists
+    // for this event, adopt it and never create a second.
+    const priorTasks = await base44.asServiceRole.entities.Task.filter({
+      google_event_id: googleId,
+      notification_recipient_email: user.email,
+    });
+    const prior = (priorTasks || []).find((t: any) => t.status !== 'completed') || priorTasks?.[0];
+    if (prior) {
+      console.log('[syncGoogleCalendar] task already exists for event, adopting instead of creating:', googleId);
+      await base44.asServiceRole.entities.CalendarSyncedEvent.update(claim.id, { ...syncMeta, adhd_task_id: prior.id });
+      skipped++;
+      continue;
+    }
+
+    taskRecord.google_event_id = googleId;
+    // Marks "reminders are being booked right now" so the refill cron leaves
+    // this task alone until the ids below are written.
+    taskRecord.reminder_scheduling_since = new Date().toISOString();
+
     // Use user-scoped create so created_by is set to the current user (making the task visible in the app)
     const createdTask = await base44.entities.Task.create(taskRecord);
+
+    // FINISH THE CLAIM IMMEDIATELY — before any reminder work. Everything below
+    // is slow (LLM schedule + pushes) and interruptible; from this point on the
+    // event is recorded as imported no matter what happens next.
+    await base44.asServiceRole.entities.CalendarSyncedEvent.update(claim.id, { ...syncMeta, adhd_task_id: createdTask.id });
+    created++;
+    results.push({ googleId, title, routedAs, urgency: ai.urgency });
+
+    // Whatever gets booked below is committed in ONE write together with
+    // clearing the in-progress marker.
+    const finalPatch: any = { reminder_scheduling_since: null };
 
     // For one-time events, use the LLM-powered reminder schedule generator
     // to determine optimal reminder times based on ADHD principles.
@@ -754,39 +854,16 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail) {
               notification_title: r.notification_title,
               notification_body: r.notification_body,
             }));
-          await base44.entities.Task.update(createdTask.id, {
-            onesignal_notification_ids: notificationIds,
-            reminder_schedule: structured,
-          });
+          finalPatch.onesignal_notification_ids = notificationIds;
+          finalPatch.reminder_schedule = structured;
         }
       } catch (e) {
         console.log('[syncGoogleCalendar] event reminder scheduling failed:', e.message);
       }
     }
 
-    const syncRecord: any = {
-      google_event_id: googleId,
-      title,
-      start_time: startRaw || null,
-      end_time: endRaw || null,
-      is_all_day: isAllDay,
-      attendee_count: attendeeCount,
-      recurrence_rule: recurrenceRule || null,
-      ai_importance: ai.urgency === 'urgent' || ai.urgency === 'high' ? 'high' : ai.urgency === 'low' ? 'low' : 'medium',
-      ai_reminder_interval: reminderInterval,
-      item_type: isBirthday ? 'event' : (reminderInterval === 'once' ? 'event' : 'task'),
-      routed_as: routedAs,
-      adhd_task_id: createdTask.id,
-      last_synced_at: new Date().toISOString(),
-      user_email: user.email
-    };
-
-    // Finish the claim row we already reserved for this event — never create a
-    // second row, which is what produced the duplicates.
-    await base44.asServiceRole.entities.CalendarSyncedEvent.update(claim.id, syncRecord);
-    created++;
-
-    results.push({ googleId, title, routedAs, urgency: ai.urgency });
+    await base44.asServiceRole.entities.Task.update(createdTask.id, finalPatch).catch((e) =>
+      console.log('[syncGoogleCalendar] could not finalize task reminders:', e.message));
   }
 
   return { created, updated, skipped, cancelledRemoved, total_events: events.length, results, connectedEmail };
@@ -845,7 +922,20 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'not_connected', message: 'Google Calendar not connected' }, { status: 400 });
     }
 
-    const result = await syncCalendarAccount(base44, user, accessToken, user.email);
+    // One run per account at a time. A second trigger while a sync is live gets
+    // a clean "already running" instead of a second import.
+    const lock = await acquireSyncLock(base44, user);
+    if (!lock.acquired) {
+      console.log('[syncGoogleCalendar] sync already in progress for', user.email, 'since', lock.since);
+      return Response.json({ success: true, in_progress: true, skipped: true, since: lock.since || null });
+    }
+
+    let result;
+    try {
+      result = await syncCalendarAccount(base44, user, accessToken, user.email, lock.heartbeat);
+    } finally {
+      await lock.release();
+    }
 
     if (result.error) {
       console.log('[syncGoogleCalendar] sync returned error for=', result.connectedEmail, 'err=', JSON.stringify(result.details));
