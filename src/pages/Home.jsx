@@ -15,6 +15,7 @@ import TaskCompletionCelebration from "../components/tasks/TaskCompletionCelebra
 import { isTodayTask, isCompletedToday } from "../components/utils/todayTasks";
 import { ensureBirthdayReminders } from "../components/utils/birthdayScheduler";
 import BirthdayStrip from "../components/home/BirthdayStrip";
+import NotificationsOffBanner from "../components/home/NotificationsOffBanner";
 
 export default function Home() {
   const [tasks, setTasks] = useState([]);
@@ -226,6 +227,8 @@ export default function Home() {
         />
 
         <div className="space-y-6">
+          <NotificationsOffBanner theme={theme} specialMode={specialMode} />
+
           <WelcomeCard userName={user?.full_name} theme={theme} specialMode={specialMode} user={user} />
           
           <QuickActions theme={theme} specialMode={specialMode} user={user} />

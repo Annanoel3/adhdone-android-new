@@ -163,6 +163,21 @@ public class NotifyBridge extends Plugin {
     }
 
     /**
+     * Whether Android currently lets this app show notifications. The web app
+     * asks this to decide whether to show its "notifications are off" notice.
+     */
+    @PluginMethod
+    public void getPermissionState(PluginCall call) {
+        try {
+            JSObject result = new JSObject();
+            result.put("granted", OneSignal.getNotifications().getPermission());
+            call.resolve(result);
+        } catch (Exception e) {
+            call.reject("Failed to read permission state: " + e.getMessage());
+        }
+    }
+
+    /**
      * Returns the data payload of the notification that opened the app (cold
      * start), then clears it so the popup only fires once. Returns an empty
      * object when the app was not opened from a notification.
