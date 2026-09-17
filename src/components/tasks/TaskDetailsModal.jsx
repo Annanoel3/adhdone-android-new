@@ -63,9 +63,21 @@ import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Cake } from "lucide-react";
 
-export default function TaskDetailsModal({ task, isOpen, onClose, onUpdate, onDelete, onComplete, theme, itemClassification }) {
+export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUpdate: onUpdateProp, onDelete, onComplete, theme, itemClassification }) {
   const { toast } = useToast();
   const navigate = useNavigate();
+  // Optimistic changes are applied to a LOCAL copy first, so pills like the
+  // Type chip flip the instant the user picks something — even if the parent
+  // page is slow to hand the updated record back down.
+  const [localPatch, setLocalPatch] = useState({});
+  useEffect(() => { setLocalPatch({}); }, [taskProp?.id]);
+  const task = taskProp ? { ...taskProp, ...localPatch } : null;
+  const onUpdate = (updated) => {
+    if (updated && updated.id && updated.id === taskProp?.id) {
+      setLocalPatch((prev) => ({ ...prev, ...updated }));
+    }
+    if (onUpdateProp) onUpdateProp(updated);
+  };
   const [subTasks, setSubTasks] = useState([]);
   const [newSubTask, setNewSubTask] = useState("");
   const [showDecomposition, setShowDecomposition] = useState(false);

@@ -182,7 +182,11 @@ async function classifyEventWithAI(base44, event) {
   const details = event.description
     ? `\nDetails: ${String(event.description).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 400)}`
     : '';
-  const inputText = `${summary}${when}${loc}${details}`;
+  // Google Calendar forces a time on everything — people put errands, bills and
+  // to-dos in there too. So the event-vs-task call has to come from the wording
+  // of the title, never from the fact that a time exists.
+  const calendarNote = '\n(From the user\'s Google Calendar. Every entry there has a date and time, including plain to-dos, errands and bills — so judge from the wording of the title alone whether this is an event they attend or a task they do.)';
+  const inputText = `${summary}${when}${loc}${details}${calendarNote}`;
 
   const prompt = buildTaskParsePrompt(inputText);
   const res = await base44.asServiceRole.functions.invoke('parseTask', { prompt });
@@ -653,9 +657,12 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         due_date: dueDateISO,
         end_date: endDateISO,
         event_time: eventTimeISO,
+        // The AI's own read of the title decides event vs task. It used to be
+        // "anything with a single reminder is an event", which turned every
+        // dated bill or errand from the calendar into an event.
         classification: (ai.classification === 'payment' || isPaymentTitle(title))
           ? 'payment'
-          : (isOnce ? 'event' : 'task'),
+          : (isOnce && ai.classification === 'event' ? 'event' : 'task'),
         notification_recipient_email: user.email,
         recurrence_pattern: recurrenceRule ? (recurrenceRule.includes('FREQ=DAILY') ? 'daily' : recurrenceRule.includes('FREQ=WEEKLY') ? 'weekly' : recurrenceRule.includes('FREQ=MONTHLY') ? 'monthly' : recurrenceRule.includes('FREQ=YEARLY') ? 'yearly' : 'none') : 'none'
       };
