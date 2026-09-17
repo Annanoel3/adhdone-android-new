@@ -733,7 +733,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                           <PopoverContent className="w-56 p-2" onClick={(e) => e.stopPropagation()}>
                             <div className="space-y-1">
                               <div className="px-3 py-2 text-xs text-gray-500">
-                                This task is on Smart Reminders — the app's AI decides when to nudge you based on your schedule and energy. Switch to a fixed interval below if you prefer.
+                                This task is on Smart Reminders — the app's AI decides when to nudge you based on your schedule and how much time is left. Switch to a fixed interval below if you prefer.
                               </div>
                               <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}></div>
                               <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Switch to fixed</div>
