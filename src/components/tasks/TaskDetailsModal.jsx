@@ -59,6 +59,7 @@ import {
 } from "@/components/ui/select";
 import LaunchButtons from "../launch/LaunchButtons";
 import LocationField from "./LocationField";
+import SmartDueDatePill from "./SmartDueDatePill";
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Cake } from "lucide-react";
@@ -1667,6 +1668,16 @@ Return JSON:
                 <div className="w-full mt-2">
                   <SmartReminderEditor task={task} theme={theme} onUpdate={onUpdate} isEvent={isEvent} />
                 </div>
+              )}
+
+              {/* Smart Reminders task — no fixed reminder time, but it can
+                   still be due by a day, and that day must be pushable. */}
+              {currentType === 'smart' && (
+                <SmartDueDatePill
+                  task={task}
+                  theme={theme}
+                  onSave={(iso) => handleUpdateField('due_date', iso)}
+                />
               )}
 
               {/* First-reminder date & time — only for tasks whose reminders
