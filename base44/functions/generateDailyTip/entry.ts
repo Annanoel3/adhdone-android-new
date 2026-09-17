@@ -17,12 +17,13 @@ Deno.serve(async (req) => {
     const { prompt } = await req.json();
 
     const tipCompletion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-6-astra',
       messages: [
         { role: 'system', content: 'You are an ADHD productivity expert. Generate a helpful, motivating daily tip. Respond with just the tip text.' },
         { role: 'user', content: prompt }
       ],
-      temperature: 0.7
+      reasoning_effort: 'low',
+      max_completion_tokens: 2000
     });
 
     const tipText = tipCompletion.choices[0].message.content.trim();

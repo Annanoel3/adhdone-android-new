@@ -171,7 +171,7 @@ async function generateDigestMessage(tasks: any[], firstName: string): Promise<{
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-6-astra',
       messages: [
         {
           role: 'system',
@@ -186,8 +186,8 @@ Return only the notification body text, nothing else.`
           content: `User's first name: ${firstName}\nTasks for today (${tasks.length} total):\n${taskList}\n\nGenerate a friendly morning digest notification body.`
         }
       ],
-      max_tokens: 100,
-      temperature: 0.7,
+      reasoning_effort: 'low',
+      max_completion_tokens: 2000,
     });
 
     const body = response.choices[0]?.message?.content?.trim() ||

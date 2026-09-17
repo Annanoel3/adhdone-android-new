@@ -527,14 +527,19 @@ Return ONLY valid JSON:
 
   try {
     const response = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      // Deciding WHAT to surface today, WHEN, and how often is the heaviest
+      // judgment call in the app — it runs on the strongest model available.
+      // Astra is a reasoning model: it rejects a custom temperature, and
+      // reasoning tokens count against the completion budget, so that budget
+      // has to be far larger than the visible output.
+      model: 'gpt-6-astra',
       messages: [
         { role: 'system', content: 'You are an ADHD productivity companion — a personal assistant to a disorganized but brilliant boss. Always respond with valid JSON only.' },
         { role: 'user', content: prompt },
       ],
       response_format: { type: 'json_object' },
-      temperature: 0.7,
-      max_tokens: 600,
+      reasoning_effort: 'medium',
+      max_completion_tokens: 6000,
     });
 
     const parsed = JSON.parse(response.choices[0].message.content);

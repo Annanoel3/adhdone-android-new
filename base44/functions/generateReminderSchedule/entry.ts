@@ -316,13 +316,14 @@ Examples:
 }`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-6-astra',
       messages: [
         { role: 'system', content: 'You are an ADHD productivity expert. Always respond with valid JSON only.' },
         { role: 'user', content: prompt + schemaInstruction }
       ],
       response_format: { type: 'json_object' },
-      temperature: 0.3
+      reasoning_effort: 'medium',
+      max_completion_tokens: 6000
     });
 
     const result = JSON.parse(completion.choices[0].message.content);

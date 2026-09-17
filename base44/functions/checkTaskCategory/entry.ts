@@ -6,7 +6,7 @@ Deno.serve(async (req) => {
   const { prompt } = await req.json();
   const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
   const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-6-astra",
     messages: [
       {
         role: "system",
@@ -15,7 +15,8 @@ Deno.serve(async (req) => {
       { role: "user", content: prompt }
     ],
     response_format: { type: "json_object" },
-    temperature: 0.1
+    reasoning_effort: 'low',
+    max_completion_tokens: 4000
   });
   const response = JSON.parse(completion.choices[0].message.content);
   return Response.json({ response });

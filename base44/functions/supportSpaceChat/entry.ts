@@ -30,7 +30,7 @@ When something in the app isn't working (a notification missing, a feature not s
 - Specific case: the pinned Quick Capture notification disappears when Android clears it or the app hasn't been opened in a while. It re-posts when the app is opened, so the answer is "fully close and reopen ADHDone and it should come back" — nothing else first.`;
 
     const response = await openai.responses.create({
-      model: "gpt-4o",
+      model: "gpt-6-astra",
       tools: [{ type: "web_search" }],
       input: prompt + sourcingRules
     });

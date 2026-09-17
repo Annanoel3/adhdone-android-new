@@ -38,12 +38,13 @@ Rules:
 
     const openai = new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') });
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-6-astra',
       messages: [
         { role: 'system', content: 'You write short, natural birthday text messages. You never use jargon, fluff, or unnecessary punctuation. You respond with only the message text, no quotes or labels.' },
         { role: 'user', content: prompt }
       ],
-      temperature: 0.7
+      reasoning_effort: 'low',
+      max_completion_tokens: 2000
     });
 
     const message = completion.choices[0].message.content.trim();

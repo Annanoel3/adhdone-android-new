@@ -36,13 +36,14 @@ Return JSON: { "is_birthday": boolean, "person": string|null, "date": "YYYY-MM-D
 
     const openai = new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') });
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-6-astra',
       messages: [
         { role: 'system', content: 'You are a helpful assistant that detects birthday reminders. Always respond with valid JSON only.' },
         { role: 'user', content: prompt }
       ],
       response_format: { type: 'json_object' },
-      temperature: 0.2
+      reasoning_effort: 'low',
+      max_completion_tokens: 4000
     });
 
     const detected = JSON.parse(completion.choices[0].message.content);
