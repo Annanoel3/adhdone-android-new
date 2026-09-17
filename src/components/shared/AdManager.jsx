@@ -86,7 +86,7 @@ export default function AdManager() {
       clearTimers();
       setCountdown(null);
       if (!shouldShowAd(count)) return;
-      delayRef.current = setTimeout(tryShowAd, 30000);
+      delayRef.current = setTimeout(tryShowAd, 15000);
     }
 
     registerLaunch();
