@@ -1,6 +1,22 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 
+// WHO MAY BOOK A PUSH
+// Like every Base44 function, this endpoint can be reached by anyone on the
+// internet, and it used to book whatever it was handed: any text, to any user's
+// email, no questions asked. Only two kinds of caller are legitimate:
+//   1. another backend function of this app (the reminder job, calendar import,
+//      Focus Mode, quick capture). It proves itself by passing the app's internal
+//      key as `internalKey`. The key is the CRON_SECRET secret, so it is never in
+//      the repo.
+//   2. a signed-in user booking a reminder for THEMSELVES from the app.
+// Everyone else is turned away.
+//
+// While ENFORCE_CALLER_CHECK is false this is WATCH ONLY: the check runs and
+// logs what it would have done, and nothing is blocked. It is switched to true
+// only once the logs show every real caller passing.
+const ENFORCE_CALLER_CHECK = false;
+
 Deno.serve(async (req) => {
     console.log('[schedulePush] ========== FUNCTION START ==========');
     
@@ -30,6 +46,28 @@ Deno.serve(async (req) => {
             return Response.json({ success: false, error: 'Missing title or message body' }, { status: 400 });
         }
 
+        const base44 = createClientFromRequest(req);
+
+        // Caller check (see the note at the top). Never log the key or an email.
+        const internalKey = Deno.env.get('CRON_SECRET')?.trim();
+        const presentedKey = typeof payload.internalKey === 'string' ? payload.internalKey.trim() : '';
+        const isInternal = !!internalKey && presentedKey === internalKey;
+        let callerEmail = null;
+        if (!isInternal) {
+            try {
+                const me = await base44.auth.me();
+                callerEmail = me?.email || null;
+            } catch {
+                callerEmail = null;
+            }
+        }
+        const isSelf = !!callerEmail && String(callerEmail).toLowerCase() === String(toUserExternalId).toLowerCase();
+        const callerKind = isInternal ? 'internal' : isSelf ? 'self' : callerEmail ? 'signed-in, but booking for someone else' : 'anonymous';
+        console.log(`[schedulePush] caller check: ${callerKind}${ENFORCE_CALLER_CHECK ? '' : ' (watch only)'}`);
+        if (ENFORCE_CALLER_CHECK && !isInternal && !isSelf) {
+            return Response.json({ success: false, error: 'Not allowed to book this push' }, { status: 403 });
+        }
+
         // Quiet hours enforcement is handled by callers using per-user, timezone-aware
         // logic (see cronRefillReminders, rescanTasks, and the client-side
         // reminderScheduler). A crude UTC blanket here would collapse multiple
@@ -49,7 +87,6 @@ Deno.serve(async (req) => {
 
         // Send ledger — every sender books through here, so this is where two
         // systems booking the same task minutes apart get caught.
-        const base44 = createClientFromRequest(req);
         const ledgerKind = data?.type || 'task_reminder';
         const ledgerTaskId = data?.taskId || data?.scheduledTextId || null;
         const gate = await ledgerCheck(base44, { email: String(toUserExternalId), taskId: ledgerTaskId, kind: ledgerKind, sendAt: resolvedSendAt });

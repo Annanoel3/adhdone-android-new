@@ -72,6 +72,7 @@ export default async function(req: Request): Promise<Response> {
         const { title, body } = getFocusModeContent(focusTask.title);
         try {
           const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+            internalKey: Deno.env.get('CRON_SECRET'), // proves this call comes from the app's own backend
             toUserExternalId: user.email,
             title,
             body,

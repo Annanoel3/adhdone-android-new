@@ -735,7 +735,10 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
             // Lets the "leave now" reminder be based on real drive time from home
             // instead of a blanket hour before.
             location: (createdTask as any).location || (taskRecord as any).location || '',
-            homeZip: getHomeOrigin(user),
+            // generateReminderSchedule reads `homeOrigin`. This used to be sent as
+            // `homeZip`, which nothing reads, so an imported event with a location
+            // never got its drive-time "leave now" reminder.
+            homeOrigin: getHomeOrigin(user),
             timezone: (user as any)?.timezone || undefined,
           });
           const scheduleData = scheduleRes?.data || scheduleRes || {};
@@ -760,6 +763,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
           pushBudget--;
           try {
             const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+              internalKey: Deno.env.get('CRON_SECRET'), // proves this call comes from the app's own backend
               toUserExternalId: user.email,
               title: entry.notification_title,
               body: entry.notification_body,

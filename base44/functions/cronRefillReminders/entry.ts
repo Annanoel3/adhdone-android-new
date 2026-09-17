@@ -4,6 +4,7 @@ import { adjustForQuietHours, parseHHMM, localMinutesOfDay, resolveQuietHours, a
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
+import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { buildEventReminderPlan, isBookableNow, isBookedId, BOOKABLE_WINDOW_MS } from '../../shared/eventReminderPlan.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
@@ -241,6 +242,7 @@ Deno.serve(async (req) => {
           : getReminderContent(task.title, task.due_date, sendAtISO);
         try {
           const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+            internalKey: CRON_SECRET, // proves this call comes from the app's own backend
             toUserExternalId: email,
             title,
             body,
@@ -527,6 +529,7 @@ Deno.serve(async (req) => {
 
       try {
         const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+          internalKey: CRON_SECRET,
           toUserExternalId: task.notification_recipient_email,
           title: pushTitle,
           body: pushBody,
@@ -693,6 +696,10 @@ Deno.serve(async (req) => {
         classification: task.classification || 'event',
         deadlineStyle: task.deadline_style,
         timezone: timeZone || undefined,
+        // Same inputs the calendar import and quick capture pass, so a far-out
+        // task at a real place gets the same drive-time "leave now" reminder.
+        location: task.location || '',
+        homeOrigin: getHomeOrigin(owner),
       });
       const data = res?.data || res || {};
       const plan = buildEventReminderPlan({
@@ -754,6 +761,7 @@ Deno.serve(async (req) => {
 
       try {
         const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+          internalKey: CRON_SECRET,
           toUserExternalId: task.notification_recipient_email,
           title: entry.notification_title || task.title,
           body: entry.notification_body || task.title,

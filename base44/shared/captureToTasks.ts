@@ -22,7 +22,12 @@ import { getHomeOrigin } from "./homeOrigin.ts";
 export async function callFunction(base44: any, name: string, body: unknown) {
   // asServiceRole is required for function-to-function calls; the plain client
   // is not permitted to invoke siblings from inside a function.
-  const res = await base44.asServiceRole.functions.invoke(name, body);
+  // schedulePush only accepts backend callers that present the app's internal
+  // key. It travels with every sibling call; functions that don't need it ignore it.
+  const res = await base44.asServiceRole.functions.invoke(name, {
+    ...(body as Record<string, unknown>),
+    internalKey: Deno.env.get('CRON_SECRET'),
+  });
   return res?.data ?? res;
 }
 
