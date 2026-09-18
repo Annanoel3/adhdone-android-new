@@ -64,7 +64,11 @@ Deno.serve(async (req) => {
       !t.silenced &&
       !t.parent_task_id && // sub-tasks are context for their parent, not independent nudges
       !RECURRING_INTERVALS.has(t.reminder_interval) && // explicit intervals have their own refill flow
-      !(t.reminder_interval === 'once' && !t.day_only_task) && // pinned to a clock time — own flow
+      // A 'once' task is only excluded when it really IS pinned to a clock time.
+      // A timeless 'once' task (no day-only flag, no reminder time, no event
+      // time) has nothing booked for it, so excluding it left it with no
+      // sender at all — those belong in the nudge pool.
+      !(t.reminder_interval === 'once' && !t.day_only_task && (t.next_reminder || t.event_time)) &&
       t.classification !== 'birthday' && t.classification !== 'event' &&
       !t.birthday_person;
 
