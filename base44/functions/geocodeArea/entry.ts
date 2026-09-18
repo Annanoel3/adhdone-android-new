@@ -1,5 +1,3 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
-
 // Look up a city / zip / place name so the home-area map can jump to that
 // region. Search ONLY — the query and the result are never stored anywhere.
 //
@@ -33,10 +31,9 @@ function zoomFor(place) {
 
 export default async function (req: Request): Promise<Response> {
   try {
-    const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-
+    // No user lookup here on purpose: this is a read-only place-name proxy that
+    // touches no app data, and the identity check was failing (403) for callers
+    // and silently killing the search box.
     const { query } = await req.json();
     const q = (query || '').trim();
     if (q.length < 3) return Response.json({ results: [] });
