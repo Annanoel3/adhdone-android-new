@@ -19,7 +19,7 @@ export default function WeeklyStar({ slot }) {
       type="button"
       onClick={() => window.triggerEasterEgg?.('awesome')}
       aria-label="A little something"
-      className="text-xs leading-none opacity-40 hover:opacity-100 transition-opacity p-1 select-none"
+      className="text-xs leading-none p-1 select-none"
     >
       ⭐
     </button>

@@ -18,7 +18,7 @@ export default function WeeklyEgg({ slot, type = "ideas", emoji = "💡" }) {
       type="button"
       onClick={() => window.triggerEasterEgg?.(type)}
       aria-label="A little something"
-      className="text-xs leading-none opacity-40 hover:opacity-100 transition-opacity p-1 select-none"
+      className="text-xs leading-none p-1 select-none"
     >
       {emoji}
     </button>
