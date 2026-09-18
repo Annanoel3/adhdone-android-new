@@ -5,9 +5,15 @@ import { secrets } from 'base44:runtime';
 // Biases results toward the user's home zip when one is saved.
 export default async function(req) {
   try {
-    const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    // Identity is used ONLY to bias results toward the user's home area, so a
+    // failed lookup must not kill the suggestions (it was returning 403 and
+    // silently blanking the dropdown).
+    let user: any = null;
+    try {
+      user = await createClientFromRequest(req).auth.me();
+    } catch (_e) {
+      user = null;
+    }
 
     const payload = await req.json().catch(() => ({}));
     const q = (payload?.input || '').trim();
@@ -19,10 +25,15 @@ export default async function(req) {
       return Response.json({ suggestions: [], reason: 'no_key' });
     }
 
-    const homeZip = (user.home_zip || '').trim();
     const url = new URL('https://maps.googleapis.com/maps/api/place/autocomplete/json');
-    url.searchParams.set('input', homeZip ? `${q} near ${homeZip}` : q);
+    url.searchParams.set('input', q);
     url.searchParams.set('key', apiKey);
+    // Bias toward the home circle the user placed on the map, so typing
+    // "city hall" surfaces THEIR city hall first.
+    if (Number.isFinite(user?.home_lat) && Number.isFinite(user?.home_lng)) {
+      url.searchParams.set('location', `${user.home_lat},${user.home_lng}`);
+      url.searchParams.set('radius', '50000');
+    }
 
     const res = await fetch(url.toString());
     const data = await res.json();

@@ -37,7 +37,7 @@ export default function WorkAddressCard({ user, theme, onSaved }) {
       </CardHeader>
       <CardContent>
         <p className={`text-sm mb-3 ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-          Where you commute to. Needs to be a real address — drive time to "work" isn't a thing.
+          Where you commute to.
         </p>
         {address ? (
           <div className={`flex items-start gap-2 rounded-lg px-3 py-2 text-sm ${
@@ -54,7 +54,7 @@ export default function WorkAddressCard({ user, theme, onSaved }) {
             <Input
               value={typing}
               onChange={(e) => setTyping(e.target.value)}
-              placeholder="Start typing your work address"
+              placeholder="Address or place name (e.g. City Hall)"
               className={`mb-2 ${dark ? 'bg-gray-700 text-white border-gray-600' : ''}`}
               disabled={saving}
             />
