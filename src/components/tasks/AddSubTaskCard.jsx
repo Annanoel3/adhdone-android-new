@@ -38,7 +38,20 @@ export default function AddSubTaskCard({
         </div>
       )}
 
+      {/* AI first — breaking the task down is the main event; typing and
+          speaking steps are the manual fallbacks. */}
       <div className="flex gap-2 mb-3">
+        {onAIBreakdown && (
+          <Button
+            variant={boxed ? 'outline' : 'ghost'}
+            size="sm"
+            onClick={onAIBreakdown}
+            className={`flex-1 ${theme === 'dark' ? 'border-purple-700 text-purple-300' : 'border-purple-300 text-purple-700 hover:bg-purple-50'}`}
+          >
+            <Sparkles className="w-3 h-3 mr-1" />
+            AI
+          </Button>
+        )}
         <Button
           variant={mode === 'text' ? 'default' : boxed ? 'outline' : 'ghost'}
           size="sm"
@@ -57,17 +70,6 @@ export default function AddSubTaskCard({
           <Mic className="w-3 h-3 mr-1" />
           Voice
         </Button>
-        {onAIBreakdown && (
-          <Button
-            variant={boxed ? 'outline' : 'ghost'}
-            size="sm"
-            onClick={onAIBreakdown}
-            className={`flex-1 ${theme === 'dark' ? 'border-purple-700 text-purple-300' : 'border-purple-300 text-purple-700 hover:bg-purple-50'}`}
-          >
-            <Sparkles className="w-3 h-3 mr-1" />
-            AI
-          </Button>
-        )}
       </div>
 
       {mode === 'text' ? (

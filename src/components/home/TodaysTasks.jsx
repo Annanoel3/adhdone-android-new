@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/popover";
 import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
 import TaskSortDropdown from "../tasks/TaskSortDropdown";
+import BreakIntoStepsButton from "../tasks/BreakIntoStepsButton";
 
 export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails, onUpdateTask }) {
   const navigate = useNavigate();
@@ -762,6 +763,14 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                   </Button>
                 </div>
                 
+                {/* No steps yet — offer to break the task down, in the same
+                    spot the subtask dropdown lives once steps exist. */}
+                {subtasks.length === 0 && !isEvent(task) && !isBirthdayTask(task) && (
+                  <div className="mt-2 pl-2">
+                    <BreakIntoStepsButton task={task} theme={theme} />
+                  </div>
+                )}
+
                 {/* Subtasks Dropdown */}
                 {subtasks.length > 0 && (
                   <div className="mt-2 pl-2">
