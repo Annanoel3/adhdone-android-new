@@ -1,3 +1,4 @@
+import OpenAI from "npm:openai";
 import { TASK_PARSE_SYSTEM_PROMPT, buildTaskParsePrompt, nowInTimezone } from "./taskParsePrompt.ts";
 import { fixParsedTaskTitles } from "./fixMisheardVerbs.ts";
 import { resolveParsedDates } from "./resolveDateWords.ts";
@@ -11,7 +12,11 @@ import { resolveParsedDates } from "./resolveDateWords.ts";
 // with this person" is real reasoning, not extraction. A cheap/older model
 // pattern-matches and drops facts, which is exactly the class of bug this
 // parser kept producing.
-const MODEL = "claude_sonnet_4_6";
+//
+// Runs on OpenAI with the app's own key (RULES.md rule 1). It briefly ran on
+// Base44's InvokeLLM, which draws on Base44 integration credits — and when
+// those run out every call fails, taking task entry down for everyone at once.
+const MODEL = "gpt-5.4-mini";
 
 // A recurring reminder rhythm can ONLY come from the user asking to be pinged
 // repeatedly. The model is asked that one narrow question
@@ -26,7 +31,40 @@ const REPEAT_VALUES = [
   'daily', 'every_other_day',
 ];
 
-export async function runTaskParse(base44: any, prompt: string, tz?: string) {
+// The answer is constrained to this shape by OpenAI (strict structured output),
+// so every key is always present and every enum value is one the app knows.
+const TASK_PARSE_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    title: { type: "string" },
+    location: { type: ["string", "null"] },
+    urgency: { type: "string", enum: ["low", "medium", "high", "urgent"] },
+    energy_required: { type: "string", enum: ["low", "medium", "high"] },
+    classification: { type: "string", enum: ["task", "event", "birthday", "payment"] },
+    target_date: { type: ["string", "null"] },
+    target_time: { type: ["string", "null"] },
+    end_date: { type: ["string", "null"] },
+    due_date: { type: ["string", "null"] },
+    user_asked_to_repeat_every: { anyOf: [{ type: "string", enum: REPEAT_VALUES }, { type: "null" }] },
+    recurrence_pattern: { type: "string" },
+    deadline_style: { type: "string", enum: ["on", "by"] },
+    day_only_task: { type: "boolean" },
+    needs_date_pick: { type: "boolean" },
+    is_flexible: { type: "boolean" },
+    priority_uninferrable: { type: "boolean" },
+  },
+  required: [
+    "title", "location", "urgency", "energy_required", "classification",
+    "target_date", "target_time", "end_date", "due_date",
+    "user_asked_to_repeat_every", "recurrence_pattern", "deadline_style",
+    "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
+  ],
+};
+
+// `_base44` is kept so every caller's signature stays the same; the parser no
+// longer needs the client.
+export async function runTaskParse(_base44: any, prompt: string, tz?: string) {
   // Callers are supposed to pass a prompt already built by
   // buildTaskParsePrompt, which carries the one thing the model cannot work out
   // for itself: today's real calendar. If raw text arrives instead, build it
@@ -36,34 +74,20 @@ export async function runTaskParse(base44: any, prompt: string, tz?: string) {
     ? prompt
     : buildTaskParsePrompt(prompt || '', tz);
 
-  const raw = await base44.asServiceRole.integrations.Core.InvokeLLM({
-    prompt: `${TASK_PARSE_SYSTEM_PROMPT}\n\n${fullPrompt}`,
+  const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+  const completion = await openai.chat.completions.create({
     model: MODEL,
-    response_json_schema: {
-      type: "object",
-      properties: {
-        title: { type: "string" },
-        location: { type: ["string", "null"] },
-        urgency: { type: "string", enum: ["low", "medium", "high", "urgent"] },
-        energy_required: { type: "string", enum: ["low", "medium", "high"] },
-        classification: { type: "string", enum: ["task", "event", "birthday", "payment"] },
-        target_date: { type: ["string", "null"] },
-        target_time: { type: ["string", "null"] },
-        end_date: { type: ["string", "null"] },
-        due_date: { type: ["string", "null"] },
-        user_asked_to_repeat_every: { type: ["string", "null"], enum: [...REPEAT_VALUES, null] },
-        recurrence_pattern: { type: "string" },
-        deadline_style: { type: "string", enum: ["on", "by"] },
-        day_only_task: { type: "boolean" },
-        needs_date_pick: { type: "boolean" },
-        is_flexible: { type: "boolean" },
-        priority_uninferrable: { type: "boolean" },
-      },
-      required: ["title", "classification"],
+    messages: [
+      { role: "system", content: TASK_PARSE_SYSTEM_PROMPT },
+      { role: "user", content: fullPrompt },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: { name: "task_parse", strict: true, schema: TASK_PARSE_SCHEMA },
     },
   });
 
-  const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+  const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}");
   // recurrence_pattern feeds a strict entity enum, so a free-text answer like
   // "every 20 minutes" has to fall back to "none" rather than fail the save.
   const PATTERNS = ['none', 'daily', 'weekly', 'every_other_week', 'monthly', 'yearly'];
