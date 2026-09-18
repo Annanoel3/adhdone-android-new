@@ -154,6 +154,9 @@ export default function DiaryEditor({ entry, dateKey, initialContent = "", onSav
           onMove={(i, pos) =>
             setStickers((prev) => prev.map((s, idx) => (idx === i ? { ...s, ...pos } : s)))
           }
+          onScale={(i, scale) =>
+            setStickers((prev) => prev.map((s, idx) => (idx === i ? { ...s, scale } : s)))
+          }
           onRemove={(i) => setStickers((prev) => prev.filter((_, idx) => idx !== i))}
         />
       </div>
@@ -190,8 +193,9 @@ export default function DiaryEditor({ entry, dateKey, initialContent = "", onSav
           </PopoverTrigger>
           <PopoverContent className="w-72" align="start">
             <StickerPicker
-              onPick={(char) => {
-                setStickers((prev) => [...prev, { char, x: 40, y: 8 }]);
+              onPick={(picked) => {
+                const s = picked.src ? { src: picked.src } : { char: picked.char };
+                setStickers((prev) => [...prev, { ...s, x: 40, y: 8, scale: 1 }]);
                 setStickersOpen(false);
               }}
             />
@@ -215,7 +219,8 @@ export default function DiaryEditor({ entry, dateKey, initialContent = "", onSav
         </div>
       </div>
       <p className="px-4 pb-4 text-xs text-gray-400">
-        Drag a sticker anywhere on the page — tap it to show the ✕ and remove it.
+        Drag a sticker anywhere on the page — tap a second finger down while dragging to resize it,
+        or tap it to show the ✕ and remove it.
       </p>
     </div>
   );
