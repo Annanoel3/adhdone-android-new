@@ -15,7 +15,10 @@ const SCRIPT = [
     input: 'name',
   },
   {
-    text: (name) => `Nice to meet you, ${name}!`,
+    text: (name, handle) =>
+      handle
+        ? `Nice to meet you, ${name}! Your handle is @${handle} — that's how friends will find you once sharing goes live.`
+        : `Nice to meet you, ${name}!`,
   },
   {
     text: () => "One quick question before you get started.",

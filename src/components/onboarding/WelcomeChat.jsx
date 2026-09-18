@@ -7,6 +7,7 @@ import ChatBubble from './ChatBubble';
 import OnboardingBrandMark from './OnboardingBrandMark';
 import useTypewriter from './useTypewriter';
 import SCRIPT from './welcomeScript';
+import { claimHandle } from '@/functions/claimHandle';
 
 // The first-run conversation. Answers are saved as they're given (not batched at
 // the end) so someone who closes the app halfway through still keeps their name.
@@ -14,11 +15,12 @@ export default function WelcomeChat({ onDone }) {
   const [idx, setIdx] = useState(0);
   const [history, setHistory] = useState([]);
   const [name, setName] = useState('');
+  const [handle, setHandle] = useState('');
   const [draft, setDraft] = useState('');
   const endRef = useRef(null);
 
   const beat = SCRIPT[idx];
-  const line = beat ? beat.text(name || 'you') : '';
+  const line = beat ? beat.text(name || 'you', handle) : '';
   const { shown, done } = useTypewriter(line);
 
   useEffect(() => {
@@ -50,8 +52,12 @@ export default function WelcomeChat({ onDone }) {
     if (!value) return;
     setName(value);
     // The name they give IS their username (display_name) — the same field the
-    // Settings page edits — so onboarding doesn't need a second naming step.
+    // Settings page edits. Names collide, so the server also mints a unique
+    // handle (name + number) that future social features can key on.
     base44.auth.updateMe({ preferred_name: value, display_name: value }).catch(() => {});
+    claimHandle({ name: value })
+      .then((r) => setHandle(r?.data?.handle || ''))
+      .catch(() => {});
     answer(value);
   };
 
