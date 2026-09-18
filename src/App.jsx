@@ -82,9 +82,12 @@ const AuthenticatedApp = () => {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
       // Public paths never redirect to login — everything else does
-      const publicPaths = ['/', '/privacypolicy', '/Terms', '/BrandBook', '/NotificationDemo'];
-      const isAdSpot = window.location.pathname.startsWith('/ad/');
-      if (!isAdSpot && !publicPaths.includes(window.location.pathname)) {
+      // Compared lowercased — routes themselves are case-insensitive, so
+      // /brandbook must be treated as public exactly like /BrandBook.
+      const publicPaths = ['/', '/privacypolicy', '/terms', '/brandbook', '/notificationdemo'];
+      const path = window.location.pathname.replace(/\/+$/, '').toLowerCase() || '/';
+      const isAdSpot = path.startsWith('/ad/');
+      if (!isAdSpot && !publicPaths.includes(path)) {
         navigateToLogin();
         return null;
       }
