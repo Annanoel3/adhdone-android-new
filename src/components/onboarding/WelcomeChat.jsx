@@ -16,11 +16,12 @@ export default function WelcomeChat({ onDone }) {
   const [history, setHistory] = useState([]);
   const [name, setName] = useState('');
   const [handle, setHandle] = useState('');
+  const [about, setAbout] = useState('');
   const [draft, setDraft] = useState('');
   const endRef = useRef(null);
 
   const beat = SCRIPT[idx];
-  const line = beat ? beat.text(name || 'you', handle) : '';
+  const line = beat ? beat.text(name || 'you', handle, about) : '';
   const { shown, done } = useTypewriter(line);
 
   useEffect(() => {
@@ -63,6 +64,7 @@ export default function WelcomeChat({ onDone }) {
 
   const submitAbout = () => {
     const value = draft.trim();
+    setAbout(value);
     if (value) base44.auth.updateMe({ about_me: value }).catch(() => {});
     answer(value);
   };

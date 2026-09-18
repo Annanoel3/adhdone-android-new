@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { format, startOfWeek, addDays, addWeeks } from 'date-fns';
+import ShiftImportButton from './ShiftImportButton';
 
 // Week-by-week shift entry, for schedules that change every week (retail,
 // service, healthcare). The user pastes in whatever their posted schedule says
@@ -46,6 +47,8 @@ export default function ShiftWeekEditor({ theme }) {
 
   return (
     <div className="space-y-3">
+      <ShiftImportButton theme={theme} onImported={load} />
+
       <div className="flex items-center justify-between">
         <Button variant="outline" size="icon" onClick={() => setWeekStart(addWeeks(weekStart, -1))}>
           <ChevronLeft className="w-4 h-4" />

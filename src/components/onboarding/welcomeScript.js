@@ -6,6 +6,17 @@
 // Voice: the first line is the ONE place the builder introduces herself — after
 // that it's the app talking to the user, so everything below stays in the app's
 // voice ("this app", "we") and never says "I'm Anna" again.
+const SCHEDULE_HINTS = [
+  'irregular', 'shift', 'shifts', 'rotating', 'varies', 'vary', 'different every',
+  'changes every', 'night', 'nights', 'overnight', 'graveyard', 'on call', 'on-call',
+  'no set', 'never the same', 'weekends', 'schedule',
+];
+
+const mentionsSchedule = (about) => {
+  const text = (about || '').toLowerCase();
+  return SCHEDULE_HINTS.some((w) => text.includes(w));
+};
+
 const SCRIPT = [
   {
     text: () => "Hey — welcome to ADHDone. Built by Anna, a girl who just wants to stop missing doctors appointments and got tired of apps that just don't work.",
@@ -29,8 +40,13 @@ const SCRIPT = [
     input: 'about',
   },
   {
-    text: () =>
-      "Got it. That'll shape what counts as urgent and how hard this app nudges you about it.",
+    // Someone who mentions shifts / irregular hours has just told us something
+    // the free-text note can't actually act on — the acknowledgment points them
+    // straight at the place where it becomes real.
+    text: (name, handle, about) =>
+      mentionsSchedule(about)
+        ? "Got it. Since your hours move around, head to Places whenever a new schedule gets posted — drop in a photo of it or type the week in, and this app will work around your shifts instead of guessing."
+        : "Got it. That'll shape what counts as urgent and how hard this app nudges you about it.",
   },
   {
     text: () =>
