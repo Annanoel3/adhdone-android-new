@@ -10,6 +10,7 @@
 // plan, schedulePush for the actual OneSignal scheduling. Copies of that logic
 // are exactly how this app ended up with two parsers that disagreed.
 
+import OpenAI from "npm:openai";
 import { runTaskParse } from "./runTaskParse.ts";
 import { decideReminderInterval } from "./reminderIntervalDecision.ts";
 import { getHomeOrigin } from "./homeOrigin.ts";
@@ -50,16 +51,28 @@ carry its day, time and place. Do not summarize, rewrite, or add anything.
 
 Return JSON: { "items": ["...", "..."] }`;
 
-export async function splitCapture(base44: any, text: string): Promise<string[]> {
-  const raw = await base44.asServiceRole.integrations.Core.InvokeLLM({
-    prompt: SPLIT_PROMPT.replace("%TEXT%", text),
-    response_json_schema: {
-      type: "object",
-      properties: { items: { type: "array", items: { type: "string" } } },
-      required: ["items"],
+// `_base44` is kept so the caller's signature stays the same; the split runs
+// on OpenAI with the app's own key (RULES.md rule 1), not on Base44 credits.
+export async function splitCapture(_base44: any, text: string): Promise<string[]> {
+  const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
+  const completion = await openai.chat.completions.create({
+    model: "gpt-5.4",
+    messages: [{ role: "user", content: SPLIT_PROMPT.replace("%TEXT%", text) }],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "capture_split",
+        strict: true,
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          properties: { items: { type: "array", items: { type: "string" } } },
+          required: ["items"],
+        },
+      },
     },
   });
-  const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+  const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}");
   const items = (parsed?.items || [])
     .map((s: string) => String(s || "").trim())
     .filter(Boolean);

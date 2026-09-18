@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
+import OpenAI from 'npm:openai';
 
 // Turns a PHOTO (event flyer, appointment card, invitation, handwritten note,
 // screenshot) into the same kind of plain sentence a user would have typed.
@@ -34,12 +35,21 @@ export default async function (req: Request): Promise<Response> {
     const { file_url } = await req.json();
     if (!file_url) return Response.json({ error: 'file_url is required' }, { status: 400 });
 
-    const raw = await base44.integrations.Core.InvokeLLM({
-      prompt: READ_PROMPT,
-      file_urls: [file_url],
+    // OpenAI on the app's own key (RULES.md rule 1). UploadFile gives a public
+    // URL, so the model fetches the photo itself.
+    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-5.4',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'text', text: READ_PROMPT },
+          { type: 'image_url', image_url: { url: file_url } },
+        ],
+      }],
     });
 
-    const text = String(raw || '').trim();
+    const text = String(completion.choices[0]?.message?.content || '').trim();
     // "NOTHING" is the model's way of saying this photo isn't a task — passed
     // back so the UI can say so instead of creating a junk task from a selfie.
     if (!text || text.toUpperCase().startsWith('NOTHING')) {
