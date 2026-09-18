@@ -1521,7 +1521,10 @@ Return JSON:
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className={`max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto ${theme === 'dark' ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
+        {/* [&>*]:min-w-0 — the dialog is a grid, so one wide child (a long
+            location pill, a reminder row) used to stretch the whole column
+            past the screen and clip everything on the right. */}
+        <DialogContent className={`max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0 ${theme === 'dark' ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
           
           <DialogHeader>
             <DialogTitle className={`text-2xl font-bold pt-6 pb-2 ${theme === 'dark' ? 'text-white' : ''}`}>
