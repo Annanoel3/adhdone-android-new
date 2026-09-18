@@ -11,7 +11,7 @@ import { claimHandle } from '@/functions/claimHandle';
 
 // The first-run conversation. Answers are saved as they're given (not batched at
 // the end) so someone who closes the app halfway through still keeps their name.
-export default function WelcomeChat({ onDone }) {
+export default function WelcomeChat({ onDone, script = SCRIPT }) {
   const [idx, setIdx] = useState(0);
   const [history, setHistory] = useState([]);
   const [name, setName] = useState('');
@@ -20,7 +20,7 @@ export default function WelcomeChat({ onDone }) {
   const [draft, setDraft] = useState('');
   const endRef = useRef(null);
 
-  const beat = SCRIPT[idx];
+  const beat = script[idx];
   const line = beat ? beat.text(name || 'you', handle, about) : '';
   const { shown, done } = useTypewriter(line);
 

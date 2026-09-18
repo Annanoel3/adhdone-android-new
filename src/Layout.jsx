@@ -72,6 +72,7 @@ import EventConflictWarning from "./components/shared/EventConflictWarning";
 import QuickCapturePrompt from "./components/shared/QuickCapturePrompt";
 import PageIntroTour from "./components/onboarding/PageIntroTour";
 import WelcomeDialog from "./components/onboarding/WelcomeDialog";
+import CatchUpDialog from "./components/onboarding/CatchUpDialog";
 import { applyOnboardingReplay } from "./components/onboarding/onboardingReplay";
 import { hydrateOnboardingFlags, clearOnboardingFlags } from "./components/onboarding/onboardingSync";
 import TaskCaptureProcessor from "./components/shared/TaskCaptureProcessor";
@@ -1047,6 +1048,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <TaskCaptureProcessor userEmail={user?.email} />
         <UsageTracker user={user} />
         <WelcomeDialog />
+        <CatchUpDialog user={user} />
         <PageIntroTour currentPageName={currentPageName} />
 
         <AppGuideModal

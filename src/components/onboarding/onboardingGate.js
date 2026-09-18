@@ -7,6 +7,9 @@ import { seenKey } from './tourVersion';
 export const ONBOARDING_STEPS = {
   welcome: 'onboarding_welcome_done',
   homeTour: 'onboarding_home_tour_done',
+  // Not part of the first-run sequence: the one-off catch-up for accounts that
+  // onboarded before the name + about-me questions existed.
+  catchUp: 'onboarding_catchup_done',
 };
 
 const EVENT = 'adhd_onboarding_step';
