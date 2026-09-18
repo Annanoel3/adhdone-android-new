@@ -215,7 +215,7 @@ export default function DiaryEditor({ entry, dateKey, initialContent = "", onSav
         </div>
       </div>
       <p className="px-4 pb-4 text-xs text-gray-400">
-        Drag a sticker anywhere on the page — double-tap it to remove.
+        Drag a sticker anywhere on the page — tap it to show the ✕ and remove it.
       </p>
     </div>
   );

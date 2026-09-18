@@ -1,10 +1,15 @@
-import React, { useRef } from "react";
+import React, { useRef, useState } from "react";
+import { X } from "lucide-react";
 
 // Stickers float above the page and can be dragged anywhere on it. Positions
 // are stored as percentages so a sticker keeps its spot across screen sizes.
+// Tapping a sticker (without dragging it) selects it and shows a little X so it
+// can be removed — dragging never selects, so moving one doesn't pop up the X.
 export default function StickerLayer({ stickers = [], onMove, onRemove }) {
   const layerRef = useRef(null);
   const dragIndex = useRef(null);
+  const movedRef = useRef(false);
+  const [selected, setSelected] = useState(null);
 
   const positionFromEvent = (e) => {
     const box = layerRef.current?.getBoundingClientRect();
@@ -18,17 +23,23 @@ export default function StickerLayer({ stickers = [], onMove, onRemove }) {
   const handlePointerDown = (i) => (e) => {
     if (!onMove) return;
     dragIndex.current = i;
+    movedRef.current = false;
     e.currentTarget.setPointerCapture(e.pointerId);
   };
 
   const handlePointerMove = (e) => {
     if (dragIndex.current === null) return;
     e.preventDefault();
+    movedRef.current = true;
     const pos = positionFromEvent(e);
     if (pos) onMove(dragIndex.current, pos);
   };
 
   const handlePointerUp = () => {
+    const i = dragIndex.current;
+    if (i !== null && !movedRef.current) {
+      setSelected((prev) => (prev === i ? null : i));
+    }
     dragIndex.current = null;
   };
 
@@ -53,9 +64,22 @@ export default function StickerLayer({ stickers = [], onMove, onRemove }) {
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
-          onDoubleClick={() => onRemove?.(i)}
+          onDoubleClick={() => { setSelected(null); onRemove?.(i); }}
         >
-          <span className="text-3xl leading-none drop-shadow-sm">{s.char}</span>
+          <span className={`text-3xl leading-none drop-shadow-sm ${selected === i ? "opacity-70" : ""}`}>
+            {s.char}
+          </span>
+          {onRemove && selected === i && (
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => { setSelected(null); onRemove(i); }}
+              className="absolute -top-2 -right-2 bg-gray-900 text-white rounded-full p-1 shadow"
+              aria-label="Remove sticker"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          )}
         </div>
       ))}
     </div>
