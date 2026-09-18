@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/popover";
 import ImageViewer from "../components/shared/ImageViewer";
 import IdeaNotesDialog from "../components/parkinglot/IdeaNotesDialog";
+import WeeklyEgg from "../components/shared/WeeklyEgg";
 
 function stripHtml(html) {
   if (!html) return "";
@@ -504,25 +505,14 @@ Return ONLY the category name, nothing else.`;
         <div>
           <h1 className={`text-3xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
             Parking Lot 🅿️
+            <WeeklyEgg slot={2} type="ideas" />
           </h1>
           <p className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
             Brain dump your ideas here - they're safe until you're ready!
+            <WeeklyEgg slot={1} type="ideas" />
           </p>
         </div>
-        <Button
-          onClick={() => {
-            if (window.triggerEasterEgg) {
-              window.triggerEasterEgg('ideas');
-            }
-          }}
-          variant="ghost"
-          size="sm"
-          className={`text-xs opacity-40 hover:opacity-100 transition-opacity ${
-            theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
-          }`}
-        >
-          💡 Too many ideas? 💡
-        </Button>
+        <WeeklyEgg slot={0} type="ideas" />
       </div>
 
       {/* Quick Add Modal */}
@@ -1154,6 +1144,10 @@ Return ONLY the category name, nothing else.`;
         isOpen={!!viewingImage}
         onClose={() => setViewingImage(null)}
       />
+
+      <div className="flex justify-center pt-4">
+        <WeeklyEgg slot={3} type="ideas" />
+      </div>
 
       <div style={{ paddingBottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))' }} aria-hidden="true"></div>
     </div>

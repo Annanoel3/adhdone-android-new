@@ -30,7 +30,6 @@ export default function EasterEggVideo() {
     "https://media.giphy.com/media/QMkPpxPDYY0fu/giphy.gif", // Overloaded
     "https://media.giphy.com/media/xT9DPpf0zTqbcgy8xy/giphy.gif", // Sparks flying
     "https://media.giphy.com/media/l0HlHFRbmaZtBRhXG/giphy.gif", // Wait what
-    "https://media.giphy.com/media/3o6Zt481isNVuQI1l6/giphy.gif", // Head spinning
     "https://media.giphy.com/media/26tPplGWjN0xLybiU/giphy.gif", // So many tabs open
     "https://media.giphy.com/media/l46Cy1rHbQ92uuLXa/giphy.gif", // Chaotic energy
     "https://media.giphy.com/media/3oEjHV0z8S7WM2QqIE/giphy.gif", // Brain buffering
