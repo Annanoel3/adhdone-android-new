@@ -75,6 +75,7 @@ import WelcomeDialog from "./components/onboarding/WelcomeDialog";
 import { applyOnboardingReplay } from "./components/onboarding/onboardingReplay";
 import { hydrateOnboardingFlags, clearOnboardingFlags } from "./components/onboarding/onboardingSync";
 import TaskCaptureProcessor from "./components/shared/TaskCaptureProcessor";
+import UsageTracker from "./components/shared/UsageTracker";
 import { base44 } from "@/api/base44Client";
 import { maybeAutoSync } from "@/lib/calendarSync";
 import {
@@ -1044,6 +1045,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <EventConflictWarning theme={theme} />
         <QuickCapturePrompt />
         <TaskCaptureProcessor userEmail={user?.email} />
+        <UsageTracker user={user} />
         <WelcomeDialog />
         <PageIntroTour currentPageName={currentPageName} />
 

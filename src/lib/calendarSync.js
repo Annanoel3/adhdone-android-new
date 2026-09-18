@@ -1,4 +1,5 @@
 import { base44 } from '@/api/base44Client';
+import { trackFire } from '@/lib/appTrack';
 
 // The ONE place the app starts a Google Calendar sync from.
 //
@@ -54,6 +55,15 @@ export function runCalendarSync() {
     .invoke('syncGoogleCalendar', {})
     .then((res) => {
       const data = res?.data || {};
+      trackFire('calendar_sync', {
+        props: {
+          finished: !!data.synced_at,
+          in_progress: !!data.in_progress,
+          created: data.created ?? null,
+          updated: data.updated ?? null,
+          skipped: data.skipped ?? null,
+        },
+      });
       if (data.synced_at) {
         localStorage.setItem(GATE_KEY, data.synced_at);
       } else {
@@ -71,6 +81,9 @@ export function runCalendarSync() {
       // Not connected / network error: undo the optimistic marker so the next
       // legitimate trigger (e.g. right after connecting) isn't gated out.
       undoOptimisticGate();
+      trackFire('calendar_sync_failed', {
+        props: { message: String(err?.message || err).slice(0, 300) },
+      });
       throw err;
     })
     .finally(() => {

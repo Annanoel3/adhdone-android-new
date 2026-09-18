@@ -8,6 +8,7 @@ import { toast } from "@/components/ui/use-toast";
 import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule, anchorToDaytime } from "./taskSchedule";
 import { announceEventConflict } from "./eventConflicts";
 import { commitNotificationIds } from "./notificationOwnership";
+import { trackFire } from "@/lib/appTrack";
 
 // Every step of turning raw user input (typed, spoken, or shared) into task
 // records. Pure async functions with no React state, so the pipeline can keep
@@ -539,6 +540,22 @@ Return JSON:
     maybeAskForHomeZip(`${createdTask.title} ${inputText}`, parsed.location);
     announceEventConflict(createdTask);
 
+    // Was this task born with anything that will ever nudge the user? A task
+    // created with no time, no interval and no due date is silent forever, and
+    // that is the single most important thing to be able to count.
+    trackFire('task_created', {
+      props: {
+        classification: createdTask.classification || 'task',
+        urgency: createdTask.urgency,
+        interval: actualReminderInterval || 'none',
+        has_reminder: !!nextReminder,
+        has_due_date: !!dueDateISO,
+        day_only: !!parsed.day_only_task,
+        silent: !nextReminder && !dueDateISO,
+        input_words: (inputText || '').trim().split(/\s+/).length,
+      },
+    });
+
     // Never schedule a reminder in the past or immediate
     if (nextReminder && nextReminder <= new Date(now.getTime() + 2 * 60 * 1000)) {
       nextReminder = (actualReminderInterval && actualReminderInterval !== 'once' && INTERVAL_MS[actualReminderInterval])
@@ -607,6 +624,9 @@ Return JSON:
   } catch (error) {
     console.error('🔄 [PROCESS] Error:', error);
     trace('processError', { message: String(error?.message || error) });
+    trackFire('task_create_failed', {
+      props: { message: String(error?.message || error).slice(0, 300) },
+    });
     return { status: 'error', message: error.message };
   }
 }

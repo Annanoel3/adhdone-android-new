@@ -1,0 +1,39 @@
+{
+  "name": "AppEvent",
+  "type": "object",
+  "properties": {
+    "event": {
+      "type": "string",
+      "description": "What happened, as a short machine name: session_start, session_end, page_view, task_created, task_create_failed, task_completed, calendar_sync, calendar_sync_failed, app_error, duplicate_detected."
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Who the event belongs to. Set by whoever writes the event so records stay groupable per user without reading any personal content."
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Random id generated once per app open (lives in sessionStorage). Lets session length and the sequence of actions inside one visit be reconstructed without any device identifier."
+    },
+    "seconds": {
+      "type": "number",
+      "description": "Duration in seconds, for events that measure time: how long a session stayed open, or how long a task existed before being completed."
+    },
+    "page": {
+      "type": "string",
+      "description": "Route the event happened on (e.g. /Home). Path only \u2014 never query strings, which can carry content."
+    },
+    "props": {
+      "type": "object",
+      "description": "Small bag of non-identifying detail for this event only \u2014 counts, flags, error messages, timings. Never task titles, diary text, names, addresses or anything the user wrote."
+    }
+  },
+  "required": [
+    "event"
+  ],
+  "rls": {
+    "read": false,
+    "create": {},
+    "update": false,
+    "delete": false
+  }
+}
