@@ -325,7 +325,10 @@ export default function Settings() {
 
         <HomeZipCard user={user} theme={theme} />
 
-        <AdDiagnosticsCard user={user} theme={theme} />
+        {/* Developer-only tool — hidden for everyone else. */}
+        {user?.email === 's2kap2chick@gmail.com' && (
+          <AdDiagnosticsCard user={user} theme={theme} />
+        )}
 
         {/* Theme Section */}
         <Card className={`mb-6 border-none shadow-lg ${
