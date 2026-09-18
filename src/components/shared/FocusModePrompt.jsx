@@ -164,11 +164,38 @@ export default function FocusModePrompt({ user, theme }) {
 
   // Already focusing (e.g. the sprint "keep going" handoff) — show the active
   // session right away, but never behind a page tour card. There is NO automatic
-  // intro popup: Focus Mode only ever opens from the Home button.
+  // intro popup: Focus Mode only ever opens from the Home button. If the user
+  // already tucked the popup away this session, respect that and just show the
+  // top bar instead of shoving the dialog back in their face on every page.
   useEffect(() => {
     if (!user?.email || !focusTaskId) return;
+    if (sessionStorage.getItem("focus_popup_hidden") === "1") return;
     waitForTourEnd().then(() => setOpen(true));
   }, [user?.email, focusTaskId]);
+
+  // Completing the focus task ANYWHERE (task card, notification, subtask flow)
+  // ends the session — normal reminders come back immediately instead of the
+  // user being stuck in a focus session for a task that's already done.
+  useEffect(() => {
+    if (!focusTaskId) return;
+    const check = async () => {
+      try {
+        const t = await base44.entities.Task.get(focusTaskId);
+        if (t && t.status !== "active") {
+          await base44.functions.invoke("setFocusMode", { action: "exit" });
+          sessionStorage.removeItem("focus_popup_hidden");
+          setFocusTaskId(null);
+          setFocusTask(null);
+          setMode("offer");
+          setEnteredAt(null);
+          setOpen(false);
+          broadcast(null);
+        }
+      } catch {}
+    };
+    window.addEventListener("tasks-changed", check);
+    return () => window.removeEventListener("tasks-changed", check);
+  }, [focusTaskId]);
 
   // Manual open from the Home Focus button.
   useEffect(() => {
@@ -183,6 +210,7 @@ export default function FocusModePrompt({ user, theme }) {
     // picker list is fresh for the next completion.
     justCompletedRef.current = null;
     try {
+      sessionStorage.removeItem("focus_popup_hidden");
       await base44.functions.invoke("setFocusMode", { action: "enter", taskId: task.id });
       setFocusTaskId(task.id);
       setFocusTask(task);
@@ -215,6 +243,7 @@ export default function FocusModePrompt({ user, theme }) {
     // Remember the just-finished task so the next-picker reload excludes it
     // (the server status flip lags the list refresh triggered below).
     justCompletedRef.current = task.id;
+    sessionStorage.removeItem("focus_popup_hidden");
     // Celebrate instantly — don't freeze the UI on the task update, OneSignal
     // cancel, and Focus Mode teardown. Those run in the background while the
     // confetti + "back to it" popup show right away.
@@ -285,6 +314,7 @@ export default function FocusModePrompt({ user, theme }) {
 
   const handleExit = async () => {
     setBusy(true);
+    sessionStorage.removeItem("focus_popup_hidden");
     try {
       await base44.functions.invoke("setFocusMode", { action: "exit" });
       setFocusTaskId(null);
@@ -299,12 +329,15 @@ export default function FocusModePrompt({ user, theme }) {
     }
   };
 
-  // While a focus session is active the popup is locked — no outside-click, no
-  // Escape, no stray dismissal. The only way out is the X, which confirms first.
-  // There's no reason to be browsing the app mid-focus, and an accidental
-  // dismissal used to be hard to recover from.
+  // Tucking the popup away does NOT end the session — the bar at the top of the
+  // screen stays, and tapping it brings this back.
+  const hidePopup = () => {
+    sessionStorage.setItem("focus_popup_hidden", "1");
+    setOpen(false);
+  };
+
   const handleClose = (o) => {
-    if (!o && mode === "active") return;
+    if (!o && mode === "active") { hidePopup(); return; }
     setOpen(!!o);
   };
 
@@ -337,8 +370,8 @@ export default function FocusModePrompt({ user, theme }) {
                 "max-w-md w-[calc(100vw-2rem)] [&>button:last-child]:hidden " + cardClass
               : "max-w-md " + cardClass
           }`}
-          onEscapeKeyDown={(e) => { if (mode === "active") e.preventDefault(); }}
-          onInteractOutside={(e) => { if (mode === "active") e.preventDefault(); }}
+          onEscapeKeyDown={() => { if (mode === "active") hidePopup(); }}
+          onInteractOutside={() => { if (mode === "active") hidePopup(); }}
         >
           {mode === "active" ? (
             <div className="flex flex-col p-5 sm:p-6 overflow-y-auto">
@@ -358,8 +391,8 @@ export default function FocusModePrompt({ user, theme }) {
                   <Target className="w-5 h-5 text-green-500" /> Focus Mode
                 </DialogTitle>
                 <DialogDescription>
-                  You're focused on one task — hourly check-ins, everything else quiet. Come back
-                  here when you've finished it.
+                  You're focused on one task — hourly check-ins, everything else quiet. Close this
+                  and the Focus Mode bar stays at the top; tap it to come back.
                 </DialogDescription>
               </DialogHeader>
               <div className="py-4">
@@ -382,7 +415,10 @@ export default function FocusModePrompt({ user, theme }) {
                   >
                     <CheckCircle2 className="w-4 h-4 mr-2" /> I completed this
                   </Button>
-                  <Button onClick={() => setConfirmExit(true)} variant="outline" disabled={busy}>
+                  <Button onClick={hidePopup} variant="outline" disabled={busy}>
+                    Keep focusing — hide this
+                  </Button>
+                  <Button onClick={() => setConfirmExit(true)} variant="ghost" disabled={busy}>
                     Exit Focus Mode
                   </Button>
                 </div>
@@ -475,17 +511,19 @@ export default function FocusModePrompt({ user, theme }) {
       {mode === "active" && focusTaskId && !open && (
         <button
           onClick={() => setOpen(true)}
-          className={`fixed left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 rounded-full shadow-lg px-5 py-3 text-sm font-semibold ${
+          className={`fixed left-0 right-0 z-40 flex items-center justify-center gap-2 shadow-lg px-4 py-3 text-sm font-semibold ${
             theme === "dark"
               ? "bg-green-600 text-white hover:bg-green-700"
               : theme === "spicybrains"
               ? "bg-gradient-to-r from-pink-500 to-yellow-400 text-gray-900 border-2 border-cyan-400"
               : "bg-green-600 text-white hover:bg-green-700"
           }`}
-          style={{ bottom: "max(5.5rem, calc(5.5rem + env(safe-area-inset-bottom)))" }}
+          style={{ top: 0, paddingTop: "max(0.75rem, calc(0.5rem + env(safe-area-inset-top)))" }}
         >
-          <Target className="w-4 h-4" />
-          {focusTask?.title ? `Back to Focus: ${focusTask.title}` : "Back to Focus Mode"}
+          <Target className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">
+            {focusTask?.title ? `Focus Mode: ${focusTask.title}` : "Focus Mode"}
+          </span>
         </button>
       )}
     </>

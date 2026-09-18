@@ -6,6 +6,9 @@ import { Timer, Shuffle, Lightbulb } from "lucide-react";
 // Small shortcuts that sit next to Focus Mode — same icons as the sidebar nav.
 // The name sits under every icon permanently: no hold, no guessing, and it's
 // how the icons become familiar in the first place.
+// Rendered as a fragment (no wrapper div) so all four shortcuts are siblings in
+// the parent row — a wrapper made these three one wide item that wrapped to a
+// second line on narrow phones.
 const TOOLS = [
   { title: "Pomodoro", icon: Timer, url: createPageUrl("FocusTimer") },
   { title: "Decisions", icon: Shuffle, url: createPageUrl("DecisionMaker") },
@@ -14,13 +17,13 @@ const TOOLS = [
 
 export default function QuickToolButtons({ theme }) {
   return (
-    <div className="flex items-start gap-3">
+    <>
       {TOOLS.map((tool) => (
         <Link
           key={tool.title}
           to={tool.url}
           aria-label={tool.title}
-          className="flex flex-col items-center gap-1 w-16 select-none"
+          className="flex flex-col items-center gap-1 w-[62px] select-none"
         >
           <span
             className={`flex items-center justify-center w-10 h-10 rounded-full border transition-colors ${
@@ -40,6 +43,6 @@ export default function QuickToolButtons({ theme }) {
           </span>
         </Link>
       ))}
-    </div>
+    </>
   );
 }

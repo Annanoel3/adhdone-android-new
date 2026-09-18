@@ -42,7 +42,7 @@ export default function FocusModeButton({ user }) {
     <button
       onClick={openPrompt}
       aria-label="Focus Mode"
-      className="flex flex-col items-center gap-1 w-16 select-none"
+      className="flex flex-col items-center gap-1 w-[62px] select-none"
     >
       <span className="flex items-center justify-center w-10 h-10 rounded-full border border-green-500 text-green-600 hover:bg-green-50 transition-colors">
         <Target className="w-4 h-4" />
