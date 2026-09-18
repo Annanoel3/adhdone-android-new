@@ -137,3 +137,15 @@ export function searchStickers(query) {
 export function stickerKey(s) {
   return s.src || s.char;
 }
+
+// Pull the illustrated stickers into the browser cache ahead of time so the
+// picker grid never opens empty.
+const warmed = [];
+export function warmStickerImages() {
+  if (warmed.length) return;
+  STICKERS.filter((s) => s.src).forEach((s) => {
+    const img = new Image();
+    img.src = s.src;
+    warmed.push(img);
+  });
+}

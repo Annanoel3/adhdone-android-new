@@ -1,9 +1,10 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
-import { searchStickers, stickerKey } from "./stickerLibrary";
+import { searchStickers, stickerKey, warmStickerImages } from "./stickerLibrary";
 
 export default function StickerPicker({ onPick }) {
   const [query, setQuery] = useState("");
+  useEffect(warmStickerImages, []);
   const results = searchStickers(query);
 
   return (
@@ -27,7 +28,13 @@ export default function StickerPicker({ onPick }) {
               title={s.tags.split(" ")[0]}
             >
               {s.src ? (
-                <img src={s.src} alt={s.tags.split(" ")[0]} className="w-8 h-8 object-contain" />
+                <img
+                  src={s.src}
+                  alt={s.tags.split(" ")[0]}
+                  loading="eager"
+                  decoding="async"
+                  className="w-8 h-8 object-contain"
+                />
               ) : (
                 s.char
               )}

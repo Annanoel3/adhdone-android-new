@@ -9,6 +9,7 @@ import StickerPicker from "./StickerPicker";
 import StickerLayer from "./StickerLayer";
 import PrivateImage from "./PrivateImage";
 import { normalizeStickers } from "./stickerNormalize";
+import { warmStickerImages } from "./stickerLibrary";
 
 const LINE_HEIGHT = 34;
 
@@ -21,6 +22,7 @@ export default function DiaryEditor({ entry, dateKey, initialContent = "", onSav
   const [uploading, setUploading] = useState(false);
   const [stickersOpen, setStickersOpen] = useState(false);
   const fileRef = useRef(null);
+  useEffect(warmStickerImages, []); // image stickers ready before the picker opens
   // What the page last handed to the server. Used both to know when there's
   // something new worth saving, and to recognise our OWN save coming back as a
   // fresh `entry` prop — without that, the reset below would wipe any keystroke
