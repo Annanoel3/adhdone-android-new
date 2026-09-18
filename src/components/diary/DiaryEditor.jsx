@@ -21,25 +21,60 @@ export default function DiaryEditor({ entry, dateKey, initialContent = "", onSav
   const [uploading, setUploading] = useState(false);
   const [stickersOpen, setStickersOpen] = useState(false);
   const fileRef = useRef(null);
+  // What the page last handed to the server. Used both to know when there's
+  // something new worth saving, and to recognise our OWN save coming back as a
+  // fresh `entry` prop — without that, the reset below would wipe any keystroke
+  // typed while a save was in flight.
+  const lastSavedRef = useRef(JSON.stringify({
+    content: entry?.content || "",
+    stickers: normalizeStickers(entry?.stickers),
+    images: entry?.images || [],
+  }));
 
   useEffect(() => {
+    const incoming = JSON.stringify({
+      content: entry?.content || "",
+      stickers: normalizeStickers(entry?.stickers),
+      images: entry?.images || [],
+    });
+    if (incoming === lastSavedRef.current) return; // our own autosave echoing back
+    lastSavedRef.current = incoming;
     setContent(entry?.content || initialContent);
     setStickers(normalizeStickers(entry?.stickers));
     setImages(entry?.images || []);
     setSavedAt(null);
   }, [entry?.id, initialContent]);
 
-  const dirty =
-    content !== (entry?.content || "") ||
-    JSON.stringify(stickers) !== JSON.stringify(normalizeStickers(entry?.stickers)) ||
-    JSON.stringify(images) !== JSON.stringify(entry?.images || []);
+  const snapshot = JSON.stringify({ content, stickers, images });
+  const dirty = snapshot !== lastSavedRef.current;
 
   const save = async () => {
+    const pending = { content, stickers, images };
+    lastSavedRef.current = JSON.stringify(pending);
     setSaving(true);
-    await onSave({ content, stickers, images });
-    setSaving(false);
-    setSavedAt(new Date());
+    try {
+      await onSave(pending);
+      setSavedAt(new Date());
+    } finally {
+      setSaving(false);
+    }
   };
+
+  // Autosave — a short pause in typing writes the page. No Save button to
+  // forget, which is the whole point for an ADHD diary.
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  useEffect(() => {
+    if (!dirty) return;
+    const id = setTimeout(() => saveRef.current(), 1200);
+    return () => clearTimeout(id);
+  }, [snapshot, dirty]);
+
+  // Leaving the page (back button, closing the app) flushes anything the
+  // debounce hasn't written yet.
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  useEffect(() => () => { if (dirtyRef.current) saveRef.current(); }, []);
 
   const pickFile = async (e) => {
     const file = e.target.files?.[0];
@@ -163,22 +198,21 @@ export default function DiaryEditor({ entry, dateKey, initialContent = "", onSav
           </PopoverContent>
         </Popover>
 
-        <Button onClick={save} disabled={saving || !dirty} className="flex-1">
+        <div className="flex-1 flex justify-end pr-1">
           {saving ? (
-            <>
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Saving
-            </>
-          ) : (
-            "Save"
-          )}
-        </Button>
-        {!dirty && savedAt && (
-          <span className="flex items-center gap-1 text-xs text-green-600">
-            <Check className="w-3.5 h-3.5" />
-            Saved
-          </span>
-        )}
+            <span className="flex items-center gap-1.5 text-xs text-gray-500">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              Saving…
+            </span>
+          ) : dirty ? (
+            <span className="text-xs text-gray-400">Unsaved changes…</span>
+          ) : savedAt ? (
+            <span className="flex items-center gap-1.5 text-xs text-green-600">
+              <Check className="w-3.5 h-3.5" />
+              Saved automatically
+            </span>
+          ) : null}
+        </div>
       </div>
       <p className="px-4 pb-4 text-xs text-gray-400">
         Drag a sticker anywhere on the page — double-tap it to remove.
