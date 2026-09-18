@@ -26,6 +26,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import LaunchButtons from "../launch/LaunchButtons";
+import SubtaskQuickAdd from "./SubtaskQuickAdd";
 
 export default function TaskCard({
   task,
@@ -1078,6 +1079,15 @@ export default function TaskCard({
                 </Button>
               )}
             </div>
+
+            {!isEvent && task.status !== 'completed' && !task.parent_task_id && (
+              <SubtaskQuickAdd
+                task={task}
+                theme={theme}
+                subtaskCount={subtaskCount || 0}
+                onRefresh={onRefreshTasks}
+              />
+            )}
 
             {(task.type === 'task' || task.type === 'reminder') && (
               <div className={`flex flex-wrap gap-2 pt-2 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
