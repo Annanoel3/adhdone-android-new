@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
 import FocusModeButton from "./FocusModeButton";
+import QuickToolButtons from "./QuickToolButtons";
 
 export default function WelcomeCard({ userName, theme, user }) {
   const specialMode = localStorage.getItem('special_mode') || 'normal';
@@ -59,8 +60,9 @@ export default function WelcomeCard({ userName, theme, user }) {
             }`} />
           </div>
         </div>
-        <div className="mt-5">
+        <div className="mt-5 flex flex-wrap items-center gap-2">
           <FocusModeButton user={user} theme={theme} />
+          <QuickToolButtons theme={theme} />
         </div>
       </CardContent>
     </Card>
