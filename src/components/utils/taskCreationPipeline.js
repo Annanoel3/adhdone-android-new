@@ -4,7 +4,7 @@ import { scheduleReminder } from "./reminderScheduler";
 import { getReminderCopy } from "./reminderCopy";
 import dedupeSplitTasks from "./dedupeSplitTasks";
 import { createBirthdayFromInput } from "./birthdayScheduler";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/use-toast";
 import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule, anchorToDaytime } from "./taskSchedule";
 import { announceEventConflict } from "./eventConflicts";
 import { commitNotificationIds } from "./notificationOwnership";
@@ -147,7 +147,8 @@ export async function processAndCreateTask(inputText, opts = {}) {
       try {
         const birthday = await createBirthdayFromInput(inputText, currentUser.email);
         if (birthday) {
-          toast.success(`🎂 Added ${birthday.person}'s birthday!`, {
+          toast({
+            title: `🎂 Added ${birthday.person}'s birthday!`,
             description: "We'll remind you 1 week before, the day before, and the day of — every year.",
             duration: 4000,
           });
@@ -344,7 +345,8 @@ Return JSON:
             list_format: 'checkbox'
           });
         }
-        toast.success('Added to Parking Lot! 📝', {
+        toast({
+          title: 'Added to Parking Lot! 📝',
           description: `"${categoryCheck.main_idea}" with ${categoryCheck.items.length} items`,
           duration: 3000
         });
@@ -354,7 +356,8 @@ Return JSON:
           converted_to_task: false,
           list_format: 'plain'
         });
-        toast.success('Added to Parking Lot! 📝', {
+        toast({
+          title: 'Added to Parking Lot! 📝',
           description: inputText.trim().substring(0, 50) + (inputText.length > 50 ? '...' : ''),
           duration: 3000
         });

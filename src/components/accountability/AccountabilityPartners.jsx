@@ -7,7 +7,7 @@ import { MessageCircle, UserX, Loader2, Ban, ShieldAlert } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { useNavigate, Link } from "react-router-dom";
 import { createPageUrl } from "@/utils";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/use-toast";
 import {
   Dialog,
   DialogContent,
@@ -63,10 +63,10 @@ export default function AccountabilityPartners({ theme, user }) {
       await base44.entities.AccountabilityConnection.delete(partner.connection_id);
       setPartners(prev => prev.filter(p => p.connection_id !== partner.connection_id));
       setRemovingPartner(null);
-      toast.success("Partner removed");
+      toast({ title: "Partner removed" });
     } catch (error) {
       console.error("Error removing partner:", error);
-      toast.error("Failed to remove partner. Please try again.");
+      toast({ title: "Failed to remove partner. Please try again.", variant: "destructive" });
     }
   };
 
@@ -87,10 +87,10 @@ export default function AccountabilityPartners({ theme, user }) {
 
       setPartners(prev => prev.filter(p => p.connection_id !== blockingPartner.connection_id));
       setBlockingPartner(null);
-      toast.success("Partner blocked");
+      toast({ title: "Partner blocked" });
       } catch (error) {
       console.error("Error blocking partner:", error);
-      toast.error("Failed to block partner. Please try again.");
+      toast({ title: "Failed to block partner. Please try again.", variant: "destructive" });
       }
       };
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -84,7 +84,7 @@ export default function TaskCaptureProcessor({ userEmail }) {
           try {
             trace('captureClaimed', { text: capture.text.slice(0, 200), resumed: !!capture.resumed });
             if (capture.resumed) {
-              toast('Finishing a task you added earlier', { description: capture.text.slice(0, 80) });
+              toast({ title: 'Finishing a task you added earlier', description: capture.text.slice(0, 80) });
             }
             // A resumed capture keeps the split it already had — asking the AI
             // again could split it differently and redo finished parts.
@@ -118,21 +118,21 @@ export default function TaskCaptureProcessor({ userEmail }) {
                   try {
                     await createTaskWithDate(result.data, choice.date, choice.time);
                   } catch (e) {
-                    toast.error(e.message);
+                    toast({ title: e.message, variant: 'destructive' });
                   }
                 }
               } else if (result.status === 'needs_advance') {
                 const minutes = await requestInput('advance', result.taskData);
                 await createAdvanceTask(result.taskData, result.currentUser, minutes ?? 0);
               } else if (result.status === 'error') {
-                toast.error('Failed to create task: ' + result.message);
+                toast({ title: 'Failed to create task: ' + result.message, variant: 'destructive' });
               }
               saveCaptureProgress(capture.id, { doneCount: part + 1 });
             }
           } catch (e) {
             trace('captureFailed', { message: String(e?.message || e) });
             console.error('[CAPTURE] Failed:', e);
-            toast.error('Failed to create task: ' + e.message);
+            toast({ title: 'Failed to create task: ' + e.message, variant: 'destructive' });
           } finally {
             removeCapture(capture.id);
             window.dispatchEvent(new Event('tasks-changed'));

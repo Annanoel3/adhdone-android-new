@@ -119,6 +119,9 @@ Before proposing ANY mechanism below, assume it exists and go read it.
 | Focus Mode check-ins | `Task.focus_mode_notification_ids` | Kept apart from a task's own reminders so leaving Focus Mode cancels only the check-ins and never invents an interval |
 | Reminder interval decision | `base44/shared/reminderIntervalDecision.ts` | The single place interval classification happens |
 | Server-side task parsing | `base44/shared/runTaskParse.ts` + `taskParsePrompt.ts` | One parser. Never add a second one (native-side parsing was tried and rejected) |
+| On-screen messages (toasts) | `toast` from `src/components/ui/use-toast` + the `<Toaster />` in `src/App.jsx` | The ONLY toast system that is on screen. Every toast closes itself after 4 s and always has an X, and the container sits below the phone's status bar. `import { toast } from "sonner"` shows NOTHING — sonner is not mounted; never use it |
+| Notifications-off notice | `src/components/home/NotificationsOffBanner.jsx` + `myPushStatus` function | One row on Home, phone app only, shown when OneSignal reports no switched-on Android subscription for the signed-in user. Not dismissable on purpose; "Turn on" calls `NotifyBridge.requestPermission()`. Newer app builds answer from the phone via `NotifyBridge.getPermissionState()` |
+| Who may book a push | caller check inside `schedulePush` | Backend callers prove themselves with `internalKey` (the CRON_SECRET secret); a signed-in user may book only for their own email. Watch-only (logs, blocks nothing) until `ENFORCE_CALLER_CHECK` is flipped to true |
 
 ### Correct states that are NOT bugs
 - **Subtasks never have notifications.** A subtask (`parent_task_id` set) with null

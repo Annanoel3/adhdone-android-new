@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { AccountabilityConnection } from "@/entities/AccountabilityConnection";
 import { UserPlus, Check, X, Loader2, Clock, RefreshCw, AlertCircle } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/components/ui/use-toast";
 
 export default function ConnectionRequests({ theme, user }) {
   const [requests, setRequests] = useState([]);
@@ -54,7 +54,7 @@ export default function ConnectionRequests({ theme, user }) {
       await loadRequests();
     } catch (error) {
       console.error("Error declining request:", error);
-      toast.error("Failed to decline request");
+      toast({ title: "Failed to decline request", variant: "destructive" });
     }
   };
 
