@@ -23,6 +23,7 @@ import WeeklyStar from "../components/tasks/WeeklyStar";
 import TaskSections from "../components/tasks/TaskSections";
 import TaskCompletionCelebration from "../components/tasks/TaskCompletionCelebration";
 import { passesBirthdayDayFilter } from "../components/utils/birthdayHelpers";
+import { countCompletionForGif } from "../components/utils/completionMilestone";
 
 export default function Tasks() {
   const navigate = useNavigate();
@@ -154,6 +155,7 @@ export default function Tasks() {
       setShowCelebration(false);
       requestAnimationFrame(() => setShowCelebration(true));
       setTimeout(() => setShowCelebration(false), 2200);
+      countCompletionForGif();
     }
 
     const now = new Date();

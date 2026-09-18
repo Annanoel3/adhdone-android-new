@@ -16,6 +16,7 @@ import { isTodayTask, isCompletedToday } from "../components/utils/todayTasks";
 import { ensureBirthdayReminders } from "../components/utils/birthdayScheduler";
 import BirthdayStrip from "../components/home/BirthdayStrip";
 import NotificationsOffBanner from "../components/home/NotificationsOffBanner";
+import { countCompletionForGif } from "../components/utils/completionMilestone";
 
 export default function Home() {
   const [tasks, setTasks] = useState([]);
@@ -121,6 +122,7 @@ export default function Home() {
       setShowCelebration(false);
       requestAnimationFrame(() => setShowCelebration(true));
       setTimeout(() => setShowCelebration(false), 2200);
+      countCompletionForGif();
     }
 
     const localISOString = new Date().toISOString();
