@@ -81,6 +81,11 @@
       "format": "date-time",
       "description": "The actual date/time an event takes place. Stored separately from next_reminder (the reminder time) so the event time stays visible on the task card even after the user manually edits the reminder time. Only set for events with a specific time."
     },
+    "end_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When a timed task or event FINISHES, turning a single moment into a block: the card then reads '10:00 AM \u2013 6:00 PM' instead of just a start. Distinct from end_date, which is the last DAY of a multi-day span. Only set when the user gave an end time \u2014 a task with no end_time keeps its single-time label rather than showing half a range. Ignored for day_only_task items, which have no clock time at all."
+    },
     "day_only_task": {
       "type": "boolean",
       "default": false,

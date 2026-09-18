@@ -25,6 +25,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { formatTimeRange } from "../utils/timeRangeLabel";
 import LaunchButtons from "../launch/LaunchButtons";
 import SubtaskQuickAdd from "./SubtaskQuickAdd";
 
@@ -83,6 +84,9 @@ export default function TaskCard({
   };
 
   const dueDate = task.next_reminder ? new Date(task.next_reminder) : new Date(task.created_date);
+
+  // "10:00 AM – 6:00 PM" when this task occupies a block of time, else null.
+  const timeRange = formatTimeRange(task);
 
   const isEvent = task.classification === 'event';
   const typeEmoji = task.classification === 'event' ? '📅' : task.classification === 'birthday' ? '🎂' : task.classification === 'payment' ? '💳' : null;
@@ -467,6 +471,26 @@ export default function TaskCard({
     }
   };
 
+  // Timed blocks: let the user say when a task/event FINISHES, so the pill can
+  // read "10:00 AM – 6:00 PM". Clearing it returns the card to a single time.
+  const handleEndTimeChange = async (newTime) => {
+    try {
+      let endTimeISO = null;
+      if (newTime) {
+        const anchor = new Date(task.event_time || task.next_reminder || task.due_date || new Date());
+        const [hours, minutes] = newTime.split(':').map(n => parseInt(n, 10));
+        endTimeISO = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate(), hours, minutes, 0, 0).toISOString();
+      }
+      if (onUpdateTask) onUpdateTask({ ...task, end_time: endTimeISO });
+      Task.update(task.id, { end_time: endTimeISO }).catch(error => {
+        console.error("Error updating end time:", error);
+        if (onRefreshTasks) onRefreshTasks();
+      });
+    } catch (error) {
+      console.error("Error updating end time:", error);
+    }
+  };
+
   // Multi-day events: let the user set / clear the last day of the span.
   const handleEndDateChange = async (newDate) => {
     try {
@@ -577,7 +601,7 @@ export default function TaskCard({
                   ? theme === 'dark' ? 'border-green-700 bg-green-900/30 text-green-400' : 'border-green-300 bg-green-50 text-green-700'
                   : theme === 'dark' ? 'border-gray-700 bg-gray-800 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-600'
             }`}>
-              {collapsedDate.label}
+              {collapsedDate.label}{timeRange ? ` · ${timeRange}` : ''}
             </span>
           )}
 
@@ -916,9 +940,13 @@ export default function TaskCard({
                       }`}
                     >
                       <Calendar className="w-3 h-3" />
-                      {task.end_date && new Date(task.next_reminder).toDateString() !== new Date(task.end_date).toDateString()
-                        ? `${formatEventDateRange()}${task.day_only_task ? ' • all day' : ` • ${formatReminderTime(task.next_reminder)}`}`
-                        : `${formatReminderDate(task.next_reminder)}${task.day_only_task ? ' • all day' : ` • ${formatReminderTime(task.next_reminder)}`}`}
+                      {(() => {
+                        const datePart = task.end_date && new Date(task.next_reminder).toDateString() !== new Date(task.end_date).toDateString()
+                          ? formatEventDateRange()
+                          : formatReminderDate(task.next_reminder);
+                        if (task.day_only_task) return `${datePart} • all day`;
+                        return `${datePart} • ${timeRange || formatReminderTime(task.next_reminder)}`;
+                      })()}
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className={`w-72 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
@@ -949,6 +977,21 @@ export default function TaskCard({
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
                         />
                       </div>
+                      {!task.day_only_task && (
+                        <div>
+                          <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>End Time (optional):</label>
+                          <input
+                            type="time"
+                            defaultValue={task.end_time ? `${String(new Date(task.end_time).getHours()).padStart(2, '0')}:${String(new Date(task.end_time).getMinutes()).padStart(2, '0')}` : ''}
+                            onChange={(e) => handleEndTimeChange(e.target.value || null)}
+                            className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
+                          />
+                          <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                            Set this and the card shows a block of time — "10:00 AM – 6:00 PM".
+                          </p>
+                        </div>
+                      )}
+
                       {isEvent && (
                         <div>
                           <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Multi-day End Date:</label>

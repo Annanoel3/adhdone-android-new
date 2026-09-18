@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CheckCircle2, Clock, Zap, Pencil, Calendar, CalendarClock, ListChecks, RefreshCw, Bell, Sparkles } from "lucide-react";
+import { CheckCircle2, Clock, Pencil, Calendar, CalendarClock, ListChecks, RefreshCw, Bell, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "react-router-dom";
@@ -15,6 +15,7 @@ import { isBirthdayTask, passesBirthdayDayFilter } from "../utils/birthdayHelper
 import { isSmartReminderTask } from "../utils/smartReminderTask";
 import { pushWidgetTasks } from "../utils/widgetBridge";
 import { getReminderCopy } from "../utils/reminderCopy";
+import { formatTimeRange } from "../utils/timeRangeLabel";
 import {
   Popover,
   PopoverContent,
@@ -135,13 +136,6 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
     if (onUpdateTask) onUpdateTask({ ...task, urgency: newUrgency });
     base44.entities.Task.update(task.id, { urgency: newUrgency }).catch(error => {
       console.error("Error updating urgency:", error);
-    });
-  };
-
-  const handleEnergyChange = async (task, newEnergy) => {
-    if (onUpdateTask) onUpdateTask({ ...task, energy_required: newEnergy });
-    base44.entities.Task.update(task.id, { energy_required: newEnergy }).catch(error => {
-      console.error("Error updating energy:", error);
     });
   };
 
@@ -378,6 +372,9 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
     if (!at) return null;
     const date = new Date(at);
     if (task.day_only_task) return `${formatReminderDate(at)} • all day`;
+    // A block of time beats a single start: "Sep 1, 10:00 AM – 6:00 PM".
+    const range = formatTimeRange(task);
+    if (range) return `${formatReminderDate(at)}, ${range}`;
     return `${formatReminderDate(at)}, ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
   };
   const isEvent = (task) => task.classification === 'event';
@@ -506,26 +503,10 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                         </PopoverContent>
                       </Popover>
 
-                      {task.energy_required && (
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button 
-                              onClick={(e) => e.stopPropagation()}
-                              className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors ${theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600' : 'border-gray-300'}`}
-                            >
-                              <Zap className="w-3 h-3" />
-                              {task.energy_required} energy
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-48 p-2" onClick={(e) => e.stopPropagation()}>
-                            <div className="space-y-1">
-                              <button onClick={() => handleEnergyChange(task, 'low')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Low</button>
-                              <button onClick={() => handleEnergyChange(task, 'medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Medium</button>
-                              <button onClick={() => handleEnergyChange(task, 'high')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">High</button>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      )}
+                      {/* Energy deliberately does NOT appear on the closed card. It's
+                          rarely what you're scanning for, and it pushed the pills that
+                          are (priority, when, type) onto a second line. It's still
+                          editable in the task details. */}
 
                       {/* Show interval badge for recurring reminders */}
                       {task.reminder_interval && task.reminder_interval !== 'once' && (
@@ -656,7 +637,9 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                                 <CalendarClock className="w-3 h-3" />
                                 {new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
                                   ? 'Overdue'
-                                  : `Due ${formatReminderDate(task.due_date)}`}
+                                  : formatTimeRange(task)
+                                    ? `${formatReminderDate(task.due_date)}, ${formatTimeRange(task)}`
+                                    : `Due ${formatReminderDate(task.due_date)}`}
                               </button>
                             </PopoverTrigger>
                             <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`} onClick={(e) => e.stopPropagation()}>
