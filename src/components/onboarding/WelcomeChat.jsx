@@ -49,7 +49,9 @@ export default function WelcomeChat({ onDone }) {
     const value = draft.trim();
     if (!value) return;
     setName(value);
-    base44.auth.updateMe({ preferred_name: value }).catch(() => {});
+    // The name they give IS their username (display_name) — the same field the
+    // Settings page edits — so onboarding doesn't need a second naming step.
+    base44.auth.updateMe({ preferred_name: value, display_name: value }).catch(() => {});
     answer(value);
   };
 

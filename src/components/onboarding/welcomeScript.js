@@ -8,10 +8,10 @@
 // voice ("this app", "we") and never says "I'm Anna" again.
 const SCRIPT = [
   {
-    text: () => "Hey — welcome to ADHDone. Built by Anna, who has ADHD and got tired of apps that just nag.",
+    text: () => "Hey — welcome to ADHDone. Built by Anna, a girl who just wants to stop missing doctors appointments and got tired of apps that just don't work.",
   },
   {
-    text: () => 'First things first: what should we call you?',
+    text: () => "First things first: what should we call you? This becomes your username — you can change it in Settings anytime.",
     input: 'name',
   },
   {
