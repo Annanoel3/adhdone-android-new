@@ -5,7 +5,6 @@ import { Lock, Loader2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import DiaryFirstRunDialog from "@/components/diary/DiaryFirstRunDialog";
-import MoodPromptCard from "@/components/diary/MoodPromptCard";
 import DiaryEditor from "@/components/diary/DiaryEditor";
 import DiaryEntryCard from "@/components/diary/DiaryEntryCard";
 
@@ -17,8 +16,8 @@ export default function Diary() {
   const [entries, setEntries] = useState([]);
   const [todayEntry, setTodayEntry] = useState(null);
   const [showFirstRun, setShowFirstRun] = useState(false);
-  const [showMoodPrompt, setShowMoodPrompt] = useState(false);
   const [completedToday, setCompletedToday] = useState([]);
+  const [prefill, setPrefill] = useState("");
 
   const load = async () => {
     const me = await base44.auth.me();
@@ -33,8 +32,7 @@ export default function Diary() {
     if (!me.diary_setup_done) {
       setShowFirstRun(true);
     } else if (!today && me.diary_autofill_enabled) {
-      setCompletedToday(await loadCompletedToday());
-      setShowMoodPrompt(true);
+      await applyHeadStart();
     }
 
     setLoading(false);
@@ -52,6 +50,20 @@ export default function Diary() {
       .map((t) => t.title);
   };
 
+  // Head start = the diary itself, opened with today's finished tasks already
+  // at the top. No intermediate "how did your day go?" step — that question is
+  // the diary page's own prompt now.
+  const buildHeadStart = (tasks) => {
+    if (!tasks?.length) return "";
+    return ["Today I finished:", ...tasks.map((t) => `\u2713 ${t}`), "", ""].join("\n");
+  };
+
+  const applyHeadStart = async () => {
+    const tasks = await loadCompletedToday();
+    setCompletedToday(tasks);
+    setPrefill(buildHeadStart(tasks));
+  };
+
   const handleFirstRunChoice = async (autofillEnabled) => {
     await base44.auth.updateMe({
       diary_setup_done: true,
@@ -60,32 +72,13 @@ export default function Diary() {
     setUser((u) => ({ ...u, diary_setup_done: true, diary_autofill_enabled: autofillEnabled }));
     setShowFirstRun(false);
     if (autofillEnabled && !todayEntry) {
-      setCompletedToday(await loadCompletedToday());
-      setShowMoodPrompt(true);
+      await applyHeadStart();
     }
   };
 
   const toggleAutofill = async (enabled) => {
     setUser((u) => ({ ...u, diary_autofill_enabled: enabled }));
     await base44.auth.updateMe({ diary_autofill_enabled: enabled });
-  };
-
-  const createTodayEntry = async ({ moodAnswer, tasks }) => {
-    const lines = [];
-    if (moodAnswer) lines.push(moodAnswer);
-    if (tasks?.length) {
-      lines.push("", "Today I finished:");
-      tasks.forEach((t) => lines.push(`\u2713 ${t}`));
-      lines.push("");
-    }
-    const entry = await base44.entities.DiaryEntry.create({
-      entry_date: todayKey(),
-      content: lines.join("\n"),
-      mood_answer: moodAnswer || "",
-      autofilled_tasks: tasks || [],
-    });
-    setTodayEntry(entry);
-    setShowMoodPrompt(false);
   };
 
   const saveTodayContent = async (patch) => {
@@ -95,6 +88,7 @@ export default function Diary() {
     } else {
       const created = await base44.entities.DiaryEntry.create({
         entry_date: todayKey(),
+        autofilled_tasks: completedToday,
         ...patch,
       });
       setTodayEntry(created);
@@ -119,14 +113,7 @@ export default function Diary() {
         </p>
       </div>
 
-      {showMoodPrompt && !todayEntry ? (
-        <MoodPromptCard
-          onAnswer={(answer) => createTodayEntry({ moodAnswer: answer, tasks: completedToday })}
-          onSkip={() => createTodayEntry({ moodAnswer: "", tasks: completedToday })}
-        />
-      ) : (
-        <DiaryEditor entry={todayEntry} onSave={saveTodayContent} />
-      )}
+      <DiaryEditor entry={todayEntry} onSave={saveTodayContent} initialContent={prefill} />
 
       <div className="flex items-start justify-between gap-4 rounded-xl border p-4">
         <div className="space-y-1">

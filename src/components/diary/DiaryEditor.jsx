@@ -7,15 +7,17 @@ import { format } from "date-fns";
 import DiaryAddMenu from "./DiaryAddMenu";
 import DiaryMediaStrip from "./DiaryMediaStrip";
 
-export default function DiaryEditor({ entry, onSave }) {
-  const [content, setContent] = useState(entry?.content || "");
+export default function DiaryEditor({ entry, onSave, initialContent = "" }) {
+  const [content, setContent] = useState(entry?.content || initialContent);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState(null);
 
+  // No saved entry yet: the head-start text arrives after the completed tasks
+  // load, so seed the box when it shows up (never overwrite a real entry).
   useEffect(() => {
-    setContent(entry?.content || "");
+    setContent(entry?.content || initialContent);
     setSavedAt(null);
-  }, [entry?.id]);
+  }, [entry?.id, initialContent]);
 
   const images = entry?.images || [];
   const stickers = entry?.stickers || [];
