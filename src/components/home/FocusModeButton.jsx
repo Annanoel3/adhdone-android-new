@@ -37,13 +37,17 @@ export default function FocusModeButton({ user }) {
     );
   }
 
+  // Idle: same icon-over-label shape as the quick tool shortcuts next to it.
   return (
     <button
       onClick={openPrompt}
-      className="inline-flex items-center gap-2 px-3 py-2 rounded-full border border-green-500 text-green-700 text-sm font-medium hover:bg-green-50 transition"
+      aria-label="Focus Mode"
+      className="flex flex-col items-center gap-1 w-16 select-none"
     >
-      <Target className="w-4 h-4" />
-      Focus Mode
+      <span className="flex items-center justify-center w-10 h-10 rounded-full border border-green-500 text-green-600 hover:bg-green-50 transition-colors">
+        <Target className="w-4 h-4" />
+      </span>
+      <span className="text-[10px] leading-tight text-center text-gray-600">Focus Mode</span>
     </button>
   );
 }

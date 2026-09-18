@@ -60,7 +60,7 @@ export default function WelcomeCard({ userName, theme, user }) {
             }`} />
           </div>
         </div>
-        <div className="mt-5 flex flex-wrap items-center gap-2">
+        <div className="mt-5 flex flex-wrap items-start gap-3">
           <FocusModeButton user={user} theme={theme} />
           <QuickToolButtons theme={theme} />
         </div>
