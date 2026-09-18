@@ -89,7 +89,7 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
     {
       icon: Timer,
       title: "Focus Timer",
-      description: "Pomodoro-style sessions with work and break lengths that fit your brain. Focus Mode quiets your other reminders while you're in it."
+      description: "Pomodoro-style sessions with work and break lengths that fit your brain."
     },
     {
       icon: Lightbulb,
