@@ -10,6 +10,7 @@ export default function EasterEggVideo() {
   const [subtitle, setSubtitle] = useState('');
   const [ideasGifs, setIdeasGifs] = useState([]);
   const [awesomeGifs, setAwesomeGifs] = useState([]);
+  const [gifBlocked, setGifBlocked] = useState(false);
 
   // Default fallback GIFs
   const defaultIdeasGifs = [
@@ -81,7 +82,7 @@ export default function EasterEggVideo() {
   };
 
   // A GIF URL that fails to load is remembered and never offered again.
-  const brokenKey = 'easter_egg_broken';
+  const brokenKey = 'easter_egg_broken_v2';
   const readBroken = () => {
     try {
       const raw = localStorage.getItem(brokenKey);
@@ -93,8 +94,18 @@ export default function EasterEggVideo() {
 
   const currentTypeRef = React.useRef('ideas');
 
+  // If the network/device blocks the GIF host entirely, retrying forever just
+  // shows a broken image box — after a few misses fall back to a confetti card.
+  const failCountRef = React.useRef(0);
+
   const handleGifError = () => {
     const dead = videoUrl;
+    failCountRef.current += 1;
+    if (failCountRef.current >= 3) {
+      setVideoUrl('');
+      setGifBlocked(true);
+      return;
+    }
     try {
       localStorage.setItem(brokenKey, JSON.stringify([...new Set([...readBroken(), dead])]));
     } catch {}
@@ -168,6 +179,8 @@ export default function EasterEggVideo() {
       }
       
       currentTypeRef.current = type;
+      failCountRef.current = 0;
+      setGifBlocked(false);
       selectedGif = pickFreshGif(type, gifList);
 
       if (type === 'ideas') {
@@ -195,7 +208,7 @@ export default function EasterEggVideo() {
 
   return (
     <AnimatePresence>
-      {show && videoUrl && (
+      {show && (videoUrl || gifBlocked) && (
         <motion.div
           initial={{ opacity: 0, scale: 0.5 }}
           animate={{ opacity: 1, scale: 1 }}
@@ -226,13 +239,19 @@ export default function EasterEggVideo() {
               </div>
               
               <div className="rounded-xl overflow-hidden bg-gray-100">
-                <img
-                  src={videoUrl}
-                  alt="Easter egg GIF"
-                  className="w-full h-auto"
-                  style={{ maxHeight: '400px', objectFit: 'contain' }}
-                  onError={handleGifError}
-                />
+                {gifBlocked ? (
+                  <div className="py-12 text-center text-6xl leading-relaxed">
+                    {currentTypeRef.current === 'ideas' ? '🧠💥🤯' : '🎉🙌✨'}
+                  </div>
+                ) : (
+                  <img
+                    src={videoUrl}
+                    alt=""
+                    className="w-full h-auto"
+                    style={{ maxHeight: '400px', objectFit: 'contain' }}
+                    onError={handleGifError}
+                  />
+                )}
               </div>
               
               <p className="text-center text-gray-600 mt-4 text-sm">
