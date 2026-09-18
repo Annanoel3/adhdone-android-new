@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ArrowLeft, Check, Loader2, ImagePlus, Smile, X } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import VoiceTaskInput from "@/components/tasks/VoiceTaskInput";
 import StickerPicker from "./StickerPicker";
 import StickerLayer from "./StickerLayer";
 import PrivateImage from "./PrivateImage";
@@ -138,6 +139,13 @@ export default function DiaryEditor({ entry, dateKey, initialContent = "", onSav
             <ImagePlus className="w-4 h-4" />
           )}
         </Button>
+
+        {/* Speak the entry — transcription lands at the end of what's written. */}
+        <VoiceTaskInput
+          onTranscription={(text) =>
+            setContent((prev) => (prev ? `${prev.replace(/\s*$/, "")}\n${text}` : text))
+          }
+        />
 
         <Popover open={stickersOpen} onOpenChange={setStickersOpen}>
           <PopoverTrigger asChild>
