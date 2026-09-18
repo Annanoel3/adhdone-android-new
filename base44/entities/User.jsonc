@@ -1,6 +1,14 @@
 {
   "type": "object",
   "properties": {
+    "preferred_name": {
+      "type": "string",
+      "description": "What the user asked to be called, in their own words, collected in the first-run chat. Used for greetings and in notification copy \u2014 the account's full_name is often a formal legal name (or a Google account name) that nobody actually calls them."
+    },
+    "about_me": {
+      "type": "string",
+      "description": "One or two sentences the user wrote about their own life in the first-run chat (e.g. 'I play violin at weddings', 'I'm a nurse on night shifts', 'two kids under 5'). Handed VERBATIM to the AI that classifies imported calendar items, parses tasks, plans reminders and writes nudges \u2014 a single title like 'Karly's Wedding' is unrankable without knowing the wedding is this person's job. Deliberately free text: a profession dropdown misses side work, caregiving and the hobbies that carry real obligation."
+    },
     "signed_up_at": {
       "type": "string",
       "format": "date-time",

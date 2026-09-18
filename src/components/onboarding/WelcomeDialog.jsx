@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
 import { ONBOARDING_STEPS, isStepDone, markStepDone } from './onboardingGate';
 import { enterOnboardingSurface, exitOnboardingSurface } from './onboardingSurface';
-import OnboardingBrandMark from './OnboardingBrandMark';
+import WelcomeChat from './WelcomeChat';
 
-// The very first thing a new user sees — a note from Anna. Nothing else in the
-// first-run sequence starts until this is dismissed.
+// The very first thing a new user sees — a short back-and-forth with Anna that
+// collects a name and a sentence about the user's life. Nothing else in the
+// first-run sequence starts until it's finished.
 export default function WelcomeDialog() {
   const [open, setOpen] = useState(false);
 
@@ -28,21 +28,9 @@ export default function WelcomeDialog() {
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
-      <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto bg-card text-card-foreground border-border">
-        <div className="space-y-4 pt-2">
-          <OnboardingBrandMark />
-          <h2 className="text-2xl font-bold text-foreground">Hey, welcome to ADHDone! 👋</h2>
-          <div className="space-y-3 text-[15px] leading-relaxed text-muted-foreground">
-            <p>
-              I'm Anna. I built this because I was sick of another checklist to ignore.
-            </p>
-            <p>
-              It's helped my brain a lot — I hope it helps you too.
-            </p>
-          </div>
-          <Button onClick={handleClose} className="w-full">
-            Okay
-          </Button>
+      <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0 bg-card text-card-foreground border-border">
+        <div className="pt-2">
+          <WelcomeChat onDone={handleClose} />
         </div>
       </DialogContent>
     </Dialog>
