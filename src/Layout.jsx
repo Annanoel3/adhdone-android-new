@@ -113,6 +113,24 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 
+// Labels for the seasonal/special slot in the theme rotation, so the button
+// names the theme you're actually looking at instead of falling back to the
+// base theme's label ("Light Theme") while a seasonal skin is on screen.
+const SPECIAL_MODE_LABELS = {
+  kawaii: 'Kawaii ✨',
+  halloween: 'Halloween 🎃',
+  fall: 'Fall 🍂',
+  harvest: 'Harvest 🦃',
+  winter: 'Winter ❄️',
+  christmas: 'Christmas 🎄',
+  valentines: "Valentine's 💗",
+  newyears: "New Year's 🎉",
+  stpatricks: "St. Patrick's ☘️",
+  fourthjuly: 'Fourth of July 🎆',
+  summer: 'Summer ☀️',
+  spring: 'Spring 🌸',
+};
+
 function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -907,7 +925,12 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                           : ''
                   }`}
                 >
-                  {theme === 'minimalist' ? (
+                  {specialMode !== 'normal' ? (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>{SPECIAL_MODE_LABELS[specialMode] || 'Seasonal Theme'}</span>
+                    </>
+                  ) : theme === 'minimalist' ? (
                     <>
                       <Sun className="w-4 h-4" />
                       <span>Light Theme</span>
