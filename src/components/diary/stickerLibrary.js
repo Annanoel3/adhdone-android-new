@@ -1,6 +1,28 @@
 // Searchable sticker set — each sticker carries keywords so typing "tired",
 // "proud", "coffee" finds it the way a messenger sticker search would.
+// Illustrated stickers come FIRST so they sit at the front of the picker.
+// They carry a `src` instead of a `char`.
 export const STICKERS = [
+  {
+    src: "https://media.base44.com/images/public/68dd79726fce6eca73056b9b/636b950eb_ooo.png",
+    tags: "out of office ooo work done quit sign",
+  },
+  {
+    src: "https://media.base44.com/images/public/68dd79726fce6eca73056b9b/7a2e70c4c_medal.png",
+    tags: "medal cried at work survived win proud award",
+  },
+  {
+    src: "https://media.base44.com/images/public/68dd79726fce6eca73056b9b/fa9df23f6_frog.png",
+    tags: "frog working hard hardly lazy coffee work",
+  },
+  {
+    src: "https://media.base44.com/images/public/68dd79726fce6eca73056b9b/cbb9d1197_Spongebob.png",
+    tags: "spongebob imagination rainbow silly fun",
+  },
+  {
+    src: "https://media.base44.com/images/public/68dd79726fce6eca73056b9b/0b0b25b8e_now.png",
+    tags: "now thats what i call adhd brain spicy funny",
+  },
   { char: "😀", tags: "happy smile good day joy" },
   { char: "🥰", tags: "love loved soft warm" },
   { char: "😌", tags: "calm relieved peace ok" },
@@ -110,4 +132,8 @@ export function searchStickers(query) {
   const q = query.trim().toLowerCase();
   if (!q) return STICKERS;
   return STICKERS.filter((s) => s.tags.includes(q) || s.char === q);
+}
+
+export function stickerKey(s) {
+  return s.src || s.char;
 }

@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Input } from "@/components/ui/input";
-import { searchStickers } from "./stickerLibrary";
+import { searchStickers, stickerKey } from "./stickerLibrary";
 
 export default function StickerPicker({ onPick }) {
   const [query, setQuery] = useState("");
@@ -20,13 +20,17 @@ export default function StickerPicker({ onPick }) {
         <div className="grid grid-cols-6 gap-1 max-h-56 overflow-y-auto">
           {results.map((s) => (
             <button
-              key={s.char}
+              key={stickerKey(s)}
               type="button"
-              onClick={() => onPick(s.char)}
-              className="text-2xl rounded-lg py-1.5 hover:bg-gray-100"
+              onClick={() => onPick(s)}
+              className="text-2xl rounded-lg py-1.5 hover:bg-gray-100 flex items-center justify-center"
               title={s.tags.split(" ")[0]}
             >
-              {s.char}
+              {s.src ? (
+                <img src={s.src} alt={s.tags.split(" ")[0]} className="w-8 h-8 object-contain" />
+              ) : (
+                s.char
+              )}
             </button>
           ))}
         </div>
