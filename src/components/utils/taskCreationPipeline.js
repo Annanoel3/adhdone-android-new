@@ -226,6 +226,7 @@ Return JSON:
         reminder_count: 0,
         urgency: mainTaskParsed.urgency || 'medium',
         energy_required: mainTaskParsed.energy_required || 'medium',
+        life_area: mainTaskParsed.life_area === 'work' ? 'work' : 'personal',
         status: 'active',
         notification_recipient_email: currentUser.email,
         // Reminders are booked fire-and-forget below; this tells the refill
@@ -386,6 +387,7 @@ Return JSON:
           original_input: inputText,
           energy_required: parsed.energy_required || 'medium',
           classification: parsed.classification || 'task',
+          life_area: parsed.life_area === 'work' ? 'work' : 'personal',
           presetDueDateISO,
           currentUser
         }
@@ -404,6 +406,7 @@ Return JSON:
           initialDate: parsed.target_date || null,
           initialTime: parsed.target_time || null,
           classification: parsed.classification || 'task',
+          life_area: parsed.life_area === 'work' ? 'work' : 'personal',
           end_date: parsed.end_date || null,
           presetDueDateISO,
           currentUser
@@ -483,6 +486,7 @@ Return JSON:
             event_time: eventTimeISO,
             urgency: parsed.urgency || 'medium',
             energy_required: parsed.energy_required || 'medium',
+            life_area: parsed.life_area === 'work' ? 'work' : 'personal',
             status: 'active',
             notification_recipient_email: currentUser.email
           }
@@ -526,6 +530,7 @@ Return JSON:
       event_time: eventTimeISO,
       urgency: parsed.urgency || 'medium',
       energy_required: parsed.energy_required || 'medium',
+      life_area: parsed.life_area === 'work' ? 'work' : 'personal',
       status: 'active',
       notification_recipient_email: currentUser.email,
       reminder_scheduling_since: nextReminder ? new Date().toISOString() : null
@@ -678,6 +683,7 @@ export async function createTaskWithPriority(data, priority) {
     next_reminder: null,
     urgency,
     energy_required: data.energy_required,
+    life_area: data.life_area || 'personal',
     status: 'active',
     notification_recipient_email: data.currentUser.email
   });
@@ -711,6 +717,7 @@ export async function createTaskWithDate(data, date, time) {
     end_date: endDateISO,
     urgency: data.urgency,
     energy_required: data.energy_required,
+    life_area: data.life_area || 'personal',
     status: 'active',
     notification_recipient_email: data.currentUser.email,
     reminder_scheduling_since: new Date().toISOString()
@@ -776,6 +783,7 @@ export async function createTaskAnyDay(data) {
     next_reminder: null,
     urgency: data.urgency,
     energy_required: data.energy_required,
+    life_area: data.life_area || 'personal',
     status: 'active',
     notification_recipient_email: data.currentUser.email
   });

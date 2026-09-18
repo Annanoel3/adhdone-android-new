@@ -207,6 +207,14 @@
       ],
       "default": "medium"
     },
+    "life_area": {
+      "type": "string",
+      "enum": [
+        "work",
+        "personal"
+      ],
+      "description": "Whether this task belongs to the user's WORK life or their PERSONAL life. Set by the task parser at creation using the user's about_me context (a nurse's 'chart notes' is work; 'buy dog food' is personal), and freely overridable by the user from the card. Work tasks show a \ud83d\udcbc in front of the title. Unset on older tasks \u2014 treated as personal (no briefcase)."
+    },
     "parent_task_id": {
       "type": "string",
       "description": "The ID of the parent task, if this is a sub-task"

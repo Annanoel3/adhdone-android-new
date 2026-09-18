@@ -260,6 +260,12 @@ is_flexible — true when the task can be done any day. priority_uninferrable �
   true only if the input is so vague that no urgency can be guessed at all;
   this should be almost never, so default urgency "medium" instead.
 
+life_area — "work" if this belongs to the user's job / professional life,
+  "personal" for everything else (home, family, health, errands, fun). Use
+  what you know about the user (the ABOUT THE USER note, if present) to judge
+  ambiguous items — "chart notes" is work for a nurse, "practice the set" is
+  work for a wedding musician. When genuinely unsure, "personal".
+
 ────────────────────────────────────────────────────────────────────────
 Return JSON with exactly these keys:
 {
@@ -278,6 +284,7 @@ Return JSON with exactly these keys:
   "day_only_task": boolean,
   "needs_date_pick": boolean,
   "is_flexible": boolean,
-  "priority_uninferrable": boolean
+  "priority_uninferrable": boolean,
+  "life_area": "work" | "personal"
 }`;
 }

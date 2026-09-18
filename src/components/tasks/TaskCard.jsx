@@ -28,6 +28,7 @@ import {
 import { formatTimeRange } from "../utils/timeRangeLabel";
 import LaunchButtons from "../launch/LaunchButtons";
 import SubtaskQuickAdd from "./SubtaskQuickAdd";
+import LifeAreaPill from "./LifeAreaPill";
 
 export default function TaskCard({
   task,
@@ -622,7 +623,7 @@ export default function TaskCard({
             } ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}
             onClick={() => setExpanded(v => !v)}
           >
-            {typeEmoji && <span className="mr-1">{typeEmoji}</span>}{task.title}
+            {typeEmoji && <span className="mr-1">{typeEmoji}</span>}{task.life_area === 'work' && <span className="mr-1">💼</span>}{task.title}
           </h3>
 
           {!task.silenced && (
@@ -681,7 +682,7 @@ export default function TaskCard({
             ) : (
               <div className="flex items-center gap-2 min-w-0">
                 <h3 className={`text-base font-medium break-words flex-1 min-w-0 ${task.status === 'completed' ? 'line-through opacity-60' : ''} ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
-                  {typeEmoji && <span className="mr-1">{typeEmoji}</span>}{task.title}
+                  {typeEmoji && <span className="mr-1">{typeEmoji}</span>}{task.life_area === 'work' && <span className="mr-1">💼</span>}{task.title}
                 </h3>
                 <button
                   onClick={() => setIsEditingTitle(true)}
@@ -718,6 +719,10 @@ export default function TaskCard({
                   </div>
                 </PopoverContent>
               </Popover>
+
+              {!isEvent && task.classification !== 'birthday' && !task.birthday_person && (
+                <LifeAreaPill task={task} theme={theme} onUpdateTask={onUpdateTask} />
+              )}
 
               {task.energy_required && (
                 <Popover>

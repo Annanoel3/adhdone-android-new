@@ -24,6 +24,7 @@ import {
 import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
 import TaskSortDropdown from "../tasks/TaskSortDropdown";
 import BreakIntoStepsButton from "../tasks/BreakIntoStepsButton";
+import LifeAreaPill from "../tasks/LifeAreaPill";
 
 export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails, onUpdateTask }) {
   const navigate = useNavigate();
@@ -469,6 +470,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                     <div className="flex items-center gap-2 mb-2">
                       <h4 className={`font-medium flex-1 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
                         {isBirthdayTask(task) && !/🎂/.test(task.title) && <span className="mr-1">🎂</span>}
+                        {task.life_area === 'work' && <span className="mr-1">💼</span>}
                         {task.title}
                       </h4>
                       <Button
@@ -502,6 +504,10 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                           </div>
                         </PopoverContent>
                       </Popover>
+
+                      {!isEvent(task) && !isBirthdayTask(task) && (
+                        <LifeAreaPill task={task} theme={theme} onUpdateTask={onUpdateTask} />
+                      )}
 
                       {/* Energy deliberately does NOT appear on the closed card. It's
                           rarely what you're scanning for, and it pushed the pills that

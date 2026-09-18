@@ -53,18 +53,22 @@ const TASK_PARSE_SCHEMA = {
     needs_date_pick: { type: "boolean" },
     is_flexible: { type: "boolean" },
     priority_uninferrable: { type: "boolean" },
+    life_area: { type: "string", enum: ["work", "personal"] },
   },
   required: [
     "title", "location", "urgency", "energy_required", "classification",
     "target_date", "target_time", "end_date", "due_date",
     "user_asked_to_repeat_every", "recurrence_pattern", "deadline_style",
     "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
+    "life_area",
   ],
 };
 
 // `_base44` is kept so every caller's signature stays the same; the parser no
-// longer needs the client.
-export async function runTaskParse(_base44: any, prompt: string, tz?: string) {
+// longer needs the client. `aboutMe` is the user's own one-liner about their
+// life from onboarding — it's what lets the model tell a work task from a
+// personal one for THIS person rather than for a generic office worker.
+export async function runTaskParse(_base44: any, prompt: string, tz?: string, aboutMe?: string) {
   // Callers are supposed to pass a prompt already built by
   // buildTaskParsePrompt, which carries the one thing the model cannot work out
   // for itself: today's real calendar. If raw text arrives instead, build it
@@ -83,7 +87,12 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string) {
     // previous parser on the same inputs before this was chosen.
     reasoning_effort: "low",
     messages: [
-      { role: "system", content: TASK_PARSE_SYSTEM_PROMPT },
+      {
+        role: "system",
+        content: aboutMe?.trim()
+          ? `${TASK_PARSE_SYSTEM_PROMPT}\n\nABOUT THE USER (in their own words): ${aboutMe.trim()}`
+          : TASK_PARSE_SYSTEM_PROMPT,
+      },
       { role: "user", content: fullPrompt },
     ],
     response_format: {
