@@ -9,7 +9,6 @@ export const PAGE_TOURS = {
       body: "Today's stuff and what's coming up, all in one spot.",
       points: [
         { label: "Add anything", text: "Talk or type it in — or share text and screenshots straight from other apps. The app figures out what's a task and what's just an idea." },
-        { label: "Stuck? Launch 🚀", text: "A short Sprint on one thing, or the Launchpad to help you pick and actually start." },
       ],
     },
   ],
