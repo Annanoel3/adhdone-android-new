@@ -29,7 +29,7 @@ export default function WelcomeChat({ onDone }) {
   useEffect(() => {
     if (!done || !beat || beat.input || beat.final) return;
     const t = setTimeout(() => {
-      setHistory((h) => [...h, { from: 'anna', text: line }]);
+      setHistory((h) => [...h, { from: 'app', text: line }]);
       setIdx((i) => i + 1);
     }, 550);
     return () => clearTimeout(t);
@@ -38,7 +38,7 @@ export default function WelcomeChat({ onDone }) {
   const answer = (value) => {
     setHistory((h) => [
       ...h,
-      { from: 'anna', text: line },
+      { from: 'app', text: line },
       ...(value ? [{ from: 'user', text: value }] : []),
     ]);
     setDraft('');
@@ -68,7 +68,7 @@ export default function WelcomeChat({ onDone }) {
           <ChatBubble key={i} from={m.from}>{m.text}</ChatBubble>
         ))}
         {beat && (
-          <ChatBubble from="anna">
+          <ChatBubble from="app">
             {shown}
             {!done && <span className="opacity-40">▍</span>}
           </ChatBubble>

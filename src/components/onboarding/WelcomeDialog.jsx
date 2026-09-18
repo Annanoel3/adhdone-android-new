@@ -4,8 +4,8 @@ import { ONBOARDING_STEPS, isStepDone, markStepDone } from './onboardingGate';
 import { enterOnboardingSurface, exitOnboardingSurface } from './onboardingSurface';
 import WelcomeChat from './WelcomeChat';
 
-// The very first thing a new user sees — a short back-and-forth with Anna that
-// collects a name and a sentence about the user's life. Nothing else in the
+// The very first thing a new user sees — a short back-and-forth that collects a
+// name and a sentence about the user's life. Nothing else in the
 // first-run sequence starts until it's finished.
 export default function WelcomeDialog() {
   const [open, setOpen] = useState(false);
