@@ -1182,7 +1182,8 @@ export default function Layout({ children, currentPageName }) {
       maybeAutoSync();
     } catch (error) {
       console.error("Error checking user status:", error);
-      base44.auth.redirectToLogin(window.location.href);
+      // Custom auth pages: send them to the app's own login screen.
+      window.location.href = `/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`;
     }
   }, [isPublicPage]);
 

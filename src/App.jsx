@@ -9,11 +9,10 @@ import { queryClientInstance } from '@/lib/query-client'
 import VisualEditAgent from '@/lib/VisualEditAgent'
 import NavigationTracker from '@/lib/NavigationTracker'
 import { pagesConfig } from './pages.config'
-import { BrowserRouter as Router, Route, Routes, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useNavigate, Navigate } from 'react-router-dom';
 import { setupIframeMessaging } from './lib/iframe-messaging';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
-import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Settings from '@/pages/Settings';
 import Calendar from '@/pages/Calendar';
 import PrivacyPolicyPublic from '@/pages/PrivacyPolicy';
@@ -33,6 +32,11 @@ import Birthdays from '@/pages/Birthdays';
 import DecisionMaker from '@/pages/DecisionMaker';
 import Diary from '@/pages/Diary';
 import Places from '@/pages/Places';
+import Login from '@/pages/Login';
+import Register from '@/pages/Register';
+import ForgotPassword from '@/pages/ForgotPassword';
+import ResetPassword from '@/pages/ResetPassword';
+import ProtectedRoute from '@/components/ProtectedRoute';
 import { LaunchProvider } from '@/context/LaunchContext';
 
 // Sentry loaded via CDN in index.html
@@ -55,7 +59,7 @@ const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   : <>{children}</>;
 
 const AuthenticatedApp = () => {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, isAuthenticated, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
   // After a Google Calendar app-user OAuth flow, the platform redirects back to
@@ -76,23 +80,9 @@ const AuthenticatedApp = () => {
     );
   }
 
-  // Handle authentication errors
-  if (authError) {
-    if (authError.type === 'user_not_registered') {
-      return <UserNotRegisteredError />;
-    } else if (authError.type === 'auth_required') {
-      // Public paths never redirect to login — everything else does
-      // Compared lowercased — routes themselves are case-insensitive, so
-      // /brandbook must be treated as public exactly like /BrandBook.
-      const publicPaths = ['/', '/privacypolicy', '/terms', '/brandbook', '/notificationdemo'];
-      const path = window.location.pathname.replace(/\/+$/, '').toLowerCase() || '/';
-      const isAdSpot = path.startsWith('/ad/');
-      if (!isAdSpot && !publicPaths.includes(path)) {
-        navigateToLogin();
-        return null;
-      }
-    }
-  }
+  // Authentication is enforced by ProtectedRoute on the app routes below —
+  // no global redirect firewall. Public pages (landing, legal, brand book,
+  // ad spots) sit outside the guard and stay reachable without an account.
 
   // Render the main app
   return (
@@ -111,19 +101,27 @@ const AuthenticatedApp = () => {
       <Route path="/ad/d" element={<AdVariantD />} />
       <Route path="/ad/e" element={<AdVariantE />} />
 
-      {/* Authenticated app with layout */}
-      <Route path="/Home" element={<LayoutWrapper currentPageName="Home"><Home /></LayoutWrapper>} />
-      {Object.entries(Pages).map(([path, Page]) => (
-        <Route key={path} path={`/${path}`} element={<LayoutWrapper currentPageName={path}><Page /></LayoutWrapper>} />
-      ))}
-      <Route path="/settings" element={<LayoutWrapper currentPageName="Settings"><Settings /></LayoutWrapper>} />
-      <Route path="/Calendar" element={<LayoutWrapper currentPageName="Calendar"><Calendar /></LayoutWrapper>} />
-      <Route path="/Community" element={<LayoutWrapper currentPageName="Community"><Community /></LayoutWrapper>} />
-      <Route path="/About" element={<LayoutWrapper currentPageName="About"><About /></LayoutWrapper>} />
-      <Route path="/Birthdays" element={<LayoutWrapper currentPageName="Birthdays"><Birthdays /></LayoutWrapper>} />
-      <Route path="/DecisionMaker" element={<LayoutWrapper currentPageName="DecisionMaker"><DecisionMaker /></LayoutWrapper>} />
-      <Route path="/Diary" element={<LayoutWrapper currentPageName="Diary"><Diary /></LayoutWrapper>} />
-      <Route path="/Places" element={<LayoutWrapper currentPageName="Places"><Places /></LayoutWrapper>} />
+      {/* Custom auth pages — public by definition */}
+      <Route path="/login" element={<Login />} />
+      <Route path="/register" element={<Register />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
+
+      {/* Authenticated app with layout — everything below requires login */}
+      <Route element={<ProtectedRoute unauthenticatedElement={<Navigate to="/login" replace />} />}>
+        <Route path="/Home" element={<LayoutWrapper currentPageName="Home"><Home /></LayoutWrapper>} />
+        {Object.entries(Pages).map(([path, Page]) => (
+          <Route key={path} path={`/${path}`} element={<LayoutWrapper currentPageName={path}><Page /></LayoutWrapper>} />
+        ))}
+        <Route path="/settings" element={<LayoutWrapper currentPageName="Settings"><Settings /></LayoutWrapper>} />
+        <Route path="/Calendar" element={<LayoutWrapper currentPageName="Calendar"><Calendar /></LayoutWrapper>} />
+        <Route path="/Community" element={<LayoutWrapper currentPageName="Community"><Community /></LayoutWrapper>} />
+        <Route path="/About" element={<LayoutWrapper currentPageName="About"><About /></LayoutWrapper>} />
+        <Route path="/Birthdays" element={<LayoutWrapper currentPageName="Birthdays"><Birthdays /></LayoutWrapper>} />
+        <Route path="/DecisionMaker" element={<LayoutWrapper currentPageName="DecisionMaker"><DecisionMaker /></LayoutWrapper>} />
+        <Route path="/Diary" element={<LayoutWrapper currentPageName="Diary"><Diary /></LayoutWrapper>} />
+        <Route path="/Places" element={<LayoutWrapper currentPageName="Places"><Places /></LayoutWrapper>} />
+      </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
     </LaunchProvider>
