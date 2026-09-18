@@ -19,6 +19,7 @@ import { snoozeTask } from "../components/utils/snoozeTask";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
 import TaskSortDropdown from "../components/tasks/TaskSortDropdown";
+import WeeklyStar from "../components/tasks/WeeklyStar";
 import TaskSections from "../components/tasks/TaskSections";
 import TaskCompletionCelebration from "../components/tasks/TaskCompletionCelebration";
 import { passesBirthdayDayFilter } from "../components/utils/birthdayHelpers";
@@ -289,12 +290,14 @@ export default function Tasks() {
                   theme === 'dark' ? 'text-white' : 'text-gray-900'
                 }`}>
                   My Tasks
+                  <WeeklyStar slot={2} />
                 </h1>
                 <p className={`mt-1 ${
                   isSeasonalTheme() ? `${specialMode}-text` :
                   theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
                 }`}>
                   {activeTasks.length} active • {completedThisWeek} completed this week
+                  <WeeklyStar slot={1} />
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -378,6 +381,8 @@ export default function Tasks() {
 
           <TaskSortDropdown />
 
+          <WeeklyStar slot={0} />
+
           <div className="flex items-center gap-1 ml-auto">
             <Button
               variant={viewMode === 'sections' ? 'secondary' : 'ghost'}
@@ -401,6 +406,7 @@ export default function Tasks() {
               <CalendarDays className="w-3.5 h-3.5 mr-1" />
               Days
             </Button>
+            <WeeklyStar slot={3} />
           </div>
         </div>
 
