@@ -16,7 +16,7 @@ All LLM/AI calls must use the OpenAI SDK directly with the app's `OPENAI_API_KEY
 import OpenAI from 'npm:openai';
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 const completion = await openai.chat.completions.create({
-  model: 'gpt-4o',
+  model: 'gpt-5.4',   // the current model (Sept 2026); gpt-4o is two years old — do not use it for new code
   messages: [/* ... */],
 });
 ```
@@ -30,6 +30,11 @@ If you need to add AI/LLM functionality, use OpenAI only. If you are not sure wh
 - `base44/functions/generateDailyTip/entry.ts`
 - `src/components/utils/birthdayScheduler.jsx`
 - `src/components/utils/calendarEmojiResolver.js`
+- `base44/shared/runTaskParse.ts` (moved to InvokeLLM on Sept 4 2026 without asking; back on OpenAI gpt-5.4 Sept 18 2026, tested side by side on the same inputs first)
+- `base44/shared/captureToTasks.ts` (same)
+- `base44/functions/readImageCapture/entry.ts` (same — photos go to gpt-5.4 as an image_url)
+
+Why this rule exists, so nobody "improves" it away: InvokeLLM runs on Base44 integration credits. Base44's own docs say that when those run out, every call fails. Task entry must never depend on a shared credit pool.
 
 Before finishing ANY task involving AI/LLM, run a codebase search for `InvokeLLM` to confirm zero results.
 
