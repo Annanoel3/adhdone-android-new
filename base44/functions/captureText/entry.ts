@@ -56,7 +56,9 @@ Deno.serve(async (req) => {
     const created: Record<string, unknown>[] = [];
 
     for (const piece of pieces) {
-      const parsed = await runTaskParse(base44, buildTaskParsePrompt(piece, tz), tz);
+      // about_me goes in here too, exactly like the in-app add path — otherwise
+      // a task shared from the phone gets classified for a generic person.
+      const parsed = await runTaskParse(base44, buildTaskParsePrompt(piece, tz), tz, user.about_me);
       if (!parsed?.title) continue;
 
       // original_input keeps the user's verbatim words (the whole shared text

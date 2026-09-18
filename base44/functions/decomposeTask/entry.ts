@@ -16,15 +16,23 @@ Deno.serve(async (req) => {
 
     const { prompt } = await req.json();
 
+    // The user's own note about their life (from onboarding) — steps for
+    // "prep the set" look very different for a wedding musician than for a
+    // generic office worker. Added as a system note so the caller's prompt
+    // stays exactly as it was.
+    const messages = [];
+    if (user.about_me?.trim()) {
+      messages.push({
+        role: "system",
+        content: `Context about this person, in their own words: ${user.about_me.trim()}\nUse it only to make the steps fit their real life. Never mention this note back to them.`,
+      });
+    }
+    messages.push({ role: "user", content: prompt });
+
     const completion = await openai.chat.completions.create({
       model: "gpt-6-astra",
       response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "user",
-          content: prompt
-        }
-      ]
+      messages
     });
 
     const parsedObject = JSON.parse(completion.choices[0].message.content);

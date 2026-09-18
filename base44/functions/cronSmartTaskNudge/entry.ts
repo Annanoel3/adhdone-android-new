@@ -160,7 +160,8 @@ Deno.serve(async (req) => {
           (eventsByUser[email] || []).filter(e =>
             isSameLocalDay(new Date(e.event_time || e.next_reminder), now, timeZone)
           ),
-          getHomeOrigin(user)
+          getHomeOrigin(user),
+          user.about_me || ''
         );
 
         if (!newEntries || newEntries.length === 0) continue;
@@ -332,7 +333,8 @@ async function generateDailySchedule(
   quietEndMin: number,
   subtasksByParent: Record<string, any[]>,
   todaysEvents: any[] = [],
-  homeOrigin: string = ''
+  homeOrigin: string = '',
+  aboutMe: string = ''
 ): Promise<any[] | null> {
   const hour = Math.floor(localMin / 60);
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
@@ -467,7 +469,7 @@ You're not annoying. You don't flood them. You make sure everything gets done an
 CURRENT CONTEXT:
 - Current time: ${timeStr} (${timeOfDay})
 - Timezone: ${timeZone}
-- Quiet hours: ${noQuietHours ? 'NONE — this user has quiet hours turned off and is often up until around midnight, so late-evening nudges are welcome' : `${quietStartStr} - ${quietEndStr} (never schedule during these)`}
+${aboutMe.trim() ? `- ABOUT YOUR BOSS, in their own words: ${aboutMe.trim()}\n  Use this only to judge what a task really involves and how much it matters to THEM. Never quote it back at them in a notification.\n` : ''}- Quiet hours: ${noQuietHours ? 'NONE — this user has quiet hours turned off and is often up until around midnight, so late-evening nudges are welcome' : `${quietStartStr} - ${quietEndStr} (never schedule during these)`}
 
 FULL TASK LIST (you decide what's relevant today — you have the week ahead):
 ${taskList}
