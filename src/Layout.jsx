@@ -1002,7 +1002,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               {children}
             </div>
 
-            {currentPageName !== "Home" && currentPageName !== "ParkingLot" && currentPageName !== "SupportSpace" && currentPageName !== "AddTask" && currentPageName !== "Tasks" && (
+            {currentPageName !== "Home" && currentPageName !== "ParkingLot" && currentPageName !== "SupportSpace" && currentPageName !== "AddTask" && currentPageName !== "Tasks" && currentPageName !== "Diary" && (
               <Button
                 onClick={() => {
                   const event = new CustomEvent('open-voice-assistant');
