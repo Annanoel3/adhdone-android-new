@@ -77,6 +77,11 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string) {
   const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
   const completion = await openai.chat.completions.create({
     model: MODEL,
+    // A little thinking is what makes the model actually apply the prompt's
+    // rules (mirror the date into due_date, "night" is a clock time, an errand
+    // means leaving the house) instead of skimming them. Tested against the
+    // previous parser on the same inputs before this was chosen.
+    reasoning_effort: "low",
     messages: [
       { role: "system", content: TASK_PARSE_SYSTEM_PROMPT },
       { role: "user", content: fullPrompt },
