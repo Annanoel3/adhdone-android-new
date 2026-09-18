@@ -13,7 +13,7 @@
     },
     "mood_answer": {
       "type": "string",
-      "description": "The user's answer to the opening 'how do you feel your day went' prompt, kept separately so it can head the entry without being lost if the body is rewritten. Only set when the user opted into autofill and answered."
+      "description": "Legacy field from when a separate 'how did your day go' prompt preceded the entry. No longer written \u2014 the diary page itself is the prompt now. Kept so old entries keep their first line."
     },
     "autofilled_tasks": {
       "type": "array",
@@ -34,10 +34,24 @@
     "stickers": {
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "object",
+        "properties": {
+          "char": {
+            "type": "string",
+            "description": "The sticker character."
+          },
+          "x": {
+            "type": "number",
+            "description": "Horizontal position as a PERCENTAGE (0-100) of the page width, so a sticker lands in the same spot on any screen size."
+          },
+          "y": {
+            "type": "number",
+            "description": "Vertical position as a PERCENTAGE (0-100) of the page height."
+          }
+        }
       },
       "default": [],
-      "description": "Sticker characters the user added to this entry, in the order they were added."
+      "description": "Stickers the user placed on the page, each with its own dragged position. Older entries stored plain characters with no position; the app treats those as unplaced and lays them out along the top."
     }
   },
   "required": [
