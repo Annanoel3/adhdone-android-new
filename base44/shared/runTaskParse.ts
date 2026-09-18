@@ -16,7 +16,7 @@ import { resolveParsedDates } from "./resolveDateWords.ts";
 // Runs on OpenAI with the app's own key (RULES.md rule 1). It briefly ran on
 // Base44's InvokeLLM, which draws on Base44 integration credits — and when
 // those run out every call fails, taking task entry down for everyone at once.
-const MODEL = "gpt-5.4-mini";
+const MODEL = "gpt-5.4";
 
 // A recurring reminder rhythm can ONLY come from the user asking to be pinged
 // repeatedly. The model is asked that one narrow question
