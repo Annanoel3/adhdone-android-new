@@ -14,7 +14,6 @@ import {
 import { Card, CardContent } from "@/components/ui/card";
 import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import TaskEditModal from "../components/tasks/TaskEditModal";
-import HelpfulRemindersSuggestions from "../components/tasks/HelpfulRemindersSuggestions";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { snoozeTask } from "../components/utils/snoozeTask";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -336,10 +335,6 @@ export default function Tasks() {
             </div>
           </CardContent>
         </Card>
-
-        <div className="mb-6">
-          <HelpfulRemindersSuggestions theme={theme} onTaskCreated={loadTasks} />
-        </div>
 
         <div className="flex flex-wrap items-center gap-3 mb-6">
           <div className="flex items-center gap-2">

@@ -13,6 +13,9 @@ import confetti from "canvas-confetti";
 import { isTodayTask } from "@/components/utils/todayTasks";
 import ConfirmDialog from "@/components/launch/ConfirmDialog";
 import { waitForTourEnd } from "@/components/onboarding/tourActive";
+import { firstUseSeen, markFirstUseSeen } from "@/components/onboarding/FirstUseDialog";
+
+const FOCUS_FIRST_USE_FLAG = "firstuse_focus_mode_done";
 
 function formatElapsed(ms) {
   const totalSec = Math.floor(ms / 1000);
@@ -197,9 +200,17 @@ export default function FocusModePrompt({ user, theme }) {
     return () => window.removeEventListener("tasks-changed", check);
   }, [focusTaskId]);
 
-  // Manual open from the Home Focus button.
+  // Manual open from the Home Focus button. The very first time, the "what is
+  // Focus Mode?" explainer comes up over the picker — after that it's only ever
+  // shown on demand via the info button.
   useEffect(() => {
-    const handler = () => setOpen(true);
+    const handler = () => {
+      setOpen(true);
+      if (!firstUseSeen(FOCUS_FIRST_USE_FLAG)) {
+        markFirstUseSeen(FOCUS_FIRST_USE_FLAG);
+        setShowInfo(true);
+      }
+    };
     window.addEventListener("open-focus-prompt", handler);
     return () => window.removeEventListener("open-focus-prompt", handler);
   }, []);

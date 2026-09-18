@@ -428,7 +428,7 @@ Answer plainly and practically, then stop.`;
                       handleSend();
                     }
                   }}
-                  placeholder="Type your message... (Press Enter to send, Shift+Enter for new line)"
+                  placeholder="Type your message..."
                   className="min-h-[100px] text-base flex-1"
                   disabled={isLoading}
                 />
@@ -580,7 +580,7 @@ Answer plainly and practically, then stop.`;
                         handleSend();
                       }
                     }}
-                    placeholder="Continue the conversation... (Press Enter to send)"
+                    placeholder="Continue the conversation..."
                     className="min-h-[80px] flex-1"
                     disabled={isLoading}
                   />

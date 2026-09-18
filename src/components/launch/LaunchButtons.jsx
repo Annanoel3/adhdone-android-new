@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Rocket, Timer, Info } from 'lucide-react';
 import { useLaunch } from '@/context/LaunchContext';
@@ -7,10 +7,53 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import FirstUseDialog, { firstUseSeen, markFirstUseSeen } from '@/components/onboarding/FirstUseDialog';
+
+// Each of the two is explained the FIRST time it's tapped, not before — the
+// explanation lands when the user is actually curious, and the button still
+// does what they pressed it for straight after.
+const FIRST_USE = {
+  launchpad: {
+    flag: 'firstuse_launchpad_done',
+    title: 'Launchpad 🚀',
+    body: "A gentle 5-minute countdown that eases you toward starting. When it hits zero you lift off into Focus Mode on this task — for when \"just start\" feels impossible.",
+    confirmLabel: "Start the countdown",
+  },
+  sprint: {
+    flag: 'firstuse_sprint_done',
+    title: '5-min Sprint ⏱️',
+    body: "A 5-minute timer starting right now — no ramp-up, just a short, low-pressure burst of doing the thing. Great for \"I'll do 5 minutes and see what happens.\"",
+    confirmLabel: "Start my 5 minutes",
+  },
+};
 
 export default function LaunchButtons({ task, theme, onStarted }) {
   const { startLaunchpad, startSprint, hasActiveLaunch } = useLaunch();
+  const [pending, setPending] = useState(null);
   if (!task || task.status === 'completed') return null;
+
+  const run = (kind) => {
+    if (kind === 'launchpad') startLaunchpad(task);
+    else startSprint(task);
+    onStarted?.();
+  };
+
+  // First tap ever → explain, then run it when they tap through.
+  const handlePress = (kind) => {
+    if (!firstUseSeen(FIRST_USE[kind].flag)) {
+      setPending(kind);
+      return;
+    }
+    run(kind);
+  };
+
+  const confirmFirstUse = () => {
+    const kind = pending;
+    setPending(null);
+    if (!kind) return;
+    markFirstUseSeen(FIRST_USE[kind].flag);
+    run(kind);
+  };
 
   const infoBtnClass = `flex items-center justify-center w-5 h-5 rounded-full flex-shrink-0 ${
     theme === 'dark' ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
@@ -21,7 +64,7 @@ export default function LaunchButtons({ task, theme, onStarted }) {
       <div className="flex items-center gap-1">
         <Button
           size="sm"
-          onClick={() => { startLaunchpad(task); onStarted?.(); }}
+          onClick={() => handlePress('launchpad')}
           disabled={hasActiveLaunch}
           className={`gap-1.5 ${
             theme === 'dark'
@@ -49,7 +92,7 @@ export default function LaunchButtons({ task, theme, onStarted }) {
         <Button
           size="sm"
           variant="outline"
-          onClick={() => { startSprint(task); onStarted?.(); }}
+          onClick={() => handlePress('sprint')}
           disabled={hasActiveLaunch}
           className={`gap-1.5 ${
             theme === 'dark'
@@ -72,6 +115,15 @@ export default function LaunchButtons({ task, theme, onStarted }) {
           </PopoverContent>
         </Popover>
       </div>
+
+      <FirstUseDialog
+        open={!!pending}
+        onConfirm={confirmFirstUse}
+        title={pending ? FIRST_USE[pending].title : ''}
+        body={pending ? FIRST_USE[pending].body : ''}
+        confirmLabel={pending ? FIRST_USE[pending].confirmLabel : 'Got it'}
+        theme={theme}
+      />
     </div>
   );
 }
