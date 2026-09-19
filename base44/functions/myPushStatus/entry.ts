@@ -10,6 +10,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 // It takes no input and only ever looks up the person who is signed in.
 Deno.serve(async (req) => {
     try {
+        console.log('[myPushStatus] api-url', req.headers.get('Base44-Api-Url'), '| host', req.headers.get('host'), '| origin', req.headers.get('origin'));
         const base44 = createClientFromRequest(req);
         let me = null;
         try {
