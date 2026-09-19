@@ -220,21 +220,26 @@ const SYNC_LOCK_STALE_MS = 10 * 60 * 1000;
 const HEARTBEAT_EVERY = 5;
 
 async function acquireSyncLock(base44, user) {
-  const users = base44.asServiceRole.entities.User;
-  const fresh = (await users.filter({ email: user.email }))?.[0] || user;
+  // The lock lives on the CALLER'S OWN user record, so every read/write here
+  // goes through auth.me / auth.updateMe. Writing the User entity through the
+  // service role is refused with a 403 — that refusal, added with the dedupe
+  // lock, is what made every sync die with a 500 right after finding the token.
+  const readMe = () => base44.auth.me();
+  const writeMe = (patch) => base44.auth.updateMe(patch);
+  const fresh = (await readMe()) || user;
   const since = fresh?.calendar_sync_in_progress_since;
   if (since && Date.now() - new Date(since).getTime() < SYNC_LOCK_STALE_MS) {
     return { acquired: false, since };
   }
   const runId = crypto.randomUUID();
-  await users.update(fresh.id, {
+  await writeMe({
     calendar_sync_in_progress_since: new Date().toISOString(),
     calendar_sync_run_id: runId,
   });
   // Two triggers that both saw "no lock" both write; after a short settle the
   // one whose run id survived owns the lock and the other stands down.
   await new Promise((r) => setTimeout(r, 400));
-  const confirmed = (await users.filter({ email: user.email }))?.[0];
+  const confirmed = await readMe();
   if (confirmed?.calendar_sync_run_id !== runId) {
     return { acquired: false, since: confirmed?.calendar_sync_in_progress_since };
   }
@@ -243,13 +248,13 @@ async function acquireSyncLock(base44, user) {
     userId: fresh.id,
     runId,
     heartbeat: async () => {
-      await users.update(fresh.id, { calendar_sync_in_progress_since: new Date().toISOString() }).catch(() => {});
+      await writeMe({ calendar_sync_in_progress_since: new Date().toISOString() }).catch(() => {});
     },
     release: async () => {
       // Only release our own lock — never wipe one a newer run has taken.
-      const current = (await users.filter({ email: user.email }).catch(() => []))?.[0];
+      const current = await readMe().catch(() => null);
       if (current && current.calendar_sync_run_id !== runId) return;
-      await users.update(fresh.id, { calendar_sync_in_progress_since: null, calendar_sync_run_id: null }).catch(() => {});
+      await writeMe({ calendar_sync_in_progress_since: null, calendar_sync_run_id: null }).catch(() => {});
     },
   };
 }
