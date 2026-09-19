@@ -6,6 +6,7 @@ import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { filterAll } from '../../shared/listAll.ts';
 import { buildEventReminderPlan, isBookableNow, isBookedId } from '../../shared/eventReminderPlan.ts';
 import { getGoogleAccessToken } from '../../shared/googleOAuth.ts';
+import { withChallengeRetry } from '../../shared/sdkRetry.ts';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
 
@@ -224,8 +225,8 @@ async function acquireSyncLock(base44, user) {
   // goes through auth.me / auth.updateMe. Writing the User entity through the
   // service role is refused with a 403 — that refusal, added with the dedupe
   // lock, is what made every sync die with a 500 right after finding the token.
-  const readMe = () => base44.auth.me();
-  const writeMe = (patch) => base44.auth.updateMe(patch);
+  const readMe = () => withChallengeRetry(() => base44.auth.me());
+  const writeMe = (patch) => withChallengeRetry(() => base44.auth.updateMe(patch));
   const fresh = (await readMe()) || user;
   const since = fresh?.calendar_sync_in_progress_since;
   if (since && Date.now() - new Date(since).getTime() < SYNC_LOCK_STALE_MS) {
@@ -834,7 +835,7 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
     step = 'auth.me';
-    const user = await base44.auth.me();
+    const user = await withChallengeRetry(() => base44.auth.me());
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Get the user's Google Calendar token from the platform
