@@ -87,6 +87,15 @@
       "default": "07:00",
       "description": "Quiet hours end in local HH:MM. Defaults to 07:00; anything that would have fired overnight is delivered at this time instead."
     },
+    "calendar_sync_in_progress_since": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Heartbeat timestamp for the per-account Google Calendar sync lock. A live sync refreshes it as it works, so a long first import keeps the lock while a crashed run's lock goes stale and the next trigger can take over. MUST exist here: syncGoogleCalendar writes it before every sync, and while it was missing from this schema the write failed validation and every single sync died with a 500 right after finding the user's Google token."
+    },
+    "calendar_sync_run_id": {
+      "type": "string",
+      "description": "Random id of the sync run that currently owns the calendar sync lock. Two triggers that both saw no lock both write, then the one whose id survived owns the run and the other stands down; release only clears the lock when the id still matches."
+    },
     "focus_mode_task_id": {
       "type": "string",
       "description": "ID of the recurring task the user is currently focusing on (Focus Mode). Null/empty = not in Focus Mode."
