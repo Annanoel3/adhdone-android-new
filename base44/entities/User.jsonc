@@ -87,6 +87,28 @@
       "default": "07:00",
       "description": "Quiet hours end in local HH:MM. Defaults to 07:00; anything that would have fired overnight is delivered at this time instead."
     },
+    "google_refresh_token": {
+      "type": "string",
+      "description": "Long-lived Google OAuth refresh token for this user's own Google Calendar, obtained by the app's OWN OAuth flow (googleCalendarConnect \u2192 googleCalendarCallback). The platform's app-user connector completed Google consent but persisted no connection, so every sync returned 400 not_connected; the app now stores the grant itself and this field is the single source of truth for 'is Calendar connected'. Server-side only \u2014 never sent to the client."
+    },
+    "google_account_email": {
+      "type": "string",
+      "description": "The Google account the calendar grant actually belongs to, read from Google's userinfo at connect time. Shown on the Calendar page: it is frequently NOT the app login email (people link a personal calendar to a work login), and guessing wrong made the page claim the wrong account was syncing."
+    },
+    "google_connected_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the Google Calendar grant was last (re)established. Used to tell 'never connected' apart from 'connected but the grant was revoked at Google'."
+    },
+    "google_oauth_state": {
+      "type": "string",
+      "description": "Single-use random state for an in-flight Google consent. Google hits the callback with NO app session, so this is the only thing tying that redirect back to a user. Cleared the moment it is used, so a captured callback URL cannot be replayed."
+    },
+    "google_oauth_state_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the in-flight consent was started. The callback rejects a state older than 15 minutes, so an abandoned attempt can't be completed by someone else later."
+    },
     "calendar_sync_in_progress_since": {
       "type": "string",
       "format": "date-time",

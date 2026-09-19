@@ -5,6 +5,7 @@ import { isRecurringInterval, INTERVAL_MS } from '../../shared/reminderIntervalD
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { filterAll } from '../../shared/listAll.ts';
 import { buildEventReminderPlan, isBookableNow, isBookedId } from '../../shared/eventReminderPlan.ts';
+import { getGoogleAccessToken } from '../../shared/googleOAuth.ts';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
 
@@ -840,6 +841,24 @@ Deno.serve(async (req) => {
     // Probe mode: check whether a Google Calendar connection exists without
     // running a full sync (used by the Calendar page to render connect state).
     if (body.probe) {
+      // App-owned grant first — this is the source of truth now. Only fall
+      // through to the platform connector so users who linked before the
+      // switch keep working until they reconnect.
+      step = 'probe.ownGrant';
+      try {
+        const own = await getGoogleAccessToken(user);
+        if (own) {
+          return Response.json({
+            connected: true,
+            connected_email: user.google_account_email || user.email,
+            source: 'app',
+          });
+        }
+      } catch (err) {
+        console.log('[syncGoogleCalendar] probe: own grant rejected by Google:', err.message);
+        return Response.json({ error: 'reconnect_required', message: 'Google access expired — reconnect.' }, { status: 400 });
+      }
+
       step = 'probe.getCurrentAppUserConnection';
       try {
         const conn = await base44.asServiceRole.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
@@ -865,15 +884,26 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'not_connected', message: 'Google Calendar not connected' }, { status: 400 });
     }
 
-    // For app-user connector, fetch the current user's connection token
-    step = 'getCurrentAppUserConnection';
+    // App-owned grant first (see shared/googleOAuth.ts for why).
+    step = 'ownGrant';
     try {
-      const conn = await base44.asServiceRole.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
-      accessToken = conn?.accessToken;
-      if (conn?.email) connectedEmail = conn.email;
-      console.log('[syncGoogleCalendar] platform conn.email =', conn?.email, '| user.email =', user.email);
+      accessToken = await getGoogleAccessToken(user);
+      if (accessToken && user.google_account_email) connectedEmail = user.google_account_email;
     } catch (err) {
-      console.log('[syncGoogleCalendar] No connection available:', err.message);
+      console.log('[syncGoogleCalendar] own grant rejected by Google:', err.message);
+      return Response.json({ error: 'reconnect_required', message: 'Google access expired — reconnect.' }, { status: 400 });
+    }
+
+    // Legacy path: platform app-user connector, for anyone still on it.
+    step = 'getCurrentAppUserConnection';
+    if (!accessToken) {
+      try {
+        const conn = await base44.asServiceRole.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
+        accessToken = conn?.accessToken;
+        if (conn?.email) connectedEmail = conn.email;
+      } catch (err) {
+        console.log('[syncGoogleCalendar] No platform connection available:', err.message);
+      }
     }
 
     if (!accessToken) {

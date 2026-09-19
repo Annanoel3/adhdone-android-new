@@ -146,10 +146,21 @@ export default function Calendar() {
         const me = await base44.auth.me();
         setUser(me);
         await Promise.all([loadSyncedEvents(), loadTasks()]);
-        // Straight back from the OAuth flow: a brand-new connection isn't
-        // always readable on the first ask, and a single "no" used to stick as
-        // "not connected" until a manual reload. Retry briefly.
-        const justConnected = sessionStorage.getItem('adhd_calendar_just_connected') === '1';
+        // Straight back from our own OAuth callback, which lands here as
+        // ?gcal=connected (or an explicit failure reason). A brand-new grant
+        // isn't always readable on the first ask, so retry briefly rather than
+        // letting one "no" stick as "not connected".
+        const gcal = new URLSearchParams(window.location.search).get('gcal');
+        if (gcal && gcal !== 'connected') {
+          setSyncError(
+            gcal === 'denied' ? 'Google sign-in was cancelled.'
+            : gcal === 'expired' ? 'That sign-in link timed out — tap Connect again.'
+            : gcal === 'no_refresh_token' ? "Google didn't return a lasting permission — tap Connect again and approve the calendar access."
+            : 'Connecting to Google failed — tap Connect to try again.'
+          );
+        }
+        const justConnected = gcal === 'connected'
+          || sessionStorage.getItem('adhd_calendar_just_connected') === '1';
         sessionStorage.removeItem('adhd_calendar_just_connected');
         let isConnected = await probeConnection();
         if (!isConnected && justConnected) {
@@ -203,20 +214,22 @@ export default function Calendar() {
     setConnecting(true);
     setSyncError(null);
     try {
-      // Full-page hand-off, deliberately. A popup cannot work here: the Android
-      // app has no popups, and in the browser Cross-Origin-Opener-Policy blocks
-      // reading popup.closed, so the flow never resumes. Coming back is handled
-      // by the bounce in App.jsx.
-      const url = await base44.connectors.connectAppUser(CONNECTOR_ID);
-      sessionStorage.setItem('adhd_calendar_oauth_return', '1');
+      // App-owned OAuth. Full-page hand-off, deliberately: the Android app has
+      // no popups. Google returns to our OWN callback, which redirects straight
+      // back to this page with ?gcal=…, so there is no detour through a Base44
+      // host and nothing depends on connector storage.
+      const res = await base44.functions.invoke('googleCalendarConnect', {});
+      const url = res.data?.url;
+      if (!url) throw new Error('Could not start Google sign-in');
       window.location.href = url;
-    } finally {
+    } catch (e) {
+      setSyncError(e.message || 'Could not start Google sign-in');
       setConnecting(false);
     }
   };
 
   const handleDisconnect = async () => {
-    await base44.connectors.disconnectAppUser(CONNECTOR_ID);
+    await base44.functions.invoke('googleCalendarDisconnect', {});
     setConnected(false);
     setCalendarConnected(false);
     setConnectedEmail(null);
@@ -378,13 +391,7 @@ export default function Calendar() {
             {/* Switch account button */}
             {connected && (
               <button
-                onClick={async () => {
-                  // Disconnect first so the existing grant is cleared and Google
-                  // shows the account chooser instead of defaulting to the
-                  // currently-linked account.
-                  try { await base44.connectors.disconnectAppUser(CONNECTOR_ID); } catch {}
-                  handleConnect();
-                }}
+                onClick={handleConnect}
                 className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-colors ${isDark ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-200' : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
               >
                 <Plus className="w-3.5 h-3.5" />
