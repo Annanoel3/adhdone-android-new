@@ -35,7 +35,16 @@ export default function EggBadge() {
           style={{ bottom: 'max(6rem, calc(5rem + env(safe-area-inset-bottom)))' }}
         >
           <div className="relative rounded-2xl bg-gray-900 text-white shadow-2xl px-5 py-4 flex items-start gap-3">
-            <span className="text-3xl leading-none">{badge.emoji}</span>
+            {badge.gif ? (
+              <img
+                src={badge.gif}
+                alt=""
+                className="w-14 h-14 object-contain flex-shrink-0"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+            ) : (
+              <span className="text-3xl leading-none">{badge.emoji}</span>
+            )}
             <div className="flex-1 min-w-0 pr-4">
               <p className="font-bold">{badge.title}</p>
               {badge.body && (

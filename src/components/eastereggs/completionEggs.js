@@ -1,4 +1,5 @@
 import { showEggBadge } from './eggBadge';
+import { checkChoreEgg } from './choreEggs';
 
 // Hidden badges that fire off a real completion. Called from the pages that
 // complete tasks — never changes what completing a task actually does.
@@ -43,6 +44,11 @@ export function checkCompletionEggs(task) {
         title: 'The goblin hours. Logged.',
         body: "Nobody else is awake. You did a thing anyway.",
       });
+      return;
     }
   }
+
+  // 3) Housework — chores get done and never celebrated. Escalates up to three
+  //    in a day, then goes quiet.
+  checkChoreEgg(task);
 }
