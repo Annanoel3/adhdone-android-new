@@ -29,6 +29,7 @@ import { formatTimeRange } from "../utils/timeRangeLabel";
 import LaunchButtons from "../launch/LaunchButtons";
 import SubtaskQuickAdd from "./SubtaskQuickAdd";
 import LifeAreaPill from "./LifeAreaPill";
+import { checkDuePushEgg } from "../eastereggs/duePushEgg";
 
 export default function TaskCard({
   task,
@@ -405,6 +406,11 @@ export default function TaskCard({
 
       const interval = task.reminder_interval;
 
+      // A one-time task's date IS its deadline — moving it later is a push.
+      if (interval === 'once') {
+        checkDuePushEgg(task, task.next_reminder, nextReminder.toISOString());
+      }
+
       // Optimistic — update UI instantly
       if (onUpdateTask) onUpdateTask({ ...task, next_reminder: nextReminder.toISOString() });
 
@@ -520,6 +526,7 @@ export default function TaskCard({
         const minutes = existing ? existing.getMinutes() : 0;
         dueDateValue = new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString();
       }
+      checkDuePushEgg(task, task.due_date, dueDateValue);
       if (onUpdateTask) onUpdateTask({ ...task, due_date: dueDateValue });
       Task.update(task.id, { due_date: dueDateValue }).catch(error => {
         console.error("Error updating due date:", error);

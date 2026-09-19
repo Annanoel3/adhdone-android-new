@@ -20,6 +20,7 @@ None of these change what the app actually does — they're rewards and surprise
 | Goblin hours | Complete anything between 1:00 and 4:00 AM local (once per night) | Badge: "The goblin hours. Logged." | `src/components/eastereggs/completionEggs.js` |
 | Chore cat | Complete a chore-ish task — laundry, dishes, vacuum, clean, trash, fold, tidy, etc. | Badge with the tuxedo cat riding the robot vacuum | `src/components/eastereggs/choreEggs.js` |
 | Five in one day | Finish 5 tasks in a single local day (any tasks) | Badge with the vacuum guy: "Five done today. Five." | `src/components/eastereggs/choreEggs.js` |
+| Rickroll (due-date pushes) | Push a task's date LATER for the 5th time (and every 5th after) — earlier moves and first-time dates don't count | Rick Astley badge: "Pushed 5 times. Still here. / Never gonna give you up…" — the app joking that *it* won't drop the task | `src/components/eastereggs/duePushEgg.js` |
 | Every 5th completion | Every 5th real completion, counted cumulatively across days (device-persisted) | Full-screen celebration GIF popup | `src/components/utils/completionMilestone.js`, `src/components/shared/EasterEggVideo.jsx` |
 
 ## Page-specific
