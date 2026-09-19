@@ -105,6 +105,9 @@ import {
   TooltipProvider,
 } from "@/components/ui/tooltip";
 import EasterEggVideo from "./components/shared/EasterEggVideo";
+import LongPressBrandTitle from "./components/eastereggs/LongPressBrandTitle";
+import EggBadge from "./components/eastereggs/EggBadge";
+import ChaosModeStyles from "./components/eastereggs/ChaosModeStyles";
 import {
   Dialog,
   DialogContent,
@@ -529,6 +532,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       {specialMode === 'summer' && <SummerMode />}
       {specialMode === 'spring' && <SpringMode />}
       <EasterEggVideo />
+      <EggBadge />
+      <ChaosModeStyles user={user} />
 
       {isSeasonalTheme() && !['summer', 'spring', 'valentines', 'stpatricks', 'kawaii', 'halloween', 'harvest', 'fall', 'winter'].includes(specialMode) && (
         <div
@@ -1011,7 +1016,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                     <LayoutDashboard className="w-7 h-7" />
                   </Button>
                 </SidebarTrigger>
-                <h1 className={`text-xl font-bold ${
+                <LongPressBrandTitle className={`text-xl font-bold ${
                   isSeasonalTheme()
                     ? 'text-gray-900'
                     : theme === 'dark'
@@ -1019,7 +1024,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                       : theme === 'spicybrains'
                         ? 'text-gray-900'
                         : 'text-gray-900'
-                }`}>ADHDone</h1>
+                }`} />
               </div>
             </header>
 

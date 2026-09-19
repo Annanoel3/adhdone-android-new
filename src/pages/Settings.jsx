@@ -23,6 +23,7 @@ import { Switch } from '@/components/ui/switch';
 import HomeZipCard from '@/components/settings/HomeZipCard';
 import QuickCaptureCard from '@/components/settings/QuickCaptureCard';
 import AdDiagnosticsCard from '@/components/settings/AdDiagnosticsCard';
+import VersionTap from '@/components/settings/VersionTap';
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -427,6 +428,8 @@ export default function Settings() {
             </Button>
           </CardContent>
         </Card>
+
+        <VersionTap user={user} theme={theme} />
 
         <div style={{ height: '80px' }} aria-hidden="true" />
       </div>

@@ -128,6 +128,11 @@ export const STICKERS = [
   { char: "🪴", tags: "watered plants kept something alive care" },
 ];
 
+// Hidden sticker: only exists on the 13th of the month. Blink and you miss it.
+if (new Date().getDate() === 13) {
+  STICKERS.unshift({ char: "🐈‍⬛", tags: "black cat unlucky the 13th spooky luck" });
+}
+
 export function searchStickers(query) {
   const q = query.trim().toLowerCase();
   if (!q) return STICKERS;

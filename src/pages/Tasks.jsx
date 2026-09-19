@@ -24,6 +24,8 @@ import TaskSections from "../components/tasks/TaskSections";
 import TaskCompletionCelebration from "../components/tasks/TaskCompletionCelebration";
 import { passesBirthdayDayFilter } from "../components/utils/birthdayHelpers";
 import { countCompletionForGif } from "../components/utils/completionMilestone";
+import PullToRefresh from "../components/shared/PullToRefresh";
+import { checkCompletionEggs } from "../components/eastereggs/completionEggs";
 
 export default function Tasks() {
   const navigate = useNavigate();
@@ -156,6 +158,7 @@ export default function Tasks() {
       requestAnimationFrame(() => setShowCelebration(true));
       setTimeout(() => setShowCelebration(false), 2200);
       countCompletionForGif();
+      checkCompletionEggs(task);
     }
 
     const now = new Date();
@@ -274,6 +277,7 @@ export default function Tasks() {
         : ''
     }`}>
       {showCelebration && <TaskCompletionCelebration theme={theme} />}
+      <PullToRefresh onRefresh={loadTasks}>
       <div className="max-w-6xl mx-auto">
         <Card className={`${isSeasonalTheme() ? `${specialMode}-card` : ''} border-none shadow-lg mb-6 ${
           !isSeasonalTheme() ? (
@@ -477,7 +481,8 @@ export default function Tasks() {
           theme={theme}
         />
       </div>
-      
+      </PullToRefresh>
+
       {/* Android Navigation Button Spacer */}
       <div style={{ height: '120px' }} aria-hidden="true"></div>
     </div>

@@ -17,6 +17,8 @@ import { ensureBirthdayReminders } from "../components/utils/birthdayScheduler";
 import BirthdayStrip from "../components/home/BirthdayStrip";
 import NotificationsOffBanner from "../components/home/NotificationsOffBanner";
 import { countCompletionForGif } from "../components/utils/completionMilestone";
+import PullToRefresh from "../components/shared/PullToRefresh";
+import { checkCompletionEggs } from "../components/eastereggs/completionEggs";
 
 export default function Home() {
   const [tasks, setTasks] = useState([]);
@@ -123,6 +125,7 @@ export default function Home() {
       requestAnimationFrame(() => setShowCelebration(true));
       setTimeout(() => setShowCelebration(false), 2200);
       countCompletionForGif();
+      checkCompletionEggs(task);
     }
 
     const localISOString = new Date().toISOString();
@@ -221,6 +224,7 @@ export default function Home() {
       paddingBottom: 'max(8rem, calc(8rem + env(safe-area-inset-bottom)))'
     }}>
       {showCelebration && <TaskCompletionCelebration theme={theme} />}
+      <PullToRefresh onRefresh={loadTasks}>
       <div className="max-w-7xl mx-auto">
         <MomentumCelebration 
           completedCount={todayCompleted.length}
@@ -301,6 +305,7 @@ export default function Home() {
           onSaved={loadTasks}
         />
       </div>
+      </PullToRefresh>
     </div>
   );
 }

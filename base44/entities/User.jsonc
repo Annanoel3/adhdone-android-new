@@ -32,6 +32,11 @@
       "default": false,
       "description": "Whether the user has unlocked seasonal themes via the easter egg"
     },
+    "chaos_mode": {
+      "type": "boolean",
+      "default": false,
+      "description": "The hidden 'chaos mode' ugly skin (found by tapping the version number in Settings seven times). Normally chaos mode lives only in sessionStorage so closing the app always escapes it \u2014 this flag exists so it can be switched ON for a specific account to look at. Tapping the version seven times clears it again, so nobody can be trapped in it."
+    },
     "last_energy_checkin_date": {
       "type": "string",
       "format": "date",
