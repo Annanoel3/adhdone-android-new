@@ -26,6 +26,15 @@ const THRESHOLDS = {
 
 let inFlight = null;
 
+// "Request aborted" is not a failure: the browser cancelled the call because
+// the page went away — the hand-off to Google's consent screen, a navigation
+// away from Calendar mid-sync, or the Android app being backgrounded. The
+// server run is unaffected. These must never reach the user as an error.
+export function isAbortedError(err) {
+  const msg = String(err?.message || err || '');
+  return err?.name === 'AbortError' || /abort/i.test(msg);
+}
+
 export function getInFlightSync() {
   return inFlight;
 }
@@ -85,6 +94,11 @@ export function runCalendarSync({ background = false } = {}) {
       // to fail this call on every single app open, which is what put a red
       // error on their Home screen every session. Keeping the marker backs off
       // for one full interval; connecting the calendar triggers a direct sync.
+      if (isAbortedError(err)) {
+        // The page/app went away mid-call. Let the next trigger ask again.
+        undoOptimisticGate();
+        return { aborted: true };
+      }
       if (!background) undoOptimisticGate();
       trackFire('calendar_sync_failed', {
         props: { background, message: String(err?.message || err).slice(0, 300) },

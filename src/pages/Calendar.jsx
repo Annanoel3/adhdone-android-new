@@ -248,7 +248,9 @@ export default function Calendar() {
         setSyncError('Google Calendar disconnected. Please reconnect.');
       } else {
         const result = await attemptSync();
-        if (result?.in_progress) {
+        if (result?.aborted) {
+          // Page/app went away mid-sync — nothing to report.
+        } else if (result?.in_progress) {
           setSyncError('A sync is already running for your account — give it a minute and it will finish on its own.');
         } else {
           setSyncResult(result);
