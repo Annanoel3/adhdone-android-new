@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { exchangeCodeForTokens, fetchGoogleEmail } from '../../shared/googleOAuth.ts';
 
 // Step 2 of app-owned Google Calendar OAuth: Google redirects the browser here.

@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 import { wallClockToUtc } from '../../shared/timezoneReminders.ts';
 import { isRecurringInterval, INTERVAL_MS } from '../../shared/reminderIntervalDecision.ts';

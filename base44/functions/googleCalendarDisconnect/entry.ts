@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
 // Clears the app-owned Google link and revokes the grant at Google, so
 // reconnecting always shows the account chooser and a fresh refresh token.

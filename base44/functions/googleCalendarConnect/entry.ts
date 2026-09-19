@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { buildConsentUrl } from '../../shared/googleOAuth.ts';
 
 // Step 1 of app-owned Google Calendar OAuth: hand the app a consent URL.
