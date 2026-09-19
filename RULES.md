@@ -96,6 +96,13 @@ These are absolutes. There is no clever exception, no "but in this case."
    user-facing breakage. Check before claiming.
 7. **Never productivity-shame the user in app copy**, and never advertise a capability
    the app doesn't actually have.
+8. **Never state anything about a real user, their data, or app behavior as fact unless
+   it was actually looked up THIS session** — the entity queried, the log read, the
+   OneSignal API called, the file opened. No inferring "she must have", "this was her
+   first open", "that fired at X" from context or plausibility. If it wasn't checked,
+   either check it or say plainly "I'm guessing — I'd have to look." An answer that
+   sounds confident and was never verified costs Anna more than a slow one: she then has
+   to disprove it. Opinions are fine, labeled as opinions. Invented facts are not.
 
 ## 5. ALREADY BUILT — DO NOT PRESENT THESE AS NEW
 
