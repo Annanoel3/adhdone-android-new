@@ -68,6 +68,10 @@ const AuthenticatedApp = () => {
   useEffect(() => {
     if (isAuthenticated && sessionStorage.getItem('adhd_calendar_oauth_return') === '1') {
       sessionStorage.removeItem('adhd_calendar_oauth_return');
+      // Tells the Calendar page it just came back from OAuth, so it retries the
+      // connection check instead of trusting one call that can land before the
+      // new connection is readable.
+      sessionStorage.setItem('adhd_calendar_just_connected', '1');
       navigate('/Calendar', { replace: true });
     }
   }, [isAuthenticated, navigate]);

@@ -146,7 +146,18 @@ export default function Calendar() {
         const me = await base44.auth.me();
         setUser(me);
         await Promise.all([loadSyncedEvents(), loadTasks()]);
-        const isConnected = await probeConnection();
+        // Straight back from the OAuth flow: a brand-new connection isn't
+        // always readable on the first ask, and a single "no" used to stick as
+        // "not connected" until a manual reload. Retry briefly.
+        const justConnected = sessionStorage.getItem('adhd_calendar_just_connected') === '1';
+        sessionStorage.removeItem('adhd_calendar_just_connected');
+        let isConnected = await probeConnection();
+        if (!isConnected && justConnected) {
+          for (let i = 0; i < 4 && !isConnected; i++) {
+            await new Promise((r) => setTimeout(r, 1500));
+            isConnected = await probeConnection();
+          }
+        }
         // Background auto-sync — at most once per the user's chosen interval,
         // via the shared module (joins any run already in flight). If a sync
         // is running when this page opens, surface it as "Syncing…" and
@@ -196,15 +207,11 @@ export default function Calendar() {
       setConnectedEmail(null);
     } catch {}
 
-    const rawUrl = await base44.connectors.connectAppUser(CONNECTOR_ID);
-    let url;
-    try {
-      url = new URL(rawUrl);
-      url.searchParams.set('prompt', 'select_account consent');
-      url = url.toString();
-    } catch {
-      url = rawUrl;
-    }
+    // Use the platform's authorize URL EXACTLY as given. We used to append
+    // prompt=select_account to it, which tampers with the callback state and
+    // left Google's consent screen looking successful while no connection was
+    // ever stored. The disconnect above is what re-shows the account chooser.
+    const url = await base44.connectors.connectAppUser(CONNECTOR_ID);
     sessionStorage.setItem('adhd_calendar_oauth_return', '1');
     window.location.href = url;
   };
