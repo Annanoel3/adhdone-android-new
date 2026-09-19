@@ -41,7 +41,7 @@ export function isAutoSyncDue() {
 // Starts a sync, or joins the one already running. Resolves with the backend
 // result ({ synced_at, created, ... } or { in_progress: true } when another
 // device/run holds the server lock).
-export function runCalendarSync() {
+export function runCalendarSync({ background = false } = {}) {
   if (inFlight) return inFlight;
 
   const previous = localStorage.getItem(GATE_KEY);
@@ -78,11 +78,15 @@ export function runCalendarSync() {
       return data;
     })
     .catch((err) => {
-      // Not connected / network error: undo the optimistic marker so the next
-      // legitimate trigger (e.g. right after connecting) isn't gated out.
-      undoOptimisticGate();
+      // A user-initiated sync undoes the optimistic marker so a retry right
+      // after connecting isn't gated out. A BACKGROUND sync keeps it instead:
+      // an account with no Google Calendar connected (or a server hiccup) used
+      // to fail this call on every single app open, which is what put a red
+      // error on their Home screen every session. Keeping the marker backs off
+      // for one full interval; connecting the calendar triggers a direct sync.
+      if (!background) undoOptimisticGate();
       trackFire('calendar_sync_failed', {
-        props: { message: String(err?.message || err).slice(0, 300) },
+        props: { background, message: String(err?.message || err).slice(0, 300) },
       });
       throw err;
     })
@@ -98,5 +102,5 @@ export function runCalendarSync() {
 export function maybeAutoSync() {
   if (inFlight) return inFlight;
   if (!isAutoSyncDue()) return null;
-  return runCalendarSync().catch(() => null);
+  return runCalendarSync({ background: true }).catch(() => null);
 }
