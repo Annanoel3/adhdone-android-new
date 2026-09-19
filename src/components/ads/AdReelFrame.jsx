@@ -11,25 +11,25 @@ export default function AdReelFrame({ headline, phone, caption }) {
       <div className="pointer-events-none absolute -bottom-24 -right-20 w-80 h-80 rounded-full bg-rose-200/40 blur-3xl" />
 
       {/* platform strip — kept clear on purpose */}
-      <div className="h-[7vh] shrink-0" />
+      <div className="h-[5vh] shrink-0" />
 
       {/* headline band */}
-      <div className="h-[13vh] shrink-0 w-full max-w-sm flex items-center justify-center text-center relative z-10">
+      <div className="h-[12vh] shrink-0 w-full max-w-sm flex items-center justify-center text-center relative z-10">
         {headline}
       </div>
 
-      {/* phone band — fixed height, so the device never resizes or jumps */}
-      <div className="flex-1 min-h-0 w-full flex items-center justify-center relative z-10 py-1">
+      {/* phone band — the device keeps one width the whole way through */}
+      <div className="flex-1 min-h-0 w-full flex items-center justify-center relative z-10">
         {phone}
       </div>
 
       {/* caption band */}
-      <div className="h-[16vh] shrink-0 w-full max-w-sm flex items-start justify-center pt-2 text-center relative z-10">
+      <div className="h-[14vh] shrink-0 w-full max-w-sm flex items-start justify-center pt-2 text-center relative z-10">
         {caption}
       </div>
 
       {/* platform strip — username / caption / sound live here */}
-      <div className="h-[13vh] shrink-0" />
+      <div className="h-[10vh] shrink-0" />
     </div>
   );
 }
