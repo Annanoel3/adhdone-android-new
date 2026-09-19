@@ -1,4 +1,5 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
+import { trackFire } from '@/lib/appTrack';
 
 const AD_UNIT_ID = 'ca-app-pub-7979856440890193/4453371625';
 
@@ -34,8 +35,10 @@ export function initAdMob() {
         // A missing/misconfigured UMP form is NOT a reason to stop serving ads —
         // consent is only required for EEA/UK users, and the form lives in the
         // AdMob console, not here. Note it and carry on with the ad request.
+        // Kept OUT of the ad-attempt status: this note was being read as "the
+        // last ad failed", when in fact no ad had even been requested yet.
         console.warn('[AdMob] consent step skipped:', e);
-        setStatus(`consent unavailable (continuing): ${e?.message || e}`);
+        localStorage.setItem('admob_consent_note', `${new Date().toLocaleTimeString()} — ${e?.message || e}`);
       }
 
       // The plugin dispatches MobileAds.initialize() without awaiting it,
@@ -61,14 +64,20 @@ export function resetAdLaunchState() {
   shownThisLaunch = false;
 }
 
-export async function showInterstitialAd() {
+// `source` says WHO asked for the ad ('auto' = the open-count schedule,
+// 'manual' = the diagnostics test button) so the two can be told apart in the
+// per-user numbers.
+export async function showInterstitialAd(source = 'auto') {
   if (shownThisLaunch || adInFlight) {
-    setStatus(shownThisLaunch ? 'skipped: already shown this launch' : 'skipped: another attempt in flight');
+    const reason = shownThisLaunch ? 'already shown this launch' : 'another attempt in flight';
+    setStatus(`skipped: ${reason}`);
+    trackFire('ad_skipped', { props: { source, reason } });
     return false;
   }
   const ready = await initAdMob();                   // never request before init+consent
   if (!ready || !AdMob) {
     setStatus('skipped: AdMob not initialized');
+    trackFire('ad_skipped', { props: { source, reason: 'not initialized' } });
     return false;
   }
 
@@ -78,11 +87,18 @@ export async function showInterstitialAd() {
     shownThisLaunch = true;              // set before show so a retry can't double-show
     await AdMob.showInterstitial();
     setStatus('shown');
+    trackFire('ad_shown', {
+      props: {
+        source,
+        open_count: parseInt(localStorage.getItem('admgr_open_count') || '0', 10),
+      },
+    });
     return true;
   } catch (e) {
     // No-fill / load failure / consent refusal all land here: just don't show.
     console.warn('[AdMob] interstitial skipped:', e);
     setStatus(`ad request failed: ${e?.message || e}`);
+    trackFire('ad_failed', { props: { source, error: String(e?.message || e).slice(0, 200) } });
     return false;
   } finally {
     adInFlight = false;

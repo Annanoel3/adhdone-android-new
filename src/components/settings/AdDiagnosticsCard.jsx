@@ -18,7 +18,7 @@ export default function AdDiagnosticsCard({ user, theme }) {
   const runTest = async () => {
     setTesting(true);
     resetAdLaunchState();
-    await showInterstitialAd().catch(() => {});
+    await showInterstitialAd('manual').catch(() => {});
     setStatus(getLastAdStatus());
     setTesting(false);
   };
