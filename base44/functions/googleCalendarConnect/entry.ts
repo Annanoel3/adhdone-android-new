@@ -14,14 +14,19 @@ export default async function (req) {
 
     const state = crypto.randomUUID().replace(/-/g, '') + crypto.randomUUID().replace(/-/g, '');
 
-    await base44.asServiceRole.entities.User.update(user.id, {
+    // updateMe, not a service-role User.update: writing another record through
+    // the service role is exactly the call that was coming back 403 and
+    // surfacing to the app as a 500.
+    await base44.auth.updateMe({
       google_oauth_state: state,
       google_oauth_state_at: new Date().toISOString(),
     });
 
     return Response.json({ url: buildConsentUrl(state) });
   } catch (error) {
-    console.error('[googleCalendarConnect] failed:', error?.message);
+    console.error('[googleCalendarConnect] failed:', error?.message,
+      '| status=', error?.response?.status ?? error?.status,
+      '| detail=', JSON.stringify(error?.response?.data ?? {}).slice(0, 400));
     return Response.json({ error: error.message }, { status: 500 });
   }
 }
