@@ -1,0 +1,44 @@
+{
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "0 */2 * * *",
+      "one_time_date": null,
+      "timezone": "UTC",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
+  "description": "Every couple of hours, checks whether any user is due for their weekly Back Burner check-in. The function only acts once every 7 days per user, and only in their local afternoon/early evening outside quiet hours \u2014 so this cadence just gives it the chance to land at a sane local time in every timezone.",
+  "definition": {
+    "document": {
+      "dsl": "1.0.0",
+      "name": "back_burner_check_in",
+      "version": "1.0",
+      "namespace": "base44"
+    },
+    "do": [
+      {
+        "back_burner_check_in": {
+          "call": "invoke_backend_function",
+          "with": {
+            "function_name": "cronBackBurnerCheckIn"
+          },
+          "then": "end",
+          "x-base44": {
+            "title": "Weekly Back Burner check-in",
+            "description": "Picks one parked task, suggests a tiny restart"
+          }
+        }
+      }
+    ]
+  },
+  "name": "Back Burner Check-In"
+}
