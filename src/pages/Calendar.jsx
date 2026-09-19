@@ -203,34 +203,13 @@ export default function Calendar() {
     setConnecting(true);
     setSyncError(null);
     try {
+      // Full-page hand-off, deliberately. A popup cannot work here: the Android
+      // app has no popups, and in the browser Cross-Origin-Opener-Policy blocks
+      // reading popup.closed, so the flow never resumes. Coming back is handled
+      // by the bounce in App.jsx.
       const url = await base44.connectors.connectAppUser(CONNECTOR_ID);
-      const popup = window.open(url, '_blank');
-      if (!popup) {
-        // Popup blocked (some Android webviews): fall back to a full-page trip
-        // and let the bounce in App.jsx bring us back here.
-        sessionStorage.setItem('adhd_calendar_oauth_return', '1');
-        window.location.href = url;
-        return;
-      }
-      await new Promise((resolve) => {
-        const timer = setInterval(() => {
-          if (popup.closed) { clearInterval(timer); resolve(); }
-        }, 500);
-      });
-      // The connection isn't always readable the instant the window closes.
-      let ok = await probeConnection();
-      for (let i = 0; i < 4 && !ok; i++) {
-        await new Promise((r) => setTimeout(r, 1500));
-        ok = await probeConnection();
-      }
-      if (ok) {
-        setSyncing(true);
-        await attemptSync().catch(() => {});
-        await Promise.all([loadSyncedEvents(), loadTasks()]);
-        setSyncing(false);
-      } else {
-        setSyncError("Google didn't finish linking your account. Please try connecting again.");
-      }
+      sessionStorage.setItem('adhd_calendar_oauth_return', '1');
+      window.location.href = url;
     } finally {
       setConnecting(false);
     }
