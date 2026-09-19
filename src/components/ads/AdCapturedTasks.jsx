@@ -5,11 +5,8 @@ import { Sparkles } from "lucide-react";
 // The ADHDone task list right after three texts were shared into it.
 export default function AdCapturedTasks({ tasks, visibleCount }) {
   return (
-    <div className="w-full rounded-[38px] p-[7px] bg-[#1b1b1f] shadow-[0_26px_60px_rgba(0,0,0,0.35)]">
-      <div
-        className="rounded-[32px] overflow-hidden bg-gradient-to-b from-stone-50 to-white px-4 pt-4 pb-5 flex flex-col"
-        style={{ minHeight: 470 }}
-      >
+    <div className="w-full max-w-[280px] mx-auto rounded-[38px] p-[7px] bg-[#1b1b1f] shadow-[0_26px_60px_rgba(0,0,0,0.35)]">
+      <div className="rounded-[32px] overflow-hidden bg-gradient-to-b from-stone-50 to-white px-4 pt-4 pb-5 flex flex-col aspect-[9/19]">
         <div className="flex items-center gap-2 mb-1">
           <span className="w-7 h-7 rounded-xl bg-gradient-to-br from-orange-400 to-rose-400 flex items-center justify-center">
             <Sparkles className="w-4 h-4 text-white" />

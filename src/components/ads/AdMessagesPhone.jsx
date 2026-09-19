@@ -2,6 +2,7 @@ import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft } from "lucide-react";
 import AdShareSheet from "./AdShareSheet";
+import AdSelectionToolbar from "./AdSelectionToolbar";
 
 // A texting thread on a phone — the messages arrive one at a time, the last one
 // can be shown selected (highlighted) and then shared.
@@ -15,11 +16,8 @@ export default function AdMessagesPhone({
   children,
 }) {
   return (
-    <div className="w-full rounded-[38px] p-[7px] bg-[#1b1b1f] shadow-[0_26px_60px_rgba(0,0,0,0.35)]">
-      <div
-        className="relative rounded-[32px] overflow-hidden bg-white flex flex-col"
-        style={{ minHeight: 470 }}
-      >
+    <div className="w-full max-w-[280px] mx-auto rounded-[38px] p-[7px] bg-[#1b1b1f] shadow-[0_26px_60px_rgba(0,0,0,0.35)]">
+      <div className="relative rounded-[32px] overflow-hidden bg-white flex flex-col aspect-[9/19]">
         {/* status bar */}
         <div className="flex items-center justify-between px-4 pt-2 pb-1 text-[9px] font-semibold text-gray-500">
           <span>•••○○ Sprint LTE</span>
@@ -63,17 +61,7 @@ export default function AdMessagesPhone({
                         }`}
                       >
                         {m.text}
-                        {selected && (
-                          <motion.div
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.2 }}
-                            className="absolute -bottom-7 left-1/2 -translate-x-1/2 flex items-center gap-3 rounded-full bg-[#2b2b2e] px-3 py-1.5 text-white text-[10px] shadow-lg whitespace-nowrap z-10"
-                          >
-                            <span>Copy</span>
-                            <span className="font-semibold text-orange-300">Share</span>
-                          </motion.div>
-                        )}
+                        {selected && <AdSelectionToolbar />}
                       </div>
                     </motion.div>
                   );

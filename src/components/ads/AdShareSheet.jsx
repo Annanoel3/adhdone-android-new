@@ -1,52 +1,68 @@
 import React from "react";
 import { motion } from "framer-motion";
+import { AlignLeft, Copy } from "lucide-react";
 
 const APPS = [
-  { label: "Quick\nShare", bg: "bg-blue-500", char: "⇪" },
-  { label: "ADHDone", bg: "bg-gradient-to-br from-orange-300 to-rose-300", char: "✅", highlight: true },
-  { label: "Gmail", bg: "bg-red-500", char: "✉" },
-  { label: "Messenger", bg: "bg-sky-500", char: "💬" },
+  { label: "Quick\nShare", ring: "bg-[#2f6bff]", char: "⇄", white: true },
+  { label: "ADHDone", app: true },
+  { label: "Gmail", ring: "bg-white", char: "M", gmail: true },
+  { label: "Messenger", sub: "Chats", ring: "bg-[#0084ff]", char: "⚡", white: true },
+  { label: "Link to", sub: "Send to", ring: "bg-[#dfe6f2]", char: "🖥" },
 ];
 
-// The Android "Sharing text" sheet, with ADHDone as the tapped target.
+// The real Android "Sharing text" sheet: dark card, snippet row with a
+// document chip + copy affordance, then the app row with ADHDone pressed.
 export default function AdShareSheet({ snippet }) {
   return (
     <motion.div
-      initial={{ y: 140, opacity: 0 }}
+      initial={{ y: 160, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
-      transition={{ duration: 0.3, ease: "easeOut" }}
-      className="absolute left-0 right-0 bottom-0 rounded-t-2xl bg-[#1c1c1e] px-4 pt-3 pb-4 z-20"
+      transition={{ duration: 0.32, ease: "easeOut" }}
+      className="absolute left-1.5 right-1.5 bottom-1.5 rounded-2xl bg-[#1f1f22] overflow-hidden z-20"
     >
-      <p className="text-white text-[12px] font-semibold mb-2">Sharing text</p>
-      <div className="rounded-lg bg-white/10 px-2.5 py-2 mb-3">
-        <p className="text-white/70 text-[10px] leading-snug line-clamp-2">{snippet}</p>
+      <p className="text-white text-[15px] font-semibold px-4 pt-3 pb-3">Sharing text</p>
+      <div className="border-t border-white/10 px-3 py-3">
+        <div className="flex items-center gap-3 rounded-2xl bg-white/[0.07] px-3 py-2.5">
+          <span className="w-8 h-8 rounded-xl bg-white flex items-center justify-center shrink-0">
+            <AlignLeft className="w-4 h-4 text-gray-700" />
+          </span>
+          <p className="text-white/80 text-[11px] leading-snug line-clamp-2 flex-1">{snippet}</p>
+          <Copy className="w-4 h-4 text-white/60 shrink-0" />
+        </div>
       </div>
-      <div className="flex items-start justify-between">
+
+      <div className="border-t border-white/10 flex items-start gap-0 px-2 pt-3 pb-3 overflow-hidden">
         {APPS.map((a) => (
-          <div key={a.label} className="relative flex flex-col items-center gap-1 w-14">
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center text-[15px] ${a.bg}`}>
-              {a.char}
-            </div>
-            <span className="text-white/70 text-[8px] text-center leading-tight whitespace-pre-line">
+          <div
+            key={a.label}
+            className={`relative flex flex-col items-center gap-1.5 w-[19%] shrink-0 py-1 ${
+              a.app ? "bg-white/[0.14] rounded-lg" : ""
+            }`}
+          >
+            {a.app ? (
+              <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-200 via-amber-100 to-rose-200 flex items-center justify-center text-[7px] font-extrabold text-gray-800 tracking-tight">
+                ADHD
+              </span>
+            ) : (
+              <span
+                className={`w-9 h-9 rounded-full flex items-center justify-center text-[14px] ${a.ring} ${
+                  a.white ? "text-white" : a.gmail ? "text-red-500 font-extrabold" : "text-gray-700"
+                }`}
+              >
+                {a.char}
+              </span>
+            )}
+            <span className="text-white text-[8px] text-center leading-tight whitespace-pre-line">
               {a.label}
             </span>
-            {a.highlight && (
-              <>
-                <motion.span
-                  initial={{ scale: 0.4, opacity: 0.8 }}
-                  animate={{ scale: 1.9, opacity: 0 }}
-                  transition={{ duration: 0.7, delay: 0.35, ease: "easeOut" }}
-                  className="absolute top-0 w-10 h-10 rounded-full bg-white/60"
-                />
-                <motion.span
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.2, delay: 0.3 }}
-                  className="absolute -bottom-1 left-7 text-[20px]"
-                >
-                  👆
-                </motion.span>
-              </>
+            {a.sub && <span className="text-white/50 text-[7px] leading-none">{a.sub}</span>}
+            {a.app && (
+              <motion.span
+                initial={{ scale: 0.4, opacity: 0.7 }}
+                animate={{ scale: 1.9, opacity: 0 }}
+                transition={{ duration: 0.7, delay: 0.35, ease: "easeOut" }}
+                className="absolute top-1 w-9 h-9 rounded-xl bg-white/50"
+              />
             )}
           </div>
         ))}
