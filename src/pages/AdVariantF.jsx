@@ -107,7 +107,7 @@ export default function AdVariantF() {
   ) : step >= 10 ? (
     <AdCapturedTasks tasks={TASKS} visibleCount={step - 9} />
   ) : (
-    <div style={{ width: 'min(300px, 26vh)' }} className="aspect-[9/19]" />
+    <div style={{ width: 'min(86vw, 34vh, 340px)' }} className="aspect-[9/19]" />
   );
 
   const caption = (

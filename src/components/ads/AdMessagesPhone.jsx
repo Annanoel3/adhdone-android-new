@@ -16,7 +16,7 @@ export default function AdMessagesPhone({
   children,
 }) {
   return (
-    <div style={{ width: 'min(300px, 26vh)' }} className="mx-auto rounded-[38px] p-[7px] bg-[#1b1b1f] shadow-[0_26px_60px_rgba(0,0,0,0.35)]">
+    <div style={{ width: 'min(86vw, 34vh, 340px)' }} className="mx-auto rounded-[38px] p-[7px] bg-[#1b1b1f] shadow-[0_26px_60px_rgba(0,0,0,0.35)]">
       <div className="relative rounded-[32px] overflow-hidden bg-white flex flex-col aspect-[9/19]">
         {/* status bar */}
         <div className="flex items-center justify-between px-4 pt-2 pb-1 text-[9px] font-semibold text-gray-500">
