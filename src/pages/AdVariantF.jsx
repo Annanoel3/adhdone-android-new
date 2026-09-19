@@ -1,5 +1,4 @@
 import React from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import AdReelFrame from "@/components/ads/AdReelFrame";
 import AdMessagesPhone from "@/components/ads/AdMessagesPhone";
 import AdCapturedTasks from "@/components/ads/AdCapturedTasks";
@@ -67,32 +66,17 @@ export default function AdVariantF() {
   const banners = step >= 10 ? [] : NOISE.slice(0, Math.max(0, Math.min(2, step - 2)));
 
   const headline = (
-    <AnimatePresence mode="wait">
+    <p className="text-[21px] font-extrabold text-gray-900 leading-tight">
       {step < 10 ? (
-        <motion.p
-          key="setup"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
-          className="text-[21px] font-extrabold text-gray-900 leading-tight"
-        >
+        <>
           Three people.
           <br />
           Three things to remember.
-        </motion.p>
+        </>
       ) : (
-        <motion.p
-          key="payoff"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.35 }}
-          className="text-[21px] font-extrabold text-gray-900 leading-tight"
-        >
-          All three. Already waiting.
-        </motion.p>
+        'All three. Already waiting.'
       )}
-    </AnimatePresence>
+    </p>
   );
 
   const phone = showThread ? (
