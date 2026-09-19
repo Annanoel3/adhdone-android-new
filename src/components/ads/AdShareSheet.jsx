@@ -40,8 +40,8 @@ export default function AdShareSheet({ snippet }) {
             }`}
           >
             {a.app ? (
-              <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-orange-200 via-amber-100 to-rose-200 flex items-center justify-center text-[6px] font-extrabold text-gray-800 tracking-tight">
-                ADHD
+              <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-orange-500 to-rose-500 flex items-center justify-center text-[13px] font-extrabold text-white leading-none">
+                A
               </span>
             ) : (
               <span

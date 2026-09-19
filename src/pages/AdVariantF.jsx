@@ -49,8 +49,8 @@ const NOISE = [
 
 // 1 msg1 · 2 select1 · 3 sheet1 · 4 msg2 · 5 select2 · 6 sheet2
 // 7 msg3 · 8 select3 · 9 sheet3 · 10 app+task1 · 11 task2 · 12 task3 · 13 payoff · 14 brand
-const MARKS = [500, 2000, 2900, 4100, 5500, 6400, 7600, 9000, 9900, 11100, 11700, 12300, 13400, 15000];
-const LOOP = 19000;
+const MARKS = [500, 2000, 2900, 4100, 5500, 6400, 7600, 9000, 9900, 11100, 11700, 12300, 13400, 17200];
+const LOOP = 22000;
 
 export default function AdVariantF() {
   const runId = useAdLoop(LOOP);
