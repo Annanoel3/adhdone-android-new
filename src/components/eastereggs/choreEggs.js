@@ -21,11 +21,6 @@ const STAGES = [
     title: "Two chores. You're on a cleaning bender.",
     body: 'This is the most dangerous kind of momentum.',
   },
-  {
-    gif: 'https://media.base44.com/images/public/68dd79726fce6eca73056b9b/3f3f9d038_HappyHomeStickerbyNETFLIX.gif',
-    title: 'Three chores in one day.',
-    body: 'Somewhere, two women are laughing about how clean it is in here.',
-  },
 ];
 
 const isChore = (title = '') => {

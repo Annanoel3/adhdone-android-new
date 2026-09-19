@@ -1,34 +1,36 @@
 import React from "react";
 import { motion } from "framer-motion";
 
-const RACCOON_URL = "https://media.base44.com/images/public/68dd79726fce6eca73056b9b/84b0d762c_generated_image.png";
+const CREW_URL = "https://media.base44.com/images/public/68dd79726fce6eca73056b9b/3f3f9d038_HappyHomeStickerbyNETFLIX.gif";
 
-// Once the parking lot is genuinely full, someone shows up to rummage through
-// it. Peeks over the bottom edge of the screen, looks around, ducks back down.
+// Once the parking lot is genuinely full, two people pop up at the edge of the
+// screen, take one look at the pile, and decide it's a system. Solidarity, not
+// a comment on the size of the pile.
 export default function RaccoonPeek({ count = 0, alwaysOn = false }) {
   if (!alwaysOn && count < 10) return null;
 
   return (
     <motion.div
-      className="fixed left-4 z-40 pointer-events-none"
-      style={{ bottom: 0, width: 96 }}
-      initial={{ y: 110 }}
-      animate={{ y: [110, 10, 10, 6, 10, 110] }}
+      className="fixed left-4 z-40 pointer-events-none flex flex-col items-center"
+      style={{ bottom: 0, width: 132 }}
+      initial={{ y: 150 }}
+      animate={{ y: [150, 12, 12, 12, 150] }}
       transition={{
-        duration: 9,
-        times: [0, 0.18, 0.4, 0.55, 0.72, 1],
+        duration: 10,
+        times: [0, 0.16, 0.5, 0.8, 1],
         repeat: Infinity,
-        repeatDelay: 14,
+        repeatDelay: 16,
         ease: "easeInOut",
       }}
     >
-      <motion.img
-        src={RACCOON_URL}
+      <div className="mb-1 rounded-2xl bg-gray-900 text-white text-xs font-semibold px-3 py-1.5 shadow-lg whitespace-nowrap">
+        It's a system!
+      </div>
+      <img
+        src={CREW_URL}
         alt=""
         aria-hidden="true"
-        className="w-24 h-auto drop-shadow-lg"
-        animate={{ rotate: [0, -5, 4, 0] }}
-        transition={{ duration: 3, repeat: Infinity, repeatType: "reverse", ease: "easeInOut" }}
+        className="w-32 h-auto drop-shadow-lg"
       />
     </motion.div>
   );
