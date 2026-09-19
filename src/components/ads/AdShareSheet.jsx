@@ -40,9 +40,11 @@ export default function AdShareSheet({ snippet }) {
             }`}
           >
             {a.app ? (
-              <span className="w-7 h-7 rounded-lg bg-gradient-to-br from-orange-500 to-rose-500 flex items-center justify-center text-[13px] font-extrabold text-white leading-none">
-                A
-              </span>
+              <img
+                src="https://media.base44.com/images/public/68dd79726fce6eca73056b9b/fe2085666_ADHDone1.png"
+                alt="ADHDone"
+                className="w-7 h-7 rounded-lg object-cover"
+              />
             ) : (
               <span
                 className={`w-7 h-7 rounded-full flex items-center justify-center text-[11px] ${a.ring} ${
