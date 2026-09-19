@@ -193,27 +193,47 @@ export default function Calendar() {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [probeConnection]);
 
-  // Starts the OAuth flow with a full-page navigation. After the provider
-  // redirects back to the app (Home), a one-time flag bounces the user back to
-  // this Calendar page — see the bounce effect in App.jsx.
-  const handleConnect = async () => {
-    // Clear any cached Google grant first so Google re-prompts the account
-    // chooser on the next authorize (the platform redirect strips the
-    // prompt=select_account param, so clearing consent is what forces the
-    // picker). Without this Google silently reuses the last account.
-    try {
-      await base44.connectors.disconnectAppUser(CONNECTOR_ID);
-      setConnected(false);
-      setConnectedEmail(null);
-    } catch {}
+  // Runs OAuth in a POPUP, which is how per-user connections are meant to be
+  // made. It used to be a full-page redirect: that dumped the user back on the
+  // app root instead of here, and the connection never ended up stored. This
+  // page never unloads now — when the popup closes we just re-check.
+  const [connecting, setConnecting] = useState(false);
 
-    // Use the platform's authorize URL EXACTLY as given. We used to append
-    // prompt=select_account to it, which tampers with the callback state and
-    // left Google's consent screen looking successful while no connection was
-    // ever stored. The disconnect above is what re-shows the account chooser.
-    const url = await base44.connectors.connectAppUser(CONNECTOR_ID);
-    sessionStorage.setItem('adhd_calendar_oauth_return', '1');
-    window.location.href = url;
+  const handleConnect = async () => {
+    setConnecting(true);
+    setSyncError(null);
+    try {
+      const url = await base44.connectors.connectAppUser(CONNECTOR_ID);
+      const popup = window.open(url, '_blank');
+      if (!popup) {
+        // Popup blocked (some Android webviews): fall back to a full-page trip
+        // and let the bounce in App.jsx bring us back here.
+        sessionStorage.setItem('adhd_calendar_oauth_return', '1');
+        window.location.href = url;
+        return;
+      }
+      await new Promise((resolve) => {
+        const timer = setInterval(() => {
+          if (popup.closed) { clearInterval(timer); resolve(); }
+        }, 500);
+      });
+      // The connection isn't always readable the instant the window closes.
+      let ok = await probeConnection();
+      for (let i = 0; i < 4 && !ok; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        ok = await probeConnection();
+      }
+      if (ok) {
+        setSyncing(true);
+        await attemptSync().catch(() => {});
+        await Promise.all([loadSyncedEvents(), loadTasks()]);
+        setSyncing(false);
+      } else {
+        setSyncError("Google didn't finish linking your account. Please try connecting again.");
+      }
+    } finally {
+      setConnecting(false);
+    }
   };
 
   const handleDisconnect = async () => {
@@ -415,11 +435,12 @@ export default function Calendar() {
               <div className="mt-5 space-y-3">
                 <Button
                   onClick={handleConnect}
+                  disabled={connecting}
                   className="gap-3 px-6 py-3 h-auto bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 shadow-sm font-medium rounded-xl"
                   variant="outline"
                 >
-                  <GoogleLogo />
-                  Connect Google Calendar
+                  {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <GoogleLogo />}
+                  {connecting ? 'Waiting for Google…' : 'Connect Google Calendar'}
                 </Button>
                 <div className={`flex items-start gap-2 p-3 rounded-xl border text-xs ${isDark ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
                   <Lock className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-gray-400" />
