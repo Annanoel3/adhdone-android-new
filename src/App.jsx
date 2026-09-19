@@ -20,6 +20,7 @@ import LandingPage from '@/pages/LandingPage';
 import Home from '@/pages/Home';
 import Community from '@/pages/Community';
 import BrandBook from '@/pages/BrandBook';
+import PressKit from '@/pages/PressKit';
 import NotificationDemo from '@/pages/NotificationDemo';
 import AdVariantA from '@/pages/AdVariantA';
 import AdVariantB from '@/pages/AdVariantB';
@@ -93,6 +94,7 @@ const AuthenticatedApp = () => {
       <Route path="/privacypolicy" element={<PrivacyPolicyPublic />} />
       <Route path="/Terms" element={<TermsPublic />} />
       <Route path="/BrandBook" element={<BrandBook />} />
+      <Route path="/PressKit" element={<PressKit />} />
       <Route path="/NotificationDemo" element={<NotificationDemo />} />
       {/* Temporary ad-variant spots for A/B testing — no layout, no auth. */}
       <Route path="/ad/a" element={<AdVariantA />} />
