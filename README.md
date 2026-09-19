@@ -5,9 +5,9 @@
 - **Anna always tests on her Android phone (the installed app).** Not the preview, not desktop.
   Any fix that depends on a browser-only capability (popups, `window.open`, `window.closed`,
   new tabs) is invalid by default. She has said this many times.
-- The app is served from the **custom domain `adhdone.space`**. The Base44 platform's
-  OAuth connect URLs live on **`base44.app`** — a different origin. Anything that assumes
-  same-origin session sharing during an OAuth hand-off is suspect.
+- **A regression must be explained by something that CHANGED.** If it worked three days ago, any
+  theory about long-standing setup (the custom domain, the OAuth origins, the hosting) is wrong by
+  construction. Diff recent code first; never reach for architecture to explain a regression.
 - **Never tell Anna to contact Base44 support.** 98% of the time it is a problem I created and a
   problem I need to solve. "It's on the platform's side" is not an answer — keep digging until the
   real cause is found and fixed here.
@@ -20,10 +20,17 @@
 Google consent completes, but the platform stores no app-user connection:
 `getCurrentAppUserConnection` returns no token (sync → 400), some calls → 500.
 Another user (s2kap2chick@gmail.com) connected successfully on 2026-09-17, so it worked recently.
-Browser console shows **Cross-Origin-Opener-Policy blocking `window.closed`**, which means the
-popup-based OAuth flow cannot work at all (and popups don't exist in the Android webview).
+Server logs show the real failure: `Base44Error: Request failed with status code 403` thrown inside
+the function and returned to the app as a 500. `syncGoogleCalendar` now carries a `step` label and
+logs `step / name / status / detail` when it fails, so the next failed sync names the exact call
+that 403s. **Read that log before changing anything.**
 
-Failed attempts — do not repeat:
+Failed attempts and disproven theories — do not repeat:
 1. Removing `prompt=select_account` from the OAuth URL.
 2. Revoking the connection before reconnecting (destroys valid tokens).
 3. Popup OAuth with retry polling (blocked by COOP; unavailable on Android).
+4. **"Different origins (adhdone.space vs base44.app) break the OAuth hand-off."** Disproven: the
+   domain setup has not changed and this worked three days ago. Never raise it again.
+5. **"The sync-lock fields were missing from the User schema, so the lock write failed."** Disproven
+   by direct test — Base44 accepts undeclared fields on User without error. (The two fields are now
+   documented in the schema anyway, which is correct, but it was NOT the cause.)

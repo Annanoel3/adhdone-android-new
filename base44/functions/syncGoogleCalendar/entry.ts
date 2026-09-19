@@ -820,8 +820,14 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
 }
 
 Deno.serve(async (req) => {
+  // Which call we're on. The top-level catch used to log a bare
+  // "Base44Error: 403" with a minified stack, which named no call at all — so a
+  // sync failing at the very first step looked identical to one failing deep in
+  // the import. Every step below updates this, and the catch reports it.
+  let step = 'create_client';
   try {
     const base44 = createClientFromRequest(req);
+    step = 'auth.me';
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -834,6 +840,7 @@ Deno.serve(async (req) => {
     // Probe mode: check whether a Google Calendar connection exists without
     // running a full sync (used by the Calendar page to render connect state).
     if (body.probe) {
+      step = 'probe.getCurrentAppUserConnection';
       try {
         const conn = await base44.asServiceRole.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
         if (conn?.accessToken) {
@@ -859,6 +866,7 @@ Deno.serve(async (req) => {
     }
 
     // For app-user connector, fetch the current user's connection token
+    step = 'getCurrentAppUserConnection';
     try {
       const conn = await base44.asServiceRole.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
       accessToken = conn?.accessToken;
@@ -874,6 +882,7 @@ Deno.serve(async (req) => {
 
     // One run per account at a time. A second trigger while a sync is live gets
     // a clean "already running" instead of a second import.
+    step = 'acquireSyncLock';
     const lock = await acquireSyncLock(base44, user);
     if (!lock.acquired) {
       console.log('[syncGoogleCalendar] sync already in progress for', user.email, 'since', lock.since);
@@ -882,8 +891,10 @@ Deno.serve(async (req) => {
 
     let result;
     try {
+      step = 'syncCalendarAccount';
       result = await syncCalendarAccount(base44, user, accessToken, user.email, lock.heartbeat);
     } finally {
+      step = 'lock.release';
       await lock.release();
     }
 
@@ -907,7 +918,12 @@ Deno.serve(async (req) => {
     });
 
   } catch (error) {
-    console.error('[syncGoogleCalendar] Error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    const status = error?.response?.status ?? error?.status ?? null;
+    const detail = (() => {
+      try { return JSON.stringify(error?.response?.data ?? error?.data ?? {}).slice(0, 500); }
+      catch { return '{}'; }
+    })();
+    console.error('[syncGoogleCalendar] FAILED at step=', step, '| name=', error?.name, '| status=', status, '| message=', error?.message, '| detail=', detail);
+    return Response.json({ error: error.message, failed_step: step, upstream_status: status }, { status: 500 });
   }
 });
