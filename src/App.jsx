@@ -26,6 +26,7 @@ import AdVariantB from '@/pages/AdVariantB';
 import AdVariantC from '@/pages/AdVariantC';
 import AdVariantD from '@/pages/AdVariantD';
 import AdVariantE from '@/pages/AdVariantE';
+import AdVariantF from '@/pages/AdVariantF';
 import About from '@/pages/About';
 import Birthdays from '@/pages/Birthdays';
 import DecisionMaker from '@/pages/DecisionMaker';
@@ -99,6 +100,7 @@ const AuthenticatedApp = () => {
       <Route path="/ad/c" element={<AdVariantC />} />
       <Route path="/ad/d" element={<AdVariantD />} />
       <Route path="/ad/e" element={<AdVariantE />} />
+      <Route path="/ad/f" element={<AdVariantF />} />
 
       {/* Custom auth pages — public by definition */}
       <Route path="/login" element={<Login />} />
