@@ -60,6 +60,16 @@ export default function AdShareSheet({ snippet }) {
             {a.sub && <span className="text-white/50 text-[7px] leading-none">{a.sub}</span>}
             {a.app && (
               <motion.span
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, delay: 0.35 }}
+                className="absolute -right-1 top-5 text-[22px] z-10"
+              >
+                👆
+              </motion.span>
+            )}
+            {a.app && (
+              <motion.span
                 initial={{ scale: 0.4, opacity: 0.7 }}
                 animate={{ scale: 1.9, opacity: 0 }}
                 transition={{ duration: 0.7, delay: 0.35, ease: "easeOut" }}

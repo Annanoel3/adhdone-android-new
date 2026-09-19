@@ -113,16 +113,11 @@ export default function AdVariantF() {
   const caption = (
     <div className="w-full">
       {step >= 13 && step < 14 && (
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.4 }}
-          className="text-[17px] font-extrabold text-gray-900 leading-tight"
-        >
+        <p className="text-[17px] font-extrabold text-gray-900 leading-tight">
           You didn't type a thing.
           <br />
           You just hit share.
-        </motion.p>
+        </p>
       )}
       {step >= 14 && <AdBrandLockup line="Highlight any text. Share it. It's a task." />}
     </div>

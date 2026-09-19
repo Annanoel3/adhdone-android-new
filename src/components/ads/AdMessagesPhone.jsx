@@ -79,7 +79,7 @@ export default function AdMessagesPhone({
                         }`}
                       >
                         {m.text}
-                        {selected && <AdSelectionToolbar />}
+                        {selected && !showSheet && <AdSelectionToolbar />}
                       </div>
                     </motion.div>
                   );
