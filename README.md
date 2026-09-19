@@ -8,6 +8,9 @@
 - The app is served from the **custom domain `adhdone.space`**. The Base44 platform's
   OAuth connect URLs live on **`base44.app`** — a different origin. Anything that assumes
   same-origin session sharing during an OAuth hand-off is suspect.
+- **Never tell Anna to contact Base44 support.** 98% of the time it is a problem I created and a
+  problem I need to solve. "It's on the platform's side" is not an answer — keep digging until the
+  real cause is found and fixed here.
 - **Never state something about her data, her users, or app behavior as fact unless it was
   looked up in this session.** Query the entity, read the log, open the file. If it wasn't
   checked, say "I'm guessing — I'd have to look." Do not invent a reason she asked for a change.
