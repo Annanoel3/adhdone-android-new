@@ -54,6 +54,18 @@ export default function ChaosModeStyles({ user }) {
         background: #ffd0f2 !important;
         border: 4px dotted #00a2ff !important;
       }
+      /* Popups keep the loud skin but must stay centered and on-screen: the
+         rotate + fat dashed border above pushed dialogs off the right edge. */
+      [role="dialog"], [role="alertdialog"] {
+        transform: translate(-50%, -50%) !important;
+        border-width: 4px !important;
+        border-radius: 24px !important;
+        max-width: calc(100vw - 1.5rem) !important;
+        box-shadow: 6px 6px 0 #00e5ff !important;
+      }
+      [role="dialog"] *, [role="alertdialog"] * {
+        transform: none !important;
+      }
       aside, [data-sidebar] {
         background: repeating-linear-gradient(90deg, #ffb300 0 20px, #ff2ec4 20px 40px) !important;
       }
