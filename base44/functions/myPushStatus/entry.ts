@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
             me = null;
         }
         if (!me?.email) {
-            return Response.json({ success: false, error: 'Not signed in' }, { status: 401 });
+            return Response.json({ success: false, error: 'Not signed in', apiUrl: req.headers.get('Base44-Api-Url'), host: req.headers.get('host') }, { status: 401 });
         }
 
         const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
