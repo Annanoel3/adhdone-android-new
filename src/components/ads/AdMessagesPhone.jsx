@@ -16,8 +16,8 @@ export default function AdMessagesPhone({
   children,
 }) {
   return (
-    <div className="w-full max-w-[280px] mx-auto rounded-[38px] p-[7px] bg-[#1b1b1f] shadow-[0_26px_60px_rgba(0,0,0,0.35)]">
-      <div className="relative rounded-[32px] overflow-hidden bg-white flex flex-col aspect-[9/19]">
+    <div className="h-full aspect-[9/19] mx-auto rounded-[38px] p-[7px] bg-[#1b1b1f] shadow-[0_26px_60px_rgba(0,0,0,0.35)]">
+      <div className="relative h-full rounded-[32px] overflow-hidden bg-white flex flex-col">
         {/* status bar */}
         <div className="flex items-center justify-between px-4 pt-2 pb-1 text-[9px] font-semibold text-gray-500">
           <span>•••○○ Sprint LTE</span>
@@ -37,8 +37,26 @@ export default function AdMessagesPhone({
               <span className="text-[11px] font-medium text-blue-500">Details</span>
             </div>
 
+            {/* distraction banners — in flow, so they never sit on the text */}
+            <div className="px-2 pt-1 space-y-1">
+              <AnimatePresence>
+                {banners.map((b) => (
+                  <motion.div
+                    key={b}
+                    initial={{ opacity: 0, y: -14 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.25 }}
+                    className="rounded-xl bg-gray-50 border border-gray-200 px-3 py-1.5"
+                  >
+                    <p className="text-[9px] font-semibold text-gray-500 leading-tight">{b}</p>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+
             {/* bubbles */}
-            <div className="flex-1 px-3 py-3 space-y-2">
+            <div className="flex-1 px-3 pt-2 pb-3 space-y-2">
               <AnimatePresence>
                 {messages.map((m, i) => {
                   const isLast = i === messages.length - 1;
@@ -70,24 +88,6 @@ export default function AdMessagesPhone({
             </div>
           </>
         )}
-
-        {/* distraction banners across the top */}
-        <div className="absolute top-[52px] left-2 right-2 space-y-1 z-30">
-          <AnimatePresence>
-            {banners.map((b) => (
-              <motion.div
-                key={b}
-                initial={{ opacity: 0, y: -18 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -12 }}
-                transition={{ duration: 0.25 }}
-                className="rounded-xl bg-white/95 backdrop-blur px-3 py-1.5 shadow-[0_6px_20px_rgba(0,0,0,0.15)]"
-              >
-                <p className="text-[10px] font-semibold text-gray-800 leading-tight">{b}</p>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
 
         <AnimatePresence>
           {showSheet && (

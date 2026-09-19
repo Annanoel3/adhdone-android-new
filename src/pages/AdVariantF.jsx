@@ -1,14 +1,15 @@
 import React from "react";
-import { motion } from "framer-motion";
-import AdStage from "@/components/ads/AdStage";
+import { motion, AnimatePresence } from "framer-motion";
+import AdReelFrame from "@/components/ads/AdReelFrame";
 import AdMessagesPhone from "@/components/ads/AdMessagesPhone";
 import AdCapturedTasks from "@/components/ads/AdCapturedTasks";
 import AdBrandLockup from "@/components/ads/AdBrandLockup";
 import { useAdLoop, useAdSteps } from "@/components/ads/useAdLoop";
 
 // VARIANT F — Three texts, three shares, three tasks.
-// Hypothesis: the share-to-capture flow sells itself if you watch real life
-// arrive faster than anyone could write it down.
+// Built for a reel: the top and bottom strips of the canvas stay empty so a
+// platform's own username/caption text can't land on anything that matters, and
+// every band has a fixed height so no copy appearing ever pushes the phone.
 
 const THREADS = [
   {
@@ -44,7 +45,6 @@ const TASKS = [
 const NOISE = [
   "Instagram · 4 new likes on your story",
   "Weather · Rain starting in 20 min",
-  "Bank · Card ending 4417 charged $62.10",
 ];
 
 // 1 msg1 · 2 select1 · 3 sheet1 · 4 msg2 · 5 select2 · 6 sheet2
@@ -66,53 +66,67 @@ export default function AdVariantF() {
   // Junk notifications drift in over the first two threads, then clear out.
   const banners = step >= 10 ? [] : NOISE.slice(0, Math.max(0, Math.min(2, step - 2)));
 
-  return (
-    <AdStage tone="warm">
-      <div className="space-y-5">
-        {step < 10 && (
-          <p className="text-center text-[22px] font-extrabold text-gray-900 leading-tight">
-            Three people.
-            <br />
-            Three things to remember.
-          </p>
-        )}
-
-        {showThread && (
-          <AdMessagesPhone
-            sender={THREADS[threadIndex].sender}
-            clock={THREADS[threadIndex].clock}
-            messages={THREADS[threadIndex].messages}
-            highlight={highlight}
-            showSheet={showSheet}
-            banners={banners}
-          />
-        )}
-
-        {step >= 10 && (
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ duration: 0.35, ease: "easeOut" }}
-          >
-            <AdCapturedTasks tasks={TASKS} visibleCount={step - 9} />
-          </motion.div>
-        )}
-
-        {step >= 13 && (
-          <motion.p
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="text-center text-xl font-extrabold text-gray-900 leading-tight"
-          >
-            You didn't type a thing.
-            <br />
-            You just hit share.
-          </motion.p>
-        )}
-
-        {step >= 14 && <AdBrandLockup line="Highlight any text. Share it. It's a task." />}
-      </div>
-    </AdStage>
+  const headline = (
+    <AnimatePresence mode="wait">
+      {step < 10 ? (
+        <motion.p
+          key="setup"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
+          className="text-[21px] font-extrabold text-gray-900 leading-tight"
+        >
+          Three people.
+          <br />
+          Three things to remember.
+        </motion.p>
+      ) : (
+        <motion.p
+          key="payoff"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.35 }}
+          className="text-[21px] font-extrabold text-gray-900 leading-tight"
+        >
+          All three. Already waiting.
+        </motion.p>
+      )}
+    </AnimatePresence>
   );
+
+  const phone = showThread ? (
+    <AdMessagesPhone
+      sender={THREADS[threadIndex].sender}
+      clock={THREADS[threadIndex].clock}
+      messages={THREADS[threadIndex].messages}
+      highlight={highlight}
+      showSheet={showSheet}
+      banners={banners}
+    />
+  ) : step >= 10 ? (
+    <AdCapturedTasks tasks={TASKS} visibleCount={step - 9} />
+  ) : (
+    <div className="h-full aspect-[9/19]" />
+  );
+
+  const caption = (
+    <div className="w-full">
+      {step >= 13 && step < 14 && (
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.4 }}
+          className="text-[17px] font-extrabold text-gray-900 leading-tight"
+        >
+          You didn't type a thing.
+          <br />
+          You just hit share.
+        </motion.p>
+      )}
+      {step >= 14 && <AdBrandLockup line="Highlight any text. Share it. It's a task." />}
+    </div>
+  );
+
+  return <AdReelFrame headline={headline} phone={phone} caption={caption} />;
 }
