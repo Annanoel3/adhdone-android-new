@@ -20,7 +20,15 @@
 Google consent completes, but the platform stores no app-user connection:
 `getCurrentAppUserConnection` returns no token (sync → 400), some calls → 500.
 Another user (s2kap2chick@gmail.com) connected successfully on 2026-09-17, so it worked recently.
-Server logs show the real failure: `Base44Error: Request failed with status code 403` thrown inside
+**Fixed by replacing the connector (2026-09-19):** the app now runs its OWN Google OAuth —
+`googleCalendarConnect` → Google → `googleCalendarCallback` (redirect URI
+`https://adhdone.space/functions/googleCalendarCallback`, must stay registered in Google Cloud) →
+refresh token stored on the user record → `syncGoogleCalendar` refreshes it per sync. The platform
+connector is only a fallback for accounts linked before the switch. Do not restore it.
+
+History of the failure that forced this:
+
+Server logs showed the real failure: `Base44Error: Request failed with status code 403` thrown inside
 the function and returned to the app as a 500. `syncGoogleCalendar` now carries a `step` label and
 logs `step / name / status / detail` when it fails, so the next failed sync names the exact call
 that 403s. **Read that log before changing anything.**
