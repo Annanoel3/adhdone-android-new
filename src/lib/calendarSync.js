@@ -16,6 +16,7 @@ import { trackFire } from '@/lib/appTrack';
 // an overlapping run.
 
 const GATE_KEY = 'calendar_last_synced_at';
+const CONNECTED_KEY = 'calendar_connected';
 const INTERVAL_KEY = 'calendar_auto_sync_interval';
 const THRESHOLDS = {
   '6hours': 6 * 3600000,
@@ -97,10 +98,35 @@ export function runCalendarSync({ background = false } = {}) {
   return inFlight;
 }
 
-// Background trigger: only runs when the user's chosen interval has elapsed.
+// Remembers whether this account actually has a Google Calendar connected, so
+// the background sync never fires for someone who has never connected one.
+export function setCalendarConnected(isConnected) {
+  localStorage.setItem(CONNECTED_KEY, isConnected ? 'true' : 'false');
+}
+
+// Cheap "is a calendar connected?" check that also records the answer.
+async function probeConnected() {
+  const known = localStorage.getItem(CONNECTED_KEY);
+  if (known === 'true') return true;
+  if (known === 'false') return false;
+  // Unknown (e.g. an existing user on a new device): ask once, then remember.
+  try {
+    const res = await base44.functions.invoke('syncGoogleCalendar', { probe: true });
+    const connected = !!(res?.data || res)?.connected;
+    setCalendarConnected(connected);
+    return connected;
+  } catch {
+    setCalendarConnected(false);
+    return false;
+  }
+}
+
+// Background trigger: only runs when a calendar is actually connected AND the
+// user's chosen interval has elapsed.
 // Returns the shared promise (or null when nothing needed to run).
-export function maybeAutoSync() {
+export async function maybeAutoSync() {
   if (inFlight) return inFlight;
   if (!isAutoSyncDue()) return null;
+  if (!(await probeConnected())) return null;
   return runCalendarSync({ background: true }).catch(() => null);
 }

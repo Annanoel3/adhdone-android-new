@@ -22,7 +22,7 @@ import {
 import CalendarGrid from '@/components/calendar/CalendarGrid';
 import TaskDetailsModal from '@/components/tasks/TaskDetailsModal';
 import KeepAppOpenNote from '@/components/shared/KeepAppOpenNote';
-import { runCalendarSync, maybeAutoSync, getInFlightSync } from '@/lib/calendarSync';
+import { runCalendarSync, maybeAutoSync, getInFlightSync, setCalendarConnected } from '@/lib/calendarSync';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
 
@@ -127,11 +127,13 @@ export default function Calendar() {
       const result = res.data;
       if (result?.connected) {
         setConnected(true);
+        setCalendarConnected(true);
         if (result.connected_email) setConnectedEmail(result.connected_email);
         return true;
       }
     } catch { /* not connected */ }
     setConnected(false);
+    setCalendarConnected(false);
     setConnectedEmail(null);
     return false;
   }, []);
@@ -210,6 +212,7 @@ export default function Calendar() {
   const handleDisconnect = async () => {
     await base44.connectors.disconnectAppUser(CONNECTOR_ID);
     setConnected(false);
+    setCalendarConnected(false);
     setConnectedEmail(null);
     setSyncResult(null);
     setSyncedEvents([]);
