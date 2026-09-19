@@ -604,12 +604,12 @@ export default function TaskCard({
           {collapsedDate && !task.silenced && (
             <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${
               collapsedDate.overdue
-                ? theme === 'dark' ? 'border-red-700 bg-red-900/30 text-red-300' : 'border-red-300 bg-red-50 text-red-700'
+                ? 'border-red-700 bg-red-600 text-white font-semibold'
                 : collapsedDate.isTodayLabel
                   ? theme === 'dark' ? 'border-green-700 bg-green-900/30 text-green-400' : 'border-green-300 bg-green-50 text-green-700'
                   : theme === 'dark' ? 'border-gray-700 bg-gray-800 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-600'
             }`}>
-              {collapsedDate.label}{timeRange ? ` · ${timeRange}` : ''}
+              {collapsedDate.overdue ? `Overdue · ${collapsedDate.label}` : collapsedDate.label}{timeRange ? ` · ${timeRange}` : ''}
             </span>
           )}
 
