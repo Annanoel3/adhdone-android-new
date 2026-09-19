@@ -16,10 +16,10 @@ export default function AdMessagesPhone({
   children,
 }) {
   return (
-    <div style={{ width: 'min(86vw, 30vh, 420px)' }} className="mx-auto rounded-[38px] p-[7px] bg-[#1b1b1f] shadow-[0_26px_60px_rgba(0,0,0,0.35)]">
-      <div className="relative rounded-[32px] overflow-hidden bg-white flex flex-col aspect-[9/19]">
+    <div style={{ width: 'min(86vw, 30vh, 420px)' }} className="mx-auto rounded-[26px] p-[6px] bg-[#1b1b1f] shadow-[0_26px_60px_rgba(0,0,0,0.35)]">
+      <div className="relative rounded-[21px] overflow-hidden bg-white flex flex-col aspect-[9/19]">
         {/* status bar */}
-        <div className="flex items-center justify-between px-4 pt-2 pb-1 text-[9px] font-semibold text-gray-500">
+        <div className="flex items-center justify-between px-4 pt-2 pb-1 text-[7px] font-semibold text-gray-500">
           <span>•••○○ Sprint LTE</span>
           <span className="text-gray-900">{clock}</span>
           <span>75% ▰</span>
@@ -29,12 +29,12 @@ export default function AdMessagesPhone({
           <>
             {/* thread header */}
             <div className="flex items-center justify-between px-3 py-2 border-b border-gray-200 bg-white">
-              <span className="flex items-center text-[11px] font-medium text-blue-500">
-                <ChevronLeft className="w-3.5 h-3.5" />
+              <span className="flex items-center text-[9px] font-medium text-blue-500">
+                <ChevronLeft className="w-3 h-3" />
                 Messages
               </span>
-              <span className="text-[13px] font-semibold text-gray-900">{sender}</span>
-              <span className="text-[11px] font-medium text-blue-500">Details</span>
+              <span className="text-[11px] font-semibold text-gray-900">{sender}</span>
+              <span className="text-[9px] font-medium text-blue-500">Details</span>
             </div>
 
             {/* distraction banners — in flow, so they never sit on the text */}
@@ -49,7 +49,7 @@ export default function AdMessagesPhone({
                     transition={{ duration: 0.25 }}
                     className="rounded-xl bg-gray-50 border border-gray-200 px-3 py-1.5"
                   >
-                    <p className="text-[9px] font-semibold text-gray-500 leading-tight">{b}</p>
+                    <p className="text-[8px] font-semibold text-gray-500 leading-tight">{b}</p>
                   </motion.div>
                 ))}
               </AnimatePresence>
@@ -70,7 +70,7 @@ export default function AdMessagesPhone({
                       className={`flex ${m.from === "me" ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`relative max-w-[76%] rounded-2xl px-3 py-2 text-[12px] leading-snug ${
+                        className={`relative max-w-[76%] rounded-2xl px-2.5 py-1.5 text-[10px] leading-snug ${
                           m.from === "me"
                             ? "bg-green-500 text-white"
                             : selected
