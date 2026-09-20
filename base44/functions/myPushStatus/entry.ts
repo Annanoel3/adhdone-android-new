@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { platformRequest } from '../../shared/sdkRetry.ts';
 
 // CAN A PUSH REACH THE SIGNED-IN USER?
 // A phone with notifications switched off looks exactly like a working one from
@@ -10,9 +11,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 // It takes no input and only ever looks up the person who is signed in.
 Deno.serve(async (req) => {
     try {
-                console.log('[myPushStatus] api-url', req.headers.get('Base44-Api-Url'), '| host', req.headers.get('host'), '| origin', req.headers.get('origin'));
-        console.log('[myPushStatus] api-url', req.headers.get('Base44-Api-Url'), '| host', req.headers.get('host'), '| origin', req.headers.get('origin'));
-        const base44 = createClientFromRequest(req);
+        const base44 = createClientFromRequest(platformRequest(req));
         let me = null;
         try {
             me = await base44.auth.me();
@@ -20,7 +19,7 @@ Deno.serve(async (req) => {
             me = null;
         }
         if (!me?.email) {
-            return Response.json({ success: false, error: 'Not signed in', apiUrl: req.headers.get('Base44-Api-Url'), host: req.headers.get('host') }, { status: 401 });
+            return Response.json({ success: false, error: 'Not signed in' }, { status: 401 });
         }
 
         const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
@@ -49,7 +48,7 @@ Deno.serve(async (req) => {
         const push = subscriptions.filter((s) => typeof s?.type === 'string' && s.type.endsWith('Push'));
         const pushTypes = [...new Set(push.map((s) => s.type))];
         const enabledPushTypes = [...new Set(push.filter((s) => s.enabled === true).map((s) => s.type))];
-        return Response.json({ success: true, known: true, pushTypes, enabledPushTypes, v: 'diag2' });
+        return Response.json({ success: true, known: true, pushTypes, enabledPushTypes });
     } catch (error) {
         console.error('[myPushStatus] Unhandled error:', error.message);
         return Response.json({ success: false, error: 'Internal server error' }, { status: 500 });
