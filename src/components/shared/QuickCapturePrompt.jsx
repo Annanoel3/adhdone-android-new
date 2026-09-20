@@ -170,16 +170,42 @@ export function WaysToAddPopup({ user }) {
   const [busy, setBusy] = useState(false);
   const started = useRef(false);
 
+  // TEMPORARY test hook — delete this line and its three uses below once the
+  // popup is settled. Anna's own account gets the popup on every open, in a
+  // browser as well as in the app, so the design can be looked at without
+  // burning the one-time flags or waiting for a second open. No other account
+  // is touched by it.
+  const isTester = (user?.email || '').toLowerCase() === 's2kap2chick@gmail.com';
+
   useEffect(() => {
     // Wait for the account's onboarding flags to be copied down before reading
     // them, or this replays for someone who already saw it and has just signed
     // in on a new phone.
     if (!user || started.current) return;
     started.current = true;
-    if (isStepDone(WAYS_SEEN)) return;
+    if (!isTester && isStepDone(WAYS_SEEN)) return;
 
     let cancelled = false;
     const startedAt = Date.now();
+
+    // Ask whether the pinned notification is already on, wait for the first-run
+    // sequence to be finished and for the screen to be calm, then show it. If
+    // the quick capture check fails we simply do not offer it — never claim a
+    // state we have not confirmed.
+    const show = () => {
+      const { ShareBridge } = getPlugins();
+      ShareBridge?.isQuickCaptureEnabled?.()
+        .then((res) => { if (!cancelled) setQuickCaptureOn(!!res?.enabled); })
+        .catch(() => {});
+      waitForStep(ONBOARDING_STEPS.homeTour)
+        .then(waitForCalm)
+        .then(() => { if (!cancelled) setOpen(true); });
+    };
+
+    if (isTester) {
+      show();
+      return () => { cancelled = true; };
+    }
 
     // Same poll as above: the bridge attaches a moment after the web layer
     // boots. No bridge at all means a browser, where none of these four ways
@@ -196,24 +222,14 @@ export function WaysToAddPopup({ user }) {
           return;
         }
 
-        // Only decides whether to offer the pinned notification. If the check
-        // fails we simply do not offer it — never claim a state we have not
-        // confirmed.
-        ShareBridge.isQuickCaptureEnabled?.()
-          .then((res) => { if (!cancelled) setQuickCaptureOn(!!res?.enabled); })
-          .catch(() => {});
-
-        // Never stacked on the first-run sequence.
-        waitForStep(ONBOARDING_STEPS.homeTour)
-          .then(waitForCalm)
-          .then(() => { if (!cancelled) setOpen(true); });
+        show();
       } else if (Date.now() - startedAt > 15000) {
         clearInterval(poll);
       }
     }, 500);
 
     return () => { cancelled = true; clearInterval(poll); };
-  }, [user]);
+  }, [user, isTester]);
 
   useEffect(() => {
     if (!open) return;
@@ -222,7 +238,7 @@ export function WaysToAddPopup({ user }) {
   }, [open]);
 
   const close = () => {
-    markStepDone(WAYS_SEEN);
+    if (!isTester) markStepDone(WAYS_SEEN);
     setOpen(false);
   };
 
