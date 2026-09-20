@@ -103,6 +103,19 @@ These are absolutes. There is no clever exception, no "but in this case."
    either check it or say plainly "I'm guessing — I'd have to look." An answer that
    sounds confident and was never verified costs Anna more than a slow one: she then has
    to disprove it. Opinions are fine, labeled as opinions. Invented facts are not.
+9. **The app talks to Base44 at base44.app, never through its own domain.**
+   `src/api/base44Client.js` passes `serverUrl` from app-params (https://base44.app, or
+   the preview host the editor passes in). Never set it to `''`: that means "whatever
+   domain the app was opened on", and adhdone.space sits behind Cloudflare's proxy, which
+   answers a backend function's own calls back into Base44 with a bot check (HTTP 403,
+   "Just a moment"). That took down every function the app calls from Sept 18 to Sept 20
+   2026 — calendar connect and sync, motivation, emoji, push status, player ID. A function
+   that an outside service reaches through adhdone.space directly (Google's OAuth redirect
+   into `googleCalendarCallback`, webhooks) must build its client with
+   `createClientFromRequest(platformRequest(req))` from `base44/shared/sdkRetry.ts` for the
+   same reason. And: saving a backend function in the editor only updates the PREVIEW
+   version; the live app runs the PUBLISHED version, so a backend change is not on Anna's
+   phone until Publish.
 
 ## 5. ALREADY BUILT — DO NOT PRESENT THESE AS NEW
 
@@ -185,3 +198,6 @@ on this path.
 - Retrying calendar sync with an artificial sleep/wait delay
 - Targeting announcements by both device ID and user ID (duplicate storms)
 - The Variant B jitter animation (seizure risk)
+- Retrying an SDK call that got Cloudflare's "Just a moment" page (`withChallengeRetry`) —
+  the challenge is not transient; every call through adhdone.space gets it. Fix the host,
+  not the retry (hard rule 9)
