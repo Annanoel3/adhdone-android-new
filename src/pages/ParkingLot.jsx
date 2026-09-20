@@ -205,15 +205,9 @@ export default function ParkingLot() {
   const [viewingImage, setViewingImage] = useState(null);
   const [notesDialogIdea, setNotesDialogIdea] = useState(null);
   
-  const [currentUserEmail, setCurrentUserEmail] = useState('');
-
   const specialMode = localStorage.getItem('special_mode') || 'normal';
   
   const queryClient = useQueryClient();
-
-  useEffect(() => {
-    base44.auth.me().then(u => setCurrentUserEmail(u?.email || '')).catch(() => {});
-  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -523,10 +517,7 @@ Return ONLY the category name, nothing else.`;
       </div>
 
       {/* Once the lot is properly full, something comes to rummage through it. */}
-      <RaccoonPeek
-        count={topLevelIdeas.length}
-        alwaysOn={currentUserEmail === 's2kap2chick@gmail.com'}
-      />
+      <RaccoonPeek count={topLevelIdeas.length} />
 
       {/* Quick Add Modal */}
       <Dialog open={showQuickAdd} onOpenChange={setShowQuickAdd}>
