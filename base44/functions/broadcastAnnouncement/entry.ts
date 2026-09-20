@@ -24,7 +24,10 @@ Deno.serve(async (req) => {
       return Response.json({ success: false, error: 'Admins only' }, { status: 403 });
     }
 
-    const { title, body, dryRun = true, confirm = false } = await req.json();
+    // deliveryTimeOfDay (e.g. "9:00AM") hands OneSignal a local time of day and it
+    // delivers at that hour in each person's own timezone, so a fix announced at
+    // midnight Central does not wake anyone up. Left out = send right now.
+    const { title, body, dryRun = true, confirm = false, deliveryTimeOfDay = null } = await req.json();
     if (!title || !body) {
       return Response.json({ success: false, error: 'title and body are required' }, { status: 400 });
     }
@@ -56,6 +59,7 @@ Deno.serve(async (req) => {
         recipientCount: emails.length,
         title,
         body,
+        deliveryTimeOfDay,
         note: 'Nothing was sent. Re-run with dryRun:false and confirm:true to actually broadcast.',
       });
     }
@@ -73,6 +77,9 @@ Deno.serve(async (req) => {
         headings: { en: title },
         contents: { en: body },
         data: { type: 'announcement' },
+        ...(deliveryTimeOfDay
+          ? { delayed_option: 'timezone', delivery_time_of_day: deliveryTimeOfDay }
+          : {}),
       }),
     });
     const out = await res.json();
