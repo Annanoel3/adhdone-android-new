@@ -7,6 +7,12 @@ import { generateSmartTipForUser, CURRENT_PROMPT_VERSION } from "../utils/dailyT
 
 const isEvening = () => new Date().getHours() >= 17;
 
+// Shown when a tip could not be generated (backend down, network gone). It is
+// never saved: a saved fallback would sit there as "today's tip" until tomorrow
+// even after the backend came back, which is exactly what happened Sept 18-20
+// 2026. Kept as one constant so an old saved copy can be recognised and replaced.
+const FALLBACK_TIP_TEXT = "Stuck in cement? Stand up, do 5 jumping jacks (seriously), then immediately dive into your task. Movement gets the blood flowing and tricks your brain into action mode.";
+
 const getLocalDateString = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -51,7 +57,8 @@ export default function DailyTipCard({ theme }) {
       const needsRegeneration = 
         !tip.prompt_version || 
         tip.prompt_version < CURRENT_PROMPT_VERSION ||
-        shouldRegenerateForContext(completedToday);
+        shouldRegenerateForContext(completedToday) ||
+        tip.tip_text === FALLBACK_TIP_TEXT;
       
       if (needsRegeneration) {
         console.log('🔄 [DAILY TIP] Regenerating tip (context changed or old version)...');
@@ -112,13 +119,8 @@ export default function DailyTipCard({ theme }) {
       setTodaysTip(newTip);
     } catch (error) {
       console.error("Error generating tip:", error);
-      const fallbackTip = await base44.entities.DailyTip.create({
-        tip_text: "Stuck in cement? Stand up, do 5 jumping jacks (seriously), then immediately dive into your task. Movement gets the blood flowing and tricks your brain into action mode.",
-        category: "focus",
-        shown_date: today,
-        prompt_version: CURRENT_PROMPT_VERSION
-      });
-      setTodaysTip(fallbackTip);
+      // Show the fallback for this visit only; the next open tries again.
+      setTodaysTip({ tip_text: FALLBACK_TIP_TEXT, category: "focus", shown_date: today });
     }
     setIsLoading(false);
   };
