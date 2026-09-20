@@ -56,6 +56,10 @@
     "notes": {
       "type": "string",
       "description": "Additional notes for this idea"
+    },
+    "capture_id": {
+      "type": "string",
+      "description": "Idempotency key for ideas captured from OUTSIDE the app (share sheet, pinned notification, widget). Native retries after a lost response reuse the same id, and captureText returns the ideas the first attempt already made instead of creating a second copy. Empty for ideas made inside the app."
     }
   },
   "required": [
