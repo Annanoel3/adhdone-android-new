@@ -272,57 +272,17 @@ export async function scheduleTaskReminders(
 }
 
 // ── Task or idea ───────────────────────────────────────────────────────────
-// The SAME question the in-app Add button asks, asked the same way, so a
+// The SAME question the in-app Add button asks, asked in the SAME place, so a
 // capture from the share sheet / pinned notification / widget lands where it
 // would have landed had it been typed into the app. Before this existed,
-// everything captured from outside the app became a Task, even a pure idea —
-// the category step lived only in the web pipeline and native never ran it.
+// everything captured from outside the app became a Task, even a pure idea.
 //
-// The prompt is a verbatim copy of the one in
-// src/components/utils/taskCreationPipeline.js, and both paths call the same
-// checkTaskCategory function. Change one, change the other — or better, move
-// the web path onto this helper and delete its copy, so there is one prompt.
-const CATEGORY_PROMPT = `Analyze this input: "%TEXT%"
-
-      CRITICAL RULES:
-      1. If user explicitly says "parking lot" → ALWAYS parking_lot
-      2. If it's an ACTIONABLE TODO that needs to be done → task
-      Examples: "clean the toilet", "call dentist", "do laundry", "Amazon returns", "pay bills"
-      3. If it's IDEAS, THOUGHTS, INFORMATION, or vague LISTS → parking_lot
-
-      TASKS (concrete actions that need to be done):
-      - Clear actionable todos: "clean the toilet", "call dentist", "Amazon returns", "submit report", "pay rent"
-      - With timing: "Remind me tomorrow", "Call at 2pm", "Do laundry every day"
-      - Deadlines: "Turn in homework Tuesday", "Pay rent by the 1st"
-      - Appointments: "Therapist at 12 p.m.", "Meeting at 9am"
-      - Events: "Martin's wedding on the 30th", "Birthday party Saturday"
-      - Errands: "Pick up dry cleaning", "Drop off package", "Go to post office"
-
-      PARKING LOT (ideas, thoughts, non-actionable information):
-      - Explicit: "add to parking lot", "parking lot idea"
-      - Ideas/thoughts: "Steel guitar strings might be better", "Maybe try meditation"
-      - Planning: "Think about what to tell my professor"
-      - Shopping/reading lists WITHOUT urgency: "I need milk, eggs, paper", "read twilight and cirque du freak"
-      - Information: "Brazilian blowouts cost $200"
-      - Brainstorming: "My project needs hypothesis, summary, references"
-      - Questions: "Not sure if car leak is from transmission or seal"
-      - Research: "Look into meditation apps", "Research vacation spots"
-
-      KEY DISTINCTION: If someone needs to DO it (action verb), it's a TASK. If they're just capturing info/ideas, it's PARKING LOT.
-
-      Return JSON:
-      {
-      "category": "parking_lot" | "task",
-      "is_list": true/false,
-      "main_idea": "short title",
-      "items": ["item 1", "item 2", ...] or []
-      }`;
-
+// The prompt itself lives inside the checkTaskCategory function, not here and
+// not in the web pipeline, so the two entry points cannot drift apart. Send it
+// raw text and nothing else.
 export async function classifyCapture(base44: any, text: string) {
   try {
-    const out = await callFunction(base44, "checkTaskCategory", {
-      prompt: CATEGORY_PROMPT.replace("%TEXT%", text),
-    });
+    const out = await callFunction(base44, "checkTaskCategory", { text });
     const r = out?.response ?? out;
     if (r && (r.category === "parking_lot" || r.category === "task")) return r;
     console.error("[captureToTasks] unusable category answer:", JSON.stringify(r)?.slice(0, 200));
