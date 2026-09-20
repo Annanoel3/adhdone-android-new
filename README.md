@@ -168,16 +168,7 @@ The `DailyTip` table has therefore never been cleaned. Fix the workflow to pass
 the secret (or make the function accept the workflow caller) and verify one run
 actually deletes yesterday's rows.
 
-### 4. One category prompt, not two
-The "is this a task or a parking lot idea" prompt now exists twice: inline in
-`src/components/utils/taskCreationPipeline.js`, and as `CATEGORY_PROMPT` in
-`base44/shared/captureToTasks.ts` (added 2026-09-20 so captures from outside the
-app can create ideas too). Both call `checkTaskCategory`. Move the web path onto
-`classifyCapture()` from the shared module and delete the inline copy, so the two
-entry points can never drift apart. This app has already paid twice for having
-two copies of one decision.
-
-### 5. Wording: every push a user receives IS a reminder
+### 4. Wording: every push a user receives IS a reminder
 A smart nudge and a morning digest are reminders to the person holding the phone,
 whatever the code calls them internally. Never write "no reminders were sent"
 because a task had no `reminder_interval` / `next_reminder` chain. Say the task
@@ -185,7 +176,7 @@ had no scheduled reminder chain, and name the pushes that did go out. Anna's
 words: "Anytime a user receives a push, that is a reminder." Once you have read
 this and understood it, delete this item.
 
-### 6. Historical note — do not re-break, then delete this item
+### 5. Historical note — do not re-break, then delete this item
 Tasks captured from outside the app before roughly 2026-09-18 17:20 UTC were saved
 with an EMPTY `notification_recipient_email`. `cronRefillReminders` requires that
 field ("never fall back to created_by") and `cronDailyDigest` skips tasks without
