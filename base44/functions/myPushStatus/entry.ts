@@ -49,7 +49,7 @@ Deno.serve(async (req) => {
         const push = subscriptions.filter((s) => typeof s?.type === 'string' && s.type.endsWith('Push'));
         const pushTypes = [...new Set(push.map((s) => s.type))];
         const enabledPushTypes = [...new Set(push.filter((s) => s.enabled === true).map((s) => s.type))];
-        return Response.json({ success: true, known: true, pushTypes, enabledPushTypes });
+        return Response.json({ success: true, known: true, pushTypes, enabledPushTypes, v: 'diag2' });
     } catch (error) {
         console.error('[myPushStatus] Unhandled error:', error.message);
         return Response.json({ success: false, error: 'Internal server error' }, { status: 500 });
