@@ -170,7 +170,7 @@ export function WaysToAddPopup({ user }) {
   const [busy, setBusy] = useState(false);
   const started = useRef(false);
 
-  // TEMPORARY test hook — delete this line and its three uses below once the
+  // TEMPORARY test hook — delete this line and its four uses below once the
   // popup is settled. Anna's own account gets the popup on every open, in a
   // browser as well as in the app, so the design can be looked at without
   // burning the one-time flags or waiting for a second open. No other account
