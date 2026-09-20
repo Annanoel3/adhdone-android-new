@@ -52,17 +52,17 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
         {
           icon: Camera,
           title: "Share a screenshot or photo",
-          description: "Screenshot anything (an invite, a flyer, a receipt) and share it into the app — it reads it and makes the task for you"
+          description: "Screenshot anything (an invite, a flyer, a receipt) and share it into the app — it reads it and makes the task or idea for you"
         },
         {
           icon: Zap,
           title: "The pinned notification",
-          description: "With Quick Capture on, just expand the notification and dump a task in without opening the app (turn it on in Settings)"
+          description: "With Quick Capture on, just expand the notification and dump a task or idea in without opening the app (turn it on in Settings)"
         },
         {
           icon: LayoutGrid,
           title: "The home screen widget",
-          description: "Add a task straight from the widget — and see today's tasks right on your home screen"
+          description: "Add a task or idea straight from the widget — and see today's tasks right on your home screen"
         }
       ]
     },
