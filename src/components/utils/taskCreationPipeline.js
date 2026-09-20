@@ -293,46 +293,14 @@ Return JSON:
     const prompt = buildTaskParsePrompt(inputText);
 
     // Parking lot vs task
-    const categoryCheckPrompt = `Analyze this input: "${inputText}"
-
-      CRITICAL RULES:
-      1. If user explicitly says "parking lot" → ALWAYS parking_lot
-      2. If it's an ACTIONABLE TODO that needs to be done → task
-      Examples: "clean the toilet", "call dentist", "do laundry", "Amazon returns", "pay bills"
-      3. If it's IDEAS, THOUGHTS, INFORMATION, or vague LISTS → parking_lot
-
-      TASKS (concrete actions that need to be done):
-      - Clear actionable todos: "clean the toilet", "call dentist", "Amazon returns", "submit report", "pay rent"
-      - With timing: "Remind me tomorrow", "Call at 2pm", "Do laundry every day"
-      - Deadlines: "Turn in homework Tuesday", "Pay rent by the 1st"
-      - Appointments: "Therapist at 12 p.m.", "Meeting at 9am"
-      - Events: "Martin's wedding on the 30th", "Birthday party Saturday"
-      - Errands: "Pick up dry cleaning", "Drop off package", "Go to post office"
-
-      PARKING LOT (ideas, thoughts, non-actionable information):
-      - Explicit: "add to parking lot", "parking lot idea"
-      - Ideas/thoughts: "Steel guitar strings might be better", "Maybe try meditation"
-      - Planning: "Think about what to tell my professor"
-      - Shopping/reading lists WITHOUT urgency: "I need milk, eggs, paper", "read twilight and cirque du freak"
-      - Information: "Brazilian blowouts cost $200"
-      - Brainstorming: "My project needs hypothesis, summary, references"
-      - Questions: "Not sure if car leak is from transmission or seal"
-      - Research: "Look into meditation apps", "Research vacation spots"
-
-      KEY DISTINCTION: If someone needs to DO it (action verb), it's a TASK. If they're just capturing info/ideas, it's PARKING LOT.
-
-      Return JSON:
-      {
-      "category": "parking_lot" | "task",
-      "is_list": true/false,
-      "main_idea": "short title",
-      "items": ["item 1", "item 2", ...] or []
-      }`;
-
-    const categoryCheck = (await base44.functions.invoke('checkTaskCategory', { prompt: categoryCheckPrompt }))?.data?.response;
+    // Task or idea? The prompt for this lives inside the checkTaskCategory
+    // function, not here — the same call is made by the outside-the-app captures
+    // (captureText → classifyCapture), so both ways of adding ask the question
+    // identically and can never drift apart. Send raw text and nothing else.
+    const categoryCheck = (await base44.functions.invoke('checkTaskCategory', { text: inputText }))?.data?.response;
     trace('categoryCheck', { result: categoryCheck });
 
-    if (categoryCheck.category === 'parking_lot') {
+    if (categoryCheck?.category === 'parking_lot') {
       if (categoryCheck.is_list && categoryCheck.items && categoryCheck.items.length > 1) {
         const mainIdea = await base44.entities.ParkingLotIdea.create({
           idea: categoryCheck.main_idea,
