@@ -14,6 +14,8 @@ import {
   splitCapture,
   buildTaskRecord,
   scheduleTaskReminders,
+  classifyCapture,
+  createParkingLotIdeas,
 } from "../../shared/captureToTasks.ts";
 
 Deno.serve(async (req) => {
@@ -36,6 +38,17 @@ Deno.serve(async (req) => {
     // would otherwise double-create. The same capture_id returns what the first
     // attempt already made instead of parsing and creating all over again.
     if (capture_id) {
+      const existingIdeas = await base44.entities.ParkingLotIdea.filter({ capture_id });
+      if (existingIdeas?.length) {
+        return Response.json({
+          success: true,
+          duplicate: true,
+          kind: "idea",
+          count: existingIdeas.length,
+          tasks: existingIdeas.map((i: any) => ({ id: i.id, title: i.idea })),
+          ideas: existingIdeas.map((i: any) => ({ id: i.id, title: i.idea })),
+        });
+      }
       const existing = await base44.entities.Task.filter({ capture_id });
       if (existing?.length) {
         return Response.json({
@@ -46,6 +59,23 @@ Deno.serve(async (req) => {
           tasks: existing.map((t: any) => ({ id: t.id, title: t.title })),
         });
       }
+    }
+
+    // Task or idea? Asked once, on the WHOLE capture, before any splitting —
+    // exactly where the in-app Add button asks it. An idea is not an errand and
+    // must never be chopped into several; the splitter is for errands only.
+    const category = await classifyCapture(base44, raw);
+    if (category.category === "parking_lot") {
+      const ideas = await createParkingLotIdeas(base44, category, raw, capture_id);
+      console.log(`[captureText] ${ideas.length} parking lot idea(s) from ${raw.length} chars`);
+      return Response.json({
+        success: true,
+        duplicate: false,
+        kind: "idea",
+        count: ideas.length,
+        tasks: ideas,
+        ideas,
+      });
     }
 
     const split = await splitCapture(base44, raw);
@@ -90,7 +120,9 @@ Deno.serve(async (req) => {
 
     console.log(`[captureText] ${created.length} task(s) from ${raw.length} chars`);
     // kind/count let the phone show an honest confirmation without inspecting
-    // the array itself. Everything this endpoint creates is a Task today.
+    // the array itself. kind is "task" here and "idea" on the parking lot
+    // branch above; `tasks` is populated either way so an older phone build
+    // that only reads the array still shows the right count.
     return Response.json({
       success: true,
       duplicate: false,
