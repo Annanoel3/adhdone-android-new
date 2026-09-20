@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
+import { platformRequest } from '../../shared/sdkRetry.ts';
 import { exchangeCodeForTokens, fetchGoogleEmail } from '../../shared/googleOAuth.ts';
 
 // Step 2 of app-owned Google Calendar OAuth: Google redirects the browser here.
@@ -27,7 +28,7 @@ export default async function (req) {
     if (denied) return backToApp('denied');
     if (!code || !state) return backToApp('bad_request');
 
-    const base44 = createClientFromRequest(req);
+    const base44 = createClientFromRequest(platformRequest(req));
     const matches = await base44.asServiceRole.entities.User.filter({ google_oauth_state: state });
     const user = matches?.[0];
     if (!user) {
