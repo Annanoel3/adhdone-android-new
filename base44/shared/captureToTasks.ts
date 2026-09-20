@@ -270,3 +270,112 @@ export async function scheduleTaskReminders(
   // isn't subscribed) — worth reporting rather than silently claiming success.
   return { planned: (plan?.reminders || []).length, scheduled: ids.length };
 }
+
+// ── Task or idea ───────────────────────────────────────────────────────────
+// The SAME question the in-app Add button asks, asked the same way, so a
+// capture from the share sheet / pinned notification / widget lands where it
+// would have landed had it been typed into the app. Before this existed,
+// everything captured from outside the app became a Task, even a pure idea —
+// the category step lived only in the web pipeline and native never ran it.
+//
+// The prompt is a verbatim copy of the one in
+// src/components/utils/taskCreationPipeline.js, and both paths call the same
+// checkTaskCategory function. Change one, change the other — or better, move
+// the web path onto this helper and delete its copy, so there is one prompt.
+const CATEGORY_PROMPT = `Analyze this input: "%TEXT%"
+
+      CRITICAL RULES:
+      1. If user explicitly says "parking lot" → ALWAYS parking_lot
+      2. If it's an ACTIONABLE TODO that needs to be done → task
+      Examples: "clean the toilet", "call dentist", "do laundry", "Amazon returns", "pay bills"
+      3. If it's IDEAS, THOUGHTS, INFORMATION, or vague LISTS → parking_lot
+
+      TASKS (concrete actions that need to be done):
+      - Clear actionable todos: "clean the toilet", "call dentist", "Amazon returns", "submit report", "pay rent"
+      - With timing: "Remind me tomorrow", "Call at 2pm", "Do laundry every day"
+      - Deadlines: "Turn in homework Tuesday", "Pay rent by the 1st"
+      - Appointments: "Therapist at 12 p.m.", "Meeting at 9am"
+      - Events: "Martin's wedding on the 30th", "Birthday party Saturday"
+      - Errands: "Pick up dry cleaning", "Drop off package", "Go to post office"
+
+      PARKING LOT (ideas, thoughts, non-actionable information):
+      - Explicit: "add to parking lot", "parking lot idea"
+      - Ideas/thoughts: "Steel guitar strings might be better", "Maybe try meditation"
+      - Planning: "Think about what to tell my professor"
+      - Shopping/reading lists WITHOUT urgency: "I need milk, eggs, paper", "read twilight and cirque du freak"
+      - Information: "Brazilian blowouts cost $200"
+      - Brainstorming: "My project needs hypothesis, summary, references"
+      - Questions: "Not sure if car leak is from transmission or seal"
+      - Research: "Look into meditation apps", "Research vacation spots"
+
+      KEY DISTINCTION: If someone needs to DO it (action verb), it's a TASK. If they're just capturing info/ideas, it's PARKING LOT.
+
+      Return JSON:
+      {
+      "category": "parking_lot" | "task",
+      "is_list": true/false,
+      "main_idea": "short title",
+      "items": ["item 1", "item 2", ...] or []
+      }`;
+
+export async function classifyCapture(base44: any, text: string) {
+  try {
+    const out = await callFunction(base44, "checkTaskCategory", {
+      prompt: CATEGORY_PROMPT.replace("%TEXT%", text),
+    });
+    const r = out?.response ?? out;
+    if (r && (r.category === "parking_lot" || r.category === "task")) return r;
+    console.error("[captureToTasks] unusable category answer:", JSON.stringify(r)?.slice(0, 200));
+  } catch (e) {
+    console.error("[captureToTasks] category check failed:", e?.message);
+  }
+  // A failed or unrecognised answer must NEVER lose the capture. Falling back
+  // to "task" keeps the old behaviour, which is a misfiled idea at worst —
+  // never a dropped one.
+  return { category: "task", is_list: false, main_idea: "", items: [] };
+}
+
+// Creates the parking lot row(s) for a capture the classifier called an idea.
+// Mirrors the in-app behaviour exactly: a real list becomes a parent idea with
+// checkbox children, anything else becomes one plain idea holding the user's
+// own words (never the classifier's paraphrase of them).
+//
+// Created as the USER, not the service role: ParkingLotIdea RLS keys off
+// created_by, so a service-role insert saves a row the user can never see.
+export async function createParkingLotIdeas(
+  base44: any,
+  category: any,
+  rawText: string,
+  captureId?: string,
+) {
+  const stamp = (rec: Record<string, unknown>) =>
+    captureId ? { ...rec, capture_id: captureId } : rec;
+  const made: { id: string; title: string }[] = [];
+
+  if (category?.is_list && Array.isArray(category.items) && category.items.length > 1) {
+    const parent = await base44.entities.ParkingLotIdea.create(stamp({
+      idea: category.main_idea || rawText.trim(),
+      converted_to_task: false,
+      list_format: "checkbox",
+    }));
+    made.push({ id: parent.id, title: parent.idea });
+    for (const item of category.items) {
+      const child = await base44.entities.ParkingLotIdea.create(stamp({
+        idea: item,
+        parent_idea_id: parent.id,
+        converted_to_task: false,
+        list_format: "checkbox",
+      }));
+      made.push({ id: child.id, title: child.idea });
+    }
+    return made;
+  }
+
+  const one = await base44.entities.ParkingLotIdea.create(stamp({
+    idea: rawText.trim(),
+    converted_to_task: false,
+    list_format: "plain",
+  }));
+  made.push({ id: one.id, title: one.idea });
+  return made;
+}
