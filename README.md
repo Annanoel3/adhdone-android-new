@@ -15,6 +15,11 @@
 - **Never state something about her data, her users, or app behavior as fact unless it was
   looked up in this session.** Query the entity, read the log, open the file. If it wasn't
   checked, say "I'm guessing — I'd have to look." Do not invent a reason she asked for a change.
+- **At the end of every change, list every file you touched — including files Anna did not ask
+  about — with one line each on what changed and why.** Base44 keeps no memory between
+  conversations, so that list is the only record Anna gets. A change to a file she never
+  mentioned (like the 2026-06-26 edit to `src/api/base44Client.js` that broke the app three
+  months later) must be called out plainly, never buried in "done".
 
 ## Google Calendar connector (was an open issue; resolved 2026-09-20 — see the incident section below)
 
