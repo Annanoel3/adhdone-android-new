@@ -178,9 +178,44 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
   return out.sort((a, b) => a.at - b.at).slice(0, ALARM_MAX);
 }
 
+// What happened to alarms since we last asked — snoozes, dismissals, rings
+// nobody answered — added to the task's counters. Data only: no reminder is
+// changed, cancelled or moved because of any of it.
+async function drainAlarmActivity(tasks) {
+  const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
+  if (!AlarmBridge?.drainActivity) return;
+  let rows = [];
+  try {
+    rows = (await AlarmBridge.drainActivity())?.activity || [];
+  } catch (err) {
+    return;
+  }
+  const byId = new Map((tasks || []).map((t) => [t.id, t]));
+  for (const row of rows) {
+    const t = byId.get(row.taskId);
+    if (!t) continue;
+    const patch = {};
+    if (row.snoozes > 0) {
+      patch.snooze_count = (t.snooze_count || 0) + row.snoozes;
+      patch.consecutive_snoozes = (t.consecutive_snoozes || 0) + row.snoozes;
+    }
+    if (row.dismissed) patch.dismissed_count = (t.dismissed_count || 0) + 1;
+    if (row.ignored > 0) patch.ignored_count = (t.ignored_count || 0) + row.ignored;
+    if (Object.keys(patch).length === 0) continue;
+    Object.assign(t, patch);
+    try {
+      await base44.entities.Task.update(t.id, patch);
+    } catch (err) {
+      console.error('Alarm activity not recorded:', err);
+    }
+  }
+}
+
 export async function pushAlarms(tasks) {
   const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
   if (!AlarmBridge || alarmMode === null) return;
+
+  await drainAlarmActivity(tasks);
 
   const alarms = alarmSetFor(tasks);
   const json = JSON.stringify(alarms);
