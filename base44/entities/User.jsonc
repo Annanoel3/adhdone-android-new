@@ -83,7 +83,23 @@
         "alarm"
       ],
       "default": "notification",
-      "description": "Whether tasks marked high or urgent should also ring a real, out-loud alarm on the phone. 'notification' (everyone's default) = nothing changes, the usual push reminders only. 'alarm' = the installed Android app books an on-device alarm through its native AlarmBridge plugin (one hour before a timed task, 9 AM on the day of a day-only task); push reminders still go out exactly as before. Android-only and native: the alarm itself lives in android/, which you must not edit. There is no web or server version of this and none should be built \u2014 a push notification is not an alarm."
+      "description": "The user's DEFAULT alert style for tasks that have no alert_style of their own: 'notification' (everyone's default) = the usual push reminders only; 'alarm' = each of a task's existing reminders also rings as a real full-screen alarm on the installed Android app. It changes HOW reminders arrive, never WHEN. Android-only and native: the alarm itself lives in android/, which you must not edit, and it reads the task's existing reminder times. There is no web or server version of this and none should be built \u2014 a push notification is not an alarm."
+    },
+    "alarm_sound_url": {
+      "type": "string",
+      "description": "URL of the sound the phone rings alarms with: a preset from the app's sound bucket or a file the user uploaded through UploadFile. Empty = the phone's default alarm tone. The Android app downloads it once and rings from the local copy."
+    },
+    "alarm_sound_name": {
+      "type": "string",
+      "description": "Display name for alarm_sound_url (the preset's name or the uploaded file's name)."
+    },
+    "device_calendar_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Ids of the calendars on the user's PHONE (Samsung Calendar, Outlook, any account Android's calendar app shows) that they chose to sync. Read by the Android app's native CalendarBridge plugin; the app sends those calendars' events to syncGoogleCalendar with source: 'device', which imports them through the same pipeline as Google. Empty = no phone calendars synced. Ids are only meaningful on that phone."
     },
     "quiet_hours_enabled": {
       "type": "boolean",
