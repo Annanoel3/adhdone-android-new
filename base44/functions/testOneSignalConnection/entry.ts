@@ -107,6 +107,27 @@ Deno.serve(async (req) => {
       });
     }
 
+    if (mode === 'status') {
+      const id = String(body.id || '');
+      if (!id) return Response.json({ error: 'id required' }, { status: 400 });
+      const url = 'https://onesignal.com/api/v1/notifications/' + encodeURIComponent(id) +
+        '?app_id=' + encodeURIComponent(Deno.env.get('ONESIGNAL_APP_ID')!.trim());
+      const r = await fetch(url, { headers: { Authorization: 'Basic ' + Deno.env.get('ONESIGNAL_REST_API_KEY')!.trim() } });
+      const j = await r.json();
+      return Response.json({
+        ...summary,
+        httpStatus: r.status,
+        successful: j?.successful ?? null,
+        failed: j?.failed ?? null,
+        errored: j?.errored ?? null,
+        remaining: j?.remaining ?? null,
+        received: j?.received ?? null,
+        converted: j?.converted ?? null,
+        completedAt: j?.completed_at ?? null,
+        errors: j?.errors ?? null,
+      });
+    }
+
     return Response.json({ error: 'Unknown mode' }, { status: 400 });
   } catch (error) {
     return Response.json({ error: String(error?.message || error) }, { status: 500 });
