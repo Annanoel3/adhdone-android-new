@@ -10,10 +10,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle2, Clock, Zap, Timer, Loader2, Bell } from "lucide-react";
-import {
-  scheduleReminder,
-  cancelScheduledReminder,
-} from "@/components/utils/reminderScheduler";
+import { cancelScheduledReminder } from "@/components/utils/reminderScheduler";
+import { snoozeTaskUntil, recordReminderDismissed } from "@/components/utils/snoozeTask";
 import { updateTodaysSummary } from "@/components/utils/dailySummaryHelper";
 import { getReminderCopy, smartSnoozeTime } from "@/components/utils/reminderCopy";
 import { useLaunch } from "@/context/LaunchContext";
@@ -208,33 +206,9 @@ export default function NotificationFollowupModal({ user, theme }) {
         snoozeUntil = smartSnoozeTime(currentTask, new Date(Date.now() + option.minutes * 60 * 1000));
       }
 
-      if (currentTask.onesignal_notification_ids?.length > 0) {
-        await cancelScheduledReminder(
-          currentTask.onesignal_notification_ids
-        ).catch(() => {});
-      }
-
-      const notificationId = await scheduleReminder({
-        email: user.email,
-        ...getReminderCopy(currentTask, snoozeUntil),
-        sendAtISO: snoozeUntil.toISOString(),
-        taskId: currentTask.id,
-        data: {
-          screen: "/TaskNotification",
-          taskId: currentTask.id,
-          urgency: currentTask.urgency,
-          type: "task_reminder",
-        },
-      });
-
-      await base44.entities.Task.update(currentTask.id, {
-        next_reminder: snoozeUntil.toISOString(),
-        onesignal_notification_ids: notificationId ? [notificationId] : [],
-        snooze_count: (currentTask.snooze_count || 0) + 1,
-        // Log avoidance so reminder cadence can adapt — a "not now" from the
-        // follow-up means the user is sidestepping this task, not just timing it.
-        consecutive_snoozes: (currentTask.consecutive_snoozes || 0) + 1,
-      });
+      // One extra reminder at the snoozed time, snooze counted; everything
+      // else the task has booked stays exactly as it was.
+      await snoozeTaskUntil(currentTask, snoozeUntil);
 
       dismissedTaskIds.current.add(currentTask.id);
       pendingTasksRef.current = pendingTasksRef.current.filter(
@@ -273,6 +247,8 @@ export default function NotificationFollowupModal({ user, theme }) {
 
   const handleDismiss = () => {
     if (!currentTask) return;
+    // Closed without choosing: nothing changes for the task; only counted.
+    recordReminderDismissed(currentTask);
     dismissedTaskIds.current.add(currentTask.id);
     pendingTasksRef.current = pendingTasksRef.current.filter(
       (t) => t.id !== currentTask.id
