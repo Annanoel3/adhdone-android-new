@@ -610,7 +610,7 @@ export function AlertStylePrompt({ user, theme }) {
         </div>
 
         <p className={`text-xs pt-1 ${dark ? 'text-gray-500' : 'text-gray-500'}`}>
-          Change it any time: every task has its own switch, and Settings holds the default for new ones.
+          You can change this anytime in Settings, and every task has its own switch too.
         </p>
       </DialogContent>
     </Dialog>
