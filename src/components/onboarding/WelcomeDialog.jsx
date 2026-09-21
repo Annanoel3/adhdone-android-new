@@ -7,12 +7,23 @@ import WelcomeChat from './WelcomeChat';
 // The very first thing a new user sees — a short back-and-forth that collects a
 // name and a sentence about the user's life. Nothing else in the
 // first-run sequence starts until it's finished.
-export default function WelcomeDialog() {
+//
+// Whether it has been done belongs to the ACCOUNT, not the phone: the flag is
+// copied down from the profile before this mounts, and an account that already
+// answered (it has a name or an about-me) counts as done even if the flag was
+// lost — so a reinstall or a new phone never asks twice.
+export default function WelcomeDialog({ user }) {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    if (!isStepDone(ONBOARDING_STEPS.welcome)) setOpen(true);
-  }, []);
+    if (!user) return;
+    if (isStepDone(ONBOARDING_STEPS.welcome)) return;
+    if (user.preferred_name || user.about_me) {
+      markStepDone(ONBOARDING_STEPS.welcome);
+      return;
+    }
+    setOpen(true);
+  }, [user]);
 
   // While it's up, no other onboarding surface may appear behind it.
   useEffect(() => {
