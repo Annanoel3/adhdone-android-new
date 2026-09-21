@@ -21,7 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import HomeZipCard from '@/components/settings/HomeZipCard';
-import QuickCaptureCard from '@/components/settings/QuickCaptureCard';
+import QuickCaptureCard, { AlarmCard } from '@/components/settings/QuickCaptureCard';
 import AdDiagnosticsCard from '@/components/settings/AdDiagnosticsCard';
 import VersionTap from '@/components/settings/VersionTap';
 
@@ -326,9 +326,14 @@ export default function Settings() {
 
         <HomeZipCard user={user} theme={theme} />
 
-        {/* Developer-only tool — hidden for everyone else. */}
+        {/* Developer-only tools — hidden for everyone else. Alarms stay here
+            until they have been tested on a real phone; then AlarmCard moves
+            out of this block so everyone on a build that has it can turn it on. */}
         {user?.email === 's2kap2chick@gmail.com' && (
-          <AdDiagnosticsCard user={user} theme={theme} />
+          <>
+            <AlarmCard user={user} theme={theme} />
+            <AdDiagnosticsCard user={user} theme={theme} />
+          </>
         )}
 
         {/* Theme Section */}
