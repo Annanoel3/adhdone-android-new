@@ -35,12 +35,21 @@ const isUserBusy = () => {
   return tag === 'INPUT' || tag === 'TEXTAREA' || el.isContentEditable;
 };
 
+// The moment a waiter is released it owns the screen. Its dialog only registers
+// itself a render later, so until it does — or for a short grace period, if it
+// decides not to show after all — every other waiter keeps waiting. Without this
+// two surfaces polling the same calm screen were released in the same tick and
+// stacked on top of each other.
+let claimedUntil = 0;
+const CLAIM_GRACE_MS = 2500;
+
 // Resolves the moment nothing is blocking the screen and the user isn't in the
 // middle of typing or tapping. Polls readiness instead of guessing a delay.
 export function waitForCalm() {
   return new Promise((resolve) => {
     const check = () => {
-      if (!isOnboardingSurfaceOpen() && !isTourActive() && !isUserBusy()) {
+      if (!isOnboardingSurfaceOpen() && !isTourActive() && !isUserBusy() && Date.now() >= claimedUntil) {
+        claimedUntil = Date.now() + CLAIM_GRACE_MS;
         resolve();
         return;
       }
