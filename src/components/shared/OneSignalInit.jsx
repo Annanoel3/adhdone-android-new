@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { ONBOARDING_STEPS, waitForStep } from '@/components/onboarding/onboardingGate';
+import { snoozeTask } from '@/components/utils/snoozeTask';
 
 // Persist the OneSignal subscription/player ID to the user record so the
 // backend can deliver pushes by include_player_ids (per-device, reliable).
@@ -36,6 +37,25 @@ function handleNotificationData(data, navigate) {
   if (!data) return;
   const taskId = data.taskId || data.task_id;
   if (!taskId) return;
+
+  // A snooze button on the push itself ("Snooze 15 min", "Snooze 1 hour").
+  // Native passes which button was tapped; until it did, every button just
+  // opened the app. Snoozing here = one extra reminder, nothing else touched.
+  const snoozeMatch = /^snooze_(\d+)$/.exec(String(data.actionId || ''));
+  if (snoozeMatch) {
+    const minutes = parseInt(snoozeMatch[1], 10);
+    base44.entities.Task.filter({ id: taskId })
+      .then((rows) => (rows?.[0] ? snoozeTask(rows[0], minutes) : null))
+      .then(() => {
+        const label = minutes >= 60 ? `${minutes / 60} hour${minutes > 60 ? 's' : ''}` : `${minutes} min`;
+        if (navigate) navigate('/Home', { state: { reload: true, message: `Snoozed! Reminder in ${label} ⏰` } });
+      })
+      .catch((err) => {
+        console.error('[OneSignal] snooze from notification failed:', err);
+        if (navigate) navigate(`/TaskNotification?taskId=${taskId}`);
+      });
+    return;
+  }
 
   const screen = data.screen || '/TaskNotification';
   if (navigate) {
