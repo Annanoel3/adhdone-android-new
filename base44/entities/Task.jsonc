@@ -240,6 +240,16 @@
       "default": 0,
       "description": "Track consecutive snoozes for adaptive reminders"
     },
+    "dismissed_count": {
+      "type": "number",
+      "default": 0,
+      "description": "How many times a reminder for this task (a push or a full-screen alarm) was closed, swiped away, or opened without picking a snooze. Data only: it never changes, cancels or moves the task's reminders."
+    },
+    "ignored_count": {
+      "type": "number",
+      "default": 0,
+      "description": "How many times a full-screen alarm for this task rang out with no response at all. Data only: nothing is rescheduled because of it \u2014 the task's remaining reminders carry on as booked."
+    },
     "original_interval": {
       "type": "string",
       "description": "Original reminder interval before adaptation"
