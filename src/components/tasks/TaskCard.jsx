@@ -53,6 +53,23 @@ export default function TaskCard({
   const [expanded, setExpanded] = useState(false);
   const dateInputRef = useRef(null);
   const timeInputRef = useRef(null);
+  // The date/time popover saves ONCE, when it closes, with both fields read
+  // together. It used to save on every keystroke of each field separately, so
+  // changing the day first saved "that day at the old time" — often a time
+  // already gone by — which moved the card into another group (closing the
+  // editor mid-edit) and then failed to book a push for a past time, at which
+  // point the refresh put the old date back. Editing looked possessed.
+  const [dateTimeOpen, setDateTimeOpen] = useState(false);
+
+  const commitDateTime = () => {
+    const newDate = dateInputRef.current?.value || '';
+    const newTime = timeInputRef.current?.value || '';
+    if (!newDate && !newTime) return;
+    const sameDate = !newDate || newDate === getCurrentReminderDate(task);
+    const sameTime = !newTime || newTime === getCurrentReminderTime(task);
+    if (sameDate && sameTime) return;
+    handleReminderDateChange(newDate || getCurrentReminderDate(task), newTime || getCurrentReminderTime(task));
+  };
 
   const specialMode = localStorage.getItem('special_mode') || 'normal';
 
@@ -449,17 +466,25 @@ export default function TaskCard({
             if (multiIds) {
               notificationIds = multiIds;
             } else {
-              const { scheduleReminder } = await import('../utils/reminderScheduler');
-              const { getReminderCopy } = await import('../utils/reminderCopy');
-              const notificationId = await scheduleReminder({
-                email: currentUser.email,
-                ...getReminderCopy(task, nextReminder),
-                sendAtISO: nextReminder.toISOString(),
-                taskId: task.id,
-                data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency, type: 'task_reminder' },
-                buttons: [{ id: "snooze_15", text: "Snooze 15 min" }, { id: "snooze_60", text: "Snooze 1 hour" }, { id: "complete", text: "✅ Done" }]
-              });
-              if (notificationId) notificationIds = [notificationId];
+              // A time that is already past, or under two minutes away, can't be
+              // booked as a push (schedulePush refuses it). The user's date still
+              // stands — the overdue system takes it from there — so a refused
+              // booking must not undo the edit.
+              try {
+                const { scheduleReminder } = await import('../utils/reminderScheduler');
+                const { getReminderCopy } = await import('../utils/reminderCopy');
+                const notificationId = await scheduleReminder({
+                  email: currentUser.email,
+                  ...getReminderCopy(task, nextReminder),
+                  sendAtISO: nextReminder.toISOString(),
+                  taskId: task.id,
+                  data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency, type: 'task_reminder' },
+                  buttons: [{ id: "snooze_15", text: "Snooze 15 min" }, { id: "snooze_60", text: "Snooze 1 hour" }, { id: "complete", text: "✅ Done" }]
+                });
+                if (notificationId) notificationIds = [notificationId];
+              } catch (bookErr) {
+                console.warn("Reminder not booked for the new time (kept the date anyway):", bookErr?.message || bookErr);
+              }
             }
 
             await Task.update(task.id, {
@@ -941,7 +966,7 @@ export default function TaskCard({
 
               {/* Show date badge for one-time reminders with a date set */}
               {task.reminder_interval === 'once' && task.next_reminder && (
-                <Popover>
+                <Popover open={dateTimeOpen} onOpenChange={(o) => { setDateTimeOpen(o); if (!o) commitDateTime(); }}>
                   <PopoverTrigger asChild>
                     <button
                       onClick={(e) => e.stopPropagation()}
@@ -969,10 +994,6 @@ export default function TaskCard({
                           type="date"
                           ref={dateInputRef}
                           defaultValue={getCurrentReminderDate(task)}
-                          onChange={(e) => {
-                            const currentTime = timeInputRef.current?.value || '09:00';
-                            handleReminderDateChange(e.target.value, currentTime);
-                          }}
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
                         />
                       </div>
@@ -982,10 +1003,6 @@ export default function TaskCard({
                           type="time"
                           ref={timeInputRef}
                           defaultValue={getCurrentReminderTime(task)}
-                          onChange={(e) => {
-                            const currentDate = dateInputRef.current?.value;
-                            handleReminderDateChange(currentDate, e.target.value);
-                          }}
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
                         />
                       </div>
@@ -1026,6 +1043,10 @@ export default function TaskCard({
                           </p>
                         </div>
                       )}
+
+                      <Button size="sm" className="w-full" onClick={(e) => { e.stopPropagation(); setDateTimeOpen(false); commitDateTime(); }}>
+                        Done
+                      </Button>
                     </div>
                   </PopoverContent>
                 </Popover>
