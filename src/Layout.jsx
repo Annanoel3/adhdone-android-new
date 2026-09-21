@@ -1078,7 +1078,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <FeedbackPrompt user={user} />
         <TaskCaptureProcessor userEmail={user?.email} />
         <UsageTracker user={user} />
-        <WelcomeDialog />
+        <WelcomeDialog user={user} />
         <CatchUpDialog user={user} />
         <PageIntroTour currentPageName={currentPageName} />
 
@@ -1182,6 +1182,12 @@ export default function Layout({ children, currentPageName }) {
         clearOnboardingFlags();
       } else {
         hydrateOnboardingFlags(currentUser);
+      }
+      // A replay request is one-shot. Until it is cleared from the account,
+      // EVERY fresh install (new phone, reinstall) would apply it again and wipe
+      // the saved flags — the welcome chat and tours came back on each install.
+      if (currentUser.onboarding_replay_token) {
+        base44.auth.updateMe({ onboarding_replay_token: '' }).catch(() => {});
       }
       setUser(currentUser);
       setAuthCheckComplete(true);
