@@ -2,6 +2,13 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { Zap, AlarmClock } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { setAlarmMode, refreshAlarms, pushAlarmSound, requestAlarmPermissions } from '../utils/widgetBridge';
@@ -105,6 +112,10 @@ export function AlarmCard({ user, theme }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [sound, setSound] = useState({ url: user?.alarm_sound_url || '', name: user?.alarm_sound_name || '' });
+  // After the default changes: "switch your existing tasks too?" — holds the
+  // mode just chosen while the question is up; null = no question.
+  const [convertTo, setConvertTo] = useState(null);
+  const [converting, setConverting] = useState(false);
   const [soundBusy, setSoundBusy] = useState(false);
   const [soundNote, setSoundNote] = useState('');
   const [previewing, setPreviewing] = useState(false);
@@ -157,10 +168,35 @@ export function AlarmCard({ user, theme }) {
       // Anything Android still withholds opens the guided walk-through now,
       // not the first time an alarm quietly fails to ring.
       if (next) await requestAlarmPermissions();
+      // The default only covers tasks with no choice of their own. Ask whether
+      // the tasks they already have should follow the new choice as well.
+      setConvertTo(mode);
     } catch (e) {
       setError("Couldn't save that. Try again.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  // Stamp the chosen style on every task they have now, so all of them ring
+  // (or don't) the same way. Only the alert style changes — reminder times,
+  // dates and everything else on the task stay exactly as they are.
+  const convertExistingTasks = async (mode) => {
+    setConverting(true);
+    setError('');
+    try {
+      const tasks = await base44.entities.Task.list('-updated_date', 500);
+      const toChange = (tasks || []).filter((t) => t.status === 'active' && t.alert_style !== mode);
+      for (const t of toChange) {
+        await base44.entities.Task.update(t.id, { alert_style: mode });
+      }
+      await refreshAlarms();
+      await refreshStatus();
+    } catch (e) {
+      setError("Couldn't update every task. Try again from a task's own switch.");
+    } finally {
+      setConverting(false);
+      setConvertTo(null);
     }
   };
 
@@ -268,6 +304,27 @@ export function AlarmCard({ user, theme }) {
 
   return (
     <Card className={`mb-6 border-none shadow-lg ${dark ? 'bg-gray-800' : 'bg-white'}`}>
+      <Dialog open={!!convertTo} onOpenChange={(o) => { if (!o && !converting) setConvertTo(null); }}>
+        <DialogContent className={`max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
+          <DialogHeader>
+            <DialogTitle className={dark ? 'text-white' : ''}>
+              {convertTo === 'alarm' ? 'Switch your existing tasks to alarms too?' : 'Switch your existing tasks to regular notifications too?'}
+            </DialogTitle>
+            <DialogDescription className={dark ? 'text-gray-400' : ''}>
+              New tasks will use your new choice either way. This changes only how the tasks you already
+              have get your attention — their reminder times don't move.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 pt-1">
+            <Button onClick={() => convertExistingTasks(convertTo)} disabled={converting} className="flex-1">
+              {converting ? 'Updating…' : 'Yes, all my tasks'}
+            </Button>
+            <Button variant="outline" onClick={() => setConvertTo(null)} disabled={converting} className="flex-1">
+              Just new ones
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
       <CardHeader>
         <CardTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
           <AlarmClock className="w-5 h-5" />
