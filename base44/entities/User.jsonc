@@ -76,6 +76,15 @@
       "type": "object",
       "description": "Set by an admin when something this person captured was really a request for the app itself (a feature they want) and it wrongly became a task. Holds { text, task_id, queued_at } while waiting. The app shows a one-time popup with their own words, which they can edit, offering to send it to Anna through sendSupportRequest. Once they answer, the app overwrites this with { answered_at, answer } \u2014 never null, which the schema would reject \u2014 so the popup never shows again. While it is waiting, the ways-to-add popup holds off."
     },
+    "alarm_mode": {
+      "type": "string",
+      "enum": [
+        "notification",
+        "alarm"
+      ],
+      "default": "notification",
+      "description": "Whether tasks marked high or urgent should also ring a real, out-loud alarm on the phone. 'notification' (everyone's default) = nothing changes, the usual push reminders only. 'alarm' = the installed Android app books an on-device alarm through its native AlarmBridge plugin (one hour before a timed task, 9 AM on the day of a day-only task); push reminders still go out exactly as before. Android-only and native: the alarm itself lives in android/, which you must not edit. There is no web or server version of this and none should be built \u2014 a push notification is not an alarm."
+    },
     "quiet_hours_enabled": {
       "type": "boolean",
       "default": true,
