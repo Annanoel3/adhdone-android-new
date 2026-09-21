@@ -9,7 +9,7 @@ import BirthdayTextDialog from "../components/birthdays/BirthdayTextDialog";
 import { createPageUrl } from "@/utils";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { cancelScheduledReminder } from "../components/utils/reminderScheduler";
-import { snoozeTask } from "../components/utils/snoozeTask";
+import { snoozeTask, recordReminderDismissed } from "../components/utils/snoozeTask";
 
 const SNOOZE_OPTIONS = [
   { label: "10 min", minutes: 10 },
@@ -24,6 +24,18 @@ export default function TaskNotification() {
   const [task, setTask] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [processingAction, setProcessingAction] = useState(null); // 'complete' | 'snooze-N'
+  // Leaving this page without completing or snoozing — back, Dismiss, the
+  // home button — changes nothing about the task's reminders. It is only
+  // counted. Opened from a full-screen alarm (?from=alarm), the alarm already
+  // counted it, so this page stays quiet.
+  const actedRef = React.useRef(false);
+  const taskRef = React.useRef(null);
+  useEffect(() => {
+    const fromAlarm = new URLSearchParams(window.location.search).get('from') === 'alarm';
+    return () => {
+      if (!fromAlarm && !actedRef.current && taskRef.current) recordReminderDismissed(taskRef.current);
+    };
+  }, []);
   const [showBirthdayDraft, setShowBirthdayDraft] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
 
@@ -55,6 +67,7 @@ export default function TaskNotification() {
       }
 
       setTask(tasks[0]);
+      taskRef.current = tasks[0];
       setIsLoading(false);
     } catch (error) {
       console.error("Error loading task:", error);
@@ -64,6 +77,7 @@ export default function TaskNotification() {
 
   const handleComplete = async () => {
     if (!task) return;
+    actedRef.current = true;
     setProcessingAction('complete');
 
     try {
@@ -91,6 +105,7 @@ export default function TaskNotification() {
 
   const handleSnooze = async (minutes) => {
     if (!task) return;
+    actedRef.current = true;
     setProcessingAction(`snooze-${minutes}`);
 
     try {
