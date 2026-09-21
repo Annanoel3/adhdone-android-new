@@ -9,11 +9,14 @@
 //      only when traffic is meaningfully worse than the free-flow drive. It
 //      says what time to leave, but it is explicitly NOT the safety net —
 //      it's information, and it stays silent on a normal day.
-//   2. LEAVE NOW (the safety net): fires when departure time arrives —
-//      arrival time minus measured drive time minus a get-out-the-door
-//      cushion. This one is time-critical and is never suppressed by quiet
-//      hours; a commute alert that yields is a commute alert that made
-//      someone late.
+//   2. LEAVE NOW (the safety net): fires AT departure time — arrival time
+//      minus measured drive time minus a get-out-the-door cushion. The cron
+//      only ticks every 15 minutes, so on the tick before departure it books
+//      the push with OneSignal for the exact minute instead of sending early
+//      (2026-09-21: Anna's fired at 8:15 for an 8:25 departure and went
+//      unnoticed). It goes out at high priority, on the alarm channel when one
+//      is configured, and is never suppressed by quiet hours; a commute alert
+//      that yields is a commute alert that made someone late.
 //
 // Both are claimed on the user record BEFORE sending, so a re-run (or a run cut
 // off mid-send) can't double-notify — the same rule the daily digest uses.
@@ -26,6 +29,12 @@ import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { listAll } from '../../shared/listAll.ts';
 
 const CUSHION_MINUTES = 10;       // finding keys / shoes / getting in the car
+// OneSignal "Android notification channel" for the leave-now push, created in
+// the OneSignal dashboard (Settings → Push & In-App → Android Notification
+// Channels) at URGENT importance with an alarm sound — that is what makes it a
+// banner with sound instead of a silent tray entry. Paste its ID here. Empty
+// means "default channel", which is what this used to do.
+const LEAVE_NOW_CHANNEL_ID = '';
 const LEAVE_WINDOW_MINUTES = 16;  // one cron tick, so departure is never missed
 const HEADS_UP_EARLIEST = 100;    // minutes before arrival
 const HEADS_UP_LATEST = 40;
@@ -40,7 +49,13 @@ function fmtLocalTime(utc: Date, timeZone: string): string {
   }).format(utc);
 }
 
-async function sendPush(email: string, user: any, title: string, body: string) {
+async function sendPush(
+  email: string,
+  user: any,
+  title: string,
+  body: string,
+  opts: { sendAt?: Date | null; alarm?: boolean } = {},
+) {
   const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
   const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
   if (!appId || !restApiKey) {
@@ -57,6 +72,19 @@ async function sendPush(email: string, user: any, title: string, body: string) {
     data: { screen: '/Places', type: 'commute' },
     channel_for_external_user_ids: 'push',
   };
+  // Booked for the exact departure minute (only when that is still ahead of us;
+  // OneSignal rejects a send_after in the past, and "now" is right anyway).
+  if (opts.sendAt && opts.sendAt.getTime() > Date.now() + 30_000) {
+    payload.send_after = opts.sendAt.toISOString();
+  }
+  if (opts.alarm) {
+    // High priority = delivered immediately even in battery saving / Doze.
+    payload.priority = 10;
+    // Only useful for a few minutes: a "leave now" that arrives an hour late
+    // is noise, so let OneSignal drop it rather than deliver it stale.
+    payload.ttl = 20 * 60;
+    if (LEAVE_NOW_CHANNEL_ID) payload.android_channel_id = LEAVE_NOW_CHANNEL_ID;
+  }
 
   try {
     const res = await fetch('https://onesignal.com/api/v1/notifications', {
@@ -137,13 +165,19 @@ export default async function (req: Request): Promise<Response> {
         const body = late
           ? `${drive.minutes} min drive${drive.inTraffic ? ' with traffic' : ''} and you're due at ${commute.arriveBy}. Grab your stuff and go.`
           : `It's about ${drive.minutes} min${drive.inTraffic ? ' with traffic right now' : ''} — leaving now gets you there by ${commute.arriveBy}.`;
-        const id = await sendPush(email, user, title, body);
+        // Not late yet → book it for the departure minute itself. Late → now.
+        const sendAt = late ? null : departUtc;
+        const id = await sendPush(email, user, title, body, { sendAt, alarm: true });
         if (id) {
           await ledgerRecord(base44, {
             email, kind: 'task_reminder', source: 'cronCommuteWatch',
+            sendAt: sendAt || undefined,
             notificationId: typeof id === 'string' ? id : null, title,
           });
-          sent.push({ email, type: 'leave_now', driveMinutes: drive.minutes });
+          sent.push({
+            email, type: 'leave_now', driveMinutes: drive.minutes,
+            scheduledFor: sendAt ? sendAt.toISOString() : 'now',
+          });
         } else {
           try {
             await base44.asServiceRole.entities.User.update(user.id, { last_commute_leave_date: user.last_commute_leave_date || null });
