@@ -1,39 +1,64 @@
 import { base44 } from "@/api/base44Client";
-import { scheduleReminder, cancelScheduledReminder } from "./reminderScheduler";
+import { scheduleReminder } from "./reminderScheduler";
 import { getReminderCopy, smartSnoozeTime } from "./reminderCopy";
 
 // The ONE way to snooze a task from a button.
 //
-// The task stays ACTIVE. A snooze moves the next reminder; it does not park the
-// task. The old handlers set status 'snoozed', which hid the task from Home
-// (Home only lists active tasks), nothing ever switched it back, and
-// onTaskUpdate treated 'snoozed' like 'completed' — cancelling the reminder the
-// snooze had just booked and wiping the task's reminder fields.
+// A snooze adds ONE extra reminder at the chosen time and counts the snooze.
+// That is all it does. It never cancels or moves anything else: the task's
+// remaining reminders — the rest of the smart schedule, tomorrow's, the day
+// after's — carry on exactly as booked, so a task that isn't finished today
+// still reminds as normal tomorrow. (It used to cancel every booked push and
+// replace them with the snoozed one, which quietly wiped the rest.)
 //
-// Returns the time the reminder will actually fire.
-export async function snoozeTask(task, minutes) {
+// The task stays ACTIVE and keeps its own date and time; only the extra
+// reminder is new. The extra push joins onesignal_notification_ids so that
+// completing the task still cancels it.
+//
+// Returns the time the extra reminder will fire.
+export async function snoozeTaskUntil(task, when) {
   const user = await base44.auth.me();
-  const snoozeUntil = smartSnoozeTime(task, new Date(Date.now() + minutes * 60 * 1000));
+  const snoozeUntil = new Date(when);
 
-  // Cancel what's booked so the user isn't reminded twice.
-  if (task.onesignal_notification_ids?.length > 0) {
-    await cancelScheduledReminder(task.onesignal_notification_ids).catch(() => {});
+  let notificationId = null;
+  try {
+    notificationId = await scheduleReminder({
+      email: user.email,
+      ...getReminderCopy(task, snoozeUntil),
+      sendAtISO: snoozeUntil.toISOString(),
+      taskId: task.id,
+      data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency, type: "task_reminder", snoozed: true },
+    });
+  } catch (e) {
+    // Too soon, or refused as a duplicate of a push already booked for that
+    // minute — either way the schedule already covers it. The snooze still counts.
+    console.warn("[snoozeTask] extra reminder not booked:", e?.message || e);
   }
 
-  const notificationId = await scheduleReminder({
-    email: user.email,
-    ...getReminderCopy(task, snoozeUntil),
-    sendAtISO: snoozeUntil.toISOString(),
-    taskId: task.id,
-    data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency, type: "task_reminder" },
-  });
+  const ids = Array.from(new Set([
+    ...(task.onesignal_notification_ids || []),
+    ...(notificationId ? [notificationId] : []),
+  ]));
 
   await base44.entities.Task.update(task.id, {
     snooze_count: (task.snooze_count || 0) + 1,
     consecutive_snoozes: (task.consecutive_snoozes || 0) + 1,
-    next_reminder: snoozeUntil.toISOString(),
-    onesignal_notification_ids: notificationId ? [notificationId] : [],
+    onesignal_notification_ids: ids,
   });
 
   return snoozeUntil;
+}
+
+export async function snoozeTask(task, minutes) {
+  const when = smartSnoozeTime(task, new Date(Date.now() + minutes * 60 * 1000));
+  return snoozeTaskUntil(task, when);
+}
+
+// Closed, swiped away, opened and left, or rang out with nobody answering:
+// nothing happens to the task's reminders. This only keeps count.
+export function recordReminderDismissed(task) {
+  if (!task?.id) return Promise.resolve();
+  return base44.entities.Task.update(task.id, {
+    dismissed_count: (task.dismissed_count || 0) + 1,
+  }).catch(() => {});
 }
