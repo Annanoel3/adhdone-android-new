@@ -33,14 +33,16 @@ import {
   FileText,
   Bell,
   BellOff,
-  AlarmClock
+  AlarmClock,
+  Info
 } from "lucide-react";
 import { Task } from "@/entities/Task";
 import TaskDecompositionModal from "./TaskDecompositionModal";
 import SmartReminderEditor from "./SmartReminderEditor";
 import AddSubTaskCard from "./AddSubTaskCard";
 import ReminderTypeSelector, { getCurrentReminderType } from "./ReminderTypeSelector";
-import { supportsAlarms, alertStyleFor, refreshAlarms } from "../utils/widgetBridge";
+import { supportsAlarms, alertStyleFor, refreshAlarms, requestAlarmPermissions } from "../utils/widgetBridge";
+import { AlertStyleInfo } from "../shared/QuickCapturePrompt";
 import VoiceTaskInput from "./VoiceTaskInput";
 import { scheduleReminder, cancelScheduledReminder } from "../utils/reminderScheduler";
 import { User } from "@/entities/User";
@@ -1468,12 +1470,11 @@ Return JSON:
   // Alarm vs regular notification for THIS task. Same reminder times either
   // way; this only changes how they arrive. A task with no choice of its own
   // follows the user's default, and the first tap here makes it explicit.
-  const handleToggleAlertStyle = async () => {
-    if (!task) return;
-    const next = alertStyleFor(task) === 'alarm' ? 'notification' : 'alarm';
+  const handleSetAlertStyle = async (next) => {
+    if (!task || alertStyleFor(task) === next) return;
     onUpdate({ ...task, alert_style: next });
     toast({
-      title: next === 'alarm' ? 'Alarm on ⏰' : 'Regular notifications',
+      title: next === 'alarm' ? 'Full-screen alarm ⏰' : 'Regular notifications',
       description: next === 'alarm'
         ? 'Reminders for this task ring full-screen, impossible to ignore.'
         : 'Reminders for this task arrive as normal notifications.',
@@ -1481,6 +1482,8 @@ Return JSON:
     try {
       await Task.update(task.id, { alert_style: next });
       await refreshAlarms();
+      // First time an alarm is switched on, Android's own switches come up.
+      if (next === 'alarm') await requestAlarmPermissions();
     } catch (e) {
       console.error('Error changing alert style:', e);
     }
@@ -1638,23 +1641,49 @@ Return JSON:
               </Button>
               )}
 
-              {/* Alarm switch — only on an app build that can ring one. */}
+              {/* Notification vs full-screen alarm — a two-sided switch plus an (i)
+                   that explains the difference. Only on an app build that can ring one. */}
               {supportsAlarms() && !task.silenced && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleToggleAlertStyle}
-                className={`gap-1.5 h-8 transition-all active:scale-95 ${
-                  alertStyleFor(task) === 'alarm'
-                    ? 'bg-red-500 text-white border-red-500 hover:bg-red-600 shadow-sm'
-                    : theme === 'dark'
-                      ? 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700'
-                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                <AlarmClock className="w-3.5 h-3.5" />
-                {alertStyleFor(task) === 'alarm' ? 'Alarm ⏰' : 'Notification'}
-              </Button>
+              <div className="flex items-center gap-1">
+                <div className={`inline-flex h-8 rounded-full border overflow-hidden text-xs font-medium ${
+                  theme === 'dark' ? 'border-gray-600' : 'border-gray-300'
+                }`}>
+                  <button
+                    type="button"
+                    onClick={() => handleSetAlertStyle('notification')}
+                    className={`flex items-center gap-1 px-3 transition-colors ${
+                      alertStyleFor(task) !== 'alarm'
+                        ? 'bg-gray-800 text-white'
+                        : theme === 'dark' ? 'bg-gray-800 text-gray-400 hover:text-gray-200' : 'bg-white text-gray-500 hover:bg-gray-50'
+                    }`}
+                  >
+                    <Bell className="w-3.5 h-3.5" />
+                    Notification
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetAlertStyle('alarm')}
+                    className={`flex items-center gap-1 px-3 transition-colors ${
+                      alertStyleFor(task) === 'alarm'
+                        ? 'bg-red-500 text-white'
+                        : theme === 'dark' ? 'bg-gray-800 text-gray-400 hover:text-gray-200' : 'bg-white text-gray-500 hover:bg-gray-50'
+                    }`}
+                  >
+                    <AlarmClock className="w-3.5 h-3.5" />
+                    Full-screen
+                  </button>
+                </div>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button type="button" aria-label="What's the difference?" className={`p-1 rounded-full ${theme === 'dark' ? 'text-gray-400 hover:text-gray-200' : 'text-gray-400 hover:text-gray-700'}`}>
+                      <Info className="w-3.5 h-3.5" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className={`w-72 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`}>
+                    <AlertStyleInfo dark={theme === 'dark'} />
+                  </PopoverContent>
+                </Popover>
+              </div>
               )}
 
               {/* Energy Badge — energy is for picking which task to start next.
