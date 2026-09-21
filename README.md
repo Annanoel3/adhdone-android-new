@@ -5,13 +5,13 @@
 - **Anna always tests on her Android phone (the installed app).** Not the preview, not desktop.
   Any fix that depends on a browser-only capability (popups, `window.open`, `window.closed`,
   new tabs) is invalid by default. She has said this many times.
-- **ADHDone only exists as a Play Store download on Android — there are no browser users.**
-  So the first question for any capability is whether the phone can already do it, not which
-  web API to connect to. Reaching for a server integration where a native one exists has cost
-  real time: reading the calendar was built as Google OAuth, which is why there is a token to
-  refresh, a redirect back through `adhdone.space`, and the three-day outage of 2026-09-18 in
-  that callback. A device-side read has none of those parts. A native change needs a new AAB,
-  so say that cost out loud — never quietly pick the web route to avoid it.
+- **ADHDone is only used as the installed Android app — nobody uses it in a browser.** It is
+  still a React web app running inside a WebView, so keep writing normal web code. But anything
+  that needs a PHONE capability — the device calendar, the widget, the share sheet, the pinned
+  notification — lives in `android/`, which you must not edit, and which needs Anna to build and
+  upload a new AAB. When a request needs one of those, say so plainly and stop. Never build a
+  web or server workaround to avoid the rebuild: the Google Calendar OAuth path is what that
+  workaround looks like, and the outage described below came out of it.
 - **A regression must be explained by something that CHANGED.** If it worked three days ago, a
   long-standing setup cannot explain it BY ITSELF — but the change can be on a third party's side
   (Cloudflare, Base44's platform) and land on that setup. Diff recent code first, then prove what
