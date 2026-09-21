@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { pushWidgetTasks, pushAlarms, setAlarmMode } from '../utils/widgetBridge';
+import { pushWidgetTasks, pushAlarms, pushAlarmSound, setAlarmMode } from '../utils/widgetBridge';
 
 // Seeds the home-screen widget once on app open, from anywhere in the app — a
 // notification tap or a share can land the user on a screen that never renders
@@ -8,9 +8,9 @@ import { pushWidgetTasks, pushAlarms, setAlarmMode } from '../utils/widgetBridge
 // Once Home does render, TodaysTasks keeps it current as tasks change.
 //
 // Seeds the phone's alarms the same way, once the signed-in user is known
-// (alarm_mode lives on the profile). Alarms ring only when that setting is on;
-// for everyone else this hands native an empty set, which cancels nothing that
-// was never booked. Only runs on an app build that has the AlarmBridge plugin.
+// (their default alert style, alarm_mode, lives on the profile), and hands
+// native the ring sound they chose. Only runs on an app build that has the
+// AlarmBridge plugin.
 export default function WidgetTaskSync({ user }) {
   useEffect(() => {
     if (!window.Capacitor?.Plugins?.WidgetBridge) return;
@@ -28,6 +28,13 @@ export default function WidgetTaskSync({ user }) {
       .then(pushAlarms)
       .catch(() => {});
   }, [userId, alarmMode]);
+
+  const soundUrl = user?.alarm_sound_url;
+  useEffect(() => {
+    if (!userId || !window.Capacitor?.Plugins?.AlarmBridge) return;
+    pushAlarmSound(user);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, soundUrl]);
 
   return null;
 }
