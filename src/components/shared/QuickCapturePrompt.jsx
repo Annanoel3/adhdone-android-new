@@ -14,7 +14,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { Zap, LayoutGrid } from 'lucide-react';
+import { Zap, LayoutGrid, Bell, AlarmClock, Check } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
 import {
   ONBOARDING_STEPS,
   waitForStep,
@@ -26,6 +27,12 @@ import {
   enterOnboardingSurface,
   exitOnboardingSurface,
 } from '@/components/onboarding/onboardingSurface';
+import {
+  setAlarmMode,
+  refreshAlarms,
+  alarmPermissionStatus,
+  requestAlarmPermissions,
+} from '../utils/widgetBridge';
 
 const SEEN_KEY = 'quick_capture_prompt_seen';
 
@@ -333,6 +340,278 @@ export function WaysToAddPopup({ user }) {
             </Button>
           )}
         </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Alarms: the explanation, the first-task question, the permissions walk ──
+//
+// Three more surfaces that belong together (and, again, would be their own
+// files if the editor could make one). All Android-only: they wait for the
+// AlarmBridge plugin and do nothing where it never appears.
+
+function waitForPlugin(name, timeoutMs = 15000) {
+  return new Promise((resolve) => {
+    const startedAt = Date.now();
+    const poll = setInterval(() => {
+      const p = window.Capacitor?.Plugins?.[name];
+      if (p) {
+        clearInterval(poll);
+        resolve(p);
+      } else if (Date.now() - startedAt > timeoutMs) {
+        clearInterval(poll);
+        resolve(null);
+      }
+    }, 500);
+  });
+}
+
+// The difference, in two lines. Used by the (i) next to every task's switch and
+// by the first-task question, so the wording is the same everywhere.
+export function AlertStyleInfo({ dark = false }) {
+  const sub = dark ? 'text-gray-400' : 'text-gray-600';
+  return (
+    <div className="space-y-3 text-sm">
+      <div className="flex gap-2">
+        <Bell className="w-4 h-4 mt-0.5 flex-shrink-0" />
+        <div>
+          <p className="font-medium">Regular notification</p>
+          <p className={`text-xs ${sub}`}>Shows up in your tray like any app's. Easy to miss when the phone is face down.</p>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <AlarmClock className="w-4 h-4 mt-0.5 flex-shrink-0" />
+        <div>
+          <p className="font-medium">Full-screen alarm</p>
+          <p className={`text-xs ${sub}`}>Rings out loud like an alarm clock, takes over the screen even when it's locked, and keeps going until you snooze or dismiss it.</p>
+        </div>
+      </div>
+      <p className={`text-xs ${sub}`}>Same reminder times either way — only how they reach you changes.</p>
+    </div>
+  );
+}
+
+// Android keeps three things off until the user says yes, and an alarm without
+// them is late, quiet, or stuck in the tray. This walks them through it the
+// first time they turn an alarm on (requestAlarmPermissions fires it only when
+// something is actually missing). Each button bounces out to a settings screen;
+// coming back re-checks and ticks the row.
+export function AlarmPermissionsDialog({ theme }) {
+  const dark = theme === 'dark';
+  const [open, setOpen] = useState(false);
+  const [status, setStatus] = useState(null);
+
+  useEffect(() => {
+    const onNeeded = (e) => {
+      setStatus(e.detail || null);
+      setOpen(true);
+    };
+    window.addEventListener('alarm-permissions-needed', onNeeded);
+    return () => window.removeEventListener('alarm-permissions-needed', onNeeded);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    enterOnboardingSurface();
+    const recheck = () => {
+      if (document.visibilityState === 'visible') {
+        alarmPermissionStatus().then((s) => { if (s) setStatus(s); });
+      }
+    };
+    document.addEventListener('visibilitychange', recheck);
+    return () => {
+      exitOnboardingSurface();
+      document.removeEventListener('visibilitychange', recheck);
+    };
+  }, [open]);
+
+  if (!status) return null;
+  const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
+  const { NotifyBridge } = getPlugins();
+  const tryOpen = (fn) => { try { Promise.resolve(fn()).catch(() => {}); } catch (e) { /* stays on the list */ } };
+
+  const rows = [
+    {
+      key: 'notifications',
+      ok: !!status.notifications,
+      label: 'Notifications',
+      why: "The alarm can't show at all without them.",
+      action: () => tryOpen(() => NotifyBridge?.requestPermission?.()),
+    },
+    {
+      key: 'exact',
+      ok: !!status.exactAlarms,
+      label: 'Alarms & reminders',
+      why: 'Rings at the exact minute instead of "sometime in the next ten".',
+      action: () => tryOpen(() => AlarmBridge?.openExactAlarmSettings?.()),
+    },
+    {
+      key: 'fullscreen',
+      ok: !!status.fullScreen,
+      label: 'Full-screen notifications',
+      why: 'Lets the alarm take over the screen, even when the phone is locked.',
+      action: () => tryOpen(() => AlarmBridge?.openFullScreenSettings?.()),
+    },
+    {
+      key: 'battery',
+      ok: !!status.ignoringBatteryOptimizations,
+      label: 'Battery: unrestricted',
+      why: 'Samsung puts sleeping apps to bed; a sleeping app can ring late or not at all.',
+      action: () => tryOpen(() => AlarmBridge?.requestIgnoreBatteryOptimizations?.()),
+    },
+  ];
+  const allOk = rows.every((r) => r.ok);
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) setOpen(false); }}>
+      <DialogContent className={`max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
+        <DialogHeader>
+          <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
+            <AlarmClock className="w-5 h-5" />
+            {allOk ? 'All set — your phone can ring it' : 'Let your phone ring the alarm'}
+          </DialogTitle>
+          <DialogDescription className={dark ? 'text-gray-400' : ''}>
+            {allOk
+              ? 'Every switch Android needed is on.'
+              : "Android keeps these off until you say yes. Tap each one — you'll hop out to a settings screen and straight back."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className={`divide-y ${dark ? 'divide-gray-700' : 'divide-gray-200'}`}>
+          {rows.map((r) => (
+            <div key={r.key} className="flex items-center justify-between gap-3 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{r.label}</p>
+                <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>{r.why}</p>
+              </div>
+              {r.ok ? (
+                <span className="flex items-center gap-1 text-xs text-green-600 flex-shrink-0">
+                  <Check className="w-4 h-4" /> On
+                </span>
+              ) : (
+                <Button size="sm" onClick={r.action} className="flex-shrink-0">Allow</Button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="flex gap-2 pt-1">
+          {allOk ? (
+            <Button onClick={() => setOpen(false)} className="w-full">Done</Button>
+          ) : (
+            <Button variant="outline" onClick={() => setOpen(false)} className="w-full">
+              Later — it's in Settings → Alarms
+            </Button>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Asked ONCE, right after the first task exists: should reminders arrive as
+// regular notifications or as full-screen alarms? That is the moment the
+// difference means something. The answer becomes the default for new tasks
+// (User.alarm_mode); every task keeps its own switch. Accounts that already
+// have tasks when this ships get asked on their next open.
+const ALERT_STYLE_STEP = 'onboarding_alert_style_done';
+
+export function AlertStylePrompt({ user, theme }) {
+  const dark = theme === 'dark';
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (!user || started.current) return;
+    started.current = true;
+    if (isStepDone(ALERT_STYLE_STEP)) return;
+
+    let cancelled = false;
+    let shown = false;
+    const show = () => {
+      if (shown) return;
+      shown = true;
+      waitForStep(ONBOARDING_STEPS.homeTour)
+        .then(waitForCalm)
+        .then(() => { if (!cancelled) setOpen(true); });
+    };
+    const onCreated = () => show();
+
+    waitForPlugin('AlarmBridge').then((plugin) => {
+      if (cancelled || !plugin) return;
+      window.addEventListener('task-created', onCreated);
+      // Already has a task (an account from before alarms existed, or a capture
+      // made outside the app)? Then the moment is now.
+      base44.entities.Task.filter({ status: 'active' }, '-created_date', 1)
+        .then((rows) => { if (!cancelled && rows?.length) show(); })
+        .catch(() => {});
+    });
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener('task-created', onCreated);
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!open) return;
+    enterOnboardingSurface();
+    return exitOnboardingSurface;
+  }, [open]);
+
+  const finish = () => {
+    markStepDone(ALERT_STYLE_STEP);
+    setOpen(false);
+  };
+
+  const choose = async (style) => {
+    setBusy(true);
+    try {
+      await base44.auth.updateMe({ alarm_mode: style });
+      setAlarmMode(style);
+      finish();
+      await refreshAlarms();
+      if (style === 'alarm') await requestAlarmPermissions();
+    } catch (e) {
+      // Leave the default (regular notifications) in place; Settings has the switch.
+      finish();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const card = `w-full text-left rounded-xl border p-4 transition-colors ${dark ? 'border-gray-700 hover:bg-gray-800' : 'border-gray-200 hover:bg-gray-50'}`;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) finish(); }}>
+      <DialogContent className={`max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
+        <DialogHeader>
+          <DialogTitle className={dark ? 'text-white' : ''}>How should reminders reach you?</DialogTitle>
+          <DialogDescription className={dark ? 'text-gray-400' : ''}>
+            Both arrive at the same times. This is only how hard they are to ignore.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-3 pt-1">
+          <button type="button" className={card} onClick={() => choose('notification')} disabled={busy}>
+            <div className="flex items-center gap-2 font-medium"><Bell className="w-4 h-4" /> Regular notification</div>
+            <p className={`text-xs mt-1 ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
+              Shows up in your tray like any app's. Easy to miss when the phone is face down.
+            </p>
+          </button>
+          <button type="button" className={card} onClick={() => choose('alarm')} disabled={busy}>
+            <div className="flex items-center gap-2 font-medium"><AlarmClock className="w-4 h-4" /> Full-screen alarm</div>
+            <p className={`text-xs mt-1 ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
+              Rings out loud like an alarm clock, takes over the screen even when it's locked, and keeps going until you snooze or dismiss it.
+            </p>
+          </button>
+        </div>
+
+        <p className={`text-xs pt-1 ${dark ? 'text-gray-500' : 'text-gray-500'}`}>
+          Change it any time: every task has its own switch, and Settings holds the default for new ones.
+        </p>
       </DialogContent>
     </Dialog>
   );
