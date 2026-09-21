@@ -68,18 +68,25 @@ export default function SupportEscalationCard({ message, transcript, theme, onDi
   );
 }
 
-// ── "Was that a request for ADHDone?" ─────────────────────────────────────────
+// ── "I think this was a feature request" ─────────────────────────────────────
 //
 // One-time popup for when something a person captured was really a request for
 // the app itself — a feature they want — and it wrongly became a task. It shows
 // when their profile carries pending_feedback_prompt ({ text, task_id, queued_at })
-// and has not been answered yet.
+// that has not been answered yet. The app speaks in its own voice here: it is the
+// app that noticed, not a person reading their notes.
 //
 // Same consent rule as the card above: nothing leaves the app unless they tap
-// Send. They see their OWN words and can change them first — the app never
-// writes the request for them. Whichever button they press, the prompt is
-// marked answered so it never comes back, and the ways-to-add popup is marked
-// seen so first-run education never lands on top of this.
+// "Yes, send it". They see their OWN words and can change them first — the app
+// never writes the request for them.
+//
+// Every answer is recorded on their profile, whether or not the email arrives:
+//   answer "yes"        — plus sent_text, and email "sent" or "failed"
+//   answer "no"         — pressed No thanks
+//   answer "dismissed"  — closed it with the X
+// Tapping outside or pressing Escape does nothing, so a stray tap can never count
+// as an answer. Once answered it never shows again, and the ways-to-add popup is
+// marked seen so first-run education never lands on top of this.
 export function FeedbackPrompt({ user }) {
   const pending = user?.pending_feedback_prompt;
   const waiting = !!(pending?.text && !pending?.answered_at);
@@ -103,54 +110,81 @@ export function FeedbackPrompt({ user }) {
     return exitOnboardingSurface;
   }, [open]);
 
-  // Overwritten, never set to null: the schema types this field as an object
-  // and would reject null, which would leave the popup coming back forever.
-  const markAnswered = async (answer) => {
-    markStepDone('onboarding_ways_seen');
+  // Keeps what was queued and adds the answer on top. Overwritten, never set to
+  // null: the schema types this field as an object and would reject null.
+  const record = async (fields) => {
     try {
       await base44.auth.updateMe({
-        pending_feedback_prompt: { answered_at: new Date().toISOString(), answer },
+        pending_feedback_prompt: {
+          text: pending?.text,
+          task_id: pending?.task_id,
+          queued_at: pending?.queued_at,
+          answered_at: new Date().toISOString(),
+          ...fields,
+        },
       });
     } catch (e) {
-      // Worst case it shows once more next time — never worth an error here.
+      console.error('Could not record the feature request answer:', e);
     }
   };
 
-  const handleSend = async () => {
+  const handleYes = async () => {
     const message = text.trim();
     if (!message) return;
     setStatus('sending');
+    markStepDone('onboarding_ways_seen');
+    // The yes and their words are saved FIRST, so they are never lost even if
+    // the email to the developer fails.
+    await record({ answer: 'yes', sent_text: message, email: 'sending' });
     try {
       await base44.functions.invoke('sendSupportRequest', {
         message,
         transcript:
-          'Sent from the "was that a request for ADHDone?" popup. What they originally captured: "' +
+          'Sent from the "I think this was a feature request" popup. What they originally captured: "' +
           String(pending?.text || '').slice(0, 1000) + '"',
       });
-      setStatus('sent');
-      markAnswered('sent');
+      await record({ answer: 'yes', sent_text: message, email: 'sent' });
     } catch (e) {
-      console.error('Failed to send feature request:', e);
-      setStatus('error');
+      console.error('Feature request email failed:', e);
+      await record({
+        answer: 'yes',
+        sent_text: message,
+        email: 'failed',
+        email_error: String(e?.message || e).slice(0, 300),
+      });
     }
+    // Either way the request is on record where the developer can see it.
+    setStatus('done');
   };
 
-  const handleClose = () => {
+  const handleNo = (answer) => {
+    markStepDone('onboarding_ways_seen');
+    record({ answer });
     setOpen(false);
-    if (status !== 'sent') markAnswered('dismissed');
+  };
+
+  const handleOpenChange = (o) => {
+    if (o) return;
+    if (status === 'sending') return;
+    if (status === 'done') { setOpen(false); return; }
+    handleNo('dismissed');
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
-      <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto bg-card text-card-foreground border-border">
-        {status === 'sent' ? (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto bg-card text-card-foreground border-border"
+      >
+        {status === 'done' ? (
           <div className="space-y-4 pt-2">
             <div className="flex items-center gap-2">
               <Check className="w-5 h-5 text-green-600" />
-              <h2 className="text-xl font-bold text-foreground">Sent to Anna</h2>
+              <h2 className="text-xl font-bold text-foreground">Got it</h2>
             </div>
             <p className="text-[15px] leading-relaxed text-muted-foreground">
-              She reads every one of these herself. If she replies, it'll come to your email.
+              The developer will see this. If there's a reply, it'll come to your email.
             </p>
             <Button onClick={() => setOpen(false)} className="w-full">
               Close
@@ -158,10 +192,10 @@ export function FeedbackPrompt({ user }) {
           </div>
         ) : (
           <div className="space-y-4 pt-2">
-            <h2 className="text-xl font-bold text-foreground">Was that a request for ADHDone?</h2>
+            <h2 className="text-xl font-bold text-foreground">I think this was a feature request</h2>
             <p className="text-[15px] leading-relaxed text-muted-foreground">
-              It sounded like something you'd like the app to do, and it turned into a task by
-              mistake. Want to send it to Anna, who builds the app? You can change the wording first.
+              It turned into a task, but it sounds like something you'd like ADHDone to do. Want
+              to send it to the developer? You can change the wording first.
             </p>
             <Textarea
               value={text}
@@ -169,20 +203,22 @@ export function FeedbackPrompt({ user }) {
               rows={3}
               className="text-[15px]"
             />
-            {status === 'error' && (
-              <p className="text-sm text-red-500">Couldn't send that — please try again.</p>
-            )}
             <div className="flex gap-2">
               <Button
-                onClick={handleSend}
+                onClick={handleYes}
                 disabled={status === 'sending' || !text.trim()}
                 className="flex-1"
               >
                 {status === 'sending'
                   ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Sending…</>
-                  : 'Send to Anna'}
+                  : 'Yes, send it'}
               </Button>
-              <Button onClick={handleClose} variant="outline" disabled={status === 'sending'} className="flex-1">
+              <Button
+                onClick={() => handleNo('no')}
+                variant="outline"
+                disabled={status === 'sending'}
+                className="flex-1"
+              >
                 No thanks
               </Button>
             </div>
