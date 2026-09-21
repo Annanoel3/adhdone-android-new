@@ -173,6 +173,14 @@
       ],
       "default": "active"
     },
+    "alert_style": {
+      "type": "string",
+      "enum": [
+        "notification",
+        "alarm"
+      ],
+      "description": "HOW this task's reminders arrive on the installed Android app, never WHEN. 'alarm' = every reminder this task already has (reminder_schedule entries, next_reminder) also rings as a real full-screen alarm on the phone; 'notification' = the usual push only. Unset = follow the user's default (User.alarm_mode). Set from the switch on the task's detail card. The alarm itself is native (android/, which you must not edit) and reads the task's existing reminder times; do not add reminder logic for it."
+    },
     "silenced": {
       "type": "boolean",
       "default": false,
