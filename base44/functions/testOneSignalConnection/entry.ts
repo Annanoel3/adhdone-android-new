@@ -50,7 +50,11 @@ Deno.serve(async (req) => {
       waysSeen: flags.includes('onboarding_ways_seen'),
       waysFirstOpen: flags.includes('onboarding_ways_first_open'),
       feedbackWaiting: !!(fb?.text && !fb?.answered_at),
-      feedbackAnswered: fb?.answered_at ? fb.answer : null,
+      feedbackAnswer: fb?.answer ?? null,
+      feedbackAnsweredAt: fb?.answered_at ?? null,
+      feedbackEmail: fb?.email ?? null,
+      feedbackEmailError: fb?.email_error ?? null,
+      feedbackSentText: fb?.answer === 'yes' ? (fb?.sent_text ?? null) : null,
     };
 
     if (mode === 'inspect') return Response.json(summary);
