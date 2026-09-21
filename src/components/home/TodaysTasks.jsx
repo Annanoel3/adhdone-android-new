@@ -13,7 +13,7 @@ import { updateTodaysSummary } from "../utils/dailySummaryHelper";
 import { isTodayTask, isUpcomingTask } from "../utils/todayTasks";
 import { isBirthdayTask, passesBirthdayDayFilter } from "../utils/birthdayHelpers";
 import { isSmartReminderTask } from "../utils/smartReminderTask";
-import { pushWidgetTasks } from "../utils/widgetBridge";
+import { pushWidgetTasks, pushAlarms } from "../utils/widgetBridge";
 import { getReminderCopy } from "../utils/reminderCopy";
 import { formatTimeRange } from "../utils/timeRangeLabel";
 import {
@@ -58,6 +58,9 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
   // re-dating a task updates the widget without the user reopening anything.
   React.useEffect(() => {
     pushWidgetTasks(tasks);
+    // Same trigger keeps the phone's alarms in step (no-op unless the user has
+    // alarms turned on and the app build has the plugin).
+    pushAlarms(tasks);
   }, [tasks]);
 
   const getUrgencyColor = (urgency) => {
