@@ -26,6 +26,8 @@ Deno.serve(async (req) => {
       workRemote: rec.work_remote ?? null,
       hasWorkAddress: !!(rec.work_address || '').trim(),
       workAddressLength: (rec.work_address || '').length,
+      workAddressKeyPresent: Object.prototype.hasOwnProperty.call(rec, 'work_address'),
+      workAddressIsEmptyString: rec.work_address === '',
       hasHome: !!home,
       homeLatType: typeof rec.home_lat,
       homeLngType: typeof rec.home_lng,
@@ -48,6 +50,13 @@ Deno.serve(async (req) => {
       if (d?.minutes) leaveAtUtc = new Date(commute.arriveUtc.getTime() - (d.minutes + 10) * 60000).toISOString();
     }
 
+    let places = null;
+    try {
+      const pr = await svc.functions.invoke('placesAutocomplete', { input: 'Austin City Hall' });
+      const pd = pr?.data ?? pr;
+      places = { suggestions: Array.isArray(pd?.suggestions) ? pd.suggestions.length : null, reason: pd?.reason ?? null, error: pd?.error ?? null };
+    } catch (e) { places = { threw: String(e?.message || e).slice(0, 200) }; }
+
     const ledger = await svc.entities.NotificationLedger.filter({ user_email: rec.email, source: 'cronCommuteWatch' });
 
     const fmt = (iso) => (iso ? new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(iso)) : null);
@@ -67,6 +76,7 @@ Deno.serve(async (req) => {
       wouldLeaveAtLocal: fmt(leaveAtUtc),
       lastLeaveDate: rec.last_commute_leave_date ?? null,
       lastHeadsupDate: rec.last_commute_headsup_date ?? null,
+      placesAutocompleteNow: places,
       commuteLedgerEntries: ledger.length,
       commuteLedgerRecent: ledger.slice(-5).map((l) => ({ sendAtLocal: fmt(l.send_at), title: l.title })),
     });
