@@ -56,6 +56,26 @@ Deno.serve(async (req) => {
 
     const ledger = await svc.entities.NotificationLedger.filter({ user_email: rec.email, source: 'cronCommuteWatch' });
 
+    const lastEntry = ledger[ledger.length - 1] || null;
+    const appId = Deno.env.get('ONESIGNAL_APP_ID')!.trim();
+    const key = Deno.env.get('ONESIGNAL_REST_API_KEY')!.trim();
+    let osNotif = null;
+    if (lastEntry?.notification_id) {
+      const r = await fetch('https://onesignal.com/api/v1/notifications/' + encodeURIComponent(lastEntry.notification_id) + '?app_id=' + encodeURIComponent(appId), { headers: { Authorization: 'Basic ' + key } });
+      const j = await r.json();
+      osNotif = { httpStatus: r.status, successful: j?.successful ?? null, failed: j?.failed ?? null, errored: j?.errored ?? null, remaining: j?.remaining ?? null, received: j?.received ?? null, converted: j?.converted ?? null, completedAt: j?.completed_at ?? null, queuedAt: j?.queued_at ?? null, errors: j?.errors ?? null };
+    }
+    let osUser = null;
+    {
+      const r = await fetch('https://api.onesignal.com/apps/' + appId + '/users/by/external_id/' + encodeURIComponent(rec.email), { headers: { Authorization: 'Basic ' + key } });
+      if (r.ok) {
+        const b = await r.json();
+        const subs = Array.isArray(b?.subscriptions) ? b.subscriptions : [];
+        const toIso = (t) => (t ? new Date(Number(t) * 1000).toISOString() : null);
+        osUser = { lastActive: toIso(b?.properties?.last_active), pushSubs: subs.filter((s) => typeof s?.type === 'string' && s.type.endsWith('Push')).map((s) => ({ type: s.type, enabled: s.enabled ?? null, notificationTypes: s.notification_types ?? null, sessionCount: s.session_count ?? null, appVersion: s.app_version ?? null, deviceModel: s.device_model ?? null })) };
+      } else osUser = { httpStatus: r.status };
+    }
+
     const fmt = (iso) => (iso ? new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(iso)) : null);
 
     return Response.json({
@@ -74,6 +94,9 @@ Deno.serve(async (req) => {
       wouldLeaveAtLocal: fmt(leaveAtUtc),
       lastLeaveDate: rec.last_commute_leave_date ?? null,
       lastHeadsupDate: rec.last_commute_headsup_date ?? null,
+      lastLedgerHasNotificationId: !!lastEntry?.notification_id,
+      osNotif,
+      osUser,
       commuteLedgerEntries: ledger.length,
       commuteLedgerRecent: ledger.slice(-5).map((l) => ({ sendAtLocal: fmt(l.send_at), title: l.title })),
     });
