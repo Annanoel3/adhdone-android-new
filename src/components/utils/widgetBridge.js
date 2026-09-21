@@ -9,6 +9,7 @@
 // widget read from it, so the two can never disagree.
 
 import { isTodayTask, isUpcomingTask, getLocalDateString } from './todayTasks';
+import { base44 } from '@/api/base44Client';
 
 // The widget only has room for a handful of rows, and a wall of text is the
 // opposite of useful on a home screen.
@@ -103,36 +104,31 @@ export async function pushWidgetTasks(tasks) {
 }
 
 // ---------------------------------------------------------------------------
-// Alarms — real, out-loud alarms for high and urgent tasks, through the
-// AlarmBridge Capacitor plugin. Android only. The plugin is absent on web and
-// on app builds older than the one that added it, and every call here is then
-// a no-op.
+// Alarms — the task's EXISTING reminders, delivered as a real, out-loud alarm
+// instead of (for now: as well as) a push. Through the AlarmBridge Capacitor
+// plugin, Android only. The plugin is absent on web and on app builds older
+// than the one that added it, and every call here is then a no-op.
 //
-// Same one-way mirror as the widget: the app decides which tasks deserve an
-// alarm and when it should ring, and hands native the WHOLE set every time
-// tasks change. Native books them with AlarmManager, keeps them across reboots
-// and rings them with or without a network. Anything missing from the latest
-// set is cancelled on the phone.
+// Same one-way mirror as the widget: the app hands native the WHOLE set every
+// time tasks change. Native books them with AlarmManager, keeps them across
+// reboots and rings them with or without a network. Anything missing from the
+// latest set is cancelled on the phone.
 //
-// Alarms are OFF for everyone by default. They ring only for a user whose
-// alarm_mode is 'alarm' (Settings). Push reminders are unchanged either way —
-// for now an alarm rings alongside them, not instead of them.
-//
-// Which tasks ring, and when:
-//   - active, top-level (no parent), not on the Back Burner, not a birthday,
-//     urgency high or urgent, classification task or payment (events later)
-//   - a day-only task rings at 9:00 AM local on its day
-//   - a task with a clock time rings ONE HOUR before that time
-//   - a task with no date at all gets no alarm (later: one combined 9 AM)
+// Nothing here decides WHEN a task reminds — that is already decided by the
+// reminder plan (reminder_schedule) and next_reminder. This only decides HOW:
+// a task rings as an alarm when its own alert_style is 'alarm', or when it has
+// none of its own and the user's default (alarm_mode) is 'alarm'. Off for
+// everyone until they turn it on.
 
-const ALARM_LEAD_MS = 60 * 60 * 1000;
-const ALARM_DAY_HOUR = 9;
 // Native keeps snooze/dismiss state for an alarm whose time hasn't changed, so
 // a recently-past alarm must still be listed — otherwise a snoozed ring would
 // be cancelled the moment the app opened. Anything older than this is dropped.
 const ALARM_KEEP_PAST_MS = 24 * 60 * 60 * 1000;
+// AlarmManager refuses new alarms once an app holds a few hundred; the nearest
+// ones are the ones that matter, and the set is rebuilt on every app open.
+const ALARM_MAX = 100;
 
-// null = the signed-in user's setting isn't known yet. Native is never touched
+// null = the signed-in user's default isn't known yet. Native is never touched
 // on a guess: an empty set would cancel every alarm on the phone.
 let alarmMode = null;
 let lastAlarmsJson = '';
@@ -145,54 +141,48 @@ export function setAlarmMode(mode) {
   alarmMode = mode === 'alarm' ? 'alarm' : 'notification';
 }
 
-function atNineLocal(iso) {
-  const d = new Date(iso);
-  if (isNaN(d)) return null;
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), ALARM_DAY_HOUR, 0, 0, 0).getTime();
+export function getAlarmMode() {
+  return alarmMode;
 }
 
-// When one task's alarm should ring, in epoch milliseconds, or null for none.
-export function alarmTimeFor(task) {
-  if (task.day_only_task) {
-    const day = task.due_date || task.next_reminder;
-    return day ? atNineLocal(day) : null;
+// How this task alerts: its own choice, else the user's default.
+export function alertStyleFor(task, userDefault = alarmMode) {
+  if (task?.alert_style === 'alarm' || task?.alert_style === 'notification') return task.alert_style;
+  return userDefault === 'alarm' ? 'alarm' : 'notification';
+}
+
+// Every moment this task is already set to remind at.
+function reminderTimesFor(task) {
+  const times = new Set();
+  for (const r of task.reminder_schedule || []) {
+    const t = r?.send_at ? new Date(r.send_at).getTime() : NaN;
+    if (!isNaN(t)) times.add(t);
   }
-  if (task.reminder_interval === 'once' && task.next_reminder) {
+  if (task.next_reminder) {
     const t = new Date(task.next_reminder).getTime();
-    return isNaN(t) ? null : t - ALARM_LEAD_MS;
+    if (!isNaN(t)) times.add(t);
   }
-  if (task.due_date) {
-    const d = new Date(task.due_date);
-    if (isNaN(d)) return null;
-    // The parser stores a deadline day with no clock time as 23:59 local.
-    // That is a DAY, not a time — ring at 9 AM, not at 10:59 PM.
-    if (d.getHours() === 23 && d.getMinutes() === 59) return atNineLocal(task.due_date);
-    return d.getTime() - ALARM_LEAD_MS;
-  }
-  return null;
+  return Array.from(times);
 }
 
-export function alarmSetFor(tasks) {
+export function alarmSetFor(tasks, userDefault = alarmMode) {
   const cutoff = Date.now() - ALARM_KEEP_PAST_MS;
-  return (tasks || [])
-    .filter((t) =>
-      t.status === 'active' &&
-      !t.parent_task_id &&
-      !t.silenced &&
-      !t.birthday_person &&
-      (t.urgency === 'high' || t.urgency === 'urgent') &&
-      (!t.classification || t.classification === 'task' || t.classification === 'payment')
-    )
-    .map((t) => ({ id: t.id, taskId: t.id, title: t.title || 'Task', at: alarmTimeFor(t) }))
-    .filter((a) => a.at && a.at > cutoff)
-    .sort((a, b) => a.at - b.at);
+  const out = [];
+  for (const t of tasks || []) {
+    if (t.status !== 'active' || t.silenced) continue;
+    if (alertStyleFor(t, userDefault) !== 'alarm') continue;
+    for (const at of reminderTimesFor(t)) {
+      if (at > cutoff) out.push({ id: `${t.id}:${at}`, taskId: t.id, title: t.title || 'Task', at });
+    }
+  }
+  return out.sort((a, b) => a.at - b.at).slice(0, ALARM_MAX);
 }
 
 export async function pushAlarms(tasks) {
   const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
   if (!AlarmBridge || alarmMode === null) return;
 
-  const alarms = alarmMode === 'alarm' ? alarmSetFor(tasks) : [];
+  const alarms = alarmSetFor(tasks);
   const json = JSON.stringify(alarms);
   if (json === lastAlarmsJson) return;
   lastAlarmsJson = json;
@@ -203,5 +193,31 @@ export async function pushAlarms(tasks) {
     // Try again on the next change rather than believing the phone has this set.
     lastAlarmsJson = '';
     console.error('Alarm sync failed:', err);
+  }
+}
+
+// Re-reads the task list and pushes the alarm set. For screens that change a
+// task's alert style or the user's default and aren't Home.
+export async function refreshAlarms() {
+  if (!window.Capacitor?.Plugins?.AlarmBridge || alarmMode === null) return;
+  try {
+    const tasks = await base44.entities.Task.list('-updated_date', 500);
+    await pushAlarms(tasks);
+  } catch (err) {
+    console.error('Alarm refresh failed:', err);
+  }
+}
+
+// Hands native the ring sound the user chose ('' = the phone's default alarm
+// tone). Native downloads it once and rings from the copy. Resolves the
+// plugin's { result, ready }, or null when there is nothing to do.
+export async function pushAlarmSound(user) {
+  const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
+  if (!AlarmBridge?.setSound) return null;
+  try {
+    return await AlarmBridge.setSound({ url: user?.alarm_sound_url || '', name: user?.alarm_sound_name || '' });
+  } catch (err) {
+    console.error('Alarm sound sync failed:', err);
+    return null;
   }
 }
