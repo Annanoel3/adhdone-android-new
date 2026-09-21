@@ -32,13 +32,15 @@ import {
   Upload,
   FileText,
   Bell,
-  BellOff
+  BellOff,
+  AlarmClock
 } from "lucide-react";
 import { Task } from "@/entities/Task";
 import TaskDecompositionModal from "./TaskDecompositionModal";
 import SmartReminderEditor from "./SmartReminderEditor";
 import AddSubTaskCard from "./AddSubTaskCard";
 import ReminderTypeSelector, { getCurrentReminderType } from "./ReminderTypeSelector";
+import { supportsAlarms, alertStyleFor, refreshAlarms } from "../utils/widgetBridge";
 import VoiceTaskInput from "./VoiceTaskInput";
 import { scheduleReminder, cancelScheduledReminder } from "../utils/reminderScheduler";
 import { User } from "@/entities/User";
@@ -1463,6 +1465,27 @@ Return JSON:
   // Back Burner — silence all notifications for this task (or reactivate them).
   // The onTaskUpdate automation cancels/reschedules the actual OneSignal
   // notifications, so the frontend only flips the flag.
+  // Alarm vs regular notification for THIS task. Same reminder times either
+  // way; this only changes how they arrive. A task with no choice of its own
+  // follows the user's default, and the first tap here makes it explicit.
+  const handleToggleAlertStyle = async () => {
+    if (!task) return;
+    const next = alertStyleFor(task) === 'alarm' ? 'notification' : 'alarm';
+    onUpdate({ ...task, alert_style: next });
+    toast({
+      title: next === 'alarm' ? 'Alarm on ⏰' : 'Regular notifications',
+      description: next === 'alarm'
+        ? 'Reminders for this task ring full-screen, impossible to ignore.'
+        : 'Reminders for this task arrive as normal notifications.',
+    });
+    try {
+      await Task.update(task.id, { alert_style: next });
+      await refreshAlarms();
+    } catch (e) {
+      console.error('Error changing alert style:', e);
+    }
+  };
+
   const handleToggleSilenced = async () => {
     if (!task) return;
     const newSilenced = !task.silenced;
@@ -1612,6 +1635,25 @@ Return JSON:
               >
                 {task.silenced ? <BellOff className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
                 {task.silenced ? 'Back Burner 🔇' : 'Back Burner'}
+              </Button>
+              )}
+
+              {/* Alarm switch — only on an app build that can ring one. */}
+              {supportsAlarms() && !task.silenced && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleToggleAlertStyle}
+                className={`gap-1.5 h-8 transition-all active:scale-95 ${
+                  alertStyleFor(task) === 'alarm'
+                    ? 'bg-red-500 text-white border-red-500 hover:bg-red-600 shadow-sm'
+                    : theme === 'dark'
+                      ? 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700'
+                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                <AlarmClock className="w-3.5 h-3.5" />
+                {alertStyleFor(task) === 'alarm' ? 'Alarm ⏰' : 'Notification'}
               </Button>
               )}
 
