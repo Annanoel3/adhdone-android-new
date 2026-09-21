@@ -210,19 +210,16 @@ export default function Tasks() {
   };
 
   const handleSnooze = async (task, minutes) => {
-    const nextReminder = new Date();
-    nextReminder.setMinutes(nextReminder.getMinutes() + minutes);
-
-    // Optimistic — update UI instantly. The task stays ACTIVE: a snooze moves
-    // the reminder, it doesn't hide the task.
+    // Optimistic — update UI instantly. The task stays ACTIVE and keeps its
+    // date: a snooze adds one extra reminder, it doesn't move or hide anything.
     setAllTasks(prev => prev.map(t =>
       t.id === task.id
-        ? { ...t, snooze_count: (t.snooze_count || 0) + 1, consecutive_snoozes: (t.consecutive_snoozes || 0) + 1, next_reminder: nextReminder.toISOString() }
+        ? { ...t, snooze_count: (t.snooze_count || 0) + 1, consecutive_snoozes: (t.consecutive_snoozes || 0) + 1 }
         : t
     ));
 
-    // Shared helper: cancels what's booked, books ONE reminder at the snoozed
-    // time and saves it. (This button used to book nothing at all.)
+    // Shared helper: books ONE extra reminder at the snoozed time and counts
+    // the snooze; everything else already booked stays put.
     snoozeTask(task, minutes).catch(error => {
       console.error("Failed to snooze task:", error);
       loadTasks();
