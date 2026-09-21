@@ -76,6 +76,21 @@ Deno.serve(async (req) => {
       } else osUser = { httpStatus: r.status };
     }
 
+    // Compare against her other recent pushes: does OneSignal record confirmed
+    // receipt for ANY of them? If yes, confirmed delivery is tracked and a 0 means
+    // the commute push really did not land.
+    const allLedger = await svc.entities.NotificationLedger.filter({ user_email: rec.email });
+    const recent = allLedger.filter((l) => l.notification_id).sort((a, b) => String(b.send_at || '').localeCompare(String(a.send_at || ''))).slice(0, 8);
+    const compare = [];
+    for (const l of recent) {
+      try {
+        const r = await fetch('https://onesignal.com/api/v1/notifications/' + encodeURIComponent(l.notification_id) + '?app_id=' + encodeURIComponent(appId), { headers: { Authorization: 'Basic ' + key } });
+        const j = await r.json();
+        compare.push({ source: l.source, sendAt: l.send_at, successful: j?.successful ?? null, received: j?.received ?? null, converted: j?.converted ?? null, failed: j?.failed ?? null });
+      } catch (e) { compare.push({ source: l.source, err: true }); }
+    }
+    const enabledSubs = (osUser?.pushSubs || []).filter((s) => s.enabled === true);
+
     const fmt = (iso) => (iso ? new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(iso)) : null);
 
     return Response.json({
@@ -96,7 +111,10 @@ Deno.serve(async (req) => {
       lastHeadsupDate: rec.last_commute_headsup_date ?? null,
       lastLedgerHasNotificationId: !!lastEntry?.notification_id,
       osNotif,
-      osUser,
+      osUserLastActive: osUser?.lastActive ?? null,
+      pushSubsTotal: (osUser?.pushSubs || []).length,
+      enabledSubs,
+      compare,
       commuteLedgerEntries: ledger.length,
       commuteLedgerRecent: ledger.slice(-5).map((l) => ({ sendAtLocal: fmt(l.send_at), title: l.title })),
     });
