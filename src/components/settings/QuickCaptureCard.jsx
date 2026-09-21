@@ -154,6 +154,12 @@ export function AlarmCard({ user, theme }) {
       setAlarmMode(mode);
       await refreshAlarms();
       await refreshStatus();
+      // Without the exact-alarm grant Android can ring up to ten minutes late.
+      // Take them straight to the switch the first time they turn alarms on.
+      if (next && AlarmBridge.openExactAlarmSettings) {
+        const st = await AlarmBridge.getStatus().catch(() => null);
+        if (st && st.exactAlarms === false) openSetting(() => AlarmBridge.openExactAlarmSettings());
+      }
     } catch (e) {
       setError("Couldn't save that. Try again.");
     } finally {
