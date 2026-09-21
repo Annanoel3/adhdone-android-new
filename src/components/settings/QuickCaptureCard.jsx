@@ -4,7 +4,7 @@ import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Zap, AlarmClock } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import { setAlarmMode, refreshAlarms, pushAlarmSound } from '../utils/widgetBridge';
+import { setAlarmMode, refreshAlarms, pushAlarmSound, requestAlarmPermissions } from '../utils/widgetBridge';
 
 const getPlugins = () => {
   const p = (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.Plugins) || {};
@@ -154,12 +154,9 @@ export function AlarmCard({ user, theme }) {
       setAlarmMode(mode);
       await refreshAlarms();
       await refreshStatus();
-      // Without the exact-alarm grant Android can ring up to ten minutes late.
-      // Take them straight to the switch the first time they turn alarms on.
-      if (next && AlarmBridge.openExactAlarmSettings) {
-        const st = await AlarmBridge.getStatus().catch(() => null);
-        if (st && st.exactAlarms === false) openSetting(() => AlarmBridge.openExactAlarmSettings());
-      }
+      // Anything Android still withholds opens the guided walk-through now,
+      // not the first time an alarm quietly fails to ring.
+      if (next) await requestAlarmPermissions();
     } catch (e) {
       setError("Couldn't save that. Try again.");
     } finally {
