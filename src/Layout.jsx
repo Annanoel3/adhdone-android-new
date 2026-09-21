@@ -69,7 +69,7 @@ import WidgetTaskSync from "./components/shared/WidgetTaskSync";
 import WidgetOpenReceiver from "./components/shared/WidgetOpenReceiver";
 import HomeZipPrompt from "./components/shared/HomeZipPrompt";
 import EventConflictWarning from "./components/shared/EventConflictWarning";
-import QuickCapturePrompt, { WaysToAddPopup } from "./components/shared/QuickCapturePrompt";
+import QuickCapturePrompt, { WaysToAddPopup, AlertStylePrompt, AlarmPermissionsDialog } from "./components/shared/QuickCapturePrompt";
 import { FeedbackPrompt } from "./components/support/SupportEscalationCard";
 import PageIntroTour from "./components/onboarding/PageIntroTour";
 import WelcomeDialog from "./components/onboarding/WelcomeDialog";
@@ -1076,6 +1076,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <QuickCapturePrompt />
         <WaysToAddPopup user={user} />
         <FeedbackPrompt user={user} />
+        <AlertStylePrompt user={user} theme={theme} />
+        <AlarmPermissionsDialog theme={theme} />
         <TaskCaptureProcessor userEmail={user?.email} />
         <UsageTracker user={user} />
         <WelcomeDialog user={user} />
