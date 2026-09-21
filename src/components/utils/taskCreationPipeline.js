@@ -55,6 +55,14 @@ function maybeAskForHomeZip(text, location) {
   } catch (e) {}
 }
 
+// Every path that creates a main task says so. The one-time "how should
+// reminders reach you?" ask (AlertStylePrompt) keys off the first of these.
+function announceTaskCreated(task) {
+  try {
+    window.dispatchEvent(new CustomEvent('task-created', { detail: { task } }));
+  } catch (e) {}
+}
+
 export async function detectMultipleTasks(inputText) {
   const multiTaskPrompt = `Analyze this input and determine if it contains multiple separate tasks:
 
@@ -236,6 +244,7 @@ Return JSON:
       });
 
       maybeAskForHomeZip(`${subtaskCheck.main_task} ${inputText}`, mainTaskParsed.location);
+      announceTaskCreated(parentTask);
 
       // Subtasks IN ORDER — no notifications on subtasks, only the parent
       for (let si = 0; si < subtaskCheck.subtasks.length; si++) {
@@ -507,6 +516,7 @@ Return JSON:
 
     maybeAskForHomeZip(`${createdTask.title} ${inputText}`, parsed.location);
     announceEventConflict(createdTask);
+    announceTaskCreated(createdTask);
 
     // Was this task born with anything that will ever nudge the user? A task
     // created with no time, no interval and no due date is silent forever, and
@@ -611,6 +621,7 @@ export async function createAdvanceTask(taskData, currentUser, minutesBefore) {
 
   const createdTask = await base44.entities.Task.create({ ...taskData, reminder_scheduling_since: new Date().toISOString() });
   announceEventConflict(createdTask);
+  announceTaskCreated(createdTask);
 
   const buttons = [
     { id: "snooze_15", text: "Snooze 15 min" },
@@ -660,7 +671,7 @@ export async function createAdvanceTask(taskData, currentUser, minutesBefore) {
 // Priority sets URGENCY ONLY — the smart nudge cron decides when to remind.
 export async function createTaskWithPriority(data, priority) {
   const urgency = ['high', 'medium', 'low'].includes(priority) ? priority : 'medium';
-  return base44.entities.Task.create({
+  const createdTask = await base44.entities.Task.create({
     title: data.title,
     original_input: data.original_input || null,
     description: '',
@@ -675,6 +686,8 @@ export async function createTaskWithPriority(data, priority) {
     status: 'active',
     notification_recipient_email: data.currentUser.email
   });
+  announceTaskCreated(createdTask);
+  return createdTask;
 }
 
 export async function createTaskWithDate(data, date, time) {
@@ -712,6 +725,7 @@ export async function createTaskWithDate(data, date, time) {
   });
 
   announceEventConflict(createdTask);
+  announceTaskCreated(createdTask);
 
   const { scheduleMultiReminders } = await import('./multiReminderScheduler');
   const multiIds = await scheduleMultiReminders({
