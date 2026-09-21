@@ -208,6 +208,31 @@ export async function refreshAlarms() {
   }
 }
 
+// What Android still withholds for alarms on this phone (each key true =
+// allowed), or null when the plugin is absent.
+export async function alarmPermissionStatus() {
+  const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
+  if (!AlarmBridge?.getStatus) return null;
+  try {
+    return await AlarmBridge.getStatus();
+  } catch (err) {
+    return null;
+  }
+}
+
+// Something still missing? Then the guided "let your phone ring" dialog
+// (mounted once in Layout) opens, and this resolves true. Called the moment
+// someone first turns an alarm on — a task's switch, the first-task question,
+// or the Settings default — never out of nowhere.
+export async function requestAlarmPermissions() {
+  const st = await alarmPermissionStatus();
+  if (!st) return false;
+  const missing = !st.notifications || !st.exactAlarms || !st.fullScreen || !st.ignoringBatteryOptimizations;
+  if (!missing) return false;
+  window.dispatchEvent(new CustomEvent('alarm-permissions-needed', { detail: st }));
+  return true;
+}
+
 // Hands native the ring sound the user chose ('' = the phone's default alarm
 // tone). Native downloads it once and rings from the copy. Resolves the
 // plugin's { result, ready }, or null when there is nothing to do.
