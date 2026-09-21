@@ -185,6 +185,12 @@ export function WaysToAddPopup({ user }) {
     started.current = true;
     if (!isTester && isStepDone(WAYS_SEEN)) return;
 
+    // A waiting "was that a request for the app?" prompt goes first, and
+    // answering it marks this popup seen — so nobody is handed first-run
+    // education in the middle of that.
+    const fb = user.pending_feedback_prompt;
+    if (fb?.text && !fb?.answered_at) return;
+
     let cancelled = false;
     const startedAt = Date.now();
 
