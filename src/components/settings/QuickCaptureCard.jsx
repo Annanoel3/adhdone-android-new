@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Zap, AlarmClock } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import { setAlarmMode, pushAlarms } from '../utils/widgetBridge';
+import { setAlarmMode, refreshAlarms, pushAlarmSound } from '../utils/widgetBridge';
 
 const getPlugins = () => {
   const p = (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.Plugins) || {};
@@ -75,13 +75,28 @@ export default function QuickCaptureCard({ theme }) {
   );
 }
 
-// Alarms — a real, out-loud alarm for tasks marked high or urgent. Android
-// only: this renders nothing unless the app build has the AlarmBridge plugin
-// (older builds, web). The choice lives on the profile as alarm_mode;
-// 'notification' (everyone's default) means no alarm is ever booked for this
-// person. Turning it on books alarms for the tasks that qualify right away and
-// shows what Android is still withholding (exact timing, showing over the lock
-// screen, battery limits), each with the matching phone-settings screen.
+// Alarms — how reminders arrive on this phone. Android only: this renders
+// nothing unless the app build has the AlarmBridge plugin (older builds, web).
+//
+// Two things live here. The DEFAULT for tasks that have no alert style of their
+// own (User.alarm_mode; each task's detail card has its own switch), and the
+// ring SOUND (a preset from the sound bucket, or a file the user uploads; the
+// phone downloads it once and rings from the copy). Neither changes when a
+// task reminds — only how loud it is when it does.
+const ALARM_SOUND_BASE = 'https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/';
+const ALARM_SOUND_PRESETS = [
+  { name: 'Joyful Melody', file: 'Joyful Melody.wav' },
+  { name: 'Piano Melody', file: 'Piano Melody.mp3' },
+  { name: 'Short Piano', file: 'Short Piano Notification.mp3' },
+  { name: 'Short Notification', file: 'Short Notification.wav' },
+  { name: 'Applause', file: 'Applause.wav' },
+  { name: 'JR Station', file: 'JR Station Notification 3.mp3' },
+  { name: 'JR Osaka Loop', file: 'JR Osaka Loop 4.mp3' },
+  { name: 'JR Morning Tranquility', file: 'JR Morning Tranquility.mp3' },
+  { name: 'JR Flower Shop', file: 'JR Flower Shop.mp3' },
+].map((p) => ({ ...p, url: ALARM_SOUND_BASE + encodeURIComponent(p.file) }));
+const ALARM_SOUND_MAX_BYTES = 10 * 1024 * 1024;
+
 export function AlarmCard({ user, theme }) {
   const { AlarmBridge, NotifyBridge } = getPlugins();
   const dark = theme === 'dark';
@@ -89,10 +104,17 @@ export function AlarmCard({ user, theme }) {
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [sound, setSound] = useState({ url: user?.alarm_sound_url || '', name: user?.alarm_sound_name || '' });
+  const [soundBusy, setSoundBusy] = useState(false);
+  const [soundNote, setSoundNote] = useState('');
+  const [previewing, setPreviewing] = useState(false);
+  const previewRef = useRef(null);
+  const fileRef = useRef(null);
 
   useEffect(() => {
     setOn(user?.alarm_mode === 'alarm');
-  }, [user?.alarm_mode]);
+    setSound({ url: user?.alarm_sound_url || '', name: user?.alarm_sound_name || '' });
+  }, [user?.alarm_mode, user?.alarm_sound_url, user?.alarm_sound_name]);
 
   const refreshStatus = async () => {
     if (!AlarmBridge?.getStatus) return;
@@ -111,17 +133,13 @@ export function AlarmCard({ user, theme }) {
       if (document.visibilityState === 'visible') refreshStatus();
     };
     document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      if (previewRef.current) previewRef.current.pause();
+    };
   }, [AlarmBridge]);
 
   if (!AlarmBridge?.sync) return null;
-
-  const resync = async (mode) => {
-    setAlarmMode(mode);
-    const tasks = await base44.entities.Task.list('-updated_date', 500);
-    await pushAlarms(tasks);
-    await refreshStatus();
-  };
 
   const handleToggle = async (next) => {
     setBusy(true);
@@ -133,7 +151,9 @@ export function AlarmCard({ user, theme }) {
       const mode = next ? 'alarm' : 'notification';
       await base44.auth.updateMe({ alarm_mode: mode });
       setOn(next);
-      await resync(mode);
+      setAlarmMode(mode);
+      await refreshAlarms();
+      await refreshStatus();
     } catch (e) {
       setError("Couldn't save that. Try again.");
     } finally {
@@ -149,8 +169,85 @@ export function AlarmCard({ user, theme }) {
     }
   };
 
+  const stopPreview = () => {
+    if (previewRef.current) {
+      previewRef.current.pause();
+      previewRef.current = null;
+    }
+    setPreviewing(false);
+  };
+
+  const togglePreview = () => {
+    if (previewRef.current) {
+      stopPreview();
+      return;
+    }
+    if (!sound.url) return;
+    const audio = new Audio(sound.url);
+    audio.onended = stopPreview;
+    audio.onerror = () => {
+      stopPreview();
+      setSoundNote("Couldn't play that sound.");
+    };
+    previewRef.current = audio;
+    setPreviewing(true);
+    audio.play().catch(() => stopPreview());
+  };
+
+  const applySound = async (url, name) => {
+    stopPreview();
+    setSoundBusy(true);
+    setSoundNote('');
+    try {
+      await base44.auth.updateMe({ alarm_sound_url: url, alarm_sound_name: name });
+      setSound({ url, name });
+      const res = await pushAlarmSound({ alarm_sound_url: url, alarm_sound_name: name });
+      if (url) {
+        setSoundNote(res?.ready
+          ? 'Saved to your phone — it rings even with no signal.'
+          : "Saved. It couldn't download yet, so the phone's default alarm rings until it does.");
+      }
+      await refreshStatus();
+    } catch (e) {
+      setSoundNote("Couldn't save that sound. Try again.");
+    } finally {
+      setSoundBusy(false);
+    }
+  };
+
+  const handlePick = (e) => {
+    const url = e.target.value;
+    if (url === '__upload__') {
+      fileRef.current?.click();
+      return;
+    }
+    const preset = ALARM_SOUND_PRESETS.find((p) => p.url === url);
+    applySound(url, preset ? preset.name : sound.name);
+  };
+
+  const handleUpload = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > ALARM_SOUND_MAX_BYTES) {
+      setSoundNote('That file is over 10 MB — pick a shorter clip.');
+      return;
+    }
+    setSoundBusy(true);
+    setSoundNote('Uploading…');
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      if (!file_url) throw new Error('upload returned no url');
+      await applySound(file_url, file.name.replace(/\.[a-z0-9]+$/i, ''));
+    } catch (err) {
+      setSoundNote("Couldn't upload that file. Try again.");
+      setSoundBusy(false);
+    }
+  };
+
   const textMain = dark ? 'text-gray-200' : 'text-gray-900';
   const textSub = dark ? 'text-gray-400' : 'text-gray-600';
+  const isPreset = !sound.url || ALARM_SOUND_PRESETS.some((p) => p.url === sound.url);
 
   const Row = ({ ok, label, detail, action, onAction }) => (
     <div className="flex items-center justify-between gap-3 py-2">
@@ -178,18 +275,48 @@ export function AlarmCard({ user, theme }) {
         <div className="flex items-center justify-between">
           <div className="pr-4">
             <p className={`text-sm font-medium ${textMain}`}>
-              Ring an alarm for high and urgent tasks
+              New tasks ring as an alarm
             </p>
             <p className={`text-xs ${textSub}`}>
-              Rings out loud like an alarm clock, even with the screen off. Tasks with a time
-              ring an hour before; day-only tasks ring at 9 AM. Your usual reminders still come.
+              Same reminder times, but full-screen and impossible to ignore instead of a
+              regular notification. Each task's detail card has its own switch.
             </p>
           </div>
           <Switch checked={on} onCheckedChange={handleToggle} disabled={busy} />
         </div>
         {error && <p className="text-xs text-red-500 mt-3">{error}</p>}
 
-        {on && status && (
+        <div className={`mt-4 border-t pt-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
+          <p className={`text-sm font-medium ${textMain}`}>Alarm sound</p>
+          <div className="flex items-center gap-2 mt-2">
+            <select
+              value={sound.url}
+              onChange={handlePick}
+              disabled={soundBusy}
+              className={`flex-1 min-w-0 text-sm rounded-lg px-2 py-2 border ${dark ? 'bg-gray-700 border-gray-600 text-gray-200' : 'bg-white border-gray-300 text-gray-900'}`}
+            >
+              <option value="">Phone's default alarm</option>
+              {ALARM_SOUND_PRESETS.map((p) => (
+                <option key={p.url} value={p.url}>{p.name}</option>
+              ))}
+              {!isPreset && <option value={sound.url}>Your upload: {sound.name || 'sound'}</option>}
+              <option value="__upload__">Upload your own…</option>
+            </select>
+            <Button size="sm" variant="outline" onClick={togglePreview} disabled={!sound.url || soundBusy}>
+              {previewing ? 'Stop' : 'Play'}
+            </Button>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="audio/*,.mp3,.wav,.ogg,.m4a"
+            className="hidden"
+            onChange={handleUpload}
+          />
+          {soundNote && <p className={`text-xs mt-2 ${textSub}`}>{soundNote}</p>}
+        </div>
+
+        {status && (
           <div className={`mt-4 border-t pt-2 ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
             <Row
               ok={status.notifications}
