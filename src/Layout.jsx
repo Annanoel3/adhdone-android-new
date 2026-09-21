@@ -1069,7 +1069,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <OwnBirthdayPopup user={user} theme={theme} />
         <SharedTextReceiver />
         <SharedImageReceiver />
-        <WidgetTaskSync />
+        <WidgetTaskSync user={user} />
         <WidgetOpenReceiver />
         <HomeZipPrompt user={user} theme={theme} />
         <EventConflictWarning theme={theme} />
