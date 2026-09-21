@@ -101,3 +101,107 @@ export async function pushWidgetTasks(tasks) {
     console.error('Widget update failed:', err);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Alarms — real, out-loud alarms for high and urgent tasks, through the
+// AlarmBridge Capacitor plugin. Android only. The plugin is absent on web and
+// on app builds older than the one that added it, and every call here is then
+// a no-op.
+//
+// Same one-way mirror as the widget: the app decides which tasks deserve an
+// alarm and when it should ring, and hands native the WHOLE set every time
+// tasks change. Native books them with AlarmManager, keeps them across reboots
+// and rings them with or without a network. Anything missing from the latest
+// set is cancelled on the phone.
+//
+// Alarms are OFF for everyone by default. They ring only for a user whose
+// alarm_mode is 'alarm' (Settings). Push reminders are unchanged either way —
+// for now an alarm rings alongside them, not instead of them.
+//
+// Which tasks ring, and when:
+//   - active, top-level (no parent), not on the Back Burner, not a birthday,
+//     urgency high or urgent, classification task or payment (events later)
+//   - a day-only task rings at 9:00 AM local on its day
+//   - a task with a clock time rings ONE HOUR before that time
+//   - a task with no date at all gets no alarm (later: one combined 9 AM)
+
+const ALARM_LEAD_MS = 60 * 60 * 1000;
+const ALARM_DAY_HOUR = 9;
+// Native keeps snooze/dismiss state for an alarm whose time hasn't changed, so
+// a recently-past alarm must still be listed — otherwise a snoozed ring would
+// be cancelled the moment the app opened. Anything older than this is dropped.
+const ALARM_KEEP_PAST_MS = 24 * 60 * 60 * 1000;
+
+// null = the signed-in user's setting isn't known yet. Native is never touched
+// on a guess: an empty set would cancel every alarm on the phone.
+let alarmMode = null;
+let lastAlarmsJson = '';
+
+export function supportsAlarms() {
+  return !!window.Capacitor?.Plugins?.AlarmBridge;
+}
+
+export function setAlarmMode(mode) {
+  alarmMode = mode === 'alarm' ? 'alarm' : 'notification';
+}
+
+function atNineLocal(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), ALARM_DAY_HOUR, 0, 0, 0).getTime();
+}
+
+// When one task's alarm should ring, in epoch milliseconds, or null for none.
+export function alarmTimeFor(task) {
+  if (task.day_only_task) {
+    const day = task.due_date || task.next_reminder;
+    return day ? atNineLocal(day) : null;
+  }
+  if (task.reminder_interval === 'once' && task.next_reminder) {
+    const t = new Date(task.next_reminder).getTime();
+    return isNaN(t) ? null : t - ALARM_LEAD_MS;
+  }
+  if (task.due_date) {
+    const d = new Date(task.due_date);
+    if (isNaN(d)) return null;
+    // The parser stores a deadline day with no clock time as 23:59 local.
+    // That is a DAY, not a time — ring at 9 AM, not at 10:59 PM.
+    if (d.getHours() === 23 && d.getMinutes() === 59) return atNineLocal(task.due_date);
+    return d.getTime() - ALARM_LEAD_MS;
+  }
+  return null;
+}
+
+export function alarmSetFor(tasks) {
+  const cutoff = Date.now() - ALARM_KEEP_PAST_MS;
+  return (tasks || [])
+    .filter((t) =>
+      t.status === 'active' &&
+      !t.parent_task_id &&
+      !t.silenced &&
+      !t.birthday_person &&
+      (t.urgency === 'high' || t.urgency === 'urgent') &&
+      (!t.classification || t.classification === 'task' || t.classification === 'payment')
+    )
+    .map((t) => ({ id: t.id, taskId: t.id, title: t.title || 'Task', at: alarmTimeFor(t) }))
+    .filter((a) => a.at && a.at > cutoff)
+    .sort((a, b) => a.at - b.at);
+}
+
+export async function pushAlarms(tasks) {
+  const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
+  if (!AlarmBridge || alarmMode === null) return;
+
+  const alarms = alarmMode === 'alarm' ? alarmSetFor(tasks) : [];
+  const json = JSON.stringify(alarms);
+  if (json === lastAlarmsJson) return;
+  lastAlarmsJson = json;
+
+  try {
+    await AlarmBridge.sync({ alarms });
+  } catch (err) {
+    // Try again on the next change rather than believing the phone has this set.
+    lastAlarmsJson = '';
+    console.error('Alarm sync failed:', err);
+  }
+}
