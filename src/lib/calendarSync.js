@@ -196,6 +196,9 @@ export function deviceRowToEvent(row) {
     attendees: [],
     source: 'device',
     calendarId: cal,
+    // The provider's own id for the event (Google's event id for a Google
+    // account) so the backend can skip what it already imported from Google.
+    syncId: row.syncId ? String(row.syncId) : '',
   };
   if (end) event.end = allDay ? { date: utcDay(end) } : { dateTime: new Date(end).toISOString() };
   if (row.organizer) event.organizer = { email: row.organizer };
