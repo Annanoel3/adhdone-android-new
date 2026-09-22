@@ -28,6 +28,20 @@ import {
 // (task or idea) carrying this capture_id wins, and any later arrival removes
 // what it just made. Checked twice, the second time after a short pause, so two
 // saves landing in the same instant still agree on a single winner.
+async function retryBrief<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+  let last: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      last = e;
+      console.log(`[captureText] platform call failed (${i + 1}/${attempts}): ${e?.message}`);
+      await new Promise((r) => setTimeout(r, 700 * (i + 1)));
+    }
+  }
+  throw last;
+}
+
 const byAge = (a: any, b: any) =>
   String(a.created_date || "").localeCompare(String(b.created_date || "")) ||
   String(a.id).localeCompare(String(b.id));
@@ -64,12 +78,16 @@ function duplicateResponse(winner: { tasks: any[]; ideas: any[] }) {
 Deno.serve(async (req) => {
   try {
     const base44 = await createClientFromRequest(req);
-    const user = await base44.auth.me();
+    const { text, timezone, capture_id } = await req.json();
+    // The platform occasionally rejects a perfectly good call outright
+    // ("Admin permissions required") and then accepts the identical one a
+    // moment later. That turned into a 500 the phone had to back off from
+    // for ten seconds or more; a couple of quick retries here absorb it.
+    const user = await retryBrief(() => base44.auth.me());
     if (!user?.email) {
       return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
     }
 
-    const { text, timezone, capture_id } = await req.json();
     if (!text || !String(text).trim()) {
       return Response.json({ success: false, error: "text is required" }, { status: 400 });
     }
@@ -81,7 +99,7 @@ Deno.serve(async (req) => {
     // would otherwise double-create. The same capture_id returns what the first
     // attempt already made instead of parsing and creating all over again.
     if (capture_id) {
-      const existingIdeas = await base44.entities.ParkingLotIdea.filter({ capture_id });
+      const existingIdeas = await retryBrief(() => base44.entities.ParkingLotIdea.filter({ capture_id }));
       if (existingIdeas?.length) {
         return Response.json({
           success: true,
@@ -92,7 +110,7 @@ Deno.serve(async (req) => {
           ideas: existingIdeas.map((i: any) => ({ id: i.id, title: i.idea })),
         });
       }
-      const existing = await base44.entities.Task.filter({ capture_id });
+      const existing = await retryBrief(() => base44.entities.Task.filter({ capture_id }));
       if (existing?.length) {
         return Response.json({
           success: true,
