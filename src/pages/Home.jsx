@@ -8,7 +8,6 @@ import TodaysTasks from "../components/home/TodaysTasks";
 import PendingTaskCards from "../components/home/PendingTaskCards";
 import EndOfDayReview from "../components/home/EndOfDayReview";
 import BirthdayTextDialog from "../components/birthdays/BirthdayTextDialog";
-import MotivationCoach from "../components/home/MotivationCoach";
 import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import MomentumCelebration from "../components/shared/MomentumCelebration";
 import TaskCompletionCelebration from "../components/tasks/TaskCompletionCelebration";
@@ -276,7 +275,10 @@ export default function Home() {
           theme={theme}
         />
 
-        <MotivationCoach theme={theme} />
+        {/* MotivationCoach ("Your Coach") is switched off everywhere: its
+            numbers were wrong (it told Anna she had finished zero tasks on a
+            day the end-of-day review counted several). Do not mount it again
+            without fixing what it counts first. */}
 
         <TaskDetailsModal
           task={selectedTask}
