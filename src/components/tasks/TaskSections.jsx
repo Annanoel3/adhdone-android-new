@@ -138,7 +138,6 @@ export default function TaskSections({
       const map = {};
       daySections.forEach((s) => (map[s.key] = []));
       tasks.forEach((task) => {
-        if (task.classification === "birthday" || task.birthday_person) return;
         if (task.silenced) {
           map.backburner.push(task);
           return;
@@ -159,8 +158,9 @@ export default function TaskSections({
       recurring: [],
       backburner: [],
     };
+    // Birthdays land in the section for their day like everything else
+    // (their card is pink and says birthday), instead of being dropped here.
     tasks.forEach((task) => {
-      if (task.classification === "birthday" || task.birthday_person) return;
       if (task.silenced) {
         map.backburner.push(task);
         return;
