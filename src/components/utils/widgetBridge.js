@@ -11,6 +11,7 @@
 import { isTodayTask, isUpcomingTask, getLocalDateString } from './todayTasks';
 import { base44 } from '@/api/base44Client';
 import { isInQuietHours } from './reminderScheduler';
+import { getReminderCopy } from './reminderCopy';
 
 // The widget only has room for a handful of rows, and a wall of text is the
 // opposite of useful on a home screen.
@@ -152,18 +153,34 @@ export function alertStyleFor(task, userDefault = alarmMode) {
   return userDefault === 'alarm' ? 'alarm' : 'notification';
 }
 
-// Every moment this task is already set to remind at.
-function reminderTimesFor(task) {
-  const times = new Set();
-  for (const r of task.reminder_schedule || []) {
-    const t = r?.send_at ? new Date(r.send_at).getTime() : NaN;
-    if (!isNaN(t)) times.add(t);
+// Every moment a push notification is already booked for this task, each
+// with the exact words that push carries. An alarm only ever stands in for
+// one of these — same time, same title, same body — never a moment of its
+// own. So:
+//  - a task with a smart reminder schedule rings ONLY at those entries, with
+//    each entry's own title and body (a "night before" entry says "night
+//    before" things);
+//  - a task with no schedule rings at its one booked push time
+//    (next_reminder), with the copy that push was given;
+//  - a day-only task's next_reminder is just a 9 AM anchor, not a push, so it
+//    is never an alarm — its real pushes are in the schedule.
+function reminderMomentsFor(task) {
+  const out = new Map();
+  const schedule = (task.reminder_schedule || []).filter((r) => r && r.send_at);
+  for (const r of schedule) {
+    const t = new Date(r.send_at).getTime();
+    if (isNaN(t) || out.has(t)) continue;
+    out.set(t, { at: t, heading: r.notification_title || '', body: r.notification_body || '' });
   }
-  if (task.next_reminder) {
+  if (schedule.length === 0 && task.next_reminder && !task.day_only_task) {
     const t = new Date(task.next_reminder).getTime();
-    if (!isNaN(t)) times.add(t);
+    if (!isNaN(t) && !out.has(t)) {
+      let copy = { title: '', body: '' };
+      try { copy = getReminderCopy(task, new Date(t)) || copy; } catch (e) { /* plain title below */ }
+      out.set(t, { at: t, heading: copy.title || '', body: copy.body || '' });
+    }
   }
-  return Array.from(times);
+  return Array.from(out.values());
 }
 
 // Quiet hours apply to alarms exactly as they do to pushes (default ON,
@@ -177,10 +194,10 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
   for (const t of tasks || []) {
     if (t.status !== 'active' || t.silenced) continue;
     if (alertStyleFor(t, userDefault) !== 'alarm') continue;
-    for (const at of reminderTimesFor(t)) {
-      if (at <= cutoff) continue;
-      if (isInQuietHours(new Date(at))) continue;
-      out.push({ id: `${t.id}:${at}`, taskId: t.id, title: t.title || 'Task', at });
+    for (const m of reminderMomentsFor(t)) {
+      if (m.at <= cutoff) continue;
+      if (isInQuietHours(new Date(m.at))) continue;
+      out.push({ id: `${t.id}:${m.at}`, taskId: t.id, title: t.title || 'Task', at: m.at, heading: m.heading, body: m.body });
     }
   }
   return out.sort((a, b) => a.at - b.at).slice(0, ALARM_MAX);
