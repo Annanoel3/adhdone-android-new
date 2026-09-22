@@ -12,10 +12,20 @@ export default async function (req) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const body = await req.json().catch(() => ({}));
+
+    // A handle is minted once per account. The welcome and catch-up chats call
+    // this every time they run, and used to hand out a fresh random handle each
+    // time (Anna7792, then Anna1246…) — the old one simply overwritten. An
+    // account that already has one keeps it.
+    if (user.handle && !body.force) {
+      return Response.json({ handle: user.handle, existing: true });
+    }
+
     const raw = (body.name || user.display_name || user.full_name || 'friend').toString();
     const base = raw.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 15) || 'friend';
 
-    const all = await base44.asServiceRole.entities.User.list();
+    // Explicit limit: the default page is far too small to check for clashes.
+    const all = await base44.asServiceRole.entities.User.list('-created_date', 2000);
     const taken = new Set(
       all.filter((u) => u.id !== user.id).map((u) => (u.handle || '').toLowerCase())
     );
