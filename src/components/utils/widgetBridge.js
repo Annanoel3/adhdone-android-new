@@ -289,3 +289,116 @@ export async function pushAlarmSound(user) {
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// The full-screen alarm wears the app's current look.
+//
+// Nothing here knows theme names. The page's real background (a theme's
+// gradient, a seasonal colour, dark mode's near-black) is read from the DOM
+// after it has been painted, reduced to a few hex colours plus the app's
+// accent, and handed to native (AlarmBridge.setTheme), which draws the alarm
+// screen with them. Re-sent whenever the theme or seasonal mode changes.
+
+function cssColorToHex(str) {
+  const t = (str || '').trim();
+  const h = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(t);
+  if (h) return h[1].length === 3 ? '#' + [...h[1]].map((c) => c + c).join('') : '#' + h[1];
+  const m = /rgba?\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)(?:[,\s/]+([\d.]+%?))?\s*\)/i.exec(t);
+  if (!m) return null;
+  if (m[4] !== undefined && parseFloat(m[4]) === 0) return null; // transparent
+  const hex = (n) => Math.max(0, Math.min(255, Number(n))).toString(16).padStart(2, '0');
+  return `#${hex(m[1])}${hex(m[2])}${hex(m[3])}`;
+}
+
+function hslTripleToHex(triple) {
+  // Tailwind/shadcn CSS variable form: "271 91% 65%"
+  const m = /^\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%\s*$/.exec(triple || '');
+  if (!m) return null;
+  const hh = Number(m[1]) / 360, ss = Number(m[2]) / 100, ll = Number(m[3]) / 100;
+  const f = (n) => {
+    const k = (n + hh * 12) % 12;
+    const a = ss * Math.min(ll, 1 - ll);
+    return ll - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+  };
+  const hex = (v) => Math.round(v * 255).toString(16).padStart(2, '0');
+  return `#${hex(f(0))}${hex(f(8))}${hex(f(4))}`;
+}
+
+function luminance(hex) {
+  const c = (i) => parseInt(hex.slice(i, i + 2), 16) / 255;
+  return 0.2126 * c(1) + 0.7152 * c(3) + 0.0722 * c(5);
+}
+
+const GRADIENT_DIRECTIONS = {
+  'to top': 0, 'to top right': 45, 'to right top': 45, 'to right': 90,
+  'to bottom right': 135, 'to right bottom': 135, 'to bottom': 180,
+  'to bottom left': 225, 'to left bottom': 225, 'to left': 270,
+  'to top left': 315, 'to left top': 315,
+};
+
+function parseGradient(backgroundImage) {
+  const m = /linear-gradient\((.*)\)/i.exec(backgroundImage || '');
+  if (!m) return null;
+  const parts = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of m[1]) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) { parts.push(cur.trim()); cur = ''; } else cur += ch;
+  }
+  if (cur.trim()) parts.push(cur.trim());
+  let angle = 180;
+  const first = (parts[0] || '').toLowerCase();
+  if (first in GRADIENT_DIRECTIONS) { angle = GRADIENT_DIRECTIONS[first]; parts.shift(); }
+  else if (/deg$/.test(first)) { angle = parseFloat(first); parts.shift(); }
+  const colors = parts
+    .map((p) => cssColorToHex(p.replace(/\s+[\d.]+%\s*$/, '')))
+    .filter(Boolean);
+  return colors.length ? { colors: colors.slice(0, 8), angle } : null;
+}
+
+// The look the alarm should have right now, or null when it can't be read.
+export function currentAlarmTheme() {
+  if (typeof document === 'undefined') return null;
+  const candidates = [document.getElementById('adhdone-app-bg'), document.body, document.documentElement].filter(Boolean);
+  let colors = null;
+  let angle = 135;
+  for (const el of candidates) {
+    const cs = getComputedStyle(el);
+    const g = parseGradient(cs.backgroundImage);
+    if (g) { colors = g.colors; angle = g.angle; break; }
+    const c = cssColorToHex(cs.backgroundColor);
+    if (c) { colors = [c]; break; }
+  }
+  if (!colors) return null;
+  const dark = luminance(colors[0]) < 0.4;
+  const primary = getComputedStyle(document.documentElement).getPropertyValue('--primary');
+  return {
+    colors,
+    angle: Math.round(angle),
+    text: dark ? '#ffffff' : '#111827',
+    muted: dark ? '#c9c3dc' : '#4b5563',
+    accent: hslTripleToHex(primary) || '#8b5cf6',
+    onAccent: '#ffffff',
+  };
+}
+
+let lastThemeJson = '';
+
+export async function pushAlarmTheme() {
+  const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
+  if (!AlarmBridge?.setTheme) return null;
+  const theme = currentAlarmTheme();
+  if (!theme) return null;
+  const json = JSON.stringify(theme);
+  if (json === lastThemeJson) return theme;
+  lastThemeJson = json;
+  try {
+    await AlarmBridge.setTheme(theme);
+  } catch (err) {
+    lastThemeJson = '';
+    console.error('Alarm theme sync failed:', err);
+  }
+  return theme;
+}
