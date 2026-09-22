@@ -309,7 +309,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
   const calData = await calRes.json();
   allItems = calData.items || [];
   }
-  const events = allItems.filter(e => e.status !== 'cancelled');
+  let events = allItems.filter(e => e.status !== 'cancelled');
   const cancelledItems = allItems.filter(e => e.status === 'cancelled');
   console.log('[syncGoogleCalendar] calendar fetch OK for=', connectedEmail, '| raw items=', allItems.length, '| active events=', events.length, '| cancelled=', cancelledItems.length);
 
@@ -328,6 +328,26 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
   // Google cancellation below. Calendars not covered by this sync are left
   // alone — they weren't read, so nothing can be said about them.
   if (device) {
+    // A Google account's calendar on the phone holds the same events the app
+    // may already have imported straight from Google. The phone row carries
+    // Google's event id (syncId), so anything already imported that way is
+    // skipped here instead of becoming a second copy. A modified occurrence's
+    // id is "<series>_<time>", so the series id is checked as well.
+    const fromGoogle = new Set(existingSynced
+      .map(r => String(r.google_event_id || ''))
+      .filter(id => id && !id.startsWith('device:')));
+    if (fromGoogle.size > 0) {
+      const before = events.length;
+      events = events.filter(e => {
+        const sid = String(e.syncId || '');
+        if (!sid) return true;
+        return !(fromGoogle.has(sid) || fromGoogle.has(sid.split('_')[0]));
+      });
+      if (events.length !== before) {
+        console.log('[syncGoogleCalendar] phone sync: skipped', before - events.length, 'events already imported from Google');
+      }
+    }
+
     const covered = new Set((device.calendarIds || []).map(String));
     const sentIds = new Set(allItems.map(e => String(e.id)));
     const nowMs = Date.now();
