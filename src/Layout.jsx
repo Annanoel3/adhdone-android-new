@@ -66,6 +66,7 @@ import OwnBirthdayPopup from "./components/birthdays/OwnBirthdayPopup";
 import SharedTextReceiver from "./components/shared/SharedTextReceiver";
 import SharedImageReceiver from "./components/shared/SharedImageReceiver";
 import WidgetTaskSync from "./components/shared/WidgetTaskSync";
+import { pushAlarmTheme } from "./components/utils/widgetBridge";
 import WidgetOpenReceiver from "./components/shared/WidgetOpenReceiver";
 import HomeZipPrompt from "./components/shared/HomeZipPrompt";
 import EventConflictWarning from "./components/shared/EventConflictWarning";
@@ -195,6 +196,13 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     localStorage.setItem('special_mode', specialMode);
     document.documentElement.setAttribute('data-theme', specialMode);
   }, [specialMode]);
+
+  // The full-screen alarm copies whatever the page is painted with, so tell
+  // native every time the look changes (after the new styles have applied).
+  useEffect(() => {
+    const t = setTimeout(() => { pushAlarmTheme().catch(() => {}); }, 600);
+    return () => clearTimeout(t);
+  }, [theme, specialMode]);
 
   const loadAccountabilityNotifications = async () => {
     if (!user || !user.email || !authCheckComplete) {
@@ -508,6 +516,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 
   return (
     <div
+      id="adhdone-app-bg"
       className={`min-h-screen flex w-full overflow-hidden ${
         specialMode === 'normal' ? getBackgroundClass() : ''
       }`}
