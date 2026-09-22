@@ -330,21 +330,40 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
   if (device) {
     // A Google account's calendar on the phone holds the same events the app
     // may already have imported straight from Google. The phone row carries
-    // Google's event id (syncId), so anything already imported that way is
-    // skipped here instead of becoming a second copy. A modified occurrence's
-    // id is "<series>_<time>", so the series id is checked as well.
-    const fromGoogle = new Set(existingSynced
-      .map(r => String(r.google_event_id || ''))
-      .filter(id => id && !id.startsWith('device:')));
+    // Google's event id (syncId). An event already imported that way is
+    // ADOPTED rather than copied: its import row is re-keyed to the phone id,
+    // so from here on the phone sync owns it (date changes and deletions keep
+    // working) and its task is left exactly as it is. A modified occurrence
+    // ("<series>_<time>") whose series came from Google but which was never
+    // imported on its own waits for the next sync, when the series row is the
+    // phone's.
+    const fromGoogle = new Map<string, any>();
+    for (const r of existingSynced) {
+      const id = String(r.google_event_id || '');
+      if (id && !id.startsWith('device:')) fromGoogle.set(id, r);
+    }
     if (fromGoogle.size > 0) {
-      const before = events.length;
-      events = events.filter(e => {
+      const keep: any[] = [];
+      let adopted = 0, deferred = 0;
+      for (const e of events) {
         const sid = String(e.syncId || '');
-        if (!sid) return true;
-        return !(fromGoogle.has(sid) || fromGoogle.has(sid.split('_')[0]));
-      });
-      if (events.length !== before) {
-        console.log('[syncGoogleCalendar] phone sync: skipped', before - events.length, 'events already imported from Google');
+        const row = sid ? fromGoogle.get(sid) : null;
+        if (row) {
+          await base44.asServiceRole.entities.CalendarSyncedEvent.update(row.id, { google_event_id: String(e.id) }).catch(() => {});
+          delete existingByGoogleId[sid];
+          row.google_event_id = String(e.id);
+          existingByGoogleId[String(e.id)] = row;
+          fromGoogle.delete(sid);
+          adopted++;
+          keep.push(e);
+          continue;
+        }
+        if (sid && fromGoogle.has(sid.split('_')[0])) { deferred++; continue; }
+        keep.push(e);
+      }
+      events = keep;
+      if (adopted || deferred) {
+        console.log('[syncGoogleCalendar] phone sync: adopted', adopted, 'events first imported from Google; deferred', deferred, 'modified occurrences');
       }
     }
 
@@ -986,6 +1005,12 @@ Deno.serve(async (req) => {
         cancelled_removed: dresult.cancelledRemoved,
         results: dresult.results,
       });
+    }
+
+    // Phone calendars are in use on this account: the Google path is retired
+    // for it, so a stray Google sync can't bring the same events in twice.
+    if (Array.isArray(user.device_calendar_ids) && user.device_calendar_ids.length > 0) {
+      return Response.json({ success: true, skipped: true, reason: 'phone_calendars_in_use' });
     }
 
     // App-owned grant first (see shared/googleOAuth.ts for why).
