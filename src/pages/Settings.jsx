@@ -13,7 +13,8 @@ import {
   LogOut,
   ArrowLeft,
   Info,
-  User as UserIcon
+  User as UserIcon,
+  UserCircle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { base44 } from '@/api/base44Client';
@@ -24,7 +25,95 @@ import HomeZipCard from '@/components/settings/HomeZipCard';
 import QuickCaptureCard, { AlarmCard } from '@/components/settings/QuickCaptureCard';
 import { refreshAlarms } from '@/components/utils/widgetBridge';
 import AdDiagnosticsCard from '@/components/settings/AdDiagnosticsCard';
+import { Textarea } from '@/components/ui/textarea';
 import VersionTap from '@/components/settings/VersionTap';
+
+
+// The two things the welcome chat asks for — a name and a sentence about the
+// person's life — editable any time. The about-me line is what the task parser
+// reads when it judges how urgent something is (a gig, a shift, a client), so
+// it is worth keeping current when life changes.
+function AboutYouCard({ user, theme, onSaved }) {
+  const dark = theme === 'dark';
+  const [name, setName] = useState('');
+  const [about, setAbout] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [note, setNote] = useState('');
+
+  useEffect(() => {
+    setName(user?.preferred_name || user?.display_name || '');
+    setAbout(user?.about_me || '');
+  }, [user?.preferred_name, user?.display_name, user?.about_me]);
+
+  const dirty = name.trim() !== (user?.preferred_name || user?.display_name || '').trim()
+    || about.trim() !== (user?.about_me || '').trim();
+
+  const save = async () => {
+    const n = name.trim();
+    const a = about.trim();
+    if (!n) { setNote('A name is needed.'); return; }
+    setSaving(true);
+    setNote('');
+    try {
+      // The name IS the username (display_name), the same field the welcome
+      // chat sets. The handle (@name1234) is left alone — it is minted once.
+      await base44.auth.updateMe({ preferred_name: n, display_name: n, about_me: a });
+      setNote('Saved.');
+      if (onSaved) await onSaved();
+    } catch (e) {
+      setNote("Couldn't save that. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card className={`mb-6 border-none shadow-lg ${dark ? 'bg-gray-800' : 'bg-white'}`}>
+      <CardHeader>
+        <CardTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
+          <UserCircle className="w-5 h-5" />
+          About you
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="about-you-name" className={dark ? 'text-gray-300' : ''}>What we call you</Label>
+          <Input
+            id="about-you-name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            maxLength={40}
+            className={dark ? 'bg-gray-700 border-gray-600 text-white' : ''}
+          />
+          {user?.handle && (
+            <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>Your handle is @{user.handle}.</p>
+          )}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="about-you-about" className={dark ? 'text-gray-300' : ''}>What matters to you</Label>
+          <Textarea
+            id="about-you-about"
+            value={about}
+            onChange={(e) => setAbout(e.target.value)}
+            rows={3}
+            maxLength={500}
+            placeholder='Your work, your schedule, what you juggle — e.g. "I play violin at weddings" or "I&apos;m a nurse on night shifts."'
+            className={dark ? 'bg-gray-700 border-gray-600 text-white' : ''}
+          />
+          <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
+            This is what ADHDone reads when it decides how urgent a task is and how hard to nudge you about it.
+          </p>
+        </div>
+        <div className="flex items-center gap-3">
+          <Button onClick={save} disabled={saving || !dirty} className="bg-purple-600 hover:bg-purple-700 text-white">
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+          {note && <span className={`text-sm ${dark ? 'text-gray-400' : 'text-gray-600'}`}>{note}</span>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -228,11 +317,6 @@ export default function Settings() {
       icon: Shield,
       label: 'Terms & Conditions',
       onClick: () => navigate('/Terms')
-    },
-    {
-      icon: Bug,
-      label: 'Feedback',
-      onClick: () => navigate('/reportbug')
     }
   ];
 
@@ -261,6 +345,22 @@ export default function Settings() {
           </p>
         </div>
 
+        {/* Feedback first: the fastest way to tell Anna what's wrong or missing. */}
+        <Card className={`mb-6 border-none shadow-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+          <CardContent className="pt-6 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Something off? Tell me.</p>
+              <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Bugs, ideas, anything that felt clunky.</p>
+            </div>
+            <Button onClick={() => navigate('/reportbug')} className="flex-shrink-0 gap-2 bg-purple-600 hover:bg-purple-700 text-white">
+              <Bug className="w-4 h-4" /> Feedback
+            </Button>
+          </CardContent>
+        </Card>
+
+        <AboutYouCard user={user} theme={theme} onSaved={loadUser} />
+
+        <p className={`text-xs font-bold uppercase tracking-wider mt-8 mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Reminders</p>
         {/* Quiet Hours Section */}
         <Card className={`mb-6 border-none shadow-lg ${
           theme === 'dark' ? 'bg-gray-800' : 'bg-white'
@@ -326,21 +426,18 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        <QuickCaptureCard theme={theme} />
-
-        <HomeZipCard user={user} theme={theme} />
-
         {/* Full-screen reminders: the account default, the ring sound and the
             phone permissions. The card renders nothing on a build without the
             AlarmBridge plugin (older installs, the browser), so it is safe for
             everyone. The one-time popups tell people it lives here. */}
         <AlarmCard user={user} theme={theme} />
 
-        {/* Developer-only tools — hidden for everyone else. */}
-        {user?.email === 's2kap2chick@gmail.com' && (
-          <AdDiagnosticsCard user={user} theme={theme} />
-        )}
+        <HomeZipCard user={user} theme={theme} />
 
+        <p className={`text-xs font-bold uppercase tracking-wider mt-8 mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Adding tasks</p>
+        <QuickCaptureCard theme={theme} />
+
+        <p className={`text-xs font-bold uppercase tracking-wider mt-8 mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Look and feel</p>
         {/* Theme Section */}
         <Card className={`mb-6 border-none shadow-lg ${
           theme === 'dark' ? 'bg-gray-800' : 'bg-white'
@@ -392,6 +489,7 @@ export default function Settings() {
           </CardContent>
         </Card>
 
+        <p className={`text-xs font-bold uppercase tracking-wider mt-8 mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Account</p>
         {/* Account Settings */}
         <Card className={`mb-6 border-none shadow-lg ${
           theme === 'dark' ? 'bg-gray-800' : 'bg-white'
@@ -438,6 +536,11 @@ export default function Settings() {
             </Button>
           </CardContent>
         </Card>
+
+        {/* Developer-only tools — hidden for everyone else. */}
+        {user?.email === 's2kap2chick@gmail.com' && (
+          <AdDiagnosticsCard user={user} theme={theme} />
+        )}
 
         <VersionTap user={user} theme={theme} />
 
