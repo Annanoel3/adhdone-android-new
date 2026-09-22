@@ -151,11 +151,13 @@ export function timerAlarmsSupported() {
   return !!window.Capacitor?.Plugins?.AlarmBridge?.bookOwn;
 }
 
-export async function bookOwnAlarm({ id, taskId = '', title, heading = '', body = '', at, soundUrl = '', noSnooze = true }) {
+// `actions` (up to three { label, path }) become buttons on the alarm screen in
+// place of snooze; tapping one stops the ring and opens the app at that path.
+export async function bookOwnAlarm({ id, taskId = '', title, heading = '', body = '', at, soundUrl = '', noSnooze = true, actions = [] }) {
   const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
   if (!AlarmBridge?.bookOwn || !id || !at) return false;
   try {
-    await AlarmBridge.bookOwn({ id, taskId, title: title || 'ADHDone', heading: heading || title || '', body, at, soundUrl, noSnooze });
+    await AlarmBridge.bookOwn({ id, taskId, title: title || 'ADHDone', heading: heading || title || '', body, at, soundUrl, noSnooze, actions });
     return true;
   } catch (e) {
     console.warn('[alarm] bookOwn failed:', e?.message || e);
