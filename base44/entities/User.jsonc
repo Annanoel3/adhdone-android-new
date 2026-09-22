@@ -93,6 +93,11 @@
       "type": "string",
       "description": "Display name for alarm_sound_url (the preset's name or the uploaded file's name)."
     },
+    "alarm_trial_started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the user pressed 'Try it out' on the one-time full-screen reminders introduction (alarm_mode was switched to 'alarm' at that moment). Once the phone reports a full-screen reminder rang after this time, the app asks ONCE on the next open whether to keep tasks that way (onboarding flag onboarding_fullscreen_keep_done). Empty = never tried from that popup."
+    },
     "device_calendar_ids": {
       "type": "array",
       "items": {
