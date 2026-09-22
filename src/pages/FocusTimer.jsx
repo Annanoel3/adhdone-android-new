@@ -41,6 +41,34 @@ export default function FocusTimer() {
     handleWorkDurationChange, handleBreakDurationChange,
   } = usePomodoro();
 
+  // Hear the chosen completion sound before a session ends on it.
+  const [previewing, setPreviewing] = useState(false);
+  const previewRef = useRef(null);
+  const stopPreview = () => {
+    if (previewRef.current) {
+      previewRef.current.pause();
+      previewRef.current = null;
+    }
+    setPreviewing(false);
+  };
+  const togglePreview = () => {
+    if (previewRef.current) {
+      stopPreview();
+      return;
+    }
+    const url = completionSounds?.[completionSound]?.url;
+    if (!url) return;
+    const audio = new Audio(url);
+    audio.onended = stopPreview;
+    audio.onerror = stopPreview;
+    previewRef.current = audio;
+    setPreviewing(true);
+    audio.play().catch(stopPreview);
+  };
+  // A new pick stops the old preview; leaving the page stops it too.
+  useEffect(() => { stopPreview(); }, [completionSound]);
+  useEffect(() => () => { if (previewRef.current) previewRef.current.pause(); }, []);
+
   const playlists = {
     none: { name: "No Music" },
     ghibli: { name: "Ghibli Music" },
@@ -343,6 +371,9 @@ export default function FocusTimer() {
                 ))}
               </SelectContent>
             </Select>
+            <Button variant="outline" size="sm" onClick={togglePreview} className="flex-shrink-0">
+              {previewing ? 'Stop' : 'Play'}
+            </Button>
           </div>
         </CardContent>
       </Card>
