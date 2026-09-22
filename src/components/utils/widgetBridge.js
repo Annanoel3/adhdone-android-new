@@ -12,6 +12,7 @@ import { isTodayTask, isUpcomingTask, getLocalDateString } from './todayTasks';
 import { base44 } from '@/api/base44Client';
 import { isInQuietHours } from './reminderScheduler';
 import { getReminderCopy } from './reminderCopy';
+import { isStepDone, markStepDone } from '@/components/onboarding/onboardingGate';
 
 // The widget only has room for a handful of rows, and a wall of text is the
 // opposite of useful on a home screen.
@@ -284,9 +285,19 @@ export async function alarmPermissionStatus() {
 // (mounted once in Layout) opens, and this resolves true. Called the moment
 // someone first turns an alarm on — a task's switch, the first-task question,
 // or the Settings default — never out of nowhere.
-export async function requestAlarmPermissions() {
+// Once per account: the first time alarms are turned on, the walk-through
+// opens even when Android already allows everything, because it is also where
+// the alarm sound gets picked. After that it only opens when something is off.
+const ALARM_SETUP_STEP = 'onboarding_alarm_setup_done';
+
+export async function requestAlarmPermissions({ setup = false } = {}) {
   const st = await alarmPermissionStatus();
   if (!st) return false;
+  if (setup && !isStepDone(ALARM_SETUP_STEP)) {
+    markStepDone(ALARM_SETUP_STEP);
+    window.dispatchEvent(new CustomEvent('alarm-permissions-needed', { detail: { ...st, setup: true } }));
+    return true;
+  }
   // overlay ("Display over other apps") is only reported by newer builds; an
   // older build that doesn't know it must not be nagged about it.
   const missing = !st.notifications || !st.exactAlarms || !st.fullScreen || !st.ignoringBatteryOptimizations || st.overlay === false;
