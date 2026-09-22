@@ -450,9 +450,17 @@ export function AlarmPermissionsDialog({ theme }) {
       key: 'fullscreen',
       ok: !!status.fullScreen,
       label: 'Full-screen notifications',
-      why: 'Lets the alarm take over the screen, even when the phone is locked.',
+      why: 'Lets the alarm take over the screen when the phone is locked.',
       action: () => tryOpen(() => AlarmBridge?.openFullScreenSettings?.()),
     },
+    // Only builds that report it get the row; older builds skip it silently.
+    ...(status.overlay === undefined ? [] : [{
+      key: 'overlay',
+      ok: !!status.overlay,
+      label: 'Display over other apps',
+      why: "Lets the alarm take over the screen while you're using the phone. Without it Android only shows a banner.",
+      action: () => tryOpen(() => AlarmBridge?.openOverlaySettings?.()),
+    }]),
     {
       key: 'battery',
       ok: !!status.ignoringBatteryOptimizations,
