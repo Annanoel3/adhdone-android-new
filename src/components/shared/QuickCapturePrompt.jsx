@@ -178,20 +178,13 @@ export function WaysToAddPopup({ user }) {
   const [busy, setBusy] = useState(false);
   const started = useRef(false);
 
-  // TEMPORARY test hook — delete this line and its four uses below once the
-  // popup is settled. Anna's own account gets the popup on every open, in a
-  // browser as well as in the app, so the design can be looked at without
-  // burning the one-time flags or waiting for a second open. No other account
-  // is touched by it.
-  const isTester = (user?.email || '').toLowerCase() === 's2kap2chick@gmail.com';
-
   useEffect(() => {
     // Wait for the account's onboarding flags to be copied down before reading
     // them, or this replays for someone who already saw it and has just signed
     // in on a new phone.
     if (!user || started.current) return;
     started.current = true;
-    if (!isTester && isStepDone(WAYS_SEEN)) return;
+    if (isStepDone(WAYS_SEEN)) return;
 
     // A waiting "was that a request for the app?" prompt goes first, and
     // answering it marks this popup seen — so nobody is handed first-run
@@ -216,11 +209,6 @@ export function WaysToAddPopup({ user }) {
         .then(() => { if (!cancelled) setOpen(true); });
     };
 
-    if (isTester) {
-      show();
-      return () => { cancelled = true; };
-    }
-
     // Same poll as above: the bridge attaches a moment after the web layer
     // boots. No bridge at all means a browser, where none of these four ways
     // exist and there would be nothing to offer.
@@ -243,7 +231,7 @@ export function WaysToAddPopup({ user }) {
     }, 500);
 
     return () => { cancelled = true; clearInterval(poll); };
-  }, [user, isTester]);
+  }, [user]);
 
   useEffect(() => {
     if (!open) return;
@@ -252,7 +240,7 @@ export function WaysToAddPopup({ user }) {
   }, [open]);
 
   const close = () => {
-    if (!isTester) markStepDone(WAYS_SEEN);
+    markStepDone(WAYS_SEEN);
     setOpen(false);
   };
 
