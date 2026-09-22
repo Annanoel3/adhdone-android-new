@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Rocket,
   PlayCircle,
+  Brain,
 } from "lucide-react";
 import {
   Popover,
@@ -151,16 +152,10 @@ export default function TaskCard({
 
   const handleDeleteTask = async () => {
     if (confirm(`Delete "${task.title}"?`)) {
-      // Cancel any pending OneSignal notifications before deleting
-      if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
-        try {
-          const { base44 } = await import('@/api/base44Client');
-          await base44.functions.invoke('cancelTaskNotifications', { taskId: task.id });
-          console.log('Cancelled pending notifications for task:', task.id);
-        } catch (error) {
-          console.error('Error canceling notifications:', error);
-        }
-      }
+      // Nothing is cancelled here any more: the page's delete handler gives a
+      // five-second Undo, and the task's reminders are only cancelled once
+      // that window has passed (see deleteTaskWithUndo). Cancelling first
+      // would leave an undone task alive but silent.
       onDelete(task);
     }
   };
@@ -1052,20 +1047,24 @@ export default function TaskCard({
                 </Popover>
               )}
 
-              {/* Show "Add Reminder" button if no reminder is set — tasks only; events and birthdays have fixed ladders */}
+              {/* No interval and no fixed time = the task is on Smart Reminders
+                  (the app decides when to nudge), exactly as the full task card
+                  labels it. It used to say "Add Reminder" here, which read as if
+                  the task had none. Tasks only; events and birthdays have fixed
+                  ladders. The popover still switches it to a fixed schedule. */}
               {!task.reminder_interval && !task.next_reminder && !isEvent && task.classification !== 'birthday' && !task.birthday_person && (
                 <Popover>
                   <PopoverTrigger asChild>
                     <button
                       onClick={(e) => e.stopPropagation()}
-                      className={`flex items-center gap-1 border border-dashed px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
+                      className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
                         theme === 'dark'
-                          ? 'border-gray-600 text-gray-400 hover:bg-gray-700'
-                          : 'border-gray-300 text-gray-500 hover:bg-gray-50'
+                          ? 'border-purple-700 bg-purple-900/30 text-purple-300 hover:bg-purple-900/50'
+                          : 'border-purple-200 bg-purple-100 text-purple-700 hover:bg-purple-200'
                       }`}
                     >
-                      <Clock className="w-3 h-3" />
-                      Add Reminder
+                      <Brain className="w-3 h-3" />
+                      Smart Reminders
                     </button>
                   </PopoverTrigger>
                   <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
