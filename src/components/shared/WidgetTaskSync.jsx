@@ -45,5 +45,39 @@ export default function WidgetTaskSync({ user }) {
     maybeAutoSyncDevice(user).catch(() => {});
   }, [user?.id, (user?.device_calendar_ids || []).join(',')]);
 
+  // A capture made outside the app (share sheet, pinned notification, widget)
+  // landed while the app is open: refresh the task list, the widget and the
+  // phone's alarms right away instead of waiting for the next screen wake.
+  useEffect(() => {
+    let handle = null;
+    let cancelled = false;
+    const onLanded = () => {
+      window.dispatchEvent(new CustomEvent('tasks-changed'));
+      base44.entities.Task.list('-updated_date', 500)
+        .then((tasks) => {
+          pushWidgetTasks(tasks);
+          if (window.Capacitor?.Plugins?.AlarmBridge) pushAlarms(tasks);
+        })
+        .catch(() => {});
+    };
+    const attach = () => {
+      const ShareBridge = window.Capacitor?.Plugins?.ShareBridge;
+      if (!ShareBridge?.addListener) return false;
+      Promise.resolve(ShareBridge.addListener('captureLanded', onLanded))
+        .then((h) => { if (cancelled) h?.remove?.(); else handle = h; })
+        .catch(() => {});
+      return true;
+    };
+    // The bridge attaches a moment after the web layer boots.
+    const poll = attach() ? null : setInterval(() => { if (attach()) clearInterval(poll); }, 500);
+    const stop = poll ? setTimeout(() => clearInterval(poll), 15000) : null;
+    return () => {
+      cancelled = true;
+      if (poll) clearInterval(poll);
+      if (stop) clearTimeout(stop);
+      handle?.remove?.();
+    };
+  }, []);
+
   return null;
 }
