@@ -1,5 +1,8 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.25";
 import { runTaskParse } from "../../shared/runTaskParse.ts";
+// Shared files are bundled into this function when it is deployed, so a change
+// to the shared prompt (taskParsePrompt.ts) only reaches users after this
+// function is saved and redeployed again.
 
 Deno.serve(async (req) => {
   const base44 = await createClientFromRequest(req);
