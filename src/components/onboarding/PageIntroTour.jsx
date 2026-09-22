@@ -107,6 +107,7 @@ const arrowClass =
 
 function AddPathsIntro({ onDone }) {
   const [noWorries, setNoWorries] = useState(false);
+  const scrolledRef = useRef(false);
   const sectionRefs = useRef([]);
 
   useEffect(() => {
@@ -114,10 +115,11 @@ function AddPathsIntro({ onDone }) {
     return exitOnboardingSurface;
   }, []);
 
-  // Skip at any point (before or after scrolling) gets the "no worries" note;
-  // only finishing the walkthrough, or the note's own button, closes outright.
+  // Skip before ever pressing the arrow gets the "no worries" note; once
+  // they've scrolled into the videos, the walkthrough's own footer has already
+  // pointed at the App Guide, so Skip just closes.
   const close = () => {
-    if (noWorries) onDone();
+    if (scrolledRef.current || noWorries) onDone();
     else setNoWorries(true);
   };
 
@@ -133,6 +135,7 @@ function AddPathsIntro({ onDone }) {
   }, [noWorries]);
 
   const goTo = (i) => {
+    scrolledRef.current = true;
     // The clip starts by itself once it's in view.
     sectionRefs.current[i]?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
