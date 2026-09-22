@@ -105,6 +105,9 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
+  // v2 card layout only: notes / pictures start folded into "+ Add a …" links.
+  const [v2NotesOpen, setV2NotesOpen] = useState(false);
+  const [v2PicsOpen, setV2PicsOpen] = useState(false);
   const reminderDateRef = useRef('');
   const reminderTimeRef = useRef('');
   const isInitializingRef = useRef(false);
@@ -1545,6 +1548,248 @@ Return JSON:
     if (type === 'birthday') return handleClassificationChange('birthday');
   };
 
+
+  // ---- Regrouped card layout ("v2"): on Anna's account only while it's judged. ----
+  // Same controls, same handlers; only where they sit changes. Everyone else
+  // keeps the layout exactly as it was.
+  const v2 = ['s2kap2chick@gmail.com'].includes(String(task.notification_recipient_email || task.created_by || '').toLowerCase());
+  const v2Group = `rounded-2xl border p-3 space-y-3 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`;
+  const v2Label = `text-[10px] font-bold uppercase tracking-wider flex items-center justify-between ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`;
+  const v2Link = `text-xs font-semibold ${theme === 'dark' ? 'text-purple-300' : 'text-purple-700'}`;
+  const hasPictures = taskPictures.length > 0;
+  const hasNotes = (taskNotes || '').trim().length > 0;
+  // ---- Pieces of the card that the regrouped (v2) layout moves around. ----
+  // Each is rendered exactly once, in whichever spot the layout puts it.
+  const backBurnerControl = (
+    <>
+      {!isEvent && (
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={handleToggleSilenced}
+        className={`gap-1.5 h-8 transition-all active:scale-95 ${
+          task.silenced
+            ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600 shadow-sm'
+            : theme === 'dark'
+              ? 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700'
+              : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+        }`}
+      >
+        {task.silenced ? <BellOff className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
+        {task.silenced ? 'Back Burner 🔇' : 'Back Burner'}
+      </Button>
+      )}
+    </>
+  );
+  const alertStyleControl = (
+    <>
+      {supportsAlarms() && !task.silenced && (
+      <div className="flex items-center gap-1">
+        <div className={`inline-flex h-8 rounded-full border overflow-hidden text-xs font-medium ${
+          theme === 'dark' ? 'border-gray-600' : 'border-gray-300'
+        }`}>
+          <button
+            type="button"
+            onClick={() => handleSetAlertStyle('notification')}
+            className={`flex items-center gap-1 px-3 transition-colors ${
+              alertStyleFor(task) !== 'alarm'
+                ? 'bg-gray-800 text-white'
+                : theme === 'dark' ? 'bg-gray-800 text-gray-400 hover:text-gray-200' : 'bg-white text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            <Bell className="w-3.5 h-3.5" />
+            Notification
+          </button>
+          <button
+            type="button"
+            onClick={() => handleSetAlertStyle('alarm')}
+            className={`flex items-center gap-1 px-3 transition-colors ${
+              alertStyleFor(task) === 'alarm'
+                ? 'bg-red-500 text-white'
+                : theme === 'dark' ? 'bg-gray-800 text-gray-400 hover:text-gray-200' : 'bg-white text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            <AlarmClock className="w-3.5 h-3.5" />
+            Full-screen
+          </button>
+        </div>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button type="button" aria-label="What's the difference?" className={`p-1 rounded-full ${theme === 'dark' ? 'text-gray-400 hover:text-gray-200' : 'text-gray-400 hover:text-gray-700'}`}>
+              <Info className="w-3.5 h-3.5" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className={`w-72 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`}>
+            <AlertStyleInfo dark={theme === 'dark'} />
+          </PopoverContent>
+        </Popover>
+      </div>
+      )}
+    </>
+  );
+  const energyControl = (
+    <>
+      {!isEvent && (
+      <Popover>
+        <PopoverTrigger asChild>
+          <button className={`cursor-pointer hover:opacity-80 transition-opacity ${
+            theme === 'minimalist'
+              ? 'bg-blue-100 text-blue-700'
+              : theme === 'dark'
+                ? 'bg-blue-900 text-blue-300'
+                : 'bg-purple-200 text-purple-800'
+          } px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1`}>
+            <Zap className="w-3 h-3" />
+            {task.energy_required} energy
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-48 p-2">
+          <div className="space-y-1">
+            <button onClick={() => handleUpdateField('energy_required', 'low')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Low Energy</button>
+            <button onClick={() => handleUpdateField('energy_required', 'medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Medium Energy</button>
+            <button onClick={() => handleUpdateField('energy_required', 'high')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">High Energy</button>
+          </div>
+        </PopoverContent>
+      </Popover>
+      )}
+    </>
+  );
+  const priorityControl = (
+    <>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium ${
+            task.urgency === 'urgent' ? 'bg-red-100 text-red-700' :
+            task.urgency === 'high' ? 'bg-amber-100 text-amber-700' :
+            task.urgency === 'medium' ? 'bg-blue-100 text-blue-700' :
+            'bg-gray-100 text-gray-700'
+          }`}>
+            {task.urgency} priority
+          </button>
+        </PopoverTrigger>
+        <PopoverContent className="w-48 p-2">
+          <div className="space-y-1">
+            <button onClick={() => handleUpdateField('urgency', 'low')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Low Priority</button>
+            <button onClick={() => handleUpdateField('urgency', 'medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Medium Priority</button>
+            <button onClick={() => handleUpdateField('urgency', 'high')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">High Priority</button>
+            <button onClick={() => handleUpdateField('urgency', 'urgent')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Urgent</button>
+          </div>
+        </PopoverContent>
+      </Popover>
+    </>
+  );
+  const picturesSection = (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <label className={`text-sm font-medium flex items-center gap-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+          <ImageIcon className="w-4 h-4" />
+          Pictures
+        </label>
+        <label>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={handlePictureUpload}
+            className="hidden"
+            disabled={isUploadingPicture}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={isUploadingPicture}
+            className="cursor-pointer"
+            onClick={(e) => e.currentTarget.previousElementSibling?.click()}
+          >
+            {isUploadingPicture ? (
+              <>
+                <div className="w-4 h-4 mr-2 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
+                Uploading...
+              </>
+            ) : (
+              <>
+                <Upload className="w-4 h-4 mr-2" />
+                Upload Image
+              </>
+            )}
+          </Button>
+        </label>
+      </div>
+      {taskPictures.length > 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          {taskPictures.map((pic, idx) => (
+            <div key={idx} className="relative group">
+              <img
+                src={pic}
+                alt="Task attachment"
+                className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => setViewingImage(pic)}
+              />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleRemovePicture(pic);
+                }}
+                className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full shadow-md hover:bg-red-600 transition-colors"
+                title="Delete photo"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+  const notesSection = (
+    <div className="space-y-2">
+      <label className={`text-sm font-medium flex items-center gap-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+        <FileText className="w-4 h-4" />
+        Notes
+      </label>
+      <div className="relative">
+        <Textarea
+          value={taskNotes}
+          onChange={(e) => setTaskNotes(e.target.value)}
+          placeholder="Add any additional notes..."
+          className="min-h-[80px] pr-10"
+        />
+        <button
+          onClick={handleNotesUpdate}
+          title="Save notes"
+          className="absolute bottom-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
+        >
+          <Check className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+  const handleToParkingLot = async () => {
+    if (!confirm(`Convert "${task.title}" to a parking lot idea?`)) return;
+
+    // Optimistic — close dialog and notify parent immediately
+    if (onDelete) {
+      onDelete();
+    }
+    onClose();
+
+    // Cancel reminders + create idea + delete task in the background
+    (async () => {
+      try {
+        if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+          await cancelScheduledReminder(task.onesignal_notification_ids);
+        }
+        await base44.entities.ParkingLotIdea.create({
+          idea: task.title + (task.description ? `\n\n${task.description}` : ''),
+          converted_to_task: false
+        });
+        await base44.entities.Task.delete(task.id);
+      } catch (error) {
+        console.error("Error converting to parking lot:", error);
+      }
+    })();
+  };
+
   return (
     <>
       <Dialog open={isOpen} onOpenChange={onClose}>
@@ -1606,7 +1851,7 @@ Return JSON:
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-6 py-4">
+          <div className={v2 ? 'space-y-3 py-3' : 'space-y-6 py-4'}>
             {task.description && (
               <div>
                 <h4 className={`text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Description</h4>
@@ -1614,6 +1859,10 @@ Return JSON:
               </div>
             )}
 
+            {/* Reminders group. For everyone but v2 this wrapper is invisible
+                (plain space-y-6), so the layout is unchanged. */}
+            <div className={v2 ? v2Group : 'space-y-6'}>
+              {v2 && <div className={v2Label}>Reminders</div>}
             {/* Task Type — the primary control that determines notification behavior.
                 Pulled into its own row above the other pills so it stands out. */}
             <div className="flex items-center gap-2">
@@ -1622,119 +1871,10 @@ Return JSON:
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {/* Back Burner — a fixed-time event still happens whether or not
-                   you silence it, so this only belongs on tasks. */}
-              {!isEvent && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleToggleSilenced}
-                className={`gap-1.5 h-8 transition-all active:scale-95 ${
-                  task.silenced
-                    ? 'bg-amber-500 text-white border-amber-500 hover:bg-amber-600 shadow-sm'
-                    : theme === 'dark'
-                      ? 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700'
-                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-                }`}
-              >
-                {task.silenced ? <BellOff className="w-3.5 h-3.5" /> : <Bell className="w-3.5 h-3.5" />}
-                {task.silenced ? 'Back Burner 🔇' : 'Back Burner'}
-              </Button>
-              )}
-
-              {/* Notification vs full-screen alarm — a two-sided switch plus an (i)
-                   that explains the difference. Only on an app build that can ring one. */}
-              {supportsAlarms() && !task.silenced && (
-              <div className="flex items-center gap-1">
-                <div className={`inline-flex h-8 rounded-full border overflow-hidden text-xs font-medium ${
-                  theme === 'dark' ? 'border-gray-600' : 'border-gray-300'
-                }`}>
-                  <button
-                    type="button"
-                    onClick={() => handleSetAlertStyle('notification')}
-                    className={`flex items-center gap-1 px-3 transition-colors ${
-                      alertStyleFor(task) !== 'alarm'
-                        ? 'bg-gray-800 text-white'
-                        : theme === 'dark' ? 'bg-gray-800 text-gray-400 hover:text-gray-200' : 'bg-white text-gray-500 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Bell className="w-3.5 h-3.5" />
-                    Notification
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSetAlertStyle('alarm')}
-                    className={`flex items-center gap-1 px-3 transition-colors ${
-                      alertStyleFor(task) === 'alarm'
-                        ? 'bg-red-500 text-white'
-                        : theme === 'dark' ? 'bg-gray-800 text-gray-400 hover:text-gray-200' : 'bg-white text-gray-500 hover:bg-gray-50'
-                    }`}
-                  >
-                    <AlarmClock className="w-3.5 h-3.5" />
-                    Full-screen
-                  </button>
-                </div>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button type="button" aria-label="What's the difference?" className={`p-1 rounded-full ${theme === 'dark' ? 'text-gray-400 hover:text-gray-200' : 'text-gray-400 hover:text-gray-700'}`}>
-                      <Info className="w-3.5 h-3.5" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className={`w-72 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`}>
-                    <AlertStyleInfo dark={theme === 'dark'} />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              )}
-
-              {/* Energy Badge — energy is for picking which task to start next.
-                   An event isn't a choice, so it doesn't get one. */}
-              {!isEvent && (
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button className={`cursor-pointer hover:opacity-80 transition-opacity ${
-                    theme === 'minimalist'
-                      ? 'bg-blue-100 text-blue-700'
-                      : theme === 'dark'
-                        ? 'bg-blue-900 text-blue-300'
-                        : 'bg-purple-200 text-purple-800'
-                  } px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1`}>
-                    <Zap className="w-3 h-3" />
-                    {task.energy_required} energy
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-48 p-2">
-                  <div className="space-y-1">
-                    <button onClick={() => handleUpdateField('energy_required', 'low')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Low Energy</button>
-                    <button onClick={() => handleUpdateField('energy_required', 'medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Medium Energy</button>
-                    <button onClick={() => handleUpdateField('energy_required', 'high')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">High Energy</button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-              )}
-
-              {/* Priority Badge - Clickable */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium ${
-                    task.urgency === 'urgent' ? 'bg-red-100 text-red-700' :
-                    task.urgency === 'high' ? 'bg-amber-100 text-amber-700' :
-                    task.urgency === 'medium' ? 'bg-blue-100 text-blue-700' :
-                    'bg-gray-100 text-gray-700'
-                  }`}>
-                    {task.urgency} priority
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-48 p-2">
-                  <div className="space-y-1">
-                    <button onClick={() => handleUpdateField('urgency', 'low')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Low Priority</button>
-                    <button onClick={() => handleUpdateField('urgency', 'medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Medium Priority</button>
-                    <button onClick={() => handleUpdateField('urgency', 'high')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">High Priority</button>
-                    <button onClick={() => handleUpdateField('urgency', 'urgent')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Urgent</button>
-                  </div>
-                </PopoverContent>
-              </Popover>
-
+              {!v2 && backBurnerControl}
+              {!v2 && alertStyleControl}
+              {!v2 && energyControl}
+              {!v2 && priorityControl}
               {/* Intelligent notification schedule — visible directly, not buried in a popover.
                   Always shown for events so the future-reminder list is visible. */}
               {/* A repeating task is black and white: it fires on its cadence.
@@ -2011,95 +2151,39 @@ Return JSON:
                 </Popover>
               )}
             </div>
-
-            {/* Pictures Section */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className={`text-sm font-medium flex items-center gap-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                  <ImageIcon className="w-4 h-4" />
-                  Pictures
-                </label>
-                <label>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePictureUpload}
-                    className="hidden"
-                    disabled={isUploadingPicture}
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={isUploadingPicture}
-                    className="cursor-pointer"
-                    onClick={(e) => e.currentTarget.previousElementSibling?.click()}
-                  >
-                    {isUploadingPicture ? (
-                      <>
-                        <div className="w-4 h-4 mr-2 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin"></div>
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="w-4 h-4 mr-2" />
-                        Upload Image
-                      </>
-                    )}
-                  </Button>
-                </label>
-              </div>
-              {taskPictures.length > 0 && (
-                <div className="grid grid-cols-2 gap-2">
-                  {taskPictures.map((pic, idx) => (
-                    <div key={idx} className="relative group">
-                      <img
-                        src={pic}
-                        alt="Task attachment"
-                        className="w-full h-32 object-cover rounded-lg border cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => setViewingImage(pic)}
-                      />
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemovePicture(pic);
-                        }}
-                        className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full shadow-md hover:bg-red-600 transition-colors"
-                        title="Delete photo"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
+              {v2 && (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  {alertStyleControl}
+                  {backBurnerControl}
                 </div>
               )}
             </div>
 
-            {/* Notes Section */}
-            <div className="space-y-2">
-              <label className={`text-sm font-medium flex items-center gap-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                <FileText className="w-4 h-4" />
-                Notes
-              </label>
-              <div className="relative">
-                <Textarea
-                  value={taskNotes}
-                  onChange={(e) => setTaskNotes(e.target.value)}
-                  placeholder="Add any additional notes..."
-                  className="min-h-[80px] pr-10"
-                />
-                <button
-                  onClick={handleNotesUpdate}
-                  title="Save notes"
-                  className="absolute bottom-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
-                >
-                  <Check className="w-4 h-4" />
-                </button>
+            {v2 && (
+              <div className={v2Group}>
+                <div className={v2Label}>About this task</div>
+                <div className="flex flex-wrap gap-2">
+                  {energyControl}
+                  {priorityControl}
+                </div>
+                <div className="flex flex-wrap gap-4">
+                  {!(v2NotesOpen || hasNotes) && (
+                    <button type="button" className={v2Link} onClick={() => setV2NotesOpen(true)}>＋ Add a note</button>
+                  )}
+                  {!(v2PicsOpen || hasPictures) && (
+                    <button type="button" className={v2Link} onClick={() => setV2PicsOpen(true)}>＋ Add a picture</button>
+                  )}
+                </div>
+                {(v2NotesOpen || hasNotes) && notesSection}
+                {(v2PicsOpen || hasPictures) && picturesSection}
               </div>
-            </div>
+            )}
+
+            {!v2 && picturesSection}
+            {!v2 && notesSection}
 
             {!isEvent && (
-            <div className="space-y-4">
+            <div className={v2 ? v2Group : 'space-y-4'}>
               {subTasks.length > 0 && (
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -2125,6 +2209,7 @@ Return JSON:
               {/* UPDATED: Better visual separation for manual input when no subtasks */}
               {subTasks.length === 0 && (
                 <AddSubTaskCard
+                  compact={v2}
                   theme={theme}
                   mode={subtaskInputMode}
                   setMode={setSubtaskInputMode}
@@ -2204,6 +2289,7 @@ Return JSON:
                   ))}
 
                   <AddSubTaskCard
+                  compact={v2}
                     theme={theme}
                     boxed={false}
                     mode={subtaskInputMode}
@@ -2237,9 +2323,17 @@ Return JSON:
                 </p>
               </div>
             )}
+
+            {/* v2: Launch / Sprint sit with the task, not in the footer. */}
+            {v2 && task.status !== 'completed' && !isEvent && (
+              <div className={v2Group}>
+                <div className={v2Label}>Get going</div>
+                <LaunchButtons task={task} theme={theme} />
+              </div>
+            )}
           </div>
 
-          <DialogFooter className="gap-2 flex-wrap">
+          <DialogFooter className={v2 ? 'flex-col gap-2 sm:flex-col sm:space-x-0' : 'gap-2 flex-wrap'}>
             {/* Birthdays aren't in the menu any more — this is the way to the full list */}
             {currentClassification === 'birthday' && (
               <Button
@@ -2251,38 +2345,39 @@ Return JSON:
                 See all birthdays
               </Button>
             )}
-            {task.status !== 'completed' && !isEvent && (
+            {!v2 && task.status !== 'completed' && !isEvent && (
               <div className="w-full mb-1">
                 <LaunchButtons task={task} theme={theme} />
               </div>
             )}
+            {v2 ? (
+              <>
+                <Button
+                  onClick={handleComplete}
+                  className={`w-full h-11 text-base ${theme === 'minimalist'
+                    ? 'bg-green-600 hover:bg-green-700'
+                    : theme === 'dark'
+                      ? 'bg-green-600 hover:bg-green-700'
+                      : 'bg-gradient-to-r from-purple-600 to-orange-600 hover:from-purple-700 hover:to-orange-700'
+                  }`}
+                >
+                  <CheckCircle2 className="w-4 h-4 mr-2" />
+                  {isEvent ? 'Went' : 'Mark as Complete'}
+                </Button>
+                <div className="w-full flex justify-center gap-6 text-sm pt-1">
+                  <button type="button" onClick={handleToParkingLot} className={`flex items-center gap-1 ${theme === 'dark' ? 'text-purple-300' : 'text-purple-600'}`}>
+                    <Lightbulb className="w-4 h-4" /> To Parking Lot
+                  </button>
+                  <button type="button" onClick={handleDelete} className="flex items-center gap-1 text-red-600">
+                    <Trash2 className="w-4 h-4" /> Delete
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
             <Button
               variant="outline"
-              onClick={async () => {
-                if (!confirm(`Convert "${task.title}" to a parking lot idea?`)) return;
-                
-                // Optimistic — close dialog and notify parent immediately
-                if (onDelete) {
-                  onDelete();
-                }
-                onClose();
-
-                // Cancel reminders + create idea + delete task in the background
-                (async () => {
-                  try {
-                    if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
-                      await cancelScheduledReminder(task.onesignal_notification_ids);
-                    }
-                    await base44.entities.ParkingLotIdea.create({
-                      idea: task.title + (task.description ? `\n\n${task.description}` : ''),
-                      converted_to_task: false
-                    });
-                    await base44.entities.Task.delete(task.id);
-                  } catch (error) {
-                    console.error("Error converting to parking lot:", error);
-                  }
-                })();
-              }}
+              onClick={handleToParkingLot}
               className="text-purple-600 hover:text-purple-700 hover:bg-purple-50"
             >
               <Lightbulb className="w-4 h-4 mr-2" />
@@ -2311,6 +2406,8 @@ Return JSON:
               <CheckCircle2 className="w-4 h-4 mr-2" />
               {isEvent ? 'Went' : 'Mark as Complete'}
             </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
