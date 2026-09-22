@@ -510,16 +510,29 @@ export function AlarmPermissionsDialog({ theme }) {
   );
 }
 
-// Asked ONCE, right after the first task exists: should reminders arrive as
-// regular notifications or as full-screen alarms? That is the moment the
-// difference means something. The answer becomes the default for new tasks
-// (User.alarm_mode); every task keeps its own switch. Accounts that already
-// have tasks when this ships get asked on their next open.
+// Asked ONCE: should reminders arrive as regular notifications or as
+// full-screen alarms? The answer becomes the default for new tasks
+// (User.alarm_mode); every task keeps its own switch.
+//
+// Two moments, one dialog:
+//  - A brand-new account is asked right after its first task exists ("first"),
+//    because that is when the difference means something.
+//  - An account that already has tasks when the feature arrives is told about
+//    it on its next open ("intro") and offered a try. Trying switches the
+//    account to full-screen reminders and notes when the trial began; after
+//    the first one has actually rung, AlarmKeepPrompt (below) asks on the next
+//    open whether to keep it that way.
+// Both only ever appear in the app build that can ring (the AlarmBridge
+// plugin), so an older install never sees them.
 const ALERT_STYLE_STEP = 'onboarding_alert_style_done';
+// Set when "Try it out" is pressed, so AlarmKeepPrompt can see it in the same
+// session without waiting for the account record to be reloaded.
+let trialStartedThisSession = '';
 
 export function AlertStylePrompt({ user, theme }) {
   const dark = theme === 'dark';
   const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState('first');
   const [busy, setBusy] = useState(false);
   const started = useRef(false);
 
@@ -530,22 +543,23 @@ export function AlertStylePrompt({ user, theme }) {
 
     let cancelled = false;
     let shown = false;
-    const show = () => {
+    const show = (which) => {
       if (shown) return;
       shown = true;
+      setMode(which);
       waitForStep(ONBOARDING_STEPS.homeTour)
         .then(waitForCalm)
         .then(() => { if (!cancelled) setOpen(true); });
     };
-    const onCreated = () => show();
+    const onCreated = () => show('first');
 
     waitForPlugin('AlarmBridge').then((plugin) => {
       if (cancelled || !plugin) return;
       window.addEventListener('task-created', onCreated);
-      // Already has a task (an account from before alarms existed, or a capture
-      // made outside the app)? Then the moment is now.
+      // Already has a task (an account from before full-screen reminders
+      // existed, or a capture made outside the app)? Then it's an introduction.
       base44.entities.Task.filter({ status: 'active' }, '-created_date', 1)
-        .then((rows) => { if (!cancelled && rows?.length) show(); })
+        .then((rows) => { if (!cancelled && rows?.length) show('intro'); })
         .catch(() => {});
     });
 
@@ -566,10 +580,17 @@ export function AlertStylePrompt({ user, theme }) {
     setOpen(false);
   };
 
-  const choose = async (style) => {
+  // style 'alarm' with trial=true is "Try it out": same switch, plus a note of
+  // when the trial started so the keep-it question can wait for a real ring.
+  const choose = async (style, trial = false) => {
     setBusy(true);
     try {
-      await base44.auth.updateMe({ alarm_mode: style });
+      const patch = { alarm_mode: style };
+      if (trial) {
+        trialStartedThisSession = new Date().toISOString();
+        patch.alarm_trial_started_at = trialStartedThisSession;
+      }
+      await base44.auth.updateMe(patch);
       setAlarmMode(style);
       finish();
       await refreshAlarms();
@@ -583,10 +604,45 @@ export function AlertStylePrompt({ user, theme }) {
   };
 
   const card = `w-full text-left rounded-xl border p-4 transition-colors ${dark ? 'border-gray-700 hover:bg-gray-800' : 'border-gray-200 hover:bg-gray-50'}`;
+  const panel = `max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`;
+
+  if (mode === 'intro') {
+    return (
+      <Dialog open={open} onOpenChange={(o) => { if (!o) finish(); }}>
+        <DialogContent className={panel}>
+          <DialogHeader>
+            <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
+              <AlarmClock className="w-5 h-5" /> New: full-screen reminders
+            </DialogTitle>
+            <DialogDescription className={dark ? 'text-gray-400' : ''}>
+              A reminder can now ring like an alarm clock — full screen, out loud, even with your phone locked — until you snooze or dismiss it. Same reminders, same times. Just harder to miss.
+            </DialogDescription>
+          </DialogHeader>
+
+          <p className={`text-sm ${dark ? 'text-gray-300' : 'text-gray-700'}`}>
+            Try it and your tasks switch to full-screen reminders. After the first one rings, we'll ask if you want to keep it that way.
+          </p>
+
+          <div className="flex flex-col gap-2 pt-1">
+            <Button onClick={() => choose('alarm', true)} disabled={busy} className="w-full">
+              Try it out
+            </Button>
+            <Button variant="outline" onClick={() => choose('notification')} disabled={busy} className="w-full">
+              Not now
+            </Button>
+          </div>
+
+          <p className={`text-xs pt-1 ${dark ? 'text-gray-500' : 'text-gray-500'}`}>
+            You can change this anytime in Settings, and every task has its own switch too.
+          </p>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) finish(); }}>
-      <DialogContent className={`max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
+      <DialogContent className={panel}>
         <DialogHeader>
           <DialogTitle className={dark ? 'text-white' : ''}>How should reminders reach you?</DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
@@ -611,6 +667,104 @@ export function AlertStylePrompt({ user, theme }) {
 
         <p className={`text-xs pt-1 ${dark ? 'text-gray-500' : 'text-gray-500'}`}>
           You can change this anytime in Settings, and every task has its own switch too.
+        </p>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// The second half of "Try it out". Once a full-screen reminder has actually
+// rung on this phone (native reports lastRangAt), the next open asks whether
+// to keep tasks that way. Asked once per account. "Keep" changes nothing;
+// "Back to regular" returns the account default to notifications — a task
+// someone switched to full-screen by hand keeps its own setting.
+const KEEP_STEP = 'onboarding_fullscreen_keep_done';
+
+export function AlarmKeepPrompt({ user, theme }) {
+  const dark = theme === 'dark';
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const asked = useRef(false);
+
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    const check = async () => {
+      if (asked.current || isStepDone(KEEP_STEP)) return;
+      const trialAt = user.alarm_trial_started_at || trialStartedThisSession;
+      if (!trialAt) return;
+      const plugin = await waitForPlugin('AlarmBridge', 5000);
+      if (cancelled || !plugin) return;
+      const st = await alarmPermissionStatus();
+      const rang = Number(st?.lastRangAt || 0);
+      if (!rang || rang < Date.parse(trialAt)) return;
+      asked.current = true;
+      await waitForStep(ONBOARDING_STEPS.homeTour);
+      await waitForCalm();
+      if (!cancelled) setOpen(true);
+    };
+
+    check();
+    // Coming back to the app counts as opening it.
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [user]);
+
+  useEffect(() => {
+    if (!open) return;
+    enterOnboardingSurface();
+    return exitOnboardingSurface;
+  }, [open]);
+
+  const finish = () => {
+    markStepDone(KEEP_STEP);
+    setOpen(false);
+  };
+
+  const keep = () => finish();
+
+  const goBack = async () => {
+    setBusy(true);
+    try {
+      await base44.auth.updateMe({ alarm_mode: 'notification' });
+      setAlarmMode('notification');
+      finish();
+      await refreshAlarms();
+    } catch (e) {
+      finish();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) finish(); }}>
+      <DialogContent className={`max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
+        <DialogHeader>
+          <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
+            <AlarmClock className="w-5 h-5" /> Keep full-screen reminders?
+          </DialogTitle>
+          <DialogDescription className={dark ? 'text-gray-400' : ''}>
+            Your first full-screen reminder has rung. Would you like to keep your tasks as full-screen reminders, or go back to regular notifications?
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-2 pt-1">
+          <Button onClick={keep} disabled={busy} className="w-full">
+            Keep full-screen
+          </Button>
+          <Button variant="outline" onClick={goBack} disabled={busy} className="w-full">
+            Back to regular notifications
+          </Button>
+        </div>
+
+        <p className={`text-xs pt-1 ${dark ? 'text-gray-500' : 'text-gray-500'}`}>
+          Either way, you can change this anytime in Settings.
         </p>
       </DialogContent>
     </Dialog>
