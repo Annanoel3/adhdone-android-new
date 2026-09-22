@@ -325,8 +325,10 @@ export default function Calendar() {
         const justConnected = gcal === 'connected'
           || sessionStorage.getItem('adhd_calendar_just_connected') === '1';
         sessionStorage.removeItem('adhd_calendar_just_connected');
-        let isConnected = await probeConnection();
-        if (!isConnected && justConnected) {
+        // The phone build reads calendars from the phone; Google is never
+        // probed or synced there.
+        let isConnected = hasDeviceCalendars() ? false : await probeConnection();
+        if (!hasDeviceCalendars() && !isConnected && justConnected) {
           for (let i = 0; i < 4 && !isConnected; i++) {
             await new Promise((r) => setTimeout(r, 1500));
             isConnected = await probeConnection();
@@ -359,6 +361,7 @@ export default function Calendar() {
 
   // Re-check connection status every time the page becomes visible
   useEffect(() => {
+    if (hasDeviceCalendars()) return undefined;
     const onVisible = () => {
       if (document.visibilityState === 'visible') probeConnection();
     };
@@ -435,6 +438,8 @@ export default function Calendar() {
   };
 
   const isDark = theme === 'dark';
+  // Phone build: calendars come from the phone, the Google sign-in card is gone.
+  const phone = hasDeviceCalendars();
   const cardBase = isDark ? 'bg-gray-800 border-gray-700' : 'bg-white border-gray-100';
   const textPrimary = isDark ? 'text-white' : 'text-gray-900';
   const textSecondary = isDark ? 'text-gray-400' : 'text-gray-500';
@@ -470,7 +475,30 @@ export default function Calendar() {
       style={{ paddingBottom: 'max(8rem, calc(8rem + env(safe-area-inset-bottom)))' }}>
       <div className="max-w-4xl mx-auto space-y-6">
 
-        {/* Header card */}
+        {/* Phone build: calendars are read from the phone now, so the Google
+            sign-in card is gone. Anyone who comes back here to sync Google
+            finds this note instead. */}
+        {phone && (
+          <Card className={`border-none shadow-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
+            <CardContent className="p-6 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-blue-500 flex items-center justify-center shadow">
+                  <CalendarDays className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h2 className={`text-lg font-bold ${textPrimary}`}>New calendar integration now in use!</h2>
+                  <p className={`text-sm ${textSecondary}`}>No Google sign-in needed anymore.</p>
+                </div>
+              </div>
+              <p className={`text-sm ${textSecondary}`}>
+                ADHDone now reads calendars straight from your phone. Tick the calendar(s) you want below — your Google calendar is in that list — and everything keeps working the way it did. Events already brought in stay where they are.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Google sign-in card — web only */}
+        {!phone && (
         <Card className={`border-none shadow-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
           <CardContent className="p-6 space-y-4">
             {/* Header */}
@@ -606,9 +634,10 @@ export default function Calendar() {
             )}
           </CardContent>
         </Card>
+        )}
 
-        {/* How it works — shown only when not connected */}
-        {!connected && (
+        {/* How it works — shown only when not connected (web only) */}
+        {!phone && !connected && (
           <Card className={`border-none shadow-sm ${isDark ? 'bg-gray-800' : 'bg-blue-50/50 border border-blue-100'}`}>
             <CardContent className="p-5 space-y-3">
               <h3 className={`font-semibold ${textPrimary}`}>How it works</h3>
