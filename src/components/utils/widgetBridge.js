@@ -377,25 +377,40 @@ function parseGradient(backgroundImage) {
   return colors.length ? { colors: colors.slice(0, 8), angle } : null;
 }
 
+// A seasonal theme paints the page with artwork (Layout.jsx's seasonal
+// backgrounds). That picture goes to the alarm too: native downloads it once
+// and shows it behind a dark scrim, so the colours below only matter until
+// the download has finished.
+function parseImageUrl(backgroundImage) {
+  const m = /url\((["']?)(https?:\/\/[^"')]+)\1\)/i.exec(backgroundImage || '');
+  return m ? m[2] : '';
+}
+
 // The look the alarm should have right now, or null when it can't be read.
 export function currentAlarmTheme() {
   if (typeof document === 'undefined') return null;
   const candidates = [document.getElementById('adhdone-app-bg'), document.body, document.documentElement].filter(Boolean);
   let colors = null;
   let angle = 135;
+  let image = '';
   for (const el of candidates) {
     const cs = getComputedStyle(el);
+    if (!image) image = parseImageUrl(cs.backgroundImage);
     const g = parseGradient(cs.backgroundImage);
     if (g) { colors = g.colors; angle = g.angle; break; }
     const c = cssColorToHex(cs.backgroundColor);
     if (c) { colors = [c]; break; }
   }
-  if (!colors) return null;
+  if (!colors && !image) return null;
+  // With artwork the alarm is dark-on-purpose (scrim over the picture), so
+  // the stand-in colour while it downloads is dark as well.
+  if (image) colors = ['#1f1b2e'];
   const dark = luminance(colors[0]) < 0.4;
   const primary = getComputedStyle(document.documentElement).getPropertyValue('--primary');
   return {
     colors,
     angle: Math.round(angle),
+    image,
     text: dark ? '#ffffff' : '#111827',
     muted: dark ? '#c9c3dc' : '#4b5563',
     accent: hslTripleToHex(primary) || '#8b5cf6',
