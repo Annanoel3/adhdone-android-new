@@ -311,9 +311,14 @@ export function AlarmCard({ user, theme }) {
     setError('');
     try {
       const tasks = await base44.entities.Task.list('-updated_date', 500);
-      const toChange = (tasks || []).filter((t) => t.status === 'active' && t.alert_style !== mode);
-      for (const t of toChange) {
-        await base44.entities.Task.update(t.id, { alert_style: mode });
+      // A task with no choice of its own already follows the new default, so
+      // only tasks that explicitly chose the other style need touching — and
+      // those all at once, not one after another (75 tasks used to take ages).
+      const toChange = (tasks || []).filter((t) =>
+        t.status === 'active' && (t.alert_style === 'alarm' || t.alert_style === 'notification') && t.alert_style !== mode);
+      const BATCH = 10;
+      for (let i = 0; i < toChange.length; i += BATCH) {
+        await Promise.all(toChange.slice(i, i + BATCH).map((t) => base44.entities.Task.update(t.id, { alert_style: mode })));
       }
       await refreshAlarms();
       await refreshStatus();
