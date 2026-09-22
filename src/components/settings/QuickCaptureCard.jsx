@@ -104,18 +104,12 @@ const ALARM_SOUND_PRESETS = [
 ].map((p) => ({ ...p, url: ALARM_SOUND_BASE + encodeURIComponent(p.file) }));
 const ALARM_SOUND_MAX_BYTES = 10 * 1024 * 1024;
 
-export function AlarmCard({ user, theme }) {
-  const { AlarmBridge, NotifyBridge } = getPlugins();
+// The alarm-sound chooser on its own, so the Settings card and the first-time
+// set-up popup (QuickCapturePrompt's AlarmPermissionsDialog) show the very
+// same thing and save to the same place.
+export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
   const dark = theme === 'dark';
-  const [on, setOn] = useState(user?.alarm_mode === 'alarm');
-  const [status, setStatus] = useState(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
   const [sound, setSound] = useState({ url: user?.alarm_sound_url || '', name: user?.alarm_sound_name || '' });
-  // After the default changes: "switch your existing tasks too?" — holds the
-  // mode just chosen while the question is up; null = no question.
-  const [convertTo, setConvertTo] = useState(null);
-  const [converting, setConverting] = useState(false);
   const [soundBusy, setSoundBusy] = useState(false);
   const [soundNote, setSoundNote] = useState('');
   const [previewing, setPreviewing] = useState(false);
@@ -123,90 +117,12 @@ export function AlarmCard({ user, theme }) {
   const fileRef = useRef(null);
 
   useEffect(() => {
-    setOn(user?.alarm_mode === 'alarm');
     setSound({ url: user?.alarm_sound_url || '', name: user?.alarm_sound_name || '' });
-  }, [user?.alarm_mode, user?.alarm_sound_url, user?.alarm_sound_name]);
+  }, [user?.alarm_sound_url, user?.alarm_sound_name]);
 
-  const refreshStatus = async () => {
-    if (!AlarmBridge?.getStatus) return;
-    try {
-      setStatus(await AlarmBridge.getStatus());
-    } catch (e) {
-      // Leave whatever we last knew on screen.
-    }
-  };
-
-  useEffect(() => {
-    if (!AlarmBridge) return;
-    refreshStatus();
-    // Coming back from a phone-settings screen resumes the app; re-check then.
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') refreshStatus();
-    };
-    document.addEventListener('visibilitychange', onVisible);
-    return () => {
-      document.removeEventListener('visibilitychange', onVisible);
-      if (previewRef.current) previewRef.current.pause();
-    };
-  }, [AlarmBridge]);
-
-  if (!AlarmBridge?.sync) return null;
-
-  const handleToggle = async (next) => {
-    setBusy(true);
-    setError('');
-    try {
-      if (next && NotifyBridge?.requestPermission) {
-        await NotifyBridge.requestPermission();
-      }
-      const mode = next ? 'alarm' : 'notification';
-      await base44.auth.updateMe({ alarm_mode: mode });
-      setOn(next);
-      setAlarmMode(mode);
-      await refreshAlarms();
-      await refreshStatus();
-      // Anything Android still withholds opens the guided walk-through now,
-      // not the first time an alarm quietly fails to ring.
-      if (next) await requestAlarmPermissions();
-      // The default only covers tasks with no choice of their own. Ask whether
-      // the tasks they already have should follow the new choice as well.
-      setConvertTo(mode);
-    } catch (e) {
-      setError("Couldn't save that. Try again.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Stamp the chosen style on every task they have now, so all of them ring
-  // (or don't) the same way. Only the alert style changes — reminder times,
-  // dates and everything else on the task stay exactly as they are.
-  const convertExistingTasks = async (mode) => {
-    setConverting(true);
-    setError('');
-    try {
-      const tasks = await base44.entities.Task.list('-updated_date', 500);
-      const toChange = (tasks || []).filter((t) => t.status === 'active' && t.alert_style !== mode);
-      for (const t of toChange) {
-        await base44.entities.Task.update(t.id, { alert_style: mode });
-      }
-      await refreshAlarms();
-      await refreshStatus();
-    } catch (e) {
-      setError("Couldn't update every task. Try again from a task's own switch.");
-    } finally {
-      setConverting(false);
-      setConvertTo(null);
-    }
-  };
-
-  const openSetting = async (fn) => {
-    try {
-      await fn();
-    } catch (e) {
-      // The settings screen didn't open; the status line still tells the truth.
-    }
-  };
+  useEffect(() => () => {
+    if (previewRef.current) previewRef.current.pause();
+  }, []);
 
   const stopPreview = () => {
     if (previewRef.current) {
@@ -246,7 +162,7 @@ export function AlarmCard({ user, theme }) {
           ? 'Saved to your phone — it rings even with no signal.'
           : "Saved. It couldn't download yet, so the phone's default alarm rings until it does.");
       }
-      await refreshStatus();
+      if (onSaved) await onSaved();
     } catch (e) {
       setSoundNote("Couldn't save that sound. Try again.");
     } finally {
@@ -287,6 +203,138 @@ export function AlarmCard({ user, theme }) {
   const textMain = dark ? 'text-gray-200' : 'text-gray-900';
   const textSub = dark ? 'text-gray-400' : 'text-gray-600';
   const isPreset = !sound.url || ALARM_SOUND_PRESETS.some((p) => p.url === sound.url);
+
+  return (
+    <div className={className}>
+      <p className={`text-sm font-medium ${textMain}`}>Alarm sound</p>
+      <div className="flex items-center gap-2 mt-2">
+        <select
+          value={sound.url}
+          onChange={handlePick}
+          disabled={soundBusy}
+          className={`flex-1 min-w-0 text-sm rounded-lg px-2 py-2 border ${dark ? 'bg-gray-700 border-gray-600 text-gray-200' : 'bg-white border-gray-300 text-gray-900'}`}
+        >
+          <option value="">Phone's default alarm</option>
+          {ALARM_SOUND_PRESETS.map((p) => (
+            <option key={p.url} value={p.url}>{p.name}</option>
+          ))}
+          {!isPreset && <option value={sound.url}>Your upload: {sound.name || 'sound'}</option>}
+          <option value="__upload__">Upload your own…</option>
+        </select>
+        <Button size="sm" variant="outline" onClick={togglePreview} disabled={!sound.url || soundBusy}>
+          {previewing ? 'Stop' : 'Play'}
+        </Button>
+      </div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="audio/*,.mp3,.wav,.ogg,.m4a"
+        className="hidden"
+        onChange={handleUpload}
+      />
+      {soundNote && <p className={`text-xs mt-2 ${textSub}`}>{soundNote}</p>}
+    </div>
+  );
+}
+
+export function AlarmCard({ user, theme }) {
+  const { AlarmBridge, NotifyBridge } = getPlugins();
+  const dark = theme === 'dark';
+  const [on, setOn] = useState(user?.alarm_mode === 'alarm');
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  // After the default changes: "switch your existing tasks too?" — holds the
+  // mode just chosen while the question is up; null = no question.
+  const [convertTo, setConvertTo] = useState(null);
+  const [converting, setConverting] = useState(false);
+
+  useEffect(() => {
+    setOn(user?.alarm_mode === 'alarm');
+  }, [user?.alarm_mode]);
+
+  const refreshStatus = async () => {
+    if (!AlarmBridge?.getStatus) return;
+    try {
+      setStatus(await AlarmBridge.getStatus());
+    } catch (e) {
+      // Leave whatever we last knew on screen.
+    }
+  };
+
+  useEffect(() => {
+    if (!AlarmBridge) return;
+    refreshStatus();
+    // Coming back from a phone-settings screen resumes the app; re-check then.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refreshStatus();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [AlarmBridge]);
+
+  if (!AlarmBridge?.sync) return null;
+
+  const handleToggle = async (next) => {
+    setBusy(true);
+    setError('');
+    try {
+      if (next && NotifyBridge?.requestPermission) {
+        await NotifyBridge.requestPermission();
+      }
+      const mode = next ? 'alarm' : 'notification';
+      await base44.auth.updateMe({ alarm_mode: mode });
+      setOn(next);
+      setAlarmMode(mode);
+      await refreshAlarms();
+      await refreshStatus();
+      // Anything Android still withholds opens the guided walk-through now,
+      // not the first time an alarm quietly fails to ring.
+      if (next) await requestAlarmPermissions({ setup: true });
+      // The default only covers tasks with no choice of their own. Ask whether
+      // the tasks they already have should follow the new choice as well.
+      setConvertTo(mode);
+    } catch (e) {
+      setError("Couldn't save that. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Stamp the chosen style on every task they have now, so all of them ring
+  // (or don't) the same way. Only the alert style changes — reminder times,
+  // dates and everything else on the task stay exactly as they are.
+  const convertExistingTasks = async (mode) => {
+    setConverting(true);
+    setError('');
+    try {
+      const tasks = await base44.entities.Task.list('-updated_date', 500);
+      const toChange = (tasks || []).filter((t) => t.status === 'active' && t.alert_style !== mode);
+      for (const t of toChange) {
+        await base44.entities.Task.update(t.id, { alert_style: mode });
+      }
+      await refreshAlarms();
+      await refreshStatus();
+    } catch (e) {
+      setError("Couldn't update every task. Try again from a task's own switch.");
+    } finally {
+      setConverting(false);
+      setConvertTo(null);
+    }
+  };
+
+  const openSetting = async (fn) => {
+    try {
+      await fn();
+    } catch (e) {
+      // The settings screen didn't open; the status line still tells the truth.
+    }
+  };
+
+  const textMain = dark ? 'text-gray-200' : 'text-gray-900';
+  const textSub = dark ? 'text-gray-400' : 'text-gray-600';
 
   const Row = ({ ok, label, detail, action, onAction }) => (
     <div className="flex items-center justify-between gap-3 py-2">
@@ -346,35 +394,12 @@ export function AlarmCard({ user, theme }) {
         </div>
         {error && <p className="text-xs text-red-500 mt-3">{error}</p>}
 
-        <div className={`mt-4 border-t pt-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
-          <p className={`text-sm font-medium ${textMain}`}>Alarm sound</p>
-          <div className="flex items-center gap-2 mt-2">
-            <select
-              value={sound.url}
-              onChange={handlePick}
-              disabled={soundBusy}
-              className={`flex-1 min-w-0 text-sm rounded-lg px-2 py-2 border ${dark ? 'bg-gray-700 border-gray-600 text-gray-200' : 'bg-white border-gray-300 text-gray-900'}`}
-            >
-              <option value="">Phone's default alarm</option>
-              {ALARM_SOUND_PRESETS.map((p) => (
-                <option key={p.url} value={p.url}>{p.name}</option>
-              ))}
-              {!isPreset && <option value={sound.url}>Your upload: {sound.name || 'sound'}</option>}
-              <option value="__upload__">Upload your own…</option>
-            </select>
-            <Button size="sm" variant="outline" onClick={togglePreview} disabled={!sound.url || soundBusy}>
-              {previewing ? 'Stop' : 'Play'}
-            </Button>
-          </div>
-          <input
-            ref={fileRef}
-            type="file"
-            accept="audio/*,.mp3,.wav,.ogg,.m4a"
-            className="hidden"
-            onChange={handleUpload}
-          />
-          {soundNote && <p className={`text-xs mt-2 ${textSub}`}>{soundNote}</p>}
-        </div>
+        <AlarmSoundPicker
+          user={user}
+          theme={theme}
+          onSaved={refreshStatus}
+          className={`mt-4 border-t pt-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}
+        />
 
         {status && (
           <div className={`mt-4 border-t pt-2 ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
