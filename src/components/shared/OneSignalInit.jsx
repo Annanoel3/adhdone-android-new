@@ -144,10 +144,16 @@ export default function OneSignalInit({ user }) {
 
         if (externalId) {
           console.log('[OneSignal] ✅ Calling NotifyBridge.login() with:', externalId);
-          // On a fresh install, don't throw the OS permission dialog at the user
-          // before they've read the welcome note and seen the Home tour.
+          // On a fresh install the permissions card (QuickCapturePrompt) asks
+          // for notifications right after the Home tour, with a sentence on
+          // why — so the ask happens there, not here. If that card never
+          // shows (no bridge on this build), fall back to asking directly.
           await waitForStep(ONBOARDING_STEPS.homeTour);
-          await NotifyBridge.requestPermission();
+          const cardAnswered = await Promise.race([
+            waitForStep(ONBOARDING_STEPS.permissions).then(() => true),
+            new Promise((resolve) => setTimeout(() => resolve(false), 90000)),
+          ]);
+          if (!cardAnswered) await NotifyBridge.requestPermission();
           const loginResult = await NotifyBridge.login({ externalId: externalId });
           // Native plugin returns the player ID synchronously — save it.
           if (loginResult?.playerId) {
