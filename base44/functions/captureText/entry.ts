@@ -21,6 +21,46 @@ import {
   createParkingLotIdeas,
 } from "../../shared/captureToTasks.ts";
 
+// Two deliveries of the SAME capture can arrive at once — the phone re-sending
+// while the first attempt is still being worked on. Both pass the capture_id
+// check at the top before either has saved anything, so that check alone can't
+// stop a double. Ownership is settled after saving instead: the earliest row
+// (task or idea) carrying this capture_id wins, and any later arrival removes
+// what it just made. Checked twice, the second time after a short pause, so two
+// saves landing in the same instant still agree on a single winner.
+const byAge = (a: any, b: any) =>
+  String(a.created_date || "").localeCompare(String(b.created_date || "")) ||
+  String(a.id).localeCompare(String(b.id));
+
+async function lostCaptureRace(base44: any, captureId: string, mine: { entity: string; ids: string[] }) {
+  for (const pause of [0, 1500]) {
+    if (pause) await new Promise((r) => setTimeout(r, pause));
+    const [tasks, ideas] = await Promise.all([
+      base44.entities.Task.filter({ capture_id: captureId }).catch(() => []),
+      base44.entities.ParkingLotIdea.filter({ capture_id: captureId }).catch(() => []),
+    ]);
+    const rows = [...(tasks || []), ...(ideas || [])].sort(byAge);
+    const first = rows[0];
+    if (first && !mine.ids.includes(first.id)) {
+      await Promise.all(mine.ids.map((id) => base44.entities[mine.entity].delete(id).catch(() => {})));
+      return {
+        tasks: (tasks || []).filter((t: any) => !mine.ids.includes(t.id)),
+        ideas: (ideas || []).filter((i: any) => !mine.ids.includes(i.id)),
+      };
+    }
+  }
+  return null;
+}
+
+function duplicateResponse(winner: { tasks: any[]; ideas: any[] }) {
+  if (winner.ideas.length) {
+    const ideas = winner.ideas.map((i: any) => ({ id: i.id, title: i.idea }));
+    return Response.json({ success: true, duplicate: true, kind: "idea", count: ideas.length, tasks: ideas, ideas });
+  }
+  const tasks = winner.tasks.map((t: any) => ({ id: t.id, title: t.title }));
+  return Response.json({ success: true, duplicate: true, kind: "task", count: tasks.length, tasks });
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = await createClientFromRequest(req);
@@ -70,6 +110,13 @@ Deno.serve(async (req) => {
     const category = await classifyCapture(base44, raw);
     if (category.category === "parking_lot") {
       const ideas = await createParkingLotIdeas(base44, category, raw, capture_id);
+      if (capture_id && ideas.length) {
+        const winner = await lostCaptureRace(base44, capture_id, { entity: "ParkingLotIdea", ids: ideas.map((i: any) => i.id) });
+        if (winner) {
+          console.log(`[captureText] ${capture_id} already handled by a parallel delivery; removed this copy`);
+          return duplicateResponse(winner);
+        }
+      }
       console.log(`[captureText] ${ideas.length} parking lot idea(s) from ${raw.length} chars`);
       return Response.json({
         success: true,
@@ -107,6 +154,16 @@ Deno.serve(async (req) => {
       // Created as the USER, not the service role: Task RLS keys off created_by,
       // so a service-role insert saves a record the user can never see.
       const task = await base44.entities.Task.create(record);
+
+      // First task of this capture: make sure no parallel delivery beat us to
+      // it before any reminders get scheduled.
+      if (capture_id && created.length === 0) {
+        const winner = await lostCaptureRace(base44, capture_id, { entity: "Task", ids: [task.id] });
+        if (winner) {
+          console.log(`[captureText] ${capture_id} already handled by a parallel delivery; removed this copy`);
+          return duplicateResponse(winner);
+        }
+      }
 
       // Reminder failures must not lose the task — the record is already safe,
       // and the refill cron picks up anything left without notifications.
