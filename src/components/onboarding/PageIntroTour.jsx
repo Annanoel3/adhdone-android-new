@@ -75,6 +75,29 @@ export default function PageIntroTour({ currentPageName }) {
 }
 const ADD_PATHS_TOUR = "add-paths";
 
+// A how-to clip that behaves like a GIF: silent, looping, and it starts on its
+// own the moment it scrolls into view (and pauses when it leaves), so nobody
+// has to find a play button. Muted is what lets a WebView autoplay at all.
+export function AutoClip({ src, className }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return undefined;
+    v.muted = true;
+    const io = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        const p = v.play();
+        if (p && p.catch) p.catch(() => {});
+      } else {
+        v.pause();
+      }
+    }, { threshold: 0.35 });
+    io.observe(v);
+    return () => io.disconnect();
+  }, []);
+  return <video ref={ref} src={src} muted loop playsInline preload="metadata" className={className} />;
+}
+
 // First visit to Tasks: one scrolling card. The top says adding is easy; the
 // arrow scrolls down to the first how-to video, then the next, and so on. Skip
 // before scrolling gets a "no worries" note pointing at the App Guide; the
@@ -86,7 +109,6 @@ function AddPathsIntro({ onDone }) {
   const [noWorries, setNoWorries] = useState(false);
   const scrolledRef = useRef(false);
   const sectionRefs = useRef([]);
-  const videoRefs = useRef([]);
 
   useEffect(() => {
     enterOnboardingSurface();
@@ -111,11 +133,8 @@ function AddPathsIntro({ onDone }) {
 
   const goTo = (i) => {
     scrolledRef.current = true;
+    // The clip starts by itself once it's in view.
     sectionRefs.current[i]?.scrollIntoView({ behavior: "smooth", block: "start" });
-    // Starts the clip they just scrolled to; if the WebView refuses, the
-    // controls are right there.
-    const p = videoRefs.current[i]?.play?.();
-    if (p && p.catch) p.catch(() => {});
   };
 
   if (noWorries) {
@@ -165,14 +184,7 @@ function AddPathsIntro({ onDone }) {
         {ADD_PATHS.map((path, i) => (
           <div key={path.key} ref={(el) => { sectionRefs.current[i] = el; }} className="p-5 border-t border-border">
             <h4 className="font-semibold text-foreground">{path.title}</h4>
-            <video
-              ref={(el) => { videoRefs.current[i] = el; }}
-              src={path.video}
-              controls
-              playsInline
-              preload="metadata"
-              className="mt-3 w-full max-h-[55vh] rounded-xl bg-black object-contain"
-            />
+            <AutoClip src={path.video} className="mt-3 w-full max-h-[55vh] rounded-xl bg-black object-contain" />
             <p className="mt-3 text-sm text-muted-foreground leading-relaxed">{path.text}</p>
             {i < ADD_PATHS.length - 1 ? (
               <button type="button" onClick={() => goTo(i + 1)} aria-label="Next" className={`${arrowClass} h-12 w-12 mt-4`}>
