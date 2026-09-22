@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { usePomodoro } from '@/context/PomodoroContext';
 import { base44 } from '@/api/base44Client';
 import { scheduleReminder, cancelScheduledReminder } from '@/components/utils/reminderScheduler';
@@ -21,6 +21,16 @@ const LAUNCHPAD_ALARM_ID = 'timer:launchpad';
 const SPRINT_ALARM_ID = 'timer:sprint';
 const launchSoundUrl = () => COMPLETION_SOUNDS[getLaunchAlertSound()]?.url || '';
 const ringHere = () => { if (!timerAlarmsSupported()) startAlertLoop(getLaunchAlertSound()); };
+// The sprint alarm screen carries the popup's two choices as buttons. A tap
+// stops the ring and opens the app at one of these paths; the effect below
+// turns that into the same "keep going" / "stop" the popup's buttons run.
+const SPRINT_ALARM_ACTIONS = [
+  { label: 'Keep going', path: '/Home?sprint=keep' },
+  { label: "I'm done", path: '/Home?sprint=stop' },
+];
+// The sprint that most recently ran, kept outside React state so an alarm
+// button tapped after the popup has gone can still act on it.
+let lastSprint = null;
 
 const LaunchContext = createContext(null);
 const LAUNCHPAD_KEY = 'launchpad_session';
@@ -32,6 +42,7 @@ const GRACE_MS = 10 * 60 * 1000;
 
 export function LaunchProvider({ children }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const pomodoro = usePomodoro();
   const [launchpad, setLaunchpad] = useState(null);
   const [sprint, setSprint] = useState(null);
@@ -98,6 +109,7 @@ export function LaunchProvider({ children }) {
           localStorage.removeItem(SPRINT_KEY);
           if (sp.notifId) cancelScheduledReminder(sp.notifId).catch(() => {});
           ringHere();
+          lastSprint = sp;
           setSprint(sp);
           setSprintEnded(true);
         } else {
@@ -180,10 +192,12 @@ export function LaunchProvider({ children }) {
         body: "It's okay to stop if you want. You showed up, and that's the win. 💚",
         at: new Date(endTimeISO).getTime(),
         soundUrl: launchSoundUrl(),
+        actions: SPRINT_ALARM_ACTIONS,
       });
     }
 
     const session = { taskId: task.id, title: task.title, endTimeISO, notifId };
+    lastSprint = session;
     localStorage.setItem(SPRINT_KEY, JSON.stringify(session));
     setSprintEnded(false);
     setSprintMinimized(false);
@@ -234,6 +248,64 @@ export function LaunchProvider({ children }) {
     setSprintEnded(false);
   }, [sprint, sprintEnded, logSprintSession]);
 
+  // The two choices at the end of a sprint. The popup's buttons run these, and
+  // so do the same buttons on the alarm screen (via ?sprint=keep / ?sprint=stop).
+  const keepGoingAfterSprint = useCallback(async (sp) => {
+    stopAlertLoop();
+    cancelOwnAlarm(SPRINT_ALARM_ID);
+    // "Keep going" → hand off into Focus Mode for this task (same destination
+    // as the Launchpad liftoff and the Home Focus button). Reset the sprint's
+    // pomodoro so the Focus Mode overlay's own optional timer takes over.
+    const p = pomodoroRef.current;
+    if (p) p.resetTimer();
+    localStorage.removeItem(SPRINT_KEY);
+    if (sp?.taskId) {
+      try {
+        // Carry the time already spent in the sprint into Focus Mode so
+        // the elapsed timer keeps counting from the sprint's start
+        // instead of restarting at zero.
+        const sprintStartISO = new Date(new Date(sp.endTimeISO).getTime() - DURATION_MS).toISOString();
+        await base44.functions.invoke('setFocusMode', { action: 'enter', taskId: sp.taskId, startedAt: sprintStartISO });
+        navigate('/Home', { replace: true });
+        window.dispatchEvent(new CustomEvent('focus-mode-changed', { detail: { taskId: sp.taskId } }));
+      } catch (e) {
+        console.error('Failed to enter focus mode after sprint:', e);
+      }
+    }
+    // Only drop the sprint popup once Focus Mode is entered, so there's
+    // no blank Home screen in between.
+    setSprint(null);
+    setSprintEnded(false);
+  }, [navigate]);
+
+  const stopAfterSprint = useCallback((sp) => {
+    stopAlertLoop();
+    cancelOwnAlarm(SPRINT_ALARM_ID);
+    if (sp) logSprintSession(sp);
+    const p = pomodoroRef.current;
+    if (p) p.resetTimer();
+    localStorage.removeItem(SPRINT_KEY);
+    setSprintMinimized(false);
+    setSprint(null);
+    setSprintEnded(false);
+  }, [logSprintSession]);
+
+  // A button tapped on the sprint's alarm screen lands here as ?sprint=keep or
+  // ?sprint=stop. The query is cleared first so a remount can't replay it.
+  useEffect(() => {
+    const action = new URLSearchParams(location.search).get('sprint');
+    if (!action) return;
+    navigate(location.pathname, { replace: true });
+    let sp = sprint || lastSprint;
+    if (!sp) {
+      // The app was gone when the alarm rang: the session is still on disk.
+      try { sp = JSON.parse(localStorage.getItem(SPRINT_KEY) || 'null'); } catch { sp = null; }
+    }
+    if (action === 'keep') keepGoingAfterSprint(sp);
+    else if (action === 'stop') stopAfterSprint(sp);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
+
   return (
     <LaunchContext.Provider
       value={{
@@ -282,44 +354,8 @@ export function LaunchProvider({ children }) {
             ringHere();
             setSprintEnded(true);
           }}
-          onKeepGoing={async () => {
-            stopAlertLoop();
-            cancelOwnAlarm(SPRINT_ALARM_ID);
-            // "Keep going" → hand off into Focus Mode for this task (same destination
-            // as the Launchpad liftoff and the Home Focus button). Reset the sprint's
-            // pomodoro so the Focus Mode overlay's own optional timer takes over.
-            const p = pomodoroRef.current;
-            if (p) p.resetTimer();
-            localStorage.removeItem(SPRINT_KEY);
-            if (sprint?.taskId) {
-              try {
-                // Carry the time already spent in the sprint into Focus Mode so
-                // the elapsed timer keeps counting from the sprint's start
-                // instead of restarting at zero.
-                const sprintStartISO = new Date(new Date(sprint.endTimeISO).getTime() - DURATION_MS).toISOString();
-                await base44.functions.invoke('setFocusMode', { action: 'enter', taskId: sprint.taskId, startedAt: sprintStartISO });
-                navigate('/Home', { replace: true });
-                window.dispatchEvent(new CustomEvent('focus-mode-changed', { detail: { taskId: sprint.taskId } }));
-              } catch (e) {
-                console.error('Failed to enter focus mode after sprint:', e);
-              }
-            }
-            // Only drop the sprint popup once Focus Mode is entered, so there's
-            // no blank Home screen in between.
-            setSprint(null);
-            setSprintEnded(false);
-          }}
-          onStop={() => {
-            stopAlertLoop();
-            cancelOwnAlarm(SPRINT_ALARM_ID);
-            logSprintSession(sprint);
-            const p = pomodoroRef.current;
-            if (p) p.resetTimer();
-            localStorage.removeItem(SPRINT_KEY);
-            setSprintMinimized(false);
-            setSprint(null);
-            setSprintEnded(false);
-          }}
+          onKeepGoing={() => keepGoingAfterSprint(sprint)}
+          onStop={() => stopAfterSprint(sprint)}
           onMinimize={() => { setSprintMinimized(true); localStorage.setItem(SPRINT_KEY, JSON.stringify({ ...sprint, minimized: true })); }}
           onCancel={cancelSprint}
         />
