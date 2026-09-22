@@ -1,5 +1,6 @@
 import React from 'react';
 import { ADD_PATHS } from "@/components/onboarding/pageIntros";
+import { AutoClip } from "@/components/onboarding/PageIntroTour";
 import {
   Dialog,
   DialogContent,
@@ -178,13 +179,7 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
                                 {subItem.description}
                               </span>
                               {subItem.video && (
-                                <video
-                                  src={subItem.video}
-                                  controls
-                                  playsInline
-                                  preload="metadata"
-                                  className="mt-2 w-full max-h-[50vh] rounded-lg bg-black object-contain"
-                                />
+                                <AutoClip src={subItem.video} className="mt-2 w-full max-h-[50vh] rounded-lg bg-black object-contain" />
                               )}
                             </div>
                           </div>
