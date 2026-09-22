@@ -35,4 +35,28 @@ const CATCH_UP_SCRIPT = [
   },
 ];
 
+// For a profile that already has a name (it was answered earlier, or set in
+// Settings): the same catch-up minus the name beats, so nobody is asked for
+// something the app already knows.
+export const CATCH_UP_ABOUT_ONLY_SCRIPT = [
+  {
+    text: () =>
+      "Welcome back! ADHDone is still a pretty new app, so new things are always rolling out.",
+  },
+  {
+    text: (name) =>
+      `There's a new bit of setup that makes this app a lot better at helping *you* specifically, ${name}. One quick question — that's it.`,
+  },
+  {
+    text: () =>
+      "Tell us a little about yourself — anything that helps ADHDone judge what actually matters to you. Stuff like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
+    input: 'about',
+  },
+  {
+    text: () =>
+      "Got it. That'll shape what counts as urgent and how hard this app nudges you about it. That's everything — back to your tasks.",
+    final: true,
+  },
+];
+
 export default CATCH_UP_SCRIPT;
