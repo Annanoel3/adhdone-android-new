@@ -460,6 +460,15 @@ export function currentAlarmTheme() {
     const c = cssColorToHex(cs.backgroundColor);
     if (c) { colors = [c]; break; }
   }
+  // Spicy Brains paints no background on the app shell (each page brings its
+  // own gradient), so the shell reads as plain pale pink. Its signature is the
+  // header's pink → purple → blue gradient, so the alarm wears that instead.
+  let appTheme = '';
+  try { appTheme = localStorage.getItem('adhd_theme') || ''; } catch (e) { /* no storage */ }
+  if (!image && appTheme === 'spicybrains') {
+    colors = ['#ff6b9d', '#c06bff', '#6bc5ff'];
+    angle = 135;
+  }
   if (!colors && !image) return null;
   // With artwork the alarm is dark-on-purpose (scrim over the picture), so
   // the stand-in colour while it downloads is dark as well.
