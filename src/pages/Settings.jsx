@@ -330,14 +330,15 @@ export default function Settings() {
 
         <HomeZipCard user={user} theme={theme} />
 
-        {/* Developer-only tools — hidden for everyone else. Alarms stay here
-            until they have been tested on a real phone; then AlarmCard moves
-            out of this block so everyone on a build that has it can turn it on. */}
+        {/* Full-screen reminders: the account default, the ring sound and the
+            phone permissions. The card renders nothing on a build without the
+            AlarmBridge plugin (older installs, the browser), so it is safe for
+            everyone. The one-time popups tell people it lives here. */}
+        <AlarmCard user={user} theme={theme} />
+
+        {/* Developer-only tools — hidden for everyone else. */}
         {user?.email === 's2kap2chick@gmail.com' && (
-          <>
-            <AlarmCard user={user} theme={theme} />
-            <AdDiagnosticsCard user={user} theme={theme} />
-          </>
+          <AdDiagnosticsCard user={user} theme={theme} />
         )}
 
         {/* Theme Section */}
