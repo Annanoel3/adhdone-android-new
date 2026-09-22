@@ -1487,7 +1487,7 @@ Return JSON:
       await Task.update(task.id, { alert_style: next });
       await refreshAlarms();
       // First time an alarm is switched on, Android's own switches come up.
-      if (next === 'alarm') await requestAlarmPermissions();
+      if (next === 'alarm') await requestAlarmPermissions({ setup: true });
     } catch (e) {
       console.error('Error changing alert style:', e);
     }
