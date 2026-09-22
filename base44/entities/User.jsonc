@@ -64,6 +64,10 @@
       "default": false,
       "description": "True when the user works from home. There is no drive, so commute watch skips them entirely (no 'leave now' or traffic alerts) and no work address is asked for \u2014 but their work hours still count, so the 'don't notify me at work' quiet window works exactly the same."
     },
+    "onboarding_replay_token": {
+      "type": "string",
+      "description": "Set to any new value to replay the first-run sequence once on this account's next app open (the app wipes its first-run flags, then clears this). Leave blank otherwise."
+    },
     "onboarding_flags": {
       "type": "array",
       "items": {
