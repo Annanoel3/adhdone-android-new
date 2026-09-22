@@ -1,4 +1,5 @@
 import React from 'react';
+import { ADD_PATHS } from "@/components/onboarding/pageIntros";
 import {
   Dialog,
   DialogContent,
@@ -27,6 +28,8 @@ import {
   LayoutGrid
 } from "lucide-react";
 
+const ADD_PATH_ICONS = { text: Share2, screenshot: Camera, widget: LayoutGrid, pinned: Zap };
+
 export default function AppGuideModal({ isOpen, onClose, theme }) {
   const guides = [
     {
@@ -44,26 +47,14 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
           title: "Talk it out",
           description: "Tap the mic and just say it — 'remind me to call the dentist Friday'"
         },
-        {
-          icon: Share2,
-          title: "Share highlighted text",
-          description: "Highlight text anywhere — a message, an email, a website — hit Share and pick ADHDone. It becomes a task, idea, or event"
-        },
-        {
-          icon: Camera,
-          title: "Share a screenshot or photo",
-          description: "Screenshot anything (an invite, a flyer, a receipt) and share it into the app — it reads it and makes the task or idea for you"
-        },
-        {
-          icon: Zap,
-          title: "The pinned notification",
-          description: "With Quick Capture on, just expand the notification and dump a task or idea in without opening the app (turn it on in Settings)"
-        },
-        {
-          icon: LayoutGrid,
-          title: "The home screen widget",
-          description: "Add a task or idea straight from the widget — and see today's tasks right on your home screen"
-        }
+        // The four outside-the-app ways, each with its how-to clip — same
+        // order and wording as the Tasks page walkthrough.
+        ...ADD_PATHS.map((path) => ({
+          icon: ADD_PATH_ICONS[path.key],
+          title: path.title,
+          description: path.text,
+          video: path.video,
+        })),
       ]
     },
     {
@@ -186,6 +177,15 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
                               }`}>
                                 {subItem.description}
                               </span>
+                              {subItem.video && (
+                                <video
+                                  src={subItem.video}
+                                  controls
+                                  playsInline
+                                  preload="metadata"
+                                  className="mt-2 w-full max-h-[50vh] rounded-lg bg-black object-contain"
+                                />
+                              )}
                             </div>
                           </div>
                         ))}
