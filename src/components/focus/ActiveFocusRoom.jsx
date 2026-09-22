@@ -71,50 +71,49 @@ export default function ActiveFocusRoom({ room, onLeave }) {
   const timerCompleteHandledRef = useRef(false);
   const wakeLockRef = useRef(null);
 
+  // Same bucket the alarm sounds live in; the old bucket stopped serving these.
   const completionSounds = {
     joyful_melody: {
       name: "Joyful Melody",
-      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/Joyful%20Melody.wav"
+      url: "https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/Joyful%20Melody.wav"
     },
     piano_melody: {
       name: "Piano Melody",
-      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/Piano%20Melody.mp3"
+      url: "https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/Piano%20Melody.mp3"
     },
     short_notification: {
       name: "Short Notification",
-      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/Short%20Notification.wav"
+      url: "https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/Short%20Notification.wav"
     },
     short_piano: {
       name: "Short Piano Notification",
-      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/Short%20Piano%20Notification.mp3"
+      url: "https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/Short%20Piano%20Notification.mp3"
     },
     applause: {
       name: "Applause",
-      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/Applause.wav"
+      url: "https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/Applause.wav"
     },
     jr_station: {
       name: "JR Station Notification",
-      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/JR%20Station%20Notification%203.mp3"
+      url: "https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/JR%20Station%20Notification%203.mp3"
     },
     jr_station_3: {
       name: "JR Station Notification 3",
-      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/JR%20Station%20Notification%203.mp3"
+      url: "https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/JR%20Station%20Notification%203.mp3"
     },
     jr_osaka_loop: {
       name: "JR Osaka Loop",
-      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/JR%20Osaka%20Loop%204.mp3"
+      url: "https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/JR%20Osaka%20Loop%204.mp3"
     },
     jr_morning_tranquility: {
       name: "JR Morning Tranquility",
-      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/JR%20Morning%20Tranquility.mp3"
+      url: "https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/JR%20Morning%20Tranquility.mp3"
     },
     jr_flower_shop: {
       name: "JR Flower Shop",
-      url: "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/JR%20Flower%20Shop.mp3"
+      url: "https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/JR%20Flower%20Shop.mp3"
     }
   };
-
-  const breakEndSound = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/three_dings.mp3";
 
   const musicPlaylists = {
     none: "No Music",
@@ -286,10 +285,9 @@ export default function ActiveFocusRoom({ room, onLeave }) {
     try {
       const newMode = mode === 'work' ? 'break' : 'work';
 
-      // Play completion sound immediately
-      const soundUrl = mode === 'work' 
-        ? completionSounds[currentRoom.completion_sound || 'joyful_melody']?.url || completionSounds['joyful_melody'].url
-        : breakEndSound;
+      // Play completion sound immediately. Work end and break end use the
+      // room's chosen sound; the separate break-end file no longer exists.
+      const soundUrl = completionSounds[currentRoom.completion_sound || 'joyful_melody']?.url || completionSounds['joyful_melody'].url;
 
       const audio = new Audio(soundUrl);
       audio.volume = 0.8;
