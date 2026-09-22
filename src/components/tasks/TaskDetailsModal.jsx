@@ -45,6 +45,7 @@ import { supportsAlarms, alertStyleFor, refreshAlarms, requestAlarmPermissions }
 import { AlertStyleInfo } from "../shared/QuickCapturePrompt";
 import VoiceTaskInput from "./VoiceTaskInput";
 import { scheduleReminder, cancelScheduledReminder } from "../utils/reminderScheduler";
+import { deleteTaskWithUndo } from "../utils/snoozeTask";
 import { User } from "@/entities/User";
 import { base44 } from "@/api/base44Client";
 import ImageViewer from "../shared/ImageViewer";
@@ -772,6 +773,20 @@ Return JSON:
         }
       }
 
+      // Moving a one-time task's date LATER is a push — the Insights page and
+      // the smart-nudge LLM count those (due_date_pushes). This card's date
+      // pill never counted them; only the quick view and the smart-reminder
+      // pill did. Same rule as everywhere else: an earlier date, a first
+      // date, or a cleared date is not a push.
+      if (!task.reminder_interval || task.reminder_interval === 'once') {
+        const oldISO = task.due_date || task.next_reminder;
+        if (oldISO && nextReminder.getTime() > new Date(oldISO).getTime()) {
+          const pushes = (task.due_date_pushes || 0) + 1;
+          task.due_date_pushes = pushes;
+          Task.update(task.id, { due_date_pushes: pushes }).catch(() => {});
+        }
+      }
+
       // OPTIMISTIC: show the new time + confirmation immediately, then do all
       // the cancel/reschedule network work in the background.
       onUpdate({ ...task, next_reminder: nextReminder.toISOString(), due_date: nextReminder.toISOString(), day_only_task: dayOnly });
@@ -1207,23 +1222,9 @@ Return JSON:
     }
     onClose();
 
-    // Cancel notifications + delete in the background
-    (async () => {
-      try {
-        if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
-          await cancelScheduledReminder(task.onesignal_notification_ids);
-        }
-        for (const subTask of subTasks) {
-          if (subTask.onesignal_notification_ids && subTask.onesignal_notification_ids.length > 0) {
-            await cancelScheduledReminder(subTask.onesignal_notification_ids);
-          }
-          Task.delete(subTask.id).catch(error => console.error("Error deleting subtask:", error));
-        }
-        Task.delete(task.id).catch(error => console.error("Error deleting task:", error));
-      } catch (error) {
-        console.error("Error during delete:", error);
-      }
-    })();
+    // Five-second Undo; reminders are cancelled and the records removed only
+    // once it passes. Undo brings the task back through 'tasks-changed'.
+    deleteTaskWithUndo(task, subTasks);
   };
 
   const completedCount = subTasks.filter(s => s.status === 'completed').length;
