@@ -92,19 +92,19 @@ export function PomodoroProvider({ children }) {
 
   const completionSounds = COMPLETION_SOUNDS;
 
-  const breakEndSound = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/Notifications/TX6WF5K-reveal-asia.mp3";
-
   // Loop the alert (sound + vibration) until the user taps something — a single
-  // chime at the end of a session is far too easy to miss.
-  const playCompletionSound = useCallback((isBreakEnd = false) => {
-    startAlertLoop(isBreakEnd ? '__break_end__' : completionSound, isBreakEnd ? breakEndSound : undefined);
+  // chime at the end of a session is far too easy to miss. A break ending
+  // rings with the same chosen sound as a work session ending — the separate
+  // break-end file no longer exists anywhere, so that moment had gone silent.
+  const playCompletionSound = useCallback(() => {
+    startAlertLoop(completionSound);
   }, [completionSound]);
 
   const handleTimerComplete = useCallback((currentMode, currentSessionCount) => {
     // Cancel the scheduled notification since we completed in-app
     cancelTimerNotification();
     if (currentMode === 'work') {
-      playCompletionSound(false);
+      playCompletionSound();
       const newSessionCount = currentSessionCount + 1;
       setSessionCount(newSessionCount);
       setMode('break');
@@ -114,7 +114,7 @@ export function PomodoroProvider({ children }) {
         scheduleTimerNotification(breakDuration * 60, 'break');
       }, 1000);
     } else {
-      playCompletionSound(true);
+      playCompletionSound();
       setMode('work');
       setTimeLeft(workDuration * 60);
       setTimeout(() => {
