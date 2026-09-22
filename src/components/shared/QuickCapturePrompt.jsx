@@ -434,25 +434,45 @@ export function AlarmPermissionsDialog({ theme }) {
     return () => window.removeEventListener('alarm-permissions-needed', onNeeded);
   }, []);
 
+  // Re-reads the phone's answer for every row. Some of these grants happen in
+  // a system dialog drawn OVER this screen (notifications, battery), so the
+  // page never goes hidden and a visibilitychange listener alone never fired;
+  // others come back from a settings screen a beat before Android reports the
+  // new state. So: poll while the dialog is open, plus an immediate re-read
+  // when the user comes back and when a request resolves.
+  const refreshRef = useRef(() => {});
   useEffect(() => {
     if (!open) return;
     enterOnboardingSurface();
-    const recheck = () => {
-      if (document.visibilityState === 'visible') {
-        alarmPermissionStatus().then((s) => { if (s) setStatus(s); });
-      }
+    let stopped = false;
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      alarmPermissionStatus().then((s) => {
+        if (!stopped && s) setStatus((prev) => ({ ...(prev || {}), ...s }));
+      }).catch(() => {});
     };
-    document.addEventListener('visibilitychange', recheck);
+    refreshRef.current = refresh;
+    const timer = setInterval(refresh, 1500);
+    document.addEventListener('visibilitychange', refresh);
     return () => {
+      stopped = true;
+      clearInterval(timer);
+      refreshRef.current = () => {};
       exitOnboardingSurface();
-      document.removeEventListener('visibilitychange', recheck);
+      document.removeEventListener('visibilitychange', refresh);
     };
   }, [open]);
 
   if (!status) return null;
   const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
   const { NotifyBridge } = getPlugins();
-  const tryOpen = (fn) => { try { Promise.resolve(fn()).catch(() => {}); } catch (e) { /* stays on the list */ } };
+  const tryOpen = (fn) => {
+    try {
+      Promise.resolve(fn())
+        .catch(() => {})
+        .then(() => { refreshRef.current(); setTimeout(() => refreshRef.current(), 800); });
+    } catch (e) { /* stays on the list */ }
+  };
 
   const rows = [
     {
