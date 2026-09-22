@@ -14,6 +14,7 @@ import {
   CheckCircle2,
   Loader2,
   Cake,
+  ChevronDown,
   Zap,
   Lock,
   Plus,
@@ -66,6 +67,9 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [lastSynced, setLastSynced] = useState(() => localStorage.getItem('device_calendar_last_synced_at') || null);
+  // The calendar list sits behind a dropdown; a phone with several accounts
+  // can have a dozen calendars, which is a lot to be greeted by.
+  const [listOpen, setListOpen] = useState(false);
 
   const available = hasDeviceCalendars();
 
@@ -134,6 +138,12 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
   };
 
   const chosenIds = Array.from(chosen);
+  const chosenNames = calendars.filter((c) => chosen.has(String(c.id))).map((c) => c.name || 'Calendar');
+  const summary = chosenNames.length === 0
+    ? 'Choose calendars'
+    : chosenNames.length <= 2
+      ? chosenNames.join(', ')
+      : `${chosenNames.slice(0, 2).join(', ')} +${chosenNames.length - 2} more`;
 
   return (
     <Card className={`border-none shadow-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
@@ -169,7 +179,23 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
 
         {granted && calendars.length > 0 && (
           <div className="space-y-2">
-            {calendars.map((c) => (
+            <button
+              type="button"
+              onClick={() => setListOpen((o) => !o)}
+              aria-expanded={listOpen}
+              className={`w-full flex items-center justify-between gap-3 p-3 rounded-lg border text-left ${
+                isDark ? 'border-gray-600 bg-gray-700/40 text-gray-100' : 'border-gray-300 bg-white text-gray-900'
+              }`}
+            >
+              <span className="min-w-0">
+                <span className="block text-sm font-medium truncate">{summary}</span>
+                <span className={`block text-xs ${textSecondary}`}>
+                  {chosenNames.length === 0 ? `${calendars.length} on this phone` : `${chosenNames.length} of ${calendars.length} syncing`}
+                </span>
+              </span>
+              <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${listOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {listOpen && calendars.map((c) => (
               <label key={c.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${
                 isDark ? 'border-gray-700 hover:bg-gray-700/50' : 'border-gray-200 hover:bg-gray-50'
               }`}>
