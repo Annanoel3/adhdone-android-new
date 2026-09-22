@@ -345,12 +345,12 @@ export default function Settings() {
           </p>
         </div>
 
-        {/* Feedback first: the fastest way to tell Anna what's wrong or missing. */}
+        {/* Feedback first: a direct line to the developer for anything at all. */}
         <Card className={`mb-6 border-none shadow-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
           <CardContent className="pt-6 flex items-center justify-between gap-4">
             <div className="min-w-0">
-              <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Something off? Tell me.</p>
-              <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Bugs, ideas, anything that felt clunky.</p>
+              <p className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Talk to the developer</p>
+              <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>Feature requests, bugs, questions, or anything at all — it goes straight to Anna.</p>
             </div>
             <Button onClick={() => navigate('/reportbug')} className="flex-shrink-0 gap-2 bg-purple-600 hover:bg-purple-700 text-white">
               <Bug className="w-4 h-4" /> Feedback
