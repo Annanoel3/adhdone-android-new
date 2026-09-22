@@ -140,6 +140,9 @@ async function probeConnected() {
 // Returns the shared promise (or null when nothing needed to run).
 export async function maybeAutoSync() {
   if (inFlight) return inFlight;
+  // The phone build syncs from the phone's calendars (maybeAutoSyncDevice);
+  // Google is retired there.
+  if (hasDeviceCalendars()) return null;
   if (!isAutoSyncDue()) return null;
   if (!(await probeConnected())) return null;
   return runCalendarSync({ background: true }).catch(() => null);
