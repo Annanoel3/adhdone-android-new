@@ -144,3 +144,148 @@ export async function maybeAutoSync() {
   if (!(await probeConnected())) return null;
   return runCalendarSync({ background: true }).catch(() => null);
 }
+// ---------------------------------------------------------------------------
+// Phone calendars (Samsung Calendar, Outlook, any account the phone's calendar
+// app shows). Only in the Android app: the native CalendarBridge plugin reads
+// the phone's calendar provider; the browser has no such thing and every
+// function below is a no-op there. Which calendars to sync is the user's
+// choice, saved on their account (User.device_calendar_ids), so a new phone
+// starts with none and never imports anything unasked.
+//
+// Each phone row is reshaped to look like a Google event and posted to the
+// same syncGoogleCalendar function with source: 'device', so imports get the
+// same AI classification, reminder plans and dedupe as Google ones.
+
+const DEVICE_GATE_KEY = 'device_calendar_last_synced_at';
+const DEVICE_DAYS = 365;
+let deviceInFlight = null;
+
+function calendarPlugin() {
+  return (typeof window !== 'undefined' && window.Capacitor?.Plugins?.CalendarBridge) || null;
+}
+
+export function hasDeviceCalendars() {
+  return !!calendarPlugin();
+}
+
+// All-day rows are stored by Android at UTC midnight of the day.
+const utcDay = (ms) => new Date(ms).toISOString().slice(0, 10);
+
+// One phone row -> the Google event shape the backend already understands.
+// Recurring series use their next upcoming occurrence as the start (the raw
+// dtstart is the series' first day, often years back); a modified occurrence
+// gets the "<series>_<time>" id the backend's series dedupe expects.
+export function deviceRowToEvent(row) {
+  if (!row || !row.id) return null;
+  const cal = String(row.calendarId || '');
+  const id = row.originalId
+    ? `device:${cal}:${row.originalId}_${row.originalInstanceTime || row.dtstart || 0}`
+    : `device:${cal}:${row.id}`;
+  const begin = Number(row.nextBegin) || Number(row.dtstart) || 0;
+  if (!begin) return null;
+  const end = Number(row.nextEnd) || Number(row.dtend) || 0;
+  const allDay = !!row.allDay;
+  const event = {
+    id,
+    summary: row.title || 'Untitled event',
+    description: row.description || '',
+    location: row.location || '',
+    status: 'confirmed',
+    start: allDay ? { date: utcDay(begin) } : { dateTime: new Date(begin).toISOString() },
+    recurrence: row.rrule ? [`RRULE:${row.rrule}`] : [],
+    attendees: [],
+    source: 'device',
+    calendarId: cal,
+  };
+  if (end) event.end = allDay ? { date: utcDay(end) } : { dateTime: new Date(end).toISOString() };
+  if (row.organizer) event.organizer = { email: row.organizer };
+  return event;
+}
+
+// { granted, calendars: [{ id, name, account, accountType, color, visible, isPrimary, owner }] }
+export async function listDeviceCalendars() {
+  const plugin = calendarPlugin();
+  if (!plugin?.listCalendars) return { granted: false, calendars: [] };
+  try {
+    const res = await plugin.listCalendars();
+    return { granted: !!res?.granted, calendars: res?.calendars || [] };
+  } catch (err) {
+    console.warn('[deviceCalendar] listCalendars failed:', err?.message || err);
+    return { granted: false, calendars: [] };
+  }
+}
+
+// Asks Android for READ_CALENDAR. Resolves true when granted.
+export async function requestDeviceCalendarPermission() {
+  const plugin = calendarPlugin();
+  if (!plugin?.requestPermissions) return false;
+  try {
+    const res = await plugin.requestPermissions({ permissions: ['calendar'] });
+    return res?.calendar === 'granted';
+  } catch (err) {
+    console.warn('[deviceCalendar] permission request failed:', err?.message || err);
+    return false;
+  }
+}
+
+export function isDeviceAutoSyncDue() {
+  const lastRaw = localStorage.getItem(DEVICE_GATE_KEY);
+  const lastMs = lastRaw ? new Date(lastRaw).getTime() : 0;
+  return Date.now() - lastMs > THRESHOLDS['6hours'];
+}
+
+// Reads the chosen calendars on the phone and imports them. Resolves with the
+// backend result. Joins a run already in progress.
+export function runDeviceCalendarSync(calendarIds, { background = false } = {}) {
+  if (deviceInFlight) return deviceInFlight;
+  const ids = (calendarIds || []).map(String).filter(Boolean);
+  const plugin = calendarPlugin();
+  if (!plugin?.listEvents || ids.length === 0) return Promise.resolve(null);
+
+  const previous = localStorage.getItem(DEVICE_GATE_KEY);
+  localStorage.setItem(DEVICE_GATE_KEY, new Date().toISOString());
+
+  deviceInFlight = (async () => {
+    const read = await plugin.listEvents({ calendarIds: ids, days: DEVICE_DAYS });
+    if (!read?.granted) {
+      const err = new Error('calendar_permission');
+      err.code = 'calendar_permission';
+      throw err;
+    }
+    const events = (read.events || []).map(deviceRowToEvent).filter(Boolean);
+    const res = await base44.functions.invoke('syncGoogleCalendar', {
+      source: 'device',
+      calendarIds: ids,
+      events,
+    });
+    const data = res?.data || res;
+    trackFire('device_calendar_synced', {
+      props: { background, calendars: ids.length, events: events.length, created: data?.created ?? null },
+    });
+    return data;
+  })()
+    .catch((err) => {
+      if (isAbortedError(err)) return { aborted: true };
+      if (previous) localStorage.setItem(DEVICE_GATE_KEY, previous);
+      else localStorage.removeItem(DEVICE_GATE_KEY);
+      trackFire('device_calendar_sync_failed', {
+        props: { background, message: String(err?.message || err).slice(0, 300) },
+      });
+      throw err;
+    })
+    .finally(() => {
+      deviceInFlight = null;
+    });
+
+  return deviceInFlight;
+}
+
+// Background trigger on app open: only for accounts that chose phone
+// calendars, only on the app build that can read them, at most every 6 hours.
+export async function maybeAutoSyncDevice(user) {
+  if (deviceInFlight) return deviceInFlight;
+  const ids = user?.device_calendar_ids;
+  if (!Array.isArray(ids) || ids.length === 0) return null;
+  if (!hasDeviceCalendars() || !isDeviceAutoSyncDue()) return null;
+  return runDeviceCalendarSync(ids, { background: true }).catch(() => null);
+}
