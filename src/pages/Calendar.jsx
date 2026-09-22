@@ -22,7 +22,10 @@ import {
 import CalendarGrid from '@/components/calendar/CalendarGrid';
 import TaskDetailsModal from '@/components/tasks/TaskDetailsModal';
 import KeepAppOpenNote from '@/components/shared/KeepAppOpenNote';
-import { runCalendarSync, maybeAutoSync, getInFlightSync, setCalendarConnected } from '@/lib/calendarSync';
+import {
+  runCalendarSync, maybeAutoSync, getInFlightSync, setCalendarConnected,
+  hasDeviceCalendars, listDeviceCalendars, requestDeviceCalendarPermission, runDeviceCalendarSync,
+} from '@/lib/calendarSync';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
 
@@ -48,6 +51,166 @@ function formatLastSynced(iso) {
   if (diff < 3600000) return `${Math.round(diff / 60000)}m ago`;
   if (diff < 86400000) return `${Math.round(diff / 3600000)}h ago`;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+// Phone calendars — Samsung Calendar, Outlook, any account the phone's own
+// calendar app shows. Android-app only: the native CalendarBridge plugin reads
+// them, so in a browser (or an older build) this card renders nothing. Which
+// calendars to import is the user's choice and lives on their account
+// (device_calendar_ids); nothing is read until they tick one.
+function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced }) {
+  const [granted, setGranted] = useState(null);
+  const [calendars, setCalendars] = useState([]);
+  const [chosen, setChosen] = useState(() => new Set((user?.device_calendar_ids || []).map(String)));
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState(null);
+  const [lastSynced, setLastSynced] = useState(() => localStorage.getItem('device_calendar_last_synced_at') || null);
+
+  const available = hasDeviceCalendars();
+
+  const loadCalendars = useCallback(async () => {
+    const res = await listDeviceCalendars();
+    setGranted(res.granted);
+    setCalendars(res.calendars || []);
+  }, []);
+
+  useEffect(() => {
+    if (available) loadCalendars();
+  }, [available, loadCalendars]);
+
+  useEffect(() => {
+    setChosen(new Set((user?.device_calendar_ids || []).map(String)));
+  }, [user?.device_calendar_ids]);
+
+  if (!available) return null;
+
+  const sync = async (ids) => {
+    if (!ids.length) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const data = await runDeviceCalendarSync(ids);
+      if (data && !data.aborted) {
+        setResult(data);
+        setLastSynced(localStorage.getItem('device_calendar_last_synced_at'));
+        if (onSynced) await onSynced();
+      }
+    } catch (err) {
+      setError(err?.code === 'calendar_permission'
+        ? 'Calendar access was turned off. Allow it again to sync.'
+        : `Sync failed: ${err?.message || err}`);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const allow = async () => {
+    setBusy(true);
+    try {
+      const ok = await requestDeviceCalendarPermission();
+      await loadCalendars();
+      if (!ok) setError('Calendar access was not allowed. You can allow it in your phone\'s app settings.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggle = async (id) => {
+    const next = new Set(chosen);
+    const adding = !next.has(id);
+    if (adding) next.add(id); else next.delete(id);
+    setChosen(next);
+    const ids = Array.from(next);
+    try {
+      await base44.auth.updateMe({ device_calendar_ids: ids });
+    } catch (err) {
+      setError(`Couldn't save that choice: ${err?.message || err}`);
+      return;
+    }
+    // A newly ticked calendar imports straight away; unticking only stops
+    // future syncs — what was already imported stays as tasks.
+    if (adding) await sync(ids);
+  };
+
+  const chosenIds = Array.from(chosen);
+
+  return (
+    <Card className={`border-none shadow-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
+      <CardContent className="p-6 space-y-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className={`text-xl font-bold ${textPrimary}`}>Phone calendars</h2>
+            <p className={`text-sm ${textSecondary}`}>
+              Samsung Calendar, Outlook, or any calendar your phone's calendar app shows. Tick the ones to bring in; they work exactly like Google Calendar imports.
+            </p>
+          </div>
+          {granted && chosenIds.length > 0 && (
+            <Button variant="outline" size="sm" onClick={() => sync(chosenIds)} disabled={busy}
+              className={isDark ? 'border-gray-600 text-gray-200' : ''}>
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              <span className="ml-1">{busy ? 'Syncing…' : 'Sync now'}</span>
+            </Button>
+          )}
+        </div>
+
+        {granted === false && (
+          <div className="space-y-2">
+            <p className={`text-sm ${textSecondary}`}>ADHDone needs read-only access to the calendars on this phone. Nothing is read until you pick a calendar below.</p>
+            <Button onClick={allow} disabled={busy} className="bg-purple-600 hover:bg-purple-700 text-white">
+              {busy ? 'Waiting for Android…' : 'Allow calendar access'}
+            </Button>
+          </div>
+        )}
+
+        {granted && calendars.length === 0 && (
+          <p className={`text-sm ${textSecondary}`}>No calendars found on this phone.</p>
+        )}
+
+        {granted && calendars.length > 0 && (
+          <div className="space-y-2">
+            {calendars.map((c) => (
+              <label key={c.id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer ${
+                isDark ? 'border-gray-700 hover:bg-gray-700/50' : 'border-gray-200 hover:bg-gray-50'
+              }`}>
+                <input
+                  type="checkbox"
+                  className="w-4 h-4"
+                  checked={chosen.has(String(c.id))}
+                  onChange={() => toggle(String(c.id))}
+                  disabled={busy}
+                />
+                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: c.color || '#8b5cf6' }} />
+                <span className="min-w-0">
+                  <span className={`block text-sm font-medium truncate ${textPrimary}`}>{c.name || 'Calendar'}</span>
+                  {c.account && <span className={`block text-xs truncate ${textSecondary}`}>{c.account}</span>}
+                </span>
+              </label>
+            ))}
+          </div>
+        )}
+
+        {error && (
+          <div className="flex items-start gap-2 text-sm text-red-600">
+            <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /> <span>{error}</span>
+          </div>
+        )}
+        {result && !error && (
+          <div className={`flex items-start gap-2 text-sm ${textSecondary}`}>
+            <CheckCircle2 className="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" />
+            <span>
+              {result.in_progress
+                ? 'A sync is already running.'
+                : `Imported ${result.created ?? 0}, updated ${result.updated ?? 0}${result.cancelled_removed ? `, removed ${result.cancelled_removed}` : ''}.`}
+            </span>
+          </div>
+        )}
+        {lastSynced && !result && (
+          <p className={`text-xs ${textSecondary}`}>Last synced {new Date(lastSynced).toLocaleString()}</p>
+        )}
+      </CardContent>
+    </Card>
+  );
 }
 
 export default function Calendar() {
@@ -458,6 +621,15 @@ export default function Calendar() {
             </CardContent>
           </Card>
         )}
+
+        {/* Phone calendars — only on the Android build that can read them */}
+        <PhoneCalendarsCard
+          user={user}
+          isDark={isDark}
+          textPrimary={textPrimary}
+          textSecondary={textSecondary}
+          onSynced={async () => { await Promise.all([loadSyncedEvents(), loadTasks()]); }}
+        />
 
         {/* Calendar view — in-app tasks + imported events */}
         <Card className={`border-none shadow-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
