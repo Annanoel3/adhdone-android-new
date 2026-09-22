@@ -5,11 +5,22 @@ import { base44 } from '@/api/base44Client';
 import { scheduleReminder, cancelScheduledReminder } from '@/components/utils/reminderScheduler';
 import { playWarning, haptic } from '@/components/utils/launchSounds';
 import { startAlertLoop, stopAlertLoop } from '@/components/utils/alertLoop';
-import { getLaunchAlertSound } from '@/components/utils/completionSounds';
+import { getLaunchAlertSound, COMPLETION_SOUNDS } from '@/components/utils/completionSounds';
+import { timerAlarmsSupported, bookOwnAlarm, cancelOwnAlarm, requestAlarmPermissions } from '@/components/utils/widgetBridge';
 import LaunchpadTransition from '@/components/launch/LaunchpadTransition';
 import SprintPopup from '@/components/launch/SprintPopup';
 import { Rocket, Timer, X } from 'lucide-react';
 import { readThemeState, chipClasses } from '@/components/utils/launchTheme';
+
+// On the build that can ring, the launchpad's liftoff and the sprint's end are
+// alarms on the phone's own clock — they ring with the app open or closed,
+// with the launch alert sound picked in the app, never the account-wide alarm
+// sound. The in-app popups stay for their buttons; only the sound loop moves
+// to the alarm. Older builds keep the loop and the fallback push.
+const LAUNCHPAD_ALARM_ID = 'timer:launchpad';
+const SPRINT_ALARM_ID = 'timer:sprint';
+const launchSoundUrl = () => COMPLETION_SOUNDS[getLaunchAlertSound()]?.url || '';
+const ringHere = () => { if (!timerAlarmsSupported()) startAlertLoop(getLaunchAlertSound()); };
 
 const LaunchContext = createContext(null);
 const LAUNCHPAD_KEY = 'launchpad_session';
@@ -36,8 +47,9 @@ export function LaunchProvider({ children }) {
   useEffect(() => { pomodoroRef.current = pomodoro; }, [pomodoro]);
 
   const fireLiftoff = useCallback(async (taskId) => {
-    // Alert repeats (sound + vibration) until the user taps something.
-    startAlertLoop(getLaunchAlertSound());
+    // Alert repeats (sound + vibration) until the user taps something — from
+    // the phone's alarm where the build can ring, else the in-app loop.
+    ringHere();
     // Liftoff enters Focus Mode for the chosen task — silences other recurring
     // reminders and enables hourly check-ins on it. The FocusModePrompt (in the
     // Layout) listens for the broadcast event and shows the active session, which
@@ -85,7 +97,7 @@ export function LaunchProvider({ children }) {
           // Sprint ended while away — show the checkpoint.
           localStorage.removeItem(SPRINT_KEY);
           if (sp.notifId) cancelScheduledReminder(sp.notifId).catch(() => {});
-          startAlertLoop(getLaunchAlertSound());
+          ringHere();
           setSprint(sp);
           setSprintEnded(true);
         } else {
@@ -113,6 +125,19 @@ export function LaunchProvider({ children }) {
         data: { screen: '/FocusTimer', taskId: task.id, type: 'launchpad' },
       });
     } catch (e) { console.error('Launchpad push scheduling failed:', e); }
+
+    if (timerAlarmsSupported()) {
+      requestAlarmPermissions({ feature: 'timers' });
+      bookOwnAlarm({
+        id: LAUNCHPAD_ALARM_ID,
+        taskId: task.id,
+        title: '🚀 Liftoff time!',
+        heading: '🚀 Liftoff time!',
+        body: `Time to start: ${task.title}`,
+        at: new Date(endTimeISO).getTime(),
+        soundUrl: launchSoundUrl(),
+      });
+    }
 
     const session = { taskId: task.id, title: task.title, endTimeISO, notifId };
     localStorage.setItem(LAUNCHPAD_KEY, JSON.stringify(session));
@@ -145,6 +170,19 @@ export function LaunchProvider({ children }) {
       });
     } catch (e) { console.error('Sprint push scheduling failed:', e); }
 
+    if (timerAlarmsSupported()) {
+      requestAlarmPermissions({ feature: 'timers' });
+      bookOwnAlarm({
+        id: SPRINT_ALARM_ID,
+        taskId: task.id,
+        title: '⏱️ 5 minutes up — no pressure!',
+        heading: '⏱️ 5 minutes up — no pressure!',
+        body: "It's okay to stop if you want. You showed up, and that's the win. 💚",
+        at: new Date(endTimeISO).getTime(),
+        soundUrl: launchSoundUrl(),
+      });
+    }
+
     const session = { taskId: task.id, title: task.title, endTimeISO, notifId };
     localStorage.setItem(SPRINT_KEY, JSON.stringify(session));
     setSprintEnded(false);
@@ -176,6 +214,7 @@ export function LaunchProvider({ children }) {
   }, []);
 
   const cancelLaunchpad = useCallback(() => {
+    cancelOwnAlarm(LAUNCHPAD_ALARM_ID);
     if (launchpad?.notifId) cancelScheduledReminder(launchpad.notifId).catch(() => {});
     localStorage.removeItem(LAUNCHPAD_KEY);
     setLaunchpadMinimized(false);
@@ -184,6 +223,7 @@ export function LaunchProvider({ children }) {
 
   const cancelSprint = useCallback(() => {
     stopAlertLoop();
+    cancelOwnAlarm(SPRINT_ALARM_ID);
     if (sprintEnded) logSprintSession(sprint);
     const p = pomodoroRef.current;
     if (p) p.resetTimer(); // stop the sprint's pomodoro so the mini bar disappears
@@ -239,11 +279,12 @@ export function LaunchProvider({ children }) {
           onComplete={() => {
             if (sprint.notifId) cancelScheduledReminder(sprint.notifId).catch(() => {});
             localStorage.removeItem(SPRINT_KEY);
-            startAlertLoop(getLaunchAlertSound());
+            ringHere();
             setSprintEnded(true);
           }}
           onKeepGoing={async () => {
             stopAlertLoop();
+            cancelOwnAlarm(SPRINT_ALARM_ID);
             // "Keep going" → hand off into Focus Mode for this task (same destination
             // as the Launchpad liftoff and the Home Focus button). Reset the sprint's
             // pomodoro so the Focus Mode overlay's own optional timer takes over.
@@ -270,6 +311,7 @@ export function LaunchProvider({ children }) {
           }}
           onStop={() => {
             stopAlertLoop();
+            cancelOwnAlarm(SPRINT_ALARM_ID);
             logSprintSession(sprint);
             const p = pomodoroRef.current;
             if (p) p.resetTimer();
