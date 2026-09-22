@@ -1207,14 +1207,15 @@ export default function Layout({ children, currentPageName }) {
       setAuthCheckComplete(true);
 
       // Set signed_up_at on first login; update last_active_at every session.
-      // Persist the device timezone once so backend cron jobs (e.g. reminder refill)
-      // can apply quiet hours in the user's local time.
+      // Keep the device timezone on the profile so backend cron jobs (e.g.
+      // reminder refill) can apply quiet hours in the user's local time.
       const now = new Date().toISOString();
       const updates = { last_active_at: now };
       if (!currentUser.signed_up_at) updates.signed_up_at = now;
-      if (!currentUser.timezone) {
-        updates.timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-      }
+      // Written whenever the phone's zone differs from the profile's, so a
+      // move or a trip is picked up on the next open — not only the first one.
+      const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      if (deviceTz && currentUser.timezone !== deviceTz) updates.timezone = deviceTz;
       // Quiet hours are ON by default. A profile that has never touched the
       // setting gets the overnight window written in on first load, so every
       // backend cron sees a real value instead of "undefined" (which used to
