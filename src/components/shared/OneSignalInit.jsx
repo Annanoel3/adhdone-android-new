@@ -21,6 +21,22 @@ function isRunningInCapacitor() {
     return window.Capacitor?.isNativePlatform?.() ?? false;
 }
 
+// The native bridge attaches a moment after the web layer boots. Checking only
+// once meant that if the profile loaded first, the notification permission ask
+// was skipped until some later profile refresh happened to re-run this — long
+// after the Home popup. Wait for the bridge instead.
+function waitFor(check, timeoutMs) {
+  return new Promise((resolve) => {
+    const startedAt = Date.now();
+    const tick = () => {
+      const found = check();
+      if (found || Date.now() - startedAt > timeoutMs) return resolve(found || null);
+      setTimeout(tick, 250);
+    };
+    tick();
+  });
+}
+
 // Server-side breadcrumb so we can see whether a notification tap actually
 // reached the web layer (phone console logs aren't reachable).
 function traceOpen(source, data) {
@@ -114,10 +130,12 @@ export default function OneSignalInit({ user }) {
         return;
       }
 
-      if (isRunningInCapacitor()) {
+      // A browser never grows a Capacitor bridge, so it only waits briefly.
+      const native = isRunningInCapacitor() || !!(await waitFor(isRunningInCapacitor, 4000));
+      if (native) {
         // Running in Capacitor native app - call NotifyBridge plugin directly
         console.log('[OneSignal] Running in Capacitor mobile app');
-        const NotifyBridge = window.Capacitor?.Plugins?.NotifyBridge;
+        const NotifyBridge = await waitFor(() => window.Capacitor?.Plugins?.NotifyBridge, 15000);
 
         if (!NotifyBridge) {
           console.warn('[OneSignal] NotifyBridge plugin not found');
