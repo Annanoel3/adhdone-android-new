@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
+import { runTaskParse } from '../../shared/runTaskParse.ts';
 import { wallClockToUtc } from '../../shared/timezoneReminders.ts';
 import { isRecurringInterval, INTERVAL_MS } from '../../shared/reminderIntervalDecision.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
@@ -163,11 +164,15 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone)
   return true;
 }
 
-async function classifyEventWithAI(base44, event) {
+async function classifyEventWithAI(base44, event, user) {
   // Build a task-like input string from the calendar event, then run it
-  // through the SAME parseTask function + prompt the AddTask page uses, so
-  // imported items get the exact same smart-AI decisions as manual adds
-  // (urgency, energy, reminder type & frequency, event-vs-task).
+  // through the SAME parser + prompt the AddTask page uses, so imported items
+  // get the exact same smart-AI decisions as manual adds (urgency, energy,
+  // reminder type & frequency, event-vs-task). The parser is called directly
+  // with THIS user's timezone and about-me line: invoking the parseTask
+  // function through the service role ran it with no user at all, so imported
+  // events never got the about-me context that sets urgency and work/personal
+  // for this person (a wedding musician's wedding came out "medium").
   const summary = event.summary || 'Untitled event';
   let when = '';
   if (event.start?.dateTime) {
@@ -190,10 +195,9 @@ async function classifyEventWithAI(base44, event) {
   const calendarNote = '\n(From the user\'s Google Calendar. Every entry there has a date and time, including plain to-dos, errands and bills — so judge from the wording of the title alone whether this is an event they attend or a task they do.)';
   const inputText = `${summary}${when}${loc}${details}${calendarNote}`;
 
-  const prompt = buildTaskParsePrompt(inputText);
-  const res = await base44.asServiceRole.functions.invoke('parseTask', { prompt });
-  const parsed = (res?.data || res)?.response;
-  if (!parsed) throw new Error('parseTask returned no response');
+  const prompt = buildTaskParsePrompt(inputText, user?.timezone);
+  const parsed = await runTaskParse(base44, prompt, user?.timezone, user?.about_me);
+  if (!parsed) throw new Error('task parse returned no response');
   return parsed;
 }
 
@@ -471,7 +475,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     // Run AI classification
     let ai;
     try {
-      ai = await classifyEventWithAI(base44, event);
+      ai = await classifyEventWithAI(base44, event, user);
     } catch (e) {
       console.log('[syncGoogleCalendar] parseTask failed, defaulting to event:', e.message);
       // Fallback if AI fails — default to a one-time event so we don't spam
