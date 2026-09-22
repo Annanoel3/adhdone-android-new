@@ -41,6 +41,13 @@ export default async function(req: Request): Promise<Response> {
       const focusTask = await base44.asServiceRole.entities.Task.get(taskId);
       if (!focusTask) return Response.json({ error: 'Task not found' }, { status: 404 });
 
+      // The session is on the profile before any of the slower work below, so
+      // anything reading the profile meanwhile already sees Focus Mode on.
+      await base44.asServiceRole.entities.User.update(user.id, {
+        focus_mode_task_id: taskId,
+        focus_mode_entered_at: startedAt || new Date().toISOString()
+      });
+
       const wasRecurring = RECURRING.has(focusTask.reminder_interval);
       const ownIds = Array.isArray(focusTask.onesignal_notification_ids) ? focusTask.onesignal_notification_ids : [];
 
@@ -61,15 +68,25 @@ export default async function(req: Request): Promise<Response> {
       let lastScheduledAt: Date | null = null;
       let scheduleTime = now + FOCUS_MODE_INTERVAL_MS;
 
+      // Work out the six check-in moments first (the quiet-hours shuffle needs
+      // them in order), then book them all at once — six pushes one after the
+      // other was most of the wait behind "Keep going" and liftoff.
+      const slots: Date[] = [];
+      let lastPlanned: Date | null = null;
       for (let i = 0; i < 6; i++) {
         let sendAt = new Date(scheduleTime);
         if (useQuiet) {
           sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
           if (localMinutesOfDay(sendAt, timeZone) === endMin) { scheduleTime += FOCUS_MODE_INTERVAL_MS; continue; }
-          if (lastScheduledAt && Math.abs(sendAt.getTime() - lastScheduledAt.getTime()) < 60000) { scheduleTime += FOCUS_MODE_INTERVAL_MS; continue; }
+          if (lastPlanned && Math.abs(sendAt.getTime() - lastPlanned.getTime()) < 60000) { scheduleTime += FOCUS_MODE_INTERVAL_MS; continue; }
         }
         if (sendAt.getTime() <= now) { scheduleTime += FOCUS_MODE_INTERVAL_MS; continue; }
-        const { title, body } = getFocusModeContent(focusTask.title);
+        slots.push(sendAt);
+        lastPlanned = sendAt;
+        scheduleTime += FOCUS_MODE_INTERVAL_MS;
+      }
+      const { title, body } = getFocusModeContent(focusTask.title);
+      const booked = await Promise.all(slots.map(async (sendAt) => {
         try {
           const res = await base44.asServiceRole.functions.invoke('schedulePush', {
             internalKey: Deno.env.get('CRON_SECRET'), // proves this call comes from the app's own backend
@@ -85,14 +102,16 @@ export default async function(req: Request): Promise<Response> {
             ]
           });
           const r = res?.data || res;
-          if (r?.notificationId) {
-            checkinIds.push(r.notificationId);
-            lastScheduledAt = sendAt;
-          }
+          return r?.notificationId ? { id: String(r.notificationId), sendAt } : null;
         } catch (e) {
           console.error('[setFocusMode] Failed to schedule focus check-in:', e);
+          return null;
         }
-        scheduleTime += FOCUS_MODE_INTERVAL_MS;
+      }));
+      for (const b of booked) {
+        if (!b) continue;
+        checkinIds.push(b.id);
+        lastScheduledAt = b.sendAt;
       }
 
       if (wasRecurring) {
@@ -130,20 +149,15 @@ export default async function(req: Request): Promise<Response> {
         t.reminder_interval && t.reminder_interval !== 'once' && t.id !== taskId
       );
 
-      for (const t of recurring) {
+      // All at once, not one task after another.
+      await Promise.all(recurring.map(async (t) => {
         const ids = Array.isArray(t.onesignal_notification_ids) ? t.onesignal_notification_ids : [];
         if (ids.length) await cancelOneSignal(ids);
         await base44.asServiceRole.entities.Task.update(t.id, {
           onesignal_notification_ids: [],
           last_scheduled_until: null
         });
-      }
-
-      // ── Persist focus state on the user ──
-      await base44.asServiceRole.entities.User.update(user.id, {
-        focus_mode_task_id: taskId,
-        focus_mode_entered_at: startedAt || new Date().toISOString()
-      });
+      }));
 
       return Response.json({ success: true, focusMode: true, taskId });
     }
