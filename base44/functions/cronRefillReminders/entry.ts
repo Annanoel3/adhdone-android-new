@@ -611,6 +611,10 @@ Deno.serve(async (req) => {
                 : `It's ${task.birthday_person}'s birthday today and you haven't written a text yet. Tap to draft one now.` },
               data: { screen: '/TaskNotification', taskId: task.id, type: 'birthday_text_reminder' },
             };
+            // Sent live (no booked time for an alarm to mirror), so on accounts
+            // that chose full-screen reminders the push asks the phone to ring
+            // it on arrival, with these same words.
+            if (owner?.alarm_mode === 'alarm') pushPayload.data.alarm = true;
             // HARD RULE: external id (email) only. Never player ids.
             pushPayload.include_external_user_ids = [task.notification_recipient_email];
             const pushRes = await fetch('https://onesignal.com/api/v1/notifications', {
