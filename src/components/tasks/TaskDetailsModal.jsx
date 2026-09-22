@@ -1549,10 +1549,11 @@ Return JSON:
   };
 
 
-  // ---- Regrouped card layout ("v2"): on Anna's account only while it's judged. ----
-  // Same controls, same handlers; only where they sit changes. Everyone else
-  // keeps the layout exactly as it was.
-  const v2 = ['s2kap2chick@gmail.com'].includes(String(task.notification_recipient_email || task.created_by || '').toLowerCase());
+  // ---- Regrouped card layout ("v2"), now for everyone. ----
+  // Same controls, same handlers; only where they sit changed. The flag stays
+  // so the previous arrangement (the `!v2` branches) can be brought back in
+  // one line if it's ever wanted.
+  const v2 = true;
   const v2Group = `rounded-2xl border p-3 space-y-3 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`;
   const v2Label = `text-[10px] font-bold uppercase tracking-wider flex items-center justify-between ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`;
   const v2Link = `text-xs font-semibold ${theme === 'dark' ? 'text-purple-300' : 'text-purple-700'}`;
