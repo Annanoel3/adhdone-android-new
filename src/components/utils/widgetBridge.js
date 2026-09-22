@@ -140,6 +140,41 @@ export function supportsAlarms() {
   return !!window.Capacitor?.Plugins?.AlarmBridge;
 }
 
+// ---- Alarms the phone owns outright: a timer's end. ----
+// The focus timer, the 5-minute sprint and the launchpad ring like an alarm
+// when their time is up — always, whatever the account's reminder style —
+// with the sound picked for that feature, never the account-wide alarm sound.
+// These are booked on the phone's alarm clock directly, so they ring with the
+// app closed too, and the task sync never touches them. Older builds without
+// bookOwn keep the in-app sound loop and the fallback push.
+export function timerAlarmsSupported() {
+  return !!window.Capacitor?.Plugins?.AlarmBridge?.bookOwn;
+}
+
+export async function bookOwnAlarm({ id, taskId = '', title, heading = '', body = '', at, soundUrl = '', noSnooze = true }) {
+  const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
+  if (!AlarmBridge?.bookOwn || !id || !at) return false;
+  try {
+    await AlarmBridge.bookOwn({ id, taskId, title: title || 'ADHDone', heading: heading || title || '', body, at, soundUrl, noSnooze });
+    return true;
+  } catch (e) {
+    console.warn('[alarm] bookOwn failed:', e?.message || e);
+    return false;
+  }
+}
+
+export async function cancelOwnAlarm(id) {
+  const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
+  if (!AlarmBridge?.cancelOwn || !id) return false;
+  try {
+    await AlarmBridge.cancelOwn({ id });
+    return true;
+  } catch (e) {
+    console.warn('[alarm] cancelOwn failed:', e?.message || e);
+    return false;
+  }
+}
+
 export function setAlarmMode(mode) {
   alarmMode = mode === 'alarm' ? 'alarm' : 'notification';
 }
@@ -289,8 +324,12 @@ export async function alarmPermissionStatus() {
 // opens even when Android already allows everything, because it is also where
 // the alarm sound gets picked. After that it only opens when something is off.
 const ALARM_SETUP_STEP = 'onboarding_alarm_setup_done';
+// Once per account as well: the first focus timer, sprint or launchpad. Those
+// always ring like an alarm, so Android's switches are asked for then, with
+// an explanation — and only when something is actually off.
+const TIMER_SETUP_STEP = 'onboarding_timer_alarm_setup_done';
 
-export async function requestAlarmPermissions({ setup = false } = {}) {
+export async function requestAlarmPermissions({ setup = false, feature = '' } = {}) {
   const st = await alarmPermissionStatus();
   if (!st) return false;
   if (setup && !isStepDone(ALARM_SETUP_STEP)) {
@@ -301,6 +340,13 @@ export async function requestAlarmPermissions({ setup = false } = {}) {
   // overlay ("Display over other apps") is only reported by newer builds; an
   // older build that doesn't know it must not be nagged about it.
   const missing = !st.notifications || !st.exactAlarms || !st.fullScreen || !st.ignoringBatteryOptimizations || st.overlay === false;
+  if (feature === 'timers') {
+    if (isStepDone(TIMER_SETUP_STEP)) return false;
+    markStepDone(TIMER_SETUP_STEP);
+    if (!missing) return false;
+    window.dispatchEvent(new CustomEvent('alarm-permissions-needed', { detail: { ...st, feature: 'timers' } }));
+    return true;
+  }
   if (!missing) return false;
   window.dispatchEvent(new CustomEvent('alarm-permissions-needed', { detail: st }));
   return true;
