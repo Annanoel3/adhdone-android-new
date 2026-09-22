@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { pushWidgetTasks, pushAlarms, pushAlarmSound, setAlarmMode } from '../utils/widgetBridge';
+import { maybeAutoSyncDevice } from '@/lib/calendarSync';
 
 // Seeds the home-screen widget once on app open, from anywhere in the app — a
 // notification tap or a share can land the user on a screen that never renders
@@ -35,6 +36,14 @@ export default function WidgetTaskSync({ user }) {
     pushAlarmSound(user);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, soundUrl]);
+
+  // Phone calendars the user chose to import: refresh them in the background
+  // on app open (at most every 6 hours). No-op in the browser and for anyone
+  // who never picked a phone calendar.
+  useEffect(() => {
+    if (!user) return;
+    maybeAutoSyncDevice(user).catch(() => {});
+  }, [user?.id, (user?.device_calendar_ids || []).join(',')]);
 
   return null;
 }
