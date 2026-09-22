@@ -78,15 +78,27 @@ export async function splitCapture(_base44: any, text: string): Promise<string[]
     .filter(Boolean);
 
   // Collapse accidental duplicates, and never return nothing — falling back to
-  // the original text guarantees a capture can't silently vanish.
-  const seen = new Set<string>();
-  const unique = items.filter((s) => {
-    const k = s.toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (!k || seen.has(k)) return false;
-    seen.add(k);
-    return true;
-  });
-  return unique.length ? unique : [text];
+  // the original text guarantees a capture can't silently vanish. "Duplicate"
+  // includes near-copies: a paraphrasing splitter can hand back the same
+  // sentence twice with one word changed ("… is Saturday" / "… on Saturday"),
+  // which an exact match would miss and save as two tasks.
+  const words = (s: string) => new Set(s.toLowerCase().match(/[a-z0-9]+/g) || []);
+  const sameThing = (a: Set<string>, b: Set<string>) => {
+    let shared = 0;
+    a.forEach((w) => { if (b.has(w)) shared++; });
+    const union = a.size + b.size - shared;
+    return union > 0 && shared / union >= 0.75;
+  };
+  const kept: { text: string; words: Set<string> }[] = [];
+  for (const s of items) {
+    const w = words(s);
+    if (!w.size || kept.some((k) => sameThing(k.words, w))) continue;
+    kept.push({ text: s, words: w });
+  }
+  // Two pieces that turned out to be the same thing were never a real split:
+  // fall back to the user's own words, exactly as a single capture would.
+  if (kept.length <= 1) return [text];
+  return kept.map((k) => k.text);
 }
 
 // ── Local time → UTC ───────────────────────────────────────────────────────
