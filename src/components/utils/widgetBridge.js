@@ -287,7 +287,9 @@ export async function alarmPermissionStatus() {
 export async function requestAlarmPermissions() {
   const st = await alarmPermissionStatus();
   if (!st) return false;
-  const missing = !st.notifications || !st.exactAlarms || !st.fullScreen || !st.ignoringBatteryOptimizations;
+  // overlay ("Display over other apps") is only reported by newer builds; an
+  // older build that doesn't know it must not be nagged about it.
+  const missing = !st.notifications || !st.exactAlarms || !st.fullScreen || !st.ignoringBatteryOptimizations || st.overlay === false;
   if (!missing) return false;
   window.dispatchEvent(new CustomEvent('alarm-permissions-needed', { detail: st }));
   return true;
