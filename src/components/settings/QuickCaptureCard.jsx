@@ -395,10 +395,19 @@ export function AlarmCard({ user, theme }) {
             <Row
               ok={status.fullScreen}
               label="Show over the lock screen"
-              detail="Lets the alarm take over the screen instead of sitting in the tray."
+              detail="Lets the alarm take over the screen when the phone is locked."
               action="Allow"
               onAction={() => AlarmBridge.openFullScreenSettings()}
             />
+            {status.overlay !== undefined && (
+              <Row
+                ok={status.overlay}
+                label="Display over other apps"
+                detail="Lets the alarm take over the screen while you're using the phone. Without it Android only shows a banner."
+                action="Allow"
+                onAction={() => AlarmBridge.openOverlaySettings()}
+              />
+            )}
             <Row
               ok={status.ignoringBatteryOptimizations}
               label="Battery"
