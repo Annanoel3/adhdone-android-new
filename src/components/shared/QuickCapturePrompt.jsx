@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -42,14 +43,22 @@ const getPlugins = () => {
   return { ShareBridge: p.ShareBridge, NotifyBridge: p.NotifyBridge };
 };
 
-// First-run offer for the pinned quick-capture notification. It needs OS
-// notification permission, so it can't be silently on by default — we ask once,
-// then never again (the toggle lives in Settings either way).
+// The permissions card, right after the Home tour: one screen that says why
+// notifications matter, fires Android's own prompt from a button, and offers
+// the pinned quick-capture shortcut on the same card (on by default). Asked
+// once, then never again — the shortcut's toggle lives in Settings either way.
+// OneSignalInit waits for this card's answer before it would ask on its own.
 export default function QuickCapturePrompt() {
   const { NotifyBridge } = getPlugins();
   const [open, setOpen] = useState(false);
   const [declined, setDeclined] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [pinWanted, setPinWanted] = useState(true);
+
+  const settle = () => {
+    localStorage.setItem(SEEN_KEY, 'true');
+    markStepDone(ONBOARDING_STEPS.permissions);
+  };
 
   useEffect(() => {
     if (localStorage.getItem(SEEN_KEY)) return;
@@ -73,7 +82,8 @@ export default function QuickCapturePrompt() {
             ShareBridge.isQuickCaptureEnabled?.()
               .then((res) => {
                 if (cancelled) return;
-                if (res?.enabled) localStorage.setItem(SEEN_KEY, 'true');
+                // Already pinned means they were asked (and said yes) before.
+                if (res?.enabled) settle();
                 else setOpen(true);
               })
               .catch(() => { if (!cancelled) setOpen(true); });
@@ -94,54 +104,69 @@ export default function QuickCapturePrompt() {
     return exitOnboardingSurface;
   }, [open]);
 
-  const handleEnable = async () => {
+  const handleAllow = async () => {
     setBusy(true);
     try {
       if (NotifyBridge?.requestPermission) await NotifyBridge.requestPermission();
-      await getPlugins().ShareBridge?.setQuickCaptureEnabled({ enabled: true });
+      if (pinWanted) await getPlugins().ShareBridge?.setQuickCaptureEnabled({ enabled: true });
     } catch (e) {
       // Nothing to recover here — the Settings toggle shows the real error.
     } finally {
-      localStorage.setItem(SEEN_KEY, 'true');
+      settle();
       setBusy(false);
       setOpen(false);
     }
   };
 
   const handleDecline = () => {
-    localStorage.setItem(SEEN_KEY, 'true');
+    settle();
     setDeclined(true);
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) { localStorage.setItem(SEEN_KEY, 'true'); setOpen(false); } }}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o) { settle(); setOpen(false); } }}>
       <DialogContent className="max-w-md w-[calc(100vw-2rem)]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Zap className="w-5 h-5 text-green-600" />
-            One last thing: a one-tap way to catch a thought
+            <Bell className="w-5 h-5 text-green-600" />
+            We need to ask for a couple of permissions
           </DialogTitle>
           <DialogDescription>
-            Pin a shortcut in your notification tray. Thought hits, you tap it, it's saved — no
-            opening the app, no losing it.
+            So you can get the most out of ADHDone. First, Android will ask if it can send
+            you notifications — every reminder and alarm rides on that.
           </DialogDescription>
         </DialogHeader>
 
         {declined ? (
           <div className="space-y-4 pt-2">
             <p className="text-sm text-gray-600">
-              No problem — it's waiting in Settings whenever you want it.
+              No problem — both are waiting in Settings whenever you want them.
             </p>
             <Button onClick={() => setOpen(false)} className="w-full">Got it</Button>
           </div>
         ) : (
-          <div className="flex gap-2 pt-2">
-            <Button onClick={handleEnable} disabled={busy} className="flex-1">
-              {busy ? 'Turning on...' : 'Yes, pin it'}
-            </Button>
-            <Button onClick={handleDecline} variant="outline" className="flex-1">
-              Not now
-            </Button>
+          <div className="space-y-4 pt-2">
+            <div className="flex items-start justify-between gap-3 rounded-xl border p-3">
+              <div className="flex items-start gap-2">
+                <Zap className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm font-medium">Second, pin a quick-capture shortcut</p>
+                  <p className="text-xs text-gray-600">
+                    A shortcut in your notification tray. Thought hits, you tap it, it's
+                    saved — no opening the app, no losing it.
+                  </p>
+                </div>
+              </div>
+              <Switch checked={pinWanted} onCheckedChange={setPinWanted} aria-label="Pin the quick-capture shortcut" />
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={handleAllow} disabled={busy} className="flex-1">
+                {busy ? 'One sec...' : 'Allow notifications'}
+              </Button>
+              <Button onClick={handleDecline} variant="outline" className="flex-1">
+                Not now
+              </Button>
+            </div>
           </div>
         )}
       </DialogContent>
