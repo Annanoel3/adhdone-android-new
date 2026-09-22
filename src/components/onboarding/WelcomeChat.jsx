@@ -24,7 +24,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
 
   const beat = script[idx];
   const line = beat ? beat.text(name || 'you', handle, about) : '';
-  const { shown, done } = useTypewriter(line);
+  const { shown, done } = useTypewriter(line, 28, idx);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
