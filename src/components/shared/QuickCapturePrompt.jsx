@@ -61,7 +61,10 @@ export default function QuickCapturePrompt() {
   };
 
   useEffect(() => {
-    if (localStorage.getItem(SEEN_KEY)) return;
+    // Once per ACCOUNT. The older device-only "seen" flag doesn't count, so
+    // accounts that met the stand-alone pinned-shortcut offer still get this
+    // card once — it also carries the notification explanation.
+    if (isStepDone(ONBOARDING_STEPS.permissions)) return;
 
     let cancelled = false;
 
@@ -79,14 +82,9 @@ export default function QuickCapturePrompt() {
           .then(waitForCalm)
           .then(() => {
             if (cancelled) return;
-            ShareBridge.isQuickCaptureEnabled?.()
-              .then((res) => {
-                if (cancelled) return;
-                // Already pinned means they were asked (and said yes) before.
-                if (res?.enabled) settle();
-                else setOpen(true);
-              })
-              .catch(() => { if (!cancelled) setOpen(true); });
+            // Shown whether or not the shortcut is already pinned — the card is
+            // also where notifications get explained, and the switch starts on.
+            if (!cancelled) setOpen(true);
           });
       } else if (Date.now() - start > 15000) {
         // Not a native build (or no bridge) — nothing to offer.
