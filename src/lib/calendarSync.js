@@ -209,12 +209,21 @@ export function deviceRowToEvent(row) {
 }
 
 // { granted, calendars: [{ id, name, account, accountType, color, visible, isPrimary, owner }] }
+// Google subscribes every account on the phone to a regional holiday feed
+// ("Holidays in United States"), so a phone with three accounts lists it three
+// times. Those are public holiday lists, not the person's own events, and
+// they're left off the list entirely.
+const isHolidayFeed = (c) =>
+  /#holiday@group\.v\.calendar\.google\.com$/i.test(String(c?.owner || '')) ||
+  /^holidays? in /i.test(String(c?.name || '').trim());
+
 export async function listDeviceCalendars() {
   const plugin = calendarPlugin();
   if (!plugin?.listCalendars) return { granted: false, calendars: [] };
   try {
     const res = await plugin.listCalendars();
-    return { granted: !!res?.granted, calendars: res?.calendars || [] };
+    const calendars = (res?.calendars || []).filter((c) => !isHolidayFeed(c));
+    return { granted: !!res?.granted, calendars };
   } catch (err) {
     console.warn('[deviceCalendar] listCalendars failed:', err?.message || err);
     return { granted: false, calendars: [] };
