@@ -84,6 +84,10 @@ async function sendPush(
     // is noise, so let OneSignal drop it rather than deliver it stale.
     payload.ttl = 20 * 60;
     if (LEAVE_NOW_CHANNEL_ID) payload.android_channel_id = LEAVE_NOW_CHANNEL_ID;
+    // Accounts that chose full-screen reminders get this as an alarm: the app
+    // build that can ring (its PushFilter) rings it the moment it arrives, with
+    // these same words. Older builds and everyone else see the push as before.
+    if (user?.alarm_mode === 'alarm') payload.data.alarm = true;
   }
 
   try {
