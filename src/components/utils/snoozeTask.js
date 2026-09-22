@@ -1,6 +1,10 @@
+import React from "react";
 import { base44 } from "@/api/base44Client";
 import { scheduleReminder } from "./reminderScheduler";
 import { getReminderCopy, smartSnoozeTime } from "./reminderCopy";
+import { refreshAlarms } from "./widgetBridge";
+import { toast } from "@/components/ui/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 
 // The ONE way to snooze a task from a button.
 //
@@ -61,4 +65,80 @@ export function recordReminderDismissed(task) {
   return base44.entities.Task.update(task.id, {
     dismissed_count: (task.dismissed_count || 0) + 1,
   }).catch(() => {});
+}
+
+// ---------------------------------------------------------------------------
+// Delete with a five-second undo.
+//
+// The task leaves the screen at once, a toast offers Undo for five seconds,
+// and only when those pass (or the app is sent to the background — a delete
+// must never quietly survive a swipe-away) does anything actually happen:
+// the task's pending pushes are cancelled and the record removed. Undo just
+// stops the clock — nothing was cancelled or deleted yet, so the task comes
+// back exactly as it was, reminders included.
+//
+// Shared by the quick-view trash icon and the details card, so both delete
+// the same way. Callers remove the task from their own state before calling
+// and get it back through the 'tasks-changed' event on undo.
+const UNDO_MS = 5000;
+const pendingDeletes = new Map();
+
+function commitAllPending() {
+  for (const p of Array.from(pendingDeletes.values())) p.commit();
+}
+if (typeof window !== "undefined") {
+  window.addEventListener("pagehide", commitAllPending);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") commitAllPending();
+  });
+}
+
+async function reallyDelete(records) {
+  for (const t of records) {
+    try {
+      await base44.functions.invoke("cancelTaskNotifications", { taskId: t.id });
+    } catch (e) {
+      console.warn("[deleteTask] could not cancel reminders for", t.id, e?.message || e);
+    }
+  }
+  for (const t of records) {
+    try {
+      await base44.entities.Task.delete(t.id);
+    } catch (e) {
+      console.error("[deleteTask] delete failed for", t.id, e);
+    }
+  }
+  refreshAlarms().catch(() => {});
+}
+
+export function deleteTaskWithUndo(task, subtasks = []) {
+  if (!task?.id || pendingDeletes.has(task.id)) return;
+  const records = [task, ...(subtasks || []).filter((s) => s?.id)];
+  let settled = false;
+  let handle = null;
+
+  const commit = () => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    pendingDeletes.delete(task.id);
+    handle?.dismiss?.();
+    reallyDelete(records);
+  };
+  const undo = () => {
+    if (settled) return;
+    settled = true;
+    clearTimeout(timer);
+    pendingDeletes.delete(task.id);
+    handle?.dismiss?.();
+    window.dispatchEvent(new CustomEvent("tasks-changed"));
+  };
+
+  const timer = setTimeout(commit, UNDO_MS);
+  pendingDeletes.set(task.id, { commit });
+  handle = toast({
+    title: `Deleted "${task.title || "task"}"`,
+    duration: UNDO_MS,
+    action: React.createElement(ToastAction, { altText: "Undo delete", onClick: undo }, "Undo"),
+  });
 }
