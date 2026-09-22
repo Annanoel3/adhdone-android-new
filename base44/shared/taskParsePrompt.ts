@@ -251,6 +251,13 @@ urgency — judge the real consequence of it not happening: what breaks, spoils,
   anything involving a pet or another person depending on it — is at least
   "medium", and "high" once it's clearly overdue. "low" is for things that would
   be exactly as fine next week as they are today.
+  Judge it for THIS person, using the ABOUT THE USER note when there is one.
+  Anything that is part of how they earn a living, or that other people are
+  counting on them to show up for — a gig, a shift, a performance, a client, a
+  booking — is "high" at least: a wedding musician playing a wedding is "high",
+  not "medium", even though it is months away; a nurse's shift is "high"; a
+  student's exam is "high". Missing it costs them money or their reputation,
+  and that is the consequence you are judging.
 
 energy_required — effort. Anything that means leaving the house is "high"
   (the app batches those into one trip). At-home and online things are low or
