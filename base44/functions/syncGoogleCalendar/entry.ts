@@ -264,7 +264,13 @@ async function acquireSyncLock(base44, user) {
   };
 }
 
-async function syncCalendarAccount(base44, user, accessToken, calendarEmail, heartbeat = async () => {}) {
+// `device`, when given, is a sync of the PHONE's calendars instead of Google:
+// { events, calendarIds }. The Android app reads Samsung/Outlook/any calendar
+// the phone's calendar app shows (native CalendarBridge), reshapes each row to
+// look like a Google event (src/lib/calendarSync.js deviceRowToEvent) and posts
+// them here, so every rule below — AI classification, reminder plans, dedupe,
+// date patches — is shared with Google imports. Ids are "device:<cal>:<id>".
+async function syncCalendarAccount(base44, user, accessToken, calendarEmail, heartbeat = async () => {}, device = null) {
   const runId = crypto.randomUUID().slice(0, 8);
   const authHeader = { Authorization: `Bearer ${accessToken}` };
   // All-day calendar items have no clock time, so we anchor them at 9 AM in the
@@ -274,6 +280,11 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
 
   // Fetch the connected Gmail account info
   let connectedEmail = calendarEmail;
+  let allItems = [];
+  if (device) {
+    connectedEmail = 'this phone';
+    allItems = Array.isArray(device.events) ? device.events.filter(e => e && e.id && String(e.id).startsWith('device:')) : [];
+  } else {
   try {
     const profileRes = await fetch('https://www.googleapis.com/oauth2/v1/userinfo?alt=json', { headers: authHeader });
     if (profileRes.ok) {
@@ -296,7 +307,8 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
   }
 
   const calData = await calRes.json();
-  const allItems = calData.items || [];
+  allItems = calData.items || [];
+  }
   const events = allItems.filter(e => e.status !== 'cancelled');
   const cancelledItems = allItems.filter(e => e.status === 'cancelled');
   console.log('[syncGoogleCalendar] calendar fetch OK for=', connectedEmail, '| raw items=', allItems.length, '| active events=', events.length, '| cancelled=', cancelledItems.length);
@@ -308,6 +320,27 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
   const existingSynced = await filterAll(base44.asServiceRole.entities.CalendarSyncedEvent, { user_email: user.email });
   const existingByGoogleId = {};
   for (const s of existingSynced) existingByGoogleId[s.google_event_id] = s;
+
+  // The phone has no "cancelled" status: an event that was deleted there is
+  // simply gone from the list. So for every phone calendar covered by this
+  // sync, an imported row that is no longer sent, and whose event hasn't
+  // already happened, counts as cancelled and is handled exactly like a
+  // Google cancellation below. Calendars not covered by this sync are left
+  // alone — they weren't read, so nothing can be said about them.
+  if (device) {
+    const covered = new Set((device.calendarIds || []).map(String));
+    const sentIds = new Set(allItems.map(e => String(e.id)));
+    const nowMs = Date.now();
+    for (const row of existingSynced) {
+      const gid = String(row.google_event_id || '');
+      if (!gid.startsWith('device:')) continue;
+      const calId = gid.split(':')[1];
+      if (!covered.has(calId) || sentIds.has(gid)) continue;
+      const startMs = row.start_time ? new Date(row.start_time).getTime() : NaN;
+      if (!isNaN(startMs) && startMs < nowMs) continue;
+      cancelledItems.push({ id: gid, status: 'cancelled' });
+    }
+  }
 
   let created = 0, updated = 0, skipped = 0, cancelledRemoved = 0;
   let pushBudget = MAX_REMINDERS_PER_SYNC;
@@ -561,7 +594,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
       taskRecord = {
         title: `🎂 ${birthdayDisplay}`,
         is_own_birthday: ownBirthday,
-        description: richDescription || `Imported from Google Calendar (${connectedEmail})`,
+        description: richDescription || (device ? 'Imported from your phone\'s calendar' : `Imported from Google Calendar (${connectedEmail})`),
         notes: event.description || '',
         urgency: 'medium',
         energy_required: 'low',
@@ -892,6 +925,47 @@ Deno.serve(async (req) => {
         console.log('[syncGoogleCalendar] probe: no connection', err.message);
       }
       return Response.json({ error: 'not_connected', message: 'Google Calendar not connected' }, { status: 400 });
+    }
+
+    // Phone calendars: the app already read the events on the device and sends
+    // them here — no Google token involved. Same lock, same import pipeline.
+    if (body.source === 'device') {
+      step = 'device.validate';
+      if (!Array.isArray(body.events)) {
+        return Response.json({ error: 'bad_request', message: 'events[] required for a phone calendar sync' }, { status: 400 });
+      }
+      const device = {
+        events: body.events.slice(0, 2500),
+        calendarIds: Array.isArray(body.calendarIds) ? body.calendarIds.map(String) : [],
+      };
+      step = 'acquireSyncLock';
+      const dlock = await acquireSyncLock(base44, user);
+      if (!dlock.acquired) {
+        return Response.json({ success: true, in_progress: true, skipped: true, since: dlock.since || null });
+      }
+      let dresult;
+      try {
+        step = 'syncCalendarAccount.device';
+        dresult = await syncCalendarAccount(base44, user, null, 'this phone', dlock.heartbeat, device);
+      } finally {
+        step = 'lock.release';
+        await dlock.release();
+      }
+      if (dresult.error) {
+        return Response.json({ error: dresult.error, details: dresult.details }, { status: 502 });
+      }
+      console.log('[syncGoogleCalendar] phone sync done | created=', dresult.created, 'updated=', dresult.updated, 'skipped=', dresult.skipped, 'cancelled=', dresult.cancelledRemoved, 'total=', dresult.total_events);
+      return Response.json({
+        success: true,
+        source: 'device',
+        synced_at: new Date().toISOString(),
+        total_events: dresult.total_events,
+        created: dresult.created,
+        updated: dresult.updated,
+        skipped: dresult.skipped,
+        cancelled_removed: dresult.cancelledRemoved,
+        results: dresult.results,
+      });
     }
 
     // App-owned grant first (see shared/googleOAuth.ts for why).
