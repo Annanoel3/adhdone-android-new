@@ -10,6 +10,7 @@
 
 import { isTodayTask, isUpcomingTask, getLocalDateString } from './todayTasks';
 import { base44 } from '@/api/base44Client';
+import { isInQuietHours } from './reminderScheduler';
 
 // The widget only has room for a handful of rows, and a wall of text is the
 // opposite of useful on a home screen.
@@ -165,6 +166,11 @@ function reminderTimesFor(task) {
   return Array.from(times);
 }
 
+// Quiet hours apply to alarms exactly as they do to pushes (default ON,
+// 22:00–07:00, the user's own window from Settings). A reminder that falls
+// inside them is never booked as a full-screen alarm — that moment keeps its
+// regular push, which the scheduler has already placed by the same rules —
+// so nothing rings out loud at 3 AM.
 export function alarmSetFor(tasks, userDefault = alarmMode) {
   const cutoff = Date.now() - ALARM_KEEP_PAST_MS;
   const out = [];
@@ -172,7 +178,9 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
     if (t.status !== 'active' || t.silenced) continue;
     if (alertStyleFor(t, userDefault) !== 'alarm') continue;
     for (const at of reminderTimesFor(t)) {
-      if (at > cutoff) out.push({ id: `${t.id}:${at}`, taskId: t.id, title: t.title || 'Task', at });
+      if (at <= cutoff) continue;
+      if (isInQuietHours(new Date(at))) continue;
+      out.push({ id: `${t.id}:${at}`, taskId: t.id, title: t.title || 'Task', at });
     }
   }
   return out.sort((a, b) => a.at - b.at).slice(0, ALARM_MAX);
