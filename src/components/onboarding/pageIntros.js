@@ -8,7 +8,9 @@ export const PAGE_TOURS = {
       title: "This is home base 🏠",
       body: "Today's stuff and what's coming up, all in one spot.",
       points: [
-        { label: "Add anything", text: "Talk or type it in — or share text and screenshots straight from other apps. The app figures out what's a task and what's just an idea." },
+        { label: "Add anything", text: "Talk or type it in. The app works out what's a task and what's just an idea." },
+        { label: "Four ways to add without opening the app", text: "Share text to ADHDone from any app, share a screenshot, type into the pinned notification, or tap + on the home-screen widget." },
+        { label: "More help as you go", text: "Each page introduces itself the first time you open it — look out for those popups." },
       ],
     },
   ],
