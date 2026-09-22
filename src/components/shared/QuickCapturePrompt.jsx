@@ -33,6 +33,7 @@ import {
   alarmPermissionStatus,
   requestAlarmPermissions,
 } from '../utils/widgetBridge';
+import { AlarmSoundPicker } from '../settings/QuickCaptureCard';
 
 const SEEN_KEY = 'quick_capture_prompt_seen';
 
@@ -401,10 +402,17 @@ export function AlarmPermissionsDialog({ theme }) {
   const dark = theme === 'dark';
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState(null);
+  // First-time set-up: the same dialog also carries the alarm-sound chooser,
+  // which needs the account record for the current choice.
+  const [setup, setSetup] = useState(false);
+  const [me, setMe] = useState(null);
 
   useEffect(() => {
     const onNeeded = (e) => {
       setStatus(e.detail || null);
+      const isSetup = !!e.detail?.setup;
+      setSetup(isSetup);
+      if (isSetup) base44.auth.me().then(setMe).catch(() => {});
       setOpen(true);
     };
     window.addEventListener('alarm-permissions-needed', onNeeded);
@@ -477,14 +485,20 @@ export function AlarmPermissionsDialog({ theme }) {
         <DialogHeader>
           <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
             <AlarmClock className="w-5 h-5" />
-            {allOk ? 'All set — your phone can ring it' : 'Let your phone ring the alarm'}
+            {setup ? 'Set up full-screen reminders' : allOk ? 'All set — your phone can ring it' : 'Let your phone ring the alarm'}
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
-            {allOk
-              ? 'Every switch Android needed is on.'
-              : "Android keeps these off until you say yes. Tap each one — you'll hop out to a settings screen and straight back."}
+            {setup
+              ? (allOk
+                ? 'Pick the sound it rings with. Every switch Android needed is already on.'
+                : "Pick the sound it rings with, then let Android know it may ring — tap each one and you'll hop out to a settings screen and straight back.")
+              : allOk
+                ? 'Every switch Android needed is on.'
+                : "Android keeps these off until you say yes. Tap each one — you'll hop out to a settings screen and straight back."}
           </DialogDescription>
         </DialogHeader>
+
+        {setup && <AlarmSoundPicker user={me} theme={theme} className="pb-1" />}
 
         <div className={`divide-y ${dark ? 'divide-gray-700' : 'divide-gray-200'}`}>
           {rows.map((r) => (
@@ -602,7 +616,7 @@ export function AlertStylePrompt({ user, theme }) {
       setAlarmMode(style);
       finish();
       await refreshAlarms();
-      if (style === 'alarm') await requestAlarmPermissions();
+      if (style === 'alarm') await requestAlarmPermissions({ setup: true });
     } catch (e) {
       // Leave the default (regular notifications) in place; Settings has the switch.
       finish();
