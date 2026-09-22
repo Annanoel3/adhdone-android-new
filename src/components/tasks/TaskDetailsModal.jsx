@@ -1859,6 +1859,19 @@ Return JSON:
               </div>
             )}
 
+            {/* v2: a paused task says so up top, where it can't be missed, and
+                offers the one thing you'd want to do about it. */}
+            {v2 && task.silenced && !isEvent && (
+              <div className={`flex items-center justify-between gap-3 rounded-2xl px-4 py-3 ${theme === 'dark' ? 'bg-amber-900/30 text-amber-200' : 'bg-amber-50 text-amber-800'}`}>
+                <div className="flex items-center gap-2 text-sm font-semibold">
+                  <BellOff className="w-4 h-4" /> On the Back Burner — reminders paused
+                </div>
+                <Button size="sm" variant="outline" onClick={handleToggleSilenced} className={theme === 'dark' ? 'border-amber-700 text-amber-200' : 'border-amber-300 text-amber-800 hover:bg-amber-100'}>
+                  Turn back on
+                </Button>
+              </div>
+            )}
+
             {/* Reminders group. For everyone but v2 this wrapper is invisible
                 (plain space-y-6), so the layout is unchanged. */}
             <div className={v2 ? v2Group : 'space-y-6'}>
@@ -2152,9 +2165,8 @@ Return JSON:
               )}
             </div>
               {v2 && (
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {alertStyleControl}
-                  {backBurnerControl}
                 </div>
               )}
             </div>
@@ -2364,7 +2376,12 @@ Return JSON:
                   <CheckCircle2 className="w-4 h-4 mr-2" />
                   {isEvent ? 'Went' : 'Mark as Complete'}
                 </Button>
-                <div className="w-full flex justify-center gap-6 text-sm pt-1">
+                <div className="w-full flex flex-wrap justify-center gap-6 text-sm pt-1">
+                  {!isEvent && !task.silenced && (
+                    <button type="button" onClick={handleToggleSilenced} className={`flex items-center gap-1 ${theme === 'dark' ? 'text-amber-300' : 'text-amber-700'}`}>
+                      <BellOff className="w-4 h-4" /> Back Burner
+                    </button>
+                  )}
                   <button type="button" onClick={handleToParkingLot} className={`flex items-center gap-1 ${theme === 'dark' ? 'text-purple-300' : 'text-purple-600'}`}>
                     <Lightbulb className="w-4 h-4" /> To Parking Lot
                   </button>
