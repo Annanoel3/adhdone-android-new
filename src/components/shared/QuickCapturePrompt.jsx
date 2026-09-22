@@ -394,12 +394,16 @@ export function AlarmPermissionsDialog({ theme }) {
   // which needs the account record for the current choice.
   const [setup, setSetup] = useState(false);
   const [me, setMe] = useState(null);
+  // 'timers': asked the first time a focus timer, sprint or launchpad starts —
+  // those always ring like an alarm, so the wording says why.
+  const [feature, setFeature] = useState('');
 
   useEffect(() => {
     const onNeeded = (e) => {
       setStatus(e.detail || null);
       const isSetup = !!e.detail?.setup;
       setSetup(isSetup);
+      setFeature(e.detail?.feature || '');
       if (isSetup) base44.auth.me().then(setMe).catch(() => {});
       setOpen(true);
     };
@@ -473,10 +477,14 @@ export function AlarmPermissionsDialog({ theme }) {
         <DialogHeader>
           <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
             <AlarmClock className="w-5 h-5" />
-            {setup ? 'Set up full-screen reminders' : allOk ? 'All set — your phone can ring it' : 'Let your phone ring the alarm'}
+            {feature === 'timers'
+              ? 'Timers ring like an alarm'
+              : setup ? 'Set up full-screen reminders' : allOk ? 'All set — your phone can ring it' : 'Let your phone ring the alarm'}
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
-            {setup
+            {feature === 'timers'
+              ? "The focus timer, 5-minute sprints and the launchpad ring when their time is up, so Android needs these switched on. You can say no — they'll still work, just quieter and easier to miss."
+              : setup
               ? (allOk
                 ? 'Pick the sound it rings with. Every switch Android needed is already on.'
                 : "Pick the sound it rings with, then let Android know it may ring — tap each one and you'll hop out to a settings screen and straight back.")
