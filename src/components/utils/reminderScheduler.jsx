@@ -6,9 +6,10 @@
 import { base44 } from "@/api/base44Client";
 
 /**
- * Checks if a given time is within quiet hours
+ * Checks if a given time is within quiet hours. Exported so the full-screen
+ * alarm set (widgetBridge) follows the same window as pushes do.
  */
-function isInQuietHours(dateTime) {
+export function isInQuietHours(dateTime) {
   // RULES.md hard rule 4: quiet hours default to ON. Only an explicit 'false'
   // (the user turned them off) disables them — a missing value must never read
   // as "off". The defaults match the server and the Layout (22:00–07:00).
