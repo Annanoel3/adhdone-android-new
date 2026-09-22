@@ -11,10 +11,12 @@ import { claimHandle } from '@/functions/claimHandle';
 
 // The first-run conversation. Answers are saved as they're given (not batched at
 // the end) so someone who closes the app halfway through still keeps their name.
-export default function WelcomeChat({ onDone, script = SCRIPT }) {
+export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' }) {
   const [idx, setIdx] = useState(0);
   const [history, setHistory] = useState([]);
-  const [name, setName] = useState('');
+  // A name the profile already holds, so a script without a name beat can
+  // still address the person by it.
+  const [name, setName] = useState(initialName || '');
   const [handle, setHandle] = useState('');
   const [about, setAbout] = useState('');
   const [draft, setDraft] = useState('');
