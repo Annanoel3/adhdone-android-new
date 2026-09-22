@@ -69,7 +69,7 @@ import WidgetTaskSync from "./components/shared/WidgetTaskSync";
 import WidgetOpenReceiver from "./components/shared/WidgetOpenReceiver";
 import HomeZipPrompt from "./components/shared/HomeZipPrompt";
 import EventConflictWarning from "./components/shared/EventConflictWarning";
-import QuickCapturePrompt, { WaysToAddPopup, AlertStylePrompt, AlarmPermissionsDialog } from "./components/shared/QuickCapturePrompt";
+import QuickCapturePrompt, { AlertStylePrompt, AlarmKeepPrompt, AlarmPermissionsDialog } from "./components/shared/QuickCapturePrompt";
 import { FeedbackPrompt } from "./components/support/SupportEscalationCard";
 import PageIntroTour from "./components/onboarding/PageIntroTour";
 import WelcomeDialog from "./components/onboarding/WelcomeDialog";
@@ -1074,9 +1074,12 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <HomeZipPrompt user={user} theme={theme} />
         <EventConflictWarning theme={theme} />
         <QuickCapturePrompt />
-        <WaysToAddPopup user={user} />
+        {/* WaysToAddPopup (the "ways to add tasks outside the app" popup) is
+            switched off until it is redesigned. The component still exists in
+            QuickCapturePrompt.jsx; mount it here again when it's ready. */}
         <FeedbackPrompt user={user} />
         <AlertStylePrompt user={user} theme={theme} />
+        <AlarmKeepPrompt user={user} theme={theme} />
         <AlarmPermissionsDialog theme={theme} />
         <TaskCaptureProcessor userEmail={user?.email} />
         <UsageTracker user={user} />
