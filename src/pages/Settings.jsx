@@ -22,6 +22,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import HomeZipCard from '@/components/settings/HomeZipCard';
 import QuickCaptureCard, { AlarmCard } from '@/components/settings/QuickCaptureCard';
+import { refreshAlarms } from '@/components/utils/widgetBridge';
 import AdDiagnosticsCard from '@/components/settings/AdDiagnosticsCard';
 import VersionTap from '@/components/settings/VersionTap';
 
@@ -178,6 +179,9 @@ export default function Settings() {
           quietEnd: end
         });
       }
+      // Full-screen alarms follow the same window: rebuild the phone's alarm
+      // set so nothing booked inside the new quiet hours can ring.
+      refreshAlarms().catch(() => {});
     } catch (e) {
       console.error('Failed to save quiet hours:', e);
     } finally {
