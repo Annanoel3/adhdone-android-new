@@ -32,11 +32,16 @@ export default async function (req: Request): Promise<Response> {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { file_url } = await req.json();
-    if (!file_url) return Response.json({ error: 'file_url is required' }, { status: 400 });
+    const { file_url, image_base64, mime_type } = await req.json();
+    // Two callers: the web app sends a public UploadFile URL; the Android
+    // share target (CaptureActivity → CaptureSyncWorker) sends the downscaled
+    // JPEG itself, base64, so a shared screenshot never has to open the app.
+    const imageUrl = file_url
+      || (image_base64 ? `data:${mime_type || 'image/jpeg'};base64,${String(image_base64).replace(/^data:[^,]*,/, '')}` : null);
+    if (!imageUrl) return Response.json({ error: 'file_url or image_base64 is required' }, { status: 400 });
 
-    // OpenAI on the app's own key (RULES.md rule 1). UploadFile gives a public
-    // URL, so the model fetches the photo itself.
+    // OpenAI on the app's own key (RULES.md rule 1). A public URL is fetched by
+    // the model itself; a data URL carries the bytes inline.
     const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
     const completion = await openai.chat.completions.create({
       model: 'gpt-5.4',
@@ -44,7 +49,7 @@ export default async function (req: Request): Promise<Response> {
         role: 'user',
         content: [
           { type: 'text', text: READ_PROMPT },
-          { type: 'image_url', image_url: { url: file_url } },
+          { type: 'image_url', image_url: { url: imageUrl } },
         ],
       }],
     });
