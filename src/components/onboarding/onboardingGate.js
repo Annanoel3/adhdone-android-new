@@ -10,8 +10,10 @@ export const ONBOARDING_STEPS = {
   // The permissions card (notifications + pinned shortcut) right after the
   // Home tour. Answered either way counts — the OS prompt waits on this.
   // Kept on the account only: every account sees the card once, including
-  // ones that answered the older stand-alone pinned-shortcut offer.
-  permissions: 'onboarding_permissions_done',
+  // ones that answered the older stand-alone pinned-shortcut offer. The key is
+  // versioned because a first cut of the card marked itself done without ever
+  // appearing on accounts that already had the shortcut pinned.
+  permissions: 'onboarding_permissions_done_v2',
   // Not part of the first-run sequence: the one-off catch-up for accounts that
   // onboarded before the name + about-me questions existed.
   catchUp: 'onboarding_catchup_done',
