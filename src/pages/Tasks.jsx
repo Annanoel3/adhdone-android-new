@@ -15,14 +15,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import TaskEditModal from "../components/tasks/TaskEditModal";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
-import { snoozeTask } from "../components/utils/snoozeTask";
+import { snoozeTask, deleteTaskWithUndo } from "../components/utils/snoozeTask";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
 import TaskSortDropdown from "../components/tasks/TaskSortDropdown";
 import WeeklyStar from "../components/tasks/WeeklyStar";
 import TaskSections from "../components/tasks/TaskSections";
 import TaskCompletionCelebration from "../components/tasks/TaskCompletionCelebration";
-import { passesBirthdayDayFilter } from "../components/utils/birthdayHelpers";
+import { isBirthdayTask } from "../components/utils/birthdayHelpers";
 import { countCompletionForGif } from "../components/utils/completionMilestone";
 import PullToRefresh from "../components/shared/PullToRefresh";
 import { checkCompletionEggs } from "../components/eastereggs/completionEggs";
@@ -103,8 +103,10 @@ export default function Tasks() {
   }, [allTasks]);
 
   const applyFilters = useCallback(() => {
-    // Birthdays surface in the task list only on the day they happen.
-    let topLevelTasks = allTasks.filter(t => !t.parent_task_id && passesBirthdayDayFilter(t));
+    // Birthdays are listed here like any dated item — they sit in the section
+    // for their day, on a birthday card, and can be filtered to on their own.
+    // They are still birthdays, not tasks: the card says so.
+    let topLevelTasks = allTasks.filter(t => !t.parent_task_id);
     let filtered = topLevelTasks.filter(t => t.status === statusFilter);
     
     if (urgencyFilter !== 'all') {
@@ -113,8 +115,10 @@ export default function Tasks() {
 
     if (typeFilter !== 'all') {
       if (typeFilter === 'task') {
-        // "Tasks" = anything not tagged as an event or payment
-        filtered = filtered.filter(t => !t.classification || t.classification === 'task');
+        // "Tasks" = anything not tagged as an event, payment or birthday
+        filtered = filtered.filter(t => (!t.classification || t.classification === 'task') && !isBirthdayTask(t));
+      } else if (typeFilter === 'birthday') {
+        filtered = filtered.filter(isBirthdayTask);
       } else {
         filtered = filtered.filter(t => t.classification === typeFilter);
       }
@@ -227,13 +231,11 @@ export default function Tasks() {
   };
 
   const handleDelete = async (task) => {
-    // Optimistic — remove from UI instantly
+    // Optimistic — remove from UI instantly; the real delete waits five
+    // seconds behind an Undo toast (undo reloads the list via 'tasks-changed').
+    const subtasks = allTasks.filter(t => t.parent_task_id === task.id);
     setAllTasks(prev => prev.filter(t => t.id !== task.id && t.parent_task_id !== task.id));
-
-    Task.delete(task.id).catch(error => {
-      console.error("Failed to delete task:", error);
-      loadTasks();
-    });
+    deleteTaskWithUndo(task, subtasks);
   };
 
   const getSubtaskCount = (taskId) => {
@@ -378,6 +380,7 @@ export default function Tasks() {
               <SelectItem value="all">All Types</SelectItem>
               <SelectItem value="payment">💳 Payments</SelectItem>
               <SelectItem value="event">📅 Events</SelectItem>
+              <SelectItem value="birthday">🎂 Birthdays</SelectItem>
               <SelectItem value="task">📌 Tasks</SelectItem>
             </SelectContent>
           </Select>
