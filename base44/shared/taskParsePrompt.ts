@@ -240,7 +240,9 @@ user_asked_to_repeat_every — answer ONLY this narrow question: did the user
 recurrence_pattern — "none" unless the thing itself repeats on the calendar
   ("every Wednesday", "the 1st of every month", "every year on June 3rd"); then
   use weekly/every_other_week/monthly/yearly/daily AND set target_date to the
-  next occurrence so the first one isn't lost.
+  next occurrence so the first one isn't lost. A word like "Annual" inside an
+  event's NAME ("8th Annual RiverRod 2027") describes that one dated edition,
+  not a request to repeat it — that is "none".
 
 urgency — judge the real consequence of it not happening: what breaks, spoils,
   costs money, or leaves someone waiting. "urgent" for real same-day stakes,
