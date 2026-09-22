@@ -3,6 +3,11 @@ import { schedulePush } from '@/functions/schedulePush';
 import { cancelScheduled } from '@/functions/cancelScheduled';
 import { COMPLETION_SOUNDS } from '@/components/utils/completionSounds';
 import { startAlertLoop, stopAlertLoop } from '@/components/utils/alertLoop';
+import { timerAlarmsSupported, bookOwnAlarm, cancelOwnAlarm, requestAlarmPermissions } from '@/components/utils/widgetBridge';
+
+// The one alarm the focus timer holds on the phone: re-booked for each phase
+// (work, then break), cancelled on pause or reset.
+const POMODORO_ALARM_ID = 'timer:pomodoro';
 
 const PomodoroContext = createContext(null);
 
@@ -90,6 +95,33 @@ export function PomodoroProvider({ children }) {
     }
   }, []);
 
+  // A phase (work or break) is under way: make sure its end will be heard.
+  // On the build that can ring, that is an alarm on the phone's own clock —
+  // it rings with the app open, in the background or closed, and with the
+  // sound picked for this timer, never the account-wide alarm sound. Older
+  // builds keep the fallback push (booked only while the app is hidden).
+  const armTimer = useCallback((secondsRemaining, currentMode) => {
+    if (timerAlarmsSupported()) {
+      const title = currentMode === 'work' ? '🍅 Focus session complete!' : '☕ Break time over!';
+      const body = currentMode === 'work' ? 'Great work! Time for a break.' : 'Ready to focus again?';
+      bookOwnAlarm({
+        id: POMODORO_ALARM_ID,
+        title,
+        heading: title,
+        body,
+        at: Date.now() + secondsRemaining * 1000,
+        soundUrl: COMPLETION_SOUNDS[completionSound]?.url || '',
+      });
+      return;
+    }
+    scheduleTimerNotification(secondsRemaining, currentMode);
+  }, [completionSound, scheduleTimerNotification]);
+
+  const disarmTimer = useCallback(() => {
+    if (timerAlarmsSupported()) cancelOwnAlarm(POMODORO_ALARM_ID);
+    cancelTimerNotification();
+  }, [cancelTimerNotification]);
+
   const completionSounds = COMPLETION_SOUNDS;
 
   // Loop the alert (sound + vibration) until the user taps something — a single
@@ -97,11 +129,15 @@ export function PomodoroProvider({ children }) {
   // rings with the same chosen sound as a work session ending — the separate
   // break-end file no longer exists anywhere, so that moment had gone silent.
   const playCompletionSound = useCallback(() => {
+    // The phone's alarm rings this moment on the build that can; the in-app
+    // loop is for builds that can't.
+    if (timerAlarmsSupported()) return;
     startAlertLoop(completionSound);
   }, [completionSound]);
 
   const handleTimerComplete = useCallback((currentMode, currentSessionCount) => {
-    // Cancel the scheduled notification since we completed in-app
+    // The fallback push is no longer needed: the phase completed in-app. (The
+    // phone alarm for this moment is left alone — it IS the alert.)
     cancelTimerNotification();
     if (currentMode === 'work') {
       playCompletionSound();
@@ -111,7 +147,7 @@ export function PomodoroProvider({ children }) {
       setTimeLeft(breakDuration * 60);
       setTimeout(() => {
         setIsActive(true);
-        scheduleTimerNotification(breakDuration * 60, 'break');
+        armTimer(breakDuration * 60, 'break');
       }, 1000);
     } else {
       playCompletionSound();
@@ -119,14 +155,22 @@ export function PomodoroProvider({ children }) {
       setTimeLeft(workDuration * 60);
       setTimeout(() => {
         setIsActive(true);
-        scheduleTimerNotification(workDuration * 60, 'work');
+        armTimer(workDuration * 60, 'work');
       }, 1000);
     }
-  }, [playCompletionSound, breakDuration, workDuration, cancelTimerNotification]);
+  }, [playCompletionSound, breakDuration, workDuration, cancelTimerNotification, armTimer]);
+
+  // A different sound picked mid-phase: the booked alarm takes the new one.
+  useEffect(() => {
+    if (isActive && timeLeft > 0 && timerAlarmsSupported()) armTimer(timeLeft, mode);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [completionSound]);
 
   // Schedule notification when app goes to background, cancel when it comes back
   useEffect(() => {
     const handleVisibilityChange = () => {
+      // With a phone alarm booked there is nothing to do either way.
+      if (timerAlarmsSupported()) return;
       if (document.visibilityState === 'hidden' && isActive && timeLeft > 0) {
         // App backgrounded — schedule the fallback notification
         scheduleTimerNotification(timeLeft, mode);
@@ -173,30 +217,32 @@ export function PomodoroProvider({ children }) {
 
   const toggleTimer = useCallback(() => {
     stopAlertLoop();
+    // First timer on this account: Android's alarm switches, with the reason.
+    if (!isActive && timerAlarmsSupported()) requestAlarmPermissions({ feature: 'timers' });
     setIsActive(prev => {
       const nowActive = !prev;
       if (nowActive) {
-        // Starting/resuming — schedule a notification
+        // Starting/resuming — book the alarm (or the fallback push)
         setTimeLeft(tl => {
-          scheduleTimerNotification(tl, mode);
+          armTimer(tl, mode);
           return tl;
         });
       } else {
-        // Pausing — cancel the notification
-        cancelTimerNotification();
+        // Pausing — cancel it
+        disarmTimer();
       }
       return nowActive;
     });
-  }, [scheduleTimerNotification, cancelTimerNotification, mode]);
+  }, [armTimer, disarmTimer, mode, isActive]);
 
   const resetTimer = useCallback(() => {
     stopAlertLoop();
-    cancelTimerNotification();
+    disarmTimer();
     setIsActive(false);
     setMode('work');
     setTimeLeft(workDuration * 60);
     setSessionCount(0);
-  }, [cancelTimerNotification, workDuration]);
+  }, [disarmTimer, workDuration]);
 
   const handleWorkDurationChange = (value) => {
     const duration = parseInt(value, 10);
