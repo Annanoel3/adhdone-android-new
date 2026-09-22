@@ -15,8 +15,36 @@ let knownFlags = [];
 let pending = new Set();
 let queue = Promise.resolve();
 
+// Which account this phone's first-run flags belong to. A different account
+// signing in here must not inherit the previous one's "already seen" marks —
+// that is how a brand-new account on a used phone got no welcome at all.
+const ACCOUNT_KEY = 'adhd_onboarding_account';
+const FIRST_RUN_KEYS = ['quick_capture_prompt_seen', 'home_zip_prompt_seen_v2', 'spicybrains_explanation_seen'];
+
+function clearLocalFirstRunFlags() {
+  try {
+    Object.keys(localStorage).forEach((k) => {
+      if (k.startsWith('onboarding_') || k.startsWith('tour_seen_') || FIRST_RUN_KEYS.includes(k)) {
+        localStorage.removeItem(k);
+      }
+    });
+  } catch (e) {}
+}
+
 export function hydrateOnboardingFlags(user) {
-  knownFlags = Array.isArray(user?.onboarding_flags) ? [...user.onboarding_flags] : [];
+  const serverFlags = Array.isArray(user?.onboarding_flags) ? [...user.onboarding_flags] : [];
+  const email = String(user?.email || '').toLowerCase();
+  let lastAccount = '';
+  try { lastAccount = localStorage.getItem(ACCOUNT_KEY) || ''; } catch (e) {}
+  // A profile with nothing on it yet (no flags, no name, no about-me) is a
+  // fresh start whatever this phone remembers — including a profile that was
+  // wiped and recreated under the same email.
+  const freshProfile = serverFlags.length === 0 && !user?.preferred_name && !user?.about_me;
+  if (email && (email !== lastAccount || freshProfile)) {
+    clearLocalFirstRunFlags();
+    try { localStorage.setItem(ACCOUNT_KEY, email); } catch (e) {}
+  }
+  knownFlags = serverFlags;
   knownFlags.forEach((key) => {
     try { localStorage.setItem(key, '1'); } catch (e) {}
   });
