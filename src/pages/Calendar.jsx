@@ -23,12 +23,16 @@ import {
 import CalendarGrid from '@/components/calendar/CalendarGrid';
 import TaskDetailsModal from '@/components/tasks/TaskDetailsModal';
 import KeepAppOpenNote from '@/components/shared/KeepAppOpenNote';
+import FirstUseDialog, { firstUseSeen, markFirstUseSeen } from '@/components/onboarding/FirstUseDialog';
 import {
   runCalendarSync, maybeAutoSync, getInFlightSync, setCalendarConnected,
   hasDeviceCalendars, listDeviceCalendars, requestDeviceCalendarPermission, runDeviceCalendarSync,
 } from '@/lib/calendarSync';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
+// One-time note for accounts that had Google Calendar attached before the
+// phone build started reading calendars from the phone instead.
+const CALENDAR_SWITCH_KEY = 'onboarding_calendar_switch_note_seen';
 
 const URGENCY_COLORS = {
   high: 'bg-red-100 text-red-700 border-red-200',
@@ -257,6 +261,7 @@ export default function Calendar() {
   const [detailTask, setDetailTask] = useState(null);
   const [detailItemClass, setDetailItemClass] = useState('task');
   const [modalOpen, setModalOpen] = useState(false);
+  const [switchNote, setSwitchNote] = useState(false);
 
   const loadSyncedEvents = useCallback(async () => {
     try {
@@ -269,8 +274,10 @@ export default function Calendar() {
         setLastSyncedAt(latest.last_synced_at);
         localStorage.setItem('calendar_last_synced_at', latest.last_synced_at);
       }
+      return events;
     } catch {
       setSyncedEvents([]);
+      return [];
     }
   }, []);
 
@@ -334,7 +341,18 @@ export default function Calendar() {
       if (authed) {
         const me = await base44.auth.me();
         setUser(me);
-        await Promise.all([loadSyncedEvents(), loadTasks()]);
+        const [events] = await Promise.all([loadSyncedEvents(), loadTasks()]);
+        // Phone build: someone who had Google Calendar attached before gets
+        // told once where their calendar went. Nobody else sees this.
+        if (hasDeviceCalendars() && !firstUseSeen(CALENDAR_SWITCH_KEY)) {
+          let hadGoogle = false;
+          try { hadGoogle = localStorage.getItem('calendar_connected') === 'true'; } catch (e) {}
+          if (!hadGoogle) {
+            hadGoogle = (events || []).some((ev) =>
+              ev?.google_event_id && !String(ev.google_event_id).startsWith('device:'));
+          }
+          if (hadGoogle) setSwitchNote(true);
+        }
         // Straight back from our own OAuth callback, which lands here as
         // ?gcal=connected (or an explicit failure reason). A brand-new grant
         // isn't always readable on the first ask, so retry briefly rather than
@@ -500,28 +518,6 @@ export default function Calendar() {
     <div className={`min-h-screen p-4 md:p-8 ${isDark ? 'bg-gray-900' : ''}`}
       style={{ paddingBottom: 'max(8rem, calc(8rem + env(safe-area-inset-bottom)))' }}>
       <div className="max-w-4xl mx-auto space-y-6">
-
-        {/* Phone build: calendars are read from the phone now, so the Google
-            sign-in card is gone. Anyone who comes back here to sync Google
-            finds this note instead. */}
-        {phone && (
-          <Card className={`border-none shadow-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
-            <CardContent className="p-6 space-y-3">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-blue-500 flex items-center justify-center shadow">
-                  <CalendarDays className="w-6 h-6 text-white" />
-                </div>
-                <div>
-                  <h2 className={`text-lg font-bold ${textPrimary}`}>New calendar integration now in use!</h2>
-                  <p className={`text-sm ${textSecondary}`}>No Google sign-in needed anymore.</p>
-                </div>
-              </div>
-              <p className={`text-sm ${textSecondary}`}>
-                ADHDone now reads calendars straight from your phone. Tick the calendar(s) you want below — your Google calendar is in that list — and everything keeps working the way it did. Events already brought in stay where they are.
-              </p>
-            </CardContent>
-          </Card>
-        )}
 
         {/* Google sign-in card — web only */}
         {!phone && (
@@ -708,6 +704,14 @@ export default function Calendar() {
           onUpdate={handleModalUpdate}
           theme={theme}
           itemClassification={detailItemClass}
+        />
+
+        <FirstUseDialog
+          open={switchNote}
+          theme={theme}
+          title="New calendar integration now in use!"
+          body="No Google sign-in needed anymore. ADHDone now reads calendars straight from your phone. Tick the calendar(s) you want in the Phone calendars list — your Google calendar is in there — and everything keeps working the way it did. Events already brought in stay where they are."
+          onConfirm={() => { markFirstUseSeen(CALENDAR_SWITCH_KEY); setSwitchNote(false); }}
         />
       </div>
     </div>
