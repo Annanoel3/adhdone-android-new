@@ -187,6 +187,11 @@ export default function Tasks() {
         if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
           const { createNextRecurrence } = await import('../components/utils/taskRecurrence');
           const result = await createNextRecurrence(task);
+          // Show the next occurrence the moment it exists — it lands in the
+          // section for its day — rather than waiting on a full reload.
+          if (result?.task) {
+            setAllTasks(prev => prev.some(t => t.id === result.task.id) ? prev : [result.task, ...prev]);
+          }
           if (result) loadTasks();
         }
       } catch (error) {
