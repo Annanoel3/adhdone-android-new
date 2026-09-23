@@ -44,6 +44,10 @@ export async function getProximity(
   // traffic instead of a free-flow average. Ignored if it's in the past —
   // the API rejects past departure times.
   departureAt?: Date | null,
+  // avoidTolls: measure toll-free routes only, for people who don't take
+  // tolls — Google's fastest route often is the toll road, and a leave-now
+  // timed on it runs late for everyone else.
+  opts: { avoidTolls?: boolean } = {},
 ): Promise<ProximityResult> {
   const empty: ProximityResult = { pairs: [], fromHome: {} };
 
@@ -79,6 +83,7 @@ export async function getProximity(
     url.searchParams.set('departure_time', String(Math.floor(depMs / 1000)));
     url.searchParams.set('traffic_model', 'best_guess');
   }
+  if (opts.avoidTolls) url.searchParams.set('avoid', 'tolls');
   url.searchParams.set('key', apiKey);
 
   let data: any;
