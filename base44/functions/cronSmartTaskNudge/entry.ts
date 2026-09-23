@@ -427,7 +427,10 @@ async function generateDailySchedule(
     // Location is only ever present when the user explicitly entered one.
     const loc = (t.location || '').trim();
     const locInfo = loc ? `, LOCATION: ${loc}` : '';
-    return `${i + 1}. "${t.title}"${descInfo} (${dueInfo}${windowInfo}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${locInfo}${pushInfo}${nudged}${subInfo})`;
+    // The boss's own instruction about reminding this one, when they gave one.
+    const wish = String(t.reminder_wish || '').trim().replace(/\s+/g, ' ').slice(0, 200);
+    const wishInfo = wish ? `, REMINDER WISH: "${wish}"` : '';
+    return `${i + 1}. "${t.title}"${descInfo} (${dueInfo}${windowInfo}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${locInfo}${pushInfo}${wishInfo}${nudged}${subInfo})`;
   }).join('\n');
 
   const urgentCount = tasks.filter(t => t.urgency === 'urgent').length;
@@ -483,6 +486,7 @@ FULL TASK LIST (you decide what's relevant today — you have the week ahead):
 ${taskList}
 ${eventList ? `\nFIXED APPOINTMENTS TODAY (context only — do NOT nudge these, they have their own reminders):\n${eventList}\n` : ''}${proximityNotes ? `\n${proximityNotes}\n` : ''}${alreadyNudgedTitles.length > 0 ? `\nTASKS ALREADY NUDGED TODAY (use check-in style — "Have you done X yet?"):\n${alreadyNudgedTitles.map(t => `- "${t}"`).join('\n')}\n` : ''}
 YOUR APPROACH:
+- A REMINDER WISH on a task is the boss's own instruction about how, when or how often to nudge THAT task ("keep reminding me until I finish", "just once", "don't bug me before noon", "only on weekdays"). Obey it over every rule below for that task: it sets the count, the spacing and the earliest hour. Where the wish is silent, the rules below apply.
 - You can see the whole week. Plan TODAY's reminders — what to surface, when, what to say.
 - MEET ALL DEADLINES: if something is due today or tomorrow, it must be surfaced. If something is overdue, surface it with urgency.
 - DUE TODAY IS NON-NEGOTIABLE: every "DUE TODAY" task gets a nudge, and its FIRST nudge lands within the next 30-60 minutes — the boss said it has to happen today, so the window is closing whether the task is dishes or taxes. If less than 2 hours remain before ${cutoffLabel}, nudge it within 15 minutes and, if it's still open, once more about halfway to ${cutoffLabel}. The task's stored priority doesn't lower this — a same-day deadline outranks priority.
