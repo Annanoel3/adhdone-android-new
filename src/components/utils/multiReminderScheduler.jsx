@@ -45,9 +45,11 @@ function setCachedSchedule(title, urgency, data, location) {
 }
 
 // ── Core: get reminder times (minutes_before + label) from LLM or cache ──────
-async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, location) {
-  // Day-only schedules have absolute clock times — never use the cache.
-  let reminders = dayOnly ? null : getCachedSchedule(title, urgency, location);
+async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, location, reminderWish) {
+  // Day-only schedules have absolute clock times — never use the cache. A task
+  // with the user's own reminder wish never uses it either: the cache is keyed
+  // on title + priority, and the wish is what makes this one different.
+  let reminders = (dayOnly || reminderWish) ? null : getCachedSchedule(title, urgency, location);
 
   if (!reminders) {
     console.log(`[multiReminderScheduler] No cache hit for "${title}" (priority: ${urgency || 'medium'}) — calling LLM`);
@@ -59,13 +61,14 @@ async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, 
       classification,
       deadlineStyle,
       location,
+      reminderWish: reminderWish || null,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
 
     const data = response.data || response;
     reminders = data.reminders || [];
 
-    if (reminders.length > 0) {
+    if (reminders.length > 0 && !reminderWish) {
       setCachedSchedule(title, urgency, reminders, location);
     }
   } else {
@@ -152,6 +155,7 @@ export async function scheduleMultiReminders({
   classification,
   deadlineStyle,
   location,
+  reminderWish,
 }) {
   try {
     // Every caller passes taskId, so the location is looked up here rather than
@@ -164,7 +168,7 @@ export async function scheduleMultiReminders({
         taskLocation = task?.location || '';
       } catch { taskLocation = ''; }
     }
-    const reminders = await fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, taskLocation);
+    const reminders = await fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, taskLocation, reminderWish);
     if (!reminders || reminders.length === 0) return null;
 
     // Safety net: a task set for a specific clock time ALWAYS gets a reminder at
