@@ -313,6 +313,7 @@
       "enum": [
         "none",
         "daily",
+        "every_other_day",
         "weekdays",
         "weekly",
         "every_other_week",
@@ -321,6 +322,13 @@
       ],
       "default": "none",
       "description": "How often this task should recur after completion. 'weekdays' = business days only (Mon\u2013Fri): the next occurrence skips Saturday and Sunday."
+    },
+    "recurrence_days": {
+      "type": "array",
+      "items": {
+        "type": "integer"
+      },
+      "description": "With recurrence_pattern 'weekly': the specific weekdays it repeats on, 0 = Sunday \u2026 6 = Saturday (\"every Wednesday and Thursday\" = [3, 4]). The next occurrence is the next listed day after the current one. Empty/unset = plain weekly on the same weekday."
     },
     "birthday_person": {
       "type": "string",
