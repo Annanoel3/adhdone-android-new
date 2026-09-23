@@ -127,16 +127,21 @@ export function LaunchProvider({ children }) {
 
     const endTimeISO = new Date(Date.now() + DURATION_MS).toISOString();
     let notifId = null;
-    try {
-      notifId = await scheduleReminder({
-        email: user.email,
-        title: '🚀 Liftoff time!',
-        body: `Time to start: ${task.title}\n\nLet's go — you've got this.`,
-        sendAtISO: endTimeISO,
-        taskId: task.id,
-        data: { screen: '/FocusTimer', taskId: task.id, type: 'launchpad' },
-      });
-    } catch (e) { console.error('Launchpad push scheduling failed:', e); }
+    // On a build that can ring, the phone's alarm IS the alert — no push as
+    // well, or the moment arrives twice (a banner and a full-screen ring).
+    // The push is only the fallback for builds without alarms.
+    if (!timerAlarmsSupported()) {
+      try {
+        notifId = await scheduleReminder({
+          email: user.email,
+          title: '🚀 Liftoff time!',
+          body: `Time to start: ${task.title}\n\nLet's go — you've got this.`,
+          sendAtISO: endTimeISO,
+          taskId: task.id,
+          data: { screen: '/FocusTimer', taskId: task.id, type: 'launchpad' },
+        });
+      } catch (e) { console.error('Launchpad push scheduling failed:', e); }
+    }
 
     if (timerAlarmsSupported()) {
       requestAlarmPermissions({ feature: 'timers' });
@@ -171,16 +176,20 @@ export function LaunchProvider({ children }) {
 
     const endTimeISO = new Date(Date.now() + DURATION_MS).toISOString();
     let notifId = null;
-    try {
-      notifId = await scheduleReminder({
-        email: user.email,
-        title: '⏱️ 5 minutes up — no pressure!',
-        body: "It's okay to stop if you want. You showed up, and that's the win. 💚",
-        sendAtISO: endTimeISO,
-        taskId: task.id,
-        data: { screen: '/FocusTimer', taskId: task.id, type: 'sprint_end' },
-      });
-    } catch (e) { console.error('Sprint push scheduling failed:', e); }
+    // Alarm only on a build that can ring (see startLaunchpad); the push is
+    // the fallback for builds without alarms.
+    if (!timerAlarmsSupported()) {
+      try {
+        notifId = await scheduleReminder({
+          email: user.email,
+          title: '⏱️ 5 minutes up — no pressure!',
+          body: "It's okay to stop if you want. You showed up, and that's the win. 💚",
+          sendAtISO: endTimeISO,
+          taskId: task.id,
+          data: { screen: '/FocusTimer', taskId: task.id, type: 'sprint_end' },
+        });
+      } catch (e) { console.error('Sprint push scheduling failed:', e); }
+    }
 
     if (timerAlarmsSupported()) {
       requestAlarmPermissions({ feature: 'timers' });
@@ -265,9 +274,22 @@ export function LaunchProvider({ children }) {
         // the elapsed timer keeps counting from the sprint's start
         // instead of restarting at zero.
         const sprintStartISO = new Date(new Date(sp.endTimeISO).getTime() - DURATION_MS).toISOString();
-        await base44.functions.invoke('setFocusMode', { action: 'enter', taskId: sp.taskId, startedAt: sprintStartISO });
+        // setFocusMode writes the session onto the profile FIRST and then spends
+        // several seconds booking check-ins and quieting other tasks. Waiting
+        // for all of it left this button dead for 6-7 seconds. Wait only until
+        // the profile shows Focus Mode on (a beat), then move; the rest of the
+        // call finishes in the background.
+        const entering = base44.functions.invoke('setFocusMode', { action: 'enter', taskId: sp.taskId, startedAt: sprintStartISO })
+          .catch((e) => console.error('Failed to enter focus mode after sprint:', e));
+        for (let i = 0; i < 12; i++) {
+          await new Promise((r) => setTimeout(r, 250));
+          const me = await base44.auth.me().catch(() => null);
+          if (me?.focus_mode_task_id === sp.taskId) break;
+        }
         navigate('/Home', { replace: true });
         window.dispatchEvent(new CustomEvent('focus-mode-changed', { detail: { taskId: sp.taskId } }));
+        // Once the check-ins are booked, let Focus Mode re-read the profile.
+        entering.then(() => window.dispatchEvent(new CustomEvent('focus-mode-changed', { detail: { taskId: sp.taskId } })));
       } catch (e) {
         console.error('Failed to enter focus mode after sprint:', e);
       }
