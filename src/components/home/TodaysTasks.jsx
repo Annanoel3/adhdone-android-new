@@ -702,7 +702,9 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                           <RefreshCw className="w-3 h-3" />
                           {task.recurrence_pattern === 'yearly' && task.birthday_person
                             ? `🎂 ${task.birthday_person}'s birthday`
-                            : task.recurrence_pattern}
+                            : (task.recurrence_pattern === 'weekly' && Array.isArray(task.recurrence_days) && task.recurrence_days.length
+                              ? task.recurrence_days.map((n) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][n]).filter(Boolean).join(', ')
+                              : String(task.recurrence_pattern).replace(/_/g, ' '))}
                         </span>
                       )}
 
