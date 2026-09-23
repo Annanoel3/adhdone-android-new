@@ -21,6 +21,7 @@ import { DialogTrigger } from "@radix-ui/react-dialog";
 import { usePomodoro } from "@/context/PomodoroContext";
 import RoyaltyFreeMusicPlayer from "@/components/focus/RoyaltyFreeMusicPlayer";
 import { base44 } from "@/api/base44Client";
+import { persistOnboardingFlag } from "@/components/onboarding/onboardingSync";
 
 export default function FocusTimer() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
@@ -189,6 +190,7 @@ export default function FocusTimer() {
       if (!localStorage.getItem('seasonal_popup_shown')) {
         setShowSeasonalPopup(true);
         localStorage.setItem('seasonal_popup_shown', 'true');
+        persistOnboardingFlag('seasonal_popup_shown');
       } else {
         window.location.reload();
       }
@@ -204,6 +206,7 @@ export default function FocusTimer() {
       if (!localStorage.getItem('kawaii_popup_shown')) {
         setShowKawaiiPopup(true);
         localStorage.setItem('kawaii_popup_shown', 'true');
+        persistOnboardingFlag('kawaii_popup_shown');
       } else {
         window.location.reload();
       }
