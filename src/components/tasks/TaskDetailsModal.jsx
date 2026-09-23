@@ -1504,8 +1504,10 @@ Return JSON:
         ? 'No more notifications for this task until you reactivate it.'
         : 'Notifications resumed for this task.',
     });
-    // Save in the background
-    Task.update(task.id, { silenced: newSilenced }).catch(e => {
+    // Save in the background. Parking it leaves a permanent mark, so finishing
+    // it later still counts as a rescue on the Progress page.
+    const patch = newSilenced ? { silenced: true, was_back_burnered: true } : { silenced: false };
+    Task.update(task.id, patch).catch(e => {
       console.error('Error toggling silenced:', e);
     });
   };
