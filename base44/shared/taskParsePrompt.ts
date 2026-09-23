@@ -230,12 +230,25 @@ user_asked_to_repeat_every — answer ONLY this narrow question: did the user
   other day"). If yes, give that rhythm: 10min / 20min / 30min / 1hour /
   2hours / 4hours / daily / every_other_day. If they didn't ask for repeated
   pings — which is the overwhelming majority of the time — this is null.
+  Asking to be reminded again and again UNTIL it is done, with no rhythm
+  named ("keep reminding me until I finish", "nag me until it's done", "don't
+  let me forget — keep at me"), IS a rhythm request: answer 1hour. When a
+  clock time is on the same task, the pings START at that time ("take my
+  pills at 10 am every day and keep reminding me until I finish" = a daily
+  task at 10:00, first ping at 10:00, then hourly until it's checked off).
   Do NOT use this field to say WHEN to remind them or how far ahead. That is
   not what it means, and the app works that part out on its own from the date,
   the time and how the task looks; it has an LLM that reads the whole week and
   decides what to surface. Something being important, urgent, or soon NEVER
   earns a rhythm here. A wrong value here means the user gets pinged every
   hour forever, which is the most damaging mistake you can make.
+
+reminder_wish — the user's own instruction about HOW, WHEN or HOW OFTEN to
+  remind them, kept in their words and only when they actually said one:
+  "keep reminding me until I finish", "just once", "don't bug me before
+  noon", "the night before and the morning of", "only on weekdays". This is
+  the sentence about REMINDING, never the task itself, and it never goes in
+  the title. Most tasks have no such instruction: null.
 
 recurrence_pattern — "none" unless the thing itself repeats on the calendar
   ("every Wednesday", "the 1st of every month", "every year on June 3rd"); then
@@ -307,6 +320,7 @@ Return JSON with exactly these keys:
   "priority_uninferrable": boolean,
   "life_area": "work" | "personal",
   "follow_up_title": string | null,
-  "follow_up_minutes": integer | null
+  "follow_up_minutes": integer | null,
+  "reminder_wish": string | null
 }`;
 }
