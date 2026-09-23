@@ -236,6 +236,12 @@ user_asked_to_repeat_every — answer ONLY this narrow question: did the user
   clock time is on the same task, the pings START at that time ("take my
   pills at 10 am every day and keep reminding me until I finish" = a daily
   task at 10:00, first ping at 10:00, then hourly until it's checked off).
+  A repeat that has a CLOCK TIME and a calendar rhythm of a day or longer
+  ("every day at 9", "every other day at 8 am", "Wednesdays and Thursdays at
+  noon") is NOT this field — it is the thing itself recurring on the calendar:
+  use recurrence_pattern (and recurrence_days) for that and leave this null.
+  Whenever this field is NOT null, reminder_wish must hold the words that asked
+  for it — a rhythm with no words behind it is discarded.
   Do NOT use this field to say WHEN to remind them or how far ahead. That is
   not what it means, and the app works that part out on its own from the date,
   the time and how the task looks; it has an LLM that reads the whole week and
@@ -252,10 +258,16 @@ reminder_wish — the user's own instruction about HOW, WHEN or HOW OFTEN to
 
 recurrence_pattern — "none" unless the thing itself repeats on the calendar
   ("every Wednesday", "the 1st of every month", "every year on June 3rd"); then
-  use weekly/every_other_week/monthly/yearly/daily AND set target_date to the
-  next occurrence so the first one isn't lost. A word like "Annual" inside an
-  event's NAME ("8th Annual RiverRod 2027") describes that one dated edition,
-  not a request to repeat it — that is "none".
+  use daily/every_other_day/weekly/every_other_week/monthly/yearly AND set
+  target_date to the next occurrence so the first one isn't lost. A word like
+  "Annual" inside an event's NAME ("8th Annual RiverRod 2027") describes that
+  one dated edition, not a request to repeat it — that is "none".
+
+recurrence_days — only with recurrence_pattern "weekly": the weekdays it
+  happens on when the user named specific days, as numbers 0-6 (0 = Sunday …
+  6 = Saturday): "every Wednesday and Thursday" = [3, 4], "Mondays, Wednesdays
+  and Fridays" = [1, 3, 5], "on weekdays" = [1, 2, 3, 4, 5], "every Tuesday" =
+  [2]. target_date is then the NEXT of those days. Otherwise null.
 
 urgency — judge the real consequence of it not happening: what breaks, spoils,
   costs money, or leaves someone waiting. "urgent" for real same-day stakes,
@@ -312,7 +324,8 @@ Return JSON with exactly these keys:
   "end_date": "YYYY-MM-DD" | null,
   "due_date": "YYYY-MM-DD" | null,
   "user_asked_to_repeat_every": "10min" | "20min" | "30min" | "1hour" | "2hours" | "4hours" | "daily" | "every_other_day" | null,
-  "recurrence_pattern": "none" | "daily" | "weekly" | "every_other_week" | "monthly" | "yearly",
+  "recurrence_pattern": "none" | "daily" | "every_other_day" | "weekly" | "every_other_week" | "monthly" | "yearly",
+  "recurrence_days": integer[] | null,
   "deadline_style": "on" | "by",
   "day_only_task": boolean,
   "needs_date_pick": boolean,
