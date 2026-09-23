@@ -147,6 +147,7 @@ export function buildTaskRecord(
     urgency: parsed.urgency || "medium",
     energy_required: parsed.energy_required || "medium",
     recurrence_pattern: parsed.recurrence_pattern || "none",
+    recurrence_days: Array.isArray(parsed.recurrence_days) && parsed.recurrence_days.length ? parsed.recurrence_days : null,
     // The next step this chore leads to, scheduled the moment the task is
     // marked done (see logTaskCompletion).
     follow_up_title: parsed.follow_up_title || null,
