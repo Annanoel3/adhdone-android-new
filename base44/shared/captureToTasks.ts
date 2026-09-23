@@ -12,7 +12,7 @@
 
 import OpenAI from "npm:openai";
 import { runTaskParse } from "./runTaskParse.ts";
-import { decideReminderInterval } from "./reminderIntervalDecision.ts";
+import { decideReminderInterval, isRecurringInterval } from "./reminderIntervalDecision.ts";
 import { getHomeOrigin } from "./homeOrigin.ts";
 
 // ── Calling sibling functions ──────────────────────────────────────────────
@@ -151,6 +151,11 @@ export function buildTaskRecord(
     // marked done (see logTaskCompletion).
     follow_up_title: parsed.follow_up_title || null,
     follow_up_minutes: parsed.follow_up_minutes || null,
+    // The user's own words about how to remind them ("keep reminding me until
+    // I finish"), read by the reminder planners; and the clock time they named,
+    // so each new occurrence of a recurring task starts at the same time.
+    reminder_wish: parsed.reminder_wish || null,
+    anchor_time: parsed.target_time || null,
     // Shared with calendar sync + the in-app pipeline — see
     // reminderIntervalDecision.ts for why this must not be re-implemented.
     reminder_interval: decideReminderInterval(parsed),
@@ -187,6 +192,31 @@ export async function scheduleTaskReminders(
     return { scheduled: 0 };
   }
 
+  // A task the user asked to be nagged about at a rhythm, starting at a clock
+  // time ("at 10, keep reminding me until I finish"): book only that first
+  // ping here. The refill cron owns the rhythm from there — it continues from
+  // last_scheduled_until at the task's interval until the task is done.
+  if (isRecurringInterval(task.reminder_interval)) {
+    const firstAt = new Date(task.next_reminder);
+    const ids: string[] = [];
+    if (firstAt.getTime() > Date.now()) {
+      const t = String(task.title || "").length > 40 ? `${String(task.title).slice(0, 37)}...` : String(task.title || "");
+      const res = await callFunction(base44, "schedulePush", {
+        toUserExternalId: email,
+        title: `🔔 ${t}`,
+        body: `It's time — "${t}". You've got this! 💪`,
+        sendAtISO: firstAt.toISOString(),
+        data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency || "medium", type: "task_reminder" },
+      });
+      if (res?.notificationId) ids.push(res.notificationId);
+    }
+    await base44.asServiceRole.entities.Task.update(task.id, {
+      reminder_scheduling_since: null,
+      ...(ids.length ? { onesignal_notification_ids: ids, last_scheduled_until: firstAt.toISOString() } : {}),
+    });
+    return { planned: 1, scheduled: ids.length };
+  }
+
   // Service-role calls have no end-user session, so the home origin the
   // travel-aware "leave now" reminder needs has to be looked up and passed.
   let homeOrigin = "";
@@ -211,6 +241,7 @@ export async function scheduleTaskReminders(
     location: task.location || '',
     homeOrigin,
     avoidTolls,
+    reminderWish: task.reminder_wish || parsed?.reminder_wish || null,
     timezone: tz,
   });
 
