@@ -227,9 +227,12 @@ function reminderMomentsFor(task) {
 //    always rings;
 //  - an appointment's night-before and a birthday's week-before / day-before
 //    are heads-ups, so they stay pushes;
-//  - a DEADLINE ("by Friday") is different: the work happens in the run-up,
-//    so a high-priority or urgent deadline's run-up reminders ring too, while
-//    a medium/low one only rings on the due day;
+//  - beyond that, PRIORITY decides, not whether the task has a date: a
+//    high-priority or urgent task rings unless it is pinned to one later day
+//    ("on Friday at 3" — nothing to do about it until then, so its earlier
+//    heads-ups stay pushes). A deadline ("by Friday") and a task with no date
+//    at all are both things to act on now, so their reminders ring by
+//    priority; a medium/low one only rings on its day;
 //  - a task with a working window (start date → due date) rings on every day
 //    of that window, because every one of those days is a day to work on it.
 function startOfLocalDay(ms) {
@@ -251,11 +254,14 @@ function ringsOutLoud(task, momentMs) {
   if (isEvent) return false;
   const start = task.start_date ? new Date(task.start_date).getTime() : NaN;
   if (!isNaN(start) && momentMs >= startOfLocalDay(start) && momentMs <= anchor) return true;
+  const pressing = task.urgency === 'high' || task.urgency === 'urgent';
+  if (!pressing) return false;
   // "By Friday" is a deadline; "on Friday at 3" is a moment. A due date on a
   // task that is NOT pinned to a clock time is a deadline too.
   const isDeadline = task.deadline_style === 'by' || (!!task.due_date && !task.event_time && task.reminder_interval !== 'once');
-  const pressing = task.urgency === 'high' || task.urgency === 'urgent';
-  return isDeadline && pressing && momentMs < anchor;
+  // Pinned to one later day: heads-ups before it stay pushes.
+  const pinnedLater = (!!task.event_time || !!task.due_date) && !isDeadline && momentMs < startOfLocalDay(anchor);
+  return !pinnedLater;
 }
 
 // Quiet hours apply to alarms exactly as they do to pushes (default ON,
