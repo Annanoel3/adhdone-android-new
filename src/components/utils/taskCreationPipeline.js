@@ -523,6 +523,7 @@ Return JSON:
       day_only_task: !!parsed.day_only_task,
       deadline_style: parsed.deadline_style === 'by' ? 'by' : 'on',
       recurrence_pattern: parsed.recurrence_pattern || 'none',
+      recurrence_days: Array.isArray(parsed.recurrence_days) && parsed.recurrence_days.length ? parsed.recurrence_days : null,
       // The next step this chore leads to, scheduled the moment the task is
       // marked done (server side, on completion).
       follow_up_title: parsed.follow_up_title || null,
