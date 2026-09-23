@@ -279,7 +279,7 @@ export function LaunchProvider({ children }) {
         // for all of it left this button dead for 6-7 seconds. Wait only until
         // the profile shows Focus Mode on (a beat), then move; the rest of the
         // call finishes in the background.
-        const entering = base44.functions.invoke('setFocusMode', { action: 'enter', taskId: sp.taskId, startedAt: sprintStartISO })
+        base44.functions.invoke('setFocusMode', { action: 'enter', taskId: sp.taskId, startedAt: sprintStartISO })
           .catch((e) => console.error('Failed to enter focus mode after sprint:', e));
         for (let i = 0; i < 12; i++) {
           await new Promise((r) => setTimeout(r, 250));
@@ -288,8 +288,9 @@ export function LaunchProvider({ children }) {
         }
         navigate('/Home', { replace: true });
         window.dispatchEvent(new CustomEvent('focus-mode-changed', { detail: { taskId: sp.taskId } }));
-        // Once the check-ins are booked, let Focus Mode re-read the profile.
-        entering.then(() => window.dispatchEvent(new CustomEvent('focus-mode-changed', { detail: { taskId: sp.taskId } })));
+        // No second nudge once the call finishes: the profile already showed
+        // the session on, and a late nudge could reopen a task the user had
+        // finished in the meantime.
       } catch (e) {
         console.error('Failed to enter focus mode after sprint:', e);
       }
