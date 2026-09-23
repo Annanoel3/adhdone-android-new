@@ -3,7 +3,7 @@ import { runTaskParse } from "../../shared/runTaskParse.ts";
 // Shared files are bundled into this function when it is deployed, so a change
 // to the shared prompt (taskParsePrompt.ts) only reaches users after this
 // function is saved and redeployed again (last redeploy: the parser's
-// reminder_wish field — the user's own words about how to remind them).
+// recurrence_days field — "every Wednesday and Thursday" — and every_other_day).
 
 Deno.serve(async (req) => {
   const base44 = await createClientFromRequest(req);
