@@ -831,6 +831,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
             // `homeZip`, which nothing reads, so an imported event with a location
             // never got its drive-time "leave now" reminder.
             homeOrigin: getHomeOrigin(user),
+            avoidTolls: (user as any)?.commute_avoid_tolls === true,
             timezone: (user as any)?.timezone || undefined,
           });
           const scheduleData = scheduleRes?.data || scheduleRes || {};
