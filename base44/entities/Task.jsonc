@@ -287,6 +287,14 @@
       "type": "string",
       "description": "Additional notes for this task"
     },
+    "follow_up_title": {
+      "type": "string",
+      "description": "The next step this chore leads to (\"Move the laundry to the dryer\"), set by the parser only for chores with an obvious timed next step. Sent as a reminder follow_up_minutes after the task is marked done."
+    },
+    "follow_up_minutes": {
+      "type": "number",
+      "description": "Minutes after completion at which the follow-up reminder goes out."
+    },
     "recurrence_pattern": {
       "type": "string",
       "enum": [
