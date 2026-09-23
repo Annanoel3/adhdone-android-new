@@ -748,6 +748,9 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         classification: (ai.classification === 'payment' || isPaymentTitle(title))
           ? 'payment'
           : (isOnce && ai.classification === 'event' ? 'event' : 'task'),
+        // A reminder instruction written into the event ("remind me the night
+        // before") — the planners obey it. Usually null.
+        reminder_wish: ai?.reminder_wish || null,
         notification_recipient_email: user.email,
         recurrence_pattern: recurrenceRule ? (recurrenceRule.includes('FREQ=DAILY') ? 'daily' : recurrenceRule.includes('FREQ=WEEKLY') ? 'weekly' : recurrenceRule.includes('FREQ=MONTHLY') ? 'monthly' : recurrenceRule.includes('FREQ=YEARLY') ? 'yearly' : 'none') : 'none'
       };
@@ -832,6 +835,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
             // never got its drive-time "leave now" reminder.
             homeOrigin: getHomeOrigin(user),
             avoidTolls: (user as any)?.commute_avoid_tolls === true,
+            reminderWish: (createdTask as any)?.reminder_wish || null,
             timezone: (user as any)?.timezone || undefined,
           });
           const scheduleData = scheduleRes?.data || scheduleRes || {};
