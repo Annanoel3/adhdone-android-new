@@ -43,6 +43,14 @@ const HEADS_UP_LATEST = 40;
 const WORSE_MIN_MINUTES = 8;
 const WORSE_RATIO = 1.2;
 
+// What the push SAYS. Google's figure is exact-looking ("34 min") but it is a
+// prediction, and a low-looking number reads as permission to dawdle — so the
+// spoken figure rounds UP to the next 5 ("about 35 min"). The departure time
+// itself is still computed from the exact minutes.
+function aboutMinutes(minutes: number): number {
+  return Math.ceil(minutes / 5) * 5;
+}
+
 function fmtLocalTime(utc: Date, timeZone: string): string {
   return new Intl.DateTimeFormat('en-US', {
     timeZone, hour: 'numeric', minute: '2-digit',
@@ -145,12 +153,27 @@ export default async function (req: Request): Promise<Response> {
       if (alreadyLeft) continue;
 
       const home = getHomeOrigin(user);
-      // Traffic-aware drive, measured for the moment they'd actually be driving.
-      const withTraffic = await getProximity([commute.place], home, commute.arriveUtc);
-      const drive = withTraffic.fromHome[commute.place];
+      // People who don't take toll roads get toll-free timing (asked on the
+      // Places page when the work address goes in).
+      const routeOpts = { avoidTolls: user.commute_avoid_tolls === true };
+      // Traffic-aware drive, measured for the moment they'd actually be
+      // DRIVING — not for the arrival time. Google's departure_time is when
+      // the car leaves, and asking for 9:00 traffic when the drive starts at
+      // 8:20 under-read the rush hour (2026-09-23: "about 30 min" against a
+      // real 34-37). The drive time is what decides the departure time, so it
+      // takes two passes: measure at "now" to get a first departure estimate,
+      // then re-measure at that departure minute when it is still ahead.
+      const firstPass = await getProximity([commute.place], home, new Date(Date.now() + 60000), routeOpts);
+      let drive = firstPass.fromHome[commute.place];
       if (!drive?.minutes) {
         console.log(`[COMMUTE] Could not measure home → ${commute.place} for ${email}`);
         continue;
+      }
+      const firstDepart = new Date(commute.arriveUtc.getTime() - (drive.minutes + CUSHION_MINUTES) * 60000);
+      if (firstDepart.getTime() > now.getTime() + 2 * 60000) {
+        const secondPass = await getProximity([commute.place], home, firstDepart, routeOpts);
+        const refined = secondPass.fromHome[commute.place];
+        if (refined?.minutes) drive = refined;
       }
 
       const leaveInMinutes = minutesUntilArrival - drive.minutes - CUSHION_MINUTES;
@@ -166,9 +189,10 @@ export default async function (req: Request): Promise<Response> {
         }
         const late = leaveInMinutes < -5;
         const title = late ? '🚗 Running behind — head out now' : '🚗 Time to leave for work';
+        const about = aboutMinutes(drive.minutes);
         const body = late
-          ? `${drive.minutes} min drive${drive.inTraffic ? ' with traffic' : ''} and you're due at ${commute.arriveBy}. Grab your stuff and go.`
-          : `It's about ${drive.minutes} min${drive.inTraffic ? ' with traffic right now' : ''} — leaving now gets you there by ${commute.arriveBy}.`;
+          ? `About ${about} min drive${drive.inTraffic ? ' with traffic' : ''} and you're due at ${commute.arriveBy}. Grab your stuff and go.`
+          : `It's about ${about} min${drive.inTraffic ? ' with traffic right now' : ''} — leaving now gets you there by ${commute.arriveBy}.`;
         // Not late yet → book it for the departure minute itself. Late → now.
         const sendAt = late ? null : departUtc;
         const id = await sendPush(email, user, title, body, { sendAt, alarm: true });
@@ -195,7 +219,7 @@ export default async function (req: Request): Promise<Response> {
       if (minutesUntilArrival < HEADS_UP_LATEST || minutesUntilArrival > HEADS_UP_EARLIEST) continue;
       if (!drive.inTraffic) continue; // no traffic data = nothing to compare
 
-      const freeFlow = await getProximity([commute.place], home, null);
+      const freeFlow = await getProximity([commute.place], home, null, routeOpts);
       const usual = freeFlow.fromHome[commute.place]?.minutes;
       if (!usual) continue;
       const extra = drive.minutes - usual;
@@ -213,7 +237,7 @@ export default async function (req: Request): Promise<Response> {
       }
 
       const title = '🚧 Traffic is worse than usual';
-      const body = `Your drive is running about ${drive.minutes} min instead of the usual ${usual}. Leaving by ${fmtLocalTime(departUtc, timeZone)} keeps you on time for ${commute.arriveBy}. I'll ping you when it's time to go.`;
+      const body = `Your drive is running about ${aboutMinutes(drive.minutes)} min instead of the usual ${aboutMinutes(usual)}. Leaving by ${fmtLocalTime(departUtc, timeZone)} keeps you on time for ${commute.arriveBy}. I'll ping you when it's time to go.`;
       const id = await sendPush(email, user, title, body);
       if (id) {
         await ledgerRecord(base44, {
