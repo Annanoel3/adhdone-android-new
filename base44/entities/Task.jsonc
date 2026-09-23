@@ -186,6 +186,11 @@
       "default": false,
       "description": "Back Burner: when true, all notifications for this task are cancelled and suppressed until the user reactivates it. The task stays visible in the full task list but drops out of Today's Tasks and smart nudges."
     },
+    "was_back_burnered": {
+      "type": "boolean",
+      "default": false,
+      "description": "Set the first time the task is put on the back burner and never cleared, so a task that was parked, brought back and then finished still counts as a rescue on the Progress page (silenced alone only shows whether it is parked right now)."
+    },
     "urgency": {
       "type": "string",
       "enum": [
