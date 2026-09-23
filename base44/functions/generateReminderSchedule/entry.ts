@@ -74,7 +74,11 @@ export default async function(req) {
     }
 
     const bodyText = await req.text();
-    const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, timezone, location, homeOrigin, avoidTolls } = JSON.parse(bodyText);
+    const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, timezone, location, homeOrigin, avoidTolls, reminderWish } = JSON.parse(bodyText);
+    // The user's own instruction about reminding ("the night before and the
+    // morning of", "just once"). When there is one, the fixed ladders below are
+    // skipped and the planner is told to obey it over every rule of its own.
+    const wish = typeof reminderWish === 'string' ? reminderWish.trim().slice(0, 200) : '';
     // A task with a real place attached gets a travel-aware "leave now" instead
     // of a blanket hour: measured drive time from the user's home circle center
     // + cushion. Service-role callers (captureToTasks) have no session, so they
@@ -126,7 +130,7 @@ export default async function(req) {
     // Driven only by the real classification (set by the parser / calendar
     // sync), never by words in the title. Keeping this deterministic also
     // prevents "2 months before" reminders for far-future events.
-    if (classification === 'event') {
+    if (classification === 'event' && !wish) {
       const schedule = getEventSchedule(lead);
       const reminders = schedule.map(r => {
         const text = getEventNotificationText(r.label, title, lead);
@@ -147,7 +151,7 @@ export default async function(req) {
     // ── Day-only tasks ("remind me to do X on [day]") ──────────────────────
     // One "heads up, due tomorrow" the night before, then hourly nudges on the
     // day of based on priority. No reminders fire in the days leading up.
-    if (dayOnly && !isDeadline) {
+    if (dayOnly && !isDeadline && !wish) {
       // Day-only tasks get ONE night-before heads-up. The day-of hourly nudges
       // are handled by cronSmartTaskNudge, which looks at ALL the user's due-today
       // day-only tasks and uses the LLM to pick ONE to surface at a time — instead
@@ -175,7 +179,10 @@ export default async function(req) {
     const nowStr = humanTime(now);
 
     const prompt = `You are an ADHD productivity expert helping someone with ADHD manage their task reminders.
-
+${wish ? `
+THE USER'S OWN REMINDER WISH: "${wish}"
+This is their explicit instruction about how, when or how often to be reminded. It OVERRIDES every rule and principle below about how many reminders to make and when: build exactly what they asked for ("just once" = one reminder at the time; "the night before and the morning of" = those two; "don't bug me before noon" = nothing earlier than 12:00). Where the wish is silent, fall back to the rules below.
+` : ''}
 TASK TITLE: "${title}"
 TASK PRIORITY: ${priority}
 TASK CLASSIFICATION: ${classification || 'task'}
