@@ -165,7 +165,8 @@ Deno.serve(async (req) => {
             isSameLocalDay(new Date(e.event_time || e.next_reminder), now, timeZone)
           ),
           getHomeOrigin(user),
-          user.about_me || ''
+          user.about_me || '',
+          user.commute_avoid_tolls === true
         );
 
         if (!newEntries || newEntries.length === 0) continue;
@@ -338,7 +339,10 @@ async function generateDailySchedule(
   subtasksByParent: Record<string, any[]>,
   todaysEvents: any[] = [],
   homeOrigin: string = '',
-  aboutMe: string = ''
+  aboutMe: string = '',
+  // The user's toll answer from Places: errand distances are measured the
+  // same way their commute is, on toll-free routes when they said so.
+  avoidTolls: boolean = false
 ): Promise<any[] | null> {
   const hour = Math.floor(localMin / 60);
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
@@ -450,7 +454,7 @@ async function generateDailySchedule(
     .map(t => (t.location || '').trim())
     .filter(Boolean);
   if (located.length >= 2 || (located.length === 1 && homeOrigin)) {
-    const prox = await getProximity(located, homeOrigin);
+    const prox = await getProximity(located, homeOrigin, null, { avoidTolls });
     proximityNotes = formatProximityNotes(prox);
   }
 
