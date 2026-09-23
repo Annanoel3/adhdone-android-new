@@ -177,6 +177,16 @@ export default function NotificationFollowupModal({ user, theme }) {
         ).catch(() => {});
       }
       await updateTodaysSummary();
+      // A repeating task finished from this follow-up used to end here for
+      // good — only Home and the task list made the next occurrence.
+      if (currentTask.recurrence_pattern && currentTask.recurrence_pattern !== 'none') {
+        try {
+          const { createNextRecurrence } = await import('@/components/utils/taskRecurrence');
+          await createNextRecurrence(currentTask);
+        } catch (e) {
+          console.error('Failed to create next recurrence:', e);
+        }
+      }
       // Tell the Home page (and any other listener) to refresh its task list —
       // without this the DB is updated but the UI still shows the task as active.
       window.dispatchEvent(new CustomEvent('tasks-changed'));
