@@ -234,9 +234,12 @@ Deno.serve(async (req) => {
         // Which nudges ring OUT LOUD on a phone set to full-screen reminders
         // (the push asks to ring on arrival, like the commute "leave now"):
         // a task due today; every day of a working window (start → due); and
-        // the run-up to a high-priority or urgent deadline. A heads-up about a
-        // later, lower-priority day stays a regular notification. Same rule as
-        // the app's own alarm list (widgetBridge.ringsOutLoud).
+        // any high-priority or urgent task that isn't pinned to a later day —
+        // a deadline's run-up, an overdue task, or a task with no date at all.
+        // The priority decides how loud a task is; having a date doesn't. A
+        // heads-up about a task tied to a later day stays a regular
+        // notification. Same rule as the app's own alarm list
+        // (widgetBridge.ringsOutLoud).
         const nudgedTask = entry.task_id ? taskById.get(entry.task_id) : null;
         const alarmStyle = nudgedTask
           ? (nudgedTask.alert_style === 'alarm' || (nudgedTask.alert_style !== 'notification' && user.alarm_mode === 'alarm'))
@@ -250,7 +253,10 @@ Deno.serve(async (req) => {
           const pressing = nudgedTask.urgency === 'high' || nudgedTask.urgency === 'urgent';
           // "By Friday" is a deadline; a task pinned to a clock time is a moment.
           const isDeadline = nudgedTask.deadline_style === 'by' || (!!due && !nudgedTask.event_time && nudgedTask.reminder_interval !== 'once');
-          ringsOutLoud = dueToday || inWindow || (isDeadline && pressing && !!due && now.getTime() < due.getTime());
+          // Tied to one later day ("on Friday"): nothing to do until then, so
+          // its earlier heads-ups stay pushes whatever the priority.
+          const pinnedLater = !!due && !isDeadline && !dueToday && due.getTime() > now.getTime();
+          ringsOutLoud = dueToday || inWindow || (pressing && !pinnedLater);
         }
         const sent = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id, ringsOutLoud);
         if (sent) {
@@ -515,13 +521,13 @@ YOUR APPROACH:
 - DUE TODAY IS NON-NEGOTIABLE: every "DUE TODAY" task gets a nudge, and its FIRST nudge lands within the next 30-60 minutes — the boss said it has to happen today, so the window is closing whether the task is dishes or taxes. If less than 2 hours remain before ${cutoffLabel}, nudge it within 15 minutes and, if it's still open, once more about halfway to ${cutoffLabel}. The task's stored priority doesn't lower this — a same-day deadline outranks priority.
 - WEIGH THE WHOLE TASK, EVERY TIME. Whether to nudge it today, at what time of day, and how many times all come out of the same four things together:
   * THE DUE DATE — how many days are left, and whether it's a deadline (work can start early) or tied to one day. Closer = more often; nothing due for a week+ gets at most an occasional heads-up.
-  * THE PRIORITY the boss set — urgent/high earns more frequent and earlier nudges than low/medium at the same distance. A low-priority thing due in 5 days can wait; an urgent one due in 5 days gets started now.
+  * THE PRIORITY the boss set — every nudge spends some of their patience, and once they start swiping without reading, all of them stop working. Priority is how much of that patience a task is worth: low means barely any, urgent means spend it freely because this is the thing that matters this week. Urgent/high earns more frequent and earlier nudges than low/medium at the same distance. A low-priority thing due in 5 days can wait; an urgent one due in 5 days gets started now. And a high-priority or urgent task with NO date is not a someday — nothing is pinning it, so it's a do-it-now that deserves at least as much of today as an urgent one due Friday.
   * WHAT THE TITLE AND DESCRIPTION ACTUALLY SAY — how much work it is, and whether it depends on a business, an office, or another person (those need daytime hours and more lead time than something doable from the couch).
   * THE ENERGY LEVEL — high-energy tasks belong earlier in the day; low-energy ones fit fine in the evening.
   A close due date on a big or business-dependent task can mean several nudges across today; a far-off low-priority one-liner means none. Never pick a frequency from the due date alone or the priority alone.
 - DON'T LET THINGS SNEAK UP: if a deadline is 2-3 days out and the task is high-priority, a heads-up today is smart. If it's a week+ out, hold off unless it's urgent.
 - "DEADLINE in N days" vs "happens on [day]" — TREAT THESE COMPLETELY DIFFERENTLY:
-  * DEADLINE tasks can be worked on ahead of time, so give them RUNWAY. How much runway depends on how much work the task actually is — judge that from the task itself: a one-step thing (pay a bill, send an email, book something online) needs 1-2 days; an errand or anything involving another person, an office, or paperwork needs 3-5 days; a genuinely big multi-step job (taxes, a report, applications, packing, cleaning out a room) deserves nudges starting a week or two out, framed around ONE small first step. Never let a big deadline task get its first nudge the day before.
+  * DEADLINE tasks can be worked on ahead of time, so give them RUNWAY. The app already sends every deadline a fixed heads-up the evening before and one at 9 AM on the due day — those two are not yours to repeat; the run-up and the rest of the due day are. How much runway depends on how much work the task actually is — judge that from the task itself: a one-step thing (pay a bill, send an email, book something online) needs 1-2 days; an errand or anything involving another person, an office, or paperwork needs 3-5 days; a genuinely big multi-step job (taxes, a report, applications, packing, cleaning out a room) deserves nudges starting a week or two out, framed around ONE small first step. Never let a big deadline task get its first nudge the day before.
   * "happens on [day]" tasks are tied to that specific day and CANNOT be done sooner — do not nudge in the days leading up (at most a heads-up the night before). Nudging early just makes the user feel behind on something they can't act on yet.
 - NOT EVERY TASK NEEDS A NUDGE TODAY: a low-priority task with no deadline can wait. Use judgment — you're the assistant, you decide what matters now.
 - NO EMPTY NOTIFICATIONS: every nudge must be about at least one specific task and name it in the body. Never send generic filler like "quick check on your tasks", "nothing urgent today", or an "energy boost" — a notification that doesn't tell the boss what to do is noise. If nothing genuinely needs surfacing today, return {"nudges": []}.
