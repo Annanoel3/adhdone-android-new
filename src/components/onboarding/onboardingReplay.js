@@ -3,7 +3,7 @@
 // directly — instead the profile carries `onboarding_replay_token`; when the
 // device sees a token it hasn't applied yet, it wipes the first-run flags once.
 const APPLIED_KEY = 'onboarding_replay_applied';
-const FIRST_RUN_KEYS = ['quick_capture_prompt_seen', 'home_zip_prompt_seen_v2', 'spicybrains_explanation_seen'];
+const FIRST_RUN_KEYS = ['quick_capture_prompt_seen', 'home_zip_prompt_seen_v2', 'spicybrains_explanation_seen', 'seasonal_popup_shown', 'kawaii_popup_shown'];
 
 export function applyOnboardingReplay(user) {
   const token = user?.onboarding_replay_token;
