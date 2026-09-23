@@ -15,13 +15,28 @@ import {
 import { Badge } from "@/components/ui/badge";
 import HabitPatterns from "@/components/progress/HabitPatterns";
 
+// The window the numbers cover. Everything that is a count of things that
+// happened (completions, rescues, focus sessions, deadline pushes) recounts for
+// the chosen window; the streak and the Habits card are all-time by nature (a
+// streak is "up to today", a habit needs weeks of history) and say so.
+const RANGES = [
+  { key: 'week', label: 'Week', days: 7 },
+  { key: 'month', label: 'Month', days: 30 },
+  { key: 'year', label: 'Year', days: 365 },
+  { key: 'all', label: 'All time', days: null },
+];
+const RANGE_KEY = 'insights_range';
+
 export default function Progress() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [insights, setInsights] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [range, setRange] = useState(() => {
+    const saved = localStorage.getItem(RANGE_KEY);
+    return RANGES.some(r => r.key === saved) ? saved : 'all';
+  });
 
   useEffect(() => {
-    loadInsights();
     const interval = setInterval(() => {
       const newTheme = localStorage.getItem('adhd_theme') || 'minimalist';
       setTheme(newTheme);
@@ -29,8 +44,16 @@ export default function Progress() {
     return () => clearInterval(interval);
   }, []);
 
-  const loadInsights = async () => {
+  useEffect(() => {
+    localStorage.setItem(RANGE_KEY, range);
+    loadInsights(range);
+  }, [range]);
+
+  const loadInsights = async (rangeKey = 'all') => {
     setIsLoading(true);
+    const rangeDays = (RANGES.find(r => r.key === rangeKey) || RANGES[3]).days;
+    const since = rangeDays ? Date.now() - rangeDays * 24 * 60 * 60 * 1000 : null;
+    const inRange = (iso) => !since || (iso && new Date(iso).getTime() >= since);
 
     // Pull completed tasks separately so the "Tasks Done" total isn't silently
     // capped by a recent-500 window that's mostly still-active tasks.
@@ -44,9 +67,10 @@ export default function Progress() {
     // one task into many), no birthdays (not something you "get done"), and a real
     // completed_at timestamp. Deleted tasks are gone from the database entirely,
     // so they can't be counted here.
-    const completedTasks = allCompleted.filter(t =>
+    const allCompletedTasks = allCompleted.filter(t =>
       t.completed_at && !t.parent_task_id && !t.birthday_person
     );
+    const completedTasks = allCompletedTasks.filter(t => inRange(t.completed_at));
 
     const morningCompletions = completedTasks.filter(t => {
       const hour = new Date(t.completed_at).getHours();
@@ -117,10 +141,14 @@ export default function Progress() {
     // counts if at least one task was finished; the streak is still alive if the
     // most recent completion day is today or yesterday.
     const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    // Always from every completion, whatever window is showing — a streak is
+    // "up to today" by definition, and a 7-day window would cap it at 7.
+    const streakDays = {};
+    allCompletedTasks.forEach(t => { streakDays[dayKey(new Date(t.completed_at))] = true; });
     let currentStreak = 0;
     const cursor = new Date();
-    if (!completionsByDay[dayKey(cursor)]) cursor.setDate(cursor.getDate() - 1);
-    while (completionsByDay[dayKey(cursor)]) {
+    if (!streakDays[dayKey(cursor)]) cursor.setDate(cursor.getDate() - 1);
+    while (streakDays[dayKey(cursor)]) {
       currentStreak++;
       cursor.setDate(cursor.getDate() - 1);
     }
@@ -130,7 +158,12 @@ export default function Progress() {
     // it four times still counts, and it may be older than the recent-500 window.
     const byId = {};
     [...tasks, ...allCompleted].forEach(t => { byId[t.id] = t; });
-    const tasksWithPushes = Object.values(byId).filter(t => (t.due_date_pushes || 0) > 0 && !t.parent_task_id && !t.birthday_person);
+    // A push is a counter on the task, not a dated event, so the window is
+    // judged by when the task last changed — close, not exact.
+    const tasksWithPushes = Object.values(byId).filter(t =>
+      (t.due_date_pushes || 0) > 0 && !t.parent_task_id && !t.birthday_person &&
+      inRange(t.updated_date || t.completed_at || t.created_date)
+    );
     const totalPushes = tasksWithPushes.reduce((sum, t) => sum + (t.due_date_pushes || 0), 0);
     const mostPushed = tasksWithPushes
       .sort((a, b) => (b.due_date_pushes || 0) - (a.due_date_pushes || 0))
@@ -144,7 +177,7 @@ export default function Progress() {
     // finishing is.
     const rescued = completedTasks.filter(t => t.silenced === true || t.was_back_burnered === true).length;
 
-    const focusSessions = (focusLogs || []).filter(l => (l.duration_seconds || 0) > 0);
+    const focusSessions = (focusLogs || []).filter(l => (l.duration_seconds || 0) > 0 && inRange(l.completed_at || l.started_at));
     const sumMinutes = (list) => Math.round(list.reduce((sum, l) => sum + (l.duration_seconds || 0), 0) / 60);
     const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const focusMinutes = sumMinutes(focusSessions);
@@ -175,7 +208,8 @@ export default function Progress() {
     setIsLoading(false);
   };
 
-  if (isLoading || !insights) {
+  // Full-page spinner only the first time; switching the window recounts in place.
+  if (!insights) {
     return (
       <div className="p-4 md:p-8 max-w-5xl mx-auto">
         <div className="text-center py-12">
@@ -188,9 +222,28 @@ export default function Progress() {
 
   return (
     <div className="p-4 md:p-8 max-w-5xl mx-auto">
-      <div className="mb-8">
+      <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Insights</h1>
         <p className="text-gray-600">Understanding your productivity patterns</p>
+      </div>
+
+      {/* Which window the numbers below cover. */}
+      <div className={`inline-flex rounded-xl p-1 mb-6 ${theme === 'minimalist' ? 'bg-gray-100' : 'bg-white/70 shadow'}`} role="tablist" aria-label="Time range">
+        {RANGES.map(r => (
+          <button
+            key={r.key}
+            role="tab"
+            aria-selected={range === r.key}
+            onClick={() => setRange(r.key)}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+              range === r.key
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'text-gray-600 hover:text-gray-900'
+            }`}
+          >
+            {r.label}
+          </button>
+        ))}
       </div>
 
       {/* grid-cols-1 matters: without an explicit column the single mobile
@@ -296,6 +349,7 @@ export default function Progress() {
                 <Zap className="w-8 h-8 mx-auto mb-2 text-orange-600" />
                 <div className="text-2xl font-bold text-gray-900">{insights.currentStreak}</div>
                 <p className="text-xs text-gray-600 mt-1">Day Streak</p>
+                {range !== 'all' && <p className="text-[10px] text-gray-500">always up to today</p>}
               </div>
 
               <div className={`p-4 rounded-xl text-center ${
@@ -356,7 +410,7 @@ export default function Progress() {
                 <Clock className="w-8 h-8 mx-auto mb-2 text-purple-600" />
                 <div className="text-2xl font-bold text-gray-900">{insights.focusMinutes}</div>
                 <p className="text-xs text-gray-600 mt-1">Focus Minutes</p>
-                <p className="text-[10px] text-gray-500">{insights.focusMinutesThisWeek} this week</p>
+                {range !== 'week' && <p className="text-[10px] text-gray-500">{insights.focusMinutesThisWeek} this week</p>}
               </div>
             </div>
           </CardContent>
