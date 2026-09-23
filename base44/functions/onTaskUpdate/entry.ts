@@ -358,6 +358,9 @@ Deno.serve(async (req) => {
         last_scheduled_until: null,
         urgency: 'low',
         pre_backburner_urgency: data.pre_backburner_urgency || currentUrgency,
+        // Permanent mark: a task that was ever parked counts as a rescue when
+        // it is finished, even after it was brought back first.
+        was_back_burnered: true,
       });
       try {
         await base44.asServiceRole.entities.User.update(user.id, { smart_nudge_schedule_dirty: true });
