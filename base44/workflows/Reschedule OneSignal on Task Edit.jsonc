@@ -2,7 +2,7 @@
   "name": "Reschedule OneSignal on Task Edit",
   "description": "",
   "trigger": {
-    "condition": "${ ((.trigger.changed_fields | index(\"status\") != null) or (.trigger.changed_fields | index(\"title\") != null) or (.trigger.changed_fields | index(\"reminder_interval\") != null) or (.trigger.changed_fields | index(\"due_date\") != null) or (.trigger.changed_fields == null) or (.trigger.changed_fields == null or .trigger.changed_fields == \"\" or .trigger.changed_fields == [] or .trigger.changed_fields == {})) }",
+    "condition": "${ ((.trigger.changed_fields | index(\"status\") != null) or (.trigger.changed_fields | index(\"title\") != null) or (.trigger.changed_fields | index(\"reminder_interval\") != null) or (.trigger.changed_fields | index(\"due_date\") != null) or (.trigger.changed_fields | index(\"urgency\") != null) or (.trigger.changed_fields == null) or (.trigger.changed_fields == null or .trigger.changed_fields == \"\" or .trigger.changed_fields == [] or .trigger.changed_fields == {})) }",
     "config": {
       "trigger_type": "entity",
       "events": [
