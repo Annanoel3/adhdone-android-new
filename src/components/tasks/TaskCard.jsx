@@ -293,7 +293,10 @@ export default function TaskCard({
   const handleToggleSilenced = async () => {
     const newSilenced = !task.silenced;
     if (onUpdateTask) onUpdateTask({ ...task, silenced: newSilenced });
-    Task.update(task.id, { silenced: newSilenced }).catch(error => {
+    // Parking it leaves a permanent mark, so finishing it later still counts
+    // as a rescue on the Progress page.
+    const patch = newSilenced ? { silenced: true, was_back_burnered: true } : { silenced: false };
+    Task.update(task.id, patch).catch(error => {
       console.error("Error toggling silenced:", error);
       if (onRefreshTasks) onRefreshTasks();
     });
