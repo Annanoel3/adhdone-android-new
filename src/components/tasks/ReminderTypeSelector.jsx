@@ -32,6 +32,7 @@ const INTERVAL_OPTIONS = [
 
 const REPEAT_OPTIONS = [
   { value: 'daily', label: 'Daily' },
+  { value: 'every_other_day', label: 'Every other day' },
   { value: 'weekdays', label: 'Weekdays only (Mon–Fri)' },
   { value: 'weekly', label: 'Weekly' },
   { value: 'monthly', label: 'Monthly' },
@@ -77,9 +78,15 @@ export default function ReminderTypeSelector({ task, theme, onChangeType }) {
   let pillLabel = meta.label;
   if (currentType === 'interval') pillLabel = formatIntervalLabel(task.reminder_interval);
   if (currentType === 'repeat') {
-    pillLabel = task.recurrence_pattern === 'weekdays'
-      ? 'Repeats weekdays'
-      : `Repeats ${task.recurrence_pattern}`;
+    const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const which = task.recurrence_pattern === 'weekly' && Array.isArray(task.recurrence_days) && task.recurrence_days.length
+      ? task.recurrence_days.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6).map((n) => dayNames[n]).join(', ')
+      : '';
+    pillLabel = which
+      ? `Repeats ${which}`
+      : task.recurrence_pattern === 'weekdays'
+        ? 'Repeats weekdays'
+        : `Repeats ${String(task.recurrence_pattern || '').replace(/_/g, ' ')}`;
   }
   if (currentType === 'once' && task.next_reminder) {
     const d = new Date(task.next_reminder);
