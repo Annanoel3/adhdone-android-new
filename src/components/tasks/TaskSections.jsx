@@ -2,6 +2,7 @@ import React, { useState, useMemo } from "react";
 import { ChevronRight, ChevronDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import TaskCard from "./TaskCard";
+import { isBirthdayTask } from "../utils/birthdayHelpers";
 
 const SECTIONS = [
   { key: "today", label: "Today" },
@@ -10,30 +11,27 @@ const SECTIONS = [
   { key: "next7days", label: "Next 7 Days" },
   { key: "upcoming", label: "Upcoming" },
   { key: "later", label: "Later" },
-  { key: "recurring", label: "Recurring" },
+  { key: "birthdays", label: "🎂 Birthdays" },
 ];
 
-// Shared logic: determine if a task is recurring, and its relevant date.
+// Shared logic: a task's relevant date. A repeating task sits in the section
+// for the day its next occurrence falls on — finishing it moves it to the
+// next one — rather than in a separate "Recurring" pile. Birthdays are the
+// exception: they get their own section at the bottom.
 function getTaskMeta(task) {
-  const hasDueDate = !!task.due_date;
-  const isRollingReminder =
-    task.reminder_interval &&
-    ["daily", "every_other_day"].includes(task.reminder_interval) &&
-    !hasDueDate;
-
-  if (
-    (task.recurrence_pattern && task.recurrence_pattern !== "none") ||
-    isRollingReminder
-  )
-    return { recurring: true };
+  if (isBirthdayTask(task)) return { birthday: true };
 
   const reminderDate = task.next_reminder ? new Date(task.next_reminder) : null;
   const dueDate = task.due_date ? new Date(task.due_date) : null;
   const startDate = task.start_date ? new Date(task.start_date) : null;
   // If start_date is set, use it as the relevant date — the task is "in progress"
   // from start through due and should appear in Today's section once started.
-  return { recurring: false, relevantDate: startDate || dueDate || reminderDate };
+  return { birthday: false, relevantDate: startDate || dueDate || reminderDate };
 }
+
+// Birthdays list soonest first.
+const birthdayWhen = (t) => new Date(t.next_reminder || t.due_date || 0).getTime();
+const sortBirthdays = (list) => list.sort((a, b) => birthdayWhen(a) - birthdayWhen(b));
 
 // Categorize into named sections (section view)
 function categorizeTask(task) {
@@ -46,8 +44,8 @@ function categorizeTask(task) {
   const monthAhead = new Date(today);
   monthAhead.setDate(monthAhead.getDate() + 30);
 
-  const { recurring, relevantDate } = getTaskMeta(task);
-  if (recurring) return "recurring";
+  const { birthday, relevantDate } = getTaskMeta(task);
+  if (birthday) return "birthdays";
   if (!relevantDate) return "today";
 
   const taskDay = new Date(
@@ -63,7 +61,7 @@ function categorizeTask(task) {
   return "later";
 }
 
-// Categorize into a specific day index (0-6) or upcoming/later/recurring (day view)
+// Categorize into a specific day index (0-6) or upcoming/later/birthdays (day view)
 function categorizeTaskByDay(task) {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -72,8 +70,8 @@ function categorizeTaskByDay(task) {
   const monthAhead = new Date(today);
   monthAhead.setDate(monthAhead.getDate() + 30);
 
-  const { recurring, relevantDate } = getTaskMeta(task);
-  if (recurring) return "recurring";
+  const { birthday, relevantDate } = getTaskMeta(task);
+  if (birthday) return "birthdays";
   if (!relevantDate) return 0;
 
   const taskDay = new Date(
@@ -108,7 +106,7 @@ function buildDaySections() {
   }
   sections.push({ key: "upcoming", label: "Upcoming" });
   sections.push({ key: "later", label: "Later" });
-  sections.push({ key: "recurring", label: "Recurring" });
+  sections.push({ key: "birthdays", label: "🎂 Birthdays" });
   return sections;
 }
 
@@ -146,6 +144,7 @@ export default function TaskSections({
         if (typeof cat === "number") map[`day_${cat}`].push(task);
         else map[cat].push(task);
       });
+      sortBirthdays(map.birthdays);
       return { sections: daySections, grouped: map };
     }
 
@@ -155,11 +154,9 @@ export default function TaskSections({
       next7days: [],
       upcoming: [],
       later: [],
-      recurring: [],
+      birthdays: [],
       backburner: [],
     };
-    // Birthdays land in the section for their day like everything else
-    // (their card is pink and says birthday), instead of being dropped here.
     tasks.forEach((task) => {
       if (task.silenced) {
         map.backburner.push(task);
@@ -168,6 +165,7 @@ export default function TaskSections({
       const section = categorizeTask(task);
       map[section].push(task);
     });
+    sortBirthdays(map.birthdays);
     return { sections: SECTIONS, grouped: map };
   }, [tasks, viewMode]);
 
