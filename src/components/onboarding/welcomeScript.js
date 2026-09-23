@@ -49,6 +49,21 @@ const SCRIPT = [
         : "Got it. That'll shape what counts as urgent and how hard this app nudges you about it.",
   },
   {
+    // The first win: one real thing on the list before they ever see Home,
+    // so a reminder exists to arrive. The app also books a test notification a
+    // few minutes out, so they learn what a reminder looks like today, not
+    // whenever the first due time happens to come around.
+    text: () =>
+      "Now let's get you a win. What's one thing you need to do today? Type it with a time if you know one — like \"call the pharmacy at 3\" — and this app will remind you.",
+    input: 'task',
+  },
+  {
+    text: (name, handle, about, task) =>
+      task
+        ? "On the list, reminder set. In a couple of minutes you'll get a test notification so you know they're reaching you."
+        : "No problem — add one from Home whenever you're ready.",
+  },
+  {
     text: () =>
       "Last thing: when you get a chance, open Places in the menu and set your schedule. That's how ADHDone knows when to nudge you — and when to leave you alone at work.",
     final: true,
