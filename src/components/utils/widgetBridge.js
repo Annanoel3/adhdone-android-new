@@ -227,12 +227,14 @@ function reminderMomentsFor(task) {
 //    always rings;
 //  - an appointment's night-before and a birthday's week-before / day-before
 //    are heads-ups, so they stay pushes;
-//  - beyond that, PRIORITY decides, not whether the task has a date: a
-//    high-priority or urgent task rings unless it is pinned to one later day
-//    ("on Friday at 3" — nothing to do about it until then, so its earlier
-//    heads-ups stay pushes). A deadline ("by Friday") and a task with no date
-//    at all are both things to act on now, so their reminders ring by
-//    priority; a medium/low one only rings on its day;
+//  - a task with NO date at all has no "day it's about": every reminder for
+//    it is a do-it-now, so all of them ring (the priority decides how often
+//    it is reminded, not how loud);
+//  - for a dated task beyond its day, PRIORITY decides: a high-priority or
+//    urgent one rings unless it is pinned to one later day ("on Friday at 3"
+//    — nothing to do about it until then, so its earlier heads-ups stay
+//    pushes), so a deadline's ("by Friday") run-up rings when it's pressing;
+//    a medium/low dated task only rings on its day;
 //  - a task with a working window (start date → due date) rings on every day
 //    of that window, because every one of those days is a day to work on it.
 function startOfLocalDay(ms) {
@@ -254,6 +256,7 @@ function ringsOutLoud(task, momentMs) {
   if (isEvent) return false;
   const start = task.start_date ? new Date(task.start_date).getTime() : NaN;
   if (!isNaN(start) && momentMs >= startOfLocalDay(start) && momentMs <= anchor) return true;
+  if (!task.due_date && !task.event_time) return true; // no date: every reminder is a do-it-now
   const pressing = task.urgency === 'high' || task.urgency === 'urgent';
   if (!pressing) return false;
   // "By Friday" is a deadline; "on Friday at 3" is a moment. A due date on a
