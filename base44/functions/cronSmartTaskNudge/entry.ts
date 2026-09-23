@@ -40,6 +40,8 @@ Deno.serve(async (req) => {
     // EVERY task, paged — not "the 500 most recently updated". Completed tasks
     // are needed too (completedTaskIds below), so this is not filtered to active.
     const allTasks = await listAll(base44.asServiceRole.entities.Task);
+    const taskById = new Map<string, any>();
+    for (const t of allTasks) if (t && t.id) taskById.set(t.id, t);
     const tasksByUser: Record<string, any[]> = {};
     // Today's fixed appointments/events per user — NOT nudged (they have their own
     // reminder flow), but given to the LLM as context so it can suggest batching
@@ -229,7 +231,28 @@ Deno.serve(async (req) => {
           break;
         }
 
-        const sent = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id);
+        // Which nudges ring OUT LOUD on a phone set to full-screen reminders
+        // (the push asks to ring on arrival, like the commute "leave now"):
+        // a task due today; every day of a working window (start → due); and
+        // the run-up to a high-priority or urgent deadline. A heads-up about a
+        // later, lower-priority day stays a regular notification. Same rule as
+        // the app's own alarm list (widgetBridge.ringsOutLoud).
+        const nudgedTask = entry.task_id ? taskById.get(entry.task_id) : null;
+        const alarmStyle = nudgedTask
+          ? (nudgedTask.alert_style === 'alarm' || (nudgedTask.alert_style !== 'notification' && user.alarm_mode === 'alarm'))
+          : false;
+        let ringsOutLoud = false;
+        if (nudgedTask && alarmStyle) {
+          const due = nudgedTask.due_date ? new Date(nudgedTask.due_date) : null;
+          const dueToday = !!(due && isSameLocalDay(due, now, timeZone));
+          const start = nudgedTask.start_date ? new Date(nudgedTask.start_date) : null;
+          const inWindow = !!(start && due && start.getTime() <= now.getTime() && now.getTime() <= due.getTime());
+          const pressing = nudgedTask.urgency === 'high' || nudgedTask.urgency === 'urgent';
+          // "By Friday" is a deadline; a task pinned to a clock time is a moment.
+          const isDeadline = nudgedTask.deadline_style === 'by' || (!!due && !nudgedTask.event_time && nudgedTask.reminder_interval !== 'once');
+          ringsOutLoud = dueToday || inWindow || (isDeadline && pressing && !!due && now.getTime() < due.getTime());
+        }
+        const sent = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id, ringsOutLoud);
         if (sent) {
           await ledgerRecord(base44, { email, taskId: entry.task_id, kind: 'smart_nudge', source: 'cronSmartTaskNudge', notificationId: sent, title: entry.title });
           entry.sent = true;
@@ -625,7 +648,8 @@ async function sendNudgeNotification(
   email: string,
   title: string,
   body: string,
-  taskId: string
+  taskId: string,
+  ringAsAlarm: boolean = false
 ): Promise<string | false> {
   const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
   const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
@@ -639,6 +663,12 @@ async function sendNudgeNotification(
     include_external_user_ids: [email],
     channel_for_external_user_ids: 'push',
   };
+  if (ringAsAlarm) {
+    // Rings the moment it arrives on a build that can (PushFilter); older
+    // builds show it as a normal push. High priority so Doze delivers it now.
+    payload.data.alarm = true;
+    payload.priority = 10;
+  }
 
   try {
     const response = await fetch('https://onesignal.com/api/v1/notifications', {
