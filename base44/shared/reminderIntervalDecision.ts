@@ -36,6 +36,13 @@ export function isRecurringInterval(interval: unknown): boolean {
   return typeof interval === "string" && RECURRING.includes(interval);
 }
 
+const SUB_DAILY = ["10min", "20min", "30min", "1hour", "2hours", "4hours"];
+
+/** A rhythm shorter than a day: "every hour", "every 20 minutes". */
+export function isSubDailyInterval(interval: unknown): boolean {
+  return typeof interval === "string" && SUB_DAILY.includes(interval);
+}
+
 /**
  * Decides the reminder_interval for a newly created task.
  *
@@ -55,8 +62,19 @@ export function decideReminderInterval(
   parsed: any,
   hasDateOverride?: boolean,
 ): string | null {
+  const interval = parsed?.reminder_interval;
+  // A task pinned to a date AND time that the user explicitly asked to be
+  // nagged about at a sub-daily rhythm ("at 10 am, keep reminding me until I
+  // take them") keeps that rhythm — the time is where the pings START, not the
+  // one and only ping. Calendar items (the override) never take this branch.
+  if (
+    hasDateOverride !== true &&
+    parsed?.target_date && parsed?.target_time && !parsed?.day_only_task &&
+    isSubDailyInterval(interval)
+  ) {
+    return interval;
+  }
   const hasDate = hasDateOverride === true || !!parsed?.target_date;
   if (hasDate) return "once";
-  const interval = parsed?.reminder_interval;
   return isRecurringInterval(interval) ? interval : null;
 }
