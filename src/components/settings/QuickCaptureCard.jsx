@@ -103,6 +103,13 @@ const ALARM_SOUND_PRESETS = [
   { name: 'JR Flower Shop', file: 'JR Flower Shop.mp3' },
 ].map((p) => ({ ...p, url: ALARM_SOUND_BASE + encodeURIComponent(p.file) }));
 const ALARM_SOUND_MAX_BYTES = 10 * 1024 * 1024;
+// The spoken alarm: not a file — the phone's own voice reads the reminder out
+// loud (native AlarmSpeech). Saved in the same field as a sound URL, as this
+// sentinel, so everything downstream stays one choice. Only offered on a build
+// whose bridge can preview it (older builds would fall back to the default tone).
+const SPOKEN_SOUND_URL = 'speak:';
+const SPOKEN_SOUND_NAME = 'Read it to me';
+const SPOKEN_SAMPLE = 'Time for this. Move the laundry to the dryer.';
 
 // The alarm-sound chooser on its own, so the Settings card and the first-time
 // set-up popup (QuickCapturePrompt's AlarmPermissionsDialog) show the very
@@ -115,17 +122,23 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
   const [previewing, setPreviewing] = useState(false);
   const previewRef = useRef(null);
   const fileRef = useRef(null);
+  const { AlarmBridge } = getPlugins();
+  const canSpeak = typeof AlarmBridge?.previewSpeech === 'function';
 
   useEffect(() => {
     setSound({ url: user?.alarm_sound_url || '', name: user?.alarm_sound_name || '' });
   }, [user?.alarm_sound_url, user?.alarm_sound_name]);
 
   useEffect(() => () => {
-    if (previewRef.current) previewRef.current.pause();
+    if (previewRef.current === 'speech') AlarmBridge?.stopSpeech?.().catch(() => {});
+    else if (previewRef.current) previewRef.current.pause();
   }, []);
 
   const stopPreview = () => {
-    if (previewRef.current) {
+    if (previewRef.current === 'speech') {
+      previewRef.current = null;
+      AlarmBridge?.stopSpeech?.().catch(() => {});
+    } else if (previewRef.current) {
       previewRef.current.pause();
       previewRef.current = null;
     }
@@ -138,6 +151,22 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
       return;
     }
     if (!sound.url) return;
+    if (sound.url === SPOKEN_SOUND_URL) {
+      if (!canSpeak) return;
+      previewRef.current = 'speech';
+      setPreviewing(true);
+      AlarmBridge.previewSpeech({ text: SPOKEN_SAMPLE })
+        .then((res) => {
+          if (previewRef.current !== 'speech') return;
+          previewRef.current = null;
+          setPreviewing(false);
+          if (res && res.spoke === false && !res.stopped) {
+            setSoundNote("This phone has no voice to read with (check its text-to-speech settings). Alarms would use the default tone instead.");
+          }
+        })
+        .catch(() => stopPreview());
+      return;
+    }
     const audio = new Audio(sound.url);
     audio.onended = stopPreview;
     audio.onerror = () => {
@@ -157,7 +186,9 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
       await base44.auth.updateMe({ alarm_sound_url: url, alarm_sound_name: name });
       setSound({ url, name });
       const res = await pushAlarmSound({ alarm_sound_url: url, alarm_sound_name: name });
-      if (url) {
+      if (url === SPOKEN_SOUND_URL) {
+        setSoundNote("Saved. Your alarms will be read out loud in the phone's voice — tap Play to hear it.");
+      } else if (url) {
         setSoundNote(res?.ready
           ? 'Saved to your phone — it rings even with no signal.'
           : "Saved. It couldn't download yet, so the phone's default alarm rings until it does.");
@@ -174,6 +205,10 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
     const url = e.target.value;
     if (url === '__upload__') {
       fileRef.current?.click();
+      return;
+    }
+    if (url === SPOKEN_SOUND_URL) {
+      applySound(url, SPOKEN_SOUND_NAME);
       return;
     }
     const preset = ALARM_SOUND_PRESETS.find((p) => p.url === url);
@@ -202,7 +237,7 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
 
   const textMain = dark ? 'text-gray-200' : 'text-gray-900';
   const textSub = dark ? 'text-gray-400' : 'text-gray-600';
-  const isPreset = !sound.url || ALARM_SOUND_PRESETS.some((p) => p.url === sound.url);
+  const isPreset = !sound.url || sound.url === SPOKEN_SOUND_URL || ALARM_SOUND_PRESETS.some((p) => p.url === sound.url);
 
   return (
     <div className={className}>
@@ -214,6 +249,9 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
           disabled={soundBusy}
           className={`flex-1 min-w-0 text-sm rounded-lg px-2 py-2 border ${dark ? 'bg-gray-700 border-gray-600 text-gray-200' : 'bg-white border-gray-300 text-gray-900'}`}
         >
+          {(canSpeak || sound.url === SPOKEN_SOUND_URL) && (
+            <option value={SPOKEN_SOUND_URL}>{SPOKEN_SOUND_NAME} (spoken, no tone)</option>
+          )}
           <option value="">Phone's default alarm</option>
           {ALARM_SOUND_PRESETS.map((p) => (
             <option key={p.url} value={p.url}>{p.name}</option>
