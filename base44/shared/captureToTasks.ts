@@ -147,6 +147,10 @@ export function buildTaskRecord(
     urgency: parsed.urgency || "medium",
     energy_required: parsed.energy_required || "medium",
     recurrence_pattern: parsed.recurrence_pattern || "none",
+    // The next step this chore leads to, scheduled the moment the task is
+    // marked done (see logTaskCompletion).
+    follow_up_title: parsed.follow_up_title || null,
+    follow_up_minutes: parsed.follow_up_minutes || null,
     // Shared with calendar sync + the in-app pipeline — see
     // reminderIntervalDecision.ts for why this must not be re-implemented.
     reminder_interval: decideReminderInterval(parsed),
