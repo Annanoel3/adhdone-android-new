@@ -141,7 +141,6 @@ export async function detectMultipleTasks(inputText) {
 //   { status: 'done' }
 //   { status: 'needs_priority', data }
 //   { status: 'needs_date', data }
-//   { status: 'needs_advance', taskData, currentUser }
 //   { status: 'error', message }
 export async function processAndCreateTask(inputText, opts = {}) {
   const { presetDate = null, presetDueDateISO = null } = opts;
@@ -465,33 +464,12 @@ Return JSON:
       }
       actualReminderInterval = 'once';
 
-      const oneDayFromNow = new Date(now.getTime() + (24 * 60 * 60 * 1000));
-      if (nextReminder && nextReminder >= oneDayFromNow) {
-        // 1+ day out — the caller asks the user about an advance reminder.
-        return {
-          status: 'needs_advance',
-          currentUser,
-          taskData: {
-            title: parsed.title || inputText.trim(),
-            original_input: inputText,
-            reminder_wish: parsed.reminder_wish || null,
-            anchor_time: parsed.target_time || null,
-            location: parsed.location || null,
-            description: '',
-            classification: parsed.classification || 'task',
-            reminder_interval: actualReminderInterval,
-            reminder_count: 0,
-            next_reminder: nextReminder.toISOString(),
-            end_date: endDateISO,
-            event_time: eventTimeISO,
-            urgency: parsed.urgency || 'medium',
-            energy_required: parsed.energy_required || 'medium',
-            life_area: parsed.life_area === 'work' ? 'work' : 'personal',
-            status: 'active',
-            notification_recipient_email: currentUser.email
-          }
-        };
-      }
+      // A timed task a day or more out used to stop here and ask "would you
+      // like an advance reminder?" (30 min / 1 hour / 1 day), then book only
+      // what was tapped — skipping the planned schedule and, for a repeating
+      // task, dropping its recurrence on the floor. Now it goes through the
+      // same planning as every other timed task, and the planner decides on
+      // its own whether this is the kind of thing that deserves a heads-up.
     } else if (parsed.reminder_interval && recurringIntervals.includes(parsed.reminder_interval)) {
       nextReminder = anchorToDaytime(new Date(now.getTime() + INTERVAL_MS[parsed.reminder_interval]), parsed.reminder_interval);
     } else {
