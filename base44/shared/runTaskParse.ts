@@ -57,6 +57,7 @@ const TASK_PARSE_SCHEMA = {
     follow_up_title: { type: ["string", "null"] },
     follow_up_minutes: { type: ["integer", "null"] },
     reminder_wish: { type: ["string", "null"] },
+    recurrence_days: { type: ["array", "null"], items: { type: "integer" } },
   },
   required: [
     "title", "location", "urgency", "energy_required", "classification",
@@ -64,6 +65,7 @@ const TASK_PARSE_SCHEMA = {
     "user_asked_to_repeat_every", "recurrence_pattern", "deadline_style",
     "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
     "life_area", "follow_up_title", "follow_up_minutes", "reminder_wish",
+    "recurrence_days",
   ],
 };
 
@@ -107,8 +109,14 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}");
   // recurrence_pattern feeds a strict entity enum, so a free-text answer like
   // "every 20 minutes" has to fall back to "none" rather than fail the save.
-  const PATTERNS = ['none', 'daily', 'weekly', 'every_other_week', 'monthly', 'yearly'];
+  const PATTERNS = ['none', 'daily', 'every_other_day', 'weekly', 'every_other_week', 'monthly', 'yearly'];
   if (!PATTERNS.includes(parsed?.recurrence_pattern)) parsed.recurrence_pattern = 'none';
+  // Specific weekdays ("Wednesdays and Thursdays") only make sense on a weekly
+  // repeat: whole numbers 0-6, no duplicates, in week order.
+  const days = Array.isArray(parsed?.recurrence_days)
+    ? [...new Set(parsed.recurrence_days.map((d: any) => Number(d)).filter((d: number) => Number.isInteger(d) && d >= 0 && d <= 6))].sort((a: number, b: number) => a - b)
+    : [];
+  parsed.recurrence_days = parsed.recurrence_pattern === 'weekly' && days.length > 0 ? days : null;
   // A follow-up only counts when both halves are usable: a real next step and
   // a wait between 5 minutes and a day.
   const fuMin = Number(parsed?.follow_up_minutes);
