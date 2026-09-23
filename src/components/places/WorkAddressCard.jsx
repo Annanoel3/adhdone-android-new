@@ -10,8 +10,28 @@ export default function WorkAddressCard({ user, theme, onSaved }) {
   const [address, setAddress] = useState('');
   const [typing, setTyping] = useState('');
   const [saving, setSaving] = useState(false);
+  // Toll roads: true = avoid them, false = takes them, undefined = never
+  // asked. Google's fastest route is often the toll road, so a "leave now"
+  // timed on it runs late for someone who won't take it. Asked the moment a
+  // work address goes in (and once for anyone who already had one).
+  const [avoidTolls, setAvoidTolls] = useState(undefined);
+  const [tollsSaving, setTollsSaving] = useState(false);
 
   useEffect(() => { setAddress(user?.work_address || ''); }, [user]);
+  useEffect(() => {
+    setAvoidTolls(typeof user?.commute_avoid_tolls === 'boolean' ? user.commute_avoid_tolls : undefined);
+  }, [user]);
+
+  const saveTolls = async (value) => {
+    setTollsSaving(true);
+    try {
+      await base44.auth.updateMe({ commute_avoid_tolls: value });
+      setAvoidTolls(value);
+      onSaved?.();
+    } finally {
+      setTollsSaving(false);
+    }
+  };
 
   const dark = theme === 'dark';
 
@@ -49,7 +69,34 @@ export default function WorkAddressCard({ user, theme, onSaved }) {
               Change
             </button>
           </div>
-        ) : (
+        ) : null}
+        {address && avoidTolls === undefined ? (
+          <div className="mt-3">
+            <p className={`text-sm font-medium ${dark ? 'text-gray-100' : 'text-gray-800'}`}>
+              Do you take toll roads?
+            </p>
+            <p className={`text-xs mt-1 mb-2 ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
+              Your "time to leave" alert is timed on the route you'd actually drive.
+            </p>
+            <div className="flex gap-2">
+              <Button size="sm" variant="outline" disabled={tollsSaving} onClick={() => saveTolls(false)}>
+                Yes, I take tolls
+              </Button>
+              <Button size="sm" variant="outline" disabled={tollsSaving} onClick={() => saveTolls(true)}>
+                No, avoid tolls
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        {address && avoidTolls !== undefined ? (
+          <p className={`mt-2 text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
+            {avoidTolls ? 'Timed on toll-free routes.' : 'Timed on the fastest route, tolls included.'}{' '}
+            <button type="button" onClick={() => setAvoidTolls(undefined)} className="underline">
+              Change
+            </button>
+          </p>
+        ) : null}
+        {!address ? (
           <>
             <Input
               value={typing}
@@ -60,7 +107,7 @@ export default function WorkAddressCard({ user, theme, onSaved }) {
             />
             <LocationSuggestions query={typing} theme={theme} onPick={save} />
           </>
-        )}
+        ) : null}
       </CardContent>
     </Card>
   );
