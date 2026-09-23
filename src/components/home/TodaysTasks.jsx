@@ -369,6 +369,16 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
     });
   };
 
+  // The "when" of a timed task that has no due date: the reminder time itself
+  // ("Today 4:20 PM", "Sep 24, 9:00 AM"). A task you just timed should never
+  // look like one with no timing at all.
+  const formatReminderMoment = (dateString) => {
+    if (!dateString) return null;
+    const date = new Date(dateString);
+    const time = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return date.toDateString() === new Date().toDateString() ? `Today ${time}` : `${formatReminderDate(dateString)}, ${time}`;
+  };
+
   // For events, the pill shows date AND time (e.g. "Sep 1, 11:25 AM") — an
   // event without its time is useless. Uses event_time when set, else due_date.
   const formatEventDateTime = (task) => {
@@ -670,18 +680,31 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                             </PopoverContent>
                           </Popover>
                         ) : (
+                          /* This pill is the task's WHEN: the reminder time when it has one, and
+                             only an empty "Add Due Date" when it has no timing at all. */
                           <Popover>
                             <PopoverTrigger asChild>
                               <button
                                 onClick={(e) => e.stopPropagation()}
-                                className="flex items-center gap-1 border border-dashed border-gray-300 px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors text-gray-500"
+                                className={task.next_reminder
+                                  ? `flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
+                                      theme === 'dark'
+                                        ? 'bg-purple-900 text-purple-300 border-purple-700 hover:bg-purple-800'
+                                        : 'border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100'
+                                    }`
+                                  : 'flex items-center gap-1 border border-dashed border-gray-300 px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors text-gray-500'}
                               >
                                 <CalendarClock className="w-3 h-3" />
-                                Add Due Date
+                                {task.next_reminder ? formatReminderMoment(task.next_reminder) : 'Add Due Date'}
                               </button>
                             </PopoverTrigger>
                             <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`} onClick={(e) => e.stopPropagation()}>
                               <div className="space-y-2 p-1">
+                                {task.next_reminder && (
+                                  <p className={`text-xs ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                                    Reminds you {formatReminderMoment(task.next_reminder)}. Add a due date if it has to be done by a certain day.
+                                  </p>
+                                )}
                                 <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : ''}`}>Due Date:</label>
                                 <input
                                   type="date"
