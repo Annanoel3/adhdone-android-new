@@ -8,6 +8,14 @@ import OnboardingBrandMark from './OnboardingBrandMark';
 import useTypewriter from './useTypewriter';
 import SCRIPT from './welcomeScript';
 import { claimHandle } from '@/functions/claimHandle';
+import { enqueueCapture } from '@/lib/pendingCaptures';
+import { firstUseSeen, markFirstUseSeen } from './FirstUseDialog';
+
+// The "this is what a reminder looks like" push: booked once per account, a
+// few minutes after the first task goes in, through the same reminder pipe
+// every real reminder uses — so it proves the whole path, not just the app.
+const FIRST_WIN_KEY = 'onboarding_first_win_push_booked';
+const FIRST_WIN_MINUTES = 3;
 
 // The first-run conversation. Answers are saved as they're given (not batched at
 // the end) so someone who closes the app halfway through still keeps their name.
@@ -19,11 +27,12 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   const [name, setName] = useState(initialName || '');
   const [handle, setHandle] = useState('');
   const [about, setAbout] = useState('');
+  const [task, setTask] = useState('');
   const [draft, setDraft] = useState('');
   const endRef = useRef(null);
 
   const beat = script[idx];
-  const line = beat ? beat.text(name || 'you', handle, about) : '';
+  const line = beat ? beat.text(name || 'you', handle, about, task) : '';
   const { shown, done } = useTypewriter(line, 28, idx);
 
   useEffect(() => {
@@ -71,6 +80,27 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     answer(value);
   };
 
+  const submitTask = () => {
+    const value = draft.trim();
+    if (!value) return;
+    setTask(value);
+    // Same path as typing it on Home: parsed, saved, reminders scheduled.
+    enqueueCapture({ text: value });
+    if (!firstUseSeen(FIRST_WIN_KEY)) {
+      markFirstUseSeen(FIRST_WIN_KEY);
+      base44.auth.me()
+        .then((me) => me?.email && base44.functions.invoke('schedulePush', {
+          toUserExternalId: me.email,
+          title: 'This is what a reminder looks like 👋',
+          body: `"${value}" is on your list. When it's time, we'll nudge you just like this.`,
+          minutesFromNow: FIRST_WIN_MINUTES,
+          data: { type: 'first_win_demo' },
+        }))
+        .catch(() => {});
+    }
+    answer(value);
+  };
+
   return (
     <div className="space-y-4">
       <OnboardingBrandMark />
@@ -112,6 +142,22 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
           />
           <div className="flex gap-2">
             <Button onClick={submitAbout} disabled={!draft.trim()} className="flex-1">Send</Button>
+            <Button variant="ghost" onClick={() => answer('')}>Skip</Button>
+          </div>
+        </div>
+      )}
+
+      {done && beat?.input === 'task' && (
+        <div className="space-y-2">
+          <Input
+            autoFocus
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && submitTask()}
+            placeholder="One thing you need to do today"
+          />
+          <div className="flex gap-2">
+            <Button onClick={submitTask} disabled={!draft.trim()} className="flex-1">Add it</Button>
             <Button variant="ghost" onClick={() => answer('')}>Skip</Button>
           </div>
         </div>
