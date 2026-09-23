@@ -1153,6 +1153,10 @@ Return JSON:
             nextReminder.setMonth(nextReminder.getMonth() + 1);
             break;
         }
+        // The clock time the user named ("pills at 10") wins over whatever
+        // time next_reminder had been bumped to by hourly reminders.
+        const anchor = /^(\d{1,2}):(\d{2})$/.exec(String(task.anchor_time || ''));
+        if (anchor) nextReminder.setHours(Number(anchor[1]), Number(anchor[2]), 0, 0);
 
         // Create new task instance
         const newTask = await Task.create({
@@ -1161,6 +1165,14 @@ Return JSON:
           urgency: task.urgency,
           energy_required: task.energy_required,
           reminder_interval: task.reminder_interval,
+          original_input: task.original_input || null,
+          location: task.location || null,
+          classification: task.classification || 'task',
+          life_area: task.life_area || 'personal',
+          reminder_wish: task.reminder_wish || null,
+          anchor_time: task.anchor_time || null,
+          follow_up_title: task.follow_up_title || null,
+          follow_up_minutes: task.follow_up_minutes || null,
           reminder_count: 0,
           next_reminder: nextReminder.toISOString(),
           status: 'active',
