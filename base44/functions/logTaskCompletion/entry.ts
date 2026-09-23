@@ -7,6 +7,17 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 //
 // Deliberately stores no task title or user-written text — only counts, timings
 // and flags.
+// "45 minutes", "an hour", "an hour and a half", "2 hours" — for the follow-up
+// text, which is written when it's booked, so the wait itself is the elapsed time.
+function sinceText(minutes: number): string {
+  const m = Math.round(minutes);
+  if (m < 60) return `${m} minutes`;
+  if (m < 75) return 'an hour';
+  if (m < 105) return 'an hour and a half';
+  const h = Math.round(m / 60);
+  return `${h} hours`;
+}
+
 export default async function (req: Request): Promise<Response> {
   try {
     const base44 = createClientFromRequest(req);
@@ -31,6 +42,30 @@ export default async function (req: Request): Promise<Response> {
       reminders = ledger
         .filter((l) => new Date(l.send_at) <= completedAt)
         .sort((a, b) => new Date(a.send_at) - new Date(b.send_at));
+    }
+
+    // The chore's next step, if the parser found one ("Move the laundry to the
+    // dryer", 60 minutes after this was marked done). Booked here because this
+    // runs for every way a task can be completed. The push carries the task id
+    // so the send ledger refuses a second copy if the workflow fires twice.
+    const fuTitle = String(task.follow_up_title || '').trim();
+    const fuMinutes = Number(task.follow_up_minutes);
+    if (email && fuTitle && Number.isFinite(fuMinutes) && fuMinutes >= 5 && fuMinutes <= 1440) {
+      try {
+        const owners = await base44.asServiceRole.entities.User.filter({ email });
+        const data: Record<string, unknown> = { type: 'follow_up', taskId };
+        if (owners?.[0]?.alarm_mode === 'alarm') data.alarm = true;
+        await base44.asServiceRole.functions.invoke('schedulePush', {
+          internalKey: Deno.env.get('CRON_SECRET'),
+          toUserExternalId: email,
+          title: fuTitle,
+          body: `You finished "${task.title}" ${sinceText(fuMinutes)} ago.`,
+          minutesFromNow: Math.round(fuMinutes),
+          data,
+        });
+      } catch (e) {
+        console.error('[logTaskCompletion] follow-up booking failed:', e?.message);
+      }
     }
 
     const first = reminders[0] ? new Date(reminders[0].send_at) : null;
