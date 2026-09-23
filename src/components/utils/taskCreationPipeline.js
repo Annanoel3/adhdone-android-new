@@ -228,6 +228,8 @@ Return JSON:
         reminder_interval: sched.interval,
         day_only_task: !!mainTaskParsed.day_only_task,
         deadline_style: mainTaskParsed.deadline_style === 'by' ? 'by' : 'on',
+        follow_up_title: mainTaskParsed.follow_up_title || null,
+        follow_up_minutes: mainTaskParsed.follow_up_minutes || null,
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
         due_date: sched.dueDateISO || presetDueDateISO,
         end_date: sched.endDateISO,
@@ -501,6 +503,10 @@ Return JSON:
       day_only_task: !!parsed.day_only_task,
       deadline_style: parsed.deadline_style === 'by' ? 'by' : 'on',
       recurrence_pattern: parsed.recurrence_pattern || 'none',
+      // The next step this chore leads to, scheduled the moment the task is
+      // marked done (server side, on completion).
+      follow_up_title: parsed.follow_up_title || null,
+      follow_up_minutes: parsed.follow_up_minutes || null,
       reminder_count: 0,
       next_reminder: nextReminder ? nextReminder.toISOString() : null,
       due_date: dueDateISO,
