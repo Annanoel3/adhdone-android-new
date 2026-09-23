@@ -32,6 +32,9 @@ export async function getTravelLead(
   // The user's home base: the exact "lat,lng" center of their home circle.
   homeOrigin: string,
   eventTimeISO?: string,
+  // avoidTolls: the user said they don't take toll roads (Places page), so the
+  // drive is measured on toll-free routes only.
+  opts: { avoidTolls?: boolean } = {},
 ): Promise<TravelLead | null> {
   const place = (location || '').trim();
   const home = (homeOrigin || '').trim();
@@ -44,9 +47,22 @@ export async function getTravelLead(
   }
 
   try {
-    const proximity = await getProximity([place], home, departureAt);
-    const drive = proximity.fromHome[place];
+    // Google's departure_time is when the car LEAVES. The arrival time is only
+    // a first guess at that (measuring 9:00 traffic for a drive that starts at
+    // 8:20 under-read rush hour — same bug as the commute watch), so once the
+    // first pass says how long the drive is, measure again at the moment
+    // they'd actually pull out, when that moment is still ahead.
+    const routeOpts = { avoidTolls: opts.avoidTolls === true };
+    const proximity = await getProximity([place], home, departureAt, routeOpts);
+    let drive = proximity.fromHome[place];
     if (!drive || !drive.minutes) return null;
+    if (departureAt) {
+      const leaveAt = new Date(departureAt.getTime() - (drive.minutes + CUSHION_MINUTES) * 60000);
+      if (leaveAt.getTime() > Date.now() + 2 * 60000) {
+        const refined = (await getProximity([place], home, leaveAt, routeOpts)).fromHome[place];
+        if (refined?.minutes) drive = refined;
+      }
+    }
 
     const raw = drive.minutes + CUSHION_MINUTES;
     const leadMinutes = Math.min(Math.ceil(raw / 5) * 5, MAX_LEAD_MINUTES);
