@@ -276,6 +276,16 @@ export default function FocusModePrompt({ user, theme }) {
         status: "completed",
         completed_at: localISO,
       });
+      // A repeating task finished at the end of a focus session used to end
+      // here for good — only Home and the task list made the next occurrence.
+      if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
+        try {
+          const { createNextRecurrence } = await import('@/components/utils/taskRecurrence');
+          await createNextRecurrence(task);
+        } catch (e) {
+          console.error('Failed to create next recurrence:', e);
+        }
+      }
       // Re-broadcast AFTER the save lands — the pre-save dispatch above races
       // the server flip, so pages that reloaded too early still showed the
       // task as active. This second event refreshes them with the real state.
