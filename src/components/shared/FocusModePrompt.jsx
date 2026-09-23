@@ -108,6 +108,9 @@ export default function FocusModePrompt({ user, theme }) {
     try {
       const me = await base44.auth.me();
       const tid = me?.focus_mode_task_id || null;
+      // The profile still names a task the user just finished here while its
+      // teardown runs in the background — don't put that task back on screen.
+      if (tid && tid === justCompletedRef.current) return;
       setFocusTaskId(tid);
       setMode(tid ? "active" : "offer");
       setEnteredAt(me?.focus_mode_entered_at || null);
@@ -123,6 +126,9 @@ export default function FocusModePrompt({ user, theme }) {
     const handler = (e) => {
       const id = e.detail?.taskId;
       if (id) {
+        // A late "focus on this" for the task just finished here (its
+        // completion is still saving) must not reopen it as the current task.
+        if (id === justCompletedRef.current) return;
         setFocusTaskId(id);
         setMode("active");
         setOpen(true);
@@ -263,11 +269,16 @@ export default function FocusModePrompt({ user, theme }) {
     setMode("offer");
     setFocusTaskId(null);
     setFocusTask(null);
-    window.dispatchEvent(new CustomEvent("tasks-changed"));
+    const now = new Date();
+    const localISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString();
+    // Tell the pages WHAT changed so they show the task finished right now.
+    // A bare tasks-changed here made Home re-fetch before the save landed and
+    // the finished task sat on the list looking untouched.
+    window.dispatchEvent(new CustomEvent("tasks-changed", {
+      detail: { taskId: task.id, patch: { status: "completed", completed_at: localISO } },
+    }));
     setBusy(true);
     try {
-      const now = new Date();
-      const localISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString();
       // NOTE: Do NOT clear onesignal_notification_ids here — let onTaskUpdate
       // see the IDs so it can cancel the actual OneSignal notifications
       // server-side. Clearing them in this update makes onTaskUpdate return
