@@ -73,18 +73,15 @@ export function anchorToDaytime(date, interval) {
   return out;
 }
 
-// A recurring interval is ONLY valid when the user actually used recurring
-// language. Anything else is the model guessing — and a wrong guess means the
-// user gets pinged every hour forever.
+// A recurring interval is ONLY valid when the user actually asked for one.
+// The parser is told that a rhythm must come with the user's own words for it
+// (reminder_wish); a rhythm with no words behind it is the model guessing —
+// and a wrong guess means the user gets pinged every hour forever. This used
+// to be a keyword list ("every", "hourly", …), which missed every phrasing it
+// hadn't been told about; the parser's reading of the sentence is the test now.
 export function stripGuessedRecurrence(parsed, inputText) {
   if (!parsed) return parsed;
-  const lower = (inputText || '').toLowerCase();
-  // "Keep reminding me until I finish" / "nag me until it's done" is recurring
-  // language too — the parser turns it into an hourly rhythm on purpose.
-  if (
-    RECURRING.includes(parsed.reminder_interval) &&
-    !/\bevery\b|\bhourly\b|\bdaily\b|\beveryday\b|\beach (day|morning|night|hour)\b|\bkeep (on )?(remind|nag|bug|pester|at)|\buntil (i|it|i'?ve|it'?s|i'?m) ?(finish|done|do|get|complete|take|taken)|\bnag me\b|\bover and over\b|\bagain and again\b|\bdon'?t let me forget\b/.test(lower)
-  ) {
+  if (RECURRING.includes(parsed.reminder_interval) && !String(parsed.reminder_wish || '').trim()) {
     parsed.reminder_interval = null;
   }
 
