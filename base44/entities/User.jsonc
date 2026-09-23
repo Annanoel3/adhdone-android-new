@@ -59,6 +59,10 @@
       "default": false,
       "description": "Whether the user has already been shown (and dismissed or answered) the one-time home base ask. Stored on the profile so a new device doesn't re-ask."
     },
+    "commute_avoid_tolls": {
+      "type": "boolean",
+      "description": "True when the user told us they don't take toll roads. Commute watch then measures the drive on toll-free routes only, so 'leave now' isn't timed on a toll road they won't use. Asked on the Places page when the work address goes in; unset = never answered (tolls allowed, Google's default)."
+    },
     "work_remote": {
       "type": "boolean",
       "default": false,
