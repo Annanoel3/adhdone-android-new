@@ -17,6 +17,17 @@ export const INTERVAL_MS = {
 };
 
 const RECURRING = Object.keys(INTERVAL_MS);
+const SUB_DAILY = ['10min', '20min', '30min', '1hour', '2hours', '4hours'];
+
+// A rhythm shorter than a day. A task pinned to a date AND time that the user
+// explicitly asked to be nagged about at such a rhythm ("at 10, keep reminding
+// me until I finish") keeps the rhythm: the time is where the pings START.
+// Server twin: isSubDailyInterval / decideReminderInterval in
+// base44/shared/reminderIntervalDecision.ts.
+export function wantsRhythmFromTime(parsed) {
+  return !!(parsed && parsed.target_date && parsed.target_time && !parsed.day_only_task
+    && SUB_DAILY.includes(parsed.reminder_interval));
+}
 
 // RULES.md hard rule 3: a reminder that repeats at the same time of day (daily,
 // every other day) must not inherit the clock time it happened to be created
@@ -68,9 +79,11 @@ export function anchorToDaytime(date, interval) {
 export function stripGuessedRecurrence(parsed, inputText) {
   if (!parsed) return parsed;
   const lower = (inputText || '').toLowerCase();
+  // "Keep reminding me until I finish" / "nag me until it's done" is recurring
+  // language too — the parser turns it into an hourly rhythm on purpose.
   if (
     RECURRING.includes(parsed.reminder_interval) &&
-    !/\bevery\b|\bhourly\b|\bdaily\b|\beveryday\b|\beach (day|morning|night|hour)\b/.test(lower)
+    !/\bevery\b|\bhourly\b|\bdaily\b|\beveryday\b|\beach (day|morning|night|hour)\b|\bkeep (on )?(remind|nag|bug|pester|at)|\buntil (i|it|i'?ve|it'?s|i'?m) ?(finish|done|do|get|complete|take|taken)|\bnag me\b|\bover and over\b|\bagain and again\b|\bdon'?t let me forget\b/.test(lower)
   ) {
     parsed.reminder_interval = null;
   }
@@ -101,7 +114,7 @@ export function deriveSchedule(parsed, now = new Date()) {
   const hasDate = !!parsed.target_date;
   const hasTime = !!parsed.target_time;
 
-  if (hasDate && hasTime) out.interval = 'once';
+  if (hasDate && hasTime) out.interval = wantsRhythmFromTime(parsed) ? parsed.reminder_interval : 'once';
 
   if (out.interval === 'once' && parsed.end_date && parsed.end_date !== parsed.target_date) {
     out.endDateISO = localISO(parsed.end_date, 9, 0);
@@ -123,6 +136,11 @@ export function deriveSchedule(parsed, now = new Date()) {
     const iso = isNaN(hh) || isNaN(mm) ? null : localISO(parsed.target_date, hh, mm);
     const at = iso ? new Date(iso) : null;
     out.nextReminder = at && at > new Date(now.getTime() + 2 * 60 * 1000) ? at : null;
+    // The rhythm starts at the named time; if that time has already gone by
+    // today, the first ping is one interval from now.
+    if (!out.nextReminder && INTERVAL_MS[out.interval]) {
+      out.nextReminder = new Date(now.getTime() + INTERVAL_MS[out.interval]);
+    }
   } else if (INTERVAL_MS[out.interval]) {
     out.nextReminder = anchorToDaytime(new Date(now.getTime() + INTERVAL_MS[out.interval]), out.interval);
   }
