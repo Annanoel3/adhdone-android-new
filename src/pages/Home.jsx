@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import WelcomeCard from "../components/home/WelcomeCard";
@@ -66,7 +66,18 @@ export default function Home() {
         loadTasks();
       }
     };
-    const handleTasksChanged = () => loadTasks();
+    const handleTasksChanged = (e) => {
+      // A sender that already knows what changed (Focus Mode's "I completed
+      // this") says so in the event, and the list shows it at once instead of
+      // re-fetching a copy the server hasn't updated yet. The sender fires a
+      // plain tasks-changed once its save lands, and that one reloads.
+      const d = e?.detail;
+      if (d?.taskId && d?.patch) {
+        setTasks(prev => prev.map(t => t.id === d.taskId ? { ...t, ...d.patch } : t));
+        return;
+      }
+      loadTasks();
+    };
     const handleBirthdayCreated = (e) => {
       setBirthdayTextTask(e.detail?.task || null);
     };
@@ -80,9 +91,17 @@ export default function Home() {
     };
   }, []);
 
+  // Several reloads can be in flight at once (landing on Home after a sprint,
+  // then finishing the task in Focus Mode), and a slow one fired BEFORE a save
+  // can answer after the one fired AFTER it, putting the stale list back —
+  // that is how a task just finished in Focus Mode kept sitting on the Home
+  // list looking untouched. Only the newest request's answer is kept.
+  const loadSeq = useRef(0);
   const loadTasks = async () => {
+    const seq = ++loadSeq.current;
     try {
       const allTasks = await base44.entities.Task.list('-updated_date', 500);
+      if (seq !== loadSeq.current) return;
       setTasks(allTasks);
       // Roll over passed birthdays to next year and ensure reminders exist
       const birthdayTasks = allTasks.filter(t => t.birthday_person && t.status === "active" && t.next_reminder);
