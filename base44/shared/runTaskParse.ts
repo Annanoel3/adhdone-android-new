@@ -54,13 +54,15 @@ const TASK_PARSE_SCHEMA = {
     is_flexible: { type: "boolean" },
     priority_uninferrable: { type: "boolean" },
     life_area: { type: "string", enum: ["work", "personal"] },
+    follow_up_title: { type: ["string", "null"] },
+    follow_up_minutes: { type: ["integer", "null"] },
   },
   required: [
     "title", "location", "urgency", "energy_required", "classification",
     "target_date", "target_time", "end_date", "due_date",
     "user_asked_to_repeat_every", "recurrence_pattern", "deadline_style",
     "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
-    "life_area",
+    "life_area", "follow_up_title", "follow_up_minutes",
   ],
 };
 
@@ -106,6 +108,17 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   // "every 20 minutes" has to fall back to "none" rather than fail the save.
   const PATTERNS = ['none', 'daily', 'weekly', 'every_other_week', 'monthly', 'yearly'];
   if (!PATTERNS.includes(parsed?.recurrence_pattern)) parsed.recurrence_pattern = 'none';
+  // A follow-up only counts when both halves are usable: a real next step and
+  // a wait between 5 minutes and a day.
+  const fuMin = Number(parsed?.follow_up_minutes);
+  const fuTitle = String(parsed?.follow_up_title || '').trim();
+  if (!fuTitle || !Number.isFinite(fuMin) || fuMin < 5 || fuMin > 1440) {
+    parsed.follow_up_title = null;
+    parsed.follow_up_minutes = null;
+  } else {
+    parsed.follow_up_title = fuTitle;
+    parsed.follow_up_minutes = Math.round(fuMin);
+  }
   parsed.reminder_interval = REPEAT_VALUES.includes(parsed?.user_asked_to_repeat_every)
     ? parsed.user_asked_to_repeat_every
     : null;
