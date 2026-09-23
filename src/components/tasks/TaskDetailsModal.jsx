@@ -1142,15 +1142,36 @@ Return JSON:
         }
 
         // Calculate next reminder based on recurrence pattern
+        const daySet = Array.isArray(task.recurrence_days) ? task.recurrence_days.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6) : [];
         switch (task.recurrence_pattern) {
           case 'daily':
             nextReminder.setDate(nextReminder.getDate() + 1);
             break;
+          case 'every_other_day':
+            nextReminder.setDate(nextReminder.getDate() + 2);
+            break;
+          case 'weekdays':
+            nextReminder.setDate(nextReminder.getDate() + 1);
+            while (nextReminder.getDay() === 0 || nextReminder.getDay() === 6) nextReminder.setDate(nextReminder.getDate() + 1);
+            break;
           case 'weekly':
-            nextReminder.setDate(nextReminder.getDate() + 7);
+            if (daySet.length > 0) {
+              // Specific weekdays ("Wednesdays and Thursdays"): the next listed day.
+              nextReminder.setDate(nextReminder.getDate() + 1);
+              let guard = 0;
+              while (!daySet.includes(nextReminder.getDay()) && guard++ < 7) nextReminder.setDate(nextReminder.getDate() + 1);
+            } else {
+              nextReminder.setDate(nextReminder.getDate() + 7);
+            }
+            break;
+          case 'every_other_week':
+            nextReminder.setDate(nextReminder.getDate() + 14);
             break;
           case 'monthly':
             nextReminder.setMonth(nextReminder.getMonth() + 1);
+            break;
+          case 'yearly':
+            nextReminder.setFullYear(nextReminder.getFullYear() + 1);
             break;
         }
         // The clock time the user named ("pills at 10") wins over whatever
@@ -1177,6 +1198,7 @@ Return JSON:
           next_reminder: nextReminder.toISOString(),
           status: 'active',
           recurrence_pattern: task.recurrence_pattern,
+          recurrence_days: daySet.length > 0 ? daySet : null,
           notification_recipient_email: currentUser.email,
           pictures: task.pictures || [],
           notes: task.notes || ''
