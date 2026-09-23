@@ -704,6 +704,7 @@ Deno.serve(async (req) => {
         // task at a real place gets the same drive-time "leave now" reminder.
         location: task.location || '',
         homeOrigin: getHomeOrigin(owner),
+        avoidTolls: owner?.commute_avoid_tolls === true,
       });
       const data = res?.data || res || {};
       const plan = buildEventReminderPlan({
