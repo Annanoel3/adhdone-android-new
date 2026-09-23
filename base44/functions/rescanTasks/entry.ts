@@ -153,6 +153,7 @@ export default async function(req: Request): Promise<Response> {
                 scheduledDateISO: nextReminder,
                 urgency: newUrgency,
                 classification: task.classification,
+                reminderWish: task.reminder_wish || null,
               });
               const schedData = schedResp.data || schedResp;
               const reminders = schedData.reminders || [];
