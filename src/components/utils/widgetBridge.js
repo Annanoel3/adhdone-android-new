@@ -221,6 +221,43 @@ function reminderMomentsFor(task) {
   return Array.from(out.values());
 }
 
+// Which of a task's reminders ring OUT LOUD, and which stay regular pushes.
+// An alarm is for not missing the moment, not for being told about it early:
+//  - the day the task is about (its event time, due day or reminder time)
+//    always rings;
+//  - an appointment's night-before and a birthday's week-before / day-before
+//    are heads-ups, so they stay pushes;
+//  - a DEADLINE ("by Friday") is different: the work happens in the run-up,
+//    so a high-priority or urgent deadline's run-up reminders ring too, while
+//    a medium/low one only rings on the due day;
+//  - a task with a working window (start date → due date) rings on every day
+//    of that window, because every one of those days is a day to work on it.
+function startOfLocalDay(ms) {
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+}
+
+function sameLocalDay(a, b) {
+  return startOfLocalDay(a) === startOfLocalDay(b);
+}
+
+function ringsOutLoud(task, momentMs) {
+  const rawAnchor = task.event_time || task.due_date || task.next_reminder;
+  const anchor = rawAnchor ? new Date(rawAnchor).getTime() : NaN;
+  if (isNaN(anchor)) return true; // nothing to compare against: the booked moment stands
+  if (sameLocalDay(momentMs, anchor)) return true;
+  const isEvent = task.classification === 'event' || task.classification === 'birthday' || !!task.birthday_person;
+  if (isEvent) return false;
+  const start = task.start_date ? new Date(task.start_date).getTime() : NaN;
+  if (!isNaN(start) && momentMs >= startOfLocalDay(start) && momentMs <= anchor) return true;
+  // "By Friday" is a deadline; "on Friday at 3" is a moment. A due date on a
+  // task that is NOT pinned to a clock time is a deadline too.
+  const isDeadline = task.deadline_style === 'by' || (!!task.due_date && !task.event_time && task.reminder_interval !== 'once');
+  const pressing = task.urgency === 'high' || task.urgency === 'urgent';
+  return isDeadline && pressing && momentMs < anchor;
+}
+
 // Quiet hours apply to alarms exactly as they do to pushes (default ON,
 // 22:00–07:00, the user's own window from Settings). A reminder that falls
 // inside them is never booked as a full-screen alarm — that moment keeps its
@@ -235,6 +272,8 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
     for (const m of reminderMomentsFor(t)) {
       if (m.at <= cutoff) continue;
       if (isInQuietHours(new Date(m.at))) continue;
+      // Heads-ups stay regular pushes; see ringsOutLoud.
+      if (!ringsOutLoud(t, m.at)) continue;
       out.push({ id: `${t.id}:${m.at}`, taskId: t.id, title: t.title || 'Task', at: m.at, heading: m.heading, body: m.body });
     }
   }
