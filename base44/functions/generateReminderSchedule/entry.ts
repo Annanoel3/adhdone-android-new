@@ -170,6 +170,37 @@ export default async function(req) {
       return Response.json({ reminders });
     }
 
+    // ── Deadlines ("do X by [day]") ────────────────────────────────────────
+    // The run-up is the smart nudge cron's job: it sees every deadline with
+    // its priority and weighs it against the rest of the week — the same way
+    // it weighs a task with no date at all. Booking a second, LLM-built
+    // ladder here on top of that gave a dated task two reminder streams while
+    // an urgent task with no date got one. What stays here is the safety net
+    // that fires even if the cron doesn't: the evening before and the morning
+    // of the due day (for a deadline that is already today, one reminder about
+    // an hour out instead).
+    if (isDeadline && !wish) {
+      const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
+      const reminders = [];
+      if (!isSameDay) {
+        reminders.push({
+          days_before: 1, hour: 18, minute: 0, relative_minutes_before: null,
+          label: 'day before deadline',
+          notification_title: `Due tomorrow ⏳ ${t}`,
+          notification_body: `Heads up — "${t}" needs to be done by tomorrow. Even a small start counts. ✨`,
+        });
+      }
+      const dueDayHour = isSameDay && nowLocal.hour >= 9 ? Math.min(nowLocal.hour + 1, 21) : 9;
+      reminders.push({
+        days_before: 0, hour: dueDayHour, minute: 0, relative_minutes_before: null,
+        label: 'deadline day',
+        notification_title: `Deadline day 🔔 ${t}`,
+        notification_body: `Today's the deadline for "${t}". You've got this! 💪`,
+      });
+      console.log(`[generateReminderSchedule] Deadline safety net for "${title}" (${priority}) — ${reminders.length} reminder(s); run-up handled by smart cron (no LLM call)`);
+      return Response.json({ reminders });
+    }
+
     const humanTime = (d) => d.toLocaleString('en-US', {
       timeZone: tz,
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -197,8 +228,7 @@ ${isDeadline ? `CRITICAL DEADLINE RULE: The user said this must be done BY ${sch
   * Multi-step or heavy tasks (taxes, a report, a big cleanout, applications, packing for a trip, anything with paperwork or research): start 1-2 weeks before — long tasks need runway.
 - Use ABSOLUTE reminders only (days_before + hour, typically hour 9 or 18). NEVER use relative_minutes_before — there is no clock time to be relative to.
 - ALWAYS include a reminder the day before (days_before: 1) and one on the due day (days_before: 0).
-- THE PRIORITY DECIDES HOW HARD THE RUN-UP PUSHES: an urgent or high-priority deadline earns an earlier start and a reminder on every day of the run-up (with two on the due day); a medium one gets the runway above; a low one gets only the day before and the due day. The person set that priority on purpose.
-- Total 2-5 reminders spread across the runway; escalate the tone as the deadline gets close.
+- Every reminder spends some of the person's patience; the priority says how much of it this task is worth. A low one gets little beyond the day before and the due day; an urgent one can be reminded on every day of the run-up. Escalate the tone as the deadline gets close.
 - The body should reference how much time is LEFT ("you've got about a week", "this is due tomorrow") and, for bigger tasks, nudge toward a small first step.
 ` : ''}${classification === 'event' ? 'CRITICAL EVENT RULE: This is an EVENT (a scheduled occurrence the user attends — meeting, concert, appointment, party, class, meetup). NEVER schedule a reminder AFTER the event start time. The event is over once it starts — a "coming up in an hour" reminder 4 hours after the event is useless and confusing. All reminders must fire BEFORE the scheduled time. If the event time has already passed, do NOT schedule any reminders at all.' : ''}
 
