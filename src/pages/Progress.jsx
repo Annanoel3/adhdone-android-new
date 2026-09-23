@@ -137,11 +137,12 @@ export default function Progress() {
       .slice(0, 5)
       .map(t => ({ title: t.title, pushes: t.due_date_pushes, status: t.status }));
 
-    // Rescued from the back burner: parked tasks that still got finished. A
-    // completed task keeps its silenced flag, so this counts every task that
-    // was on the back burner at the moment it was marked done. (Taking a task
-    // off the back burner is not a rescue; finishing it is.)
-    const rescued = completedTasks.filter(t => t.silenced === true).length;
+    // Rescued from the back burner: tasks that were parked at some point and
+    // still got finished — whether finished while parked (silenced survives
+    // completion) or brought back first (was_back_burnered is set the moment a
+    // task is parked and never cleared). Un-parking alone is not a rescue;
+    // finishing is.
+    const rescued = completedTasks.filter(t => t.silenced === true || t.was_back_burnered === true).length;
 
     const focusSessions = (focusLogs || []).filter(l => (l.duration_seconds || 0) > 0);
     const sumMinutes = (list) => Math.round(list.reduce((sum, l) => sum + (l.duration_seconds || 0), 0) / 60);
