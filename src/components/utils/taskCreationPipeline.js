@@ -5,7 +5,7 @@ import { getReminderCopy } from "./reminderCopy";
 import dedupeSplitTasks from "./dedupeSplitTasks";
 import { createBirthdayFromInput } from "./birthdayScheduler";
 import { toast } from "@/components/ui/use-toast";
-import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule, anchorToDaytime } from "./taskSchedule";
+import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule, anchorToDaytime, wantsRhythmFromTime } from "./taskSchedule";
 import { announceEventConflict } from "./eventConflicts";
 import { commitNotificationIds } from "./notificationOwnership";
 import { trackFire } from "@/lib/appTrack";
@@ -230,6 +230,8 @@ Return JSON:
         deadline_style: mainTaskParsed.deadline_style === 'by' ? 'by' : 'on',
         follow_up_title: mainTaskParsed.follow_up_title || null,
         follow_up_minutes: mainTaskParsed.follow_up_minutes || null,
+        reminder_wish: mainTaskParsed.reminder_wish || null,
+        anchor_time: mainTaskParsed.target_time || null,
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
         due_date: sched.dueDateISO || presetDueDateISO,
         end_date: sched.endDateISO,
@@ -274,6 +276,7 @@ Return JSON:
           urgency: parentTask.urgency,
           dayOnly: !!mainTaskParsed.day_only_task,
           classification: parentTask.classification,
+          reminderWish: mainTaskParsed.reminder_wish || null,
         }).then(multiIds => {
           return commitNotificationIds(parentTask.id, multiIds || []);
         }).catch(error => console.error("Failed to schedule reminders:", error));
@@ -365,6 +368,7 @@ Return JSON:
         data: {
           title: parsed.title || inputText.trim(),
           original_input: inputText,
+          reminder_wish: parsed.reminder_wish || null,
           energy_required: parsed.energy_required || 'medium',
           classification: parsed.classification || 'task',
           life_area: parsed.life_area === 'work' ? 'work' : 'personal',
@@ -380,6 +384,7 @@ Return JSON:
         data: {
           title: parsed.title || inputText.trim(),
           original_input: inputText,
+          reminder_wish: parsed.reminder_wish || null,
           location: parsed.location || null,
           energy_required: parsed.energy_required || 'medium',
           urgency: parsed.urgency || 'medium',
@@ -402,6 +407,11 @@ Return JSON:
     if (parsed.target_date && (parsed.target_time || parsed.day_only_task)) {
       actualReminderInterval = 'once';
     }
+    // "At 10 am, keep reminding me until I finish": the user asked for a
+    // rhythm AND named a time. The time is where the pings start, not the one
+    // and only ping (same rule as taskSchedule.deriveSchedule and the server).
+    const rhythmFromTime = wantsRhythmFromTime(parsed);
+    if (rhythmFromTime) actualReminderInterval = parsed.reminder_interval;
 
     const recurringIntervals = ['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day'];
 
@@ -425,7 +435,15 @@ Return JSON:
       }
     }
 
-    if (parsed.day_only_task && parsed.target_date && actualReminderInterval === 'once') {
+    if (rhythmFromTime) {
+      const [year, month, day] = parsed.target_date.split('-').map(n => parseInt(n, 10));
+      const [hours, minutes] = parsed.target_time.split(':').map(n => parseInt(n, 10));
+      const startAt = new Date(year, month - 1, day, hours, minutes, 0, 0);
+      // First ping at the named time; if it has already gone by, one interval from now.
+      nextReminder = startAt > new Date(now.getTime() + 2 * 60 * 1000 + 5000)
+        ? startAt
+        : new Date(now.getTime() + INTERVAL_MS[actualReminderInterval]);
+    } else if (parsed.day_only_task && parsed.target_date && actualReminderInterval === 'once') {
       const [y, m, d] = parsed.target_date.split('-').map(n => parseInt(n, 10));
       nextReminder = new Date(y, m - 1, d, 9, 0, 0, 0);
       if (nextReminder <= new Date(now.getTime() + 2 * 60 * 1000)) nextReminder = null;
@@ -456,6 +474,8 @@ Return JSON:
           taskData: {
             title: parsed.title || inputText.trim(),
             original_input: inputText,
+            reminder_wish: parsed.reminder_wish || null,
+            anchor_time: parsed.target_time || null,
             location: parsed.location || null,
             description: '',
             classification: parsed.classification || 'task',
@@ -507,6 +527,10 @@ Return JSON:
       // marked done (server side, on completion).
       follow_up_title: parsed.follow_up_title || null,
       follow_up_minutes: parsed.follow_up_minutes || null,
+      // The user's own words about how to remind them, and the clock time they
+      // named (each new occurrence of a recurring task starts there).
+      reminder_wish: parsed.reminder_wish || null,
+      anchor_time: parsed.target_time || null,
       reminder_count: 0,
       next_reminder: nextReminder ? nextReminder.toISOString() : null,
       due_date: dueDateISO,
@@ -559,6 +583,7 @@ Return JSON:
             dayOnly: !!parsed.day_only_task,
             deadlineStyle: parsed.deadline_style === 'by' ? 'by' : 'on',
             classification: createdTask.classification,
+            reminderWish: parsed.reminder_wish || null,
           }))
           .then(multiIds => {
             if (multiIds) {
@@ -680,6 +705,7 @@ export async function createTaskWithPriority(data, priority) {
   const createdTask = await base44.entities.Task.create({
     title: data.title,
     original_input: data.original_input || null,
+    reminder_wish: data.reminder_wish || null,
     description: '',
     classification: data.classification || 'task',
     reminder_interval: null,
@@ -715,6 +741,8 @@ export async function createTaskWithDate(data, date, time) {
   const createdTask = await base44.entities.Task.create({
     title: data.title,
     original_input: data.original_input || null,
+    reminder_wish: data.reminder_wish || null,
+    anchor_time: time || null,
     location: data.location || null,
     description: '',
     classification: data.classification || 'task',
@@ -781,6 +809,7 @@ export async function createTaskAnyDay(data) {
   return base44.entities.Task.create({
     title: data.title,
     original_input: data.original_input || null,
+    reminder_wish: data.reminder_wish || null,
     location: data.location || null,
     description: '',
     classification: data.classification || 'task',
