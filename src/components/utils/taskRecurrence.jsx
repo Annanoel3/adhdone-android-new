@@ -3,13 +3,21 @@ import { base44 } from '@/api/base44Client';
 // Advance a date by one cycle of the pattern. 'weekdays' steps forward a day
 // and then skips Saturday/Sunday, so a business-days habit never lands on the
 // weekend.
-function advance(date, pattern) {
+function advance(date, pattern, days) {
   const d = new Date(date);
+  const daySet = Array.isArray(days) ? days.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6) : [];
   if (pattern === 'daily') {
     d.setDate(d.getDate() + 1);
+  } else if (pattern === 'every_other_day') {
+    d.setDate(d.getDate() + 2);
   } else if (pattern === 'weekdays') {
     d.setDate(d.getDate() + 1);
     while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1);
+  } else if (pattern === 'weekly' && daySet.length > 0) {
+    // Specific weekdays ("Wednesdays and Thursdays"): the next listed day.
+    d.setDate(d.getDate() + 1);
+    let guard = 0;
+    while (!daySet.includes(d.getDay()) && guard++ < 7) d.setDate(d.getDate() + 1);
   } else if (pattern === 'weekly') {
     d.setDate(d.getDate() + 7);
   } else if (pattern === 'every_other_week') {
@@ -25,11 +33,11 @@ function advance(date, pattern) {
 function getNextRecurrenceDate(task) {
   const baseDate = task.next_reminder ? new Date(task.next_reminder) : new Date();
   const now = new Date();
-  let nextDate = advance(baseDate, task.recurrence_pattern);
+  let nextDate = advance(baseDate, task.recurrence_pattern, task.recurrence_days);
 
   // If computed date is still in the past, calculate from now
   if (nextDate <= now) {
-    nextDate = advance(now, task.recurrence_pattern);
+    nextDate = advance(now, task.recurrence_pattern, task.recurrence_days);
   }
 
   return nextDate;
@@ -71,6 +79,7 @@ export async function createNextRecurrence(task) {
     status: 'active',
     next_reminder: nextDate.toISOString(),
     recurrence_pattern: task.recurrence_pattern,
+    recurrence_days: Array.isArray(task.recurrence_days) && task.recurrence_days.length ? task.recurrence_days : null,
     notification_recipient_email: task.notification_recipient_email || null,
     birthday_person: task.birthday_person || null,
     birthday_remind_week_before: task.birthday_remind_week_before,
@@ -94,15 +103,31 @@ export async function createNextRecurrence(task) {
   return { task: newTask, nextDate };
 }
 
-export function getRecurrenceLabel(pattern) {
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+// "Wed, Thu" for a task that repeats on specific weekdays; '' otherwise.
+export function recurrenceDaysLabel(days) {
+  if (!Array.isArray(days) || days.length === 0) return '';
+  const names = days.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6).map((n) => DAY_NAMES[n]);
+  if (names.length === 0) return '';
+  if (names.length === 7) return 'every day';
+  return names.join(', ');
+}
+
+export function getRecurrenceLabel(pattern, days) {
   const labels = {
     none: '',
     daily: '🔁 Daily',
+    every_other_day: '🔁 Every other day',
     weekdays: '🔁 Weekdays (Mon–Fri)',
     weekly: '🔁 Weekly',
     every_other_week: '🔁 Every other week',
     monthly: '🔁 Monthly',
     yearly: '🎂 Yearly'
   };
+  if (pattern === 'weekly') {
+    const which = recurrenceDaysLabel(days);
+    if (which) return `🔁 ${which}`;
+  }
   return labels[pattern] || '';
 }
