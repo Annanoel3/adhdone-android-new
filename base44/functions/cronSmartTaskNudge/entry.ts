@@ -233,11 +233,12 @@ Deno.serve(async (req) => {
 
         // Which nudges ring OUT LOUD on a phone set to full-screen reminders
         // (the push asks to ring on arrival, like the commute "leave now"):
-        // a task due today; every day of a working window (start → due); and
-        // any high-priority or urgent task that isn't pinned to a later day —
-        // a deadline's run-up, an overdue task, or a task with no date at all.
-        // The priority decides how loud a task is; having a date doesn't. A
-        // heads-up about a task tied to a later day stays a regular
+        // a task due today; every day of a working window (start → due); every
+        // nudge about a task with NO date at all (there is no "day it's about",
+        // so each nudge is a do-it-now — the priority decides how often it is
+        // nudged, not how loud); and any high-priority or urgent dated task
+        // that isn't pinned to a later day — a deadline's run-up or an overdue
+        // task. A heads-up about a task tied to a later day stays a regular
         // notification. Same rule as the app's own alarm list
         // (widgetBridge.ringsOutLoud).
         const nudgedTask = entry.task_id ? taskById.get(entry.task_id) : null;
@@ -256,7 +257,8 @@ Deno.serve(async (req) => {
           // Tied to one later day ("on Friday"): nothing to do until then, so
           // its earlier heads-ups stay pushes whatever the priority.
           const pinnedLater = !!due && !isDeadline && !dueToday && due.getTime() > now.getTime();
-          ringsOutLoud = dueToday || inWindow || (pressing && !pinnedLater);
+          const noDate = !due && !nudgedTask.event_time;
+          ringsOutLoud = dueToday || inWindow || noDate || (pressing && !pinnedLater);
         }
         const sent = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id, ringsOutLoud);
         if (sent) {
