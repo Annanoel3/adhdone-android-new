@@ -76,7 +76,7 @@ import PageIntroTour from "./components/onboarding/PageIntroTour";
 import WelcomeDialog from "./components/onboarding/WelcomeDialog";
 import CatchUpDialog from "./components/onboarding/CatchUpDialog";
 import { applyOnboardingReplay } from "./components/onboarding/onboardingReplay";
-import { hydrateOnboardingFlags, clearOnboardingFlags } from "./components/onboarding/onboardingSync";
+import { hydrateOnboardingFlags, clearOnboardingFlags, persistOnboardingFlag } from "./components/onboarding/onboardingSync";
 import TaskCaptureProcessor from "./components/shared/TaskCaptureProcessor";
 import UsageTracker from "./components/shared/UsageTracker";
 import { base44 } from "@/api/base44Client";
@@ -364,6 +364,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         setTimeout(() => {
           setShowSpicyBrainsExplanation(true);
           localStorage.setItem('spicybrains_explanation_seen', 'true');
+          // Once per account, not once per phone.
+          persistOnboardingFlag('spicybrains_explanation_seen');
         }, 500);
       }
     }
