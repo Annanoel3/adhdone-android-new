@@ -54,6 +54,7 @@ Deno.serve(async (req) => {
         scheduledDateISO: task.next_reminder,
         urgency: task.urgency,
         classification: task.classification || 'event',
+        reminderWish: task.reminder_wish || null,
       });
       const schedData = schedRes?.data || schedRes || {};
       const rawReminders = schedData.reminders || [];
