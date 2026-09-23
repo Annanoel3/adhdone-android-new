@@ -94,6 +94,17 @@ export default function TaskNotification() {
 
       await updateTodaysSummary();
 
+      // A repeating task finished from its own reminder screen used to end
+      // here for good — only Home and the task list made the next occurrence.
+      if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
+        try {
+          const { createNextRecurrence } = await import('../components/utils/taskRecurrence');
+          await createNextRecurrence(task);
+        } catch (e) {
+          console.error('Failed to create next recurrence:', e);
+        }
+      }
+
       navigate(createPageUrl("Home"), {
         state: { reload: true, message: "Great job! Task completed! 🎉" }
       });
