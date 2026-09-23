@@ -6,11 +6,15 @@ import { base44 } from "@/api/base44Client";
 
 // Titles for the same habit drift ("Do dishes" vs "Do the dishes" vs "Put up the
 // laundry"), which used to split them into separate habits and orphan their
-// timed sessions. Drop filler words so those all land on the same key.
-const FILLER = new Set(['the', 'a', 'an', 'my', 'some', 'do', 'go', 'get', 'take', 'put', 'up', 'out', 'and', 'to', 'of']);
+// timed sessions. Drop filler words so those all land on the same key. Whose
+// thing it is doesn't change the chore either: "Put away Antonio's laundry",
+// "Put away my laundry" and "Put away laundry" are all the laundry habit, so
+// possessives ("Antonio's") and owner words ("my") go too.
+const FILLER = new Set(['the', 'a', 'an', 'my', 'our', 'his', 'her', 'their', 'some', 'any', 'do', 'go', 'get', 'take', 'put', 'up', 'out', 'away', 'back', 'down', 'off', 'and', 'to', 'of', 'for']);
 const norm = (s) =>
   (s || '')
     .toLowerCase()
+    .replace(/\b[a-z0-9]+['’]s\b/g, '')
     .replace(/[^a-z0-9 ]/g, '')
     .split(/\s+/)
     .filter((w) => w && !FILLER.has(w))
@@ -87,6 +91,9 @@ export default function HabitPatterns({ theme }) {
       const key = canon(norm(t.title));
       if (!key) return;
       const g = groups[key] || (groups[key] = { title: t.title, days: new Set() });
+      // Label the habit with its plainest wording ("Put away laundry" over
+      // "Put away Antonio's laundry"), since it stands for all of them.
+      if (t.title && t.title.length < g.title.length) g.title = t.title;
       // One per calendar day — repeated completions the same day are the same
       // instance of the task, not a repeat of the habit.
       const d = new Date(t.completed_at);
