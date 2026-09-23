@@ -193,7 +193,12 @@ export default function Progress() {
         <p className="text-gray-600">Understanding your productivity patterns</p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-6">
+      {/* grid-cols-1 matters: without an explicit column the single mobile
+          column is sized to its widest child's content, and one long
+          "most postponed" title made every card on the page wider than the
+          screen. minmax(0, 1fr) lets the cards stay screen-wide and the title
+          truncate instead. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Task Completion Times */}
         <Card className="border-none shadow-lg">
           <CardHeader>
@@ -388,7 +393,7 @@ export default function Progress() {
                   <div key={i} className={`flex items-center justify-between p-3 rounded-lg ${
                     theme === 'minimalist' ? 'bg-gray-50' : 'bg-white/60'
                   }`}>
-                    <span className={`text-sm flex-1 truncate ${t.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                    <span className={`text-sm flex-1 min-w-0 truncate ${t.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
                       {t.title}
                     </span>
                     <Badge className="bg-amber-100 text-amber-700 ml-2 flex-shrink-0">
