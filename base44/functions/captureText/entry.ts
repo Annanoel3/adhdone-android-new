@@ -5,8 +5,8 @@
 // Native does nothing but hand over the raw text: this parses it, splits it if
 // it holds several separate errands, creates the Task records, and schedules
 // the reminder pushes — all server-side, so the app never has to open and the
-// save is silent and instant. (Last redeployed for the parser's follow-up
-// fields, bundled from the shared files below.)
+// save is silent and instant. (Last redeployed so the toll answer from Places
+// reaches the drive-time reminder, bundled from the shared files below.)
 
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import { runTaskParse } from "../../shared/runTaskParse.ts";
