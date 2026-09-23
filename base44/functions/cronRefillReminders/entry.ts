@@ -72,6 +72,15 @@ Deno.serve(async (req) => {
       t.classification !== 'birthday' && t.classification !== 'event' &&
       !t.birthday_person && !t.day_only_task;
 
+    // Since 2026-09-24 a dateless task with an explicit rhythm ("every hour",
+    // "keep reminding me until I finish") is owned HERE, not by the smart-nudge
+    // cron: that cron skips every recurring interval, so between the two
+    // exclusions nobody was booking those tasks past their first batch. Tasks
+    // from before that date keep the old rule, so a long-forgotten hourly task
+    // doesn't suddenly start ringing again.
+    const RHYTHM_OWNED_SINCE = Date.parse('2026-09-24T00:00:00Z');
+    const rhythmOwnedHere = (t: any) => new Date(t.created_date || 0).getTime() >= RHYTHM_OWNED_SINCE;
+
     const recurringTasks = allTasks.filter(t =>
       t.status === 'active' &&
       !t.silenced &&  // Back Burner: silenced tasks get no notifications
@@ -79,7 +88,7 @@ Deno.serve(async (req) => {
       t.reminder_interval !== 'once' &&
       intervalMsMap[t.reminder_interval] &&
       t.notification_recipient_email &&  // require explicit email — never fall back to created_by
-      !isSmartNudgeTask(t)  // smart nudge cron handles these
+      (!isSmartNudgeTask(t) || rhythmOwnedHere(t))  // smart nudge cron handles the old dateless ones
     );
 
     console.log(`📊 [REFILL] Found ${recurringTasks.length} recurring tasks`);
@@ -182,6 +191,16 @@ Deno.serve(async (req) => {
       let batchStart = scheduledUntil > now
           ? new Date(scheduledUntil.getTime() + interval + staggerMs)
           : new Date(now.getTime() + interval + staggerMs);
+      // A schedule starting from scratch whose task already knows when it wants
+      // to begin (tomorrow's "pills at 10", made when today's was checked off)
+      // starts THERE, not an interval from now — or it would nag overnight
+      // about something that isn't due until morning.
+      if (scheduledUntil <= now && task.next_reminder) {
+        const wanted = new Date(task.next_reminder);
+        if (!isNaN(wanted.getTime()) && wanted.getTime() > batchStart.getTime()) {
+          batchStart = wanted;
+        }
+      }
 
       const email = task.notification_recipient_email;
 
@@ -705,6 +724,7 @@ Deno.serve(async (req) => {
         location: task.location || '',
         homeOrigin: getHomeOrigin(owner),
         avoidTolls: owner?.commute_avoid_tolls === true,
+        reminderWish: task.reminder_wish || null,
       });
       const data = res?.data || res || {};
       const plan = buildEventReminderPlan({
