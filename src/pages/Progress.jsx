@@ -8,7 +8,9 @@ import {
   Calendar,
   CalendarClock,
   Zap,
-  Sparkles
+  Sparkles,
+  LifeBuoy,
+  Timer
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import HabitPatterns from "@/components/progress/HabitPatterns";
@@ -34,6 +36,8 @@ export default function Progress() {
     // capped by a recent-500 window that's mostly still-active tasks.
     const tasks = await base44.entities.Task.list('-created_date', 500);
     const allCompleted = await base44.entities.Task.filter({ status: 'completed' }, '-completed_at', 2000);
+    // Focus Mode sessions, for the focus-time tiles. Never blocks the page.
+    const focusLogs = await base44.entities.FocusSessionLog.list('-completed_at', 1000).catch(() => []);
 
     // Analyze task completion by time
     // Only genuine, still-existing completions count: no subtasks (they'd inflate
@@ -133,7 +137,26 @@ export default function Progress() {
       .slice(0, 5)
       .map(t => ({ title: t.title, pushes: t.due_date_pushes, status: t.status }));
 
+    // Rescued from the back burner: parked tasks that still got finished. A
+    // completed task keeps its silenced flag, so this counts every task that
+    // was on the back burner at the moment it was marked done. (Taking a task
+    // off the back burner is not a rescue; finishing it is.)
+    const rescued = completedTasks.filter(t => t.silenced === true).length;
+
+    const focusSessions = (focusLogs || []).filter(l => (l.duration_seconds || 0) > 0);
+    const sumMinutes = (list) => Math.round(list.reduce((sum, l) => sum + (l.duration_seconds || 0), 0) / 60);
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const focusMinutes = sumMinutes(focusSessions);
+    const focusMinutesThisWeek = sumMinutes(focusSessions.filter(l => {
+      const at = new Date(l.completed_at || l.started_at).getTime();
+      return at >= weekAgo;
+    }));
+
     setInsights({
+      rescued,
+      focusSessions: focusSessions.length,
+      focusMinutes,
+      focusMinutesThisWeek,
       morningCompletions,
       afternoonCompletions,
       eveningCompletions,
@@ -293,6 +316,45 @@ export default function Progress() {
         </Card>
 
         <HabitPatterns theme={theme} />
+
+        {/* Comebacks and focus time. Only the numbers that read as a win or as
+            plain self-knowledge live here — never how many nudges went
+            unanswered or how long the app was open. */}
+        <Card className="border-none shadow-lg md:col-span-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <LifeBuoy className="w-5 h-5" />
+              Comebacks &amp; Focus
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4">
+              <div className={`p-4 rounded-xl text-center ${
+                theme === 'minimalist' ? 'bg-teal-50' : 'bg-gradient-to-br from-teal-100 to-green-100'
+              }`}>
+                <LifeBuoy className="w-8 h-8 mx-auto mb-2 text-teal-600" />
+                <div className="text-2xl font-bold text-gray-900">{insights.rescued}</div>
+                <p className="text-xs text-gray-600 mt-1">Rescued</p>
+                <p className="text-[10px] text-gray-500">finished from the back burner</p>
+              </div>
+              <div className={`p-4 rounded-xl text-center ${
+                theme === 'minimalist' ? 'bg-indigo-50' : 'bg-gradient-to-br from-indigo-100 to-blue-100'
+              }`}>
+                <Timer className="w-8 h-8 mx-auto mb-2 text-indigo-600" />
+                <div className="text-2xl font-bold text-gray-900">{insights.focusSessions}</div>
+                <p className="text-xs text-gray-600 mt-1">Focus Sessions</p>
+              </div>
+              <div className={`p-4 rounded-xl text-center ${
+                theme === 'minimalist' ? 'bg-purple-50' : 'bg-gradient-to-br from-purple-100 to-pink-100'
+              }`}>
+                <Clock className="w-8 h-8 mx-auto mb-2 text-purple-600" />
+                <div className="text-2xl font-bold text-gray-900">{insights.focusMinutes}</div>
+                <p className="text-xs text-gray-600 mt-1">Focus Minutes</p>
+                <p className="text-[10px] text-gray-500">{insights.focusMinutesThisWeek} this week</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Due Date Push Tracking */}
         <Card className="border-none shadow-lg md:col-span-2">
