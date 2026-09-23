@@ -35,10 +35,21 @@ function getNextRecurrenceDate(task) {
   return nextDate;
 }
 
+// The clock time the user named for the task ("pills at 10"), applied to the
+// next occurrence. Without it, a task whose next_reminder had been bumped
+// along by hourly reminders carried the bumped time into tomorrow.
+function applyAnchorTime(date, task) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(task?.anchor_time || ''));
+  if (!m) return date;
+  const out = new Date(date);
+  out.setHours(Number(m[1]), Number(m[2]), 0, 0);
+  return out;
+}
+
 export async function createNextRecurrence(task) {
   if (!task.recurrence_pattern || task.recurrence_pattern === 'none') return null;
 
-  const nextDate = getNextRecurrenceDate(task);
+  const nextDate = applyAnchorTime(getNextRecurrenceDate(task), task);
 
   const newTask = await base44.entities.Task.create({
     title: task.title,
@@ -46,6 +57,17 @@ export async function createNextRecurrence(task) {
     urgency: task.urgency || 'medium',
     energy_required: task.energy_required || 'medium',
     reminder_interval: task.reminder_interval || 'once',
+    // What makes this task itself, carried to every occurrence: where it
+    // happens, what the user originally wrote, how they asked to be reminded,
+    // the time they named, and the chore's follow-up step.
+    original_input: task.original_input || null,
+    location: task.location || null,
+    classification: task.classification || 'task',
+    life_area: task.life_area || 'personal',
+    reminder_wish: task.reminder_wish || null,
+    anchor_time: task.anchor_time || null,
+    follow_up_title: task.follow_up_title || null,
+    follow_up_minutes: task.follow_up_minutes || null,
     status: 'active',
     next_reminder: nextDate.toISOString(),
     recurrence_pattern: task.recurrence_pattern,
