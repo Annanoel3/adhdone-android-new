@@ -238,7 +238,7 @@ KEY ADHD REMINDER PRINCIPLES:
 - People with ADHD struggle with executive function — they often forget things, so multiple reminders help for important tasks
 - BUT too many reminders can create anxiety and overwhelm — find the right balance (usually 1-4 reminders)
 - "Just-in-time" reminders work well for time-sensitive tasks (right before the task)
-- Advance reminders help for tasks that need preparation or travel
+- A HEADS-UP BEFORE THE TIME IS NOT AUTOMATIC. Add one only when a person would actually want it: an appointment, a meeting or a call with someone else, something they have to leave the house for, or something that needs prep first (packing, defrosting, charging, getting dressed up). A routine pinned to a clock time — coffee at 9:30, pills at 10, a chore at 6 — gets exactly one reminder, at the time; a "coming up in an hour" for making coffee is noise, and so is one for anything that repeats on a schedule.
 - Externalizing future thoughts reduces cognitive load — a well-timed reminder is like a "body double"
 - People with ADHD benefit from reminders that create a gentle sense of urgency without overwhelming
 
@@ -429,14 +429,15 @@ Examples:
         console.log(`[generateReminderSchedule] Dropped ${before - reminders.length} reminder(s) scheduled after the task time`);
       }
 
-      // The lead reminder: drive time + cushion when we know where this happens,
-      // otherwise the generic one-hour heads-up (which must NOT tell the user to
-      // leave — we have no idea how far away it is).
+      // The lead reminder: drive time + cushion when we know where this
+      // happens. When we don't, there is no automatic heads-up any more — the
+      // LLM decides whether this task deserves one (an appointment does, coffee
+      // at 9:30 doesn't). Only the at-time reminder is guaranteed.
       const leadMinutes = lead ? lead.leadMinutes : 60;
       const hasLead = reminders.some(r => r.relative_minutes_before === leadMinutes);
       const hasAtTime = reminders.some(r => r.relative_minutes_before === 0);
 
-      if (!hasLead && new Date(scheduled.getTime() - leadMinutes * 60000) > now) {
+      if (lead && !hasLead && new Date(scheduled.getTime() - leadMinutes * 60000) > now) {
         reminders.push({
           days_before: null, hour: null, minute: null, relative_minutes_before: leadMinutes,
           label: lead ? 'leave now' : '1 hour before',
