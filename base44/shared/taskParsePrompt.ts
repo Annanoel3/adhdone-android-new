@@ -275,6 +275,17 @@ life_area — "work" if this belongs to the user's job / professional life,
   ambiguous items — "chart notes" is work for a nurse, "practice the set" is
   work for a wedding musician. When genuinely unsure, "personal".
 
+follow_up_title / follow_up_minutes — some chores have an obvious NEXT step that
+  only makes sense a set time after this one is DONE: laundry in the washer →
+  "Move the laundry to the dryer" (about 60 min), laundry in the dryer → "Fold
+  the laundry" (about 60), something in the oven → "Take it out of the oven"
+  (its cook time), feeding the parking meter → "Move the car" (its limit),
+  sprinklers on → "Turn off the sprinklers" (about 30), dishwasher started →
+  "Empty the dishwasher" (about 120). For those, give the next step as a short
+  imperative title and the wait in minutes counted from when the user marks
+  THIS task done. For everything else — most tasks — both are null. Never
+  invent a follow-up for appointments, errands, calls or anything one-and-done.
+
 ────────────────────────────────────────────────────────────────────────
 Return JSON with exactly these keys:
 {
@@ -294,6 +305,8 @@ Return JSON with exactly these keys:
   "needs_date_pick": boolean,
   "is_flexible": boolean,
   "priority_uninferrable": boolean,
-  "life_area": "work" | "personal"
+  "life_area": "work" | "personal",
+  "follow_up_title": string | null,
+  "follow_up_minutes": integer | null
 }`;
 }
