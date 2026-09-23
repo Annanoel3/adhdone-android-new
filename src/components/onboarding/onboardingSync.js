@@ -19,7 +19,7 @@ let queue = Promise.resolve();
 // signing in here must not inherit the previous one's "already seen" marks —
 // that is how a brand-new account on a used phone got no welcome at all.
 const ACCOUNT_KEY = 'adhd_onboarding_account';
-const FIRST_RUN_KEYS = ['quick_capture_prompt_seen', 'home_zip_prompt_seen_v2', 'spicybrains_explanation_seen'];
+const FIRST_RUN_KEYS = ['quick_capture_prompt_seen', 'home_zip_prompt_seen_v2', 'spicybrains_explanation_seen', 'seasonal_popup_shown', 'kawaii_popup_shown'];
 
 function clearLocalFirstRunFlags() {
   try {
