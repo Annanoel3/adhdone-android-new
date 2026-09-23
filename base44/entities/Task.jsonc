@@ -300,6 +300,14 @@
       "type": "number",
       "description": "Minutes after completion at which the follow-up reminder goes out."
     },
+    "reminder_wish": {
+      "type": "string",
+      "description": "The user's own instruction about how, when or how often to remind them, in their words (\"keep reminding me until I finish\", \"just once\", \"the night before and the morning of\"). Set by the parser only when they said one. The smart-nudge planner and the reminder-plan generator obey it over their defaults; it never changes WHAT the task is."
+    },
+    "anchor_time": {
+      "type": "string",
+      "description": "The clock time the user named for this task, local HH:MM. Each new occurrence of a recurring task starts here (a daily 'pills at 10' task made at 11:30 must still ring at 10:00 tomorrow, not 11:30)."
+    },
     "recurrence_pattern": {
       "type": "string",
       "enum": [
