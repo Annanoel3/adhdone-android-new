@@ -300,6 +300,14 @@
       "type": "number",
       "description": "Minutes after completion at which the follow-up reminder goes out."
     },
+    "next_occurrence_id": {
+      "type": "string",
+      "description": "Id of the next copy of this repeating task that completing it made. Lets un-checking it take that copy back, and stops a second completion from making another copy."
+    },
+    "follow_up_notification_id": {
+      "type": "string",
+      "description": "OneSignal id of the follow-up push booked when this task was completed (written by logTaskCompletion). Kept apart from onesignal_notification_ids because completing a task cancels and clears those. onTaskUpdate cancels it when the task is un-completed or deleted."
+    },
     "reminder_wish": {
       "type": "string",
       "description": "The user's own instruction about how, when or how often to remind them, in their words (\"keep reminding me until I finish\", \"just once\", \"the night before and the morning of\"). Set by the parser only when they said one. The smart-nudge planner and the reminder-plan generator obey it over their defaults; it never changes WHAT the task is."
