@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import BirthdayTextDialog from "./BirthdayTextDialog";
 import { isTourActive } from "@/components/onboarding/tourActive";
+import { usePopupTurn } from "@/components/onboarding/onboardingSurface";
 
 function todayKey() {
   const d = new Date();
@@ -30,6 +31,8 @@ function daysUntil(iso) {
  */
 export default function BirthdayTextPromptPopup({ user, theme }) {
   const [isOpen, setIsOpen] = useState(false);
+  // Opens on its own, so it takes its turn: never on top of another popup.
+  const shown = usePopupTurn(isOpen);
   const [current, setCurrent] = useState(null);
   const [showWriter, setShowWriter] = useState(false);
   const dismissedRef = useRef(new Set());
@@ -112,7 +115,7 @@ export default function BirthdayTextPromptPopup({ user, theme }) {
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={(open) => { if (!open) dismiss(); }}>
+      <Dialog open={shown} onOpenChange={(open) => { if (!open) dismiss(); }}>
         <DialogContent className={`max-w-md ${theme === "dark" ? "bg-gray-900 text-white border-gray-700" : ""}`}>
           <DialogHeader>
             <div className="flex items-center gap-3">
