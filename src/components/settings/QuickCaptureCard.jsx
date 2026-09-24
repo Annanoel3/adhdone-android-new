@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Zap, AlarmClock } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import { setAlarmMode, refreshAlarms, pushAlarmSound, requestAlarmPermissions, alarmQuietChoiceSupported, pushAlarmQuietVibrate } from '../utils/widgetBridge';
+import { setAlarmMode, refreshAlarms, pushAlarmSound, requestAlarmPermissions, alarmQuietChoiceSupported, pushAlarmQuietVibrate, eventQuietSupported, pushEventQuiet } from '../utils/widgetBridge';
 
 const getPlugins = () => {
   const p = (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.Plugins) || {};
@@ -278,6 +278,67 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
   );
 }
 
+// "Silent alarms during events?" — a plain yes or no, same shape as the
+// vibrate-only question below (User.alarm_quiet_during_events; the phone
+// gets its own copy through pushEventQuiet). Required the first time alarms
+// are set up, so nobody misses it; the Settings card shows it for changing
+// later. Renders nothing on a build that can't do it.
+export function AlarmEventQuietChoice({ value, onChange, theme, className = '' }) {
+  const dark = theme === 'dark';
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  if (!eventQuietSupported()) return null;
+
+  const pick = async (on) => {
+    setBusy(true);
+    setError('');
+    try {
+      await base44.auth.updateMe({ alarm_quiet_during_events: on });
+      await pushEventQuiet(on);
+      if (onChange) onChange(on);
+    } catch (e) {
+      setError("Couldn't save that. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const textMain = dark ? 'text-gray-200' : 'text-gray-900';
+  const textSub = dark ? 'text-gray-400' : 'text-gray-600';
+
+  return (
+    <div className={className}>
+      <p className={`text-sm font-medium ${textMain}`}>
+        Silent alarms during events?
+      </p>
+      <p className={`text-xs mt-1 ${textSub}`}>
+        Yes: while something on your calendar is happening, alarms and timers buzz and light up the screen with no sound. An event with no end time counts as one hour. No: they ring out loud even then.
+      </p>
+      <div className="flex gap-2 mt-2">
+        <Button
+          size="sm"
+          variant={value === true ? 'default' : 'outline'}
+          onClick={() => pick(true)}
+          disabled={busy}
+          className="flex-1"
+        >
+          Yes, silent during events
+        </Button>
+        <Button
+          size="sm"
+          variant={value === false ? 'default' : 'outline'}
+          onClick={() => pick(false)}
+          disabled={busy}
+          className="flex-1"
+        >
+          No, ring out loud
+        </Button>
+      </div>
+      {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+    </div>
+  );
+}
+
 // "Only vibrate when your phone is on silent, vibrate or Do Not Disturb?" — a
 // plain yes or no (User.alarm_vibrate_when_quiet; the phone gets its own copy
 // through pushAlarmQuietVibrate). The first-time alarm set-up won't close
@@ -352,6 +413,7 @@ export function AlarmCard({ user, theme }) {
   const [convertTo, setConvertTo] = useState(null);
   const [converting, setConverting] = useState(false);
   const [quietVibrate, setQuietVibrate] = useState(user?.alarm_vibrate_when_quiet);
+  const [quietEvents, setQuietEvents] = useState(user?.alarm_quiet_during_events);
 
   useEffect(() => {
     setOn(user?.alarm_mode === 'alarm');
@@ -360,6 +422,10 @@ export function AlarmCard({ user, theme }) {
   useEffect(() => {
     setQuietVibrate(user?.alarm_vibrate_when_quiet);
   }, [user?.alarm_vibrate_when_quiet]);
+
+  useEffect(() => {
+    setQuietEvents(user?.alarm_quiet_during_events);
+  }, [user?.alarm_quiet_during_events]);
 
   const refreshStatus = async () => {
     if (!AlarmBridge?.getStatus) return;
@@ -547,6 +613,13 @@ export function AlarmCard({ user, theme }) {
         <AlarmQuietChoice
           value={quietVibrate}
           onChange={setQuietVibrate}
+          theme={theme}
+          className={`mt-4 border-t pt-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}
+        />
+
+        <AlarmEventQuietChoice
+          value={quietEvents}
+          onChange={setQuietEvents}
           theme={theme}
           className={`mt-4 border-t pt-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}
         />
