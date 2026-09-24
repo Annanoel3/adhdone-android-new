@@ -170,8 +170,8 @@
     },
     "quiet_hours_end": {
       "type": "string",
-      "default": "07:00",
-      "description": "Quiet hours end in local HH:MM. Defaults to 07:00; anything that would have fired overnight is delivered at this time instead."
+      "default": "08:00",
+      "description": "Quiet hours end in local HH:MM. Defaults to 08:00; anything that would have fired overnight is delivered at this time instead."
     },
     "google_refresh_token": {
       "type": "string",
