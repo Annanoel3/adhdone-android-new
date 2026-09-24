@@ -16,6 +16,7 @@ import { updateTodaysSummary } from "@/components/utils/dailySummaryHelper";
 import { getReminderCopy, smartSnoozeTime } from "@/components/utils/reminderCopy";
 import { useLaunch } from "@/context/LaunchContext";
 import { waitForTourEnd } from "@/components/onboarding/tourActive";
+import { usePopupTurn } from "@/components/onboarding/onboardingSurface";
 
 const SNOOZE_OPTIONS = [
   { label: "1 hour", minutes: 60 },
@@ -25,6 +26,9 @@ const SNOOZE_OPTIONS = [
 
 export default function NotificationFollowupModal({ user, theme }) {
   const [isOpen, setIsOpen] = useState(false);
+  // Takes its turn with other popups (never stacks on one), but as the answer
+  // to something the user just did it shows the moment the screen is free.
+  const shown = usePopupTurn(isOpen, { reactive: true });
   const [currentTask, setCurrentTask] = useState(null);
   const [showNoOptions, setShowNoOptions] = useState(false);
   const [processing, setProcessing] = useState(null);
@@ -286,7 +290,7 @@ export default function NotificationFollowupModal({ user, theme }) {
 
   return (
     <Dialog
-      open={isOpen}
+      open={shown}
       onOpenChange={(open) => {
         if (!open && !processing) {
           handleDismiss();
