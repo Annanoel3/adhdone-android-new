@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent } from '../../shared/reminderTitle.ts';
-import { adjustForQuietHours, parseHHMM, localMinutesOfDay, resolveQuietHours, anchorToDaytime } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey } from '../../shared/quietHours.ts';
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
@@ -29,6 +29,33 @@ const isBeingScheduledElsewhere = (t: any, nowMs: number) => {
 const RETRY_AFTER_MS = 2 * 60 * 60 * 1000;
 const isInRetryBackoff = (t: any, nowMs: number) =>
   !!t.reminder_retry_after && new Date(t.reminder_retry_after).getTime() > nowMs;
+
+// Every task is read once when the run starts, and booking a batch takes a
+// while (ten pushes, one after another). A task finished, deleted or moved to
+// the Back Burner in the meantime used to get the whole batch anyway — and a
+// deleted task's pushes were then tracked nowhere, so nothing could ever cancel
+// them. So the task is read again right before booking and again before its
+// ids are written. Returns the fresh copy, or null when it no longer wants
+// reminders (gone, not active, or silenced).
+async function stillWantsReminders(base44: any, taskId: string): Promise<any | null> {
+  const fresh = await base44.asServiceRole.entities.Task.get(taskId).catch(() => null);
+  if (!fresh || fresh.status !== 'active' || fresh.silenced) return null;
+  return fresh;
+}
+
+// Takes back pushes this run just booked for a task that no longer wants them.
+async function cancelJustBooked(base44: any, ids: string[]) {
+  if (!ids.length) return;
+  const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+  const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+  await Promise.allSettled(ids.map(id =>
+    fetch(`https://onesignal.com/api/v1/notifications/${id}?app_id=${appId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Basic ${restApiKey}` }
+    })
+  ));
+  await ledgerCancel(base44, ids);
+}
 
 // Far-out dated tasks get their reminder plan written here (one schedule-
 // generator call each); cap that work per run.
@@ -84,6 +111,7 @@ Deno.serve(async (req) => {
     const recurringTasks = allTasks.filter(t =>
       t.status === 'active' &&
       !t.silenced &&  // Back Burner: silenced tasks get no notifications
+      !t.parent_task_id &&  // steps are a checklist; the parent does the reminding
       t.reminder_interval &&
       t.reminder_interval !== 'once' &&
       intervalMsMap[t.reminder_interval] &&
@@ -222,15 +250,16 @@ Deno.serve(async (req) => {
 
       const email = task.notification_recipient_email;
 
-      // Owner's quiet hours (local "HH:MM"). Apply only when enabled AND the owner
-      // has a recorded timezone — otherwise we can't convert local wall-time to UTC.
+      // Owner's quiet hours (local "HH:MM"), read in the owner's timezone (the
+      // shared fallback when none is saved — without one this used to skip
+      // quiet hours and the daytime anchor entirely).
       // Quiet hours default to ON — a profile that never touched the setting is
       // silenced overnight, not left wide open (that's how daily reminders ended
       // up firing at 3 AM local for new users).
       const owner = userMap[email];
       const { enabled: quietEnabled, startMin, endMin } = resolveQuietHours(owner);
-      const timeZone = owner && owner.timezone ? owner.timezone : null;
-      const useQuiet = quietEnabled && !!timeZone;
+      const timeZone = userTimeZone(owner);
+      const useQuiet = quietEnabled;
 
       // RULES.md hard rule 3. A schedule that is starting from scratch (a task the
       // server created, or one whose bookings had lapsed) takes its time of day
@@ -238,7 +267,7 @@ Deno.serve(async (req) => {
       // forever. Pin that first slot to a daytime hour. Only for reminders that
       // repeat at the same time of day, and never for a task that already has a
       // running schedule — that one keeps the time it has.
-      if (interval >= 24 * 60 * 60 * 1000 && scheduledUntil <= now && timeZone) {
+      if (interval >= 24 * 60 * 60 * 1000 && scheduledUntil <= now) {
         batchStart = anchorToDaytime(batchStart, startMin, endMin, timeZone);
       }
 
@@ -251,6 +280,15 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // Finished, deleted or back-burnered since the run started? Book nothing.
+      // (A changed rhythm is left to onTaskUpdate, which re-books it itself.)
+      const current = await stillWantsReminders(base44, task.id);
+      if (!current || current.reminder_interval !== task.reminder_interval) {
+        console.log(`⏭ [REFILL] Skipping "${task.title}" — finished, deleted, silenced or changed since this run started`);
+        skipped++;
+        continue;
+      }
+
       const notificationIds = [];
       let lastScheduledAt: Date | null = null; // de-dupe quiet-hour slots that collapse to the same time
       let rejected = false; // OneSignal refused a booking — not the same as "the digest covers it"
@@ -258,14 +296,15 @@ Deno.serve(async (req) => {
       for (let i = 0; i < BATCH_SIZE; i++) {
         let sendAt = new Date(batchStart.getTime() + interval * i);
         if (useQuiet) {
-          sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
-          // Skip the first-of-day notification — the daily digest cron replaces it
-          // with a single summary instead of N individual task notifications.
-          if (localMinutesOfDay(sendAt, timeZone) === endMin) {
-            continue;
-          }
-          // Quiet-hours can shift two consecutive night slots onto the same morning
-          // minute — skip duplicates rather than send two notifications at once.
+          // A night-time ping of a short rhythm is dropped (the morning digest
+          // replaces it); a daily one moves to a daytime slot instead of being
+          // dropped. See placeRepeatingSlot — dropping every slot that landed
+          // on the minute quiet hours end silenced daily rhythms for good.
+          const placed = placeRepeatingSlot(sendAt, interval, startMin, endMin, timeZone);
+          if (!placed) continue;
+          sendAt = placed;
+          // Two slots can still land on the same minute — skip the duplicate
+          // rather than send two notifications at once.
           if (lastScheduledAt && Math.abs(sendAt.getTime() - lastScheduledAt.getTime()) < 60000) {
             continue;
           }
@@ -276,7 +315,7 @@ Deno.serve(async (req) => {
         const isFocusTask = !!(focusTaskId && task.id === focusTaskId);
         const { title, body } = isFocusTask
           ? getFocusModeContent(task.title)
-          : getReminderContent(task.title, task.due_date, sendAtISO);
+          : getReminderContent(task.title, task.due_date, sendAtISO, timeZone);
         try {
           const res = await base44.asServiceRole.functions.invoke('schedulePush', {
             internalKey: CRON_SECRET, // proves this call comes from the app's own backend
@@ -313,6 +352,17 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Read the task again before writing anything: finished, deleted or
+      // back-burnered while the batch was being booked means the batch is
+      // taken back here, since no one else knows these ids exist.
+      const fresh = await stillWantsReminders(base44, task.id);
+      if (!fresh) {
+        await cancelJustBooked(base44, notificationIds);
+        console.log(`↩️ [REFILL] "${task.title}" was finished, deleted or silenced mid-refill — cancelled the ${notificationIds.length} push(es) just booked`);
+        skipped++;
+        continue;
+      }
+
       if (notificationIds.length > 0) {
         // Use the last actually-scheduled time (may differ from batchStart math once
         // quiet-hours shifting/skipping is applied) so the next refill window is correct.
@@ -324,7 +374,6 @@ Deno.serve(async (req) => {
         // task while we were working (the creator's fire-and-forget landing
         // late), cancel those pushes rather than silently drop the ids and
         // leave them live and untracked.
-        const fresh = await base44.asServiceRole.entities.Task.get(task.id).catch(() => null);
         const freshIds: string[] = Array.isArray(fresh?.onesignal_notification_ids) ? fresh.onesignal_notification_ids : [];
         const foreign = freshIds.filter(id => !oldIds.includes(id) && !notificationIds.includes(id));
         if (foreign.length > 0) {
@@ -627,70 +676,70 @@ Deno.serve(async (req) => {
     // Birthday text reminder — hourly on day-of until the user sends the text.
     // Only fires during waking hours, respects quiet hours, and dedupes via
     // birthday_text_last_reminded_at so the user gets ~1/hour, not 1/cron-run.
+    // "Is it the birthday today?" is asked on the owner's calendar. It used to
+    // compare dates on the server's UTC clock, where a US evening is already
+    // the next day — so the "text them today" pushes started the evening
+    // BEFORE the birthday and stopped at dinner time on the day itself.
     const bdayDate = new Date(nextReminderIso);
-    const isDayOf = bdayDate.getFullYear() === now.getFullYear() &&
-                    bdayDate.getMonth() === now.getMonth() &&
-                    bdayDate.getDate() === now.getDate();
+    const owner = userMap[task.notification_recipient_email];
+    const timeZone = userTimeZone(owner);
+    const isDayOf = localDateKey(bdayDate, timeZone) === localDateKey(now, timeZone);
     if (isDayOf && !isOwn && task.birthday_text_sent !== true) {
-      const owner = userMap[task.notification_recipient_email];
-      const timeZone = owner?.timezone || null;
-      if (timeZone) {
-        const localMin = localMinutesOfDay(now, timeZone);
-        const { enabled: quietEnabled, startMin: qStart, endMin: qEnd } = resolveQuietHours(owner);
-        const inQuiet = quietEnabled && (qStart < qEnd
-          ? (localMin >= qStart && localMin < qEnd)
-          : (localMin >= qStart || localMin < qEnd));
-        const inDefaultSleep = localMin < 8 * 60 || localMin >= 21 * 60;
-        const lastRemindedMs = task.birthday_text_last_reminded_at
-          ? new Date(task.birthday_text_last_reminded_at).getTime() : 0;
-        const dedupMs = 50 * 60 * 1000;
-        const bdayGate = (!inQuiet && !inDefaultSleep && (now.getTime() - lastRemindedMs) > dedupMs)
-          ? await ledgerCheck(base44, { email: task.notification_recipient_email, taskId: task.id, kind: 'birthday_text_reminder' })
-          : { allowed: false };
-        if (bdayGate.allowed) {
-          try {
-            const bAppId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
-            const bRestKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
-            const pushPayload: any = {
-              app_id: bAppId,
-              headings: { en: task.birthday_text_message ? `🎂 Text ${task.birthday_person}!` : `🎂 Write a text for ${task.birthday_person}` },
-              contents: { en: task.birthday_text_message
-                ? `It's ${task.birthday_person}'s birthday today — don't forget to send your birthday text!`
-                : `It's ${task.birthday_person}'s birthday today and you haven't written a text yet. Tap to draft one now.` },
-              data: { screen: '/TaskNotification', taskId: task.id, type: 'birthday_text_reminder' },
-            };
-            // Sent live (no booked time for an alarm to mirror), so on accounts
-            // that chose full-screen reminders the push asks the phone to ring
-            // it on arrival, with these same words.
-            if (owner?.alarm_mode === 'alarm') {
-              pushPayload.data.alarm = true;
-              // OneSignal re-delivers recent pushes each time the app starts
-              // fresh ("restore"), and the phone rang this again on every app
-              // open for the push's 3-day default lifetime. Ten minutes: it is
-              // never restored after that, and the next hourly one follows.
-              pushPayload.ttl = 10 * 60;
-              // The alarm's big button says what this is for (1.3.9+).
-              pushPayload.data.openLabel = task.birthday_text_message ? 'Send a text' : 'Write a text';
-            }
-            // HARD RULE: external id (email) only. Never player ids.
-            pushPayload.include_external_user_ids = [task.notification_recipient_email];
-            const pushRes = await fetch('https://onesignal.com/api/v1/notifications', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${bRestKey}` },
-              body: JSON.stringify(pushPayload),
-            });
-            const pushResult = await pushRes.json();
-            if (pushRes.ok && !pushResult.errors) {
-              await ledgerRecord(base44, { email: task.notification_recipient_email, taskId: task.id, kind: 'birthday_text_reminder', source: 'cronRefillReminders', notificationId: pushResult.id, title: pushPayload.headings.en });
-              await base44.asServiceRole.entities.Task.update(task.id, {
-                birthday_text_last_reminded_at: now.toISOString(),
-              });
-              birthdayTextReminders++;
-              console.log(`🎂 [REFILL] Sent birthday text reminder for "${task.title}"`);
-            }
-          } catch (e) {
-            console.error(`[REFILL] Birthday text push failed for ${task.id}:`, e);
+      const localMin = localMinutesOfDay(now, timeZone);
+      const { enabled: quietEnabled, startMin: qStart, endMin: qEnd } = resolveQuietHours(owner);
+      const inQuiet = quietEnabled && (qStart < qEnd
+        ? (localMin >= qStart && localMin < qEnd)
+        : (localMin >= qStart || localMin < qEnd));
+      const inDefaultSleep = localMin < 8 * 60 || localMin >= 21 * 60;
+      const lastRemindedMs = task.birthday_text_last_reminded_at
+        ? new Date(task.birthday_text_last_reminded_at).getTime() : 0;
+      const dedupMs = 50 * 60 * 1000;
+      const bdayGate = (!inQuiet && !inDefaultSleep && (now.getTime() - lastRemindedMs) > dedupMs)
+        ? await ledgerCheck(base44, { email: task.notification_recipient_email, taskId: task.id, kind: 'birthday_text_reminder' })
+        : { allowed: false };
+      if (bdayGate.allowed) {
+        try {
+          const bAppId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+          const bRestKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+          const pushPayload: any = {
+            app_id: bAppId,
+            headings: { en: task.birthday_text_message ? `🎂 Text ${task.birthday_person}!` : `🎂 Write a text for ${task.birthday_person}` },
+            contents: { en: task.birthday_text_message
+              ? `It's ${task.birthday_person}'s birthday today — don't forget to send your birthday text!`
+              : `It's ${task.birthday_person}'s birthday today and you haven't written a text yet. Tap to draft one now.` },
+            data: { screen: '/TaskNotification', taskId: task.id, type: 'birthday_text_reminder' },
+          };
+          // Sent live (no booked time for an alarm to mirror), so on accounts
+          // that chose full-screen reminders the push asks the phone to ring
+          // it on arrival, with these same words.
+          if (owner?.alarm_mode === 'alarm') {
+            pushPayload.data.alarm = true;
+            // OneSignal re-delivers recent pushes each time the app starts
+            // fresh ("restore"), and the phone rang this again on every app
+            // open for the push's 3-day default lifetime. Ten minutes: it is
+            // never restored after that, and the next hourly one follows.
+            pushPayload.ttl = 10 * 60;
+            // The alarm's big button says what this is for (1.3.9+).
+            pushPayload.data.openLabel = task.birthday_text_message ? 'Send a text' : 'Write a text';
           }
+          // HARD RULE: external id (email) only. Never player ids.
+          pushPayload.include_external_user_ids = [task.notification_recipient_email];
+          const pushRes = await fetch('https://onesignal.com/api/v1/notifications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Basic ${bRestKey}` },
+            body: JSON.stringify(pushPayload),
+          });
+          const pushResult = await pushRes.json();
+          if (pushRes.ok && !pushResult.errors) {
+            await ledgerRecord(base44, { email: task.notification_recipient_email, taskId: task.id, kind: 'birthday_text_reminder', source: 'cronRefillReminders', notificationId: pushResult.id, title: pushPayload.headings.en });
+            await base44.asServiceRole.entities.Task.update(task.id, {
+              birthday_text_last_reminded_at: now.toISOString(),
+            });
+            birthdayTextReminders++;
+            console.log(`🎂 [REFILL] Sent birthday text reminder for "${task.title}"`);
+          }
+        } catch (e) {
+          console.error(`[REFILL] Birthday text push failed for ${task.id}:`, e);
         }
       }
     }
@@ -709,6 +758,7 @@ Deno.serve(async (req) => {
   const datedTasks = allTasks.filter(t =>
     t.status === 'active' &&
     !t.silenced &&
+    !t.parent_task_id &&  // steps never get their own pushes
     !t.birthday_person &&
     !t.is_own_birthday &&
     t.classification !== 'birthday' &&
@@ -807,8 +857,18 @@ Deno.serve(async (req) => {
     }
     if (isBeingScheduledElsewhere(task, now.getTime()) || isInRetryBackoff(task, now.getTime())) continue;
     if (refusedEmails.has(task.notification_recipient_email)) continue;
-    const schedule = [...task.reminder_schedule];
-    const ids = Array.isArray(task.onesignal_notification_ids) ? [...task.onesignal_notification_ids] : [];
+    // Nothing inside the booking window yet? Nothing to do (and no need to
+    // read the task again).
+    const hasDue = task.reminder_schedule.some((e: any) =>
+      !isBookedId(e?.notification_id) && isBookableNow(e?.send_at, now.getTime()));
+    if (!hasDue) continue;
+    // Read the task again right before booking, and book from that copy:
+    // finished, deleted or back-burnered since the run started gets nothing,
+    // and a plan the user edited meanwhile isn't overwritten with the old one.
+    const current = await stillWantsReminders(base44, task.id);
+    if (!current || !Array.isArray(current.reminder_schedule) || current.reminder_schedule.length === 0) continue;
+    const schedule = current.reminder_schedule.map((e: any) => ({ ...e }));
+    const ids = Array.isArray(current.onesignal_notification_ids) ? [...current.onesignal_notification_ids] : [];
     let dirty = false;
     const newIds: string[] = [];
 
@@ -860,6 +920,14 @@ Deno.serve(async (req) => {
     }
 
     if (dirty) {
+      // Finished, deleted or back-burnered while these were being booked:
+      // take them back — nothing else knows these ids exist.
+      const fresh = await stillWantsReminders(base44, task.id);
+      if (!fresh) {
+        await cancelJustBooked(base44, newIds);
+        console.log(`↩️ [REFILL] "${task.title}" was finished, deleted or silenced mid-booking — cancelled ${newIds.length} event push(es) just booked`);
+        continue;
+      }
       // Same reconcile-not-append rule as the birthday pass: the schedule owns
       // the id list, and anything booked that it no longer references is
       // cancelled instead of left running untracked.
