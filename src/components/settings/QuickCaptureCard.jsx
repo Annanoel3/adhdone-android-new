@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Zap, AlarmClock } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import { setAlarmMode, refreshAlarms, pushAlarmSound, requestAlarmPermissions } from '../utils/widgetBridge';
+import { setAlarmMode, refreshAlarms, pushAlarmSound, requestAlarmPermissions, alarmQuietChoiceSupported, pushAlarmQuietVibrate } from '../utils/widgetBridge';
 
 const getPlugins = () => {
   const p = (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.Plugins) || {};
@@ -275,6 +275,68 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
   );
 }
 
+// "Only vibrate when your phone is on silent, vibrate or Do Not Disturb?" — a
+// plain yes or no (User.alarm_vibrate_when_quiet; the phone gets its own copy
+// through pushAlarmQuietVibrate). The first-time alarm set-up won't close
+// until it's answered; the Settings card shows it for changing later.
+// `value`: true / false, or anything else = not answered yet. Renders nothing
+// on a build that can't do it.
+export function AlarmQuietChoice({ value, onChange, theme, className = '' }) {
+  const dark = theme === 'dark';
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  if (!alarmQuietChoiceSupported()) return null;
+
+  const pick = async (on) => {
+    setBusy(true);
+    setError('');
+    try {
+      await base44.auth.updateMe({ alarm_vibrate_when_quiet: on });
+      await pushAlarmQuietVibrate(on);
+      if (onChange) onChange(on);
+    } catch (e) {
+      setError("Couldn't save that. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const textMain = dark ? 'text-gray-200' : 'text-gray-900';
+  const textSub = dark ? 'text-gray-400' : 'text-gray-600';
+
+  return (
+    <div className={className}>
+      <p className={`text-sm font-medium ${textMain}`}>
+        Only vibrate when your phone is on silent, vibrate or Do Not Disturb?
+      </p>
+      <p className={`text-xs mt-1 ${textSub}`}>
+        Yes: while your phone is quiet, alarms and timers buzz and light up the screen with no sound. No: they ring out loud even then.
+      </p>
+      <div className="flex gap-2 mt-2">
+        <Button
+          size="sm"
+          variant={value === true ? 'default' : 'outline'}
+          onClick={() => pick(true)}
+          disabled={busy}
+          className="flex-1"
+        >
+          Yes, just vibrate
+        </Button>
+        <Button
+          size="sm"
+          variant={value === false ? 'default' : 'outline'}
+          onClick={() => pick(false)}
+          disabled={busy}
+          className="flex-1"
+        >
+          No, ring out loud
+        </Button>
+      </div>
+      {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+    </div>
+  );
+}
+
 export function AlarmCard({ user, theme }) {
   const { AlarmBridge, NotifyBridge } = getPlugins();
   const dark = theme === 'dark';
@@ -286,10 +348,15 @@ export function AlarmCard({ user, theme }) {
   // mode just chosen while the question is up; null = no question.
   const [convertTo, setConvertTo] = useState(null);
   const [converting, setConverting] = useState(false);
+  const [quietVibrate, setQuietVibrate] = useState(user?.alarm_vibrate_when_quiet);
 
   useEffect(() => {
     setOn(user?.alarm_mode === 'alarm');
   }, [user?.alarm_mode]);
+
+  useEffect(() => {
+    setQuietVibrate(user?.alarm_vibrate_when_quiet);
+  }, [user?.alarm_vibrate_when_quiet]);
 
   const refreshStatus = async () => {
     if (!AlarmBridge?.getStatus) return;
@@ -441,6 +508,13 @@ export function AlarmCard({ user, theme }) {
           user={user}
           theme={theme}
           onSaved={refreshStatus}
+          className={`mt-4 border-t pt-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}
+        />
+
+        <AlarmQuietChoice
+          value={quietVibrate}
+          onChange={setQuietVibrate}
+          theme={theme}
           className={`mt-4 border-t pt-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}
         />
 
