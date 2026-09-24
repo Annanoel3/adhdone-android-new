@@ -102,6 +102,9 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
   const [viewingImage, setViewingImage] = useState(null);
   const [reminderDate, setReminderDate] = useState('');
   const [reminderTime, setReminderTime] = useState('');
+  // Birthdays: the time their reminders go out (editable on the card).
+  const [birthdayTime, setBirthdayTime] = useState('');
+  const [isSavingBirthdayTime, setIsSavingBirthdayTime] = useState(false);
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
@@ -135,11 +138,13 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
         const rtShown = task.day_only_task ? '' : rt;
         setReminderDate(rd);
         setReminderTime(rtShown);
+        setBirthdayTime(rt);
         reminderDateRef.current = rd;
         reminderTimeRef.current = rtShown;
       } else {
         setReminderDate('');
         setReminderTime('');
+        setBirthdayTime('');
         reminderDateRef.current = '';
         reminderTimeRef.current = '';
       }
@@ -162,7 +167,10 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
       // Self-heal tasks created before repeats and smart schedules were kept
       // separate: a repeating task must never carry a lead-time reminder plan,
       // so drop it (and its live notifications) the first time it's opened.
-      if (task.recurrence_pattern && task.recurrence_pattern !== 'none' && (task.reminder_schedule || []).length > 0) {
+      // Never a birthday: it repeats yearly, but its schedule IS its reminders
+      // (a week before, the day before, on the day) — this used to cancel them
+      // every time a birthday was opened.
+      if (task.recurrence_pattern && task.recurrence_pattern !== 'none' && getCurrentReminderType(task) !== 'birthday' && (task.reminder_schedule || []).length > 0) {
         const staleIds = Array.from(new Set([
           ...(task.onesignal_notification_ids || []),
           ...task.reminder_schedule.map((r) => r.notification_id).filter(Boolean),
@@ -1387,6 +1395,70 @@ Return JSON:
   const isEvent = currentClassification === 'event';
   const currentType = getCurrentReminderType(task);
   const dueLabel = isEvent ? 'Event Date' : 'Due Date';
+
+  // Birthdays: which reminders go out (a week before, the day before, on the
+  // day — whichever are on; just the day for your own) and at what time. The
+  // time is the birthday's own time of day, next_reminder, which every
+  // birthday reminder is booked from and the yearly rollover keeps.
+  const toTimeValue = (iso) => {
+    const d = new Date(iso);
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+  const birthdayTimeSaved = currentType === 'birthday' && task.next_reminder ? toTimeValue(task.next_reminder) : '';
+  const birthdayReminderDays = (() => {
+    if (currentType !== 'birthday' || !task.next_reminder) return [];
+    const at = new Date(task.next_reminder);
+    const own = task.is_own_birthday || !task.birthday_person;
+    const list = own
+      ? [{ label: 'On the day', offset: 0, on: true }]
+      : [
+          { label: '1 week before', offset: -7, on: task.birthday_remind_week_before !== false },
+          { label: 'The day before', offset: -1, on: task.birthday_remind_day_before !== false },
+          { label: 'On the day', offset: 0, on: task.birthday_remind_day_of !== false },
+        ];
+    return list.filter((r) => r.on).map((r) => {
+      const d = new Date(at);
+      d.setDate(d.getDate() + r.offset);
+      return {
+        label: r.label,
+        day: d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }),
+        past: d.getTime() <= Date.now(),
+      };
+    });
+  })();
+
+  // Changing the time moves all of them: the booked ones are cancelled and the
+  // set is booked again at the new time (the ones already past are skipped).
+  const handleBirthdayTimeSave = async () => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(birthdayTime || '');
+    if (!m || !task.next_reminder) return;
+    const at = new Date(task.next_reminder);
+    at.setHours(Number(m[1]), Number(m[2]), 0, 0);
+    const updates = {
+      next_reminder: at.toISOString(),
+      onesignal_notification_ids: [],
+      reminder_schedule: [],
+    };
+    const oldIds = Array.from(new Set([
+      ...(task.onesignal_notification_ids || []),
+      ...(task.reminder_schedule || []).map((r) => r.notification_id),
+    ])).filter((id) => id && !String(id).startsWith('planned_'));
+    setIsSavingBirthdayTime(true);
+    try {
+      if (oldIds.length > 0) await cancelScheduledReminder(oldIds).catch(() => {});
+      await Task.update(task.id, updates);
+      const { scheduleBirthdayReminders } = await import('../utils/birthdayScheduler');
+      await scheduleBirthdayReminders({ ...task, ...updates });
+      const fresh = await base44.entities.Task.get(task.id).catch(() => null);
+      onUpdate(fresh || { ...task, ...updates });
+      toast({ title: 'Saved ✓', description: `Birthday reminders now go out at ${formatReminderTime(at.toISOString())}.` });
+    } catch (e) {
+      console.error('Could not change the birthday reminder time:', e);
+      toast({ title: "Couldn't save that", description: 'Please try again.' });
+    } finally {
+      setIsSavingBirthdayTime(false);
+    }
+  };
   // The task's date is stored in TWO places (due_date and next_reminder)
   // depending on which code path created it — the parser sets due_date only,
   // while editing here sets both. Read either one so a task created with a date
@@ -1920,6 +1992,47 @@ Return JSON:
               <ReminderTypeSelector task={task} theme={theme} onChangeType={handleChangeReminderType} />
             </div>
 
+            {/* Birthdays: when the reminders go out, and a time that can be changed. */}
+            {currentType === 'birthday' && task.next_reminder && (
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>Reminders at</span>
+                  <input
+                    type="time"
+                    value={birthdayTime}
+                    onChange={(e) => setBirthdayTime(e.target.value)}
+                    className={`border rounded-lg px-2 py-1 text-sm ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
+                  />
+                  {birthdayTime && birthdayTime !== birthdayTimeSaved && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleBirthdayTimeSave}
+                      disabled={isSavingBirthdayTime}
+                      className="h-8 bg-green-600 hover:bg-green-700 text-white"
+                    >
+                      {isSavingBirthdayTime ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save</>}
+                    </Button>
+                  )}
+                </div>
+                <ul className="space-y-1">
+                  {birthdayReminderDays.map((r) => (
+                    <li
+                      key={r.label}
+                      className={`text-sm flex items-center gap-2 ${
+                        r.past
+                          ? theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
+                          : theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
+                      }`}
+                    >
+                      <Bell className="w-3.5 h-3.5" />
+                      {r.label} · {r.day}{r.past ? ' (passed)' : ''}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="flex flex-wrap gap-2">
               {!v2 && backBurnerControl}
               {!v2 && alertStyleControl}
@@ -1929,7 +2042,7 @@ Return JSON:
                   Always shown for events so the future-reminder list is visible. */}
               {/* A repeating task is black and white: it fires on its cadence.
                    No smart/lead-time reminder plan. */}
-              {currentType !== 'repeat' && ((task.reminder_schedule && task.reminder_schedule.length > 0) || task.classification === 'event') && (
+              {currentType !== 'repeat' && currentType !== 'birthday' && ((task.reminder_schedule && task.reminder_schedule.length > 0) || task.classification === 'event') && (
                 <div className="w-full mt-2">
                   <SmartReminderEditor task={task} theme={theme} onUpdate={onUpdate} isEvent={isEvent} />
                 </div>
