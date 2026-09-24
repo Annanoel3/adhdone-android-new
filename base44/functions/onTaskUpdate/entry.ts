@@ -159,7 +159,9 @@ Deno.serve(async (req) => {
         !data.silenced &&
         !data.parent_task_id &&
         !RECURRING_INTERVALS.has(data.reminder_interval) &&
-        !(data.reminder_interval === 'once' && !data.day_only_task && (data.next_reminder || data.event_time)) &&
+        // Same test as the cron: pinned only while its reminder time is ahead.
+        !(data.reminder_interval === 'once' && !data.day_only_task &&
+          ((data.next_reminder && new Date(data.next_reminder).getTime() > Date.now()) || data.event_time)) &&
         data.classification !== 'birthday' && data.classification !== 'event' &&
         !data.birthday_person;
 
