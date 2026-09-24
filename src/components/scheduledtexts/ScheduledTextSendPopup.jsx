@@ -13,6 +13,7 @@ import { scheduleReminder, cancelScheduledReminder } from "@/components/utils/re
 import { cancelScheduledTextReminders } from "@/components/utils/scheduledTextScheduler";
 import { openSmsApp } from "@/components/utils/openSmsApp";
 import { isTourActive } from "@/components/onboarding/tourActive";
+import { usePopupTurn } from "@/components/onboarding/onboardingSurface";
 
 /**
  * Morning-of "time to send your text" popup. Appears when a scheduled text
@@ -22,6 +23,8 @@ import { isTourActive } from "@/components/onboarding/tourActive";
  */
 export default function ScheduledTextSendPopup({ user, theme }) {
   const [isOpen, setIsOpen] = useState(false);
+  // Opens on its own, so it takes its turn: never on top of another popup.
+  const shown = usePopupTurn(isOpen);
   const [current, setCurrent] = useState(null);
   const [processing, setProcessing] = useState(null);
   const queueRef = useRef([]);
@@ -191,7 +194,7 @@ export default function ScheduledTextSendPopup({ user, theme }) {
 
   return (
     <Dialog
-      open={isOpen}
+      open={shown}
       onOpenChange={(open) => {
         if (!open && !processing) handleDismiss();
       }}
