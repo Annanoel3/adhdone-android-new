@@ -559,12 +559,21 @@ Deno.serve(async (req) => {
         if (result?.notificationId) {
           entry.notification_id = result.notificationId;
           entry.scheduled = true;
+          delete entry.book_error;
           newIds.push(result.notificationId);
           dirty = true;
           birthdayScheduled++;
+        } else {
+          // Not booked. Say why on the entry itself (visible in the Task
+          // table), so a reminder that keeps failing isn't a silent mystery.
+          const why = String(result?.reason || result?.error || JSON.stringify(result || {})).slice(0, 300);
+          if (entry.book_error !== why) { entry.book_error = why; dirty = true; }
+          console.warn(`[REFILL] Birthday reminder not booked for ${task.id}: ${why}`);
         }
       } catch (e) {
         console.error(`[REFILL] Birthday schedule failed for ${task.id}:`, e);
+        const why = String(e?.message || e).slice(0, 300);
+        if (entry.book_error !== why) { entry.book_error = why; dirty = true; }
       }
     }
     // Reconcile, never append. The id list used to grow by up to 3 every time a
