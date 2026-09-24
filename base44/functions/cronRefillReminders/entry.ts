@@ -642,7 +642,11 @@ Deno.serve(async (req) => {
             // Sent live (no booked time for an alarm to mirror), so on accounts
             // that chose full-screen reminders the push asks the phone to ring
             // it on arrival, with these same words.
-            if (owner?.alarm_mode === 'alarm') pushPayload.data.alarm = true;
+            if (owner?.alarm_mode === 'alarm') {
+              pushPayload.data.alarm = true;
+              // The alarm's big button says what this is for (1.3.9+).
+              pushPayload.data.openLabel = task.birthday_text_message ? 'Send a text' : 'Write a text';
+            }
             // HARD RULE: external id (email) only. Never player ids.
             pushPayload.include_external_user_ids = [task.notification_recipient_email];
             const pushRes = await fetch('https://onesignal.com/api/v1/notifications', {
