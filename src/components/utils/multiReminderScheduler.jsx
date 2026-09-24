@@ -48,8 +48,11 @@ function setCachedSchedule(title, urgency, data, location) {
 async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, location, reminderWish) {
   // Day-only schedules have absolute clock times — never use the cache. A task
   // with the user's own reminder wish never uses it either: the cache is keyed
-  // on title + priority, and the wish is what makes this one different.
-  let reminders = (dayOnly || reminderWish) ? null : getCachedSchedule(title, urgency, location);
+  // on title + priority, and the wish is what makes this one different. Nor
+  // does a "by" deadline: its safety net isn't the plan an "at" task with the
+  // same title would get, and neither may stand in for the other.
+  const noCache = dayOnly || reminderWish || deadlineStyle === 'by';
+  let reminders = noCache ? null : getCachedSchedule(title, urgency, location);
 
   if (!reminders) {
     console.log(`[multiReminderScheduler] No cache hit for "${title}" (priority: ${urgency || 'medium'}) — calling LLM`);
@@ -68,7 +71,7 @@ async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, 
     const data = response.data || response;
     reminders = data.reminders || [];
 
-    if (reminders.length > 0 && !reminderWish) {
+    if (reminders.length > 0 && !noCache) {
       setCachedSchedule(title, urgency, reminders, location);
     }
   } else {
@@ -143,7 +146,10 @@ function resolveReminderTimes(reminders, scheduledDateISO, title = '', classific
  * Schedules multiple LLM-determined reminders for a one-time task.
  * Returns an array of OneSignal notification IDs (may be empty).
  * Returns null if no reminders could be generated, so the caller
- * can fall back to a single reminder at the scheduled time.
+ * can fall back to a single reminder at the scheduled time — except for a
+ * deadline with a clock time ("by 5 PM"), which returns an empty array
+ * instead: it must never get a reminder AT the deadline (too late by then);
+ * smart nudges own its run-up and take it over as overdue after.
  */
 export async function scheduleMultiReminders({
   email,
@@ -161,19 +167,31 @@ export async function scheduleMultiReminders({
     // Every caller passes taskId, so the location is looked up here rather than
     // threaded through a dozen call sites — the backend needs it to turn the
     // lead reminder into a real "leave now" based on drive time.
+    // The edit screens don't pass whether it's a "by" deadline — read that
+    // off the task too, so an edited "by 5 PM" task keeps its deadline
+    // behaviour instead of getting an "at 5 PM" plan. (Whether it's all-day is
+    // NOT read: a caller that leaves dayOnly out has just given it a time.)
     let taskLocation = location;
-    if (taskLocation === undefined && taskId) {
+    let style = deadlineStyle;
+    if ((taskLocation === undefined || style === undefined) && taskId) {
       try {
         const task = await base44.entities.Task.get(taskId);
-        taskLocation = task?.location || '';
-      } catch { taskLocation = ''; }
+        if (taskLocation === undefined) taskLocation = task?.location || '';
+        if (style === undefined) style = task?.deadline_style;
+      } catch {
+        if (taskLocation === undefined) taskLocation = '';
+      }
     }
+    dayOnly = !!dayOnly;
+    deadlineStyle = style === 'by' ? 'by' : 'on';
+    const clockDeadline = !dayOnly && deadlineStyle === 'by' && classification !== 'event';
     const reminders = await fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, taskLocation, reminderWish);
-    if (!reminders || reminders.length === 0) return null;
+    if (!reminders || reminders.length === 0) return clockDeadline ? [] : null;
 
     // Safety net: a task set for a specific clock time ALWAYS gets a reminder at
-    // that exact time. Cached or LLM schedules sometimes omit it.
-    if (!dayOnly && new Date(scheduledDateISO).getTime() > Date.now()
+    // that exact time. Cached or LLM schedules sometimes omit it. (Not a "by"
+    // deadline — see above.)
+    if (!dayOnly && !clockDeadline && new Date(scheduledDateISO).getTime() > Date.now()
         && !reminders.some(r => r.relative_minutes_before === 0)) {
       const t = title.length > 40 ? `${title.slice(0, 37)}...` : title;
       reminders.push({
@@ -185,7 +203,7 @@ export async function scheduleMultiReminders({
     }
 
     const reminderTimes = resolveReminderTimes(reminders, scheduledDateISO, title, classification, dayOnly);
-    if (reminderTimes.length === 0) return null;
+    if (reminderTimes.length === 0) return clockDeadline ? [] : null;
 
     console.log(`[multiReminderScheduler] Scheduling ${reminderTimes.length} LLM-determined reminders for "${title}"`);
 
@@ -232,7 +250,7 @@ export async function scheduleMultiReminders({
       base44.entities.Task.update(taskId, { reminder_schedule: structured }).catch(() => {});
     }
 
-    return notificationIds.length > 0 ? notificationIds : null;
+    return notificationIds.length > 0 ? notificationIds : (clockDeadline ? [] : null);
   } catch (error) {
     console.error('[multiReminderScheduler] Error:', error);
     return null;
