@@ -1,25 +1,56 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 
+// WHO MAY SEND. This sends a push RIGHT NOW with whatever text it is handed,
+// and it used to do that for any signed-in user, to any email — anyone with an
+// account could put any words on anyone's lock screen. Allowed now:
+//   1. another backend function of this app, proving itself with the internal
+//      key (`internalKey` = the CRON_SECRET secret), the same as schedulePush;
+//   2. the app owner (admin);
+//   3. a signed-in user sending to THEMSELVES (the "test notification" check,
+//      testOneSignalConnection).
+// Anything else is refused. That includes the Weekly Challenges "share with
+// partners" button (src/components/home/WeeklyChallenges.jsx), which pushed to
+// other people's emails — partner/challenge pushes are meant to be off
+// (RULES.md §2), and this was the one path that still sent them.
 Deno.serve(async (req) => {
     try {
         console.log('[sendOneSignalPush] ⏹️ Function started');
         const base44 = createClientFromRequest(req);
-        const user = await base44.auth.me();
-        
-        if (!user) {
-            console.error('[sendOneSignalPush] ❌ Unauthorized: No user found');
-            return Response.json({ 
-                success: false, 
-                error: 'Unauthorized' 
-            }, { status: 401 });
-        }
-
-        console.log('[sendOneSignalPush] ✅ User authenticated:', user.email);
 
         const body = await req.json();
         const { userEmail, title, message, data } = body;
-        console.log('[sendOneSignalPush] 📦 Request payload received - target user:', userEmail);
+
+        const internalKey = Deno.env.get('CRON_SECRET')?.trim();
+        const presentedKey = typeof body.internalKey === 'string' ? body.internalKey.trim() : '';
+        const isInternal = !!internalKey && presentedKey === internalKey;
+        let user = null;
+        if (!isInternal) {
+            try {
+                user = await base44.auth.me();
+            } catch {
+                user = null;
+            }
+            if (!user) {
+                console.error('[sendOneSignalPush] ❌ Unauthorized: No user found');
+                return Response.json({ 
+                    success: false, 
+                    error: 'Unauthorized' 
+                }, { status: 401 });
+            }
+            const isSelf = !!user.email && !!userEmail &&
+                String(user.email).toLowerCase().trim() === String(userEmail).toLowerCase().trim();
+            if (user.role !== 'admin' && !isSelf) {
+                // Never log the key or the target email.
+                console.warn('[sendOneSignalPush] ⛔ Refused: signed-in user sending to someone else');
+                return Response.json({ success: false, error: 'Not allowed to send this push' }, { status: 403 });
+            }
+        }
+
+        if (!userEmail || !title || !message) {
+            return Response.json({ success: false, error: 'userEmail, title and message are required' }, { status: 400 });
+        }
+        console.log(`[sendOneSignalPush] ✅ Caller allowed (${isInternal ? 'internal' : user?.role === 'admin' ? 'admin' : 'self'})`);
 
         const appId = Deno.env.get("ONESIGNAL_APP_ID");
         const rest = Deno.env.get("ONESIGNAL_REST_API_KEY");
