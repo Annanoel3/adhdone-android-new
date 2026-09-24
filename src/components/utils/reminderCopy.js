@@ -27,19 +27,31 @@ export function smartSnoozeTime(task, snoozeUntil) {
   return morning;
 }
 
+// Every body names the task. The body is the line people read in the
+// notification, and it is what the spoken alarm reads out loud, so a body
+// like "no pressure, just a friendly nudge" on its own says nothing about
+// what the reminder is for. Kept in step with base44/shared/reminderTitle.ts.
+const sentence = (s) => (/[.!?]$/.test(s) ? s : `${s}.`);
+
 export function getReminderCopy(task, sendAt = new Date()) {
   const send = sendAt instanceof Date ? sendAt : new Date(sendAt);
-  const title = task?.title || 'your task';
+  const title = (task?.title || '').trim() || 'your task';
+  const quoted = `"${title}"`;
   const hour = send.getHours();
   const evening = hour >= 19 || hour < 6;
   const due = task?.due_date ? new Date(task.due_date) : null;
+  // A rhythm the person asked for ("keep reminding me until I do it").
+  const askedRhythm = !!task?.reminder_interval && task.reminder_interval !== 'once';
 
   if (!due || Number.isNaN(due.getTime())) {
     return {
       title: `📌 ${title}`,
-      body: evening
-        ? "Just keeping this on your radar — no need to tackle it tonight."
-        : "Whenever you've got a minute — no pressure, just a friendly nudge.",
+      // They asked to be reminded, so no "no pressure" and no "not tonight".
+      body: askedRhythm
+        ? `Reminder: ${sentence(title)}`
+        : evening
+          ? `Just keeping ${quoted} on your radar — no need to tackle it tonight.`
+          : `${quoted} — whenever you've got a minute. No pressure.`,
     };
   }
 
@@ -47,28 +59,28 @@ export function getReminderCopy(task, sendAt = new Date()) {
   const label = dayLabel(due, days);
 
   if (days < 0) {
-    return { title: `⚠️ ${title}`, body: `This one slipped past ${label}. No shame — just pick it back up when you can.` };
+    return { title: `⚠️ ${title}`, body: `${quoted} slipped past ${label}. No shame — just pick it back up when you can.` };
   }
   if (days === 0) {
     return {
       title: `📅 ${title}`,
       body: evening
-        ? "Today's the day — still time to squeeze it in tonight if you've got it in you."
-        : "Due today — you've got this. Tap when it's done.",
+        ? `Today's the day for ${quoted} — still time to squeeze it in tonight if you've got it in you.`
+        : `${quoted} is due today — you've got this. Tap when it's done.`,
     };
   }
   if (days === 1) {
     return {
       title: `Heads up: ${title}`,
       body: evening
-        ? "Tomorrow's the day. Nothing to do tonight — maybe just line up what you'll need."
-        : "Tomorrow's the day — plenty of time to plan for it.",
+        ? `${quoted} is due tomorrow. Nothing to do tonight — maybe just line up what you'll need.`
+        : `${quoted} is due tomorrow — plenty of time to plan for it.`,
     };
   }
   return {
     title: `Don't forget: ${title}`,
     body: evening
-      ? `Nothing to do tonight — just keeping it in mind. Plenty of time before ${label}.`
-      : `Plenty of time before ${label} to get it done.`,
+      ? `${quoted} isn't due until ${label} — nothing to do tonight.`
+      : `${quoted} is due ${label} — plenty of time to get it done.`,
   };
 }
