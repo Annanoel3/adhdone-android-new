@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+// Reminder wording: every body names the task (the spoken alarm reads it).
 import { getReminderContent } from '../../shared/reminderTitle.ts';
 import { adjustForQuietHours, parseHHMM, localMinutesOfDay, resolveQuietHours } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
