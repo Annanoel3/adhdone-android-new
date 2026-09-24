@@ -33,8 +33,9 @@ import {
   refreshAlarms,
   alarmPermissionStatus,
   requestAlarmPermissions,
+  alarmQuietChoiceSupported,
 } from '../utils/widgetBridge';
-import { AlarmSoundPicker } from '../settings/QuickCaptureCard';
+import { AlarmSoundPicker, AlarmQuietChoice } from '../settings/QuickCaptureCard';
 
 const SEEN_KEY = 'quick_capture_prompt_seen';
 
@@ -420,6 +421,10 @@ export function AlarmPermissionsDialog({ theme }) {
   // which needs the account record for the current choice.
   const [setup, setSetup] = useState(false);
   const [me, setMe] = useState(null);
+  // Set-up also asks, and won't close without an answer: vibrate only while
+  // the phone is on silent, vibrate or Do Not Disturb? (true / false; anything
+  // else = not answered yet.) Only on a build that can do it.
+  const [quietAnswer, setQuietAnswer] = useState(undefined);
   // 'timers': asked the first time a focus timer, sprint or launchpad starts —
   // those always ring like an alarm, so the wording says why.
   const [feature, setFeature] = useState('');
@@ -430,7 +435,13 @@ export function AlarmPermissionsDialog({ theme }) {
       const isSetup = !!e.detail?.setup;
       setSetup(isSetup);
       setFeature(e.detail?.feature || '');
-      if (isSetup) base44.auth.me().then(setMe).catch(() => {});
+      setQuietAnswer(undefined);
+      if (isSetup) {
+        base44.auth.me().then((u) => {
+          setMe(u);
+          if (typeof u?.alarm_vibrate_when_quiet === 'boolean') setQuietAnswer(u.alarm_vibrate_when_quiet);
+        }).catch(() => {});
+      }
       setOpen(true);
     };
     window.addEventListener('alarm-permissions-needed', onNeeded);
@@ -516,10 +527,11 @@ export function AlarmPermissionsDialog({ theme }) {
     },
   ];
   const allOk = rows.every((r) => r.ok);
+  const quietPending = setup && alarmQuietChoiceSupported() && typeof quietAnswer !== 'boolean';
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) setOpen(false); }}>
-      <DialogContent className={`max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
+    <Dialog open={open} onOpenChange={(o) => { if (!o && !quietPending) setOpen(false); }}>
+      <DialogContent className={`max-w-md w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto ${quietPending ? '[&>button:last-child]:hidden ' : ''}${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
         <DialogHeader>
           <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
             <AlarmClock className="w-5 h-5" />
@@ -541,6 +553,14 @@ export function AlarmPermissionsDialog({ theme }) {
         </DialogHeader>
 
         {setup && <AlarmSoundPicker user={me} theme={theme} className="pb-1" />}
+        {setup && (
+          <AlarmQuietChoice
+            value={quietAnswer}
+            onChange={setQuietAnswer}
+            theme={theme}
+            className={`border-t pt-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}
+          />
+        )}
 
         <div className={`divide-y ${dark ? 'divide-gray-700' : 'divide-gray-200'}`}>
           {rows.map((r) => (
@@ -560,11 +580,16 @@ export function AlarmPermissionsDialog({ theme }) {
           ))}
         </div>
 
+        {quietPending && (
+          <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
+            Pick Yes or No above to finish.
+          </p>
+        )}
         <div className="flex gap-2 pt-1">
           {allOk ? (
-            <Button onClick={() => setOpen(false)} className="w-full">Done</Button>
+            <Button onClick={() => setOpen(false)} disabled={quietPending} className="w-full">Done</Button>
           ) : (
-            <Button variant="outline" onClick={() => setOpen(false)} className="w-full">
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={quietPending} className="w-full">
               Later — it's in Settings → Alarms
             </Button>
           )}
@@ -713,6 +738,10 @@ export function AlertStylePrompt({ user, theme }) {
   // ring sound is picked here instead of being left for Settings to find.
   const [step, setStep] = useState('choose');
   const [me, setMe] = useState(null);
+  // Vibrate only while the phone is on silent, vibrate or Do Not Disturb?
+  // Asked on the sound step, and the step won't close without an answer
+  // (only on a build that can do it).
+  const [quietAnswer, setQuietAnswer] = useState(undefined);
   const started = useRef(false);
 
   useEffect(() => {
@@ -776,7 +805,10 @@ export function AlertStylePrompt({ user, theme }) {
       await refreshAlarms();
       if (style === 'alarm') {
         ringFirstWinDemo();
-        base44.auth.me().then(setMe).catch(() => {});
+        base44.auth.me().then((u) => {
+          setMe(u);
+          if (typeof u?.alarm_vibrate_when_quiet === 'boolean') setQuietAnswer(u.alarm_vibrate_when_quiet);
+        }).catch(() => {});
         setStep('sound');
       } else {
         finish();
@@ -801,9 +833,10 @@ export function AlertStylePrompt({ user, theme }) {
   const panel = `max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`;
 
   if (step === 'sound') {
+    const quietPending = alarmQuietChoiceSupported() && typeof quietAnswer !== 'boolean';
     return (
-      <Dialog open={open} onOpenChange={(o) => { if (!o) soundDone(); }}>
-        <DialogContent className={panel}>
+      <Dialog open={open} onOpenChange={(o) => { if (!o && !quietPending) soundDone(); }}>
+        <DialogContent className={`${quietPending ? '[&>button:last-child]:hidden ' : ''}${panel}`}>
           <DialogHeader>
             <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
               <AlarmClock className="w-5 h-5" /> Pick your alarm sound
@@ -815,7 +848,19 @@ export function AlertStylePrompt({ user, theme }) {
 
           <AlarmSoundPicker user={me} theme={theme} className="pb-1" />
 
-          <Button onClick={soundDone} className="w-full">Done</Button>
+          <AlarmQuietChoice
+            value={quietAnswer}
+            onChange={setQuietAnswer}
+            theme={theme}
+            className={`border-t pt-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}
+          />
+
+          {quietPending && (
+            <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
+              Pick Yes or No above to finish.
+            </p>
+          )}
+          <Button onClick={soundDone} disabled={quietPending} className="w-full">Done</Button>
 
           <p className={`text-xs pt-1 ${dark ? 'text-gray-500' : 'text-gray-500'}`}>
             You can change it anytime in Settings.
