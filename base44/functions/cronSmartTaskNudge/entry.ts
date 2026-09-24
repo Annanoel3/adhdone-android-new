@@ -1221,6 +1221,10 @@ async function sendNudgeNotification(
     // builds show it as a normal push. High priority so Doze delivers it now.
     payload.data.alarm = true;
     payload.priority = 10;
+    // OneSignal re-delivers recent pushes each time the app starts fresh
+    // ("restore"), and the phone rang a ring-now push again every time, for the
+    // push's whole 3-day default lifetime. Ten minutes: never restored after that.
+    payload.ttl = 10 * 60;
   }
 
   try {
