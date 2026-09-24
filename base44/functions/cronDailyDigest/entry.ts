@@ -104,7 +104,9 @@ Deno.serve(async (req) => {
       }
 
       // Generate + send the digest
-      const firstName = (user.full_name || '').split(' ')[0] || 'friend';
+      // The name they asked to be called. full_name is often an email handle
+      // or a legal name nobody uses ("Good morning, shirarose823!").
+      const firstName = String(user.preferred_name || '').trim() || (user.full_name || '').split(' ')[0] || 'friend';
       const message = await generateDigestMessage(todaysTasks, firstName);
       const sent = await sendDigestNotification(email, user, message);
 
@@ -132,17 +134,31 @@ Deno.serve(async (req) => {
   }
 });
 
-// ── Helper: filter tasks relevant to "today" (in the user's timezone) ──────────
+// ── Helper: exactly what the Tasks page shows under "Today" ──────────────────
+// Every active top-level task that isn't on the back burner and isn't a
+// birthday, whose day (its start date, else its due date, else its next
+// reminder) is today or already past, plus every task with no date at all,
+// which sits under Today too ("remind me to take my pills" means today). Same
+// rule as TaskSections.categorizeTask, in the user's own timezone. The digest
+// used to count only tasks dated today, so someone whose list was all
+// no-date tasks was told their day was clear.
 function getTodaysTasks(tasks: any[], now: Date, timeZone: string): any[] {
+  const todayKey = localDateKey(now, timeZone);
   return tasks.filter(task => {
-    // Recurring tasks — they'll remind throughout the day, so always relevant
-    if (task.reminder_interval && task.reminder_interval !== 'once') return true;
-
-    // One-time tasks — relevant if due_date or next_reminder falls on today
-    const dateStr = task.due_date || task.next_reminder;
-    if (!dateStr) return false;
-    return isSameLocalDay(new Date(dateStr), now, timeZone);
+    if (task.parent_task_id) return false;
+    if (task.silenced) return false;
+    if (task.birthday_person || task.classification === 'birthday') return false;
+    const dateStr = task.start_date || task.due_date || task.next_reminder;
+    if (!dateStr) return true;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return false;
+    return localDateKey(d, timeZone) <= todayKey;
   });
+}
+
+// YYYY-MM-DD in the user's timezone, so dates compare as plain strings.
+function localDateKey(d: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
 }
 
 function isSameLocalDay(d1: Date, d2: Date, timeZone: string): boolean {
