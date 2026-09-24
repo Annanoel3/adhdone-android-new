@@ -93,6 +93,38 @@ Deno.serve(async (req) => {
 
         let reqBody: any = {};
         try { reqBody = await req.clone().json(); } catch { reqBody = {}; }
+        if (reqBody?.mode === 'cancel_pending') {
+            // Owner-only: cancel specific booked pushes for good — OneSignal, the
+            // send ledger, and the id on the task — e.g. a reminder someone
+            // doesn't need.
+            if (user.role !== 'admin') {
+                return Response.json({ success: false, error: 'Owner only' }, { status: 403 });
+            }
+            const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+            const key = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+            const results: any[] = [];
+            for (const id of (reqBody.ids || [])) {
+                try {
+                    const res = await fetch(`https://onesignal.com/api/v1/notifications/${id}?app_id=${appId}`, { headers: { Authorization: `Basic ${key}` } });
+                    const n = await res.json();
+                    const del = await fetch(`https://onesignal.com/api/v1/notifications/${id}?app_id=${appId}`, { method: 'DELETE', headers: { Authorization: `Basic ${key}` } });
+                    await ledgerCancel(base44, [id]);
+                    const taskId = n?.data?.taskId;
+                    let dropped = false;
+                    if (taskId) {
+                        const t = await base44.asServiceRole.entities.Task.get(taskId).catch(() => null);
+                        if (t && Array.isArray(t.onesignal_notification_ids) && t.onesignal_notification_ids.includes(id)) {
+                            await base44.asServiceRole.entities.Task.update(t.id, { onesignal_notification_ids: t.onesignal_notification_ids.filter((x: string) => x !== id) });
+                            dropped = true;
+                        }
+                    }
+                    results.push({ id, cancelled: del.ok, title: n?.headings?.en, droppedFromTask: dropped });
+                } catch (e) {
+                    results.push({ id, error: String(e?.message || e) });
+                }
+            }
+            return Response.json({ success: true, results });
+        }
         if (reqBody?.mode === 'reword_pending') {
             if (user.role !== 'admin') {
                 return Response.json({ success: false, error: 'Owner only' }, { status: 403 });
