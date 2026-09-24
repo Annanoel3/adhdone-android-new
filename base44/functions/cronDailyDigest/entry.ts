@@ -8,7 +8,7 @@
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
-import { localMinutesOfDay, parseHHMM } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, parseHHMM, resolveQuietHours, userTimeZone, DEFAULT_QUIET_END } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
 
@@ -68,11 +68,13 @@ Deno.serve(async (req) => {
       // De-dup: only one digest per day per user
       if (user.last_digest_date === todayStr) continue;
 
-      const timeZone = user.timezone || 'America/Chicago';
-      const quietEnabled = !!user.quiet_hours_enabled;
-      const endMin = quietEnabled && user.quiet_hours_end
-        ? parseHHMM(user.quiet_hours_end)
-        : parseHHMM('08:00');
+      const timeZone = userTimeZone(user);
+      // The morning is when the user's quiet hours end. Quiet hours default to
+      // ON, so a profile that saved an end time but never flipped the switch
+      // is read as ON (it used to be read as off and fall back to 8 AM).
+      // Explicitly off: the 8 AM default.
+      const quiet = resolveQuietHours(user);
+      const endMin = quiet.enabled ? quiet.endMin : parseHHMM(DEFAULT_QUIET_END);
 
       // Morning window: [endMin, endMin + 60) in the user's local time.
       // 60-min window with a 30-min cron ensures we never miss the slot.
