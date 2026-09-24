@@ -167,6 +167,10 @@ export default function OneSignalInit({ user }) {
               console.warn('[OneSignal] Could not retrieve native player ID:', e);
             }
           }
+          // This phone can now receive pushes for the account — anything that
+          // was waiting for that (the welcome chat's demo reminder) books now.
+          window.__adhdonePushLinked = true;
+          window.dispatchEvent(new Event('adhdone:push-linked'));
         } else {
           console.log('[OneSignal] Calling NotifyBridge.logout()');
           await NotifyBridge.logout();
@@ -186,6 +190,8 @@ export default function OneSignalInit({ user }) {
 
             console.log('[OneSignal] ✅ Web SDK using login() with:', externalId);
             window.OneSignal.login(externalId);
+            window.__adhdonePushLinked = true;
+            window.dispatchEvent(new Event('adhdone:push-linked'));
 
             // Persist the push subscription ID to the backend so pushes
             // can be delivered by include_player_ids (per-device).
