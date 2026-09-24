@@ -288,7 +288,7 @@
     "smart_nudge_planned_at": {
       "type": "string",
       "format": "date-time",
-      "description": "When the smart-nudge planner last looked at this person's list (the day's plan, or a later second look when that plan ran out while a nudged task was still open). Keeps second looks to at most one every 3 hours."
+      "description": "When the smart-nudge planner last looked at this person's list (the day's plan, or a later second look when that plan ran out while a nudged task was still open). Keeps second looks to at most one every 90 minutes."
     },
     "smart_nudge_schedule_dirty": {
       "type": "boolean",
