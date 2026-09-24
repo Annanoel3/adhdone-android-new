@@ -1,4 +1,83 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
+import { getReminderContent } from '../../shared/reminderTitle.ts';
+import { ledgerCancel } from '../../shared/sendLedger.ts';
+
+// One-time repair, run by the app owner from the editor: { mode: 'reword_pending',
+// ids: [OneSignal ids], apply: false|true }. Reminders booked before the wording
+// fix say things like "Whenever you've got a minute — no pressure" without ever
+// naming the task. For each still-pending one this books the same push again at
+// the same time, to the same person, with a body that names the task, then
+// cancels the old one and swaps the id on the task. apply:false only reports.
+const sentence = (s: string) => (/[.!?]$/.test(s) ? s : `${s}.`);
+
+async function rewordPending(base44: any, ids: string[], apply: boolean) {
+  const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+  const key = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+  const out: any[] = [];
+  for (const id of ids || []) {
+    const row: any = { id };
+    try {
+      const res = await fetch(`https://onesignal.com/api/v1/notifications/${id}?app_id=${appId}`, {
+        headers: { Authorization: `Basic ${key}` },
+      });
+      const n = await res.json();
+      const rawSend = n.send_after;
+      const sendMs = typeof rawSend === 'number' ? (rawSend < 1e12 ? rawSend * 1000 : rawSend) : Date.parse(rawSend || '');
+      if (n.canceled || n.completed_at || !sendMs || sendMs <= Date.now() + 2 * 60 * 1000) {
+        out.push({ ...row, skipped: 'not pending' });
+        continue;
+      }
+      const taskId = n.data?.taskId;
+      const task = taskId ? await base44.asServiceRole.entities.Task.get(taskId).catch(() => null) : null;
+      if (!task || task.status !== 'active') { out.push({ ...row, skipped: 'task not active' }); continue; }
+      const title = String(task.title || '').trim() || 'your task';
+      const oldBody = String(n.contents?.en || '');
+      if (oldBody.includes(title)) { out.push({ ...row, skipped: 'already names the task' }); continue; }
+      const email = task.notification_recipient_email;
+      if (!email) { out.push({ ...row, skipped: 'no recipient' }); continue; }
+      const sendAtISO = new Date(sendMs).toISOString();
+      const rhythm = !!task.reminder_interval && task.reminder_interval !== 'once';
+      let body: string;
+      if (task.due_date) {
+        body = getReminderContent(title, task.due_date, sendAtISO).body;
+      } else if (rhythm) {
+        body = `Reminder: ${sentence(title)}`;
+      } else {
+        const owner = (await base44.asServiceRole.entities.User.filter({ email }))?.[0];
+        const tz = owner?.timezone || 'America/Chicago';
+        const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(new Date(sendMs))) % 24;
+        body = hour >= 19 || hour < 6
+          ? `Just keeping "${title}" on your radar — no need to tackle it tonight.`
+          : `"${title}" — whenever you've got a minute. No pressure.`;
+      }
+      Object.assign(row, { taskId, title, sendAtISO, oldBody, newBody: body });
+      if (!apply) { out.push(row); continue; }
+      // Out of the ledger first, so the new booking isn't refused as a repeat.
+      await ledgerCancel(base44, [id]);
+      const booked = await base44.asServiceRole.functions.invoke('schedulePush', {
+        internalKey: Deno.env.get('CRON_SECRET'),
+        toUserExternalId: email,
+        title: n.headings?.en || title,
+        body,
+        sendAtISO,
+        data: n.data || { taskId },
+      });
+      const newId = (booked?.data || booked)?.notificationId;
+      if (!newId) { out.push({ ...row, error: 'rebook refused', detail: booked?.data || booked }); continue; }
+      await fetch(`https://onesignal.com/api/v1/notifications/${id}?app_id=${appId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Basic ${key}` },
+      });
+      const ids2 = (Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : []).map((x: string) => (x === id ? newId : x));
+      const sched = (Array.isArray(task.reminder_schedule) ? task.reminder_schedule : []).map((e: any) => (e?.notification_id === id ? { ...e, notification_id: newId, notification_body: body } : e));
+      await base44.asServiceRole.entities.Task.update(task.id, { onesignal_notification_ids: ids2, reminder_schedule: sched });
+      out.push({ ...row, newId, swappedOnTask: ids2.includes(newId) });
+    } catch (e) {
+      out.push({ ...row, error: String(e?.message || e) });
+    }
+  }
+  return out;
+}
 
 Deno.serve(async (req) => {
     try {
@@ -10,6 +89,16 @@ Deno.serve(async (req) => {
                 success: false, 
                 error: 'Unauthorized' 
             }, { status: 401 });
+        }
+
+        let reqBody: any = {};
+        try { reqBody = await req.clone().json(); } catch { reqBody = {}; }
+        if (reqBody?.mode === 'reword_pending') {
+            if (user.role !== 'admin') {
+                return Response.json({ success: false, error: 'Owner only' }, { status: 403 });
+            }
+            const results = await rewordPending(base44, reqBody.ids || [], reqBody.apply === true);
+            return Response.json({ success: true, apply: reqBody.apply === true, results });
         }
 
         const diagnostics = {
