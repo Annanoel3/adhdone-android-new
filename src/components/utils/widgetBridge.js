@@ -402,6 +402,27 @@ export async function requestAlarmPermissions({ setup = false, feature = '' } = 
   return true;
 }
 
+// "Only vibrate when my phone is on silent, vibrate or Do Not Disturb" — the
+// yes/no asked the first time alarms are set up (User.alarm_vibrate_when_quiet).
+// Native reads it the moment an alarm goes off, so it covers every ring: task
+// alarms and timers alike. Only builds from 1.3.9 on have it; on older ones
+// the question is never shown.
+export function alarmQuietChoiceSupported() {
+  return typeof window.Capacitor?.Plugins?.AlarmBridge?.setQuietVibrate === 'function';
+}
+
+export async function pushAlarmQuietVibrate(on) {
+  const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
+  if (typeof AlarmBridge?.setQuietVibrate !== 'function') return false;
+  try {
+    await AlarmBridge.setQuietVibrate({ on: !!on });
+    return true;
+  } catch (err) {
+    console.warn('[alarm] setQuietVibrate failed:', err?.message || err);
+    return false;
+  }
+}
+
 // Hands native the ring sound the user chose ('' = the phone's default alarm
 // tone). Native downloads it once and rings from the copy. Resolves the
 // plugin's { result, ready }, or null when there is nothing to do.
