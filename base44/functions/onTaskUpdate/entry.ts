@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 // Reminder wording: every body names the task (the spoken alarm reads it).
 import { getReminderContent } from '../../shared/reminderTitle.ts';
-import { adjustForQuietHours, parseHHMM, localMinutesOfDay, resolveQuietHours } from '../../shared/quietHours.ts';
+import { adjustForQuietHours, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID');
@@ -91,12 +91,13 @@ async function scheduleOneSignalNotification(email, title, body, sendAfterIsoStr
 
 // The Android app keeps its OWN copy of a task's alarms (booked on the phone so
 // they ring even with no signal). Cancelling the task's pushes above never
-// reaches that copy, so a task finished or deleted anywhere else — another
-// device, the web, a calendar sync — could still ring on the phone. When that
-// happens the owner's phone gets a silent message (nothing shows, no sound)
-// that takes this task's alarms off it. The phone ignores it if the app has
-// already rebuilt its alarm list since the change. Only sent when the task
-// could have alarms at all; builds before 1.3.9 simply ignore it.
+// reaches that copy, so a task finished, deleted or moved to the Back Burner
+// anywhere else — another device, the web, a calendar sync — could still ring
+// on the phone. When that happens the owner's phone gets a silent message
+// (nothing shows, no sound) that takes this task's alarms off it. The phone
+// ignores it if the app has already rebuilt its alarm list since the change.
+// Only sent when the task could have alarms at all; builds before 1.3.9 simply
+// ignore it.
 async function dropPhoneAlarms(base44, task, taskId) {
   if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY || !taskId) return;
   const email = task?.created_by;
@@ -117,13 +118,18 @@ async function dropPhoneAlarms(base44, task, taskId) {
         include_external_user_ids: [email],
         channel_for_external_user_ids: 'push',
         isAndroid: true,
-        // A data-only push: no title or text, so nothing is shown. Normal
-        // priority, as OneSignal asks for pushes that never show anything.
+        // A data-only push: no title or text, so nothing is shown.
         // The name is only for the OneSignal dashboard (never shown to anyone),
         // where a push with no title is otherwise listed as "Untitled Message".
         name: "Silent: remove a finished task's alarms from the phone",
         content_available: true,
-        priority: 5,
+        // High priority. At normal priority a sleeping phone's battery saver
+        // (Doze) can hold this until its next wake-up, and by then the alarm
+        // it is meant to take off has already rung for a task that's done.
+        priority: 10,
+        // Ten minutes. OneSignal replays recent pushes when the app starts
+        // fresh; this one is stale long before that could matter.
+        ttl: 10 * 60,
         data: { drop_alarms_task: taskId, changed_at: Date.now() }
       })
     });
@@ -136,6 +142,19 @@ async function dropPhoneAlarms(base44, task, taskId) {
   } catch (error) {
     console.error('[onTaskUpdate] alarm drop push error:', error);
   }
+}
+
+// Where a rhythm picks up again when it comes back (un-checked, or back from
+// the Back Burner): one interval from now, kept out of the owner's night.
+// A daily (or longer) rhythm goes to the daytime slot (anchorToDaytime, the
+// same rule the refill job uses for a schedule starting from scratch). It used
+// to be moved to the exact minute quiet hours end — the one minute the refill
+// job dropped as "the morning digest covers it", every single day — so a daily
+// task un-checked at night never rang again. Shorter rhythms still wait for
+// quiet hours to end.
+function nextRhythmStart(at: Date, rhythmMs: number, quietEnabled: boolean, startMin: number, endMin: number, timeZone: string): Date {
+  if (rhythmMs >= 24 * 60 * 60 * 1000) return anchorToDaytime(at, startMin, endMin, timeZone);
+  return quietEnabled ? adjustForQuietHours(at, startMin, endMin, timeZone) : at;
 }
 
 // ── Smart nudges ─────────────────────────────────────────────────────────────
@@ -275,10 +294,19 @@ Deno.serve(async (req) => {
 
     // On delete: cancel any lingering OneSignal notifications using old_data
     if (event.type === 'delete') {
-      // Focus Mode check-ins live in their own field — cancel those too.
+      // Focus Mode check-ins live in their own field — cancel those too, and
+      // the "next step" follow-up booked when it was finished (its own field
+      // as well; see logTaskCompletion).
       const ids = Array.from(new Set([
         ...(old_data?.onesignal_notification_ids || []),
         ...(old_data?.focus_mode_notification_ids || []),
+        ...(old_data?.follow_up_notification_id ? [old_data.follow_up_notification_id] : []),
+        // A reminder plan's pushes (the day-before and morning-of ones), the
+        // same as completing a task cancels them. 'planned_' entries were never
+        // booked, so there is nothing to cancel for those.
+        ...(Array.isArray(old_data?.reminder_schedule) ? old_data.reminder_schedule : [])
+          .map((e) => e?.notification_id)
+          .filter((id) => id && !String(id).startsWith('planned_')),
       ]));
       if (ids.length > 0) {
         console.log(`[onTaskUpdate] Task deleted — cancelling ${ids.length} notifications`);
@@ -287,6 +315,13 @@ Deno.serve(async (req) => {
         }
       }
       await dropPhoneAlarms(base44, old_data, event.entity_id);
+      // A deleted task can still be in today's smart-nudge plan; mark the plan
+      // out of date so it is planned without it (the nudge cron also refuses
+      // to send a nudge about a task that no longer exists).
+      if (plannerReads(old_data) && !old_data.silenced) {
+        const kick = await markPlanStale(base44, old_data.created_by || user.email, 'task deleted', !old_data.google_event_id && !old_data.parent_task_id);
+        await kickPlanner(base44, kick);
+      }
       return Response.json({ success: true, cancelled: ids.length, reason: 'task_deleted' });
     }
 
@@ -462,8 +497,14 @@ Deno.serve(async (req) => {
       if (rhythmMs) {
         rhythmNext = new Date(now + rhythmMs);
         const { enabled: quietEnabled, startMin, endMin } = resolveQuietHours(user);
-        if (quietEnabled && user?.timezone) rhythmNext = adjustForQuietHours(rhythmNext, startMin, endMin, user.timezone);
+        rhythmNext = nextRhythmStart(rhythmNext, rhythmMs, quietEnabled, startMin, endMin, userTimeZone(user));
       }
+
+      // The "next step" follow-up booked when it was checked off ("move the
+      // laundry to the dryer") is for a task that's no longer done — take it back.
+      const followUpId = data.follow_up_notification_id || old_data?.follow_up_notification_id;
+      if (followUpId) await cancelOneSignalNotification(followUpId);
+
       const t = data.title.length > 40 ? data.title.slice(0, 37) + '...' : data.title;
       const candidates = rhythmMs ? [] : isEvent && eventMs > now ? [
         { at: eventMs - 24 * 60 * 60 * 1000, label: 'night before', title: `🎉 ${t}`, body: `Heads up! Your "${t}" is tomorrow. Don't forget to prep! ✨` },
@@ -498,6 +539,7 @@ Deno.serve(async (req) => {
         ...(rhythmNext ? { next_reminder: rhythmNext.toISOString(), last_scheduled_until: null } : {}),
         ...(!rhythmMs && (isEvent || timed || dayOnly) ? { reminder_interval: data.reminder_interval || 'once' } : {}),
         ...(isEvent && Number.isFinite(eventMs) && !data.next_reminder ? { next_reminder: new Date(eventMs).toISOString() } : {}),
+        ...(followUpId ? { follow_up_notification_id: null } : {}),
         reminder_schedule: newSchedule,
         onesignal_notification_ids: newIds,
       });
@@ -519,9 +561,17 @@ Deno.serve(async (req) => {
         ? data.reminder_schedule
         : (old_data?.reminder_schedule || []));
       const scheduleIds = scheduleEntries.map((e) => e?.notification_id).filter(Boolean);
-      for (const notificationId of [...liveIds, ...scheduleIds]) {
+      // Focus Mode check-ins live in their own field, the same as on complete
+      // and delete — a parked task must not keep asking "How's it going?".
+      const focusCheckinIds = (data.focus_mode_notification_ids?.length
+        ? data.focus_mode_notification_ids
+        : (old_data?.focus_mode_notification_ids || []));
+      for (const notificationId of new Set([...liveIds, ...scheduleIds, ...focusCheckinIds])) {
         await cancelOneSignalNotification(notificationId);
       }
+      // The phone keeps its own copy of the task's alarms, which cancelling the
+      // pushes never reaches — tell it to drop them, as complete and delete do.
+      await dropPhoneAlarms(base44, { ...old_data, ...data }, event.entity_id);
       // Keep the send_at times so reactivation can reschedule them; null the
       // now-dead OneSignal IDs so nothing tries to cancel them twice.
       const preservedSchedule = scheduleEntries.map((e) => ({ ...e, notification_id: null }));
@@ -533,6 +583,7 @@ Deno.serve(async (req) => {
         onesignal_notification_ids: [],
         reminder_schedule: preservedSchedule,
         last_scheduled_until: null,
+        ...(focusCheckinIds.length ? { focus_mode_notification_ids: [] } : {}),
         urgency: 'low',
         pre_backburner_urgency: data.pre_backburner_urgency || currentUrgency,
         // Permanent mark: a task that was ever parked counts as a rescue when
@@ -549,7 +600,7 @@ Deno.serve(async (req) => {
       const email = data.notification_recipient_email || user.email;
       const now = Date.now();
       const { enabled: quietEnabled, startMin, endMin } = resolveQuietHours(user);
-      const timeZone = user && user.timezone ? user.timezone : null;
+      const timeZone = userTimeZone(user);
 
       // Restore the priority the task had before it went to the Back Burner
       // (it was forced to low while silenced). Merged into each branch's update
@@ -569,10 +620,9 @@ Deno.serve(async (req) => {
           'daily': 24 * 60 * 60 * 1000, 'every_other_day': 2 * 24 * 60 * 60 * 1000,
         };
         const ms = intervalMs[data.reminder_interval];
-        let sendAt = new Date(now + ms);
-        if (quietEnabled && timeZone) {
-          sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
-        }
+        // Kept out of the night; a daily rhythm gets a real daytime slot (see
+        // nextRhythmStart — the exact quiet-hours-end minute silenced it).
+        const sendAt = nextRhythmStart(new Date(now + ms), ms, quietEnabled, startMin, endMin, timeZone);
         await base44.asServiceRole.entities.Task.update(event.entity_id, {
           next_reminder: sendAt.toISOString(),
           ...restoreUrgency,
@@ -700,12 +750,12 @@ Deno.serve(async (req) => {
         const storedNext = currentTask.next_reminder ? new Date(currentTask.next_reminder).getTime() : 0;
         const nextReminderTime = storedNext > now ? storedNext : now + ms;
 
-        // Owner quiet hours (local "HH:MM"). Apply only when enabled AND the owner
-        // has a recorded timezone — otherwise we can't convert local wall-time to UTC.
-        // Mirrors cronRefillReminders so a reschedule here never fires at 4 AM.
+        // Owner quiet hours (local "HH:MM"), in the owner's timezone (the shared
+        // fallback when none is saved). Mirrors cronRefillReminders so a
+        // reschedule here never fires at 4 AM.
         const { enabled: quietEnabled, startMin, endMin } = resolveQuietHours(user);
-        const timeZone = user && user.timezone ? user.timezone : null;
-        const useQuiet = quietEnabled && !!timeZone;
+        const timeZone = userTimeZone(user);
+        const useQuiet = quietEnabled;
 
         // Schedule the next 10 notifications with updated title
         const newNotificationIds = [];
@@ -715,13 +765,17 @@ Deno.serve(async (req) => {
         for (let i = 0; i < 10; i++) {
           let sendAt = new Date(scheduleTime);
           if (useQuiet) {
-            sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
-            // Skip the first-of-day slot — the daily digest cron covers it.
-            if (localMinutesOfDay(sendAt, timeZone) === endMin) {
+            // Same rule as the refill job (placeRepeatingSlot): a night-time
+            // ping of a short rhythm is dropped for the morning digest, a daily
+            // one moves to a daytime slot. Dropping every slot on the minute
+            // quiet hours end silenced a daily rhythm that sat there.
+            const placed = placeRepeatingSlot(sendAt, ms, startMin, endMin, timeZone);
+            if (!placed) {
               scheduleTime += ms;
               continue;
             }
-            // Skip duplicates that collapse onto the same morning minute.
+            sendAt = placed;
+            // Skip duplicates that collapse onto the same minute.
             if (lastScheduledAt && Math.abs(sendAt.getTime() - lastScheduledAt) < 60000) {
               scheduleTime += ms;
               continue;
@@ -730,7 +784,7 @@ Deno.serve(async (req) => {
           // Only schedule if it's in the future
           if (sendAt.getTime() > now) {
             const sendAtISO = sendAt.toISOString();
-            const { title, body } = getReminderContent(currentTask.title, currentTask.due_date, sendAtISO);
+            const { title, body } = getReminderContent(currentTask.title, currentTask.due_date, sendAtISO, timeZone);
             const notificationId = await scheduleOneSignalNotification(
               currentTask.notification_recipient_email || user.email,
               title,
