@@ -153,11 +153,14 @@ Deno.serve(async (req) => {
       // the rest of the day — the planner never found out its nudge didn't do
       // the job (a new user's "take my Zoloft" got one morning nudge, then
       // silence). So once today's plan has run out, a task it nudged is still
-      // open, the last nudge was at least 3 hours ago and there's an hour or
-      // more before quiet hours, the planner is asked again. It sees those
+      // open, the last nudge went out at least an hour ago and there's an hour
+      // or more before quiet hours, the planner is asked again. It sees those
       // tasks as already nudged and decides for itself whether a check-in is
-      // worth it. At most once every 3 hours.
-      const THREE_HOURS = 3 * 60 * 60 * 1000;
+      // worth it, and when. At most once every 90 minutes. (It was 3 hours
+      // after the last nudge, which put a missed morning pill's check-in in
+      // the afternoon.)
+      const SINCE_LAST_NUDGE = 60 * 60 * 1000;
+      const SINCE_LAST_LOOK = 90 * 60 * 1000;
       const todaysEntries = schedule.filter((e: any) =>
         e.send_at && getLocalDateString(new Date(e.send_at), timeZone) === todayStr);
       const openTaskIds = new Set(tasksByUser[email].map((t: any) => t.id));
@@ -174,8 +177,8 @@ Deno.serve(async (req) => {
         ? startMin - nowLocalMin
         : 24 * 60 - nowLocalMin;
       const secondLook = hasValidSchedule && planRanOut && nudgedStillOpen &&
-        now.getTime() - lastSentMs >= THREE_HOURS &&
-        now.getTime() - lastPlannedMs >= THREE_HOURS &&
+        now.getTime() - lastSentMs >= SINCE_LAST_NUDGE &&
+        now.getTime() - lastPlannedMs >= SINCE_LAST_LOOK &&
         minsBeforeQuiet >= 60;
 
       if (!hasValidSchedule || secondLook) {
@@ -578,7 +581,7 @@ YOUR APPROACH:
   * DEADLINE tasks can be worked on ahead of time, so give them RUNWAY. The app already sends every deadline a fixed heads-up the evening before and one at 9 AM on the due day — those two are not yours to repeat; the run-up and the rest of the due day are. How much runway depends on how much work the task actually is — judge that from the task itself: a one-step thing (pay a bill, send an email, book something online) needs 1-2 days; an errand or anything involving another person, an office, or paperwork needs 3-5 days; a genuinely big multi-step job (taxes, a report, applications, packing, cleaning out a room) deserves nudges starting a week or two out, framed around ONE small first step. Never let a big deadline task get its first nudge the day before.
   * "happens on [day]" tasks are tied to that specific day and CANNOT be done sooner — do not nudge in the days leading up (at most a heads-up the night before). Nudging early just makes the user feel behind on something they can't act on yet.
 - NOT EVERY TASK NEEDS A NUDGE TODAY: a low-priority task with no deadline can wait. Use judgment — you're the assistant, you decide what matters now.
-- A TASK WITH NO DATE ISN'T A SOMEDAY. People rarely put a day on everyday things: "remind me to take my pills", "feed the cat", "call the vet" almost always mean today, and the app lists a task with no date under Today. Unless it's low priority or plainly a someday idea, plan it as one of today's: nudge it, and when it's the kind of thing that really does need doing today, also plan a friendly check-in later in the day in case it's still open. You usually plan only once a day, so plan that follow-up now. Anything they finish first is skipped automatically, so a check-in never lands on something already done.
+- A TASK WITH NO DATE ISN'T A SOMEDAY. People rarely put a day on everyday things: "remind me to take my pills", "feed the cat", "call the vet" almost always mean today, and the app lists a task with no date under Today. Unless it's low priority or plainly a someday idea, plan it as one of today's: nudge it, and when it's the kind of thing that really does need doing today, also plan a friendly check-in in case it's still open. Time that check-in by when the thing is normally done: something most people do first thing (morning pills, feeding a pet, taking something out of the freezer) gets checked on within an hour or two of the first nudge, not in the afternoon. You usually plan only once a day, so plan that follow-up now. Anything they finish first is skipped automatically, so a check-in never lands on something already done.
 - NO EMPTY NOTIFICATIONS: every nudge must be about at least one specific task and name it in the body. Never send generic filler like "quick check on your tasks", "nothing urgent today", or an "energy boost" — a notification that doesn't tell the boss what to do is noise. If nothing genuinely needs surfacing today, return {"nudges": []}.
 - DON'T BE ANNOYING: fewer, well-timed, meaningful nudges. Not one per hour. Not one per task. If only low-priority stuff remains, ONE combined heads-up is better than a nudge per task.
 - For tasks ALREADY NUDGED: check-in style ("Have you done X yet?") — supportive, never shaming.
