@@ -88,6 +88,52 @@ async function scheduleOneSignalNotification(email, title, body, sendAfterIsoStr
   }
 }
 
+// The Android app keeps its OWN copy of a task's alarms (booked on the phone so
+// they ring even with no signal). Cancelling the task's pushes above never
+// reaches that copy, so a task finished or deleted anywhere else — another
+// device, the web, a calendar sync — could still ring on the phone. When that
+// happens the owner's phone gets a silent message (nothing shows, no sound)
+// that takes this task's alarms off it. The phone ignores it if the app has
+// already rebuilt its alarm list since the change. Only sent when the task
+// could have alarms at all; builds before 1.3.9 simply ignore it.
+async function dropPhoneAlarms(base44, task, taskId) {
+  if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY || !taskId) return;
+  const email = task?.created_by;
+  if (!email || task?.alert_style === 'notification') return;
+  try {
+    if (task?.alert_style !== 'alarm') {
+      const owners = await base44.asServiceRole.entities.User.filter({ email });
+      if (owners?.[0]?.alarm_mode !== 'alarm') return;
+    }
+    const response = await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Authorization': `Basic ${ONESIGNAL_REST_API_KEY}`
+      },
+      body: JSON.stringify({
+        app_id: ONESIGNAL_APP_ID,
+        include_external_user_ids: [email],
+        channel_for_external_user_ids: 'push',
+        isAndroid: true,
+        // A data-only push: no title or text, so nothing is shown. Normal
+        // priority, as OneSignal asks for pushes that never show anything.
+        content_available: true,
+        priority: 5,
+        data: { drop_alarms_task: taskId, changed_at: Date.now() }
+      })
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      console.error(`[onTaskUpdate] alarm drop push failed (${response.status}):`, JSON.stringify(error));
+    } else {
+      console.log('[onTaskUpdate] Told the phone to drop alarms for task', taskId);
+    }
+  } catch (error) {
+    console.error('[onTaskUpdate] alarm drop push error:', error);
+  }
+}
+
 Deno.serve(async (req) => {
   try {
     console.log('[onTaskUpdate] ========== FUNCTION START ==========');
@@ -138,6 +184,7 @@ Deno.serve(async (req) => {
           await cancelOneSignalNotification(notificationId);
         }
       }
+      await dropPhoneAlarms(base44, old_data, event.entity_id);
       return Response.json({ success: true, cancelled: ids.length, reason: 'task_deleted' });
     }
 
@@ -222,6 +269,11 @@ Deno.serve(async (req) => {
     // notifications in OneSignal that fire long after completion.
     if (data.status === 'completed') {
       console.log('[onTaskUpdate] Task completed — cancelling all notifications and clearing scheduling fields');
+      // Once, on the change itself — not again when the clean-up write below
+      // re-triggers this function with the task already completed.
+      if (old_data?.status && old_data.status !== 'completed') {
+        await dropPhoneAlarms(base44, { ...old_data, ...data }, event.entity_id);
+      }
       // Fall back to old_data IDs when the update cleared them — otherwise the
       // real OneSignal notifications would be orphaned and keep firing forever.
       const ids = (data.onesignal_notification_ids?.length
