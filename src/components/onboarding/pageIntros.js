@@ -32,17 +32,9 @@ export const ADD_PATHS = [
 // card. `points` are inline point-outs rendered inside that card — never extra
 // steps. Anything already said in the main flow (how to add tasks, the pinned
 // notification) is NOT repeated here.
+// Home has no card: the welcome chat is the introduction, and a tour card
+// right after it was one popup too many.
 export const PAGE_TOURS = {
-  Home: [
-    {
-      title: "This is home base 🏠",
-      body: "Today's stuff and what's coming up, all in one spot.",
-      points: [
-        { label: "Add anything", text: "Talk or type it in. The app works out what's a task and what's just an idea." },
-        { label: "More help as you go", text: "Each page introduces itself the first time you open it — look out for those popups." },
-      ],
-    },
-  ],
   Calendar: [
     {
       title: "Your calendar 📅",
