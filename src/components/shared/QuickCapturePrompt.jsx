@@ -883,6 +883,11 @@ export function AlertStylePrompt({ user, theme }) {
             </DialogDescription>
           </DialogHeader>
 
+          <p className={`text-sm font-medium ${dark ? 'text-amber-300' : 'text-amber-700'}`}>
+            Heads up: it rings out loud even when your phone is on silent, vibrate or Do Not Disturb.
+            {alarmQuietChoiceSupported() ? " If you try it, you'll get to choose whether it only vibrates then." : ''}
+          </p>
+
           <p className={`text-sm ${dark ? 'text-gray-300' : 'text-gray-700'}`}>
             Try it and your tasks switch to full-screen reminders. After the first one rings, we'll ask if you want to keep it that way.
           </p>
@@ -924,7 +929,7 @@ export function AlertStylePrompt({ user, theme }) {
           <button type="button" className={card} onClick={() => choose('alarm')} disabled={busy}>
             <div className="flex items-center gap-2 font-medium"><AlarmClock className="w-4 h-4" /> Full-screen alarm</div>
             <p className={`text-xs mt-1 ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-              Rings out loud like an alarm clock, takes over the screen even when it's locked, and keeps going until you snooze or dismiss it.
+              Rings out loud like an alarm clock, takes over the screen even when it's locked, and keeps going until you snooze or dismiss it. It rings even when your phone is on silent, vibrate or Do Not Disturb{alarmQuietChoiceSupported() ? " (next, you can choose to have it only vibrate then)" : ''}.
             </p>
           </button>
         </div>
