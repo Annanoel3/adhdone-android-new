@@ -48,6 +48,30 @@ async function alreadyCreated(text, sinceMs) {
   }
 }
 
+// A Parking Lot idea turned into a task: the idea's pictures and notes go onto
+// the new task. If no task got made (the parse failed, or a question it asked
+// was closed without an answer) the idea goes back in the Parking Lot instead
+// of vanishing.
+async function finishIdeaConversion(idea, madeTask, taskId) {
+  try {
+    if (!madeTask) {
+      await base44.entities.ParkingLotIdea.update(idea.id, { converted_to_task: false });
+      window.dispatchEvent(new Event('parking-lot-changed'));
+      return;
+    }
+    const pictures = Array.isArray(idea.pictures) ? idea.pictures.filter(Boolean) : [];
+    const notes = String(idea.notes || '').trim();
+    if (taskId && (pictures.length || notes)) {
+      await base44.entities.Task.update(taskId, {
+        ...(pictures.length ? { pictures } : {}),
+        ...(notes ? { notes } : {}),
+      });
+    }
+  } catch (e) {
+    console.error('[CAPTURE] Finishing the Parking Lot conversion failed:', e);
+  }
+}
+
 // Lives in the app Layout so task parsing keeps running after the user leaves
 // the Add Task screen. Drains the pending-capture queue and asks the user for
 // the few things the AI can't infer (priority, date, advance reminder).
@@ -81,6 +105,9 @@ export default function TaskCaptureProcessor({ userEmail }) {
       try {
         let capture;
         while ((capture = claimNextCapture())) {
+          // A Parking Lot idea being turned into a task: which task it became.
+          let madeTask = false;
+          let madeTaskId = null;
           try {
             trace('captureClaimed', { text: capture.text.slice(0, 200), resumed: !!capture.resumed });
             if (capture.resumed) {
@@ -99,31 +126,46 @@ export default function TaskCaptureProcessor({ userEmail }) {
               const text = taskList[part];
               if (capture.resumed && part === firstPart && await alreadyCreated(text, capture.createdAt)) {
                 trace('captureAlreadyCreated', { text: text.slice(0, 60) });
+                madeTask = true;
                 saveCaptureProgress(capture.id, { doneCount: part + 1 });
                 continue;
               }
               const result = await processAndCreateTask(text, {
                 presetDate: capture.presetDate,
                 presetDueDateISO: capture.presetDueDateISO,
+                skipIdeaCheck: !!capture.fromIdea,
               });
 
-              if (result.status === 'needs_priority') {
+              if (result.status === 'done') {
+                madeTask = true;
+                madeTaskId = result.taskId || madeTaskId;
+              } else if (result.status === 'needs_priority') {
                 const priority = await requestInput('priority', result.data);
-                if (priority) await createTaskWithPriority(result.data, priority);
+                if (priority) {
+                  const t = await createTaskWithPriority(result.data, priority);
+                  madeTask = true;
+                  madeTaskId = t?.id || madeTaskId;
+                }
               } else if (result.status === 'needs_date') {
                 const choice = await requestInput('date', result.data);
                 if (choice?.anyDay) {
-                  await createTaskAnyDay(result.data);
+                  const t = await createTaskAnyDay(result.data);
+                  madeTask = true;
+                  madeTaskId = t?.id || madeTaskId;
                 } else if (choice?.date) {
                   try {
-                    await createTaskWithDate(result.data, choice.date, choice.time);
+                    const t = await createTaskWithDate(result.data, choice.date, choice.time);
+                    madeTask = true;
+                    madeTaskId = t?.id || madeTaskId;
                   } catch (e) {
                     toast({ title: e.message, variant: 'destructive' });
                   }
                 }
               } else if (result.status === 'needs_advance') {
                 const minutes = await requestInput('advance', result.taskData);
-                await createAdvanceTask(result.taskData, result.currentUser, minutes ?? 0);
+                const t = await createAdvanceTask(result.taskData, result.currentUser, minutes ?? 0);
+                madeTask = true;
+                madeTaskId = t?.id || madeTaskId;
               } else if (result.status === 'error') {
                 toast({ title: 'Failed to create task: ' + result.message, variant: 'destructive' });
               }
@@ -134,6 +176,7 @@ export default function TaskCaptureProcessor({ userEmail }) {
             console.error('[CAPTURE] Failed:', e);
             toast({ title: 'Failed to create task: ' + e.message, variant: 'destructive' });
           } finally {
+            if (capture.fromIdea?.id) await finishIdeaConversion(capture.fromIdea, madeTask, madeTaskId);
             removeCapture(capture.id);
             window.dispatchEvent(new Event('tasks-changed'));
           }
