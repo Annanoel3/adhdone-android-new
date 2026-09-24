@@ -1096,7 +1096,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <UsageTracker user={user} />
         <WelcomeDialog user={user} />
         <CatchUpDialog user={user} />
-        <PageIntroTour currentPageName={currentPageName} />
+        <PageIntroTour currentPageName={currentPageName} user={user} />
 
         <AppGuideModal
           isOpen={showAppGuide}
