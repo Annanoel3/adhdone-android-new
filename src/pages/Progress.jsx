@@ -221,7 +221,30 @@ export default function Progress() {
   }
 
   return (
-    <div className="p-4 md:p-8 max-w-5xl mx-auto">
+    <div className={`p-4 md:p-8 max-w-5xl mx-auto ${theme === 'dark' ? 'insights-dark' : ''}`}>
+      {/* Dark theme: the stat tiles and boxes below are written with light
+          pastel backgrounds and gray text for the light themes. In dark they
+          glared and some text vanished, so here they get dark tiles and light
+          text instead. Only this page is touched. */}
+      {theme === 'dark' && (
+        <style>{`
+          .insights-dark .text-gray-900 { color: #ffffff; }
+          .insights-dark .text-gray-800 { color: #f3f4f6; }
+          .insights-dark .text-gray-700,
+          .insights-dark .text-gray-600 { color: #d1d5db; }
+          .insights-dark .text-gray-500,
+          .insights-dark .text-gray-400 { color: #9ca3af; }
+          .insights-dark .bg-gray-100 { background-color: rgba(255, 255, 255, 0.1); }
+          .insights-dark .rounded-xl[class*="bg-gradient-to"],
+          .insights-dark .rounded-xl[class*="-50"],
+          .insights-dark .bg-white\\/60,
+          .insights-dark .bg-white\\/70 {
+            background-image: none;
+            background-color: rgba(255, 255, 255, 0.06);
+            border-color: rgba(255, 255, 255, 0.1);
+          }
+        `}</style>
+      )}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Insights</h1>
         <p className="text-gray-600">Understanding your productivity patterns</p>
