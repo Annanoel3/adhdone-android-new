@@ -292,7 +292,43 @@
     "smart_nudge_planned_at": {
       "type": "string",
       "format": "date-time",
-      "description": "When the smart-nudge planner last looked at this person's list (the day's plan, or a later second look when that plan ran out while a nudged task was still open). Keeps second looks to at most one every 90 minutes."
+      "description": "When the smart-nudge planner last looked at this person's list (the day's plan, a re-plan after a change, or a later second look when that plan ran out while a nudged task was still open) \u2014 the moment its information was read. Keeps second looks to at most one every 90 minutes."
+    },
+    "smart_nudge_sent_log": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "k": {
+            "type": "string",
+            "description": "Which planned nudge (its send time, task id and title)"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it went out, or was skipped"
+          },
+          "skip": {
+            "type": "string",
+            "description": "Why it was skipped instead of sent (completed / silenced); empty when it was sent"
+          }
+        }
+      },
+      "description": "The last week of smart nudges sent (or skipped) for this person. Written only by the run that sends them, so a re-plan written at the same moment can never make a sent nudge look unsent and send it twice."
+    },
+    "smart_nudge_plan_prints": {
+      "type": "object",
+      "description": "Task id \u2192 a short fingerprint of what the smart-nudge planner read on that task (and its steps) when it last made this person's plan. A task that no longer matches has changed since, however it was changed, so the plan is redone."
+    },
+    "smart_nudge_dirty_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When something the smart-nudge planner reads last changed (a task added, edited, un-completed, back-burnered or brought back). A plan made from information older than this is out of date and gets redone."
+    },
+    "smart_nudge_kick_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When a change last asked the smart-nudge planner to re-plan this person right away. Limits those immediate re-plans to one every 2 minutes; anything after that waits for the next scheduled run."
     },
     "smart_nudge_schedule_dirty": {
       "type": "boolean",
