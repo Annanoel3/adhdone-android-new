@@ -24,7 +24,9 @@ export const ADD_PATHS = [
     key: "pinned",
     title: "The pinned notification",
     video: ADD_PATHS_BASE + "pinned%20notifications.mp4",
-    text: "With Quick Capture on, pull down the notification and type straight into it. Turn it on in Settings.",
+    // Worded for both phone builds: before 1.3.9 you pull the notification down
+    // and type into it; from 1.3.9 you tap it and a small typing box opens.
+    text: "With Quick Capture on, it sits in your notification tray: tap or pull it down and type your task. Turn it on in Settings.",
   },
 ];
 
