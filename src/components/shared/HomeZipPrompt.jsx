@@ -12,6 +12,7 @@ import { MapPin, Briefcase } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import HomeBaseFields from '@/components/settings/HomeBaseFields';
 import { base44 } from '@/api/base44Client';
+import { usePopupTurn } from '@/components/onboarding/onboardingSurface';
 
 // v2: the prompt moved from "on launch" to "first errand", so everyone who
 // hasn't actually saved a home base yet gets one more chance to see it.
@@ -23,6 +24,9 @@ const SEEN_KEY = 'home_zip_prompt_seen_v2';
 // arriving out of nowhere on launch.
 export default function HomeZipPrompt({ user, theme }) {
   const [open, setOpen] = useState(false);
+  // Takes its turn with other popups (never stacks on one), but as the answer
+  // to something the user just did it shows the moment the screen is free.
+  const shown = usePopupTurn(open, { reactive: true });
   // Second step, only after home base is saved: commuters get far more out of
   // this than anyone else, but asking about work up front would bury the ask
   // that actually matters.
@@ -58,7 +62,7 @@ export default function HomeZipPrompt({ user, theme }) {
 
   if (step === 'work') {
     return (
-      <Dialog open={open} onOpenChange={(o) => { if (!o) dismiss(); }}>
+      <Dialog open={shown} onOpenChange={(o) => { if (!o) dismiss(); }}>
         <DialogContent className={`max-w-md w-[calc(100vw-2rem)] ${theme === 'dark' ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
           <DialogHeader>
             <DialogTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-white' : ''}`}>
@@ -83,7 +87,7 @@ export default function HomeZipPrompt({ user, theme }) {
   }
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) dismiss(); }}>
+    <Dialog open={shown} onOpenChange={(o) => { if (!o) dismiss(); }}>
       <DialogContent className={`max-w-md w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto ${theme === 'dark' ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
         <DialogHeader>
           <DialogTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-white' : ''}`}>
