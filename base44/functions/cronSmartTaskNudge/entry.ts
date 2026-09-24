@@ -70,7 +70,12 @@ Deno.serve(async (req) => {
       // A timeless 'once' task (no day-only flag, no reminder time, no event
       // time) has nothing booked for it, so excluding it left it with no
       // sender at all — those belong in the nudge pool.
-      !(t.reminder_interval === 'once' && !t.day_only_task && (t.next_reminder || t.event_time)) &&
+      // Pinned while its reminder time is still ahead; once that time has
+      // passed and it isn't done, it's overdue and the nudges take it over.
+      // (That hand-off used to happen by wiping next_reminder after the time
+      // passed, which erased the task's time — the date now stays.)
+      !(t.reminder_interval === 'once' && !t.day_only_task &&
+        ((t.next_reminder && new Date(t.next_reminder).getTime() > now.getTime()) || t.event_time)) &&
       t.classification !== 'birthday' && t.classification !== 'event' &&
       !t.birthday_person;
 
