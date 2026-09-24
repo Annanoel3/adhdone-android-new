@@ -141,24 +141,27 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, cancelled: ids.length, reason: 'task_deleted' });
     }
 
-    // On create: if this is a smart-nudge-eligible task (day-only or no due date,
-    // not a birthday/event), mark the daily nudge schedule dirty so the next cron
-    // run regenerates it with the new task included. No OneSignal work needed here —
-    // the cron handles sending.
+    // On create: if this is a task the smart nudge cron owns, mark the daily
+    // nudge schedule dirty so the next cron run re-plans today with it included.
+    // No OneSignal work needed here — the cron handles sending.
     if (event.type === 'create') {
-      // Smart nudge tasks = reminder_interval is null ONLY. "once" tasks and
-      // recurring-interval tasks each have their own notification flow and must
-      // NOT be flagged as smart-nudge (otherwise the cron picks them up and
-      // nudges them prematurely — e.g. a "once" task scheduled months out).
+      // EXACTLY the cron's own test (cronSmartTaskNudge isSmartNudgeTask). This
+      // used to be a narrower, older test ("reminder_interval is null only"),
+      // and the two had drifted: a "take cat food out of the freezer today
+      // asap" task is saved as 'once' with a due date and no clock time, which
+      // the cron owns — but this check said no, the day's plan (made that
+      // morning) was never redone, and an urgent task due today got nothing.
+      // Being marked dirty only means "re-plan"; whether and when to nudge is
+      // still the cron's call, so a task months out is not nudged early.
+      const RECURRING_INTERVALS = new Set(['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day']);
       const isSmartNudgeTask =
         data.status === 'active' &&
-        !data.reminder_interval && // null only — "once" and recurring have their own flows
+        !data.silenced &&
+        !data.parent_task_id &&
+        !RECURRING_INTERVALS.has(data.reminder_interval) &&
+        !(data.reminder_interval === 'once' && !data.day_only_task && (data.next_reminder || data.event_time)) &&
         data.classification !== 'birthday' && data.classification !== 'event' &&
-        !data.birthday_person && (
-          data.day_only_task ||
-          data.start_date ||  // multi-day task (start→due) — smart nudge fits reminders in the window
-          (!data.due_date && !data.event_time && !data.start_date && !data.next_reminder)
-        );
+        !data.birthday_person;
 
       if (isSmartNudgeTask) {
         console.log('[onTaskUpdate] New smart-nudge task created — marking schedule dirty');
@@ -444,12 +447,13 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, reactivated: true });
     }
 
-    // Smart nudge reassessment: ANY change to priority or energy changes how the
-    // nudge cron should rank and word this task, so mark the schedule dirty and
-    // let the next run re-plan it. (Fixed-interval reminders are deliberately not
-    // touched here — priority must never wipe a schedule the user asked for.)
-    if (old_data?.urgency !== data.urgency || old_data?.energy_required !== data.energy_required) {
-      console.log('[onTaskUpdate] Priority/energy changed — marking smart nudge schedule dirty');
+    // Smart nudge reassessment: ANY change to priority, energy or due date
+    // changes how the nudge cron should rank, time and word this task, so mark
+    // the schedule dirty and let the next run re-plan it. (Fixed-interval
+    // reminders are deliberately not touched here — priority must never wipe a
+    // schedule the user asked for.)
+    if (old_data?.urgency !== data.urgency || old_data?.energy_required !== data.energy_required || (old_data?.due_date || null) !== (data.due_date || null)) {
+      console.log('[onTaskUpdate] Priority/energy/due date changed — marking smart nudge schedule dirty');
       try {
         await base44.asServiceRole.entities.User.update(user.id, {
           smart_nudge_schedule_dirty: true
