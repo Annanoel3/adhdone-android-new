@@ -115,6 +115,12 @@ Deno.serve(async (req) => {
         // Doze until the phone wakes — same as the nudge cron's ringing pushes.
         if (data && data.alarm === true) {
             notificationPayload.priority = 10;
+            // OneSignal's app re-delivers recent pushes every time the app starts
+            // fresh ("restore"), and the phone's filter rang a ring-now push again
+            // when it did, so one push could ring on every app open for its whole
+            // lifetime (3 days by default). A short lifetime means OneSignal never
+            // restores it after 10 minutes; a ring-now moment is stale by then anyway.
+            notificationPayload.ttl = 10 * 60;
         }
 
         console.log('[schedulePush] Sending payload:', JSON.stringify(notificationPayload, null, 2));
