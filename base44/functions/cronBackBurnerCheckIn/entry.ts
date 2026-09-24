@@ -11,7 +11,7 @@
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
-import { parseHHMM, isInQuietHours } from '../../shared/quietHours.ts';
+import { isInQuietHours, resolveQuietHours, userTimeZone } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { listAll } from '../../shared/listAll.ts';
 
@@ -60,14 +60,15 @@ Deno.serve(async (req) => {
       const last = user.last_backburner_checkin_at ? new Date(user.last_backburner_checkin_at).getTime() : 0;
       if (now.getTime() - last < WEEK_MS) continue;
 
-      const timeZone = user.timezone || 'UTC';
+      // The shared fallback when no timezone is saved (UTC put a US user's
+      // "afternoon" send window in their morning).
+      const timeZone = userTimeZone(user);
       const localHour = localHourIn(now, timeZone);
       if (localHour < SEND_FROM_HOUR || localHour >= SEND_TO_HOUR) continue;
 
-      const quietEnabled = !!user.quiet_hours_enabled;
-      const startMin = quietEnabled ? parseHHMM(user.quiet_hours_start || '22:00') : 0;
-      const endMin = quietEnabled ? parseHHMM(user.quiet_hours_end || '08:00') : 0;
-      if (isInQuietHours(now, startMin, endMin, timeZone)) continue;
+      // Quiet hours default to ON; only an explicit "off" in Settings skips them.
+      const quiet = resolveQuietHours(user);
+      if (quiet.enabled && isInQuietHours(now, quiet.startMin, quiet.endMin, timeZone)) continue;
 
       // Don't repeat last week's pick unless it's the only thing back there.
       const pool = tasks.length > 1 && user.last_backburner_task_id
