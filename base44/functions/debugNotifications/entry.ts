@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
 import { getReminderContent } from '../../shared/reminderTitle.ts';
+import { userTimeZone } from '../../shared/quietHours.ts';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
 
 // One-time repair, run by the app owner from the editor: { mode: 'reword_pending',
@@ -37,14 +38,15 @@ async function rewordPending(base44: any, ids: string[], apply: boolean) {
       if (!email) { out.push({ ...row, skipped: 'no recipient' }); continue; }
       const sendAtISO = new Date(sendMs).toISOString();
       const rhythm = !!task.reminder_interval && task.reminder_interval !== 'once';
+      // "Due today / tomorrow" and the weekday are read on the owner's calendar.
+      const owner = (await base44.asServiceRole.entities.User.filter({ email }))?.[0];
+      const tz = userTimeZone(owner);
       let body: string;
       if (task.due_date) {
-        body = getReminderContent(title, task.due_date, sendAtISO).body;
+        body = getReminderContent(title, task.due_date, sendAtISO, tz).body;
       } else if (rhythm) {
         body = `Reminder: ${sentence(title)}`;
       } else {
-        const owner = (await base44.asServiceRole.entities.User.filter({ email }))?.[0];
-        const tz = owner?.timezone || 'America/Chicago';
         const hour = Number(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false }).format(new Date(sendMs))) % 24;
         body = hour >= 19 || hour < 6
           ? `Just keeping "${title}" on your radar — no need to tackle it tonight.`
