@@ -367,17 +367,43 @@ export function AlarmCard({ user, theme }) {
     }
   };
 
+  // Re-reads what Android allows. The Battery and Notifications requests are
+  // system dialogs drawn OVER this screen, so the page never goes hidden and
+  // the old "came back" check never fired: the Fix button stayed put after
+  // fixing. Now it checks right away and again over the next few seconds after
+  // any button below, every second for a minute after one is tapped, and the
+  // moment Android says the app is back (the App plugin's resume) — not only
+  // when the page reports itself visible, which can lag behind.
+  const watchUntil = useRef(0);
+  const recheck = () => {
+    refreshStatus();
+    [300, 1000, 2500, 5000].forEach((ms) => setTimeout(refreshStatus, ms));
+  };
+
   useEffect(() => {
     if (!AlarmBridge) return;
     refreshStatus();
-    // Coming back from a phone-settings screen resumes the app; re-check then.
+    let stopped = false;
     const onVisible = () => {
-      if (document.visibilityState === 'visible') refreshStatus();
+      if (document.visibilityState === 'visible') recheck();
     };
     document.addEventListener('visibilitychange', onVisible);
+    let appHandle = null;
+    try {
+      Promise.resolve(window.Capacitor?.Plugins?.App?.addListener?.('resume', recheck))
+        .then((h) => { if (stopped) h?.remove?.(); else appHandle = h; })
+        .catch(() => {});
+    } catch (e) { /* no App plugin: the other checks still run */ }
+    const timer = setInterval(() => {
+      if (Date.now() < watchUntil.current) refreshStatus();
+    }, 1000);
     return () => {
+      stopped = true;
+      clearInterval(timer);
       document.removeEventListener('visibilitychange', onVisible);
+      appHandle?.remove?.();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [AlarmBridge]);
 
   if (!AlarmBridge?.sync) return null;
@@ -436,11 +462,13 @@ export function AlarmCard({ user, theme }) {
   };
 
   const openSetting = async (fn) => {
+    watchUntil.current = Date.now() + 60 * 1000;
     try {
       await fn();
     } catch (e) {
       // The settings screen didn't open; the status line still tells the truth.
     }
+    recheck();
   };
 
   const textMain = dark ? 'text-gray-200' : 'text-gray-900';
