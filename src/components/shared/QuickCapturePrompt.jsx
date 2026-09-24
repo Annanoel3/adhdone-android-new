@@ -452,28 +452,46 @@ export function AlarmPermissionsDialog({ theme }) {
   // a system dialog drawn OVER this screen (notifications, battery), so the
   // page never goes hidden and a visibilitychange listener alone never fired;
   // others come back from a settings screen a beat before Android reports the
-  // new state. So: poll while the dialog is open, plus an immediate re-read
-  // when the user comes back and when a request resolves.
+  // new state. Every check used to wait for the page to say it was visible
+  // again, which can lag well behind the app actually being back — so a
+  // switch just turned on kept showing "Allow" for several seconds. Now: a
+  // check every second while the dialog is open (no waiting on the page), and
+  // a burst of checks the moment Android says the app is back (the App
+  // plugin's resume), when the page reports visible, and when a request
+  // resolves.
   const refreshRef = useRef(() => {});
   useEffect(() => {
     if (!open) return;
     enterOnboardingSurface();
     let stopped = false;
+    const later = [];
     const refresh = () => {
-      if (document.visibilityState !== 'visible') return;
       alarmPermissionStatus().then((s) => {
         if (!stopped && s) setStatus((prev) => ({ ...(prev || {}), ...s }));
       }).catch(() => {});
     };
-    refreshRef.current = refresh;
-    const timer = setInterval(refresh, 1500);
-    document.addEventListener('visibilitychange', refresh);
+    const recheck = () => {
+      refresh();
+      [300, 1000, 2500, 5000].forEach((ms) => later.push(setTimeout(() => { if (!stopped) refresh(); }, ms)));
+    };
+    refreshRef.current = recheck;
+    const timer = setInterval(refresh, 1000);
+    const onVisible = () => { if (document.visibilityState === 'visible') recheck(); };
+    document.addEventListener('visibilitychange', onVisible);
+    let appHandle = null;
+    try {
+      Promise.resolve(window.Capacitor?.Plugins?.App?.addListener?.('resume', recheck))
+        .then((h) => { if (stopped) h?.remove?.(); else appHandle = h; })
+        .catch(() => {});
+    } catch (e) { /* no App plugin: the checks above still run */ }
     return () => {
       stopped = true;
       clearInterval(timer);
+      later.forEach(clearTimeout);
       refreshRef.current = () => {};
       exitOnboardingSurface();
-      document.removeEventListener('visibilitychange', refresh);
+      document.removeEventListener('visibilitychange', onVisible);
+      appHandle?.remove?.();
     };
   }, [open]);
 
@@ -484,7 +502,7 @@ export function AlarmPermissionsDialog({ theme }) {
     try {
       Promise.resolve(fn())
         .catch(() => {})
-        .then(() => { refreshRef.current(); setTimeout(() => refreshRef.current(), 800); });
+        .then(() => refreshRef.current());
     } catch (e) { /* stays on the list */ }
   };
 
