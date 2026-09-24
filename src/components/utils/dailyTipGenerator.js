@@ -15,7 +15,10 @@ export const CURRENT_PROMPT_VERSION = 11;
 // search). Persists the resulting tip and returns the created DailyTip record.
 export async function generateSmartTipForUser(today) {
   const user = await base44.auth.me();
-  const tasks = await base44.entities.Task.list('-created_date', 50);
+  // Birthdays aren't to-dos: the tip never mentions them. They have their own
+  // reminders and their own card on Home.
+  const tasks = (await base44.entities.Task.list('-created_date', 50))
+    .filter((t) => !t.birthday_person && t.classification !== 'birthday' && !t.is_own_birthday);
 
   const summaries = await (async () => {
     try {
