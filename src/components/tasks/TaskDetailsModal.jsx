@@ -69,6 +69,29 @@ import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Cake } from "lucide-react";
 
+// A task nagging at a rhythm ("at 10 am, keep reminding me until I do it")
+// has its next_reminder moved along with every ping, so next_reminder is when
+// the NEXT ping goes out, not the task's time — showing it made a 10 AM task
+// read "Due 2:00 PM" by the afternoon. Its time is the one the person named
+// (anchor_time), on the day this round of pings started: next_reminder's day,
+// or the day before when the pings have rolled overnight into a morning that
+// is still before that time. An all-day task is due at the END of its day
+// (due_date), not at the 9 AM anchor its next_reminder holds — it isn't
+// overdue at 9:01 AM.
+const RHYTHM_INTERVALS = ['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day'];
+function shownDueISO(task) {
+  if (task?.day_only_task && task?.due_date) return task.due_date;
+  const fallback = task?.next_reminder || task?.due_date || null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(task?.anchor_time || ''));
+  if (!task || !m || task.day_only_task || !RHYTHM_INTERVALS.includes(task.reminder_interval) || !task.next_reminder) return fallback;
+  const cursor = new Date(task.next_reminder);
+  if (isNaN(cursor.getTime())) return fallback;
+  const named = new Date(cursor);
+  named.setHours(Number(m[1]), Number(m[2]), 0, 0);
+  if (cursor.getTime() < named.getTime()) named.setDate(named.getDate() - 1);
+  return named.toISOString();
+}
+
 export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUpdate: onUpdateProp, onDelete, onComplete, theme, itemClassification }) {
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -126,8 +149,10 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
       setTaskNotes(task.notes || '');
       // Initialize controlled date/time inputs from task
       isInitializingRef.current = true;
-      // due_date is the fallback — parser-created tasks only have that one.
-      const dateSource = task.next_reminder || task.due_date;
+      // due_date is the fallback — parser-created tasks only have that one. A
+      // task pinging at a rhythm shows the time the person named, not the
+      // next ping (see shownDueISO).
+      const dateSource = shownDueISO(task);
       if (dateSource) {
         const d = new Date(dateSource);
         const rd = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
@@ -800,7 +825,12 @@ Return JSON:
 
       // OPTIMISTIC: show the new time + confirmation immediately, then do all
       // the cancel/reschedule network work in the background.
-      onUpdate({ ...task, next_reminder: nextReminder.toISOString(), due_date: nextReminder.toISOString(), day_only_task: dayOnly });
+      // The time picked here IS the task's time from now on (anchor_time: what
+      // the repeat pill and the Due pill show, and where each new occurrence of
+      // a repeating task starts) — even when a rhythm task's first ping has to
+      // wait an interval because that time already went by today.
+      const namedTime = dayOnly ? null : finalEffectiveTime;
+      onUpdate({ ...task, next_reminder: nextReminder.toISOString(), due_date: nextReminder.toISOString(), day_only_task: dayOnly, anchor_time: namedTime });
       const savedRdNow = `${nextReminder.getFullYear()}-${String(nextReminder.getMonth()+1).padStart(2,'0')}-${String(nextReminder.getDate()).padStart(2,'0')}`;
       const savedRtNow = `${String(nextReminder.getHours()).padStart(2,'0')}:${String(nextReminder.getMinutes()).padStart(2,'0')}`;
       setReminderDate(savedRdNow);
@@ -877,6 +907,7 @@ Return JSON:
             next_reminder: nextReminder.toISOString(),
             due_date: nextReminder.toISOString(),
             day_only_task: dayOnly,
+            anchor_time: namedTime,
             onesignal_notification_ids: newNotificationIds,
             reminder_schedule: null,
             ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
@@ -923,6 +954,7 @@ Return JSON:
             next_reminder: nextReminder.toISOString(),
             due_date: nextReminder.toISOString(),
             day_only_task: dayOnly,
+            anchor_time: namedTime,
             onesignal_notification_ids: newNotificationIds,
             reminder_schedule: scheduleData,
           }).catch(err => console.error("Error updating task:", err));
@@ -1468,7 +1500,7 @@ Return JSON:
   // depending on which code path created it — the parser sets due_date only,
   // while editing here sets both. Read either one so a task created with a date
   // never shows an empty "Add due date".
-  const dueSource = task.next_reminder || task.due_date;
+  const dueSource = shownDueISO(task);
 
   const handleClassificationChange = async (newClass) => {
     if (!task || newClass === currentClassification) return;
@@ -2080,7 +2112,7 @@ Return JSON:
                       <Clock className="w-3 h-3" />
                       {dueSource ? (
                         new Date(dueSource).getTime() < Date.now() && task.status !== 'completed'
-                          ? `Overdue • ${formatReminderDate(dueSource)}`
+                          ? `Overdue • ${formatReminderDate(dueSource)}${task.day_only_task ? '' : ` • ${formatReminderTime(dueSource)}`}`
                           : task.day_only_task
                             ? `Due ${formatReminderDate(dueSource)}`
                             : `Due ${isEvent ? formatEventDateRange() : formatReminderDate(dueSource)} • ${formatReminderTime(dueSource)}`
