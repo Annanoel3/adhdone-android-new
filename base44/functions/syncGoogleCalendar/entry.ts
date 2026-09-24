@@ -455,6 +455,10 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
 
   // Already-synced events: patch dates if Google changed them, or mark a
   // user-deleted task as seen. Run in parallel batches.
+  // A repeating series whose task the user deleted is remembered here, so a
+  // single occurrence of it that was later moved in the calendar (it arrives
+  // with its own id, "<series>_<time>") doesn't sneak back in as a new task.
+  const deletedSeries = new Set<string>();
   const PARALLEL = 10;
   for (let i = 0; i < alreadySynced.length; i += PARALLEL) {
     await Promise.all(alreadySynced.slice(i, i + PARALLEL).map(async (event) => {
@@ -468,6 +472,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
       // The user deleted this task in the app. Respect that deletion — don't
       // re-import the Google event. Refresh last_synced_at so we don't keep
       // re-checking it every sync.
+      if ((event.recurrence || []).length) deletedSeries.add(String(event.id));
       await base44.asServiceRole.entities.CalendarSyncedEvent.update(existing.id, {
         last_synced_at: new Date().toISOString(),
       });
@@ -487,6 +492,14 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     const attendeeCount = (event.attendees || []).length;
 
     let existing = existingByGoogleId[googleId];
+
+    // One occurrence of a series the user deleted in the app stays deleted too.
+    const seriesOf = String(googleId).includes('_') ? String(googleId).split('_')[0] : '';
+    if (seriesOf && deletedSeries.has(seriesOf)) {
+      console.log('[syncGoogleCalendar] occurrence of a series the user deleted, not importing:', googleId);
+      skipped++;
+      continue;
+    }
 
     // CLAIM this event BEFORE any slow work. AI classification takes seconds,
     // and two syncs can run at once (a brand-new account's first connect fires
