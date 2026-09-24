@@ -45,7 +45,13 @@ Deno.serve(async (req) => {
 
     for (const user of allUsers) {
       const tasks = await base44.asServiceRole.entities.Task.filter({ created_by: user.email });
-      const activeTasks = tasks.filter(t => t.status === 'active' && t.next_reminder);
+      // Never a birthday: its next_reminder IS the birthday — the day and the
+      // time its reminders go out. The yearly rollover in cronRefillReminders
+      // moves it on the day after. Clearing it here, the moment that time
+      // passed on the birthday itself, made the birthday vanish from the
+      // Birthdays page and Home, and it could never roll over to next year.
+      const isBirthday = (t) => !!t.birthday_person || t.classification === 'birthday' || !!t.is_own_birthday;
+      const activeTasks = tasks.filter(t => t.status === 'active' && t.next_reminder && !isBirthday(t));
 
       for (const t of activeTasks) {
         const when = parseWhen(t.next_reminder);
