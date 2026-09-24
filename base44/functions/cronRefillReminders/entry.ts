@@ -664,6 +664,11 @@ Deno.serve(async (req) => {
             // it on arrival, with these same words.
             if (owner?.alarm_mode === 'alarm') {
               pushPayload.data.alarm = true;
+              // OneSignal re-delivers recent pushes each time the app starts
+              // fresh ("restore"), and the phone rang this again on every app
+              // open for the push's 3-day default lifetime. Ten minutes: it is
+              // never restored after that, and the next hourly one follows.
+              pushPayload.ttl = 10 * 60;
               // The alarm's big button says what this is for (1.3.9+).
               pushPayload.data.openLabel = task.birthday_text_message ? 'Send a text' : 'Write a text';
             }
