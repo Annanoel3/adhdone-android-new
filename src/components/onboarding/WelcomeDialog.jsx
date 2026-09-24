@@ -4,6 +4,8 @@ import { base44 } from '@/api/base44Client';
 import { ONBOARDING_STEPS, isStepDone, markStepDone } from './onboardingGate';
 import { enterOnboardingSurface, exitOnboardingSurface } from './onboardingSurface';
 import { wasReplayedThisSession } from './onboardingReplay';
+import { persistOnboardingFlag } from './onboardingSync';
+import { seenKey } from './tourVersion';
 import WelcomeChat from './WelcomeChat';
 import CATCH_UP_SCRIPT, { CATCH_UP_ABOUT_ONLY_SCRIPT } from './catchUpScript';
 
@@ -54,13 +56,22 @@ export default function WelcomeDialog({ user }) {
         setMode('welcome');
         return;
       }
-      // Not a new account. Both flags are set in the same tick, before the
-      // catch-up appears, so the separate catch-up dialog can never show a
-      // second copy. The Home tour (chained to the welcome step) waits for this
-      // one to close before it appears.
+      // Not a new account. What a returning person gets is the "welcome back"
+      // chat (only the questions their profile is missing) and, after it, the
+      // alarm question — not the first-run walkthrough. So the Home tour is
+      // marked seen and the notifications/shortcut card done, BEFORE the
+      // welcome step the tour is waiting on.
+      try { localStorage.setItem(seenKey('Home'), '1'); } catch (e) {}
+      persistOnboardingFlag(seenKey('Home'));
+      markStepDone(ONBOARDING_STEPS.permissions);
+      // Both flags are set in the same tick, before the catch-up appears, so
+      // the separate catch-up dialog can never show a second copy.
       const askCatchUp = !isStepDone(ONBOARDING_STEPS.catchUp);
       markStepDone(ONBOARDING_STEPS.welcome);
-      if (!askCatchUp) return;
+      if (!askCatchUp) {
+        markStepDone(ONBOARDING_STEPS.homeTour);
+        return;
+      }
       markStepDone(ONBOARDING_STEPS.catchUp);
       setMode('catchup');
     });
@@ -75,8 +86,14 @@ export default function WelcomeDialog({ user }) {
   }, [mode]);
 
   const handleClose = () => {
+    const wasCatchUp = mode === 'catchup';
     setMode(null);
     markStepDone(ONBOARDING_STEPS.welcome);
+    // The "Home tour finished" step is what releases what comes next (the
+    // alarm question). For a returning account it's released here, when the
+    // catch-up closes — releasing it when the catch-up opened let the alarm
+    // question land on top of it.
+    if (wasCatchUp) markStepDone(ONBOARDING_STEPS.homeTour);
   };
 
   // Same choice the catch-up dialog makes: never ask for a name we already have.
