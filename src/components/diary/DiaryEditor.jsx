@@ -91,6 +91,10 @@ export default function DiaryEditor({ entry, dateKey, initialContent = "", onSav
     }
   };
 
+  // Dark theme: a black sheet with light writing, instead of the cream page.
+  let dark = false;
+  try { dark = localStorage.getItem('adhd_theme') === 'dark'; } catch (e) { /* light */ }
+
   const dateLabel = format(
     entry?.entry_date ? parseISO(entry.entry_date) : parseISO(dateKey),
     "EEEE, MMMM d, yyyy"
@@ -102,25 +106,26 @@ export default function DiaryEditor({ entry, dateKey, initialContent = "", onSav
         <Button variant="ghost" size="icon" onClick={onBack} aria-label="Back to entries">
           <ArrowLeft className="w-5 h-5" />
         </Button>
-        <p className="text-base font-semibold text-gray-900">{dateLabel}</p>
+        <p className={`text-base font-semibold ${dark ? 'text-white' : 'text-gray-900'}`}>{dateLabel}</p>
       </div>
 
       {/* Lined paper — the writing sits between the rules, stickers float on top
           and can be dragged anywhere on the sheet. */}
-      <div className="relative flex-1 mx-4 mt-3 rounded-xl border border-amber-200 shadow-sm overflow-hidden">
+      <div className={`relative flex-1 mx-4 mt-3 rounded-xl border shadow-sm overflow-hidden ${dark ? 'border-gray-700' : 'border-amber-200'}`}>
         <div
           className="absolute inset-0"
           style={{
-            backgroundColor: "#fffdf5",
-            backgroundImage:
-              "repeating-linear-gradient(to bottom, transparent 0px, transparent 33px, #dbeafe 33px, #dbeafe 34px)",
+            backgroundColor: dark ? "#000000" : "#fffdf5",
+            backgroundImage: dark
+              ? "repeating-linear-gradient(to bottom, transparent 0px, transparent 33px, #374151 33px, #374151 34px)"
+              : "repeating-linear-gradient(to bottom, transparent 0px, transparent 33px, #dbeafe 33px, #dbeafe 34px)",
           }}
         />
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
           placeholder="Write whatever's in your head..."
-          className="relative w-full bg-transparent border-0 outline-none resize-none px-5 text-gray-900 placeholder:text-gray-400"
+          className={`relative w-full bg-transparent border-0 outline-none resize-none px-5 ${dark ? 'text-gray-100 placeholder:text-gray-500' : 'text-gray-900 placeholder:text-gray-400'}`}
           style={{
             lineHeight: `${LINE_HEIGHT}px`,
             fontSize: "17px",
