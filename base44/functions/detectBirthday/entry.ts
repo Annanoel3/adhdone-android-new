@@ -8,15 +8,29 @@ export default async function(req) {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const { inputText } = await req.json();
+    const { inputText, today: phoneToday } = await req.json();
     if (!inputText) return Response.json({ error: 'inputText is required' }, { status: 400 });
 
-    const now = new Date();
-    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    // "Tomorrow" has to be the PERSON's tomorrow. This runs on a UTC server,
+    // so on a US evening its own date is already the next day — "Grandma's
+    // birthday is tomorrow" said at 9 PM landed a day late. Use the date the
+    // phone sent; else today in the person's saved timezone; UTC last.
+    let today = typeof phoneToday === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(phoneToday) ? phoneToday : '';
+    if (!today && user.timezone) {
+      try {
+        today = new Intl.DateTimeFormat('en-CA', { timeZone: user.timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+      } catch (_) { /* unknown zone — fall through */ }
+    }
+    if (!today) {
+      const now = new Date();
+      today = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
+    }
+    // The weekday too, so "this wednesday" / "next friday" resolve from the right day.
+    const weekday = new Date(`${today}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' });
 
     const prompt = `Analyze this input from a user: "${inputText}"
 
-TODAY IS: ${today}
+TODAY IS: ${today} (${weekday})
 
 Determine if the user is asking to be reminded of someone's BIRTHDAY — a yearly recurring celebration of a specific person. Strong signals: the word "birthday", "bday", "b-day", "cake", or naming a person together with a date that is clearly their birthday (e.g. "Mom's birthday is July 4", "remind me that Alex's birthday is this wednesday", "don't forget grandma's bday on the 12th").
 
