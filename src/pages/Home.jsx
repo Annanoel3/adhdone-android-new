@@ -18,12 +18,17 @@ import NotificationsOffBanner from "../components/home/NotificationsOffBanner";
 import { countCompletionForGif } from "../components/utils/completionMilestone";
 import PullToRefresh from "../components/shared/PullToRefresh";
 import { checkCompletionEggs } from "../components/eastereggs/completionEggs";
+import { usePopupTurn } from "../components/onboarding/onboardingSurface";
+import { ONBOARDING_STEPS, isStepDone } from "../components/onboarding/onboardingGate";
 
 export default function Home() {
   const [tasks, setTasks] = useState([]);
   const [user, setUser] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [showEndOfDayReview, setShowEndOfDayReview] = useState(false);
+  // The day review opens on its own, so it takes its turn: it waits until no
+  // other popup is on screen and then holds the screen until it's closed.
+  const endOfDayReviewShown = usePopupTurn(showEndOfDayReview);
   const [selectedTask, setSelectedTask] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [birthdayTextTask, setBirthdayTextTask] = useState(null);
@@ -130,6 +135,10 @@ export default function Home() {
     
     if (hour >= 19 && lastReview !== today) {
       setTimeout(() => {
+        // Not on a visit that is still walking someone through the app (the
+        // welcome chat, the "welcome back" chat, the Home tour): reviewing a
+        // day on top of all that is noise. It comes on the next evening visit.
+        if (!isStepDone(ONBOARDING_STEPS.welcome) || !isStepDone(ONBOARDING_STEPS.homeTour)) return;
         setShowEndOfDayReview(true);
       }, 5000);
     }
@@ -289,7 +298,7 @@ export default function Home() {
         </div>
 
         <EndOfDayReview
-          isOpen={showEndOfDayReview}
+          isOpen={endOfDayReviewShown}
           onClose={handleReviewDismiss}
           theme={theme}
         />
