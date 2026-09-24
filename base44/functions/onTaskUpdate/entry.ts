@@ -118,6 +118,9 @@ async function dropPhoneAlarms(base44, task, taskId) {
         isAndroid: true,
         // A data-only push: no title or text, so nothing is shown. Normal
         // priority, as OneSignal asks for pushes that never show anything.
+        // The name is only for the OneSignal dashboard (never shown to anyone),
+        // where a push with no title is otherwise listed as "Untitled Message".
+        name: "Silent: remove a finished task's alarms from the phone",
         content_available: true,
         priority: 5,
         data: { drop_alarms_task: taskId, changed_at: Date.now() }
