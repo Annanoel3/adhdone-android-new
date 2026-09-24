@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { base44 } from '@/api/base44Client';
 import { ONBOARDING_STEPS, isStepDone, markStepDone } from './onboardingGate';
 import { enterOnboardingSurface, exitOnboardingSurface } from './onboardingSurface';
+import { wasReplayedThisSession } from './onboardingReplay';
 import WelcomeChat from './WelcomeChat';
+import CATCH_UP_SCRIPT, { CATCH_UP_ABOUT_ONLY_SCRIPT } from './catchUpScript';
 
 // The very first thing a new user sees — a short back-and-forth that collects a
 // name and a sentence about the user's life. Nothing else in the
@@ -12,36 +15,83 @@ import WelcomeChat from './WelcomeChat';
 // copied down from the profile before this mounts, and an account that already
 // answered (it has a name or an about-me) counts as done even if the flag was
 // lost — so a reinstall or a new phone never asks twice.
+//
+// An account with history is never "new" either, whatever this phone
+// remembers. The done-flag only started living on the account partway
+// through, and a page-tour version bump erases the older on-phone evidence, so
+// people who had used the app for weeks were greeted as brand new ("welcome to
+// ADHDone… let's get you a first win"). They get the short "welcome back"
+// catch-up instead. A replay requested for the account (testing a first run)
+// still gets the real first run.
+const EXISTING_ACCOUNT_DAYS = 3;
+
+async function accountHasHistory(user) {
+  const created = Date.parse(user?.created_date || '');
+  if (!isNaN(created) && Date.now() - created > EXISTING_ACCOUNT_DAYS * 24 * 60 * 60 * 1000) return true;
+  try {
+    const rows = await base44.entities.Task.list('-created_date', 1);
+    return Array.isArray(rows) && rows.length > 0;
+  } catch (e) {
+    return false;
+  }
+}
+
 export default function WelcomeDialog({ user }) {
-  const [open, setOpen] = useState(false);
+  // 'welcome' = the first-run conversation, 'catchup' = the returning-user one.
+  const [mode, setMode] = useState(null);
 
   useEffect(() => {
-    if (!user) return;
-    if (isStepDone(ONBOARDING_STEPS.welcome)) return;
+    if (!user) return undefined;
+    if (isStepDone(ONBOARDING_STEPS.welcome)) return undefined;
     if (user.preferred_name || user.about_me) {
       markStepDone(ONBOARDING_STEPS.welcome);
-      return;
+      return undefined;
     }
-    setOpen(true);
+    let cancelled = false;
+    (wasReplayedThisSession() ? Promise.resolve(false) : accountHasHistory(user)).then((existing) => {
+      if (cancelled || isStepDone(ONBOARDING_STEPS.welcome)) return;
+      if (!existing) {
+        setMode('welcome');
+        return;
+      }
+      // Not a new account. Both flags are set in the same tick, before the
+      // catch-up appears, so the separate catch-up dialog can never show a
+      // second copy. The Home tour (chained to the welcome step) waits for this
+      // one to close before it appears.
+      const askCatchUp = !isStepDone(ONBOARDING_STEPS.catchUp);
+      markStepDone(ONBOARDING_STEPS.welcome);
+      if (!askCatchUp) return;
+      markStepDone(ONBOARDING_STEPS.catchUp);
+      setMode('catchup');
+    });
+    return () => { cancelled = true; };
   }, [user]);
 
   // While it's up, no other onboarding surface may appear behind it.
   useEffect(() => {
-    if (!open) return;
+    if (!mode) return undefined;
     enterOnboardingSurface();
     return exitOnboardingSurface;
-  }, [open]);
+  }, [mode]);
 
   const handleClose = () => {
-    setOpen(false);
+    setMode(null);
     markStepDone(ONBOARDING_STEPS.welcome);
   };
 
+  // Same choice the catch-up dialog makes: never ask for a name we already have.
+  const knownName = (user?.preferred_name || user?.display_name || '').trim();
+  const catchUpScript = knownName ? CATCH_UP_ABOUT_ONLY_SCRIPT : CATCH_UP_SCRIPT;
+
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) handleClose(); }}>
+    <Dialog open={!!mode} onOpenChange={(o) => { if (!o) handleClose(); }}>
       <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0 bg-card text-card-foreground border-border">
         <div className="pt-2">
-          <WelcomeChat onDone={handleClose} />
+          {mode === 'catchup' ? (
+            <WelcomeChat onDone={handleClose} script={catchUpScript} initialName={knownName} />
+          ) : (
+            <WelcomeChat onDone={handleClose} />
+          )}
         </div>
       </DialogContent>
     </Dialog>
