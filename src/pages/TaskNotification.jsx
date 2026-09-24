@@ -30,6 +30,7 @@ export default function TaskNotification() {
   // counted it, so this page stays quiet.
   const actedRef = React.useRef(false);
   const taskRef = React.useRef(null);
+  const autoDoneRef = React.useRef(false);
   useEffect(() => {
     const fromAlarm = new URLSearchParams(window.location.search).get('from') === 'alarm';
     return () => {
@@ -69,15 +70,31 @@ export default function TaskNotification() {
       setTask(tasks[0]);
       taskRef.current = tasks[0];
       setIsLoading(false);
+
+      // "Done ✓" on the phone's alarm opens this page with done=1: finish the
+      // task right away, the same way this page's own Done button does.
+      if (urlParams.get('done') === '1' && !autoDoneRef.current) {
+        autoDoneRef.current = true;
+        handleComplete(tasks[0]);
+      }
     } catch (error) {
       console.error("Error loading task:", error);
       navigate(createPageUrl("Home"));
     }
   };
 
-  const handleComplete = async () => {
+  const handleComplete = async (given) => {
+    const task = given && given.id ? given : taskRef.current;
     if (!task) return;
     actedRef.current = true;
+    // Already finished (a second tap, or a reminder about it that came back):
+    // don't finish it again — that made an extra copy of a repeating task.
+    if (task.status === 'completed') {
+      navigate(createPageUrl("Home"), {
+        state: { reload: true, message: "Already done ✓" }
+      });
+      return;
+    }
     setProcessingAction('complete');
 
     try {
