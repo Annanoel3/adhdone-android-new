@@ -20,6 +20,7 @@ import {
   Rocket,
   PlayCircle,
   Brain,
+  RefreshCw,
 } from "lucide-react";
 import {
   Popover,
@@ -319,21 +320,29 @@ export default function TaskCard({
     return `${year}-${month}-${day}`;
   };
 
-  // The day a repeating task's CURRENT occurrence is on ("Today", "Tomorrow",
-  // "Sep 26"). Finishing it creates the next occurrence, so this moves on by
-  // itself — a repeating task never sits there looking undated.
-  const occurrenceDay = (dateString) => {
-    if (!dateString) return null;
-    const day = new Date(dateString);
-    day.setHours(0, 0, 0, 0);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const diff = Math.round((day.getTime() - today.getTime()) / 86400000);
-    if (diff === 0) return 'Today';
-    if (diff === 1) return 'Tomorrow';
-    return formatReminderDate(dateString);
-  };
+  // A repeating task's closed card says WHEN it repeats — "Daily at 10 AM",
+  // "Mon, Wed at 6 PM" — as one pill, instead of a reminder interval ("Every
+  // hour" is how it nags after the time, not when it's due) and a date pill.
+  // The time is the one the person named (anchor_time). The section it sits
+  // in already says which day. Same wording as the Home card.
   const isRepeating = !!task.recurrence_pattern && task.recurrence_pattern !== 'none';
+  const isBirthday = task.classification === 'birthday' || !!task.birthday_person;
+  const showRepeatPill = isRepeating && !isEvent && !isBirthday;
+  const repeatScheduleLabel = (() => {
+    if (!isRepeating) return null;
+    const words = {
+      daily: 'Daily', every_other_day: 'Every other day', weekdays: 'Weekdays', weekly: 'Weekly',
+      every_other_week: 'Every other week', monthly: 'Monthly', yearly: 'Yearly',
+    };
+    const days = task.recurrence_pattern === 'weekly' && Array.isArray(task.recurrence_days) && task.recurrence_days.length
+      ? task.recurrence_days.map((n) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][n]).filter(Boolean).join(', ')
+      : words[task.recurrence_pattern] || String(task.recurrence_pattern).replace(/_/g, ' ');
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(task.anchor_time || ''));
+    if (!m) return days;
+    const h = Number(m[1]);
+    const time = `${h % 12 || 12}${m[2] === '00' ? '' : `:${m[2]}`} ${h < 12 ? 'AM' : 'PM'}`;
+    return `${days} at ${time}`;
+  })();
 
   const formatReminderDate = (dateString) => {
     if (!dateString) return null;
@@ -793,8 +802,18 @@ export default function TaskCard({
                 </Popover>
               )}
 
-              {/* Show interval badge for recurring reminders */}
-              {task.reminder_interval && task.reminder_interval !== 'once' && (
+              {/* A repeating task: one pill saying when it repeats. */}
+              {showRepeatPill && (
+                <span className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
+                  theme === 'dark' ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                }`}>
+                  <RefreshCw className="w-3 h-3" />
+                  {repeatScheduleLabel}
+                </span>
+              )}
+
+              {/* Show interval badge for recurring reminders (not on a repeating task) */}
+              {task.reminder_interval && task.reminder_interval !== 'once' && !showRepeatPill && (
                 <Popover>
                   <PopoverTrigger asChild>
                     <button
@@ -823,8 +842,9 @@ export default function TaskCard({
                 </Popover>
               )}
 
-              {/* Due date option for recurring (interval) reminders */}
-              {task.reminder_interval && task.reminder_interval !== 'once' && (
+              {/* Due date option for recurring (interval) reminders. None on a
+                  repeating task's closed card — its day is in the details. */}
+              {task.reminder_interval && task.reminder_interval !== 'once' && !showRepeatPill && (
                 task.due_date ? (
                   <Popover>
                     <PopoverTrigger asChild>
@@ -869,20 +889,14 @@ export default function TaskCard({
                     <PopoverTrigger asChild>
                       <button
                         onClick={(e) => e.stopPropagation()}
-                        className={isRepeating && task.next_reminder
-                          ? `flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
-                              theme === 'dark'
-                                ? 'border-purple-700 bg-purple-900/30 text-purple-300 hover:bg-purple-900/50'
-                                : 'border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100'
-                            }`
-                          : `flex items-center gap-1 border border-dashed px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
-                              theme === 'dark'
-                                ? 'border-gray-600 text-gray-400 hover:bg-gray-700'
-                                : 'border-gray-300 text-gray-500 hover:bg-gray-50'
-                            }`}
+                        className={`flex items-center gap-1 border border-dashed px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
+                          theme === 'dark'
+                            ? 'border-gray-600 text-gray-400 hover:bg-gray-700'
+                            : 'border-gray-300 text-gray-500 hover:bg-gray-50'
+                        }`}
                       >
                         <CalendarClock className="w-3 h-3" />
-                        {isRepeating && task.next_reminder ? occurrenceDay(task.next_reminder) : 'Add Due Date'}
+                        Add Due Date
                       </button>
                     </PopoverTrigger>
                     <PopoverContent className={`w-56 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
@@ -984,8 +998,9 @@ export default function TaskCard({
                 </span>
               )}
 
-              {/* Show date badge for one-time reminders with a date set */}
-              {task.reminder_interval === 'once' && task.next_reminder && (
+              {/* Show date badge for one-time reminders with a date set (a
+                  repeating task shows its repeat pill instead) */}
+              {task.reminder_interval === 'once' && task.next_reminder && !showRepeatPill && (
                 <Popover open={dateTimeOpen} onOpenChange={(o) => { setDateTimeOpen(o); if (!o) commitDateTime(); }}>
                   <PopoverTrigger asChild>
                     <button
