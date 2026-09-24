@@ -51,20 +51,23 @@ Deno.serve(async (req) => {
       // passed on the birthday itself, made the birthday vanish from the
       // Birthdays page and Home, and it could never roll over to next year.
       const isBirthday = (t) => !!t.birthday_person || t.classification === 'birthday' || !!t.is_own_birthday;
-      const activeTasks = tasks.filter(t => t.status === 'active' && t.next_reminder && !isBirthday(t));
+      // Only a REPEATING reminder has a next time to move on to. A one-time
+      // task or an event keeps its date and time for good — nothing may
+      // disappear or change just because its time went by. (This used to clear
+      // their next_reminder once it passed, which dropped events off the
+      // Calendar and left tasks with no time on their card.)
+      const activeTasks = tasks.filter(t =>
+        t.status === 'active' && t.next_reminder && !isBirthday(t) && !!intervalMs[t.reminder_interval]
+      );
 
       for (const t of activeTasks) {
         const when = parseWhen(t.next_reminder);
         if (!when || when > now) continue;
 
-        const ms = t.reminder_interval ? intervalMs[t.reminder_interval] : 0;
-        let next = null;
-
-        if (ms && ms > 0) {
-          let nextTime = when + ms;
-          while (nextTime <= now) nextTime += ms;
-          next = new Date(nextTime).toISOString();
-        }
+        const ms = intervalMs[t.reminder_interval];
+        let nextTime = when + ms;
+        while (nextTime <= now) nextTime += ms;
+        const next = new Date(nextTime).toISOString();
 
         await base44.asServiceRole.entities.Task.update(t.id, {
           reminder_count: (t.reminder_count || 0) + 1,
