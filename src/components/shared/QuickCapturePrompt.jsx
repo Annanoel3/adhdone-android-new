@@ -493,7 +493,7 @@ export function AlarmPermissionsDialog({ theme }) {
       key: 'notifications',
       ok: !!status.notifications,
       label: 'Notifications',
-      why: "The alarm can't show at all without them.",
+      why: 'Without this, nothing from ADHDone reaches you: no reminders, no alarms, nothing.',
       action: () => tryOpen(() => NotifyBridge?.requestPermission?.()),
     },
     {
@@ -522,7 +522,7 @@ export function AlarmPermissionsDialog({ theme }) {
       key: 'battery',
       ok: !!status.ignoringBatteryOptimizations,
       label: 'Battery: unrestricted',
-      why: 'Samsung puts sleeping apps to bed; a sleeping app can ring late or not at all.',
+      why: "Samsung puts apps it thinks you don't use to sleep, and a sleeping app's reminders and alarms can come late or not at all.",
       action: () => tryOpen(() => AlarmBridge?.requestIgnoreBatteryOptimizations?.()),
     },
   ];
@@ -560,6 +560,13 @@ export function AlarmPermissionsDialog({ theme }) {
             theme={theme}
             className={`border-t pt-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}
           />
+        )}
+
+        {!allOk && (
+          <p className={`text-xs rounded-md p-2 ${dark ? 'bg-amber-900/40 text-amber-200' : 'bg-amber-50 text-amber-800'}`}>
+            Please turn on every one. Any switch left off can make your reminders and alarms
+            late, easy to miss, or not show up at all. Without Notifications, nothing gets through.
+          </p>
         )}
 
         <div className={`divide-y ${dark ? 'divide-gray-700' : 'divide-gray-200'}`}>
