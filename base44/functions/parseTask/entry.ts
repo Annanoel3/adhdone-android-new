@@ -2,8 +2,8 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.25";
 import { runTaskParse } from "../../shared/runTaskParse.ts";
 // Shared files are bundled into this function when it is deployed, so a change
 // to the shared prompt (taskParsePrompt.ts) only reaches users after this
-// function is saved and redeployed again (last redeploy: the parser's
-// recurrence_days field — "every Wednesday and Thursday" — and every_other_day).
+// function is saved and redeployed again (last redeploy: the parser telling
+// "by 5" — a deadline — apart from "at 5").
 
 Deno.serve(async (req) => {
   const base44 = await createClientFromRequest(req);
