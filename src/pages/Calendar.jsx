@@ -281,10 +281,24 @@ export default function Calendar() {
     }
   }, []);
 
+  // EVERY active task, a page at a time. The calendar used to stop at the 200
+  // most recently edited, so once a year of imported events was in, older
+  // ones quietly dropped off the calendar even though nothing had happened to
+  // them.
   const loadTasks = useCallback(async () => {
     try {
-      const list = await base44.entities.Task.filter({ status: 'active' }, '-updated_date', 200);
-      setTasks(list || []);
+      const PAGE = 200;
+      const all = [];
+      const seen = new Set();
+      for (let skip = 0; skip < 5000; skip += PAGE) {
+        const page = (await base44.entities.Task.filter({ status: 'active' }, '-updated_date', PAGE, skip)) || [];
+        let added = 0;
+        for (const t of page) {
+          if (!seen.has(t.id)) { seen.add(t.id); all.push(t); added++; }
+        }
+        if (page.length < PAGE || added === 0) break;
+      }
+      setTasks(all);
     } catch {
       setTasks([]);
     }
@@ -685,7 +699,12 @@ export default function Calendar() {
         {/* Calendar view — in-app tasks + imported events */}
         <Card className={`border-none shadow-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
           <CardContent className="p-2 md:p-6">
-            <CalendarGrid tasks={tasks} events={syncedEvents} isDark={isDark} onItemOpen={handleItemOpen} user={user} />
+            {/* Only tasks go on the grid. An imported event shows through its
+                task for as long as that task is active; the import records
+                (syncedEvents) are just the sync's bookkeeping. Drawing them too
+                showed recently imported events twice, and kept showing events
+                the user had already checked off or deleted. */}
+            <CalendarGrid tasks={tasks} isDark={isDark} onItemOpen={handleItemOpen} user={user} />
           </CardContent>
         </Card>
 
