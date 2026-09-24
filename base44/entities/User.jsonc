@@ -105,6 +105,46 @@
       "type": "boolean",
       "description": "Answer to 'Only vibrate when my phone is on silent, vibrate or Do Not Disturb?', asked (and required) the first time alarms are set up on a build that supports it; changeable in Settings -> Alarms. true = while the phone is on silent, vibrate or Do Not Disturb, alarms and timer rings vibrate and show on screen with no sound. false = they ring out loud. Empty = never asked (rings out loud, as before). The Android app reads it at the moment an alarm goes off."
     },
+    "alarm_permissions": {
+      "type": "object",
+      "properties": {
+        "notifications": {
+          "type": "boolean",
+          "description": "Android lets ADHDone show notifications. false = nothing reaches this phone: no reminders, no alarms."
+        },
+        "exact_alarms": {
+          "type": "boolean",
+          "description": "'Alarms & reminders' special access. false = alarms can ring minutes late."
+        },
+        "full_screen": {
+          "type": "boolean",
+          "description": "Full-screen notifications. false = the alarm can't take over the locked screen."
+        },
+        "overlay": {
+          "type": "boolean",
+          "description": "Display over other apps. false = while the phone is in use the alarm is only a banner. Missing = the build doesn't report it."
+        },
+        "battery": {
+          "type": "boolean",
+          "description": "Battery optimization is off for ADHDone (unrestricted). false = Android may put the app to sleep, and reminders and alarms can come late or not at all."
+        },
+        "last_rang_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When an alarm last rang on this phone, as the phone reports it. Missing = never, or the build doesn't report it."
+        },
+        "checked_at": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the phone was last asked."
+        }
+      },
+      "description": "What the user's Android phone currently allows ADHDone, read from the phone when the app opens or comes back to the front and saved only when it changes (or once a day). Read-only information for the dashboard: nothing about reminders or alarms changes because of it. Empty = never opened on an app build with alarms (web only, or an older build)."
+    },
+    "alarm_permissions_missing": {
+      "type": "string",
+      "description": "The same check in plain words, for scanning the Users table: 'All allowed', or the switches still off, e.g. 'Battery, Full-screen'. Empty = never checked."
+    },
     "alarm_trial_started_at": {
       "type": "string",
       "format": "date-time",
