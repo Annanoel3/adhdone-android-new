@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { pushWidgetTasks, pushAlarms, pushAlarmSound, setAlarmMode, pushAlarmQuietVibrate, refreshAlarms } from '../utils/widgetBridge';
+import { pushWidgetTasks, pushAlarms, pushAlarmSound, setAlarmMode, pushAlarmQuietVibrate, refreshAlarms, alarmPermissionStatus } from '../utils/widgetBridge';
 import { maybeAutoSyncDevice } from '@/lib/calendarSync';
 
 // Seeds the home-screen widget once on app open, from anywhere in the app — a
@@ -75,6 +75,63 @@ export default function WidgetTaskSync({ user }) {
     };
     document.addEventListener('visibilitychange', onVisible);
     return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [userId]);
+
+  // What Android allows ADHDone on this phone (notifications, exact alarms,
+  // full-screen, display over other apps, battery), saved on the profile so
+  // the dashboard shows who is missing a switch that reminders and alarms
+  // need. Information only: nothing about reminders changes because of it.
+  // Read on open and whenever the app comes back to the front (at most once a
+  // minute); written only when something changed, or once a day.
+  const savedPermissions = user?.alarm_permissions;
+  useEffect(() => {
+    if (!userId || !window.Capacitor?.Plugins?.AlarmBridge) return;
+    let saved = savedPermissions || null;
+    let last = 0;
+    const check = async () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - last < 60 * 1000) return;
+      last = Date.now();
+      const st = await alarmPermissionStatus();
+      if (!st) return;
+      const next = {
+        notifications: !!st.notifications,
+        exact_alarms: !!st.exactAlarms,
+        full_screen: !!st.fullScreen,
+        battery: !!st.ignoringBatteryOptimizations,
+      };
+      // Older builds don't report these two; leave them out rather than guess.
+      if (typeof st.overlay === 'boolean') next.overlay = st.overlay;
+      if (Number(st.lastRangAt) > 0) next.last_rang_at = new Date(Number(st.lastRangAt)).toISOString();
+      const keys = Object.keys(next);
+      const same = !!saved
+        && keys.every((k) => saved[k] === next[k])
+        && Object.keys(saved).every((k) => k === 'checked_at' || keys.includes(k));
+      const checkedAt = Date.parse(saved?.checked_at || '');
+      const fresh = checkedAt > Date.now() - 24 * 60 * 60 * 1000;
+      if (same && fresh) return;
+      next.checked_at = new Date().toISOString();
+      const missing = [
+        !next.notifications && 'Notifications',
+        !next.exact_alarms && 'Exact alarms',
+        !next.full_screen && 'Full-screen',
+        next.overlay === false && 'Display over apps',
+        !next.battery && 'Battery',
+      ].filter(Boolean);
+      try {
+        await base44.auth.updateMe({
+          alarm_permissions: next,
+          alarm_permissions_missing: missing.length ? missing.join(', ') : 'All allowed',
+        });
+        saved = next;
+      } catch (err) {
+        // Not saved this time; the next open or resume tries again.
+      }
+    };
+    check();
+    document.addEventListener('visibilitychange', check);
+    return () => document.removeEventListener('visibilitychange', check);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   // A capture made outside the app (share sheet, pinned notification, widget)
