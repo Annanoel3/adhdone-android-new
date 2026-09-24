@@ -23,6 +23,15 @@ export const getTaskDueLocalDate = (task) => {
   if (task.reminder_interval === 'once' && task.next_reminder) {
     return getLocalDateString(new Date(task.next_reminder));
   }
+  // A repeating task's next occurrence is made the moment the last one is
+  // checked off, and its next_reminder is the day it's for ("Take Pills,
+  // daily at 10": done today → tomorrow at 10). That occurrence belongs on
+  // tomorrow's list, not today's, even when it also has a rhythm ("keep
+  // reminding me until I do it"). Once its day comes it stays in Today until
+  // it's done, like everything else.
+  if (task.recurrence_pattern && task.recurrence_pattern !== 'none' && task.next_reminder) {
+    return getLocalDateString(new Date(task.next_reminder));
+  }
   return null;
 };
 
@@ -38,7 +47,7 @@ export const getTaskEndLocalDate = (task) => {
 // A task counts as "today" when its start has arrived (today >= start), and
 // stays "today" until it's completed or deleted — overdue tasks and events
 // whose day (or last day) has passed remain in Today. Tasks with no effective
-// date (recurring, no due) are always today.
+// date (a reminder rhythm with no date and no repeat) are always today.
 export const isTodayTask = (task, todayStr = getLocalDateString()) => {
   // Back Burner: silenced tasks drop out of Today's Tasks — they're intentionally
   // out of sight (and silent) until the user reactivates them.
