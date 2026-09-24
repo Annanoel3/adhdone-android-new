@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { waitForTourEnd } from "@/components/onboarding/tourActive";
+import { usePopupTurn } from "@/components/onboarding/onboardingSurface";
 
 function todayKey() {
   const d = new Date();
@@ -30,6 +31,8 @@ function isToday(iso) {
  */
 export default function OwnBirthdayPopup({ user, theme }) {
   const [isOpen, setIsOpen] = useState(false);
+  // Opens on its own, so it takes its turn: never on top of another popup.
+  const shown = usePopupTurn(isOpen);
 
   const check = useCallback(async () => {
     if (!user?.email) return;
@@ -55,7 +58,7 @@ export default function OwnBirthdayPopup({ user, theme }) {
   const firstName = (user?.full_name || "").trim().split(/\s+/)[0] || "friend";
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={shown} onOpenChange={setIsOpen}>
       <DialogContent className={`max-w-md text-center ${theme === "dark" ? "bg-gray-900 text-white border-gray-700" : ""}`}>
         <DialogHeader>
           <div className="mx-auto w-16 h-16 rounded-full bg-pink-100 flex items-center justify-center mb-2">
