@@ -12,13 +12,15 @@ const BIRTHDAY_SCHEDULE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * Given a month (1-12) and day, returns the next upcoming occurrence of that
- * birthday at 9:00 local time. If this year's date already passed, rolls to next year.
+ * birthday at the reminder time — 9:00 local unless the birthday already has
+ * its own time (hour/minute passed in), which is kept. If this year's date
+ * already passed, rolls to next year.
  */
-export function computeNextBirthdayDate(month, day) {
+export function computeNextBirthdayDate(month, day, hour = REMINDER_HOUR, minute = REMINDER_MINUTE) {
   const now = new Date();
-  let candidate = new Date(now.getFullYear(), month - 1, day, REMINDER_HOUR, REMINDER_MINUTE, 0, 0);
+  let candidate = new Date(now.getFullYear(), month - 1, day, hour, minute, 0, 0);
   if (candidate <= now) {
-    candidate = new Date(now.getFullYear() + 1, month - 1, day, REMINDER_HOUR, REMINDER_MINUTE, 0, 0);
+    candidate = new Date(now.getFullYear() + 1, month - 1, day, hour, minute, 0, 0);
   }
   return candidate;
 }
@@ -171,7 +173,8 @@ export async function ensureBirthdayReminders(birthdayTasks) {
     // Birthday has passed — roll to next year
     const month = birthdayDate.getMonth() + 1;
     const day = birthdayDate.getDate();
-    const nextDate = computeNextBirthdayDate(month, day);
+    // Same time of day as this year — a reminder time the person picked stays.
+    const nextDate = computeNextBirthdayDate(month, day, birthdayDate.getHours(), birthdayDate.getMinutes());
 
     // Cancel old notifications if any
     if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
