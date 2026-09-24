@@ -33,13 +33,16 @@ export default function RoyaltyFreeMusicPlayer({ selectedPlaylist, theme }) {
     lofi: {
       name: "Lo-Fi Beats",
       sources: [
-        { title: "Lo-Fi Study Mix", url: "https://www.youtube-nocookie.com/embed/H-Meqjg9cxA?autoplay=1&origin=https://adhdone.space" },
+        // Lofi Girl's "lofi hip hop radio 📚 beats to relax/study to" (a 24/7 stream).
+        { title: "Lo-Fi Study Mix", url: "https://www.youtube-nocookie.com/embed/jfKfPfyJRdk?autoplay=1&origin=https://adhdone.space" },
       ]
     },
     jazz: {
       name: "Jazz & Smooth",
       sources: [
-        { title: "Smooth Jazz", url: "https://www.youtube-nocookie.com/embed/DZpPhCGoPLg?autoplay=1&origin=https://adhdone.space" },
+        // Cafe Music BGM channel, "Romantic Journey [Relaxing Jazz Music]". This
+        // used to point at the Ambient video below, so it never played jazz.
+        { title: "Smooth Jazz", url: "https://www.youtube-nocookie.com/embed/Aw_vZ-1ol_0?autoplay=1&origin=https://adhdone.space" },
       ]
     },
     ambient: {
