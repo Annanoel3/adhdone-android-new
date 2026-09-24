@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { pushWidgetTasks, pushAlarms, pushAlarmSound, setAlarmMode, pushAlarmQuietVibrate } from '../utils/widgetBridge';
+import { pushWidgetTasks, pushAlarms, pushAlarmSound, setAlarmMode, pushAlarmQuietVibrate, refreshAlarms } from '../utils/widgetBridge';
 import { maybeAutoSyncDevice } from '@/lib/calendarSync';
 
 // Seeds the home-screen widget once on app open, from anywhere in the app — a
@@ -49,10 +49,33 @@ export default function WidgetTaskSync({ user }) {
   // Phone calendars the user chose to import: refresh them in the background
   // on app open (at most every 6 hours). No-op in the browser and for anyone
   // who never picked a phone calendar.
+  // A calendar sync can remove or move imported events, so the phone's alarm
+  // list is rebuilt once it's done.
   useEffect(() => {
     if (!user) return;
-    maybeAutoSyncDevice(user).catch(() => {});
+    maybeAutoSyncDevice(user)
+      .then((res) => {
+        if (res && !res.aborted && window.Capacitor?.Plugins?.AlarmBridge) refreshAlarms();
+      })
+      .catch(() => {});
   }, [user?.id, (user?.device_calendar_ids || []).join(',')]);
+
+  // Coming back to the app (it was only in the background, so nothing above
+  // re-runs): rebuild the alarm list from the tasks as they are now. A task
+  // finished or deleted somewhere else, or an event the calendar moved, must
+  // not keep its old alarm on this phone. At most once a minute.
+  useEffect(() => {
+    if (!userId || !window.Capacitor?.Plugins?.AlarmBridge) return;
+    let last = Date.now();
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - last < 60 * 1000) return;
+      last = Date.now();
+      refreshAlarms();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [userId]);
 
   // A capture made outside the app (share sheet, pinned notification, widget)
   // landed while the app is open: refresh the task list, the widget and the
