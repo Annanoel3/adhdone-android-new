@@ -589,12 +589,52 @@ const ALERT_STYLE_STEP = 'onboarding_alert_style_done';
 // Set when "Try it out" is pressed, so AlarmKeepPrompt can see it in the same
 // session without waiting for the account record to be reloaded.
 let trialStartedThisSession = '';
+// widgetBridge's once-per-account "first time alarms are turned on" set-up.
+// Picking the sound here covers what that set-up would have asked, so it is
+// marked done and the permissions screen only opens when Android is missing a
+// switch.
+const ALARM_SETUP_STEP = 'onboarding_alarm_setup_done';
+// The demo push the welcome chat books a few minutes out (same key there).
+const FIRST_WIN_DEMO_KEY = 'first_win_demo_push';
+
+// Someone who picks full-screen alarms while the welcome chat's demo reminder
+// is still on its way should get the demo as an alarm — it is there to show
+// what THEIR reminders will look like. Cancel the booked push and book the
+// same one, same time, asking to ring on arrival. Too close to call (under a
+// minute out) is left alone rather than risk two.
+async function ringFirstWinDemo() {
+  let demo = null;
+  try { demo = JSON.parse(localStorage.getItem(FIRST_WIN_DEMO_KEY) || 'null'); } catch (e) { demo = null; }
+  if (!demo?.id || !demo?.at) return;
+  const at = Date.parse(demo.at);
+  if (!(at > Date.now() + 60 * 1000)) return;
+  try { localStorage.removeItem(FIRST_WIN_DEMO_KEY); } catch (e) {}
+  try {
+    const { cancelScheduledReminder } = await import('@/components/utils/reminderScheduler');
+    await cancelScheduledReminder([demo.id]);
+    const me = await base44.auth.me();
+    if (!me?.email) return;
+    await base44.functions.invoke('schedulePush', {
+      toUserExternalId: me.email,
+      title: demo.title,
+      body: demo.body,
+      sendAtISO: demo.at,
+      data: { type: 'first_win_demo', alarm: true },
+    });
+  } catch (e) {
+    console.error('Could not re-book the demo reminder as an alarm:', e);
+  }
+}
 
 export function AlertStylePrompt({ user, theme }) {
   const dark = theme === 'dark';
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState('first');
   const [busy, setBusy] = useState(false);
+  // 'choose' → the question; 'sound' → right after picking full-screen, the
+  // ring sound is picked here instead of being left for Settings to find.
+  const [step, setStep] = useState('choose');
+  const [me, setMe] = useState(null);
   const started = useRef(false);
 
   useEffect(() => {
@@ -653,9 +693,16 @@ export function AlertStylePrompt({ user, theme }) {
       }
       await base44.auth.updateMe(patch);
       setAlarmMode(style);
-      finish();
+      // Answered — never asked again, even if the app closes on the sound step.
+      markStepDone(ALERT_STYLE_STEP);
       await refreshAlarms();
-      if (style === 'alarm') await requestAlarmPermissions({ setup: true });
+      if (style === 'alarm') {
+        ringFirstWinDemo();
+        base44.auth.me().then(setMe).catch(() => {});
+        setStep('sound');
+      } else {
+        finish();
+      }
     } catch (e) {
       // Leave the default (regular notifications) in place; Settings has the switch.
       finish();
@@ -664,8 +711,41 @@ export function AlertStylePrompt({ user, theme }) {
     }
   };
 
+  // Sound picked (or skipped): close, then ask Android for anything it's
+  // still missing — only if something is actually off.
+  const soundDone = async () => {
+    finish();
+    markStepDone(ALARM_SETUP_STEP);
+    try { await requestAlarmPermissions(); } catch (e) {}
+  };
+
   const card = `w-full text-left rounded-xl border p-4 transition-colors ${dark ? 'border-gray-700 hover:bg-gray-800' : 'border-gray-200 hover:bg-gray-50'}`;
   const panel = `max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`;
+
+  if (step === 'sound') {
+    return (
+      <Dialog open={open} onOpenChange={(o) => { if (!o) soundDone(); }}>
+        <DialogContent className={panel}>
+          <DialogHeader>
+            <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
+              <AlarmClock className="w-5 h-5" /> Pick your alarm sound
+            </DialogTitle>
+            <DialogDescription className={dark ? 'text-gray-400' : ''}>
+              This is what your reminders will ring with. Tap Play to hear one.
+            </DialogDescription>
+          </DialogHeader>
+
+          <AlarmSoundPicker user={me} theme={theme} className="pb-1" />
+
+          <Button onClick={soundDone} className="w-full">Done</Button>
+
+          <p className={`text-xs pt-1 ${dark ? 'text-gray-500' : 'text-gray-500'}`}>
+            You can change it anytime in Settings.
+          </p>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   if (mode === 'intro') {
     return (
