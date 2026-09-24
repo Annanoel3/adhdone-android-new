@@ -19,26 +19,38 @@ function dayLabel(due: Date, daysAway: number): string {
   return due.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
 
+// Every body names the task. The body is the line people read in the
+// notification (and the only line the dashboard lists), and it is what the
+// spoken alarm reads out loud, so "no pressure, just a friendly nudge" on its
+// own tells nobody what the reminder is for.
+function sentence(s: string): string {
+  return /[.!?]$/.test(s) ? s : `${s}.`;
+}
+
 export function getReminderContent(
   taskTitle: string | null | undefined,
   dueDateISO: string | null | undefined,
   sendAtISO: string
 ): { title: string; body: string } {
-  const title = taskTitle || 'your task';
+  const title = (taskTitle || '').trim() || 'your task';
+  const quoted = `"${title}"`;
   if (!dueDateISO) {
-    return { title: `📌 ${title}`, body: "Whenever you've got a minute — no pressure, just a friendly nudge." };
+    // Only tasks with a rhythm the person asked for land here ("remind me at
+    // 10 and keep reminding me until I do it"), so no "no pressure" — they
+    // asked to be reminded.
+    return { title: `📌 ${title}`, body: `Reminder: ${sentence(title)}` };
   }
   const due = new Date(dueDateISO);
   const days = utcDay(dueDateISO) - utcDay(sendAtISO);
   const label = dayLabel(due, days);
   if (days < 0) {
-    return { title: `⚠️ ${title}`, body: `This one slipped past ${label}. No shame — just pick it back up when you can.` };
+    return { title: `⚠️ ${title}`, body: `${quoted} slipped past ${label}. No shame — just pick it back up when you can.` };
   }
   if (days === 0) {
-    return { title: `📅 ${title}`, body: "Due today — you've got this. Tap when it's done." };
+    return { title: `📅 ${title}`, body: `${quoted} is due today — you've got this. Tap when it's done.` };
   }
   if (days === 1) {
-    return { title: `Heads up: ${title}`, body: "Tomorrow's the day — plenty of time to plan for it." };
+    return { title: `Heads up: ${title}`, body: `${quoted} is due tomorrow — plenty of time to plan for it.` };
   }
-  return { title: `Don't forget: ${title}`, body: `Plenty of time before ${label} to get it done.` };
+  return { title: `Don't forget: ${title}`, body: `${quoted} is due ${label} — plenty of time to get it done.` };
 }
