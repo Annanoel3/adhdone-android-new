@@ -168,9 +168,23 @@ Deno.serve(async (req) => {
       console.log(`🔋 [REFILL] Task "${task.title}" (${task.id}) needs refill — scheduled until: ${scheduledUntil.toISOString()}`);
 
       try {
-        // Cancel any existing scheduled OneSignal notifications for this task first
+        // Two cases:
+        //  - APPENDING: the booked run still has pushes ahead (a refill fires
+        //    when two intervals are left). Those pushes are still wanted, so
+        //    they stay live and the new batch goes on after them. This used to
+        //    cancel them and start after them anyway, so every refill dropped
+        //    the last two reminders of the run: "keep reminding me until I do
+        //    it" went quiet at 5 PM with 6 and 7 PM thrown away, and a daily
+        //    reminder skipped two days out of every ten.
+        //  - STARTING OVER: nothing booked is still ahead, so anything on the
+        //    task is already sent (or an orphan) and is cleared as before.
         const oldIds = Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : [];
-        if (oldIds.length > 0) {
+        const appending = scheduledUntil > now;
+        // The still-live pushes from the run being extended stay on the task, so
+        // finishing it cancels them too. The newest batch is all that can
+        // still be ahead, so older (already sent) ids are let go.
+        const keptIds: string[] = appending ? oldIds.slice(-BATCH_SIZE) : [];
+        if (oldIds.length > 0 && !appending) {
           const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
           const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
           await Promise.allSettled(oldIds.map(id =>
@@ -188,8 +202,12 @@ Deno.serve(async (req) => {
       const idHash = task.id.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
       const staggerMs = (idHash % 50) * 60 * 1000; // 0–49 minute stagger
 
-      let batchStart = scheduledUntil > now
-          ? new Date(scheduledUntil.getTime() + interval + staggerMs)
+      // Extending a run keeps its rhythm: the next one is one interval after
+      // the last booked one. The stagger is only for a run starting from
+      // scratch; adding it again on every refill pushed an hourly reminder
+      // later and later (7:00, then 8:17, …).
+      let batchStart = appending
+          ? new Date(scheduledUntil.getTime() + interval)
           : new Date(now.getTime() + interval + staggerMs);
       // A schedule starting from scratch whose task already knows when it wants
       // to begin (tomorrow's "pills at 10", made when today's was checked off)
@@ -323,7 +341,7 @@ Deno.serve(async (req) => {
         }
 
         await base44.asServiceRole.entities.Task.update(task.id, {
-          onesignal_notification_ids: notificationIds,
+          onesignal_notification_ids: [...keptIds.filter(id => !notificationIds.includes(id)), ...notificationIds],
           last_scheduled_until: newLastScheduledUntil,
           reminder_retry_after: null,
             ...(!task.next_reminder || new Date(task.next_reminder) <= now
@@ -342,7 +360,8 @@ Deno.serve(async (req) => {
           // Leave last_scheduled_until alone and try again after the backoff.
           refusedEmails.add(task.notification_recipient_email);
           await base44.asServiceRole.entities.Task.update(task.id, {
-            onesignal_notification_ids: [],
+            // The pushes already booked ahead stay live, so they stay tracked.
+            onesignal_notification_ids: keptIds,
             reminder_retry_after: new Date(now.getTime() + RETRY_AFTER_MS).toISOString(),
           });
           console.warn(`📵 [REFILL] Could not book "${task.title}" — will retry after ${new Date(now.getTime() + RETRY_AFTER_MS).toISOString()}`);
@@ -351,7 +370,8 @@ Deno.serve(async (req) => {
           // to prevent infinite retry loops. The daily digest will cover these tasks.
           const batchEnd = new Date(batchStart.getTime() + interval * (BATCH_SIZE - 1));
           await base44.asServiceRole.entities.Task.update(task.id, {
-            onesignal_notification_ids: [],
+            // The pushes already booked ahead stay live, so they stay tracked.
+            onesignal_notification_ids: keptIds,
             last_scheduled_until: batchEnd.toISOString(),
           });
           console.log(`📭 [REFILL] All notifications for "${task.title}" landed in digest window — digest will cover it`);
