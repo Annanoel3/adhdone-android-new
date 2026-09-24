@@ -597,18 +597,93 @@ let trialStartedThisSession = '';
 // marked done and the permissions screen only opens when Android is missing a
 // switch.
 const ALARM_SETUP_STEP = 'onboarding_alarm_setup_done';
-// The demo push the welcome chat books a few minutes out (same key there).
+// The demo push the welcome chat plans a few minutes out (same key there):
+// its words and time, plus its id once booked.
 const FIRST_WIN_DEMO_KEY = 'first_win_demo_push';
+// OneSignalInit fires this once the phone is linked to the account for pushes;
+// the welcome chat fires the other when it plans a demo.
+const PUSH_LINKED_EVENT = 'adhdone:push-linked';
+const FIRST_WIN_PLANNED_EVENT = 'adhdone:first-win-planned';
+// A demo that still can't be booked this long after its planned time is
+// dropped — arriving much later it would no longer read as a demo.
+const FIRST_WIN_DEMO_STALE_MS = 15 * 60 * 1000;
+// Never booked closer than this, so it can't land on top of the question
+// that's open when it gets booked.
+const FIRST_WIN_DEMO_MIN_LEAD_MS = 90 * 1000;
+
+const readFirstWinDemo = () => {
+  try { return JSON.parse(localStorage.getItem(FIRST_WIN_DEMO_KEY) || 'null'); } catch (e) { return null; }
+};
+const saveFirstWinDemo = (demo) => {
+  try {
+    if (demo) localStorage.setItem(FIRST_WIN_DEMO_KEY, JSON.stringify(demo));
+    else localStorage.removeItem(FIRST_WIN_DEMO_KEY);
+  } catch (e) {}
+};
+
+// Book the welcome chat's demo once this phone can receive it. The chat used
+// to book it on the spot, but a new phone isn't linked to the account for
+// pushes until after the notifications question, so that push had nowhere to
+// go and never arrived. The link can take a few seconds to settle on
+// OneSignal's side, hence the retries.
+let firstWinDemoBooking = null;
+function bookFirstWinDemo() {
+  const waiting = readFirstWinDemo();
+  if (!waiting || waiting.id || firstWinDemoBooking) return firstWinDemoBooking;
+  firstWinDemoBooking = (async () => {
+    for (const pause of [2000, 5000, 10000, 20000]) {
+      await new Promise((r) => setTimeout(r, pause));
+      const demo = readFirstWinDemo();
+      if (!demo || demo.id) return;
+      const planned = Date.parse(demo.at);
+      if (!(planned > Date.now() - FIRST_WIN_DEMO_STALE_MS)) { saveFirstWinDemo(null); return; }
+      const sendAt = new Date(Math.max(planned, Date.now() + FIRST_WIN_DEMO_MIN_LEAD_MS)).toISOString();
+      const alarm = demo.alarm === true;
+      try {
+        const me = await base44.auth.me();
+        if (!me?.email) return;
+        const res = await base44.functions.invoke('schedulePush', {
+          toUserExternalId: me.email,
+          title: demo.title,
+          body: demo.body,
+          sendAtISO: sendAt,
+          data: alarm ? { type: 'first_win_demo', alarm: true } : { type: 'first_win_demo' },
+        });
+        const id = res?.data?.notificationId;
+        if (!id) continue;
+        // Full-screen alarms may have been picked while this was booking.
+        const latest = readFirstWinDemo() || demo;
+        saveFirstWinDemo({ ...demo, at: sendAt, id, alarm });
+        if (latest.alarm === true && !alarm) await ringFirstWinDemo();
+        return;
+      } catch (e) {
+        // try again after the next pause
+      }
+    }
+  })().finally(() => { firstWinDemoBooking = null; });
+  return firstWinDemoBooking;
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener(PUSH_LINKED_EVENT, () => { bookFirstWinDemo(); });
+  window.addEventListener(FIRST_WIN_PLANNED_EVENT, () => {
+    if (window.__adhdonePushLinked) bookFirstWinDemo();
+  });
+}
 
 // Someone who picks full-screen alarms while the welcome chat's demo reminder
 // is still on its way should get the demo as an alarm — it is there to show
 // what THEIR reminders will look like. Cancel the booked push and book the
 // same one, same time, asking to ring on arrival. Too close to call (under a
-// minute out) is left alone rather than risk two.
+// minute out) is left alone rather than risk two. Not booked yet: it is simply
+// booked as an alarm when it is.
 async function ringFirstWinDemo() {
-  let demo = null;
-  try { demo = JSON.parse(localStorage.getItem(FIRST_WIN_DEMO_KEY) || 'null'); } catch (e) { demo = null; }
-  if (!demo?.id || !demo?.at) return;
+  const demo = readFirstWinDemo();
+  if (!demo?.at || demo.alarm === true) return;
+  if (!demo.id) {
+    saveFirstWinDemo({ ...demo, alarm: true });
+    return;
+  }
   const at = Date.parse(demo.at);
   if (!(at > Date.now() + 60 * 1000)) return;
   try { localStorage.removeItem(FIRST_WIN_DEMO_KEY); } catch (e) {}
