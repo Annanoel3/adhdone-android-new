@@ -70,7 +70,42 @@ export default function TaskCard({
     const sameDate = !newDate || newDate === getCurrentReminderDate(task);
     const sameTime = !newTime || newTime === getCurrentReminderTime(task);
     if (sameDate && sameTime) return;
+    if (isBirthday) {
+      handleBirthdayDateTimeChange(newDate || getCurrentReminderDate(task), newTime || getCurrentReminderTime(task));
+      return;
+    }
     handleReminderDateChange(newDate || getCurrentReminderDate(task), newTime || getCurrentReminderTime(task));
+  };
+
+  // A birthday's date and time are when its reminders go out (a week before,
+  // the day before, on the day). Changing them here has to move those: the
+  // booked ones are cancelled and the set is booked again from the new date
+  // and time. (It used to go down the one-time-task path, which only moved
+  // the date on the card and left every reminder where it was.)
+  const handleBirthdayDateTimeChange = async (newDate, newTime) => {
+    try {
+      const [y, mo, d] = String(newDate).split('-').map(n => parseInt(n, 10));
+      const [h, mi] = String(newTime || '09:00').split(':').map(n => parseInt(n, 10));
+      const at = new Date(y, mo - 1, d, h, mi, 0, 0);
+      if (isNaN(at.getTime())) return;
+      const updates = { next_reminder: at.toISOString(), onesignal_notification_ids: [], reminder_schedule: [] };
+      if (onUpdateTask) onUpdateTask({ ...task, ...updates });
+      const oldIds = Array.from(new Set([
+        ...(task.onesignal_notification_ids || []),
+        ...(task.reminder_schedule || []).map(r => r.notification_id),
+      ])).filter(id => id && !String(id).startsWith('planned_'));
+      if (oldIds.length > 0) {
+        const { cancelScheduledReminder } = await import('../utils/reminderScheduler');
+        await cancelScheduledReminder(oldIds).catch(e => console.error("Cancel failed:", e));
+      }
+      await Task.update(task.id, updates);
+      const { scheduleBirthdayReminders } = await import('../utils/birthdayScheduler');
+      await scheduleBirthdayReminders({ ...task, ...updates });
+      if (onRefreshTasks) onRefreshTasks();
+    } catch (error) {
+      console.error("Error moving the birthday reminders:", error);
+      if (onRefreshTasks) onRefreshTasks();
+    }
   };
 
   const specialMode = localStorage.getItem('special_mode') || 'normal';
@@ -1041,7 +1076,8 @@ export default function TaskCard({
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
                         />
                       </div>
-                      {!task.day_only_task && (
+                      {/* A birthday is a day, not a block of time — no end time. */}
+                      {!task.day_only_task && !isBirthday && (
                         <div>
                           <label className={`text-sm font-medium block mb-2 ${theme === 'dark' ? 'text-gray-200' : ''}`}>End Time (optional):</label>
                           <input
