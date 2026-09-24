@@ -369,6 +369,22 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
     });
   };
 
+  // The day a repeating task's CURRENT occurrence is on ("Today", "Tomorrow",
+  // "Sep 26"). Finishing it creates the next occurrence, so this moves on by
+  // itself — a repeating task never sits there looking undated.
+  const occurrenceDay = (dateString) => {
+    if (!dateString) return null;
+    const day = new Date(dateString);
+    day.setHours(0, 0, 0, 0);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diff = Math.round((day.getTime() - today.getTime()) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Tomorrow';
+    return formatReminderDate(dateString);
+  };
+  const isRepeating = (t) => !!t.recurrence_pattern && t.recurrence_pattern !== 'none';
+
   // The "when" of a timed task that has no due date: the reminder time itself
   // ("Today 4:20 PM", "Sep 24, 9:00 AM"). A task you just timed should never
   // look like one with no timing at all.
@@ -600,10 +616,16 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                             <PopoverTrigger asChild>
                               <button 
                                 onClick={(e) => e.stopPropagation()}
-                                className="flex items-center gap-1 border border-dashed border-gray-300 px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors text-gray-500"
+                                className={isRepeating(task) && task.next_reminder
+                                  ? `flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
+                                      theme === 'dark'
+                                        ? 'bg-purple-900 text-purple-300 border-purple-700 hover:bg-purple-800'
+                                        : 'border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100'
+                                    }`
+                                  : "flex items-center gap-1 border border-dashed border-gray-300 px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors text-gray-500"}
                               >
                                 <CalendarClock className="w-3 h-3" />
-                                Add Due Date
+                                {isRepeating(task) && task.next_reminder ? occurrenceDay(task.next_reminder) : 'Add Due Date'}
                               </button>
                             </PopoverTrigger>
                             <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`} onClick={(e) => e.stopPropagation()}>
