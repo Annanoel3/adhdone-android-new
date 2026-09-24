@@ -208,15 +208,21 @@ due_date — when the thing must be DONE by. Set it for deadlines ("by Friday",
   For a deadline phrased "by / before / no later than X" with no clock time,
   target_date is X itself (the last allowed day) — NEVER today. "Do an oil
   change before this Sunday" → target_date = that Sunday, deadline_style "by".
+  With a clock time it's the same kind of deadline, just tighter: "have the
+  report in by 5", "pay it before noon Friday" → target_date = that day,
+  target_time = that time, deadline_style "by".
 
 day_only_task — true when this is tied to a specific day but has NO time in any
   form (so never true when target_time is filled in).
   The app then sends one heads-up the night before and lets its smart-nudge
   system surface it that day.
 
-deadline_style — "on" if the thing happens ON that day and can't be done
-  sooner; "by" if the date is a limit the work has to fit inside (so reminders
-  can start earlier). Only matters when day_only_task is true.
+deadline_style — "on" if the thing happens ON that day or AT that time and
+  can't be done sooner ("call mom at 5", "dentist Friday", "remind me at 10");
+  "by" if the day or time is a limit the work has to fit inside, so it can be
+  done any time before it ("by 5", "before noon", "no later than Friday", "by
+  the 20th"). Judge what the person means, for a clock time as much as for a
+  day: "at 5" is a moment, "by 5" is a deadline.
 
 needs_date_pick — almost always false. A day with no clock time is an ALL-DAY
   thing and needs nothing from the user, so never set this just because a time
