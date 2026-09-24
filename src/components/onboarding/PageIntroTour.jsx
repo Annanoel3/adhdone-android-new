@@ -7,7 +7,7 @@ import { enterOnboardingSurface, exitOnboardingSurface } from "./onboardingSurfa
 import TourStepCard from "./TourStepCard";
 import { ONBOARDING_STEPS, isStepDone, markStepDone, waitForStep } from "./onboardingGate";
 import { persistOnboardingFlag } from "./onboardingSync";
-import { waitForCalm } from "./onboardingSurface";
+import { waitForCalm, waitForClear } from "./onboardingSurface";
 import { seenKey } from "./tourVersion";
 
 // Shows a one-time intro tour the first time the user lands on a page.
@@ -25,8 +25,11 @@ export default function PageIntroTour({ currentPageName }) {
     // Two ways in:
     //  - Welcome note is up right now → the tour is CHAINED to its dismissal:
     //    the instant it closes, a ~250ms beat for the dialog fade, then the
-    //    card. No calm-polling here — the "Okay" tap itself counts as user
-    //    activity and would push the card out by seconds.
+    //    card. No "is the user mid-tap" wait here — the "Okay" tap itself
+    //    counts as user activity and would push the card out by seconds — but
+    //    it does wait for the screen to be free: a returning account's welcome
+    //    step is marked done the moment its "welcome back" chat OPENS, and the
+    //    card must not land on top of that chat.
     //  - Welcome already done (any later first visit to a page) → wait for a
     //    genuinely clear screen so we never stack on another surface.
     let cancelled = false;
@@ -34,11 +37,12 @@ export default function PageIntroTour({ currentPageName }) {
     waitForStep(ONBOARDING_STEPS.welcome)
       .then(() =>
         chainedToWelcome
-          ? new Promise((r) => setTimeout(r, 250))
+          ? new Promise((r) => setTimeout(r, 250)).then(waitForClear)
           : waitForCalm()
       )
       .then(() => {
         if (cancelled) return;
+        if (localStorage.getItem(seenKey(currentPageName))) return;
         // Mark the page's tour seen the MOMENT it appears, not when the last
         // step is tapped. A user who opened Home, saw step 1 and left got the
         // whole thing again on every single app open.
