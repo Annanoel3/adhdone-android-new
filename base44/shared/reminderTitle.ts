@@ -3,18 +3,26 @@
 // with the client-side reminderCopy helper: warm, deadline-aware, never a flat
 // "Task Reminder — tap to mark as complete!".
 //
-// Day comparison uses UTC date strings (YYYY-MM-DD) of the scheduled send time
-// and the due_date — both anchored to the same timezone consistently.
+// "Today", "tomorrow" and the weekday are worked out on the OWNER'S calendar
+// (their timezone), the way the app shows them. They used to be compared as UTC
+// dates, and a task captured as "due Friday" is saved as Friday 11:59 PM local,
+// which is already Saturday in UTC — so a Friday-evening reminder said "due
+// tomorrow" and named the wrong weekday for US users.
+import { DEFAULT_TIME_ZONE, localDateKey } from './quietHours.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-function utcDay(iso: string): number {
-  const d = new Date(iso);
-  return Math.floor(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) / DAY_MS);
+// Days since 1970 of the local calendar date — so two dates can be subtracted.
+function localDay(iso: string, timeZone: string): number {
+  const [y, m, d] = localDateKey(new Date(iso), timeZone).split('-').map(Number);
+  return Math.floor(Date.UTC(y, m - 1, d) / DAY_MS);
 }
 
-function dayLabel(due: Date, daysAway: number): string {
+function dayLabel(dueDay: number, daysAway: number): string {
+  // dueDay counts days since 1970 on the owner's calendar, so reading it back
+  // as a UTC date gives exactly that local date.
+  const due = new Date(dueDay * DAY_MS);
   if (Math.abs(daysAway) < 7) return WEEKDAYS[due.getUTCDay()];
   return due.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
 }
@@ -30,7 +38,8 @@ function sentence(s: string): string {
 export function getReminderContent(
   taskTitle: string | null | undefined,
   dueDateISO: string | null | undefined,
-  sendAtISO: string
+  sendAtISO: string,
+  timeZone: string = DEFAULT_TIME_ZONE
 ): { title: string; body: string } {
   const title = (taskTitle || '').trim() || 'your task';
   const quoted = `"${title}"`;
@@ -40,9 +49,10 @@ export function getReminderContent(
     // asked to be reminded.
     return { title: `📌 ${title}`, body: `Reminder: ${sentence(title)}` };
   }
-  const due = new Date(dueDateISO);
-  const days = utcDay(dueDateISO) - utcDay(sendAtISO);
-  const label = dayLabel(due, days);
+  const tz = timeZone || DEFAULT_TIME_ZONE;
+  const dueDay = localDay(dueDateISO, tz);
+  const days = dueDay - localDay(sendAtISO, tz);
+  const label = dayLabel(dueDay, days);
   if (days < 0) {
     return { title: `⚠️ ${title}`, body: `${quoted} slipped past ${label}. No shame — just pick it back up when you can.` };
   }
