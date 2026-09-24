@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { adjustForQuietHours, parseHHMM, localMinutesOfDay } from '../../shared/quietHours.ts';
+import { adjustForQuietHours, localMinutesOfDay, resolveQuietHours, userTimeZone } from '../../shared/quietHours.ts';
 import { FOCUS_MODE_INTERVAL, FOCUS_MODE_INTERVAL_MS, getFocusModeContent } from '../../shared/focusMode.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
@@ -56,12 +56,13 @@ export default async function(req: Request): Promise<Response> {
       // cancelling them here is how a dated task lost its reminders for good.
       if (wasRecurring && ownIds.length) await cancelOneSignal(ownIds);
 
-      // Owner quiet hours (applied to the focus check-in batch)
-      const quietEnabled = !!(user && user.quiet_hours_enabled);
-      const timeZone = user && user.timezone ? user.timezone : null;
-      const startMin = user && user.quiet_hours_start ? parseHHMM(user.quiet_hours_start) : parseHHMM('22:00');
-      const endMin = user && user.quiet_hours_end ? parseHHMM(user.quiet_hours_end) : parseHHMM('08:00');
-      const useQuiet = quietEnabled && !!timeZone;
+      // Owner quiet hours (applied to the focus check-in batch). They default
+      // to ON — a profile that never touched the setting used to read as "off"
+      // here, so a late-night focus session booked check-ins at 1, 2, 3 AM.
+      // The shared timezone fallback applies when none is saved.
+      const { enabled: quietEnabled, startMin, endMin } = resolveQuietHours(user);
+      const timeZone = userTimeZone(user);
+      const useQuiet = quietEnabled;
 
       const now = Date.now();
       const checkinIds: string[] = [];
