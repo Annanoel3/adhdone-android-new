@@ -243,27 +243,6 @@ export default function Settings() {
 
   const [quietHoursSaving, setQuietHoursSaving] = useState(false);
 
-  // The one notification toggle that has a real effect: achievement pushes
-  // (sendAchievementNotification checks it). The old Notifications page also
-  // listed task reminders, daily tips and accountability switches, but nothing
-  // ever read those, so they are not carried over.
-  const [achievementsOn, setAchievementsOn] = useState(true);
-  const [achievementsSaving, setAchievementsSaving] = useState(false);
-  useEffect(() => {
-    setAchievementsOn(user?.notification_settings?.achievements !== false);
-  }, [user?.notification_settings]);
-  const handleAchievementsToggle = async (next) => {
-    setAchievementsOn(next);
-    setAchievementsSaving(true);
-    try {
-      await base44.auth.updateMe({ notification_settings: { ...(user?.notification_settings || {}), achievements: next } });
-    } catch (e) {
-      setAchievementsOn(!next);
-    } finally {
-      setAchievementsSaving(false);
-    }
-  };
-
   const handleQuietHoursChange = (startTime, endTime) => {
     setQuietHoursStart(startTime);
     setQuietHoursEnd(endTime);
@@ -447,26 +426,6 @@ export default function Settings() {
             AlarmBridge plugin (older installs, the browser), so it is safe for
             everyone. The one-time popups tell people it lives here. */}
         <AlarmCard user={user} theme={theme} />
-
-        {/* Was its own "Notifications" page (with a second copy of quiet hours);
-            folded in here so every reminder control is in one place. */}
-        <Card className={`mb-6 border-none shadow-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
-          <CardHeader>
-            <CardTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-white' : ''}`}>
-              <Bell className="w-5 h-5" />
-              Other notifications
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>Achievements</p>
-                <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>A push when you unlock one.</p>
-              </div>
-              <Switch checked={achievementsOn} onCheckedChange={handleAchievementsToggle} disabled={achievementsSaving} />
-            </div>
-          </CardContent>
-        </Card>
 
         <HomeZipCard user={user} theme={theme} />
 
