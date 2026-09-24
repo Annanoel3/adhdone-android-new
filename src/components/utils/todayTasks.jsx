@@ -35,10 +35,10 @@ export const getTaskEndLocalDate = (task) => {
   return null;
 };
 
-// A task counts as "today" when its start has arrived (today >= start). Tasks
-// with no end_date stay "today" until completed — overdue tasks remain in
-// Today. Tasks with an explicit end_date (multi-day events) drop out once
-// the span ends. Tasks with no effective date (recurring, no due) are always today.
+// A task counts as "today" when its start has arrived (today >= start), and
+// stays "today" until it's completed or deleted — overdue tasks and events
+// whose day (or last day) has passed remain in Today. Tasks with no effective
+// date (recurring, no due) are always today.
 export const isTodayTask = (task, todayStr = getLocalDateString()) => {
   // Back Burner: silenced tasks drop out of Today's Tasks — they're intentionally
   // out of sight (and silent) until the user reactivates them.
@@ -46,8 +46,9 @@ export const isTodayTask = (task, todayStr = getLocalDateString()) => {
   const start = getTaskDueLocalDate(task);
   if (!start) return true;
   if (start > todayStr) return false;
-  const end = getTaskEndLocalDate(task);
-  if (end && end < todayStr) return false;
+  // Once started it stays in Today until it's finished or deleted — a
+  // multi-day event whose last day has passed no longer drops out on its own.
+  // Nothing disappears just because its time went by.
   return true;
 };
 
