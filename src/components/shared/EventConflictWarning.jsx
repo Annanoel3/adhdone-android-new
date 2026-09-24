@@ -5,6 +5,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { CalendarClock, Clock } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { usePopupTurn } from '@/components/onboarding/onboardingSurface';
 
 const startOf = (task) => task?.event_time || task?.next_reminder;
 
@@ -35,6 +36,9 @@ export default function EventConflictWarning({ theme }) {
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
   const [saving, setSaving] = useState(false);
+  // Takes its turn with other popups (never stacks on one), but as the answer
+  // to something the user just did it shows the moment the screen is free.
+  const shown = usePopupTurn(!!payload, { reactive: true });
   const dark = theme === 'dark';
 
   useEffect(() => {
@@ -49,7 +53,7 @@ export default function EventConflictWarning({ theme }) {
     return () => window.removeEventListener('event-conflict-detected', onConflict);
   }, []);
 
-  if (!payload) return null;
+  if (!payload || !shown) return null;
   const { task, conflicts } = payload;
 
   const reschedule = async () => {
