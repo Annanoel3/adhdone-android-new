@@ -57,6 +57,7 @@ function persist(capture) {
     text: capture.text,
     presetDate: capture.presetDate,
     presetDueDateISO: capture.presetDueDateISO,
+    fromIdea: capture.fromIdea || null,
     ownerEmail: capture.ownerEmail || null,
     parts: capture.parts || null,
     doneCount: capture.doneCount || 0,
@@ -111,6 +112,7 @@ export function resumeAbandonedCaptures(email) {
       text: entry.text,
       presetDate: entry.presetDate ?? null,
       presetDueDateISO: entry.presetDueDateISO ?? null,
+      fromIdea: entry.fromIdea || null,
       ownerEmail: entry.ownerEmail,
       parts: Array.isArray(entry.parts) ? entry.parts : null,
       doneCount: entry.doneCount || 0,
@@ -136,14 +138,20 @@ export function subscribeCaptures(fn) {
   return () => listeners.delete(fn);
 }
 
-export function enqueueCapture({ text, presetDate = null, presetDueDateISO = null }) {
+// fromIdea: { id, pictures, notes } when a Parking Lot idea is being turned
+// into a task. It goes through the same parser as anything typed in, as ONE
+// task (no splitting, no task-or-idea question); its pictures and notes come
+// along, and if no task gets made the idea goes back in the Parking Lot.
+export function enqueueCapture({ text, presetDate = null, presetDueDateISO = null, fromIdea = null }) {
+  const clean = text.trim();
   const capture = {
     id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-    text: text.trim(),
+    text: clean,
     presetDate,
     presetDueDateISO,
+    fromIdea,
     ownerEmail: null,
-    parts: null,
+    parts: fromIdea ? [clean] : null,
     doneCount: 0,
     createdAt: Date.now(),
     resumed: false,
