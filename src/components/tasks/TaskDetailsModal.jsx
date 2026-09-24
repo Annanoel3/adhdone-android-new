@@ -1449,6 +1449,8 @@ Return JSON:
       await Task.update(task.id, updates);
       const { scheduleBirthdayReminders } = await import('../utils/birthdayScheduler');
       await scheduleBirthdayReminders({ ...task, ...updates });
+      // The full-screen alarm lives on the phone — hand it the new time now.
+      refreshAlarms().catch(() => {});
       const fresh = await base44.entities.Task.get(task.id).catch(() => null);
       onUpdate(fresh || { ...task, ...updates });
       toast({ title: 'Saved ✓', description: `Birthday reminders now go out at ${formatReminderTime(at.toISOString())}.` });
