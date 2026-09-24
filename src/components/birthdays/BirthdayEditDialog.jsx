@@ -71,9 +71,13 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
     setSaving(true);
     try {
       const [, m, d] = date.split("-").map(Number);
-      const nextDate = computeNextBirthdayDate(m, d);
-
       const oldD = new Date(birthday.next_reminder);
+      // Keep the birthday's reminder time (set on its task card); 9 AM only
+      // when it has none yet.
+      const nextDate = isNaN(oldD.getTime())
+        ? computeNextBirthdayDate(m, d)
+        : computeNextBirthdayDate(m, d, oldD.getHours(), oldD.getMinutes());
+
       const dateChanged = oldD.getMonth() + 1 !== m || oldD.getDate() !== d;
       const nameChanged = name.trim() !== birthday.birthday_person;
       const reschedule = dateChanged || nameChanged;
