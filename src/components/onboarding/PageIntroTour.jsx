@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { createPageUrl } from "@/utils";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, X } from "lucide-react";
 import { PAGE_TOURS, ADD_PATHS } from "./pageIntros";
@@ -31,12 +33,20 @@ function waitForShareBridge(timeoutMs = 15000) {
 export default function PageIntroTour({ currentPageName, user }) {
   const [steps, setSteps] = useState(null);
   const [index, setIndex] = useState(0);
+  const navigate = useNavigate();
+  // Where the person is right now (the walkthrough check below outlives the
+  // render it started in), and whether the next landing on Tasks should open
+  // the walkthrough straight away because this sent them there.
+  const pageRef = useRef(currentPageName);
+  pageRef.current = currentPageName;
+  const openOnTasks = useRef(false);
 
   // The four-video walkthrough, on its own: most people never open Tasks
-  // unprompted, so it also appears once on the first app open AFTER setup is
-  // finished, wherever they are. Never in the same visit as setup (the welcome
-  // or "welcome back" chat, the alarm question), never on top of another
-  // popup, and never again once seen here or on Tasks — they share one key.
+  // unprompted, so on the first app open AFTER setup is finished it takes them
+  // to the Tasks page and shows it there. Never in the same visit as setup
+  // (the welcome or "welcome back" chat, the alarm question), never on top of
+  // another popup, never pulling someone off a page they opened on purpose
+  // (only from Home, where the app opens), and never again once seen.
   const walkthroughChecked = useRef(false);
   const mounted = useRef(true);
   useEffect(() => {
@@ -59,10 +69,16 @@ export default function PageIntroTour({ currentPageName, user }) {
       .then((native) => (native ? waitForCalm().then(() => true) : false))
       .then((show) => {
         if (!show || !mounted.current || localStorage.getItem(seenKey("Tasks"))) return;
-        localStorage.setItem(seenKey("Tasks"), "1");
-        persistOnboardingFlag(seenKey("Tasks"));
-        setIndex(0);
-        setSteps(ADD_PATHS_TOUR);
+        if (pageRef.current === "Tasks") {
+          localStorage.setItem(seenKey("Tasks"), "1");
+          persistOnboardingFlag(seenKey("Tasks"));
+          setIndex(0);
+          setSteps(ADD_PATHS_TOUR);
+          return;
+        }
+        if (pageRef.current !== "Home") return;
+        openOnTasks.current = true;
+        navigate(createPageUrl("Tasks"));
       });
   }, [user]);
 
@@ -90,6 +106,17 @@ export default function PageIntroTour({ currentPageName, user }) {
     const tour = currentPageName === "Tasks" ? ADD_PATHS_TOUR : PAGE_TOURS[currentPageName];
     if (!tour) return;
     if (localStorage.getItem(seenKey(currentPageName))) return;
+
+    // Sent here by the next-app-open walkthrough, which already waited for a
+    // clear screen — show it now rather than waiting all over again.
+    if (tour === ADD_PATHS_TOUR && openOnTasks.current) {
+      openOnTasks.current = false;
+      localStorage.setItem(seenKey(currentPageName), "1");
+      persistOnboardingFlag(seenKey(currentPageName));
+      setIndex(0);
+      setSteps(tour);
+      return;
+    }
 
     // Two ways in:
     //  - Welcome note is up right now → the tour is CHAINED to its dismissal:
@@ -250,6 +277,9 @@ function AddPathsIntro({ onDone }) {
             <h3 className="text-2xl font-bold text-foreground">Adding tasks is easy!</h3>
             <p className="mt-3 text-base text-muted-foreground leading-relaxed">
               Add them in the app or add them without even opening the app!
+            </p>
+            <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
+              You can watch these again anytime in the App Guide, in the menu.
             </p>
           </div>
           <button type="button" onClick={() => goTo(0)} aria-label="Show me how" className={`${arrowClass} h-14 w-14 mt-6 animate-bounce`}>
