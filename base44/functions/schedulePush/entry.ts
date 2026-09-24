@@ -111,6 +111,11 @@ Deno.serve(async (req) => {
         if (android_channel_id) {
             notificationPayload.android_channel_id = android_channel_id;
         }
+        // A push that asks to ring on arrival (data.alarm) must not be held by
+        // Doze until the phone wakes — same as the nudge cron's ringing pushes.
+        if (data && data.alarm === true) {
+            notificationPayload.priority = 10;
+        }
 
         console.log('[schedulePush] Sending payload:', JSON.stringify(notificationPayload, null, 2));
 
