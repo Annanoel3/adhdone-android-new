@@ -1,5 +1,9 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
-import { isInQuietHours, parseHHMM, resolveQuietHours } from '../../shared/quietHours.ts';
+import { isInQuietHours, resolveQuietHours, userTimeZone } from '../../shared/quietHours.ts';
+import { isRecurringInterval } from '../../shared/reminderIntervalDecision.ts';
+import { isBookedId } from '../../shared/eventReminderPlan.ts';
+import { ledgerCancel } from '../../shared/sendLedger.ts';
+import { filterAll } from '../../shared/listAll.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
 const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
@@ -25,7 +29,8 @@ Deno.serve(async (req) => {
 
     // Prefer the user's profile (source of truth) for the enabled flag + timezone;
     // fall back to the values sent from the Settings page for start/end.
-    const timeZone = user.timezone || null;
+    // No timezone saved: the shared fallback, as everywhere else.
+    const timeZone = userTimeZone(user);
     // Quiet hours default to ON — only an explicit false counts as disabled.
     const resolved = resolveQuietHours({
       ...user,
@@ -36,17 +41,24 @@ Deno.serve(async (req) => {
     const startMin = resolved.startMin;
     const endMin = resolved.endMin;
 
-    if (!quietEnabled || !timeZone) {
-      return Response.json({ success: true, skipped: 'quiet hours disabled or no timezone on profile' });
+    if (!quietEnabled) {
+      return Response.json({ success: true, skipped: 'quiet hours disabled' });
     }
 
-    // Fetch all active tasks for this user with queued notifications
-    const tasks = await base44.entities.Task.filter({
+    // Fetch all active tasks for this user with queued notifications (every
+    // one of them — a plain filter() stops at 50).
+    const tasks = await filterAll(base44.entities.Task, {
       status: 'active',
       notification_recipient_email: user.email
     });
 
+    // Only a repeating rhythm ("every hour", "daily") is re-booked by the
+    // refill job, so only those can be cancelled here and come back with the
+    // new quiet hours. A one-time reminder or an event's reminders were
+    // cancelled too, and their time wiped — nothing ever booked them again, so
+    // saving quiet hours in Settings silently deleted them.
     const tasksWithNotifs = tasks.filter(t =>
+      isRecurringInterval(t.reminder_interval) &&
       Array.isArray(t.onesignal_notification_ids) && t.onesignal_notification_ids.length > 0 &&
       t.last_scheduled_until
     );
@@ -72,15 +84,26 @@ Deno.serve(async (req) => {
         isInQuietHours(new Date(task.last_scheduled_until), startMin, endMin, timeZone);
 
       if (hasConflict) {
-        console.log(`[applyQuietHours] Task "${task.title}" has quiet-hour conflict, cancelling ${ids.length} notifications`);
-        await Promise.allSettled(ids.map(id => cancelOneSignalNotification(id)));
-        // Wipe scheduling fields so cron refill picks it up immediately
+        // Anything booked through the task's reminder plan is cancelled too, and
+        // its entry loses the dead id — otherwise the plan would still point at
+        // a cancelled push and look "booked" forever.
+        const schedule = Array.isArray(task.reminder_schedule) ? task.reminder_schedule : [];
+        const scheduleIds = schedule.map((e) => e?.notification_id).filter(isBookedId);
+        const toCancel = Array.from(new Set([...ids, ...scheduleIds]));
+        console.log(`[applyQuietHours] Task "${task.title}" has quiet-hour conflict, cancelling ${toCancel.length} notifications`);
+        await Promise.allSettled(toCancel.map(id => cancelOneSignalNotification(id)));
+        await ledgerCancel(base44, toCancel);
+        // Clear the booking fields so the refill job re-books it with the new
+        // quiet hours on its next run. next_reminder stays: it is the rhythm's
+        // own time of day ("pills at 10"), and the refill job starts from it.
         await base44.entities.Task.update(task.id, {
           onesignal_notification_ids: [],
           last_scheduled_until: null,
-          next_reminder: null
+          ...(scheduleIds.length
+            ? { reminder_schedule: schedule.map((e) => (toCancel.includes(e?.notification_id) ? { ...e, notification_id: null } : e)) }
+            : {}),
         });
-        cancelledTotal += ids.length;
+        cancelledTotal += toCancel.length;
         tasksToReschedule.push(task.id);
       }
     }
