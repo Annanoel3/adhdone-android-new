@@ -391,10 +391,19 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
   // A cancelled event is not happening. If it was never imported there's
   // nothing to do; if it WAS imported, the task and every scheduled push for
   // it are removed, so no reminder ever fires for an event that's off.
+  // The same event can be imported from two calendars as ONE task (see the
+  // twin check below). Removing it from one of them must not delete the task
+  // while the other calendar still has it.
+  const cancelledIdSet = new Set(cancelledItems.map((i: any) => String(i.id)));
   for (const item of cancelledItems) {
     const row = existingByGoogleId[item.id];
     if (!row) continue;
-    if (row.adhd_task_id && !isClaimSentinel(row.adhd_task_id)) {
+    const sharedWithAnotherCalendar = !!row.adhd_task_id && Object.values(existingByGoogleId).some((r: any) =>
+      r && r.id !== row.id && r.adhd_task_id === row.adhd_task_id && !cancelledIdSet.has(String(r.google_event_id)));
+    if (sharedWithAnotherCalendar) {
+      console.log('[syncGoogleCalendar] removed from one calendar but still on another, keeping the task:', item.id);
+    }
+    if (row.adhd_task_id && !isClaimSentinel(row.adhd_task_id) && !sharedWithAnotherCalendar) {
       const task = await base44.asServiceRole.entities.Task.get(row.adhd_task_id).catch(() => null);
       if (task) {
         for (const nid of task.onesignal_notification_ids || []) {
@@ -480,6 +489,28 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     }));
   }
 
+  // The same event saved in two calendars (an invite in both a work and a
+  // personal calendar, a birthday in both Google and Samsung) arrives with two
+  // different ids. Everything already imported is indexed by title + start, so
+  // a second copy is recorded as the SAME task instead of becoming another
+  // one — and if the user finished or deleted that task, this copy stays that
+  // way too. Built after the cancellations above, so a copy that was just
+  // removed can't swallow one that moved to another calendar.
+  const twinKey = (titleRaw: any, startRawIn: any) => {
+    const t = String(titleRaw || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const sr = String(startRawIn || '');
+    if (!t || !sr) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(sr)) return `${t}|D:${sr}`;
+    const ms = Date.parse(sr);
+    return isNaN(ms) ? '' : `${t}|T:${ms}`;
+  };
+  const twinIndex = new Map<string, any>();
+  for (const r of Object.values(existingByGoogleId) as any[]) {
+    if (!r || !r.adhd_task_id || isClaimSentinel(r.adhd_task_id)) continue;
+    const k = twinKey(r.title, r.start_time);
+    if (k && !twinIndex.has(k)) twinIndex.set(k, r);
+  }
+
   let processedNew = 0;
   for (const event of newEvents) {
     if (++processedNew % HEARTBEAT_EVERY === 0) await heartbeat();
@@ -555,6 +586,27 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     const confirmed = await base44.asServiceRole.entities.CalendarSyncedEvent.get(claim.id).catch(() => null);
     if (confirmed?.adhd_task_id !== sentinel) {
       console.log('[syncGoogleCalendar] lost working lock, skipping:', googleId);
+      skipped++;
+      continue;
+    }
+
+    // Same event, other calendar: record this copy as that task and stop.
+    const myTwinKey = twinKey(title, startRaw);
+    const twin = myTwinKey ? twinIndex.get(myTwinKey) : null;
+    if (twin && String(twin.google_event_id) !== String(googleId)) {
+      await base44.asServiceRole.entities.CalendarSyncedEvent.update(claim.id, {
+        google_event_id: googleId,
+        title,
+        start_time: startRaw || null,
+        end_time: endRaw || null,
+        is_all_day: isAllDay,
+        attendee_count: attendeeCount,
+        recurrence_rule: recurrenceRule || null,
+        adhd_task_id: twin.adhd_task_id,
+        last_synced_at: new Date().toISOString(),
+        user_email: user.email,
+      });
+      console.log('[syncGoogleCalendar] same event already imported from another calendar, linking instead of copying:', googleId, '→', twin.google_event_id);
       skipped++;
       continue;
     }
@@ -800,6 +852,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     if (prior) {
       console.log('[syncGoogleCalendar] task already exists for event, adopting instead of creating:', googleId);
       await base44.asServiceRole.entities.CalendarSyncedEvent.update(claim.id, { ...syncMeta, adhd_task_id: prior.id });
+      if (myTwinKey && !twinIndex.has(myTwinKey)) twinIndex.set(myTwinKey, { google_event_id: googleId, adhd_task_id: prior.id });
       skipped++;
       continue;
     }
@@ -816,6 +869,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     // is slow (LLM schedule + pushes) and interruptible; from this point on the
     // event is recorded as imported no matter what happens next.
     await base44.asServiceRole.entities.CalendarSyncedEvent.update(claim.id, { ...syncMeta, adhd_task_id: createdTask.id });
+    if (myTwinKey && !twinIndex.has(myTwinKey)) twinIndex.set(myTwinKey, { google_event_id: googleId, adhd_task_id: createdTask.id });
     created++;
     results.push({ googleId, title, routedAs, urgency: ai.urgency });
 
