@@ -70,7 +70,7 @@ import { pushAlarmTheme } from "./components/utils/widgetBridge";
 import WidgetOpenReceiver from "./components/shared/WidgetOpenReceiver";
 import HomeZipPrompt from "./components/shared/HomeZipPrompt";
 import EventConflictWarning from "./components/shared/EventConflictWarning";
-import QuickCapturePrompt, { AlertStylePrompt, AlarmKeepPrompt, AlarmPermissionsDialog } from "./components/shared/QuickCapturePrompt";
+import QuickCapturePrompt, { AlertStylePrompt, AlarmKeepPrompt, AlarmPermissionsDialog, QuietHoursReviewPrompt } from "./components/shared/QuickCapturePrompt";
 import { FeedbackPrompt } from "./components/support/SupportEscalationCard";
 import PageIntroTour from "./components/onboarding/PageIntroTour";
 import WelcomeDialog from "./components/onboarding/WelcomeDialog";
@@ -1092,6 +1092,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <AlertStylePrompt user={user} theme={theme} />
         <AlarmKeepPrompt user={user} theme={theme} />
         <AlarmPermissionsDialog theme={theme} />
+        <QuietHoursReviewPrompt user={user} theme={theme} currentPageName={currentPageName} />
         <TaskCaptureProcessor userEmail={user?.email} />
         <UsageTracker user={user} />
         <WelcomeDialog user={user} />
