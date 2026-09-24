@@ -17,6 +17,24 @@ export default function PageIntroTour({ currentPageName }) {
 
   useEffect(() => {
     setSteps(null);
+    // Home has no intro card any more. The "Home tour done" step still exists
+    // because what follows the welcome (the notifications card, the alarm
+    // question) waits on it, so on Home it simply completes once the welcome
+    // is done and the screen is free — for anyone who reaches Home without it
+    // already set. (A returning account's welcome step is marked done when its
+    // "welcome back" chat OPENS; completing this at that moment would release
+    // the alarm question on top of the chat.)
+    if (currentPageName === "Home") {
+      if (isStepDone(ONBOARDING_STEPS.homeTour)) return undefined;
+      let cancelledHome = false;
+      waitForStep(ONBOARDING_STEPS.welcome)
+        .then(() => new Promise((r) => setTimeout(r, 250)))
+        .then(waitForClear)
+        .then(() => {
+          if (!cancelledHome && !isStepDone(ONBOARDING_STEPS.homeTour)) markStepDone(ONBOARDING_STEPS.homeTour);
+        });
+      return () => { cancelledHome = true; };
+    }
     // The Tasks page's intro is the video walkthrough below, not a card.
     const tour = currentPageName === "Tasks" ? ADD_PATHS_TOUR : PAGE_TOURS[currentPageName];
     if (!tour) return;
