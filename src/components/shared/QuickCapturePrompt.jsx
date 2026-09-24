@@ -82,6 +82,9 @@ export default function QuickCapturePrompt() {
           .then(waitForCalm)
           .then(() => {
             if (cancelled) return;
+            // A returning account has this step marked done while it waits
+            // (they get the "welcome back" chat instead of the walkthrough).
+            if (isStepDone(ONBOARDING_STEPS.permissions)) return;
             // Shown whether or not the shortcut is already pinned — the card is
             // also where notifications get explained, and the switch starts on.
             if (!cancelled) setOpen(true);
