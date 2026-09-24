@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { pushWidgetTasks, pushAlarms, pushAlarmSound, setAlarmMode, pushAlarmQuietVibrate, refreshAlarms, alarmPermissionStatus } from '../utils/widgetBridge';
+import { pushWidgetTasks, pushAlarms, pushAlarmSound, setAlarmMode, pushAlarmQuietVibrate, pushEventQuiet, refreshAlarms, alarmPermissionStatus } from '../utils/widgetBridge';
 import { maybeAutoSyncDevice } from '@/lib/calendarSync';
 
 // Seeds the home-screen widget once on app open, from anywhere in the app — a
@@ -45,6 +45,13 @@ export default function WidgetTaskSync({ user }) {
     if (!userId) return;
     pushAlarmQuietVibrate(quietVibrate);
   }, [userId, quietVibrate]);
+
+  // "Silent alarms during events": the same, for the phone's copy of that answer.
+  const quietDuringEvents = !!user?.alarm_quiet_during_events;
+  useEffect(() => {
+    if (!userId) return;
+    pushEventQuiet(quietDuringEvents);
+  }, [userId, quietDuringEvents]);
 
   // Phone calendars the user chose to import: refresh them in the background
   // on app open (at most every 6 hours). No-op in the browser and for anyone
