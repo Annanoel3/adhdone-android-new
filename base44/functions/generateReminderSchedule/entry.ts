@@ -370,13 +370,13 @@ For each reminder, also write a personalized, friendly notification title and bo
 TONE: Warm, supportive, and encouraging — like a friend giving a gentle nudge. Never cold, dry, or demanding. Match the ADHD-friendly vibe of the app.
 - notification_title: Short (2-6 words), warm, include a relevant emoji. Use the task name or a friendly reference.
   - EMOJI = ONLY WHAT THE WORDS SAY. Never guess what a name refers to: "feed Tabitha" could be a cat, a baby, or a sourdough starter — a wrong guess (🐱) feels like the app isn't listening. If the task's subject is a proper name or otherwise ambiguous, use a neutral emoji (📌 ⏰ ✨ 🔔) instead of a species, gender, or object emoji.
-- notification_body: Supportive and encouraging. Reference the RELATIVE timing (e.g. "due today", "coming up in 2 days", "in about an hour") — do NOT mention the specific calendar date.
+- notification_body: Supportive and encouraging. ALWAYS say which task it is in the body itself (by its name, or plainly enough that there is no doubt): the body is the line people read, and the spoken alarm reads ONLY the body out loud, so a body that never names the task tells them nothing. Reference the RELATIVE timing (e.g. "due today", "coming up in 2 days", "in about an hour") — do NOT mention the specific calendar date.
   - For advance reminders (future task, days before): be gentle and anticipatory ("Heads up!", "Don't forget", "Just a nudge")
   - For same-day reminders: be motivating and confident, as a supportive friend ("You got this!", "Hey, don't forget to...", "Quick nudge — time to...")
   - For just-in-time reminders: be action-oriented ("Time to head out!", "Almost time!")
 Examples:
   - notification_title: "Carmax payment 💰" / notification_body: "This is your morning reminder — your CarMax payment is due today. You got this! 💧"
-  - notification_title: "Therapist appointment 🏥" / notification_body: "Your appointment is coming up in about an hour. Time to head out! 🚗"
+  - notification_title: "Therapist appointment 🏥" / notification_body: "Your therapist appointment is coming up in about an hour. Time to head out! 🚗"
   - notification_title: "Register microchips 🔬" / notification_body: "Heads up! You need to register those microchips today. You've got this! 💪"`;
 
     const schemaInstruction = `\n\nReturn ONLY valid JSON with this shape:
