@@ -488,14 +488,26 @@ export default function TaskCard({
         checkDuePushEgg(task, task.next_reminder, nextReminder.toISOString());
       }
 
+      // A time picked here is the task's time from now on (anchor_time — what
+      // the repeat pill shows and where each new occurrence starts), and a task
+      // with a time isn't all-day any more. An all-day task moved to another
+      // day moves its due date with it (the day smart nudges plan around).
+      const allDayMove = !newTime && !!task.day_only_task && !!newDate;
+      const namedTime = newTime
+        ? { anchor_time: newTime, day_only_task: false, ...(task.day_only_task ? { due_date: nextReminder.toISOString() } : {}) }
+        : allDayMove
+          ? { due_date: new Date(nextReminder.getFullYear(), nextReminder.getMonth(), nextReminder.getDate(), 23, 59, 0, 0).toISOString() }
+          : {};
+
       // Optimistic — update UI instantly
-      if (onUpdateTask) onUpdateTask({ ...task, next_reminder: nextReminder.toISOString() });
+      if (onUpdateTask) onUpdateTask({ ...task, next_reminder: nextReminder.toISOString(), ...namedTime });
 
       if (interval && interval !== 'once') {
         // Recurring task: the onTaskUpdate entity automation handles cancelling old
         // notifications and rescheduling new ones. Frontend only updates next_reminder.
         Task.update(task.id, {
-          next_reminder: nextReminder.toISOString()
+          next_reminder: nextReminder.toISOString(),
+          ...namedTime,
         }).catch(error => {
           console.error("Error updating reminder date/time:", error);
           if (onRefreshTasks) onRefreshTasks();
@@ -520,6 +532,7 @@ export default function TaskCard({
               scheduledDateISO: nextReminder.toISOString(),
               taskId: task.id,
               urgency: task.urgency,
+              dayOnly: !newTime && !!task.day_only_task,
             });
 
             let notificationIds = [];
@@ -549,6 +562,7 @@ export default function TaskCard({
 
             await Task.update(task.id, {
               next_reminder: nextReminder.toISOString(),
+              ...namedTime,
               onesignal_notification_ids: notificationIds,
               reminder_schedule: multiIds ? undefined : null,
             });
