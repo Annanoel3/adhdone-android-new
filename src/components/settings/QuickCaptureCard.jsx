@@ -71,7 +71,10 @@ export default function QuickCaptureCard({ theme }) {
               Pinned capture notification
             </p>
             <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-              Keeps a shortcut in your notification tray so you can dump a task from anywhere.
+              {alarmQuietChoiceSupported()
+                // 1.3.9 on: tap it for a typing box; its buttons silence ADHDone.
+                ? 'Keeps a shortcut in your notification tray: tap it to add a task from anywhere, or use its buttons to silence ADHDone for 1, 2 or 3 hours.'
+                : 'Keeps a shortcut in your notification tray so you can dump a task from anywhere.'}
             </p>
           </div>
           <Switch checked={enabled} onCheckedChange={handleToggle} disabled={busy} />
