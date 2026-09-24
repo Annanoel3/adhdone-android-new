@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { enqueueCapture } from "@/lib/pendingCaptures";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -46,16 +47,13 @@ function IdeaCard({ idea, onUpdate, theme, allIdeas, specialMode }) {
   const [newSubIdea, setNewSubIdea] = useState("");
   const subIdeas = allIdeas.filter(i => i.parent_idea_id === idea.id);
 
+  // Same as the page's own convert below: through the task parser.
   const handleConvertToTask = async (ideaToConvert) => {
-    await base44.entities.Task.create({
-      title: ideaToConvert.idea,
-      status: 'active',
-      urgency: 'medium',
-      energy_required: 'medium',
-      reminder_interval: "30min",
-      reminder_count: 0
-    });
     await base44.entities.ParkingLotIdea.update(ideaToConvert.id, { converted_to_task: true });
+    enqueueCapture({
+      text: ideaToConvert.idea,
+      fromIdea: { id: ideaToConvert.id, pictures: ideaToConvert.pictures || [], notes: ideaToConvert.notes || '' },
+    });
     onUpdate();
   };
 
@@ -209,6 +207,13 @@ export default function ParkingLot() {
   
   const queryClient = useQueryClient();
 
+  // An idea that couldn't become a task comes back into the list.
+  useEffect(() => {
+    const refresh = () => queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+    window.addEventListener('parking-lot-changed', refresh);
+    return () => window.removeEventListener('parking-lot-changed', refresh);
+  }, [queryClient]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       const newTheme = localStorage.getItem('adhd_theme') || 'minimalist';
@@ -229,19 +234,19 @@ export default function ParkingLot() {
     initialData: [],
   });
 
+  // An idea turned into a task goes through the same parser as anything typed
+  // into Add Task, so it gets its real date, time, priority and place, and
+  // smart nudges pick it up. (It used to be saved raw with a hard-coded
+  // "every 30 minutes" setting and nobody to send to, so it never got a single
+  // reminder.) The idea leaves the list now; if no task comes of it, the
+  // capture processor puts it back.
   const convertToTaskMutation = useMutation({
     mutationFn: async (ideaToConvert) => {
-      await base44.entities.Task.create({
-        title: ideaToConvert.idea,
-        status: 'active',
-        urgency: 'medium',
-        energy_required: 'medium',
-        reminder_interval: "30min",
-        reminder_count: 0,
-        pictures: ideaToConvert.pictures || [],
-        notes: ideaToConvert.notes || ''
-      });
       await base44.entities.ParkingLotIdea.update(ideaToConvert.id, { converted_to_task: true });
+      enqueueCapture({
+        text: ideaToConvert.idea,
+        fromIdea: { id: ideaToConvert.id, pictures: ideaToConvert.pictures || [], notes: ideaToConvert.notes || '' },
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
