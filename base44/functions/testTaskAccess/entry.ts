@@ -3,30 +3,6 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-
-    // TEMPORARY, removed right after it runs once (Anna's request, Sep 24):
-    // quiet hours now end at 8 AM by default. Every profile still on the old
-    // default window (10 PM - 7 AM) moves to 10 PM - 8 AM, except
-    // shirarose823's, which instead gets the one-time "your quiet hours"
-    // popup flag. Admin only.
-    const body = await req.json().catch(() => ({}));
-    if (body?.migrate === 'quiet_end_8am') {
-      const me = await base44.auth.me().catch(() => null);
-      if (me?.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 });
-      const users = await base44.asServiceRole.entities.User.filter({ quiet_hours_start: '22:00', quiet_hours_end: '07:00' });
-      const moved = [];
-      const flagged = [];
-      for (const u of users) {
-        if (u.email === 'shirarose823@gmail.com') {
-          await base44.asServiceRole.entities.User.update(u.id, { quiet_hours_review_pending: true });
-          flagged.push(u.email);
-        } else {
-          await base44.asServiceRole.entities.User.update(u.id, { quiet_hours_end: '08:00' });
-          moved.push(u.email);
-        }
-      }
-      return Response.json({ moved, flagged });
-    }
     
     console.log('Testing task access...');
     
