@@ -38,8 +38,9 @@ import {
   alarmPermissionStatus,
   requestAlarmPermissions,
   alarmQuietChoiceSupported,
+  eventQuietSupported,
 } from '../utils/widgetBridge';
-import { AlarmSoundPicker, AlarmQuietChoice } from '../settings/QuickCaptureCard';
+import { AlarmSoundPicker, AlarmQuietChoice, AlarmEventQuietChoice } from '../settings/QuickCaptureCard';
 
 const SEEN_KEY = 'quick_capture_prompt_seen';
 
@@ -429,6 +430,8 @@ export function AlarmPermissionsDialog({ theme }) {
   // the phone is on silent, vibrate or Do Not Disturb? (true / false; anything
   // else = not answered yet.) Only on a build that can do it.
   const [quietAnswer, setQuietAnswer] = useState(undefined);
+  // ...and the same for "Silent alarms during events?".
+  const [eventAnswer, setEventAnswer] = useState(undefined);
   // 'timers': asked the first time a focus timer, sprint or launchpad starts —
   // those always ring like an alarm, so the wording says why.
   const [feature, setFeature] = useState('');
@@ -440,10 +443,12 @@ export function AlarmPermissionsDialog({ theme }) {
       setSetup(isSetup);
       setFeature(e.detail?.feature || '');
       setQuietAnswer(undefined);
+      setEventAnswer(undefined);
       if (isSetup) {
         base44.auth.me().then((u) => {
           setMe(u);
           if (typeof u?.alarm_vibrate_when_quiet === 'boolean') setQuietAnswer(u.alarm_vibrate_when_quiet);
+          if (typeof u?.alarm_quiet_during_events === 'boolean') setEventAnswer(u.alarm_quiet_during_events);
         }).catch(() => {});
       }
       setOpen(true);
@@ -549,7 +554,11 @@ export function AlarmPermissionsDialog({ theme }) {
     },
   ];
   const allOk = rows.every((r) => r.ok);
-  const quietPending = setup && alarmQuietChoiceSupported() && typeof quietAnswer !== 'boolean';
+  // Both yes/no questions have to be answered before set-up can close.
+  const quietPending = setup && (
+    (alarmQuietChoiceSupported() && typeof quietAnswer !== 'boolean') ||
+    (eventQuietSupported() && typeof eventAnswer !== 'boolean')
+  );
 
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o && !quietPending) setOpen(false); }}>
@@ -583,6 +592,14 @@ export function AlarmPermissionsDialog({ theme }) {
             className={`border-t pt-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}
           />
         )}
+        {setup && (
+          <AlarmEventQuietChoice
+            value={eventAnswer}
+            onChange={setEventAnswer}
+            theme={theme}
+            className={`border-t pt-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}
+          />
+        )}
 
         {!allOk && (
           <p className={`text-xs rounded-md p-2 ${dark ? 'bg-amber-900/40 text-amber-200' : 'bg-amber-50 text-amber-800'}`}>
@@ -611,7 +628,7 @@ export function AlarmPermissionsDialog({ theme }) {
 
         {quietPending && (
           <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-            Pick Yes or No above to finish.
+            Pick Yes or No for each question above to finish.
           </p>
         )}
         <div className="flex gap-2 pt-1">
@@ -769,8 +786,9 @@ export function AlertStylePrompt({ user, theme }) {
   const [me, setMe] = useState(null);
   // Vibrate only while the phone is on silent, vibrate or Do Not Disturb?
   // Asked on the sound step, and the step won't close without an answer
-  // (only on a build that can do it).
+  // (only on a build that can do it). Same for "Silent alarms during events?".
   const [quietAnswer, setQuietAnswer] = useState(undefined);
+  const [eventAnswer, setEventAnswer] = useState(undefined);
   const started = useRef(false);
 
   useEffect(() => {
@@ -837,6 +855,7 @@ export function AlertStylePrompt({ user, theme }) {
         base44.auth.me().then((u) => {
           setMe(u);
           if (typeof u?.alarm_vibrate_when_quiet === 'boolean') setQuietAnswer(u.alarm_vibrate_when_quiet);
+          if (typeof u?.alarm_quiet_during_events === 'boolean') setEventAnswer(u.alarm_quiet_during_events);
         }).catch(() => {});
         setStep('sound');
       } else {
@@ -862,7 +881,9 @@ export function AlertStylePrompt({ user, theme }) {
   const panel = `max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`;
 
   if (step === 'sound') {
-    const quietPending = alarmQuietChoiceSupported() && typeof quietAnswer !== 'boolean';
+    const quietPending =
+      (alarmQuietChoiceSupported() && typeof quietAnswer !== 'boolean') ||
+      (eventQuietSupported() && typeof eventAnswer !== 'boolean');
     return (
       <Dialog open={open} onOpenChange={(o) => { if (!o && !quietPending) soundDone(); }}>
         <DialogContent className={`${quietPending ? '[&>button:last-child]:hidden ' : ''}${panel}`}>
@@ -884,9 +905,16 @@ export function AlertStylePrompt({ user, theme }) {
             className={`border-t pt-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}
           />
 
+          <AlarmEventQuietChoice
+            value={eventAnswer}
+            onChange={setEventAnswer}
+            theme={theme}
+            className={`border-t pt-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}
+          />
+
           {quietPending && (
             <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-              Pick Yes or No above to finish.
+              Pick Yes or No for each question above to finish.
             </p>
           )}
           <Button onClick={soundDone} disabled={quietPending} className="w-full">Done</Button>
