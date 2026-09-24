@@ -235,8 +235,13 @@ export async function createBirthdayFromInput(inputText, email) {
 
   let detected;
   try {
+    // The phone's own date, so "tomorrow" means the person's tomorrow — the
+    // server runs on UTC, which is already the next day on a US evening.
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const response = await base44.functions.invoke('detectBirthday', {
       inputText,
+      today,
     });
     detected = response.data || response;
   } catch (e) {
