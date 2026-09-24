@@ -331,7 +331,11 @@ async function drainAlarmActivity(tasks) {
 
 export async function pushAlarms(tasks) {
   const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
-  if (!AlarmBridge || alarmMode === null) return;
+  if (!AlarmBridge) return;
+  // The upcoming events go over with every alarm sync, whatever the alarm
+  // mode: "Silent alarms during events" covers timers too.
+  pushEventWindows(tasks);
+  if (alarmMode === null) return;
 
   await drainAlarmActivity(tasks);
 
@@ -416,6 +420,63 @@ export async function requestAlarmPermissions({ setup = false, feature = '' } = 
 // the question is never shown.
 export function alarmQuietChoiceSupported() {
   return typeof window.Capacitor?.Plugins?.AlarmBridge?.setQuietVibrate === 'function';
+}
+
+// "Silent alarms during events?" — the yes/no asked (and required) the first
+// time alarms are set up, next to the vibrate-only question
+// (User.alarm_quiet_during_events). While an event on the calendar is
+// happening, every ring vibrates and shows with no sound. Builds from 1.3.9 on.
+export function eventQuietSupported() {
+  return typeof window.Capacitor?.Plugins?.AlarmBridge?.setEventQuiet === 'function';
+}
+
+export async function pushEventQuiet(on) {
+  const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
+  if (typeof AlarmBridge?.setEventQuiet !== 'function') return false;
+  try {
+    await AlarmBridge.setEventQuiet({ on: !!on });
+    return true;
+  } catch (err) {
+    console.warn('[alarm] setEventQuiet failed:', err?.message || err);
+    return false;
+  }
+}
+
+// The events the choice above applies to, as { start, end } times: every
+// active event with a clock time (all-day ones don't count), from now to two
+// weeks out, including one already underway. An event with no end time counts
+// as one hour.
+function eventWindowsFor(tasks) {
+  const HOUR = 60 * 60 * 1000;
+  const now = Date.now();
+  const horizon = now + 14 * 24 * HOUR;
+  const out = [];
+  for (const t of tasks || []) {
+    if (!t || t.status !== 'active' || t.classification !== 'event' || t.day_only_task) continue;
+    const start = Date.parse(t.event_time || '');
+    if (!Number.isFinite(start)) continue;
+    let end = Date.parse(t.end_time || '');
+    if (!Number.isFinite(end) || end <= start) end = start + HOUR;
+    if (end <= now || start > horizon) continue;
+    out.push({ start, end });
+  }
+  return out.sort((a, b) => a.start - b.start).slice(0, 200);
+}
+
+let lastEventWindowsJson = '';
+export async function pushEventWindows(tasks) {
+  const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
+  if (typeof AlarmBridge?.setEventWindows !== 'function') return;
+  const windows = eventWindowsFor(tasks);
+  const json = JSON.stringify(windows);
+  if (json === lastEventWindowsJson) return;
+  lastEventWindowsJson = json;
+  try {
+    await AlarmBridge.setEventWindows({ windows });
+  } catch (err) {
+    lastEventWindowsJson = '';
+    console.warn('[alarm] setEventWindows failed:', err?.message || err);
+  }
 }
 
 export async function pushAlarmQuietVibrate(on) {
