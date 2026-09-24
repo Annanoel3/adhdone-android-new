@@ -10,10 +10,61 @@ import { persistOnboardingFlag } from "./onboardingSync";
 import { waitForCalm, waitForClear } from "./onboardingSurface";
 import { seenKey } from "./tourVersion";
 
+// The alarm question's step (QuickCapturePrompt) — the last piece of setup.
+const ALERT_STYLE_STEP = "onboarding_alert_style_done";
+
+// The four ways to add a task only exist in the phone app. Its share plugin
+// attaches a moment after the web layer boots, so this waits a little for it.
+function waitForShareBridge(timeoutMs = 15000) {
+  return new Promise((resolve) => {
+    const started = Date.now();
+    const check = () => {
+      if (window.Capacitor?.Plugins?.ShareBridge) return resolve(true);
+      if (Date.now() - started > timeoutMs) return resolve(false);
+      setTimeout(check, 500);
+    };
+    check();
+  });
+}
+
 // Shows a one-time intro tour the first time the user lands on a page.
-export default function PageIntroTour({ currentPageName }) {
+export default function PageIntroTour({ currentPageName, user }) {
   const [steps, setSteps] = useState(null);
   const [index, setIndex] = useState(0);
+
+  // The four-video walkthrough, on its own: most people never open Tasks
+  // unprompted, so it also appears once on the first app open AFTER setup is
+  // finished, wherever they are. Never in the same visit as setup (the welcome
+  // or "welcome back" chat, the alarm question), never on top of another
+  // popup, and never again once seen here or on Tasks — they share one key.
+  const walkthroughChecked = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  useEffect(() => {
+    // Checked once per app open. Not cancelled when the account record is
+    // refreshed mid-wait (that happens often) — only if this goes away.
+    if (!user || walkthroughChecked.current) return;
+    walkthroughChecked.current = true;
+    if (localStorage.getItem(seenKey("Tasks"))) return;
+    const setupFinished =
+      isStepDone(ONBOARDING_STEPS.welcome) &&
+      isStepDone(ONBOARDING_STEPS.homeTour) &&
+      isStepDone(ALERT_STYLE_STEP) &&
+      (!!user.about_me || isStepDone(ONBOARDING_STEPS.catchUp));
+    if (!setupFinished) return;
+    waitForShareBridge()
+      .then((native) => (native ? waitForCalm().then(() => true) : false))
+      .then((show) => {
+        if (!show || !mounted.current || localStorage.getItem(seenKey("Tasks"))) return;
+        localStorage.setItem(seenKey("Tasks"), "1");
+        persistOnboardingFlag(seenKey("Tasks"));
+        setIndex(0);
+        setSteps(ADD_PATHS_TOUR);
+      });
+  }, [user]);
 
   useEffect(() => {
     setSteps(null);
