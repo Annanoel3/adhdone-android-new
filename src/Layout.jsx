@@ -33,6 +33,7 @@ import {
   Shuffle,
   BookLock,
   MapPin,
+  BellOff,
 } from "lucide-react";
 import {
   Sidebar,
@@ -136,6 +137,86 @@ const SPECIAL_MODE_LABELS = {
   spring: 'Spring 🌸',
 };
 
+// "Quiet notifications" in the side menu: the same 1, 2 or 3 hour quiet as the
+// pinned notification's and the Today widget's buttons, for people who use
+// neither. The quiet lives on the phone (AlarmBridge.quietFor → ReminderPause):
+// reminders and alarms still arrive, just with no sound, vibration or pop-up,
+// and it ends on its own. Only app builds that have quietFor offer it; older
+// builds and the website never show the menu item.
+function useQuietNotifications() {
+  const [plugin, setPlugin] = useState(null);
+  const [state, setState] = useState({ quiet: false, until: 0, untilLabel: '' });
+
+  // Capacitor can attach its plugins a moment after the page loads.
+  useEffect(() => {
+    const startedAt = Date.now();
+    const poll = setInterval(() => {
+      const p = window.Capacitor?.Plugins?.AlarmBridge;
+      if (p && typeof p.quietFor === 'function') {
+        clearInterval(poll);
+        setPlugin(p);
+      } else if (Date.now() - startedAt > 15000) {
+        clearInterval(poll);
+      }
+    }, 500);
+    return () => clearInterval(poll);
+  }, []);
+
+  const apply = useCallback((s) => {
+    setState({ quiet: !!s?.quiet, until: Number(s?.until) || 0, untilLabel: s?.untilLabel || '' });
+  }, []);
+
+  const refresh = useCallback(async () => {
+    if (!plugin) return;
+    try {
+      apply(await plugin.quietStatus());
+    } catch (e) {
+      console.warn('[Quiet] status failed', e);
+    }
+  }, [plugin, apply]);
+
+  // The quiet can also be started or ended from the pinned notification or the
+  // widget, so ask the phone again whenever the app comes back to the front,
+  // and once a minute while it's open.
+  useEffect(() => {
+    if (!plugin) return undefined;
+    refresh();
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', refresh);
+    const every = setInterval(refresh, 60000);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', refresh);
+      clearInterval(every);
+    };
+  }, [plugin, refresh]);
+
+  // Flip the menu back the moment the quiet runs out.
+  useEffect(() => {
+    if (!state.quiet || !state.until) return undefined;
+    const t = setTimeout(refresh, Math.max(1000, Math.min(state.until - Date.now() + 1000, 2147483000)));
+    return () => clearTimeout(t);
+  }, [state.quiet, state.until, refresh]);
+
+  const run = useCallback(async (fn) => {
+    try {
+      apply(await fn());
+    } catch (e) {
+      console.error('[Quiet] failed', e);
+      refresh();
+    }
+  }, [apply, refresh]);
+
+  return {
+    available: !!plugin,
+    ...state,
+    refresh,
+    quietFor: (hours, extend = false) => run(() => plugin.quietFor({ hours, extend })),
+    quietOff: () => run(() => plugin.quietOff()),
+  };
+}
+
 function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -186,6 +267,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     return localStorage.getItem('seasonal_unlocked') === 'true';
   });
   const [showAppGuide, setShowAppGuide] = useState(false);
+  const quietNotifications = useQuietNotifications();
+  const [showQuietPicker, setShowQuietPicker] = useState(false);
   const [showSpicyBrainsExplanation, setShowSpicyBrainsExplanation] = useState(false);
 
   useEffect(() => {
@@ -911,6 +994,34 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               paddingRight: '1rem',
               paddingBottom: 'max(4rem, calc(2rem + env(safe-area-inset-bottom)))'
             }}>
+              {quietNotifications.available && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    // Opens over the menu, like App Guide, so the menu shows the
+                    // new "Quiet until …" as soon as a length is picked.
+                    quietNotifications.refresh();
+                    setShowQuietPicker(true);
+                  }}
+                  className={`w-full flex items-center justify-center gap-2 rounded-xl ${
+                    isSeasonalTheme()
+                      ? 'bg-white/60 hover:bg-white/80 text-gray-800 border-white/40'
+                      : theme === 'dark'
+                        ? 'border-gray-700 hover:bg-gray-800 text-gray-300 bg-transparent'
+                        : theme === 'spicybrains'
+                          ? 'bg-gradient-to-r from-yellow-300 to-pink-300 hover:from-yellow-400 hover:to-pink-400 text-gray-900 font-bold border-2 border-cyan-400'
+                          : ''
+                  }`}
+                >
+                  <BellOff className="w-4 h-4" />
+                  <span>
+                    {quietNotifications.quiet && quietNotifications.untilLabel
+                      ? `Quiet until ${quietNotifications.untilLabel}`
+                      : 'Quiet notifications'}
+                  </span>
+                </Button>
+              )}
+
               <Button
                 variant="outline"
                 onClick={() => setShowAppGuide(true)}
@@ -1104,6 +1215,51 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           onClose={() => setShowAppGuide(false)}
           theme={theme}
         />
+
+        {quietNotifications.available && (
+          <Dialog open={showQuietPicker} onOpenChange={setShowQuietPicker}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>
+                  {quietNotifications.quiet && quietNotifications.untilLabel
+                    ? `Notifications are quiet until ${quietNotifications.untilLabel} 🔕`
+                    : 'Choose how long notifications should be quiet 🔕'}
+                </DialogTitle>
+                <DialogDescription className="sr-only">
+                  The same quiet as the buttons on the pinned notification and the widget.
+                </DialogDescription>
+              </DialogHeader>
+              {quietNotifications.quiet ? (
+                <div className="grid grid-cols-2 gap-2 pt-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => { quietNotifications.quietOff(); setShowQuietPicker(false); }}
+                  >
+                    Sound back on
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => { quietNotifications.quietFor(1, true); setShowQuietPicker(false); }}
+                  >
+                    Add 1 hour
+                  </Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 pt-2">
+                  {[1, 2, 3].map((h) => (
+                    <Button
+                      key={h}
+                      variant="outline"
+                      onClick={() => { quietNotifications.quietFor(h); setShowQuietPicker(false); }}
+                    >
+                      {h === 1 ? '1 hour' : `${h} hours`}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+        )}
 
         <Dialog open={showSpicyBrainsExplanation} onOpenChange={setShowSpicyBrainsExplanation}>
           <DialogContent className="max-w-2xl bg-gradient-to-br from-pink-100 via-purple-100 to-cyan-100 border-4 border-yellow-400">
