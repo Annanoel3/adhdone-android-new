@@ -1394,6 +1394,9 @@ Return JSON:
   const currentClassification = task.classification || itemClassification || (task.birthday_person ? 'birthday' : 'task');
   const isEvent = currentClassification === 'event';
   const currentType = getCurrentReminderType(task);
+  // Birthdays and events aren't things to start or put off: no Launch, no
+  // Sprint, no Back Burner, no Parking Lot on them. Tasks keep all four.
+  const isEventOrBirthday = isEvent || currentClassification === 'birthday' || currentType === 'birthday';
   const dueLabel = isEvent ? 'Event Date' : 'Due Date';
 
   // Birthdays: which reminders go out (a week before, the day before, on the
@@ -1673,7 +1676,7 @@ Return JSON:
   // Each is rendered exactly once, in whichever spot the layout puts it.
   const backBurnerControl = (
     <>
-      {!isEvent && (
+      {!isEventOrBirthday && (
       <Button
         variant="outline"
         size="sm"
@@ -2490,7 +2493,7 @@ Return JSON:
             )}
 
             {/* v2: Launch / Sprint sit with the task, not in the footer. */}
-            {v2 && task.status !== 'completed' && !isEvent && (
+            {v2 && task.status !== 'completed' && !isEventOrBirthday && (
               <div className={v2Group}>
                 <div className={v2Label}>Get going</div>
                 <LaunchButtons task={task} theme={theme} />
@@ -2510,7 +2513,7 @@ Return JSON:
                 See all birthdays
               </Button>
             )}
-            {!v2 && task.status !== 'completed' && !isEvent && (
+            {!v2 && task.status !== 'completed' && !isEventOrBirthday && (
               <div className="w-full mb-1">
                 <LaunchButtons task={task} theme={theme} />
               </div>
@@ -2530,14 +2533,16 @@ Return JSON:
                   {isEvent ? 'Went' : 'Mark as Complete'}
                 </Button>
                 <div className="w-full flex flex-wrap justify-center gap-6 text-sm pt-1">
-                  {!isEvent && !task.silenced && (
+                  {!isEventOrBirthday && !task.silenced && (
                     <button type="button" onClick={handleToggleSilenced} className={`flex items-center gap-1 ${theme === 'dark' ? 'text-amber-300' : 'text-amber-700'}`}>
                       <BellOff className="w-4 h-4" /> Back Burner
                     </button>
                   )}
+                  {!isEventOrBirthday && (
                   <button type="button" onClick={handleToParkingLot} className={`flex items-center gap-1 ${theme === 'dark' ? 'text-purple-300' : 'text-purple-600'}`}>
                     <Lightbulb className="w-4 h-4" /> To Parking Lot
                   </button>
+                  )}
                   <button type="button" onClick={handleDelete} className="flex items-center gap-1 text-red-600">
                     <Trash2 className="w-4 h-4" /> Delete
                   </button>
@@ -2545,6 +2550,7 @@ Return JSON:
               </>
             ) : (
               <>
+            {!isEventOrBirthday && (
             <Button
               variant="outline"
               onClick={handleToParkingLot}
@@ -2553,6 +2559,7 @@ Return JSON:
               <Lightbulb className="w-4 h-4 mr-2" />
               To Parking Lot
             </Button>
+            )}
             <Button
               variant="outline"
               onClick={handleDelete}
