@@ -8,7 +8,7 @@
 // interval reminders fire at 3 AM local for brand-new users. Only an explicit
 // `false` (the user turned it off in Settings) disables the overnight window.
 export const DEFAULT_QUIET_START = '22:00';
-export const DEFAULT_QUIET_END = '07:00';
+export const DEFAULT_QUIET_END = '08:00';
 
 export function resolveQuietHours(user: any): { enabled: boolean; startMin: number; endMin: number } {
   return {
