@@ -16,6 +16,7 @@ import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import TaskEditModal from "../components/tasks/TaskEditModal";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { snoozeTask, deleteTaskWithUndo } from "../components/utils/snoozeTask";
+import { refreshAlarms } from "../components/utils/widgetBridge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
 import TaskSortDropdown from "../components/tasks/TaskSortDropdown";
@@ -181,6 +182,9 @@ export default function Tasks() {
     (async () => {
       try {
         await Task.update(task.id, { status: 'completed', completed_at: localISOString });
+        // A finished task's alarms come off the phone now, not whenever Home
+        // is next opened.
+        refreshAlarms().catch(() => {});
         await updateTodaysSummary();
         const { completeSubtasks } = await import('../components/utils/subtaskCompletion');
         await completeSubtasks(task.id);
@@ -210,6 +214,7 @@ export default function Tasks() {
     (async () => {
       try {
         await Task.update(task.id, { status: 'active', completed_at: null });
+        refreshAlarms().catch(() => {});
         await updateTodaysSummary();
       } catch (error) {
         console.error("Failed to uncomplete task:", error);
