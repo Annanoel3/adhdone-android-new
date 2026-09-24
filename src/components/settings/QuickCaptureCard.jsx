@@ -497,7 +497,9 @@ export function AlarmCard({ user, theme }) {
             </p>
             <p className={`text-xs ${textSub}`}>
               Same reminder times, but full-screen and impossible to ignore instead of a
-              regular notification. Each task's detail card has its own switch.
+              regular notification. It rings even when your phone is on silent, vibrate or
+              Do Not Disturb{alarmQuietChoiceSupported() ? ', unless you choose vibrate-only below' : ''}.
+              Each task's detail card has its own switch.
             </p>
           </div>
           <Switch checked={on} onCheckedChange={handleToggle} disabled={busy} />
