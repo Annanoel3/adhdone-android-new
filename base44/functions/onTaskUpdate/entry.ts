@@ -134,6 +134,104 @@ async function dropPhoneAlarms(base44, task, taskId) {
   }
 }
 
+// ── Smart nudges ─────────────────────────────────────────────────────────────
+// The same split cronSmartTaskNudge uses. Keep the two in step.
+const RECURRING_INTERVALS = new Set(['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day']);
+const RHYTHM_OWNED_SINCE = Date.parse('2026-09-24T00:00:00Z');
+
+// Base44 timestamps can come back without a zone marker; they are UTC.
+function utcMs(v: any): number {
+  if (!v) return NaN;
+  const s = String(v);
+  return Date.parse(/[zZ]$|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`);
+}
+
+// The refill cron sends a user-asked rhythm ("every hour") — except a
+// dateless one made before 2026-09-24, and one with no recipient.
+function refillSendsRhythm(t: any): boolean {
+  if (!t.notification_recipient_email) return false;
+  const dateless = !t.due_date && !t.event_time && !t.start_date && !t.day_only_task;
+  if (!dateless) return true;
+  const created = utcMs(t.created_date);
+  return Number.isFinite(created) && created >= RHYTHM_OWNED_SINCE;
+}
+
+// Does the smart-nudge planner read this task? Its own tasks (everything but
+// birthdays and a rhythm the refill cron sends — an "at" task counts, it
+// joins the moment its time goes by), their steps, and appointments (context).
+function plannerReads(t: any): boolean {
+  if (!t || t.status !== 'active') return false;
+  if (t.classification === 'birthday' || t.birthday_person) return false;
+  if (t.parent_task_id || t.classification === 'event') return true;
+  return !RECURRING_INTERVALS.has(t.reminder_interval) || !refillSendsRhythm(t);
+}
+
+// Everything the planner reads off a task. A change to any of them has to
+// reach it right away, not tomorrow.
+const PLANNER_FIELDS = [
+  'title', 'description', 'notes', 'original_input', 'urgency', 'energy_required',
+  'due_date', 'start_date', 'next_reminder', 'event_time', 'end_time', 'anchor_time',
+  'day_only_task', 'deadline_style', 'location', 'reminder_wish', 'classification',
+  'life_area', 'recurrence_pattern', 'recurrence_days', 'reminder_interval', 'parent_task_id',
+  'subtask_order', 'due_date_pushes',
+];
+const norm = (v: any) => (v === undefined || v === null || v === '' ? null : JSON.stringify(v));
+function plannerFieldsChanged(a: any, b: any): string[] {
+  // A rhythm task's next_reminder is moved along by cronTaskReminders with
+  // every ping — bookkeeping, not an edit.
+  const rhythm = RECURRING_INTERVALS.has(a?.reminder_interval) && RECURRING_INTERVALS.has(b?.reminder_interval);
+  return PLANNER_FIELDS.filter((f) => !(rhythm && f === 'next_reminder') && norm(a?.[f]) !== norm(b?.[f]));
+}
+
+// Marks the owner's smart-nudge plan out of date — the flag, plus WHEN, so a
+// plan made from older information never clears a newer change. Returns the
+// owner's email when the planner should also be asked to re-plan them right
+// now (kickPlanner) instead of at the next run: at most once per person every
+// 2 minutes — a burst of edits gets one, and the mark carries anything after
+// it to the next scheduled run. Calendar imports and new sub-steps only mark.
+const KICK_GAP_MS = 2 * 60 * 1000;
+async function markPlanStale(base44: any, ownerEmail: string, reason: string, kick = true): Promise<string | null> {
+  if (!ownerEmail) return null;
+  let owner: any = null;
+  try {
+    owner = (await base44.asServiceRole.entities.User.filter({ email: ownerEmail }))?.[0] || null;
+  } catch (e) {
+    console.error('[onTaskUpdate] Owner lookup failed for smart-nudge re-plan:', e);
+  }
+  if (!owner?.id) return null;
+  const nowIso = new Date().toISOString();
+  const lastKick = utcMs(owner.smart_nudge_kick_at);
+  const kickNow = kick && !(Number.isFinite(lastKick) && Date.now() - lastKick < KICK_GAP_MS);
+  try {
+    await base44.asServiceRole.entities.User.update(owner.id, {
+      smart_nudge_schedule_dirty: true,
+      smart_nudge_dirty_at: nowIso,
+      ...(kickNow ? { smart_nudge_kick_at: nowIso } : {}),
+    });
+  } catch (e) {
+    console.error('[onTaskUpdate] Failed to mark the smart-nudge plan out of date:', e);
+    return null;
+  }
+  console.log(`[onTaskUpdate] Smart-nudge plan out of date (${reason})${kickNow ? ' — re-planning now' : ''}`);
+  return kickNow ? ownerEmail : null;
+}
+
+// Asks the planner to re-plan one person now. Called last, after this
+// function's own work, and waited on for at most 20 seconds: the plan is
+// already marked out of date, so if this doesn't finish the next scheduled
+// run does it.
+async function kickPlanner(base44: any, ownerEmail: string | null) {
+  if (!ownerEmail) return;
+  try {
+    await Promise.race([
+      base44.asServiceRole.functions.invoke('cronSmartTaskNudge', { email: ownerEmail }),
+      new Promise((resolve) => setTimeout(resolve, 20000)),
+    ]);
+  } catch (e) {
+    console.error('[onTaskUpdate] Immediate re-plan failed; the next scheduled run will do it:', e?.message || e);
+  }
+}
+
 Deno.serve(async (req) => {
   try {
     console.log('[onTaskUpdate] ========== FUNCTION START ==========');
@@ -188,42 +286,20 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, cancelled: ids.length, reason: 'task_deleted' });
     }
 
-    // On create: if this is a task the smart nudge cron owns, mark the daily
-    // nudge schedule dirty so the next cron run re-plans today with it included.
-    // No OneSignal work needed here — the cron handles sending.
+    // On create: anything the smart-nudge planner reads (a task of its own, a
+    // step of one, an appointment) makes today's plan out of date, so it is
+    // re-planned right away with the new task in it. Being re-planned only
+    // means the planner looks again; whether and when to nudge is still its
+    // call, so a task months out is not nudged early. (This used to test a
+    // narrower copy of the cron's rule, and the two drifted apart — an urgent
+    // task due today got nothing until the next morning.)
     if (event.type === 'create') {
-      // EXACTLY the cron's own test (cronSmartTaskNudge isSmartNudgeTask). This
-      // used to be a narrower, older test ("reminder_interval is null only"),
-      // and the two had drifted: a "take cat food out of the freezer today
-      // asap" task is saved as 'once' with a due date and no clock time, which
-      // the cron owns — but this check said no, the day's plan (made that
-      // morning) was never redone, and an urgent task due today got nothing.
-      // Being marked dirty only means "re-plan"; whether and when to nudge is
-      // still the cron's call, so a task months out is not nudged early.
-      const RECURRING_INTERVALS = new Set(['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day']);
-      const isSmartNudgeTask =
-        data.status === 'active' &&
-        !data.silenced &&
-        !data.parent_task_id &&
-        !RECURRING_INTERVALS.has(data.reminder_interval) &&
-        // Same test as the cron: pinned only while its reminder time is ahead.
-        !(data.reminder_interval === 'once' && !data.day_only_task &&
-          ((data.next_reminder && new Date(data.next_reminder).getTime() > Date.now()) || data.event_time)) &&
-        data.classification !== 'birthday' && data.classification !== 'event' &&
-        !data.birthday_person;
-
-      if (isSmartNudgeTask) {
-        console.log('[onTaskUpdate] New smart-nudge task created — marking schedule dirty');
-        try {
-          await base44.asServiceRole.entities.User.update(user.id, {
-            smart_nudge_schedule_dirty: true
-          });
-        } catch (e) {
-          console.error('[onTaskUpdate] Failed to mark smart nudge schedule dirty on create:', e);
-        }
+      const reads = plannerReads(data) && !data.silenced;
+      if (reads) {
+        const kick = await markPlanStale(base44, data.created_by || user.email, 'task added', !data.google_event_id && !data.parent_task_id);
+        await kickPlanner(base44, kick);
       }
-
-      return Response.json({ success: true, created: true, smartNudge: isSmartNudgeTask });
+      return Response.json({ success: true, created: true, smartNudge: reads });
     }
 
     // Only handle update events beyond this point
@@ -310,12 +386,15 @@ Deno.serve(async (req) => {
       // update event), which sees the same completed status, enters this
       // block again, and calls update again — an infinite self-triggering loop
       // that burns integration credits (48k+ in 9 days).
+      // next_reminder and reminder_interval are KEPT: they're the task's own
+      // time ("pills at 10") and how the user asked to be reminded ("keep
+      // reminding me until I do it"), and un-checking the task needs both to
+      // bring its reminders back as they were. Nothing sends for a completed
+      // task (every sender reads active tasks only).
       const needsClearing =
         (data.onesignal_notification_ids?.length > 0) ||
         (data.reminder_schedule?.length > 0) ||
         data.last_scheduled_until ||
-        data.next_reminder ||
-        data.reminder_interval ||
         data.notification_recipient_email ||
         (data.focus_mode_notification_ids?.length > 0) ||
         data.focus_mode_original_interval;
@@ -325,8 +404,6 @@ Deno.serve(async (req) => {
           onesignal_notification_ids: [],
           reminder_schedule: [],
           last_scheduled_until: null,
-          next_reminder: null,
-          reminder_interval: null,
           notification_recipient_email: null,
           focus_mode_notification_ids: [],
           focus_mode_original_interval: null,
@@ -341,48 +418,87 @@ Deno.serve(async (req) => {
     }
 
     // Un-completing a task (completed → active): the completed branch above wipes
-    // EVERY scheduling field (recipient email, next_reminder, interval, schedule),
-    // so without this the task comes back permanently silent — no reminders ever
-    // again, even though its date is still in the future. Rebuild the event ladder
-    // for anything with a real date left on it.
+    // its scheduling fields (recipient, interval, booked pushes). This puts back
+    // what the task needs to be reminded again — for EVERY task. It used to act
+    // only on a task with a date still ahead, so a dateless task checked off by
+    // accident and un-checked stayed silent for good (no recipient, so nothing
+    // ever picked it up again).
+    //  - The recipient always comes back, and smart nudges re-plan right away:
+    //    they cover a dateless task, a day-only task, any deadline's run-up, and
+    //    anything whose time already went by.
+    //  - What kind of task it was comes back with it: an appointment, an "at"
+    //    task, a "by 5 PM" deadline or a day-only task is 'once' again (a task
+    //    with only a due date stays a smart-nudge task — making it 'once' used
+    //    to pin it until that date and silence it).
+    //  - A thing tied to a clock time still ahead gets its own pushes back: an
+    //    appointment its heads-ups and at-time reminder, an "at" task its
+    //    at-time reminder. (Every task used to get the appointment set, "Time
+    //    to head out! 🚗" included — a day-only chore got them at 11 PM and
+    //    midnight.)
     if (data.status === 'active' && old_data?.status === 'completed') {
-      const when = data.event_time || data.due_date || data.next_reminder;
-      const whenMs = when ? new Date(when).getTime() : 0;
+      const email = data.notification_recipient_email || data.created_by || user.email;
       const now = Date.now();
-      if (whenMs > now) {
-        console.log('[onTaskUpdate] Task un-completed — rebuilding reminders');
-        const email = data.notification_recipient_email || user.email;
-        const t = data.title.length > 40 ? data.title.slice(0, 37) + '...' : data.title;
-        const candidates = [
-          { at: whenMs - 24 * 60 * 60 * 1000, label: 'night before', title: `🎉 ${t}`, body: `Heads up! Your "${t}" is tomorrow. Don't forget to prep! ✨` },
-          { at: whenMs - 60 * 60 * 1000, label: '1 hour before', title: `⏰ ${t}`, body: `Almost time! Your "${t}" is in about an hour. Time to head out! 🚗` },
-          { at: whenMs, label: 'at the time', title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` },
-        ].filter((c) => c.at > now);
-
-        const newIds = [];
-        const newSchedule = [];
-        for (const c of candidates) {
-          const sendAtISO = new Date(c.at).toISOString();
-          const notificationId = await scheduleOneSignalNotification(email, c.title, c.body, sendAtISO, event.entity_id);
-          newSchedule.push({
-            notification_id: notificationId,
-            send_at: sendAtISO,
-            label: c.label,
-            notification_title: c.title,
-            notification_body: c.body,
-          });
-          if (notificationId) newIds.push(notificationId);
-        }
-
-        await base44.asServiceRole.entities.Task.update(event.entity_id, {
-          notification_recipient_email: email,
-          next_reminder: new Date(whenMs).toISOString(),
-          reminder_interval: data.reminder_interval || 'once',
-          reminder_schedule: newSchedule,
-          onesignal_notification_ids: newIds,
-        });
-        return Response.json({ success: true, restored: newIds.length });
+      const isEvent = data.classification === 'event';
+      const dayOnly = !!data.day_only_task;
+      // The time a timed task is set for. Kept through completion from now on;
+      // older completions only have event_time (tasks captured from outside
+      // the app) to go on.
+      const clockMs = utcMs(data.next_reminder || data.event_time);
+      const timed = !isEvent && !dayOnly && !!(data.anchor_time || data.event_time) && Number.isFinite(clockMs);
+      const eventMs = isEvent ? utcMs(data.event_time || data.next_reminder || data.due_date) : NaN;
+      // A rhythm the user asked for ("keep reminding me until I do it") picks up
+      // again one interval from now; the refill cron books it from there.
+      const RHYTHM_MS = {
+        '10min': 10 * 60 * 1000, '20min': 20 * 60 * 1000, '30min': 30 * 60 * 1000,
+        '1hour': 60 * 60 * 1000, '2hours': 2 * 60 * 60 * 1000, '4hours': 4 * 60 * 60 * 1000,
+        'daily': 24 * 60 * 60 * 1000, 'every_other_day': 2 * 24 * 60 * 60 * 1000,
+      };
+      const rhythmMs = RHYTHM_MS[data.reminder_interval] || 0;
+      let rhythmNext: Date | null = null;
+      if (rhythmMs) {
+        rhythmNext = new Date(now + rhythmMs);
+        const { enabled: quietEnabled, startMin, endMin } = resolveQuietHours(user);
+        if (quietEnabled && user?.timezone) rhythmNext = adjustForQuietHours(rhythmNext, startMin, endMin, user.timezone);
       }
+      const t = data.title.length > 40 ? data.title.slice(0, 37) + '...' : data.title;
+      const candidates = rhythmMs ? [] : isEvent && eventMs > now ? [
+        { at: eventMs - 24 * 60 * 60 * 1000, label: 'night before', title: `🎉 ${t}`, body: `Heads up! Your "${t}" is tomorrow. Don't forget to prep! ✨` },
+        { at: eventMs - 60 * 60 * 1000, label: '1 hour before', title: `⏰ ${t}`, body: `Almost time! Your "${t}" is in about an hour. Time to head out! 🚗` },
+        { at: eventMs, label: 'at the time', title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` },
+      ] : timed && data.deadline_style !== 'by' && clockMs > now ? [
+        { at: clockMs, label: 'at the time', title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` },
+      ] : [];
+
+      const newIds = [];
+      const newSchedule = [];
+      for (const c of candidates.filter((x) => x.at > now)) {
+        const sendAtISO = new Date(c.at).toISOString();
+        const notificationId = await scheduleOneSignalNotification(email, c.title, c.body, sendAtISO, event.entity_id);
+        newSchedule.push({
+          notification_id: notificationId,
+          send_at: sendAtISO,
+          label: c.label,
+          notification_title: c.title,
+          notification_body: c.body,
+        });
+        if (notificationId) newIds.push(notificationId);
+      }
+
+      // Mark the plan out of date BEFORE writing the task: that write can
+      // re-trigger this function, and the second pass must see this one's
+      // re-plan request so it doesn't make another.
+      const kick = await markPlanStale(base44, data.created_by || email, 'task un-completed');
+      console.log(`[onTaskUpdate] Task un-completed — recipient restored, ${newIds.length} push(es) rebooked`);
+      await base44.asServiceRole.entities.Task.update(event.entity_id, {
+        notification_recipient_email: email,
+        ...(rhythmNext ? { next_reminder: rhythmNext.toISOString(), last_scheduled_until: null } : {}),
+        ...(!rhythmMs && (isEvent || timed || dayOnly) ? { reminder_interval: data.reminder_interval || 'once' } : {}),
+        ...(isEvent && Number.isFinite(eventMs) && !data.next_reminder ? { next_reminder: new Date(eventMs).toISOString() } : {}),
+        reminder_schedule: newSchedule,
+        onesignal_notification_ids: newIds,
+      });
+      await kickPlanner(base44, kick);
+      return Response.json({ success: true, restored: newIds.length });
     }
 
     // Back Burner: a silenced task gets NO notifications. Cancel every live
@@ -419,11 +535,7 @@ Deno.serve(async (req) => {
         // it is finished, even after it was brought back first.
         was_back_burnered: true,
       });
-      try {
-        await base44.asServiceRole.entities.User.update(user.id, { smart_nudge_schedule_dirty: true });
-      } catch (e) {
-        console.error('[onTaskUpdate] Failed to mark smart nudge schedule dirty on silence:', e);
-      }
+      await kickPlanner(base44, await markPlanStale(base44, data.created_by || user.email, 'task moved to the back burner'));
       return Response.json({ success: true, silenced: true });
     }
 
@@ -486,36 +598,34 @@ Deno.serve(async (req) => {
           ...restoreUrgency,
         });
       } else {
-        // Smart-nudge task (no interval, no event schedule) — mark the daily
-        // nudge schedule dirty so the next cron run regenerates it with this
-        // task included.
+        // Smart-nudge task (no interval, no event schedule): the re-plan below
+        // brings it back into today's nudges.
         if (data.pre_backburner_urgency) {
           await base44.asServiceRole.entities.Task.update(event.entity_id, restoreUrgency);
         }
-        try {
-          await base44.asServiceRole.entities.User.update(user.id, { smart_nudge_schedule_dirty: true });
-        } catch (e) {
-          console.error('[onTaskUpdate] Failed to mark smart nudge schedule dirty on reactivate:', e);
-        }
       }
+      await kickPlanner(base44, await markPlanStale(base44, data.created_by || user.email, 'task back from the back burner'));
       return Response.json({ success: true, reactivated: true });
     }
 
-    // Smart nudge reassessment: ANY change to priority, energy or due date
-    // changes how the nudge cron should rank, time and word this task, so mark
-    // the schedule dirty and let the next run re-plan it. (Fixed-interval
-    // reminders are deliberately not touched here — priority must never wipe a
-    // schedule the user asked for.)
-    if (old_data?.urgency !== data.urgency || old_data?.energy_required !== data.energy_required || (old_data?.due_date || null) !== (data.due_date || null)) {
-      console.log('[onTaskUpdate] Priority/energy/due date changed — marking smart nudge schedule dirty');
-      try {
-        await base44.asServiceRole.entities.User.update(user.id, {
-          smart_nudge_schedule_dirty: true
-        });
-      } catch (e) {
-        console.error('[onTaskUpdate] Failed to mark smart nudge schedule dirty:', e);
-      }
+    // Smart nudge reassessment: a change to ANYTHING the planner reads off
+    // this task (its time, date, title, notes, priority, place, steps, how the
+    // user asked to be reminded…) takes effect right away — the owner's plan
+    // is marked out of date and re-planned now. It used to be priority,
+    // energy and due date only, re-planned at the next run, so moving a time
+    // or rewording a task did nothing until the next day. (Fixed-interval
+    // reminders are deliberately not touched here — priority must never wipe
+    // a schedule the user asked for.)
+    const changedForPlanner = plannerFieldsChanged(old_data, data);
+    let pendingKick: string | null = null;
+    if (changedForPlanner.length > 0 && (plannerReads(data) || plannerReads(old_data))) {
+      pendingKick = await markPlanStale(base44, data.created_by || user.email, `changed: ${changedForPlanner.join(', ')}`, !data.google_event_id);
     }
+    // The immediate re-plan waits until this function's own work below is done.
+    const finish = async (body: any, init?: any) => {
+      await kickPlanner(base44, pendingKick);
+      return Response.json(body, init);
+    };
 
     // Focus Mode owns this task's reminders for the length of the session, and
     // the enter/exit writes themselves change reminder_interval. Rescheduling
@@ -523,19 +633,19 @@ Deno.serve(async (req) => {
     // their place, and raced the exit write. Stand down for all of it.
     if (data.focus_mode_original_interval || old_data?.focus_mode_original_interval) {
       console.log('[onTaskUpdate] Focus Mode owns this task right now — not rescheduling');
-      return Response.json({ success: true, skipped: true, reason: 'focus_mode_owned' });
+      return finish({ success: true, skipped: true, reason: 'focus_mode_owned' });
     }
 
     // Check if there are scheduled notifications for this task
     if (!data.onesignal_notification_ids || data.onesignal_notification_ids.length === 0) {
       console.log('[onTaskUpdate] No scheduled notifications for this task');
-      return Response.json({ success: true, noNotifications: true });
+      return finish({ success: true, noNotifications: true });
     }
 
     // For one-time reminders, the frontend handles all scheduling — don't cancel or reschedule
     if (data.reminder_interval === 'once') {
       console.log('[onTaskUpdate] One-time reminder — frontend handles scheduling, skipping');
-      return Response.json({ success: true, skipped: true, reason: 'one_time_reminder' });
+      return finish({ success: true, skipped: true, reason: 'one_time_reminder' });
     }
 
     // Only cancel + reschedule when a reminder-relevant field changed. Other updates
@@ -556,7 +666,7 @@ Deno.serve(async (req) => {
       const task = await base44.asServiceRole.entities.Task.filter({ id: event.entity_id });
       if (task.length === 0) {
         console.error('[onTaskUpdate] Task not found after update');
-        return Response.json({ success: false, error: 'Task not found' }, { status: 500 });
+        return finish({ success: false, error: 'Task not found' }, { status: 500 });
       }
 
       const currentTask = task[0];
@@ -662,7 +772,7 @@ Deno.serve(async (req) => {
     }
 
     console.log('[onTaskUpdate] ========== SUCCESS ==========');
-    return Response.json({ success: true });
+    return finish({ success: true });
 
   } catch (error) {
     console.error('[onTaskUpdate] Unhandled error:', error);
