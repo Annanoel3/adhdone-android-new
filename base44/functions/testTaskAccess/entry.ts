@@ -8,6 +8,22 @@ Deno.serve(async (req) => {
     // admin rights and hands back a full sample record, so admins only.
     const me = await base44.auth.me().catch(() => null);
     if (me?.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 });
+
+    // TEMPORARY, removed right after it runs once (Anna's request, Sep 24): send
+    // shirarose823's pending Zoloft check-in now instead of at its planned time.
+    const body = await req.json().catch(() => ({}));
+    if (body?.migrate === 'shira_checkin_now') {
+      const [u] = await base44.asServiceRole.entities.User.filter({ email: 'shirarose823@gmail.com' });
+      if (!u) return Response.json({ error: 'no user' });
+      const schedule = Array.isArray(u.smart_nudge_schedule) ? u.smart_nudge_schedule : [];
+      const nowIso = new Date().toISOString();
+      let moved = 0;
+      for (const e of schedule) {
+        if (!e.sent && /zoloft/i.test(String(e.title || ''))) { e.send_at = nowIso; moved++; }
+      }
+      if (moved) await base44.asServiceRole.entities.User.update(u.id, { smart_nudge_schedule: schedule });
+      return Response.json({ moved, send_at: nowIso });
+    }
     
     console.log('Testing task access...');
     
