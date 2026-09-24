@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -91,10 +91,24 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
     setChosen(new Set((user?.device_calendar_ids || []).map(String)));
   }, [user?.device_calendar_ids]);
 
+  // The checkboxes never wait on a sync. A tick shows and saves at once; the
+  // import runs in the background. A tick made while a sync is already
+  // running gets one more sync right after it, with every calendar ticked.
+  const chosenRef = useRef(chosen);
+  useEffect(() => { chosenRef.current = chosen; }, [chosen]);
+  const syncingRef = useRef(false);
+  const queuedRef = useRef(null);
+  const saveChainRef = useRef(Promise.resolve());
+
   if (!available) return null;
 
   const sync = async (ids) => {
     if (!ids.length) return;
+    if (syncingRef.current) {
+      queuedRef.current = ids;
+      return;
+    }
+    syncingRef.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -109,7 +123,11 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
         ? 'Calendar access was turned off. Allow it again to sync.'
         : `Sync failed: ${err?.message || err}`);
     } finally {
+      syncingRef.current = false;
       setBusy(false);
+      const queued = queuedRef.current;
+      queuedRef.current = null;
+      if (queued && queued.length) sync(queued);
     }
   };
 
@@ -124,21 +142,22 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
     }
   };
 
-  const toggle = async (id) => {
-    const next = new Set(chosen);
+  const toggle = (id) => {
+    const next = new Set(chosenRef.current);
     const adding = !next.has(id);
     if (adding) next.add(id); else next.delete(id);
+    chosenRef.current = next;
     setChosen(next);
-    const ids = Array.from(next);
-    try {
-      await base44.auth.updateMe({ device_calendar_ids: ids });
-    } catch (err) {
-      setError(`Couldn't save that choice: ${err?.message || err}`);
-      return;
-    }
-    // A newly ticked calendar imports straight away; unticking only stops
-    // future syncs — what was already imported stays as tasks.
-    if (adding) await sync(ids);
+    // Saves run one after another, each with the latest set of ticks, so
+    // quick taps can't land out of order.
+    saveChainRef.current = saveChainRef.current
+      .then(() => base44.auth.updateMe({ device_calendar_ids: Array.from(chosenRef.current) }))
+      .then(() => {
+        // A newly ticked calendar imports in the background; unticking only
+        // stops future syncs — what was already imported stays as tasks.
+        if (adding) sync(Array.from(chosenRef.current));
+      })
+      .catch((err) => setError(`Couldn't save that choice: ${err?.message || err}`));
   };
 
   const chosenIds = Array.from(chosen);
@@ -208,7 +227,6 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
                   className="w-4 h-4"
                   checked={chosen.has(String(c.id))}
                   onChange={() => toggle(String(c.id))}
-                  disabled={busy}
                 />
                 <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ background: c.color || '#8b5cf6' }} />
                 <span className="min-w-0">
