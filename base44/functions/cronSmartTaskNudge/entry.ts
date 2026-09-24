@@ -22,7 +22,7 @@
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
-import { localMinutesOfDay, parseHHMM, isInQuietHours, adjustForQuietHours } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, isInQuietHours, adjustForQuietHours, resolveQuietHours, userTimeZone } from '../../shared/quietHours.ts';
 import { getProximity, formatProximityNotes } from '../../shared/mapsDistance.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
@@ -232,15 +232,21 @@ Deno.serve(async (req) => {
       const user = userMap[email];
       if (!user) continue;
 
-      const timeZone = user.timezone || 'UTC';
+      // The shared fallback when no timezone is saved (it was UTC here, which
+      // put a US user's "quiet hours" in the middle of their afternoon).
+      const timeZone = userTimeZone(user);
 
       // Quiet hours — skip if the user is in their quiet window
-      // Quiet hours are PER USER. If the user hasn't turned them on, there is no
-      // quiet window at all — a 0/0 window makes isInQuietHours/adjustForQuietHours
-      // no-ops, so someone who works until midnight still gets same-day nudges.
-      const quietEnabled = !!user.quiet_hours_enabled;
-      const startMin = quietEnabled ? parseHHMM(user.quiet_hours_start || '22:00') : 0;
-      const endMin = quietEnabled ? parseHHMM(user.quiet_hours_end || '08:00') : 0;
+      // Quiet hours are PER USER and default to ON (RULES.md hard rule 4): a
+      // profile that never touched the setting gets the overnight window, and
+      // only an explicit "off" in Settings removes it. With it off there is no
+      // quiet window at all — a 0/0 window makes isInQuietHours /
+      // adjustForQuietHours no-ops, so someone who works until midnight and
+      // turned quiet hours off still gets same-day nudges.
+      const quiet = resolveQuietHours(user);
+      const quietEnabled = quiet.enabled;
+      const startMin = quietEnabled ? quiet.startMin : 0;
+      const endMin = quietEnabled ? quiet.endMin : 0;
       if (isInQuietHours(now, startMin, endMin, timeZone)) continue;
 
       const todayStr = getLocalDateString(now, timeZone);
@@ -427,6 +433,17 @@ Deno.serve(async (req) => {
         // the user to do something they finished hours ago.
         const referencedIds: string[] = entryTaskIds(entry);
 
+        // A task that no longer exists: the nudge would be about something the
+        // user deleted. Every task is read at the start of a scheduled run, so
+        // "not in that read" means deleted.
+        if (referencedIds.some((id: string) => !taskById.has(id))) {
+          entry.sent = true;
+          entry.sent_at = now.toISOString();
+          entry.skipped_reason = 'deleted';
+          newLog.push({ k: entryKey(entry), at: entry.sent_at, skip: 'deleted' });
+          continue;
+        }
+
         if (referencedIds.some((id: string) => completedTaskIds.has(id))) {
           entry.sent = true;
           entry.sent_at = now.toISOString();
@@ -440,6 +457,15 @@ Deno.serve(async (req) => {
           entry.sent_at = now.toISOString();
           entry.skipped_reason = 'silenced';
           newLog.push({ k: entryKey(entry), at: entry.sent_at, skip: 'silenced' });
+          continue;
+        }
+
+        // Anything else that isn't an active task any more is not nudged either.
+        if (referencedIds.some((id: string) => taskById.get(id)?.status !== 'active')) {
+          entry.sent = true;
+          entry.sent_at = now.toISOString();
+          entry.skipped_reason = 'not_active';
+          newLog.push({ k: entryKey(entry), at: entry.sent_at, skip: 'not_active' });
           continue;
         }
 
