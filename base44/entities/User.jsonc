@@ -105,6 +105,10 @@
       "type": "boolean",
       "description": "Answer to 'Only vibrate when my phone is on silent, vibrate or Do Not Disturb?', asked (and required) the first time alarms are set up on a build that supports it; changeable in Settings -> Alarms. true = while the phone is on silent, vibrate or Do Not Disturb, alarms and timer rings vibrate and show on screen with no sound. false = they ring out loud. Empty = never asked (rings out loud, as before). The Android app reads it at the moment an alarm goes off."
     },
+    "alarm_quiet_during_events": {
+      "type": "boolean",
+      "description": "Answer to 'Silent alarms during events?', asked (and required) the first time alarms are set up on a build that supports it; changeable in Settings -> Alarms. true = while an event on their calendar is happening (any event with a clock time; one with no end time counts as one hour), alarms and timer rings vibrate and show on screen with no sound. false = they ring out loud. Empty = never asked (rings out loud, as before)."
+    },
     "alarm_permissions": {
       "type": "object",
       "properties": {
