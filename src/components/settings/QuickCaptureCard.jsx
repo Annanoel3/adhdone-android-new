@@ -525,7 +525,7 @@ export function AlarmCard({ user, theme }) {
             <Row
               ok={status.notifications}
               label="Notifications"
-              detail="Blocked for ADHDone in your phone settings — the alarm can't show without them."
+              detail="Blocked for ADHDone in your phone settings. Without it nothing reaches you: no reminders, no alarms."
               action="Ask again"
               onAction={() => NotifyBridge?.requestPermission?.()}
             />
@@ -555,7 +555,7 @@ export function AlarmCard({ user, theme }) {
             <Row
               ok={status.ignoringBatteryOptimizations}
               label="Battery"
-              detail="Samsung puts sleeping apps to bed; an alarm from a sleeping app can be late or skipped."
+              detail="Samsung puts apps it thinks you don't use to sleep, and a sleeping app's reminders and alarms can come late or not at all."
               action="Fix"
               onAction={() => AlarmBridge.requestIgnoreBatteryOptimizations()}
             />
