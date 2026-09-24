@@ -888,7 +888,8 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                     theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
                   }`}>
                     <Calendar className="w-3 h-3" />
-                    {formatReminderDate(t.due_date)}
+                    {/* A repeating task's next occurrence has no due date, only the day it's for. */}
+                    {formatReminderDate(t.due_date || t.next_reminder)}
                   </span>
                 </div>
               ))}
