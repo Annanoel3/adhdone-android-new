@@ -414,53 +414,44 @@ export default function FocusTimer() {
       {/* Timer Card */}
       <Card className={getCardBaseClasses(specialMode, theme, mode, true)}>
         <CardContent className="p-8 md:p-12">
-          <div className="relative">
-            {theme === 'colorful' && (
-              <div className="absolute inset-0 overflow-hidden rounded-full opacity-30">
-                <motion.div animate={{ scale: [1, 1.2, 1], rotate: [0, 180, 360] }} transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-                  className={`w-full h-full ${mode === 'work' ? 'bg-gradient-to-r from-purple-400 via-pink-400 to-orange-400' : 'bg-gradient-to-r from-teal-400 via-blue-400 to-cyan-400'}`}
-                  style={{ filter: 'blur(60px)' }}
-                />
+          {/* A plain bar, not a giant ring: the time, which block this is, and
+              how far through it you are. */}
+          <div className="flex flex-col items-center">
+            <div
+              className={`text-5xl md:text-6xl font-bold tabular-nums ${theme === 'dark' || theme === 'spicybrains' ? 'text-white' : 'text-gray-900'}`}
+              style={{ textShadow: theme === 'colorful' || theme === 'spicybrains' ? '0 2px 20px rgba(255,255,255,0.5)' : 'none' }}
+            >
+              {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
+            </div>
+
+            <motion.div animate={isActive ? { scale: [1, 1.05, 1] } : {}} transition={{ duration: 2, repeat: Infinity }}
+              className={`mt-2 text-lg font-medium flex items-center gap-2 ${
+                mode === 'work'
+                  ? theme === 'minimalist' ? 'text-green-600' : theme === 'dark' ? 'text-green-400' : theme === 'spicybrains' ? 'text-yellow-300' : 'text-purple-900'
+                  : theme === 'minimalist' ? 'text-blue-600' : theme === 'dark' ? 'text-blue-400' : theme === 'spicybrains' ? 'text-blue-300' : 'text-teal-900'
+              }`}
+            >
+              {mode === 'work' ? <><Sparkles className="w-5 h-5" />Focus Time</> : <><Coffee className="w-5 h-5" />Break Time</>}
+            </motion.div>
+
+            <div
+              className="w-full h-3 rounded-full overflow-hidden mt-6"
+              style={{ backgroundColor: theme === 'minimalist' ? '#e5e7eb' : theme === 'dark' ? '#374151' : '#ffffff80' }}
+            >
+              <motion.div
+                className="h-full rounded-full"
+                style={{ backgroundColor: theme === 'minimalist' ? (mode === 'work' ? '#16a34a' : '#3b82f6') : theme === 'dark' ? (mode === 'work' ? '#22c55e' : '#3b82f6') : theme === 'spicybrains' ? (mode === 'work' ? '#fde047' : '#93c5fd') : '#ffffff' }}
+                initial={false}
+                animate={{ width: `${Math.max(0, Math.min(100, progress))}%` }}
+                transition={{ duration: 1, ease: 'linear' }}
+              />
+            </div>
+
+            {sessionCount > 0 && (
+              <div className={`text-sm mt-3 font-medium ${theme === 'dark' || theme === 'spicybrains' ? 'text-gray-200' : 'text-gray-600'}`}>
+                🍅 {sessionCount} pomodoro{sessionCount !== 1 ? 's' : ''} completed
               </div>
             )}
-
-            <svg className="w-full h-full -rotate-90 relative z-10" viewBox="0 0 200 200">
-              <circle cx="100" cy="100" r="90" stroke={theme === 'minimalist' ? '#e5e7eb' : theme === 'dark' ? '#374151' : '#ffffff80'} strokeWidth="12" fill="none" />
-              <motion.circle cx="100" cy="100" r="90"
-                stroke={theme === 'minimalist' ? (mode === 'work' ? '#16a34a' : '#3b82f6') : theme === 'dark' ? (mode === 'work' ? '#22c55e' : '#3b82f6') : theme === 'spicybrains' ? (mode === 'work' ? '#fde047' : '#93c5fd') : '#ffffff'}
-                strokeWidth="12" fill="none"
-                strokeDasharray={`${2 * Math.PI * 90}`}
-                strokeDashoffset={`${2 * Math.PI * 90 * (1 - progress / 100)}`}
-                strokeLinecap="round"
-                animate={{ strokeDashoffset: 2 * Math.PI * 90 * (1 - progress / 100) }}
-                transition={{ strokeDashoffset: { duration: 1 } }}
-              />
-            </svg>
-
-            <div className="absolute inset-0 flex flex-col items-center justify-center z-20">
-              <div
-                className={`text-6xl md:text-7xl font-bold mb-4 ${theme === 'dark' || theme === 'spicybrains' ? 'text-white' : 'text-gray-900'}`}
-                style={{ textShadow: theme === 'colorful' || theme === 'spicybrains' ? '0 2px 20px rgba(255,255,255,0.5)' : 'none' }}
-              >
-                {String(minutes).padStart(2, '0')}:{String(seconds).padStart(2, '0')}
-              </div>
-
-              <motion.div animate={isActive ? { scale: [1, 1.05, 1] } : {}} transition={{ duration: 2, repeat: Infinity }}
-                className={`text-lg font-medium flex items-center gap-2 ${
-                  mode === 'work'
-                    ? theme === 'minimalist' ? 'text-green-600' : theme === 'dark' ? 'text-green-400' : theme === 'spicybrains' ? 'text-yellow-300' : 'text-purple-900'
-                    : theme === 'minimalist' ? 'text-blue-600' : theme === 'dark' ? 'text-blue-400' : theme === 'spicybrains' ? 'text-blue-300' : 'text-teal-900'
-                }`}
-              >
-                {mode === 'work' ? <><Sparkles className="w-5 h-5" />Focus Time</> : <><Coffee className="w-5 h-5" />Break Time</>}
-              </motion.div>
-
-              {sessionCount > 0 && (
-                <div className={`text-sm mt-2 font-medium ${theme === 'dark' || theme === 'spicybrains' ? 'text-gray-200' : 'text-gray-600'}`}>
-                  🍅 {sessionCount} pomodoro{sessionCount !== 1 ? 's' : ''} completed
-                </div>
-              )}
-            </div>
           </div>
 
           <div className="flex justify-center gap-4 mt-8">
