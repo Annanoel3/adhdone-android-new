@@ -1224,14 +1224,14 @@ export default function Layout({ children, currentPageName }) {
       // read as disabled and let daily reminders fire at 3 AM local).
       if (typeof currentUser.quiet_hours_enabled !== 'boolean') updates.quiet_hours_enabled = true;
       if (!currentUser.quiet_hours_start) updates.quiet_hours_start = '22:00';
-      if (!currentUser.quiet_hours_end) updates.quiet_hours_end = '07:00';
+      if (!currentUser.quiet_hours_end) updates.quiet_hours_end = '08:00';
       await base44.auth.updateMe(updates);
 
       // Keep quiet hours in localStorage so the client-side reminder scheduler
       // (used for one-time/event reminders) follows the profile values.
       localStorage.setItem('quiet_hours_enabled', currentUser.quiet_hours_enabled === false ? 'false' : 'true');
       localStorage.setItem('quiet_hours_start', currentUser.quiet_hours_start || '22:00');
-      localStorage.setItem('quiet_hours_end', currentUser.quiet_hours_end || '07:00');
+      localStorage.setItem('quiet_hours_end', currentUser.quiet_hours_end || '08:00');
 
       // Background Google Calendar auto-sync — runs in the user's session so
       // the app-user OAuth token is available (a scheduled cron can't access
