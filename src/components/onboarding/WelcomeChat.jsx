@@ -16,9 +16,12 @@ import { firstUseSeen, markFirstUseSeen } from './FirstUseDialog';
 // every real reminder uses — so it proves the whole path, not just the app.
 const FIRST_WIN_KEY = 'onboarding_first_win_push_booked';
 const FIRST_WIN_MINUTES = 3;
-// Where the booked demo push is remembered (id + send time + words). The
-// alarm question (QuickCapturePrompt) reads the same key.
+// Where the demo push is remembered (words + send time, and its id once it is
+// booked). QuickCapturePrompt books it and the alarm question reads it — same key.
 const FIRST_WIN_DEMO_KEY = 'first_win_demo_push';
+// Tells QuickCapturePrompt a demo is waiting, in case this phone is already
+// linked for pushes (then it books straight away).
+const FIRST_WIN_PLANNED_EVENT = 'adhdone:first-win-planned';
 
 // The first-run conversation. Answers are saved as they're given (not batched at
 // the end) so someone who closes the app halfway through still keeps their name.
@@ -91,29 +94,18 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     enqueueCapture({ text: value });
     if (!firstUseSeen(FIRST_WIN_KEY)) {
       markFirstUseSeen(FIRST_WIN_KEY);
+      // Only planned here, not booked. On a new phone nothing is linked to
+      // this account for pushes yet — that happens after the notifications
+      // question — so a push booked now had nowhere to go and never arrived.
+      // QuickCapturePrompt books it the moment the phone is linked, at this
+      // same time if that is still ahead.
       const demo = {
         title: 'This is what a reminder looks like 👋',
         body: `"${value}" is on your list. When it's time, we'll nudge you just like this.`,
         at: new Date(Date.now() + FIRST_WIN_MINUTES * 60 * 1000).toISOString(),
       };
-      base44.auth.me()
-        .then((me) => me?.email && base44.functions.invoke('schedulePush', {
-          toUserExternalId: me.email,
-          title: demo.title,
-          body: demo.body,
-          sendAtISO: demo.at,
-          data: { type: 'first_win_demo' },
-        }))
-        .then((res) => {
-          // Kept so that choosing full-screen alarms a moment later (the alarm
-          // question comes after the tour) re-books this same demo to ring
-          // like one — the demo shows what THEIR reminders will look like.
-          const id = res?.data?.notificationId;
-          if (id) {
-            try { localStorage.setItem(FIRST_WIN_DEMO_KEY, JSON.stringify({ ...demo, id })); } catch (e) {}
-          }
-        })
-        .catch(() => {});
+      try { localStorage.setItem(FIRST_WIN_DEMO_KEY, JSON.stringify(demo)); } catch (e) {}
+      window.dispatchEvent(new Event(FIRST_WIN_PLANNED_EVENT));
     }
     answer(value);
   };
