@@ -18,6 +18,16 @@ export function resolveQuietHours(user: any): { enabled: boolean; startMin: numb
   };
 }
 
+// The one timezone to use for a profile that has no timezone saved yet — the
+// same one the morning digest, commute watch and work hours already used.
+// Before this, "no timezone" meant "no quiet hours at all" in some jobs and
+// "UTC" (a 3 AM quiet-hours end in the US) in others.
+export const DEFAULT_TIME_ZONE = 'America/Chicago';
+
+export function userTimeZone(user: any): string {
+  return (user && user.timezone) || DEFAULT_TIME_ZONE;
+}
+
 function localParts(utcDate: Date, timeZone: string) {
   const fmt = new Intl.DateTimeFormat('en-US', {
     timeZone,
@@ -50,6 +60,14 @@ function offsetMinutesAt(utcDate: Date, timeZone: string): number {
 export function localMinutesOfDay(utcDate: Date, timeZone: string): number {
   const lp = localParts(utcDate, timeZone);
   return lp.hour * 60 + lp.minute;
+}
+
+// The user's own calendar day ("2026-09-24") at a UTC instant. "Is it today?"
+// has to be asked on the user's calendar: 7 PM on a US evening is already
+// tomorrow on the server's UTC clock.
+export function localDateKey(utcDate: Date, timeZone: string): string {
+  const lp = localParts(utcDate, timeZone);
+  return `${lp.year}-${String(lp.month).padStart(2, '0')}-${String(lp.day).padStart(2, '0')}`;
 }
 
 export function parseHHMM(s: string): number {
@@ -129,4 +147,27 @@ export function anchorToDaytime(
   const slotMin = Math.max(DAYTIME_ANCHOR_MIN, endMin + 60);
   const keepMinutes = localMinutesOfDay(utcDate, timeZone) % 60;
   return new Date(windowEnd.getTime() + (slotMin - endMin + keepMinutes) * 60000);
+}
+
+// Where one slot of a repeating reminder goes when the owner's quiet hours
+// are on. Returns null when the slot is dropped.
+//
+//  - Once a day or less often: a slot inside the overnight window moves to
+//    the daytime anchor above and is never dropped. These used to be moved to
+//    the exact minute quiet hours end and then dropped as "the morning digest
+//    covers it" — and since a daily slot lands on that same minute every day,
+//    a daily reminder that ever got moved there (un-checking a task at night,
+//    bringing one back from the Back Burner) went silent for good.
+//  - More often than that: a slot inside the window is dropped (the morning
+//    digest stands in for the night's pings). A slot that simply falls on the
+//    minute quiet hours end is kept — it was never moved, it is a real ping.
+export function placeRepeatingSlot(
+  slot: Date,
+  intervalMs: number,
+  startMin: number,
+  endMin: number,
+  timeZone: string
+): Date | null {
+  if (intervalMs >= 24 * 60 * 60 * 1000) return anchorToDaytime(slot, startMin, endMin, timeZone);
+  return isInQuietHours(slot, startMin, endMin, timeZone) ? null : slot;
 }
