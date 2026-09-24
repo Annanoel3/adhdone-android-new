@@ -101,6 +101,8 @@ export default function TaskCard({
       await Task.update(task.id, updates);
       const { scheduleBirthdayReminders } = await import('../utils/birthdayScheduler');
       await scheduleBirthdayReminders({ ...task, ...updates });
+      // The full-screen alarm lives on the phone — hand it the new time now.
+      import('../utils/widgetBridge').then((m) => m.refreshAlarms()).catch(() => {});
       if (onRefreshTasks) onRefreshTasks();
     } catch (error) {
       console.error("Error moving the birthday reminders:", error);
