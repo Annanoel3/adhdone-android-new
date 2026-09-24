@@ -138,12 +138,15 @@ export async function detectMultipleTasks(inputText) {
 }
 
 // Processes ONE task string. Resolves to a descriptor:
-//   { status: 'done' }
+//   { status: 'done', taskId? }
 //   { status: 'needs_priority', data }
 //   { status: 'needs_date', data }
 //   { status: 'error', message }
 export async function processAndCreateTask(inputText, opts = {}) {
-  const { presetDate = null, presetDueDateISO = null } = opts;
+  // skipIdeaCheck: the text is already known to be a task (a Parking Lot idea
+  // the user chose to turn into one), so the task-or-idea question is skipped
+  // — asking it would just file the idea straight back into the Parking Lot.
+  const { presetDate = null, presetDueDateISO = null, skipIdeaCheck = false } = opts;
 
   if (!inputText.trim()) return { status: 'error', message: 'Empty input' };
 
@@ -248,6 +251,7 @@ Return JSON:
 
       maybeAskForHomeZip(`${subtaskCheck.main_task} ${inputText}`, mainTaskParsed.location);
       announceTaskCreated(parentTask);
+      const madeTaskId = parentTask.id;
 
       // Subtasks IN ORDER — no notifications on subtasks, only the parent
       for (let si = 0; si < subtaskCheck.subtasks.length; si++) {
@@ -274,6 +278,7 @@ Return JSON:
           taskId: parentTask.id,
           urgency: parentTask.urgency,
           dayOnly: !!mainTaskParsed.day_only_task,
+          deadlineStyle: mainTaskParsed.deadline_style === 'by' ? 'by' : 'on',
           classification: parentTask.classification,
           reminderWish: mainTaskParsed.reminder_wish || null,
         }).then(multiIds => {
@@ -299,7 +304,7 @@ Return JSON:
         }).catch(error => console.error("Failed to schedule reminders:", error));
       }
 
-      return { status: 'done' };
+      return { status: 'done', taskId: madeTaskId };
     }
 
     const now = new Date();
@@ -310,7 +315,9 @@ Return JSON:
     // function, not here — the same call is made by the outside-the-app captures
     // (captureText → classifyCapture), so both ways of adding ask the question
     // identically and can never drift apart. Send raw text and nothing else.
-    const categoryCheck = (await base44.functions.invoke('checkTaskCategory', { text: inputText }))?.data?.response;
+    const categoryCheck = skipIdeaCheck
+      ? null
+      : (await base44.functions.invoke('checkTaskCategory', { text: inputText }))?.data?.response;
     trace('categoryCheck', { result: categoryCheck });
 
     if (categoryCheck?.category === 'parking_lot') {
@@ -568,6 +575,11 @@ Return JSON:
             if (multiIds) {
               return commitNotificationIds(createdTask.id, multiIds);
             }
+            // A "by 5 PM" deadline never gets a lone reminder AT the deadline
+            // (too late by then) — smart nudges own it.
+            if (parsed.deadline_style === 'by' && !parsed.day_only_task) {
+              return commitNotificationIds(createdTask.id, []);
+            }
             return scheduleReminder({
               email: currentUser.email,
               ...getReminderCopy(createdTask, nextReminder),
@@ -608,7 +620,7 @@ Return JSON:
       base44.entities.Task.update(createdTask.id, { reminder_scheduling_since: null }).catch(() => {});
     }
 
-    return { status: 'done' };
+    return { status: 'done', taskId: createdTask.id };
   } catch (error) {
     console.error('🔄 [PROCESS] Error:', error);
     trace('processError', { message: String(error?.message || error) });
