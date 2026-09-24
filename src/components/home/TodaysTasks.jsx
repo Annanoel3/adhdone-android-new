@@ -369,21 +369,25 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
     });
   };
 
-  // The day a repeating task's CURRENT occurrence is on ("Today", "Tomorrow",
-  // "Sep 26"). Finishing it creates the next occurrence, so this moves on by
-  // itself — a repeating task never sits there looking undated.
-  const occurrenceDay = (dateString) => {
-    if (!dateString) return null;
-    const day = new Date(dateString);
-    day.setHours(0, 0, 0, 0);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const diff = Math.round((day.getTime() - today.getTime()) / 86400000);
-    if (diff === 0) return 'Today';
-    if (diff === 1) return 'Tomorrow';
-    return formatReminderDate(dateString);
-  };
+  // A repeating task's closed card says WHEN it repeats — "Daily at 10 AM",
+  // "Mon, Wed at 6 PM" — as one pill, instead of a reminder interval ("Every
+  // hour" is how it nags after the time, not when it's due) and a date pill.
+  // The time is the one the person named (anchor_time).
   const isRepeating = (t) => !!t.recurrence_pattern && t.recurrence_pattern !== 'none';
+  const repeatScheduleLabel = (t) => {
+    const words = {
+      daily: 'Daily', every_other_day: 'Every other day', weekdays: 'Weekdays', weekly: 'Weekly',
+      every_other_week: 'Every other week', monthly: 'Monthly', yearly: 'Yearly',
+    };
+    const days = t.recurrence_pattern === 'weekly' && Array.isArray(t.recurrence_days) && t.recurrence_days.length
+      ? t.recurrence_days.map((n) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][n]).filter(Boolean).join(', ')
+      : words[t.recurrence_pattern] || String(t.recurrence_pattern).replace(/_/g, ' ');
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(t.anchor_time || ''));
+    if (!m) return days;
+    const h = Number(m[1]);
+    const time = `${h % 12 || 12}${m[2] === '00' ? '' : `:${m[2]}`} ${h < 12 ? 'AM' : 'PM'}`;
+    return `${days} at ${time}`;
+  };
 
   // The "when" of a timed task that has no due date: the reminder time itself
   // ("Today 4:20 PM", "Sep 24, 9:00 AM"). A task you just timed should never
@@ -543,8 +547,9 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                           are (priority, when, type) onto a second line. It's still
                           editable in the task details. */}
 
-                      {/* Show interval badge for recurring reminders */}
-                      {task.reminder_interval && task.reminder_interval !== 'once' && (
+                      {/* Show interval badge for recurring reminders (not on a repeating
+                          task — its repeat pill below says when it happens) */}
+                      {task.reminder_interval && task.reminder_interval !== 'once' && !isRepeating(task) && (
                         <Popover>
                           <PopoverTrigger asChild>
                             <button 
@@ -570,8 +575,9 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                         </Popover>
                       )}
 
-                      {/* Due date option for recurring (interval) reminders */}
-                      {task.reminder_interval && task.reminder_interval !== 'once' && (
+                      {/* Due date option for recurring (interval) reminders. None on a
+                          repeating task's closed card — its day is in the details. */}
+                      {task.reminder_interval && task.reminder_interval !== 'once' && !isRepeating(task) && (
                         task.due_date ? (
                           <Popover>
                             <PopoverTrigger asChild>
@@ -616,16 +622,10 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                             <PopoverTrigger asChild>
                               <button 
                                 onClick={(e) => e.stopPropagation()}
-                                className={isRepeating(task) && task.next_reminder
-                                  ? `flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
-                                      theme === 'dark'
-                                        ? 'bg-purple-900 text-purple-300 border-purple-700 hover:bg-purple-800'
-                                        : 'border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100'
-                                    }`
-                                  : "flex items-center gap-1 border border-dashed border-gray-300 px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors text-gray-500"}
+                                className="flex items-center gap-1 border border-dashed border-gray-300 px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors text-gray-500"
                               >
                                 <CalendarClock className="w-3 h-3" />
-                                {isRepeating(task) && task.next_reminder ? occurrenceDay(task.next_reminder) : 'Add Due Date'}
+                                Add Due Date
                               </button>
                             </PopoverTrigger>
                             <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`} onClick={(e) => e.stopPropagation()}>
@@ -659,7 +659,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
 
                       {/* Due date pill for one-time and no-reminder TASKS — THE prominent date on the closed card.
                           Events and birthdays have their own date treatment above/below. */}
-                      {!isEvent(task) && !isBirthdayTask(task) && (!task.reminder_interval || task.reminder_interval === 'once') && (
+                      {!isEvent(task) && !isBirthdayTask(task) && !isRepeating(task) && (!task.reminder_interval || task.reminder_interval === 'once') && (
                         task.due_date ? (
                           <Popover>
                             <PopoverTrigger asChild>
@@ -747,9 +747,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                           <RefreshCw className="w-3 h-3" />
                           {task.recurrence_pattern === 'yearly' && task.birthday_person
                             ? `🎂 ${task.birthday_person}'s birthday`
-                            : (task.recurrence_pattern === 'weekly' && Array.isArray(task.recurrence_days) && task.recurrence_days.length
-                              ? task.recurrence_days.map((n) => ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][n]).filter(Boolean).join(', ')
-                              : String(task.recurrence_pattern).replace(/_/g, ' '))}
+                            : repeatScheduleLabel(task)}
                         </span>
                       )}
 
