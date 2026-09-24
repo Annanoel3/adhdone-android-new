@@ -15,7 +15,9 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { Zap, LayoutGrid, Bell, AlarmClock, Check } from 'lucide-react';
+import { Zap, LayoutGrid, Bell, AlarmClock, Check, Moon } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { base44 } from '@/api/base44Client';
 import {
   ONBOARDING_STEPS,
@@ -27,7 +29,9 @@ import {
   waitForCalm,
   enterOnboardingSurface,
   exitOnboardingSurface,
+  usePopupTurn,
 } from '@/components/onboarding/onboardingSurface';
+import { seenKey } from '@/components/onboarding/tourVersion';
 import {
   setAlarmMode,
   refreshAlarms,
@@ -1060,6 +1064,160 @@ export function AlarmKeepPrompt({ user, theme }) {
         <p className={`text-xs pt-1 ${dark ? 'text-gray-500' : 'text-gray-500'}`}>
           Either way, you can change this anytime in Settings.
         </p>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// "Here are your quiet hours: keep them or change them." Asked once, and only
+// of an account whose profile has quiet_hours_review_pending set — that is set
+// by hand from the dashboard, never by the app. It shows at the start of an
+// app open; if the Tasks walkthrough (PageIntroTour) is due in the same open,
+// it goes right after that instead. Saving works exactly like Settings → Quiet
+// Hours. Either answer, or closing it, clears the flag so it never comes back.
+const hhmmLabel = (hhmm) => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
+  if (!m) return hhmm;
+  const h = Number(m[1]);
+  return `${h % 12 || 12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`;
+};
+
+export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
+  const dark = theme === 'dark';
+  const [wanted, setWanted] = useState(false);
+  const [start, setStart] = useState('22:00');
+  const [end, setEnd] = useState('08:00');
+  const [was, setWas] = useState({ start: '22:00', end: '08:00' });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const shown = usePopupTurn(wanted);
+  const pageRef = useRef(currentPageName);
+  pageRef.current = currentPageName;
+  const checked = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  useEffect(() => {
+    // Once per app open. Not restarted or cancelled when the account record
+    // is refreshed mid-wait (that happens often) — only if this goes away.
+    if (!user || checked.current) return;
+    checked.current = true;
+    if (user.quiet_hours_review_pending !== true) return;
+    const s = user.quiet_hours_start || '22:00';
+    const e = user.quiet_hours_end || '08:00';
+    setStart(s);
+    setEnd(e);
+    setWas({ start: s, end: e });
+    // The Tasks walkthrough opens on its own the first app open after setup,
+    // from Home. Same test it uses; when it's due, wait for it to open (it
+    // marks itself seen as it does), and the turn below then waits for it to
+    // close.
+    const walkthroughDue =
+      !localStorage.getItem(seenKey('Tasks')) &&
+      isStepDone(ONBOARDING_STEPS.welcome) &&
+      isStepDone(ONBOARDING_STEPS.homeTour) &&
+      isStepDone(ALERT_STYLE_STEP) &&
+      (!!user.about_me || isStepDone(ONBOARDING_STEPS.catchUp)) &&
+      pageRef.current === 'Home';
+    (async () => {
+      if (walkthroughDue) {
+        const began = Date.now();
+        while (mounted.current && !localStorage.getItem(seenKey('Tasks')) && Date.now() - began < 30000) {
+          await new Promise((r) => setTimeout(r, 500));
+        }
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      if (mounted.current) setWanted(true);
+    })();
+  }, [user]);
+
+  const finish = async (save) => {
+    setSaving(true);
+    setError('');
+    try {
+      if (save) {
+        const enabled = user?.quiet_hours_enabled !== false;
+        localStorage.setItem('quiet_hours_enabled', enabled ? 'true' : 'false');
+        localStorage.setItem('quiet_hours_start', start);
+        localStorage.setItem('quiet_hours_end', end);
+        await base44.auth.updateMe({
+          quiet_hours_enabled: enabled,
+          quiet_hours_start: start,
+          quiet_hours_end: end,
+          quiet_hours_review_pending: false,
+        });
+        if (enabled) {
+          await base44.functions.invoke('applyQuietHours', { quietStart: start, quietEnd: end }).catch(() => {});
+        }
+        // Same as Settings: nothing booked on the phone may ring inside the
+        // new window.
+        refreshAlarms().catch(() => {});
+      } else {
+        await base44.auth.updateMe({ quiet_hours_review_pending: false });
+      }
+      setWanted(false);
+    } catch (e) {
+      setError("Couldn't save that. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const changed = start !== was.start || end !== was.end;
+
+  return (
+    <Dialog open={shown} onOpenChange={(o) => { if (!o && !saving) finish(false); }}>
+      <DialogContent className={`max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
+        <DialogHeader>
+          <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
+            <Moon className="w-5 h-5" />
+            Your quiet hours
+          </DialogTitle>
+          <DialogDescription className={dark ? 'text-gray-400' : ''}>
+            Reminders and alarms stay silent during your quiet hours. Right now yours
+            are {hhmmLabel(was.start)} to {hhmmLabel(was.end)}, so a reminder can come as
+            early as {hhmmLabel(was.end)}. Want to change them?
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <Label htmlFor="qh-review-start" className={dark ? 'text-gray-200' : ''}>Quiet from</Label>
+            <Input
+              id="qh-review-start"
+              type="time"
+              value={start}
+              onChange={(e) => setStart(e.target.value)}
+              className={dark ? 'bg-gray-700 text-white border-gray-600' : ''}
+            />
+          </div>
+          <div>
+            <Label htmlFor="qh-review-end" className={dark ? 'text-gray-200' : ''}>Until</Label>
+            <Input
+              id="qh-review-end"
+              type="time"
+              value={end}
+              onChange={(e) => setEnd(e.target.value)}
+              className={dark ? 'bg-gray-700 text-white border-gray-600' : ''}
+            />
+          </div>
+        </div>
+
+        {error && <p className="text-xs text-red-500">{error}</p>}
+        <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
+          You can change these any time in Settings.
+        </p>
+        <div className="flex gap-2 pt-1">
+          <Button variant="outline" onClick={() => finish(false)} disabled={saving} className="flex-1">
+            Keep these
+          </Button>
+          <Button onClick={() => finish(true)} disabled={saving || !changed || !start || !end} className="flex-1">
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
