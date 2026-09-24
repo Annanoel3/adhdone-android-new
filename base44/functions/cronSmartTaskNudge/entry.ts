@@ -148,7 +148,37 @@ Deno.serve(async (req) => {
 
       let schedule: any[] = user.smart_nudge_schedule || [];
 
-      if (!hasValidSchedule) {
+      // A second look. The day's plan is made once, so when every nudge in it
+      // has gone out and a task it nudged is still open, nothing else came for
+      // the rest of the day — the planner never found out its nudge didn't do
+      // the job (a new user's "take my Zoloft" got one morning nudge, then
+      // silence). So once today's plan has run out, a task it nudged is still
+      // open, the last nudge was at least 3 hours ago and there's an hour or
+      // more before quiet hours, the planner is asked again. It sees those
+      // tasks as already nudged and decides for itself whether a check-in is
+      // worth it. At most once every 3 hours.
+      const THREE_HOURS = 3 * 60 * 60 * 1000;
+      const todaysEntries = schedule.filter((e: any) =>
+        e.send_at && getLocalDateString(new Date(e.send_at), timeZone) === todayStr);
+      const openTaskIds = new Set(tasksByUser[email].map((t: any) => t.id));
+      const planRanOut = todaysEntries.length > 0 && todaysEntries.every((e: any) => e.sent);
+      const nudgedStillOpen = todaysEntries.some((e: any) =>
+        e.sent && !e.skipped_reason &&
+        ((e.task_ids && e.task_ids.length) ? e.task_ids : [e.task_id]).some((id: string) => id && openTaskIds.has(id)));
+      const lastSentMs = Math.max(0, ...todaysEntries
+        .filter((e: any) => e.sent_at && !e.skipped_reason)
+        .map((e: any) => Date.parse(e.sent_at) || 0));
+      const lastPlannedMs = Date.parse(user.smart_nudge_planned_at || '') || 0;
+      const nowLocalMin = localMinutesOfDay(now, timeZone);
+      const minsBeforeQuiet = (startMin !== endMin && startMin > nowLocalMin)
+        ? startMin - nowLocalMin
+        : 24 * 60 - nowLocalMin;
+      const secondLook = hasValidSchedule && planRanOut && nudgedStillOpen &&
+        now.getTime() - lastSentMs >= THREE_HOURS &&
+        now.getTime() - lastPlannedMs >= THREE_HOURS &&
+        minsBeforeQuiet >= 60;
+
+      if (!hasValidSchedule || secondLook) {
         const allUserTasks = tasksByUser[email];
 
         // Get already-nudged task titles (from existing schedule entries with sent=true)
@@ -176,7 +206,17 @@ Deno.serve(async (req) => {
           user.commute_avoid_tolls === true
         );
 
-        if (!newEntries || newEntries.length === 0) continue;
+        if (!newEntries || newEntries.length === 0) {
+          // Nothing more today: note the look so it isn't asked again every run.
+          if (secondLook) {
+            try {
+              await base44.asServiceRole.entities.User.update(user.id, { smart_nudge_planned_at: now.toISOString() });
+            } catch (e) {
+              console.error(`[SMART NUDGE] Failed to note second look for ${email}:`, e);
+            }
+          }
+          continue;
+        }
 
         // Merge: keep sent entries (for history/dedup), add new ones
         const sentEntries = schedule.filter((e: any) => e.sent);
@@ -187,6 +227,7 @@ Deno.serve(async (req) => {
             smart_nudge_schedule: schedule,
             smart_nudge_schedule_date: todayStr,
             smart_nudge_schedule_dirty: false,
+            smart_nudge_planned_at: now.toISOString(),
           });
           schedulesGenerated++;
           console.log(`[SMART NUDGE] Generated schedule for ${email}: ${newEntries.length} nudges`);
