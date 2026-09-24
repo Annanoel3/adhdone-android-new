@@ -201,7 +201,9 @@ export function alertStyleFor(task, userDefault = alarmMode) {
 //  - a task with no schedule rings at its one booked push time
 //    (next_reminder), with the copy that push was given;
 //  - a day-only task's next_reminder is just a 9 AM anchor, not a push, so it
-//    is never an alarm — its real pushes are in the schedule.
+//    is never an alarm — its real pushes are in the schedule;
+//  - a "by 5 PM" deadline's next_reminder is the deadline itself, which is
+//    never booked as a push either (too late then) — only its schedule rings.
 function reminderMomentsFor(task) {
   const out = new Map();
   const schedule = (task.reminder_schedule || []).filter((r) => r && r.send_at);
@@ -210,7 +212,7 @@ function reminderMomentsFor(task) {
     if (isNaN(t) || out.has(t)) continue;
     out.set(t, { at: t, heading: r.notification_title || '', body: r.notification_body || '' });
   }
-  if (schedule.length === 0 && task.next_reminder && !task.day_only_task) {
+  if (schedule.length === 0 && task.next_reminder && !task.day_only_task && task.deadline_style !== 'by') {
     const t = new Date(task.next_reminder).getTime();
     if (!isNaN(t) && !out.has(t)) {
       let copy = { title: '', body: '' };
