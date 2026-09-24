@@ -1130,7 +1130,7 @@ Return JSON:
         status: 'completed',
         completed_at: localISOString,
         onesignal_notification_ids: [] // Clear notification IDs as reminders are cancelled
-      }).catch(error => {
+      }).then(() => refreshAlarms()).catch(error => {
         console.error("Error completing task:", error);
       });
 
@@ -1895,6 +1895,7 @@ Return JSON:
           converted_to_task: false
         });
         await base44.entities.Task.delete(task.id);
+        refreshAlarms().catch(() => {});
       } catch (error) {
         console.error("Error converting to parking lot:", error);
       }
