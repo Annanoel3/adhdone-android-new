@@ -12,10 +12,10 @@ import { base44 } from "@/api/base44Client";
 export function isInQuietHours(dateTime) {
   // RULES.md hard rule 4: quiet hours default to ON. Only an explicit 'false'
   // (the user turned them off) disables them — a missing value must never read
-  // as "off". The defaults match the server and the Layout (22:00–07:00).
+  // as "off". The defaults match the server and the Layout (22:00–08:00).
   if (localStorage.getItem('quiet_hours_enabled') === 'false') return false;
   const quietStart = localStorage.getItem('quiet_hours_start') || '22:00';
-  const quietEnd = localStorage.getItem('quiet_hours_end') || '07:00';
+  const quietEnd = localStorage.getItem('quiet_hours_end') || '08:00';
   
   const date = new Date(dateTime);
   const hours = date.getHours();
@@ -42,7 +42,7 @@ function adjustForQuietHours(dateTime) {
   let adjustedTime = new Date(dateTime);
   
   while (isInQuietHours(adjustedTime)) {
-    const quietEnd = localStorage.getItem('quiet_hours_end') || '07:00';
+    const quietEnd = localStorage.getItem('quiet_hours_end') || '08:00';
     const [endHour, endMin] = quietEnd.split(':').map(Number);
     
     // Jump to the end of quiet hours
