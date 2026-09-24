@@ -3,6 +3,11 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
+
+    // Diagnostic only; nothing in the app calls it. It reads every task with
+    // admin rights and hands back a full sample record, so admins only.
+    const me = await base44.auth.me().catch(() => null);
+    if (me?.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 });
     
     console.log('Testing task access...');
     
