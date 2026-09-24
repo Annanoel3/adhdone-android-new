@@ -201,6 +201,45 @@ export default async function(req) {
       return Response.json({ reminders });
     }
 
+    // ── Deadlines with a clock time ("have it in by 5 PM") ────────────────
+    // Same split as a "by [day]" deadline: the run-up is the smart nudge
+    // cron's — it sees the deadline and the time left and weighs it against
+    // everything else. What stays here is the safety net that goes out even
+    // if the cron doesn't: the evening before and the morning of when the
+    // deadline is on a later day, and about an hour before the deadline
+    // itself. Never a reminder AT the deadline — by then it's too late to
+    // start; from that moment the cron treats it as overdue.
+    const isClockDeadline = !dayOnly && deadlineStyle === 'by' && classification !== 'event';
+    if (isClockDeadline && !wish) {
+      const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
+      const byTime = scheduled.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' });
+      const reminders = [];
+      if (!isSameDay) {
+        reminders.push({
+          days_before: 1, hour: 18, minute: 0, relative_minutes_before: null,
+          label: 'day before deadline',
+          notification_title: `Due tomorrow ⏳ ${t}`,
+          notification_body: `Heads up — "${t}" is due by ${byTime} tomorrow. Even a small start counts. ✨`,
+        });
+        if (scheduledLocal.hour >= 11) {
+          reminders.push({
+            days_before: 0, hour: 9, minute: 0, relative_minutes_before: null,
+            label: 'deadline day',
+            notification_title: `Deadline day 🔔 ${t}`,
+            notification_body: `"${t}" is due by ${byTime} today. You've got this! 💪`,
+          });
+        }
+      }
+      reminders.push({
+        days_before: null, hour: null, minute: null, relative_minutes_before: 60,
+        label: '1 hour before deadline',
+        notification_title: `One hour left ⏳ ${t}`,
+        notification_body: `"${t}" is due by ${byTime} — about an hour to go. You've got this! 💪`,
+      });
+      console.log(`[generateReminderSchedule] Clock-deadline safety net for "${title}" (${priority}) — ${reminders.length} reminder(s); run-up handled by smart cron (no LLM call)`);
+      return Response.json({ reminders });
+    }
+
     const humanTime = (d) => d.toLocaleString('en-US', {
       timeZone: tz,
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -230,6 +269,7 @@ ${isDeadline ? `CRITICAL DEADLINE RULE: The user said this must be done BY ${sch
 - ALWAYS include a reminder the day before (days_before: 1) and one on the due day (days_before: 0).
 - Every reminder spends some of the person's patience; the priority says how much of it this task is worth. A low one gets little beyond the day before and the due day; an urgent one can be reminded on every day of the run-up. Escalate the tone as the deadline gets close.
 - The body should reference how much time is LEFT ("you've got about a week", "this is due tomorrow") and, for bigger tasks, nudge toward a small first step.
+` : ''}${isClockDeadline ? `CLOCK DEADLINE: the user said this must be done BY ${scheduledStr} — the work fits anywhere before that time. Every reminder goes before it, leaving enough time to actually do it; none at the deadline itself.
 ` : ''}${classification === 'event' ? 'CRITICAL EVENT RULE: This is an EVENT (a scheduled occurrence the user attends — meeting, concert, appointment, party, class, meetup). NEVER schedule a reminder AFTER the event start time. The event is over once it starts — a "coming up in an hour" reminder 4 hours after the event is useless and confusing. All reminders must fire BEFORE the scheduled time. If the event time has already passed, do NOT schedule any reminders at all.' : ''}
 
 Based on ADHD research and behavioral psychology, determine the optimal reminder schedule for this specific task.
@@ -447,7 +487,8 @@ Examples:
             : `Coming up in about an hour: "${t}". Time to start wrapping up! ✨`,
         });
       }
-      if (!hasAtTime && scheduled > now) {
+      // A clock deadline ("by 5") gets nothing AT the deadline — too late then.
+      if (!hasAtTime && scheduled > now && !isClockDeadline) {
         reminders.push({
           days_before: null, hour: null, minute: null, relative_minutes_before: 0,
           label: 'at the time',
