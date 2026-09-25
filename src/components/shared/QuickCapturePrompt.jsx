@@ -1278,11 +1278,10 @@ const NEWEST_BUILD_ON_PLAY = true; // 1.3.9 approved on Play, Sep 2026
 // even on a phone that already has the newest build, so she can look at it.
 // Delete this list and the `preview` checks below once she has.
 const UPDATE_PREVIEW_EMAILS = ['s2kap2chick@gmail.com'];
-// Switch to true once 1.3.12 is out on Google Play to everyone. It becomes the
-// newest build then (the one that can tell silent mode and Do Not Disturb
-// apart for vibrate-only alarms), so 1.3.9-1.3.11 phones get this same popup
-// too, and it offers that choice. Until then the newest build is 1.3.9.
-const QUIET_CHOICE_ON_PLAY = false;
+// 1.3.12 is the newest build (the one that can tell silent mode and Do Not
+// Disturb apart for vibrate-only alarms), so 1.3.9-1.3.11 phones get this same
+// popup too, and it offers that choice. Approved on Google Play Sep 25, 2026.
+const QUIET_CHOICE_ON_PLAY = true;
 const hasQuietHoursBuild = () =>
   typeof window !== 'undefined' &&
   typeof window.Capacitor?.Plugins?.AlarmBridge?.quietFor === 'function';
