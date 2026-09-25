@@ -96,17 +96,15 @@ async function scheduleOneSignalNotification(email, title, body, sendAfterIsoStr
 // on the phone. When that happens the owner's phone gets a silent message
 // (nothing shows, no sound) that takes this task's alarms off it. The phone
 // ignores it if the app has already rebuilt its alarm list since the change.
-// Only sent when the task could have alarms at all; builds before 1.3.9 simply
-// ignore it.
+// From 1.3.13 the same message also takes the task's reminders out of the
+// notification shade, including one that was already on its way when the task
+// was checked off (a push booked for that same minute), so it goes to every
+// owner, not only alarm users. Builds before 1.3.9 simply ignore it.
 async function dropPhoneAlarms(base44, task, taskId) {
   if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY || !taskId) return;
   const email = task?.created_by;
-  if (!email || task?.alert_style === 'notification') return;
+  if (!email) return;
   try {
-    if (task?.alert_style !== 'alarm') {
-      const owners = await base44.asServiceRole.entities.User.filter({ email });
-      if (owners?.[0]?.alarm_mode !== 'alarm') return;
-    }
     const response = await fetch('https://onesignal.com/api/v1/notifications', {
       method: 'POST',
       headers: {
@@ -121,7 +119,7 @@ async function dropPhoneAlarms(base44, task, taskId) {
         // A data-only push: no title or text, so nothing is shown.
         // The name is only for the OneSignal dashboard (never shown to anyone),
         // where a push with no title is otherwise listed as "Untitled Message".
-        name: "Silent: remove a finished task's alarms from the phone",
+        name: "Silent: remove a finished task's alarms and reminders from the phone",
         content_available: true,
         // High priority. At normal priority a sleeping phone's battery saver
         // (Doze) can hold this until its next wake-up, and by then the alarm
