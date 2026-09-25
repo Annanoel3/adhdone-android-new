@@ -184,6 +184,16 @@ export default function Tasks() {
           : t
     ));
 
+    // Its booked reminders are cancelled from here straight away, as Home and
+    // the details card do. The server cancels them too, but only once the save
+    // has landed and its clean-up has started, and a reminder booked for this
+    // very minute (an hourly "keep reminding me" ping) went out in between.
+    if (task.onesignal_notification_ids?.length) {
+      import('../components/utils/reminderScheduler')
+        .then(({ cancelScheduledReminder }) => cancelScheduledReminder(task.onesignal_notification_ids))
+        .catch((error) => console.error("Failed to cancel reminders:", error));
+    }
+
     // Save + side effects in the background
     (async () => {
       try {
