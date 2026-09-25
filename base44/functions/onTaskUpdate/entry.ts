@@ -384,19 +384,11 @@ async function handleTaskEvent(req: Request): Promise<Response> {
     // notifications in OneSignal that fire long after completion.
     if (data.status === 'completed') {
       console.log('[onTaskUpdate] Task completed — cancelling all notifications and clearing scheduling fields');
-      // Once, on the change itself — not again when the clean-up write below
-      // re-triggers this function with the task already completed.
-      if (old_data?.status && old_data.status !== 'completed') {
-        await dropPhoneAlarms(base44, { ...old_data, ...data }, event.entity_id);
-      }
       // Fall back to old_data IDs when the update cleared them — otherwise the
       // real OneSignal notifications would be orphaned and keep firing forever.
       const ids = (data.onesignal_notification_ids?.length
         ? data.onesignal_notification_ids
         : (old_data?.onesignal_notification_ids || []));
-      for (const notificationId of ids) {
-        await cancelOneSignalNotification(notificationId);
-      }
 
       // Also cancel one-time/event reminders stored in reminder_schedule —
       // these are separate OneSignal notification IDs that are NOT in
@@ -405,20 +397,31 @@ async function handleTaskEvent(req: Request): Promise<Response> {
       const scheduleEntries = (data.reminder_schedule?.length
         ? data.reminder_schedule
         : (old_data?.reminder_schedule || []));
-      for (const entry of scheduleEntries) {
-        if (entry?.notification_id) {
-          await cancelOneSignalNotification(entry.notification_id);
-        }
-      }
 
       // Focus Mode check-ins are tracked in their own field — a task finished
       // mid-focus must not keep pinging "How's it going?".
       const focusCheckinIds = (data.focus_mode_notification_ids?.length
         ? data.focus_mode_notification_ids
         : (old_data?.focus_mode_notification_ids || []));
-      for (const notificationId of focusCheckinIds) {
-        await cancelOneSignalNotification(notificationId);
-      }
+
+      // All at once, not one after another. A "keep reminding me" task holds
+      // up to twenty booked pushes (the new batch and the one before it), and
+      // cancelling them in turn took seconds, while a push booked for that
+      // same minute could still go out ("Take Pills" checked off at 5:00 PM
+      // still got its 5:00 PM push).
+      const toCancel = new Set<string>([
+        ...ids,
+        ...scheduleEntries.map((e: any) => e?.notification_id).filter(Boolean),
+        ...focusCheckinIds,
+      ]);
+      await Promise.all([
+        // Once, on the change itself — not again when the clean-up write below
+        // re-triggers this function with the task already completed.
+        ...(old_data?.status && old_data.status !== 'completed'
+          ? [dropPhoneAlarms(base44, { ...old_data, ...data }, event.entity_id)]
+          : []),
+        ...[...toCancel].map((notificationId) => cancelOneSignalNotification(notificationId)),
+      ]);
 
       // GUARD: Only update if there's actually something to clear. Without this,
       // the Task.update() call below re-triggers this very automation (entity
