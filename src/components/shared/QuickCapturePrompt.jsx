@@ -1383,6 +1383,18 @@ export function AppUpdatePrompt({ user, theme }) {
   const update = async () => {
     trackFire('update_prompt', { props: { action: 'update' } });
     const NotifyBridge = window.Capacitor?.Plugins?.NotifyBridge;
+    // 1.3.12+: Google Play's own update screen, right here in the app.
+    if (typeof NotifyBridge?.startAppUpdate === 'function') {
+      try {
+        const r = await NotifyBridge.startAppUpdate();
+        if (r?.result === 'started') {
+          setWanted(false);
+          return;
+        }
+        // Backed out of Play's screen: leave this card up.
+        if (r?.result === 'cancelled') return;
+      } catch (e) { /* the Play Store page instead */ }
+    }
     if (typeof NotifyBridge?.openPlayStore === 'function') {
       try {
         await NotifyBridge.openPlayStore();
