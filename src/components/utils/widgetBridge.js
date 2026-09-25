@@ -279,6 +279,8 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
   const out = [];
   for (const t of tasks || []) {
     if (t.status !== 'active' || t.silenced) continue;
+    // A step never reminds on its own — its parent task does (RULES.md §5).
+    if (t.parent_task_id) continue;
     if (alertStyleFor(t, userDefault) !== 'alarm') continue;
     for (const m of reminderMomentsFor(t)) {
       if (m.at <= cutoff) continue;
@@ -355,12 +357,32 @@ export async function pushAlarms(tasks) {
   }
 }
 
+// EVERY active task, a page at a time (the same paging the Calendar uses).
+// The alarm set used to be built from the 500 most recently edited tasks,
+// finished ones included — and native cancels every alarm missing from the
+// set, so once finished tasks filled those 500, older active tasks silently
+// lost their alarms.
+export async function listActiveTasks() {
+  const PAGE = 200;
+  const all = [];
+  const seen = new Set();
+  for (let skip = 0; skip < 5000; skip += PAGE) {
+    const page = (await base44.entities.Task.filter({ status: 'active' }, '-updated_date', PAGE, skip)) || [];
+    let added = 0;
+    for (const t of page) {
+      if (!seen.has(t.id)) { seen.add(t.id); all.push(t); added++; }
+    }
+    if (page.length < PAGE || added === 0) break;
+  }
+  return all;
+}
+
 // Re-reads the task list and pushes the alarm set. For screens that change a
 // task's alert style or the user's default and aren't Home.
 export async function refreshAlarms() {
   if (!window.Capacitor?.Plugins?.AlarmBridge || alarmMode === null) return;
   try {
-    const tasks = await base44.entities.Task.list('-updated_date', 500);
+    const tasks = await listActiveTasks();
     await pushAlarms(tasks);
   } catch (err) {
     console.error('Alarm refresh failed:', err);
