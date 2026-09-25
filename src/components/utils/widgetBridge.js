@@ -503,6 +503,38 @@ export async function pushEventWindows(tasks) {
   }
 }
 
+// Which quiet the vibrate-only choice covers (User.alarm_quiet_when): 'silent'
+// (ringer on silent or vibrate), 'dnd' (Do Not Disturb), 'both', or 'off'
+// (always ring out loud). Builds from 1.3.12 can tell silent and Do Not
+// Disturb apart (AlarmBridge.setQuietWhen); older ones only take on/off, and
+// there every "on" means both.
+export const QUIET_WHEN_CHOICES = ['silent', 'dnd', 'both'];
+
+export function alarmQuietWhenSupported() {
+  return typeof window.Capacitor?.Plugins?.AlarmBridge?.setQuietWhen === 'function';
+}
+
+// The phone's setting from the account: 'off' unless vibrate-only is on.
+export function quietWhenFor(user) {
+  if (!user?.alarm_vibrate_when_quiet) return 'off';
+  return QUIET_WHEN_CHOICES.includes(user.alarm_quiet_when) ? user.alarm_quiet_when : 'both';
+}
+
+export async function pushAlarmQuietWhen(when) {
+  const w = QUIET_WHEN_CHOICES.includes(when) ? when : 'off';
+  const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
+  if (typeof AlarmBridge?.setQuietWhen === 'function') {
+    try {
+      await AlarmBridge.setQuietWhen({ when: w });
+      return true;
+    } catch (err) {
+      console.warn('[alarm] setQuietWhen failed:', err?.message || err);
+      return false;
+    }
+  }
+  return pushAlarmQuietVibrate(w !== 'off');
+}
+
 export async function pushAlarmQuietVibrate(on) {
   const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
   if (typeof AlarmBridge?.setQuietVibrate !== 'function') return false;
