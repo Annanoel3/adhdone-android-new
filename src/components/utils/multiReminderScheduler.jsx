@@ -1,10 +1,12 @@
 // LLM-powered multi-reminder scheduler.
-// Calls the generateReminderSchedule backend function (which uses InvokeLLM
-// with ADHD-focused prompt) to determine the optimal reminder schedule for
+// Calls the generateReminderSchedule backend function (OpenAI, never Base44's
+// LLM — RULES.md §1) with an ADHD-focused prompt to determine the optimal reminder schedule for
 // any task. Results are cached by title in localStorage (24h TTL) since the
 // minutes_before values are title-dependent, not date-dependent.
 
-import { scheduleReminder, resolveSendTime } from './reminderScheduler';
+import { scheduleReminder, resolveSendTime, cancelScheduledReminder } from './reminderScheduler';
+import { getReminderCopy } from './reminderCopy';
+import { commitNotificationIds } from './notificationOwnership';
 import { base44 } from '@/api/base44Client';
 
 // ── localStorage cache (24h TTL) ─────────────────────────────────────────────
@@ -255,4 +257,74 @@ export async function scheduleMultiReminders({
     console.error('[multiReminderScheduler] Error:', error);
     return null;
   }
+}
+
+/**
+ * Moves a one-time task's reminders to a new date: every push booked for the
+ * old one is cancelled, `updates` (the new dates) are saved, and a fresh plan
+ * is booked for `whenISO` — or, when no plan comes back, the single reminder
+ * a new task would get (same fallback as task creation). Shared by the
+ * details card's due-date pill and the Home card's date pill, so a date
+ * changed in either place moves the reminders the same way. (The Home pill
+ * used to change due_date only, and every reminder kept going off for the
+ * old day.) Returns the ids now booked.
+ */
+export async function moveRemindersToDate(task, whenISO, updates = {}) {
+  const oldIds = Array.from(new Set([
+    ...(task.onesignal_notification_ids || []),
+    ...((task.reminder_schedule || []).map((r) => r?.notification_id)),
+  ])).filter((id) => id && !String(id).startsWith('planned_'));
+  if (oldIds.length > 0) {
+    await cancelScheduledReminder(oldIds);
+  }
+  await base44.entities.Task.update(task.id, {
+    ...updates,
+    onesignal_notification_ids: [],
+    reminder_schedule: [],
+  });
+  if (!whenISO) return [];
+
+  const currentUser = await base44.auth.me();
+  const dayOnly = !!task.day_only_task;
+  const multiIds = await scheduleMultiReminders({
+    email: currentUser.email,
+    title: task.title,
+    scheduledDateISO: whenISO,
+    taskId: task.id,
+    urgency: task.urgency,
+    classification: task.classification,
+    // An all-day task keeps its all-day plan (the night before, that day) —
+    // without this its 11:59 PM due time was planned as a clock time, with a
+    // push at 11:59 PM.
+    dayOnly,
+  });
+  if (multiIds) {
+    await commitNotificationIds(task.id, multiIds);
+    return multiIds;
+  }
+  // No plan came back. A "by 5 PM" deadline never gets a lone reminder AT
+  // the deadline (smart nudges own it), and an all-day task has no clock time.
+  if (dayOnly || task.deadline_style === 'by' || new Date(whenISO).getTime() <= Date.now() + 2 * 60 * 1000) {
+    return [];
+  }
+  let notificationId = null;
+  try {
+    notificationId = await scheduleReminder({
+      email: currentUser.email,
+      ...getReminderCopy({ ...task, ...updates }, new Date(whenISO)),
+      sendAtISO: whenISO,
+      taskId: task.id,
+      data: { screen: '/TaskNotification', taskId: task.id, urgency: task.urgency, type: 'task_reminder' },
+      buttons: [
+        { id: 'snooze_15', text: 'Snooze 15 min' },
+        { id: 'snooze_60', text: 'Snooze 1 hour' },
+        { id: 'complete', text: '✅ Done' },
+      ],
+    });
+  } catch (e) {
+    console.error('[multiReminderScheduler] Could not book the reminder for the new date:', e);
+  }
+  const ids = notificationId ? [notificationId] : [];
+  await commitNotificationIds(task.id, ids);
+  return ids;
 }
