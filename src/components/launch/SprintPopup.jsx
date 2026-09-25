@@ -21,10 +21,11 @@ const sessionDurationMs = (s) => (s && s.durationMs > 0 ? s.durationMs : 5 * 60 
 // The task timer on screen. It counts DOWN, with a ring that empties as time
 // passes: for ADHD, the usual advice is a visual timer that shows how much time
 // is left (the "Time Timer" idea), because time you can see is easier to track
-// than time you have to sense. "I'm done" is there the whole time. When it's
-// up: "Keep going" (Focus Mode on the task) or "I'm done", and a small counter
-// keeps adding the time spent past the end, so none of it goes uncounted.
-export default function SprintPopup({ session, ended, onComplete, onKeepGoing, onStop, onMinimize, theme, specialMode }) {
+// than time you have to sense. "I finished the task" (checks it off) and "Stop
+// working" (it stays open) are there the whole time. When it's up: "Keep
+// going" (Focus Mode on the task) or the same two, and a small counter keeps
+// adding the time spent past the end, so none of it goes uncounted.
+export default function SprintPopup({ session, ended, onComplete, onKeepGoing, onFinish, onStop, onMinimize, theme, specialMode }) {
   const surface = surfaceClasses(theme, specialMode);
   const muted = mutedText(theme, specialMode);
   const subtle = subtleText(theme, specialMode);
@@ -91,7 +92,7 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
       onOpenChange={(o) => {
         if (o) return;
         if (ended) return; // at the end, only the buttons close it
-        // Closing it tucks the timer away (it keeps running); "I'm done" stops it.
+        // Closing it tucks the timer away (it keeps running); the buttons stop it.
         onMinimize?.();
       }}
     >
@@ -125,12 +126,20 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
               </div>
             </div>
 
-            <button
-              onClick={onStop}
-              className={`w-full rounded-xl text-sm font-semibold py-2.5 mb-3 transition-colors ${outline}`}
-            >
-              I'm done
-            </button>
+            <div className="flex flex-col gap-2 mb-3">
+              <button
+                onClick={onFinish}
+                className={`w-full rounded-xl text-sm font-semibold py-2.5 transition-colors ${outline}`}
+              >
+                I finished the task
+              </button>
+              <button
+                onClick={onStop}
+                className={`w-full rounded-xl text-sm font-medium py-2.5 transition-colors ${outline}`}
+              >
+                Stop working
+              </button>
+            </div>
 
             {!timerAlarmsSupported() && (
               <KeepAppOpenNote className="mb-1" text="Keep the app open — closing it stops the timer." />
@@ -162,18 +171,24 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
               Keep going if you're on a roll, or stop here. Either way, you showed up.
             </p>
 
-            <div className="flex gap-3">
+            <div className="flex flex-col gap-2">
               <button
                 onClick={onKeepGoing}
-                className={`flex-1 rounded-xl text-sm font-semibold py-2.5 transition-colors ${primary}`}
+                className={`w-full rounded-xl text-sm font-semibold py-2.5 transition-colors ${primary}`}
               >
                 Keep going
               </button>
               <button
-                onClick={onStop}
-                className={`flex-1 rounded-xl text-sm font-medium py-2.5 transition-colors ${outline}`}
+                onClick={onFinish}
+                className={`w-full rounded-xl text-sm font-semibold py-2.5 transition-colors ${outline}`}
               >
-                I'm done
+                I finished the task
+              </button>
+              <button
+                onClick={onStop}
+                className={`w-full rounded-xl text-sm font-medium py-2.5 transition-colors ${outline}`}
+              >
+                Stop working
               </button>
             </div>
           </div>
