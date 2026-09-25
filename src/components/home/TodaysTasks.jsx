@@ -336,6 +336,30 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
       const minutes = existing ? existing.getMinutes() : 0;
       dueDateValue = new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString();
     }
+    // A one-time task whose pill shows its date: the reminders booked for
+    // the old day move with it — the same move the details card makes
+    // (moveRemindersToDate). This pill used to change due_date only, and every
+    // reminder kept going off for the old day. Removing the date, adding one
+    // to a task that only had a reminder time (a deadline, not a move), or a
+    // smart-reminder task (nothing booked) still just saves the date.
+    const booked = (task.onesignal_notification_ids || []).length > 0 || (task.reminder_schedule || []).length > 0;
+    if (dueDateValue && task.due_date && task.reminder_interval === 'once' && booked) {
+      const updates = { due_date: dueDateValue, next_reminder: dueDateValue };
+      if (onUpdateTask) onUpdateTask({ ...task, ...updates, reminder_schedule: [], onesignal_notification_ids: [] });
+      (async () => {
+        try {
+          const { moveRemindersToDate } = await import('../utils/multiReminderScheduler');
+          await moveRemindersToDate(task, dueDateValue, updates);
+          // The fresh record carries the new plan, and handing it back here
+          // also re-sends the phone's alarm set (see the effect above).
+          const fresh = await base44.entities.Task.get(task.id).catch(() => null);
+          if (fresh && onUpdateTask) onUpdateTask(fresh);
+        } catch (error) {
+          console.error("Error moving reminders to the new date:", error);
+        }
+      })();
+      return;
+    }
     if (onUpdateTask) onUpdateTask({ ...task, due_date: dueDateValue });
     base44.entities.Task.update(task.id, { due_date: dueDateValue }).catch(error => {
       console.error("Error updating due date:", error);
