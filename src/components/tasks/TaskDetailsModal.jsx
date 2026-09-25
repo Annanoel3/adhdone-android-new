@@ -68,6 +68,7 @@ import SmartDueDatePill from "./SmartDueDatePill";
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Cake } from "lucide-react";
+import { trackFire } from "@/lib/appTrack";
 
 // A task nagging at a rhythm ("at 10 am, keep reminding me until I do it")
 // has its next_reminder moved along with every ping, so next_reminder is when
@@ -191,24 +192,36 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
 
       // Self-heal tasks created before repeats and smart schedules were kept
       // separate: a repeating task must never carry a lead-time reminder plan,
-      // so drop it (and its live notifications) the first time it's opened.
+      // so drop the lead-time part (and its live notifications) the first time
+      // it's opened. The reminder AT the task's own time stays: that is the one
+      // reminder a repeating task is meant to have. (This used to cancel every
+      // push and book nothing, so just opening a repeating task silenced it.)
+      // Anything booked outside the plan (a snooze) is left alone too.
       // Never a birthday: it repeats yearly, but its schedule IS its reminders
       // (a week before, the day before, on the day) — this used to cancel them
       // every time a birthday was opened.
       if (task.recurrence_pattern && task.recurrence_pattern !== 'none' && getCurrentReminderType(task) !== 'birthday' && (task.reminder_schedule || []).length > 0) {
-        const staleIds = Array.from(new Set([
-          ...(task.onesignal_notification_ids || []),
-          ...task.reminder_schedule.map((r) => r.notification_id).filter(Boolean),
-        ]));
-        (async () => {
-          try {
-            if (staleIds.length > 0) await cancelScheduledReminder(staleIds).catch(() => {});
-            await Task.update(task.id, { reminder_schedule: [], onesignal_notification_ids: [] });
-            onUpdate({ ...task, reminder_schedule: [], onesignal_notification_ids: [] });
-          } catch (e) {
-            console.error('Failed to clear stale schedule on repeating task:', e);
-          }
-        })();
+        const ownTime = task.classification === 'event' ? (task.event_time || task.next_reminder) : task.next_reminder;
+        const ownMs = !task.day_only_task && ownTime ? new Date(ownTime).getTime() : NaN;
+        const isAtOwnTime = (r) => Number.isFinite(ownMs) && !!r?.send_at && Math.abs(new Date(r.send_at).getTime() - ownMs) < 60 * 1000;
+        const keep = task.reminder_schedule.filter(isAtOwnTime).slice(0, 1);
+        const leadTime = task.reminder_schedule.filter((r) => !keep.includes(r));
+        if (leadTime.length > 0) {
+          const staleIds = Array.from(new Set(
+            leadTime.map((r) => r?.notification_id).filter((id) => id && !String(id).startsWith('planned_'))
+          ));
+          const keptIds = (task.onesignal_notification_ids || []).filter((id) => !staleIds.includes(id));
+          (async () => {
+            try {
+              if (staleIds.length > 0) await cancelScheduledReminder(staleIds).catch(() => {});
+              await Task.update(task.id, { reminder_schedule: keep, onesignal_notification_ids: keptIds });
+              onUpdate({ ...task, reminder_schedule: keep, onesignal_notification_ids: keptIds });
+              refreshAlarms().catch(() => {});
+            } catch (e) {
+              console.error('Failed to clear stale schedule on repeating task:', e);
+            }
+          })();
+        }
       }
     }
   }, [task?.id, isOpen]);
@@ -231,6 +244,8 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
 
   const handleSubTaskToggle = async (subTask) => {
     const newStatus = subTask.status === 'completed' ? 'active' : 'completed';
+    // Counted, so we can see how often a finished step is taken back.
+    if (newStatus === 'active') trackFire('task_uncompleted', { props: { task_id: subTask.id, source: 'task_details_step' } });
     // Optimistic — update local state immediately
     setSubTasks(prev => prev.map(s => s.id === subTask.id ? { ...s, status: newStatus } : s));
     if (onUpdate) {
@@ -247,8 +262,6 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
     if (!newSubTask.trim() || !task) return;
 
     try {
-      const currentUser = await base44.auth.me();
-
       // Split by comma to support multiple subtasks
       const subtaskTitles = newSubTask.split(',').map(s => s.trim()).filter(s => s.length > 0);
 
@@ -260,45 +273,12 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
         urgency: task.urgency,
         energy_required: task.energy_required,
         status: 'active',
-        reminder_interval: task.reminder_interval,
+        reminder_interval: 'once',
         subtask_order: subTasks.length + i + 1,
       }));
       setSubTasks(prev => [...prev, ...tempSubTasks]);
       setNewSubTask("");
       if (onUpdate) onUpdate(task);
-
-      const now = new Date();
-      let nextReminder = new Date(now.getTime());
-      
-      switch (task.reminder_interval) {
-        case '10min':
-          nextReminder.setMinutes(nextReminder.getMinutes() + 10);
-          break;
-        case '20min':
-          nextReminder.setMinutes(nextReminder.getMinutes() + 20);
-          break;
-        case '30min':
-          nextReminder.setMinutes(nextReminder.getMinutes() + 30);
-          break;
-        case '1hour':
-          nextReminder.setHours(nextReminder.getHours() + 1);
-          break;
-        case '2hours':
-          nextReminder.setHours(nextReminder.getHours() + 2);
-          break;
-        case '4hours':
-          nextReminder.setHours(nextReminder.getHours() + 4);
-          break;
-        case 'daily':
-          nextReminder.setDate(nextReminder.getDate() + 1);
-          break;
-        case 'every_other_day':
-          nextReminder.setDate(nextReminder.getDate() + 2);
-          break;
-        default: // This includes 'once' or null interval
-          nextReminder = null;
-          break;
-      }
 
       // Create all subtasks in the background
       (async () => {
@@ -312,10 +292,12 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
               urgency: task.urgency,
               energy_required: task.energy_required,
               status: 'active',
-              reminder_interval: task.reminder_interval,
+              // Steps are a checklist — the parent task does all the
+              // reminding (same as SubtaskQuickAdd). A step given the
+              // parent's interval and a recipient got pushes of its own
+              // from the hourly refill.
+              reminder_interval: 'once',
               reminder_count: 0,
-              next_reminder: task.reminder_interval && task.reminder_interval !== 'once' && nextReminder ? nextReminder.toISOString() : null,
-              notification_recipient_email: currentUser.email
             });
           }
           // Re-fetch to replace temp subtasks with real ones
@@ -354,40 +336,6 @@ Return JSON:
       const result = await base44.functions.invoke('extractSubtasks', { prompt });
       const response = result?.data?.response;
 
-      const currentUser = await base44.auth.me();
-      const now = new Date();
-      let nextReminder = new Date(now.getTime());
-
-      switch (task.reminder_interval) {
-        case '10min':
-          nextReminder.setMinutes(nextReminder.getMinutes() + 10);
-          break;
-        case '20min':
-          nextReminder.setMinutes(nextReminder.getMinutes() + 20);
-          break;
-        case '30min':
-          nextReminder.setMinutes(nextReminder.getMinutes() + 30);
-          break;
-        case '1hour':
-          nextReminder.setHours(nextReminder.getHours() + 1);
-          break;
-        case '2hours':
-          nextReminder.setHours(nextReminder.getHours() + 2);
-          break;
-        case '4hours':
-          nextReminder.setHours(nextReminder.getHours() + 4);
-          break;
-        case 'daily':
-          nextReminder.setDate(nextReminder.getDate() + 1);
-          break;
-        case 'every_other_day':
-          nextReminder.setDate(nextReminder.getDate() + 2);
-          break;
-        default: // This includes 'once' or null interval
-          nextReminder = null;
-          break;
-      }
-
       const spoken = response.subtasks || [];
 
       // OPTIMISTIC: show the parsed steps right away, then create them in the
@@ -413,14 +361,12 @@ Return JSON:
           urgency: task.urgency,
           energy_required: task.energy_required,
           status: 'active',
-          reminder_interval: task.reminder_interval,
+          // Steps are a checklist — the parent task does all the reminding
+          // (same as SubtaskQuickAdd); no interval, time or recipient of
+          // their own, so nothing books pushes for them.
+          reminder_interval: 'once',
           reminder_count: 0,
-          next_reminder: task.reminder_interval && task.reminder_interval !== 'once' && nextReminder ? nextReminder.toISOString() : null,
-          notification_recipient_email: currentUser.email
         });
-
-        // Note: Recurring reminders are handled by cron job, not OneSignal
-        // Only one-time reminders (interval='once') should use OneSignal
       }
 
       await fetchSubTasks(task.id);
@@ -485,78 +431,77 @@ Return JSON:
     onUpdate({ ...task, title: editedTitle.trim() });
     setIsEditingTitle(false);
 
+    const newTitle = editedTitle.trim();
     try {
-      // If task has recurring reminders, cancel old notifications and reschedule with new title
-      if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0 && task.reminder_interval && task.reminder_interval !== 'once') {
-        try {
-          const currentUser = await base44.auth.me();
-
-          // Cancel existing scheduled notifications
-          await cancelScheduledReminder(task.onesignal_notification_ids);
-
-          // Reschedule with updated title
-          const intervalMs = {
-            '10min': 10 * 60 * 1000,
-            '20min': 20 * 60 * 1000,
-            '30min': 30 * 60 * 1000,
-            '1hour': 60 * 60 * 1000,
-            '2hours': 2 * 60 * 60 * 1000,
-            '4hours': 4 * 60 * 60 * 1000,
-            'daily': 24 * 60 * 60 * 1000,
-            'every_other_day': 2 * 24 * 60 * 60 * 1000,
-          };
-
-          if (intervalMs[task.reminder_interval] && task.next_reminder) {
-            const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
-            const { getReminderCopy } = await import('../utils/reminderCopy');
-            const { notificationIds: newNotificationIds } = await scheduleRecurringReminders({
-              email: currentUser.email,
-              ...getReminderCopy({ ...task, title: editedTitle.trim() }, task.next_reminder),
-              startTime: task.next_reminder,
-              intervalMs: intervalMs[task.reminder_interval],
-              count: 10,
-              taskId: task.id,
-              data: {
-                screen: "/TaskNotification",
-                taskId: task.id,
-                urgency: task.urgency,
-                type: 'task_reminder'
-              }
-            });
-
-            // Update with new notification IDs
-            Task.update(task.id, { 
-              title: editedTitle.trim(),
-              onesignal_notification_ids: newNotificationIds 
-            }).catch(error => {
-              console.error("Error updating task:", error);
-            });
-          }
-        } catch (error) {
-          console.error("Failed to reschedule notifications:", error);
-        }
+      if (task.reminder_interval && task.reminder_interval !== 'once') {
+        // A rhythm task ("every hour until I do it"): just save the title.
+        // onTaskUpdate re-books its pushes itself when the title changes
+        // (with quiet hours and the new name). Re-booking here as well booked
+        // ten pushes the server then cancelled, and the title was only saved
+        // after all ten — or never, when the task had no next_reminder.
+        Task.update(task.id, { title: newTitle }).catch(error => {
+          console.error("Error updating task title:", error);
+        });
       } else if (task.reminder_schedule && task.reminder_schedule.length > 0) {
-        // One-time / event task — cancel the LLM-decided reminder schedule and
-        // reschedule each entry at the same time with the updated title so the
-        // notification content stays in sync with the new title.
-        try {
-          const currentUser = await base44.auth.me();
-          const oldIds = Array.from(new Set([
-            ...(task.onesignal_notification_ids || []),
-            ...((task.reminder_schedule || []).map((r) => r.notification_id).filter(Boolean)),
-          ]));
-          if (oldIds.length > 0) {
-            await cancelScheduledReminder(oldIds);
+        // One-time / event task: every reminder still AHEAD is re-booked at
+        // the same moment with the new title, each in its own words (the
+        // task's name swapped inside them). Ones already sent stay as they
+        // were: re-booking a past time is refused, and that one refusal used
+        // to abort the whole loop — the title was never saved and every
+        // reminder after it was lost.
+        // The title is saved first, so nothing below can lose it.
+        await Task.update(task.id, { title: newTitle });
+
+        const oldTitle = (task.title || '').trim();
+        const short = (t) => (t.length > 40 ? `${t.slice(0, 37)}...` : t);
+        const renameIn = (text, isBody) => {
+          const src = String(text || '');
+          if (oldTitle.length >= 3 && src.includes(oldTitle)) return src.split(oldTitle).join(newTitle);
+          const oldShort = short(oldTitle);
+          if (oldShort !== oldTitle && src.includes(oldShort)) return src.split(oldShort).join(short(newTitle));
+          // Words that never named the task: keep them, and still say what
+          // the reminder is for.
+          if (isBody) return src ? `${newTitle}: ${src}` : newTitle;
+          const lead = ((src.match(/^[^\p{L}\p{N}]+/u) || [''])[0]).trim();
+          return `${lead || '📌'} ${newTitle}`;
+        };
+
+        let email = null;
+        try { email = (await base44.auth.me())?.email || null; } catch (e) { email = null; }
+        const soon = Date.now() + 2 * 60 * 1000;
+        const newSchedule = [];
+        const replacedIds = [];
+        const addedIds = [];
+        for (const entry of task.reminder_schedule) {
+          const sendMs = entry?.send_at ? new Date(entry.send_at).getTime() : NaN;
+          if (!Number.isFinite(sendMs) || sendMs <= soon) {
+            newSchedule.push(entry);
+            continue;
           }
-          const newSchedule = [];
-          const newIds = [];
-          for (const entry of task.reminder_schedule) {
-            const notificationId = await scheduleReminder({
-              email: currentUser.email,
-              title: `📌 ${editedTitle.trim()}`,
-              body: `You've got this! ${editedTitle.trim()}`,
+          const title = renameIn(entry.notification_title, false);
+          const body = renameIn(entry.notification_body, true);
+          const oldId = entry.notification_id || null;
+          // Not booked yet (planned far out) or parked on the Back Burner:
+          // only its words change — whoever books it later books these.
+          if (!oldId || String(oldId).startsWith('planned_') || task.silenced) {
+            newSchedule.push({ ...entry, notification_title: title, notification_body: body });
+            continue;
+          }
+          let newId = null;
+          try {
+            // The old push goes first: the send ledger turns away a second
+            // push for the same task at the same minute.
+            await cancelScheduledReminder([oldId]);
+            replacedIds.push(oldId);
+            newId = await scheduleReminder({
+              email,
+              title,
+              body,
               sendAtISO: entry.send_at,
               taskId: task.id,
+              // send_at is already the real send time (moved for quiet hours
+              // when it was first booked) — keep it exactly.
+              exact: true,
               data: {
                 screen: '/TaskNotification',
                 taskId: task.id,
@@ -569,31 +514,27 @@ Return JSON:
                 { id: 'complete', text: '✅ Done' },
               ],
             });
-            if (notificationId) {
-              newIds.push(notificationId);
-              newSchedule.push({
-                ...entry,
-                notification_id: notificationId,
-                notification_title: `📌 ${editedTitle.trim()}`,
-                notification_body: `You've got this! ${editedTitle.trim()}`,
-              });
-            } else {
-              newSchedule.push(entry);
-            }
+          } catch (error) {
+            console.error("Could not re-book one reminder with the new title:", error);
           }
-          Task.update(task.id, {
-            title: editedTitle.trim(),
-            reminder_schedule: newSchedule,
-            onesignal_notification_ids: newIds,
-          }).catch((error) => {
-            console.error("Error updating task:", error);
-          });
-        } catch (error) {
-          console.error("Failed to reschedule one-time reminders:", error);
+          if (newId) addedIds.push(newId);
+          // Saved even when the booking failed, with no id: the hourly refill
+          // books any schedule entry that has none.
+          newSchedule.push({ ...entry, notification_id: newId || null, notification_title: title, notification_body: body });
         }
+        // Anything booked outside the plan (a snooze) is kept.
+        const ids = [
+          ...(task.onesignal_notification_ids || []).filter((id) => !replacedIds.includes(id)),
+          ...addedIds,
+        ];
+        await Task.update(task.id, {
+          reminder_schedule: newSchedule,
+          onesignal_notification_ids: Array.from(new Set(ids)),
+        });
+        refreshAlarms().catch(() => {});
       } else {
         // Just update title if no recurring reminders
-        Task.update(task.id, { title: editedTitle.trim() }).catch(error => {
+        Task.update(task.id, { title: newTitle }).catch(error => {
           console.error("Error updating task title:", error);
         });
       }
@@ -911,7 +852,7 @@ Return JSON:
             onesignal_notification_ids: newNotificationIds,
             reminder_schedule: null,
             ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
-          }).catch(err => console.error("Error updating task:", err));
+          }).then(() => refreshAlarms()).catch(err => console.error("Error updating task:", err));
         } else {
           // One-time reminder — check for multi-reminder category first
           const { scheduleMultiReminders } = await import('../utils/multiReminderScheduler');
@@ -924,7 +865,6 @@ Return JSON:
             dayOnly,
           });
 
-          let scheduleData = null;
           if (multiIds) {
             newNotificationIds = multiIds;
           } else {
@@ -956,8 +896,13 @@ Return JSON:
             day_only_task: dayOnly,
             anchor_time: namedTime,
             onesignal_notification_ids: newNotificationIds,
-            reminder_schedule: scheduleData,
-          }).catch(err => console.error("Error updating task:", err));
+            // A plan that was booked has just been saved by the scheduler
+            // itself (reminder_schedule, with each entry's own id and time);
+            // writing null here right after wiped it, so the card lost its
+            // reminder list and a later rename or back-burner had nothing to
+            // work from. Only clear the old plan when no new one was booked.
+            ...(multiIds && multiIds.length > 0 ? {} : { reminder_schedule: [] }),
+          }).then(() => refreshAlarms()).catch(err => console.error("Error updating task:", err));
         }
       } catch (error) {
         console.error("Failed to reschedule reminder:", error);
@@ -1004,35 +949,14 @@ Return JSON:
 
       (async () => {
         try {
-          // Cancel every notification we know about — batch IDs and per-entry IDs
-          const allOldIds = Array.from(new Set([
-            ...(task.onesignal_notification_ids || []),
-            ...((task.reminder_schedule || []).map(r => r.notification_id).filter(Boolean)),
-          ]));
-          if (allOldIds.length > 0) {
-            await cancelScheduledReminder(allOldIds).catch(e => console.error('Failed to cancel old reminders:', e));
-          }
-
-          await Task.update(task.id, {
-            ...updates,
-            onesignal_notification_ids: [],
-            reminder_schedule: [],
-          });
+          // Cancel every notification we know about (batch IDs and per-entry
+          // IDs), save the new date, and book a fresh plan for it — shared
+          // with the Home card's date pill (moveRemindersToDate).
+          const { moveRemindersToDate } = await import('../utils/multiReminderScheduler');
+          await moveRemindersToDate(task, dueDateValue, updates);
+          refreshAlarms().catch(() => {});
 
           if (dueDateValue) {
-            const currentUser = await base44.auth.me();
-            const { scheduleMultiReminders } = await import('../utils/multiReminderScheduler');
-            const multiIds = await scheduleMultiReminders({
-              email: currentUser.email,
-              title: task.title,
-              scheduledDateISO: dueDateValue,
-              taskId: task.id,
-              urgency: task.urgency,
-              classification: task.classification,
-            });
-            if (multiIds && multiIds.length > 0) {
-              await Task.update(task.id, { onesignal_notification_ids: multiIds });
-            }
             const refreshed = await Task.filter({ id: task.id });
             if (refreshed[0]) onUpdate(refreshed[0]);
           }
@@ -1132,6 +1056,13 @@ Return JSON:
       return;
     }
 
+    // Already finished (the button is on a done task too): nothing to finish
+    // again — doing it made a second copy of a repeating task.
+    if (task.status === 'completed') {
+      onClose();
+      return;
+    }
+
     // CRITICAL FIX: Store local date/time, not UTC
     const now = new Date();
     const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
@@ -1148,6 +1079,11 @@ Return JSON:
     try {
       console.log('✅ [COMPLETE] Marking task complete with local time:', localISOString);
 
+      // The saved record, not the card: finished elsewhere (its notification,
+      // another screen) already means its next copy exists.
+      const { isAlreadyCompleted, createNextRecurrence } = await import('../utils/taskRecurrence');
+      if (await isAlreadyCompleted(task)) return;
+
       // Cancel all scheduled reminders when task is completed
       if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
         try {
@@ -1157,133 +1093,26 @@ Return JSON:
         }
       }
 
-      // Update in background
-      Task.update(task.id, { 
+      await Task.update(task.id, { 
         status: 'completed',
         completed_at: localISOString,
         onesignal_notification_ids: [] // Clear notification IDs as reminders are cancelled
-      }).then(() => refreshAlarms()).catch(error => {
-        console.error("Error completing task:", error);
       });
+      refreshAlarms().catch(() => {});
 
-      // Check if task is recurring and create new instance
+      // Its steps are done with it, as on Home and the Tasks page.
+      const { completeSubtasks } = await import('../utils/subtaskCompletion');
+      await completeSubtasks(task.id);
+
+      // The next occurrence of a repeating task: the one shared maker, as
+      // everywhere else. This card (used from the Calendar) had its own copy
+      // that just added a day to whatever time the reminders had got to — no
+      // check for a date already gone by, no reminder booked for a timed
+      // task, a birthday's reminders never booked, and a second tap made a
+      // second copy.
       if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
-        console.log('🔄 [RECURRING] Creating new instance for pattern:', task.recurrence_pattern);
-
-        const currentUser = await base44.auth.me();
-        let nextReminder;
-
-        // If task has a specific reminder time, use that as the base (local time, no UTC shift)
-        if (task.next_reminder) {
-          const d = new Date(task.next_reminder);
-          nextReminder = new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), 0, 0);
-        } else {
-          nextReminder = new Date();
-        }
-
-        // Calculate next reminder based on recurrence pattern
-        const daySet = Array.isArray(task.recurrence_days) ? task.recurrence_days.filter((n) => Number.isInteger(n) && n >= 0 && n <= 6) : [];
-        switch (task.recurrence_pattern) {
-          case 'daily':
-            nextReminder.setDate(nextReminder.getDate() + 1);
-            break;
-          case 'every_other_day':
-            nextReminder.setDate(nextReminder.getDate() + 2);
-            break;
-          case 'weekdays':
-            nextReminder.setDate(nextReminder.getDate() + 1);
-            while (nextReminder.getDay() === 0 || nextReminder.getDay() === 6) nextReminder.setDate(nextReminder.getDate() + 1);
-            break;
-          case 'weekly':
-            if (daySet.length > 0) {
-              // Specific weekdays ("Wednesdays and Thursdays"): the next listed day.
-              nextReminder.setDate(nextReminder.getDate() + 1);
-              let guard = 0;
-              while (!daySet.includes(nextReminder.getDay()) && guard++ < 7) nextReminder.setDate(nextReminder.getDate() + 1);
-            } else {
-              nextReminder.setDate(nextReminder.getDate() + 7);
-            }
-            break;
-          case 'every_other_week':
-            nextReminder.setDate(nextReminder.getDate() + 14);
-            break;
-          case 'monthly':
-            nextReminder.setMonth(nextReminder.getMonth() + 1);
-            break;
-          case 'yearly':
-            nextReminder.setFullYear(nextReminder.getFullYear() + 1);
-            break;
-        }
-        // The clock time the user named ("pills at 10") wins over whatever
-        // time next_reminder had been bumped to by hourly reminders.
-        const anchor = /^(\d{1,2}):(\d{2})$/.exec(String(task.anchor_time || ''));
-        if (anchor) nextReminder.setHours(Number(anchor[1]), Number(anchor[2]), 0, 0);
-
-        // Create new task instance
-        const newTask = await Task.create({
-          title: task.title,
-          description: task.description,
-          urgency: task.urgency,
-          energy_required: task.energy_required,
-          reminder_interval: task.reminder_interval,
-          original_input: task.original_input || null,
-          location: task.location || null,
-          classification: task.classification || 'task',
-          life_area: task.life_area || 'personal',
-          reminder_wish: task.reminder_wish || null,
-          anchor_time: task.anchor_time || null,
-          follow_up_title: task.follow_up_title || null,
-          follow_up_minutes: task.follow_up_minutes || null,
-          reminder_count: 0,
-          next_reminder: nextReminder.toISOString(),
-          status: 'active',
-          recurrence_pattern: task.recurrence_pattern,
-          recurrence_days: daySet.length > 0 ? daySet : null,
-          notification_recipient_email: currentUser.email,
-          pictures: task.pictures || [],
-          notes: task.notes || ''
-        });
-
-        // Schedule reminders for new task if needed
-        const intervalMs = {
-          '10min': 10 * 60 * 1000,
-          '20min': 20 * 60 * 1000,
-          '30min': 30 * 60 * 1000,
-          '1hour': 60 * 60 * 1000,
-          '2hours': 2 * 60 * 60 * 1000,
-          '4hours': 4 * 60 * 60 * 1000,
-          'daily': 24 * 60 * 60 * 1000,
-          'every_other_day': 2 * 24 * 60 * 60 * 1000,
-        };
-
-        if (task.reminder_interval && task.reminder_interval !== 'once' && intervalMs[task.reminder_interval]) {
-          try {
-            const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
-            const { getReminderCopy } = await import('../utils/reminderCopy');
-            const { notificationIds } = await scheduleRecurringReminders({
-              email: currentUser.email,
-              ...getReminderCopy(task, nextReminder),
-              startTime: nextReminder.toISOString(),
-              intervalMs: intervalMs[task.reminder_interval],
-              count: 10,
-              taskId: newTask.id,
-              data: {
-                screen: "/TaskNotification",
-                taskId: newTask.id,
-                urgency: task.urgency,
-                type: 'task_reminder'
-              }
-            });
-
-            if (notificationIds && notificationIds.length > 0) {
-              await Task.update(newTask.id, { onesignal_notification_ids: notificationIds });
-            }
-          } catch (error) {
-            console.error("Failed to schedule reminders for recurring task:", error);
-          }
-        }
-
-        console.log('✅ [RECURRING] New task created:', newTask.id);
+        const result = await createNextRecurrence(task);
+        if (result?.task) console.log('✅ [RECURRING] New task created:', result.task.id);
       }
     } catch (error) {
       console.error("Error completing task:", error);
@@ -1650,23 +1479,47 @@ Return JSON:
     // Save in the background. Parking it leaves a permanent mark, so finishing
     // it later still counts as a rescue on the Progress page.
     const patch = newSilenced ? { silenced: true, was_back_burnered: true } : { silenced: false };
-    Task.update(task.id, patch).catch(e => {
-      console.error('Error toggling silenced:', e);
-    });
+    Task.update(task.id, patch)
+      // The phone's full-screen alarms are its own copy: parking the task
+      // takes them off, bringing it back puts them back — now, not whenever
+      // Home is next opened.
+      .then(() => refreshAlarms())
+      .catch(e => {
+        console.error('Error toggling silenced:', e);
+      });
   };
 
   // Switching to a repeating cadence throws away any lead-time / smart reminder
-  // plan the task picked up earlier — a repeat just fires on its schedule.
+  // plan the task picked up earlier — a repeat just fires on its schedule:
+  // ONE reminder each time, at the task's own time (the same one every next
+  // copy gets — bookAtTimeReminder). This used to cancel every reminder and
+  // book none, while saying "one reminder each time".
+  //  - A rhythm the user asked for ("keep reminding me every hour") keeps its
+  //    pings; only a lead-time plan is dropped.
+  //  - An all-day task, a "by 5 PM" deadline or one with no time has no
+  //    at-the-time reminder: smart nudges carry it, as before.
+  //  - Turning the repeat off changes nothing else: it's the same task.
   const handleSetRepeat = async (pattern) => {
     if (!task) return;
-    const oldIds = Array.from(new Set([
-      ...(task.onesignal_notification_ids || []),
-      ...((task.reminder_schedule || []).map((r) => r.notification_id).filter(Boolean)),
-    ]));
+    if (!pattern || pattern === 'none') {
+      onUpdate({ ...task, recurrence_pattern: 'none' });
+      toast({ title: 'Repeat turned off ✓', description: 'This task won\'t come back after you finish it.' });
+      Task.update(task.id, { recurrence_pattern: 'none' }).catch(e => console.error('Error setting repeat:', e));
+      return;
+    }
+    const planIds = (task.reminder_schedule || []).map((r) => r?.notification_id)
+      .filter((id) => id && !String(id).startsWith('planned_'));
+    const isRhythm = !!task.reminder_interval && task.reminder_interval !== 'once';
+    const oldIds = Array.from(new Set(isRhythm
+      ? planIds
+      : [...(task.onesignal_notification_ids || []), ...planIds]
+    )).filter((id) => id && !String(id).startsWith('planned_'));
     const updates = {
       recurrence_pattern: pattern,
       reminder_schedule: [],
-      onesignal_notification_ids: [],
+      onesignal_notification_ids: isRhythm
+        ? (task.onesignal_notification_ids || []).filter((id) => !oldIds.includes(id))
+        : [],
     };
     onUpdate({ ...task, ...updates });
     toast({ title: 'Repeat saved ✓', description: `Repeats ${pattern} — one reminder each time, nothing extra.` });
@@ -1676,6 +1529,14 @@ Return JSON:
           await cancelScheduledReminder(oldIds).catch(e => console.error('Failed to cancel reminders:', e));
         }
         await Task.update(task.id, updates);
+        const { atTimeReminderFor, bookAtTimeReminder } = await import('../utils/taskRecurrence');
+        const repeating = { ...task, ...updates };
+        if (atTimeReminderFor(repeating)) {
+          const currentUser = await base44.auth.me();
+          const { ids, schedule } = await bookAtTimeReminder(repeating, currentUser.email);
+          onUpdate({ ...repeating, onesignal_notification_ids: ids, reminder_schedule: schedule });
+        }
+        refreshAlarms().catch(() => {});
       } catch (e) {
         console.error('Error setting repeat:', e);
       }
@@ -2100,8 +1961,11 @@ Return JSON:
                    are NOT run by the smart schedule. When a Smart Reminder
                    Schedule exists it already shows (and owns) the times, so a
                    separate date/time pill just duplicates it. */}
+              {/* A repeating task's one at-the-time reminder is saved as a
+                   one-entry schedule, but it has no plan to show — its time
+                   stays editable here. */}
               {(currentType === 'once' || currentType === 'interval' || currentType === 'repeat') &&
-                !(task.reminder_schedule && task.reminder_schedule.length > 0) && (
+                (currentType === 'repeat' || !(task.reminder_schedule && task.reminder_schedule.length > 0)) && (
                 <Popover>
                   <PopoverTrigger asChild>
                     <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
@@ -2173,7 +2037,7 @@ Return JSON:
                    pill above ISN'T rendered (i.e. the task's times are owned by
                    a Smart Reminder Schedule). Otherwise the reminder pill IS
                    the due date, so a second date pill just confuses things. */}
-              {(currentType === 'once' || currentType === 'interval' || currentType === 'repeat') &&
+              {(currentType === 'once' || currentType === 'interval') &&
                 (task.reminder_schedule && task.reminder_schedule.length > 0) && (
                 task.due_date ? (
                   <Popover open={dueDatePopoverOpen} onOpenChange={setDueDatePopoverOpen}>
