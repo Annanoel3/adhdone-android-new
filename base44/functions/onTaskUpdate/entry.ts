@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 // Reminder wording: every body names the task (the spoken alarm reads it).
-import { getReminderContent } from '../../shared/reminderTitle.ts';
+import { getReminderContent, pushPhoneAlarms, platformTimeMs } from '../../shared/reminderTitle.ts';
 import { adjustForQuietHours, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
 
@@ -255,7 +255,7 @@ async function kickPlanner(base44: any, ownerEmail: string | null) {
   }
 }
 
-Deno.serve(async (req) => {
+async function handleTaskEvent(req: Request): Promise<Response> {
   try {
     console.log('[onTaskUpdate] ========== FUNCTION START ==========');
     
@@ -836,4 +836,45 @@ Deno.serve(async (req) => {
     console.error('[onTaskUpdate] Unhandled error:', error);
     return Response.json({ success: false, error: error.message }, { status: 500 });
   }
+}
+
+// After a task changes, the phone's alarms for it follow right away: an edit
+// made on another device, a calendar event that moved, or the server re-booking
+// the task used to leave the phone ringing at the old time until the app was
+// next opened. Only the task's own alarm list is sent, and only when it changed
+// (see pushPhoneAlarms). A finished task is left to dropPhoneAlarms above.
+async function movePhoneAlarms(client: any, payload: any) {
+  try {
+    const event = payload?.event;
+    if (!event || (event.type !== 'update' && event.type !== 'create') || !event.entity_id) return;
+    const rows = await client.asServiceRole.entities.Task.filter({ id: event.entity_id });
+    const task = rows?.[0];
+    if (!task || !task.created_by || task.status === 'completed') return;
+    const oldData = payload.old_data && Object.keys(payload.old_data).length > 0 ? payload.old_data : null;
+    // Set to plain notifications, now and before: it never rang as an alarm.
+    if (task.alert_style === 'notification' && (!oldData || oldData.alert_style === 'notification')) return;
+    const owners = await client.asServiceRole.entities.User.filter({ email: task.created_by });
+    const owner = owners?.[0];
+    if (!owner) return;
+    await pushPhoneAlarms(task, owner, {
+      before: oldData,
+      changedAt: platformTimeMs(task.updated_date),
+      source: 'onTaskUpdate',
+    });
+  } catch (e) {
+    console.error('[onTaskUpdate] phone alarm update failed:', e);
+  }
+}
+
+Deno.serve(async (req) => {
+  let payload: any = null;
+  try {
+    payload = JSON.parse(await req.clone().text());
+  } catch (_) {
+    // Unreadable: the handler below reports it.
+  }
+  const client = createClientFromRequest(req);
+  const res = await handleTaskEvent(req);
+  if (payload && res.ok) await movePhoneAlarms(client, payload);
+  return res;
 });
