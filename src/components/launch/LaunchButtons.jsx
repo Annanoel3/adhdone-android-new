@@ -1,129 +1,88 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Rocket, Timer, Info } from 'lucide-react';
+import { Timer } from 'lucide-react';
 import { useLaunch } from '@/context/LaunchContext';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import FirstUseDialog, { firstUseSeen, markFirstUseSeen } from '@/components/onboarding/FirstUseDialog';
 
-// Each of the two is explained the FIRST time it's tapped, not before — the
-// explanation lands when the user is actually curious, and the button still
-// does what they pressed it for straight after.
-const FIRST_USE = {
-  launchpad: {
-    flag: 'firstuse_launchpad_done',
-    title: 'Launchpad 🚀',
-    body: "A gentle 5-minute countdown that eases you toward starting. When it hits zero you lift off into Focus Mode on this task — for when \"just start\" feels impossible.",
-    confirmLabel: "Start the countdown",
-  },
-  sprint: {
-    flag: 'firstuse_sprint_done',
-    title: '5-min Sprint ⏱️',
-    body: "A 5-minute timer starting right now — no ramp-up, just a short, low-pressure burst of doing the thing. Great for \"I'll do 5 minutes and see what happens.\"",
-    confirmLabel: "Start my 5 minutes",
-  },
-};
+// The task timer: pick how long, and it starts right away. The countdown stays
+// on screen (SprintPopup) with an "I'm done" button the whole time; when it's
+// up it rings like an alarm and offers "Keep going" (Focus Mode on this task)
+// or "I'm done". Replaced the old Launchpad and 5-min Sprint buttons.
+//
+// (The file keeps its old name so everything that shows it keeps working: the
+// task's details, the Home "Timer" picker.)
+export const TIMER_MINUTES = [5, 10, 15, 25, 45];
+const MAX_MINUTES = 180;
 
 export default function LaunchButtons({ task, theme, onStarted }) {
-  const { startLaunchpad, startSprint, hasActiveLaunch } = useLaunch();
-  const [pending, setPending] = useState(null);
+  const { startTimer, hasActiveLaunch } = useLaunch();
+  const [custom, setCustom] = useState(false);
+  const [minutes, setMinutes] = useState('');
   if (!task || task.status === 'completed') return null;
 
-  const run = (kind) => {
-    if (kind === 'launchpad') startLaunchpad(task);
-    else startSprint(task);
+  const dark = theme === 'dark';
+  const start = (m) => {
+    const n = Math.round(Number(m));
+    if (!Number.isFinite(n) || n < 1 || n > MAX_MINUTES) return;
+    startTimer(task, n);
+    setCustom(false);
+    setMinutes('');
     onStarted?.();
   };
 
-  // First tap ever → explain, then run it when they tap through.
-  const handlePress = (kind) => {
-    if (!firstUseSeen(FIRST_USE[kind].flag)) {
-      setPending(kind);
-      return;
-    }
-    run(kind);
-  };
-
-  const confirmFirstUse = () => {
-    const kind = pending;
-    setPending(null);
-    if (!kind) return;
-    markFirstUseSeen(FIRST_USE[kind].flag);
-    run(kind);
-  };
-
-  const infoBtnClass = `flex items-center justify-center w-5 h-5 rounded-full flex-shrink-0 ${
-    theme === 'dark' ? 'bg-gray-700 text-gray-300 hover:bg-gray-600' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+  const chip = `h-8 px-3 text-sm ${
+    dark
+      ? 'bg-gray-700 text-emerald-300 border-gray-600 hover:bg-gray-600'
+      : 'text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-100'
   }`;
 
+  if (hasActiveLaunch) {
+    return (
+      <p className={`text-xs flex items-center gap-1.5 ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
+        <Timer className="w-3.5 h-3.5" /> A timer is already running.
+      </p>
+    );
+  }
+
   return (
-    <div className="flex flex-wrap gap-2 items-center">
-      <div className="flex items-center gap-1">
-        <Button
-          size="sm"
-          onClick={() => handlePress('launchpad')}
-          disabled={hasActiveLaunch}
-          className={`gap-1.5 ${
-            theme === 'dark'
-              ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-              : 'bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white'
-          }`}
-        >
-          <Rocket className="w-4 h-4" />
-          Launch in 5 mins
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-2 items-center">
+        {TIMER_MINUTES.map((m) => (
+          <Button key={m} size="sm" variant="outline" className={chip} onClick={() => start(m)}>
+            {m} min
+          </Button>
+        ))}
+        <Button size="sm" variant="outline" className={chip} onClick={() => setCustom((v) => !v)}>
+          Other
         </Button>
-        <Popover>
-          <PopoverTrigger asChild>
-            <button className={infoBtnClass} aria-label="What is Launchpad?">
-              <Info className="w-3 h-3" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className={`w-60 p-3 text-xs ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-200' : 'text-gray-600'}`}>
-            <p className={`font-medium mb-1 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Launchpad</p>
-            <p>A gentle 5-minute countdown that eases you toward starting. When it hits zero, you lift off into Focus Mode on this task — perfect when "just start" feels impossible.</p>
-          </PopoverContent>
-        </Popover>
       </div>
-
-      <div className="flex items-center gap-1">
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => handlePress('sprint')}
-          disabled={hasActiveLaunch}
-          className={`gap-1.5 ${
-            theme === 'dark'
-              ? 'bg-gray-700 text-emerald-300 border-gray-600 hover:bg-gray-600'
-              : 'text-emerald-700 border-emerald-300 bg-emerald-50 hover:bg-emerald-100'
-          }`}
+      {custom && (
+        <form
+          className="flex items-center gap-2"
+          onSubmit={(e) => { e.preventDefault(); start(minutes); }}
         >
-          <Timer className="w-4 h-4" />
-          5-min Sprint
-        </Button>
-        <Popover>
-          <PopoverTrigger asChild>
-            <button className={infoBtnClass} aria-label="What is a 5-min Sprint?">
-              <Info className="w-3 h-3" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className={`w-60 p-3 text-xs ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-200' : 'text-gray-600'}`}>
-            <p className={`font-medium mb-1 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>5-min Sprint</p>
-            <p>Starts a 5-minute timer right now — no ramp-up, just a quick, low-pressure burst of doing the task. Great for "I'll just do 5 minutes and see what happens."</p>
-          </PopoverContent>
-        </Popover>
-      </div>
-
-      <FirstUseDialog
-        open={!!pending}
-        onConfirm={confirmFirstUse}
-        title={pending ? FIRST_USE[pending].title : ''}
-        body={pending ? FIRST_USE[pending].body : ''}
-        confirmLabel={pending ? FIRST_USE[pending].confirmLabel : 'Got it'}
-        theme={theme}
-      />
+          <input
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={MAX_MINUTES}
+            autoFocus
+            value={minutes}
+            onChange={(e) => setMinutes(e.target.value)}
+            placeholder="Minutes"
+            className={`w-24 h-8 rounded-md border px-2 text-sm ${
+              dark ? 'bg-gray-800 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'
+            }`}
+          />
+          <Button
+            type="submit"
+            size="sm"
+            className="h-8 bg-emerald-600 hover:bg-emerald-700 text-white"
+            disabled={!(Number(minutes) >= 1 && Number(minutes) <= MAX_MINUTES)}
+          >
+            <Timer className="w-4 h-4 mr-1" /> Start
+          </Button>
+        </form>
+      )}
     </div>
   );
 }
