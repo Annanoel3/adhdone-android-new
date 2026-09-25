@@ -13,6 +13,7 @@ import MomentumCelebration from "../components/shared/MomentumCelebration";
 import TaskCompletionCelebration from "../components/tasks/TaskCompletionCelebration";
 import { isTodayTask, isCompletedToday } from "../components/utils/todayTasks";
 import { ensureBirthdayReminders } from "../components/utils/birthdayScheduler";
+import { listActiveTasks } from "../components/utils/widgetBridge";
 import BirthdayStrip from "../components/home/BirthdayStrip";
 import NotificationsOffBanner from "../components/home/NotificationsOffBanner";
 import { countCompletionForGif } from "../components/utils/completionMilestone";
@@ -105,7 +106,17 @@ export default function Home() {
   const loadTasks = async () => {
     const seq = ++loadSeq.current;
     try {
-      const allTasks = await base44.entities.Task.list('-updated_date', 500);
+      // Every active task (paged), plus the recently finished ones that
+      // "done today" and the step counts need. This list also feeds the
+      // phone's alarm set (TodaysTasks → pushAlarms), and native drops every
+      // alarm missing from it: the old "500 most recently edited, finished
+      // ones included" let finished tasks crowd older active ones out.
+      const [activeTasks, recentlyDone] = await Promise.all([
+        listActiveTasks(),
+        base44.entities.Task.filter({ status: 'completed' }, '-updated_date', 200).catch(() => []),
+      ]);
+      const seen = new Set(activeTasks.map(t => t.id));
+      const allTasks = [...activeTasks, ...(recentlyDone || []).filter(t => !seen.has(t.id))];
       if (seq !== loadSeq.current) return;
       setTasks(allTasks);
       // Roll over passed birthdays to next year and ensure reminders exist
@@ -145,6 +156,11 @@ export default function Home() {
   };
 
   const handleTaskComplete = async (task) => {
+    // Already finished (a second tap, or a card that hadn't caught up with a
+    // finish from the notification): nothing to finish again — doing it made
+    // a second copy of a repeating task.
+    if (task.status === 'completed') return;
+
     // Confetti fires immediately — before any awaits — so it never gets held up
     // by the save. Only for real tasks, not subtasks.
     if (!task.parent_task_id) {
@@ -176,6 +192,14 @@ export default function Home() {
     );
 
     try {
+      const { isAlreadyCompleted, createNextRecurrence } = await import('../components/utils/taskRecurrence');
+      // The saved record, not the card: finished elsewhere already means its
+      // next copy already exists.
+      if (await isAlreadyCompleted(task)) {
+        loadTasks();
+        return;
+      }
+
       await base44.entities.Task.update(task.id, { 
         status: 'completed',
         completed_at: localISOString,
@@ -188,7 +212,6 @@ export default function Home() {
 
       // Create next recurrence if needed
       if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
-        const { createNextRecurrence } = await import('../components/utils/taskRecurrence');
         const result = await createNextRecurrence(task);
         if (result) {
           loadTasks();
