@@ -3,7 +3,7 @@ import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 // The shared prompt is bundled at deploy time; this function was last redeployed
 // for the parser telling "by 5" (a deadline) apart from "at 5".
 import { runTaskParse } from '../../shared/runTaskParse.ts';
-import { wallClockToUtc } from '../../shared/timezoneReminders.ts';
+import { wallClockToUtc, nextLocalOccurrence } from '../../shared/timezoneReminders.ts';
 import { isRecurringInterval, INTERVAL_MS } from '../../shared/reminderIntervalDecision.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { filterAll } from '../../shared/listAll.ts';
@@ -109,12 +109,12 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone)
         nextReminderDate = new Date(yr, mo, dy, hr, mn, 0, 0);
       }
     } else {
-      const freqDays = rrule.includes('FREQ=DAILY') ? 1
-        : rrule.includes('FREQ=WEEKLY') ? 7
-        : rrule.includes('FREQ=MONTHLY') ? 30 : 1;
-      while (nextReminderDate < new Date()) {
-        nextReminderDate.setDate(nextReminderDate.getDate() + freqDays);
-      }
+      // Whole calendar days / weeks / months on the USER'S clock. Fixed day
+      // steps on the server's UTC clock moved a weekly 9 AM meeting to 8 AM
+      // after daylight saving ended, and "monthly" was +30 days.
+      const unit = rrule.includes('FREQ=WEEKLY') ? 'week'
+        : rrule.includes('FREQ=MONTHLY') ? 'month' : 'day';
+      nextReminderDate = nextLocalOccurrence(nextReminderDate, unit, Date.now(), timeZone);
     }
   }
 
@@ -671,12 +671,12 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
           nextReminderDate = new Date(yr, mo, dy, hr, mn, 0, 0);
         }
       } else {
-        const freqDays = recurrenceRule.includes('FREQ=DAILY') ? 1
-          : recurrenceRule.includes('FREQ=WEEKLY') ? 7
-          : recurrenceRule.includes('FREQ=MONTHLY') ? 30 : 1;
-        while (nextReminderDate < new Date()) {
-          nextReminderDate.setDate(nextReminderDate.getDate() + freqDays);
-        }
+        // Whole calendar days / weeks / months on the USER'S clock. Fixed day
+        // steps on the server's UTC clock moved a weekly 9 AM meeting to 8 AM
+        // after daylight saving ended, and "monthly" was +30 days.
+        const unit = recurrenceRule.includes('FREQ=WEEKLY') ? 'week'
+          : recurrenceRule.includes('FREQ=MONTHLY') ? 'month' : 'day';
+        nextReminderDate = nextLocalOccurrence(nextReminderDate, unit, Date.now(), userTz);
       }
     }
 
