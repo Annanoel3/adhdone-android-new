@@ -4,7 +4,10 @@ import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 // to the shared prompt (taskParsePrompt.ts) only reaches users after this
 // function is saved and redeployed again (last redeploy: the parser telling
 // "by 5" — a deadline — apart from "at 5").
-import { adjustForQuietHours, parseHHMM, localMinutesOfDay } from '../../shared/quietHours.ts';
+import { adjustForQuietHours, localMinutesOfDay, resolveQuietHours, userTimeZone, placeRepeatingSlot } from '../../shared/quietHours.ts';
+import { localReminderUtc } from '../../shared/timezoneReminders.ts';
+// Same wording the refill job uses, so every push names the task.
+import { getReminderContent } from '../../shared/reminderTitle.ts';
 
 const INTERVAL_MS = {
   '10min': 10 * 60 * 1000,
@@ -29,6 +32,14 @@ export default async function(req: Request): Promise<Response> {
     const { email, dryRun = false, skipReparse = false } = body;
     const targetEmail = (email || user.email).toLowerCase().trim();
 
+    // Anyone signed in could rescan — cancel and re-book every reminder of —
+    // ANY account just by naming its email. Only the app owner (admin) may
+    // name someone else; everyone else rescans their own tasks only.
+    const isAdmin = user.role === 'admin';
+    if (!isAdmin && targetEmail !== String(user.email || '').toLowerCase().trim()) {
+      return Response.json({ error: 'You can only rescan your own tasks' }, { status: 403 });
+    }
+
     // Fetch all active tasks for the account
     const tasks = await base44.asServiceRole.entities.Task.filter({
       notification_recipient_email: targetEmail,
@@ -40,14 +51,16 @@ export default async function(req: Request): Promise<Response> {
     // Fetch the target user's profile for per-user, timezone-aware quiet hours.
     // schedulePush no longer applies its own (broken) UTC blanket, so the rescan
     // must apply the owner's actual quiet hours — same as cronRefillReminders.
-    const allUsers = await base44.asServiceRole.entities.User.list();
-    const owner = allUsers.find(u => u.email && u.email.toLowerCase().trim() === targetEmail);
-    const quietEnabled = !!(owner && owner.quiet_hours_enabled);
-    const timeZone = owner && owner.timezone ? owner.timezone : null;
-    const startMin = owner && owner.quiet_hours_start ? parseHHMM(owner.quiet_hours_start) : parseHHMM('22:00');
-    const endMin = owner && owner.quiet_hours_end ? parseHHMM(owner.quiet_hours_end) : parseHHMM('08:00');
-    const useQuiet = quietEnabled && !!timeZone;
-    console.log(`[rescanTasks] Quiet hours: ${useQuiet ? `enabled (${owner.quiet_hours_start}-${owner.quiet_hours_end} ${timeZone})` : 'disabled'}`);
+    // (Looked up by email: a plain list() returns only the first 50 users.)
+    const owner = targetEmail === String(user.email || '').toLowerCase().trim()
+      ? user
+      : ((await base44.asServiceRole.entities.User.filter({ email: targetEmail }))?.[0] || null);
+    // Quiet hours default to ON (unset used to read as off here); the shared
+    // timezone fallback applies when the profile has none.
+    const { enabled: quietEnabled, startMin, endMin } = resolveQuietHours(owner);
+    const timeZone = userTimeZone(owner);
+    const useQuiet = quietEnabled;
+    console.log(`[rescanTasks] Quiet hours: ${useQuiet ? `enabled (${startMin}-${endMin} min, ${timeZone})` : 'disabled'}`);
 
     const results = [];
 
@@ -168,9 +181,9 @@ export default async function(req: Request): Promise<Response> {
                   if (r.relative_minutes_before != null) {
                     reminderTime = new Date(scheduled.getTime() - r.relative_minutes_before * 60 * 1000);
                   } else {
-                    reminderTime = new Date(scheduled);
-                    reminderTime.setDate(reminderTime.getDate() - (r.days_before || 0));
-                    reminderTime.setHours(r.hour || 0, r.minute || 0, 0, 0);
+                    // "9 AM the day before" is 9 AM on the OWNER'S clock. setHours
+                    // on the server's UTC clock made it 9 AM UTC (4 AM Central).
+                    reminderTime = localReminderUtc(scheduled, r.days_before || 0, r.hour || 0, r.minute || 0, timeZone);
                   }
                   return {
                     sendAtISO: reminderTime.toISOString(),
@@ -186,9 +199,12 @@ export default async function(req: Request): Promise<Response> {
               for (const reminder of reminderTimes) {
                 let sendAt = new Date(reminder.sendAtISO);
                 if (useQuiet) {
+                  const wanted = sendAt.getTime();
                   sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
-                  // Skip the first-of-day notification — the daily digest replaces it
-                  if (localMinutesOfDay(sendAt, timeZone) === endMin) {
+                  // Skip a night-time reminder that quiet hours pushed onto the
+                  // first minute of the morning — the daily digest replaces it.
+                  // One that is simply set for that minute is kept.
+                  if (sendAt.getTime() !== wanted && localMinutesOfDay(sendAt, timeZone) === endMin) {
                     continue;
                   }
                   if (oneTimeLastScheduledAt && Math.abs(sendAt.getTime() - oneTimeLastScheduledAt.getTime()) < 60000) {
@@ -198,6 +214,11 @@ export default async function(req: Request): Promise<Response> {
                 const adjustedISO = sendAt.toISOString();
                 try {
                   const pushResp = await base44.functions.invoke('schedulePush', {
+                    // The caller was checked above (their own tasks, or the app
+                    // owner), so this backend vouches for the booking — an
+                    // owner rescanning someone else's tasks is not "booking for
+                    // someone else" once schedulePush enforces its caller check.
+                    internalKey: Deno.env.get('CRON_SECRET'),
                     toUserExternalId: targetEmail,
                     title: reminder.notification_title,
                     body: reminder.notification_body,
@@ -238,12 +259,15 @@ export default async function(req: Request): Promise<Response> {
               if (scheduleTime > now) {
                 let sendAt = new Date(scheduleTime);
                 if (useQuiet) {
-                  sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
-                  // Skip the first-of-day notification — the daily digest replaces it
-                  if (localMinutesOfDay(sendAt, timeZone) === endMin) {
+                  // Same rule as the refill job (placeRepeatingSlot): a night-time
+                  // ping of a short rhythm is dropped for the morning digest, a
+                  // daily one moves to a daytime slot instead of going silent.
+                  const placed = placeRepeatingSlot(sendAt, INTERVAL_MS[newInterval], startMin, endMin, timeZone);
+                  if (!placed) {
                     scheduleTime += INTERVAL_MS[newInterval];
                     continue;
                   }
+                  sendAt = placed;
                   // Quiet-hours can shift two consecutive night slots onto the same
                   // morning minute — skip duplicates rather than send two at once.
                   if (lastScheduledAt && Math.abs(sendAt.getTime() - lastScheduledAt.getTime()) < 60000) {
@@ -252,11 +276,13 @@ export default async function(req: Request): Promise<Response> {
                   }
                 }
                 const sendAtISO = sendAt.toISOString();
+                const words = getReminderContent(task.title, task.due_date, sendAtISO, timeZone);
                 try {
                   const pushResp = await base44.functions.invoke('schedulePush', {
+                    internalKey: Deno.env.get('CRON_SECRET'), // caller checked above (see the one-time booking)
                     toUserExternalId: targetEmail,
-                    title: 'Task Reminder 📋',
-                    body: `${task.title}\n\nTap to mark as complete!`,
+                    title: words.title,
+                    body: words.body,
                     sendAtISO,
                     data: { screen: '/TaskNotification', taskId: task.id, urgency: newUrgency, type: 'task_reminder' },
                     buttons: [
@@ -318,7 +344,7 @@ export default async function(req: Request): Promise<Response> {
     // regenerates immediately with the updated task list (includes converted
     // 2hours/4hours tasks that are now smart-nudge-eligible).
     try {
-      const ownerRecord = allUsers.find(u => u.email && u.email.toLowerCase().trim() === targetEmail);
+      const ownerRecord = owner;
       if (ownerRecord) {
         await base44.asServiceRole.entities.User.update(ownerRecord.id, {
           smart_nudge_schedule_dirty: true,
