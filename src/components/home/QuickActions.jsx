@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
-import { Plus, Rocket } from "lucide-react";
+import { Plus, Timer } from "lucide-react";
 import LaunchPicker from "../launch/LaunchPicker";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -11,7 +11,7 @@ export default function QuickActions({ theme, user }) {
   const specialMode = localStorage.getItem('special_mode') || 'normal';
   
   const [rotatingText, setRotatingText] = useState(0);
-  const [showLaunch, setShowLaunch] = useState(false);
+  const [showTimer, setShowTimer] = useState(false);
   const rotatingOptions = ["Task", "Idea"];
 
   useEffect(() => {
@@ -30,9 +30,9 @@ export default function QuickActions({ theme, user }) {
       color: theme === 'minimalist' ? 'bg-green-100 text-green-700' : 'bg-gradient-to-br from-purple-100 to-orange-100 text-purple-700'
     },
     {
-      icon: Rocket,
-      label: "Launch",
-      onClick: () => setShowLaunch(true),
+      icon: Timer,
+      label: "Timer",
+      onClick: () => setShowTimer(true),
       color: theme === 'minimalist' ? 'bg-indigo-100 text-indigo-700' : 'bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-700'
     }
   ];
@@ -43,7 +43,7 @@ export default function QuickActions({ theme, user }) {
       {actions.map((action) => (
         <Card
           key={action.label}
-          data-tour={action.label === 'Launch' ? 'launch' : 'add-task'}
+          data-tour={action.label === 'Timer' ? 'timer' : 'add-task'}
           className={`${specialMode !== 'normal' ? `${specialMode}-card` : ''} cursor-pointer border-none shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 ${
             specialMode === 'normal' ? (
               theme === 'dark' ? 'bg-gray-800' : 'bg-white/80 backdrop-blur-sm'
@@ -80,7 +80,7 @@ export default function QuickActions({ theme, user }) {
         </Card>
       ))}
       </div>
-      <LaunchPicker open={showLaunch} onOpenChange={setShowLaunch} theme={theme} />
+      <LaunchPicker open={showTimer} onOpenChange={setShowTimer} theme={theme} />
     </div>
   );
 }
