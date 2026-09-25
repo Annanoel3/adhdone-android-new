@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { pushWidgetTasks, pushAlarms, pushAlarmSound, setAlarmMode, pushAlarmQuietVibrate, pushEventQuiet, refreshAlarms, alarmPermissionStatus, listActiveTasks } from '../utils/widgetBridge';
+import { pushWidgetTasks, pushAlarms, pushAlarmSound, setAlarmMode, pushAlarmQuietWhen, quietWhenFor, pushEventQuiet, refreshAlarms, alarmPermissionStatus, listActiveTasks } from '../utils/widgetBridge';
 import { maybeAutoSyncDevice } from '@/lib/calendarSync';
 
 // Seeds the home-screen widget once on app open, from anywhere in the app — a
@@ -38,14 +38,15 @@ export default function WidgetTaskSync({ user }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, soundUrl]);
 
-  // Vibrate-only while the phone is on silent, vibrate or Do Not Disturb:
-  // the phone keeps its own copy of the answer, so hand it over on open too
-  // (a reinstall, or an answer given on another phone).
-  const quietVibrate = !!user?.alarm_vibrate_when_quiet;
+  // Vibrate-only while the phone is quiet (silent or vibrate mode, Do Not
+  // Disturb, or both, as picked): the phone keeps its own copy of the answer,
+  // so hand it over on open too (a reinstall, or an answer given on another
+  // phone). Builds before 1.3.12 only get on/off.
+  const quietWhen = quietWhenFor(user);
   useEffect(() => {
     if (!userId) return;
-    pushAlarmQuietVibrate(quietVibrate);
-  }, [userId, quietVibrate]);
+    pushAlarmQuietWhen(quietWhen);
+  }, [userId, quietWhen]);
 
   // "Silent alarms during events": the same, for the phone's copy of that answer.
   const quietDuringEvents = !!user?.alarm_quiet_during_events;
