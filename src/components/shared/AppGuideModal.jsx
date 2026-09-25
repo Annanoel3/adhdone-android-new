@@ -76,7 +76,7 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
     {
       icon: Timer,
       title: "Task Timer",
-      description: "Pick how long, and a timer counts down on screen. When it rings, keep going in Focus Mode or call it done. Handy for anything from dishes to deep work."
+      description: "Pick how long, and a timer counts down on screen. When it rings, keep going in Focus Mode, check the task off, or just stop for now. Handy for anything from dishes to deep work."
     },
     {
       icon: Timer,
