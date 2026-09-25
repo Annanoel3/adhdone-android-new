@@ -15,10 +15,11 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { Zap, LayoutGrid, Bell, AlarmClock, Check, Moon } from 'lucide-react';
+import { Zap, LayoutGrid, Bell, AlarmClock, Check, Moon, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { base44 } from '@/api/base44Client';
+import { trackFire } from '@/lib/appTrack';
 import {
   ONBOARDING_STEPS,
   waitForStep,
@@ -1244,6 +1245,178 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
           </Button>
           <Button onClick={() => finish(true)} disabled={saving || !changed || !start || !end} className="flex-1">
             {saving ? 'Saving…' : 'Save'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// "There's a new version." ONE update popup, ever: it always describes the
+// newest build, so someone several versions behind gets this single card —
+// never one card per version they skipped. When a new build ships, change
+// hasNewestBuild() and the words below (the features of the newest build);
+// don't add a second update popup.
+//
+// Shows on the phone app only, at most once a day, until the newest build is
+// installed. The Update button opens the Play Store on builds that can
+// (NotifyBridge.openPlayStore, from 1.3.9 on); older builds can't open
+// another app from here (the app keeps web links inside itself), so there it
+// shows the three steps instead.
+//
+// Alarm users are also asked the vibrate-only question here. The answer is
+// saved to the account now and reaches the phone after the update
+// (WidgetTaskSync hands it over on every app open), so first-time alarm
+// set-up won't ask it again.
+const UPDATE_PROMPT_KEY = 'app_update_prompt_last_shown';
+// The newest build is 1.3.9: the one that can quiet notifications.
+const hasNewestBuild = () =>
+  typeof window !== 'undefined' &&
+  typeof window.Capacitor?.Plugins?.AlarmBridge?.quietFor === 'function';
+
+export function AppUpdatePrompt({ user, theme }) {
+  const dark = theme === 'dark';
+  const [wanted, setWanted] = useState(false);
+  const [askVibrate, setAskVibrate] = useState(false);
+  const [vibrate, setVibrate] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [showSteps, setShowSteps] = useState(false);
+  const shown = usePopupTurn(wanted);
+  const checked = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  useEffect(() => {
+    // Once per app open; not restarted when the account record refreshes.
+    if (!user || checked.current) return;
+    checked.current = true;
+    if (!window.Capacitor?.isNativePlatform?.()) return;
+    (async () => {
+      // The phone's plugins can show up a moment after the page loads (the
+      // side menu's quiet button waits for them too): give the newest build
+      // time to announce itself before calling it old.
+      for (let i = 0; i < 16; i++) {
+        if (!mounted.current || hasNewestBuild()) return;
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      if (!mounted.current || hasNewestBuild()) return;
+      const today = new Date().toDateString();
+      try {
+        if (localStorage.getItem(UPDATE_PROMPT_KEY) === today) return;
+        localStorage.setItem(UPDATE_PROMPT_KEY, today);
+      } catch (e) { /* no storage: still show it this once */ }
+      setAskVibrate(user.alarm_mode === 'alarm' && typeof user.alarm_vibrate_when_quiet !== 'boolean');
+      trackFire('update_prompt', { props: { action: 'shown' } });
+      setWanted(true);
+    })();
+  }, [user]);
+
+  const pickVibrate = async (on) => {
+    setSaving(true);
+    setError('');
+    try {
+      await base44.auth.updateMe({ alarm_vibrate_when_quiet: on });
+      setVibrate(on);
+    } catch (e) {
+      setError("Couldn't save that. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const update = async () => {
+    trackFire('update_prompt', { props: { action: 'update' } });
+    const NotifyBridge = window.Capacitor?.Plugins?.NotifyBridge;
+    if (typeof NotifyBridge?.openPlayStore === 'function') {
+      try {
+        await NotifyBridge.openPlayStore();
+        setWanted(false);
+        return;
+      } catch (e) { /* show the steps instead */ }
+    }
+    setShowSteps(true);
+  };
+
+  const notNow = () => {
+    trackFire('update_prompt', { props: { action: 'not_now' } });
+    setWanted(false);
+  };
+
+  const sub = dark ? 'text-gray-400' : 'text-gray-600';
+  const main = dark ? 'text-gray-200' : 'text-gray-900';
+
+  return (
+    <Dialog open={shown} onOpenChange={(o) => { if (!o && !saving) notNow(); }}>
+      <DialogContent className={`max-w-md w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
+        <DialogHeader>
+          <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
+            <Sparkles className="w-5 h-5" />
+            There's an update!
+          </DialogTitle>
+          <DialogDescription className={dark ? 'text-gray-400' : ''}>
+            The new version of ADHDone lets you quiet your reminders and alarms for 1, 2 or 3 hours.
+            They still show up, just with no sound.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className={`text-sm ${main}`}>
+          <p className="font-medium">Three ways to quiet them:</p>
+          <ul className={`mt-2 space-y-1.5 ${sub}`}>
+            <li>🔕 Expand the pinned notification and pick 1, 2 or 3 hours.</li>
+            <li>📱 Tap "Silence 1 hr" on the home-screen widget.</li>
+            <li>☰ Tap "Quiet notifications" in the side menu.</li>
+          </ul>
+        </div>
+
+        {askVibrate && (
+          <div className={`rounded-xl border p-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
+            <p className={`text-sm font-medium ${main}`}>
+              When your phone is on silent, vibrate or Do Not Disturb, should alarms only vibrate?
+            </p>
+            <p className={`text-xs mt-1 ${sub}`}>
+              This starts working once you update. You can change it any time in Settings.
+            </p>
+            <div className="flex gap-2 mt-2">
+              <Button
+                size="sm"
+                variant={vibrate === true ? 'default' : 'outline'}
+                disabled={saving}
+                onClick={() => pickVibrate(true)}
+                className="flex-1"
+              >
+                {vibrate === true && <Check className="w-4 h-4 mr-1" />}Yes, just vibrate
+              </Button>
+              <Button
+                size="sm"
+                variant={vibrate === false ? 'default' : 'outline'}
+                disabled={saving}
+                onClick={() => pickVibrate(false)}
+                className="flex-1"
+              >
+                {vibrate === false && <Check className="w-4 h-4 mr-1" />}No, ring out loud
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {error && <p className="text-xs text-red-500">{error}</p>}
+
+        {showSteps && (
+          <p className={`text-sm rounded-xl p-3 ${dark ? 'bg-gray-800 text-gray-200' : 'bg-gray-50 text-gray-800'}`}>
+            Open the Play Store app, search for ADHDone and tap Update.
+          </p>
+        )}
+
+        <div className="flex gap-2 pt-1">
+          <Button variant="outline" onClick={notNow} disabled={saving} className="flex-1">
+            Not now
+          </Button>
+          <Button onClick={update} disabled={saving} className="flex-1">
+            Update
           </Button>
         </div>
       </DialogContent>
