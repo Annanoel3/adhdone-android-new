@@ -136,7 +136,7 @@ export default function HabitPatterns({ theme }) {
       <CardContent className="space-y-3">
         {habits.length === 0 && (
           <p className="text-sm text-gray-600">
-            No habits spotted yet. Once you've done the same thing on a few separate days over a couple of weeks, it'll show up here — and if you use a Sprint or the Launchpad, we'll learn how long it actually takes you.
+            No habits spotted yet. Once you've done the same thing on a few separate days over a couple of weeks, it'll show up here — and if you time it with a timer, we'll learn how long it actually takes you.
           </p>
         )}
 
@@ -156,7 +156,7 @@ export default function HabitPatterns({ theme }) {
                 </span>
               </p>
             ) : (
-              <p className="text-[11px] text-gray-400 mt-1">Time it with a Sprint or the Launchpad to learn how long this takes you</p>
+              <p className="text-[11px] text-gray-400 mt-1">Time it with a timer to learn how long this takes you</p>
             )}
           </div>
         ))}
