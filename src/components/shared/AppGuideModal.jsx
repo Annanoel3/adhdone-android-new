@@ -74,9 +74,9 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
       description: "Birthdays live on their own page and repeat every year. Get reminded a week out, the day before, and the day of — plus help drafting the text so you actually send it."
     },
     {
-      icon: Rocket,
-      title: "Launchpad",
-      description: "Stuck at the starting line? Launchpad gets you moving with a countdown, a tiny first step, or a short sprint — because starting is the hard part."
+      icon: Timer,
+      title: "Task Timer",
+      description: "Pick how long, and a timer counts down on screen. When it rings, keep going in Focus Mode or call it done. Handy for anything from dishes to deep work."
     },
     {
       icon: Timer,
