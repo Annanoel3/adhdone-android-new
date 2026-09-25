@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
-import { getReminderContent } from '../../shared/reminderTitle.ts';
+import { getReminderContent, pushPhoneAlarms } from '../../shared/reminderTitle.ts';
 import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey } from '../../shared/quietHours.ts';
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
@@ -169,6 +169,9 @@ Deno.serve(async (req) => {
           onesignal_notification_ids: [],
           last_scheduled_until: null
         });
+        // Its alarm comes off the phone too, instead of ringing for a reminder that stopped.
+        await pushPhoneAlarms({ ...task, next_reminder: null }, userMap[task.created_by] || userMap[task.notification_recipient_email],
+          { before: task, changedAt: Date.now(), source: 'cronRefillReminders' });
         staleStopped++;
         continue;
       }
@@ -397,6 +400,11 @@ Deno.serve(async (req) => {
               ? { next_reminder: batchStart.toISOString() }
               : {})
           });
+        // A new next reminder: the phone's alarm moves to it now, not at the next app open.
+        if (!task.next_reminder || new Date(task.next_reminder) <= now) {
+          await pushPhoneAlarms({ ...task, next_reminder: batchStart.toISOString() }, userMap[task.created_by] || owner,
+            { before: task, changedAt: Date.now(), source: 'cronRefillReminders' });
+        }
 
           // newLastScheduledUntil is ALREADY an ISO string — calling .toISOString()
           // on it threw a TypeError here, which the catch below swallowed as
@@ -830,6 +838,9 @@ Deno.serve(async (req) => {
           reminder_schedule: plan,
           reminder_plan_built_at: now.toISOString(),
         });
+        // The plan's reminders replace the single one the phone held as an alarm.
+        await pushPhoneAlarms({ ...task, reminder_schedule: plan }, userMap[task.created_by] || owner,
+          { before: task, changedAt: Date.now(), source: 'cronRefillReminders' });
         task.reminder_schedule = plan; // so the promotion loop below sees it this run
         console.log(`🗓 [REFILL] Built a reminder plan for "${task.title}" (${plan.length} entr${plan.length === 1 ? 'y' : 'ies'})`);
       }
