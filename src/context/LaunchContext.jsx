@@ -176,6 +176,9 @@ export function LaunchProvider({ children }) {
 
     const endTimeISO = new Date(Date.now() + DURATION_MS).toISOString();
     let notifId = null;
+    // Every notification names its task — the body is also what the alarm
+    // reads out loud, and "5 minutes up" alone doesn't say what for.
+    const sprintBody = `5 minutes on "${(task.title || '').trim() || 'your task'}" — it's okay to stop if you want. You showed up, and that's the win. 💚`;
     // Alarm only on a build that can ring (see startLaunchpad); the push is
     // the fallback for builds without alarms.
     if (!timerAlarmsSupported()) {
@@ -183,7 +186,7 @@ export function LaunchProvider({ children }) {
         notifId = await scheduleReminder({
           email: user.email,
           title: '⏱️ 5 minutes up — no pressure!',
-          body: "It's okay to stop if you want. You showed up, and that's the win. 💚",
+          body: sprintBody,
           sendAtISO: endTimeISO,
           taskId: task.id,
           data: { screen: '/FocusTimer', taskId: task.id, type: 'sprint_end' },
@@ -198,7 +201,7 @@ export function LaunchProvider({ children }) {
         taskId: task.id,
         title: '⏱️ 5 minutes up — no pressure!',
         heading: '⏱️ 5 minutes up — no pressure!',
-        body: "It's okay to stop if you want. You showed up, and that's the win. 💚",
+        body: sprintBody,
         at: new Date(endTimeISO).getTime(),
         soundUrl: launchSoundUrl(),
         actions: SPRINT_ALARM_ACTIONS,
