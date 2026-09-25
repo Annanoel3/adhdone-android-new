@@ -23,10 +23,19 @@ export const ADD_PATHS = [
   {
     key: "pinned",
     title: "The pinned notification",
-    video: ADD_PATHS_BASE + "pinned%20notifications.mp4",
-    // Worded for both phone builds: before 1.3.9 you pull the notification down
-    // and type into it; from 1.3.9 you tap it and a small typing box opens.
-    text: "With Quick Capture on, it sits in your notification tray: tap or pull it down and type your task. Turn it on in Settings.",
+    video: ADD_PATHS_BASE + "Screen_Recording_20260924_213759_ADHDone.mp4",
+    // From 1.3.9 you tap it and a small typing box opens, and expanding it
+    // shows the buttons that quiet notifications for 1, 2 or 3 hours. The
+    // quiet sentence only shows on a build that can do it (the same check the
+    // side menu's "Quiet notifications" uses); older builds keep the old words
+    // (pull it down and type into it).
+    get text() {
+      const canQuiet = typeof window !== "undefined" &&
+        typeof window.Capacitor?.Plugins?.AlarmBridge?.quietFor === "function";
+      return canQuiet
+        ? "With Quick Capture on, it sits in your notification tray. Tap it to add a task, or expand it to quiet notifications for 1, 2 or 3 hours. Turn it on in Settings."
+        : "With Quick Capture on, it sits in your notification tray: tap or pull it down and type your task. Turn it on in Settings.";
+    },
   },
 ];
 
