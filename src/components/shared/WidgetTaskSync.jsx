@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { pushWidgetTasks, pushAlarms, pushAlarmSound, setAlarmMode, pushAlarmQuietVibrate, pushEventQuiet, refreshAlarms, alarmPermissionStatus } from '../utils/widgetBridge';
+import { pushWidgetTasks, pushAlarms, pushAlarmSound, setAlarmMode, pushAlarmQuietVibrate, pushEventQuiet, refreshAlarms, alarmPermissionStatus, listActiveTasks } from '../utils/widgetBridge';
 import { maybeAutoSyncDevice } from '@/lib/calendarSync';
 
 // Seeds the home-screen widget once on app open, from anywhere in the app — a
@@ -25,7 +25,8 @@ export default function WidgetTaskSync({ user }) {
   useEffect(() => {
     if (!userId || !window.Capacitor?.Plugins?.AlarmBridge) return;
     setAlarmMode(alarmMode);
-    base44.entities.Task.list('-updated_date', 500)
+    // Every active task (paged): native drops any alarm missing from the set.
+    listActiveTasks()
       .then(pushAlarms)
       .catch(() => {});
   }, [userId, alarmMode]);
@@ -149,7 +150,9 @@ export default function WidgetTaskSync({ user }) {
     let cancelled = false;
     const onLanded = () => {
       window.dispatchEvent(new CustomEvent('tasks-changed'));
-      base44.entities.Task.list('-updated_date', 500)
+      // Active tasks only, every page of them — the widget shows active tasks
+      // and native drops any alarm missing from the set.
+      listActiveTasks()
         .then((tasks) => {
           pushWidgetTasks(tasks);
           if (window.Capacitor?.Plugins?.AlarmBridge) pushAlarms(tasks);
