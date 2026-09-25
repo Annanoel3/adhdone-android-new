@@ -12,7 +12,11 @@ export default function EasterEggVideo() {
   const [awesomeGifs, setAwesomeGifs] = useState([]);
   const [gifBlocked, setGifBlocked] = useState(false);
 
-  // Default fallback GIFs
+  // Default fallback GIFs. Giphy doesn't fail a GIF it has taken down: it
+  // serves a "THIS CONTENT IS NOT AVAILABLE" picture in its place, so the
+  // onError fallback below never fires for those. Ten such GIFs were removed
+  // from these lists (checked Sept 2026), plus three that said the opposite
+  // of the message ("Wrong", a tear) on a "You're crushing it!" card.
   const defaultIdeasGifs = [
     "https://media.giphy.com/media/l0IylOPCNkiqOgMyA/giphy.gif", // Mind blown
     "https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif", // Head exploding
@@ -24,15 +28,12 @@ export default function EasterEggVideo() {
     "https://media.giphy.com/media/Um3ljJl8jrnHy/giphy.gif", // Hamster wheel brain
     "https://media.giphy.com/media/3og0IMJcSI8p6hYQXS/giphy.gif", // Mind blown cat
     "https://media.giphy.com/media/26xBI73gWquCBBCDe/giphy.gif", // Brain freeze
-    "https://media.giphy.com/media/l2Sq2vCtLmpXhKQ3K/giphy.gif", // Spinning thoughts
     "https://media.giphy.com/media/3o7TKMt1VVNkHV2PaE/giphy.gif", // Confused math lady
     "https://media.giphy.com/media/l3q2K5jinAlChoCLS/giphy.gif", // Static brain
     "https://media.giphy.com/media/QMkPpxPDYY0fu/giphy.gif", // Overloaded
-    "https://media.giphy.com/media/xT9DPpf0zTqbcgy8xy/giphy.gif", // Sparks flying
     "https://media.giphy.com/media/l0HlHFRbmaZtBRhXG/giphy.gif", // Wait what
     "https://media.giphy.com/media/26tPplGWjN0xLybiU/giphy.gif", // So many tabs open
     "https://media.giphy.com/media/l46Cy1rHbQ92uuLXa/giphy.gif", // Chaotic energy
-    "https://media.giphy.com/media/3oEjHV0z8S7WM2QqIE/giphy.gif", // Brain buffering
   ];
 
   const defaultAwesomeGifs = [
@@ -45,26 +46,16 @@ export default function EasterEggVideo() {
     "https://media.giphy.com/media/26u4cqiYI30juCOGY/giphy.gif", // Yes!
     "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif", // Ron Swanson giggle
     "https://media.giphy.com/media/yoJC2K6rCzwNY2EngA/giphy.gif", // Dance celebration
-    "https://media.giphy.com/media/26u4cr2dejnss7UB2/giphy.gif", // Success kid
     "https://media.giphy.com/media/Is1O1TWV0LEJi/giphy.gif", // Kid dancing
     "https://media.giphy.com/media/26BGIqWh2R1fi6JDa/giphy.gif", // Mind blown good job
     "https://media.giphy.com/media/ZdlN56usaKaQg/giphy.gif", // Cat thumbs up
-    "https://media.giphy.com/media/MSgJnzNSMGBc6BpGIc/giphy.gif", // Chef's kiss
-    "https://media.giphy.com/media/l2R032V7qRAF8J6sU/giphy.gif", // Happy dance
     "https://media.giphy.com/media/IwAZ6dvvvaTtdI8SD5/giphy.gif", // You're a star
     "https://media.giphy.com/media/3o6ZtaO9BZHcOjmErm/giphy.gif", // High five
     "https://media.giphy.com/media/3ohzdIuqJoo8QdKlnW/giphy.gif", // Proud clapping
-    "https://media.giphy.com/media/l4FGuhL4U2WyjdkaY/giphy.gif", // Confetti burst
-    "https://media.giphy.com/media/xUOwGmPWXjcvS9j0BW/giphy.gif", // Nailed it
     "https://media.giphy.com/media/l0MYGb1LuZ3n7dRnO/giphy.gif", // Standing ovation
-    "https://media.giphy.com/media/3oz8xLd9DJq2l2VFtu/giphy.gif", // Happy jump
     "https://media.giphy.com/media/l3q2XhfQ8oCkm1Ts4/giphy.gif", // Dog excited
     "https://media.giphy.com/media/3o72F8t9TDi2xVnxOE/giphy.gif", // Victory spin
     "https://media.giphy.com/media/13GIgrGdslD9oQ/giphy.gif", // Thumbs up
-    "https://media.giphy.com/media/xThuWvOZuMcHNiozOw/giphy.gif", // Sparkle finish
-    "https://media.giphy.com/media/1ffkLXpKDKfr2/giphy.gif", // Little win dance
-    "https://media.giphy.com/media/26FmQd5DjKQnQrWzu/giphy.gif", // Celebration cheer
-    "https://media.giphy.com/media/QAsBwSjx9zVKh2NlOB/giphy.gif", // Well done
   ];
 
   // Remember every GIF already shown (persisted across sessions) so the user
