@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Zap, AlarmClock } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import { setAlarmMode, refreshAlarms, pushAlarmSound, requestAlarmPermissions, alarmQuietChoiceSupported, pushAlarmQuietVibrate, eventQuietSupported, pushEventQuiet } from '../utils/widgetBridge';
+import { setAlarmMode, refreshAlarms, pushAlarmSound, requestAlarmPermissions, alarmQuietChoiceSupported, pushAlarmQuietVibrate, eventQuietSupported, pushEventQuiet, alarmQuietWhenSupported, pushAlarmQuietWhen } from '../utils/widgetBridge';
 
 const getPlugins = () => {
   const p = (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.Plugins) || {};
@@ -339,17 +339,52 @@ export function AlarmEventQuietChoice({ value, onChange, theme, className = '' }
   );
 }
 
-// "Only vibrate when your phone is on silent, vibrate or Do Not Disturb?" — a
-// plain yes or no (User.alarm_vibrate_when_quiet; the phone gets its own copy
-// through pushAlarmQuietVibrate). The first-time alarm set-up won't close
-// until it's answered; the Settings card shows it for changing later.
-// `value`: true / false, or anything else = not answered yet. Renders nothing
-// on a build that can't do it.
-export function AlarmQuietChoice({ value, onChange, theme, className = '' }) {
+// The four answers to "should alarms only vibrate when your phone is quiet?"
+// once the phone can tell silent mode and Do Not Disturb apart (1.3.12+).
+// `value`: 'off' | 'silent' | 'dnd' | 'both', or null = not answered yet.
+// Shared by the alarm set-up, Settings and the update popup.
+export const QUIET_WHEN_OPTIONS = [
+  { value: 'off', label: 'No, ring out loud' },
+  { value: 'silent', label: 'On silent or vibrate' },
+  { value: 'dnd', label: 'On Do Not Disturb' },
+  { value: 'both', label: 'On both' },
+];
+
+export function QuietWhenButtons({ value, onPick, disabled }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 mt-2">
+      {QUIET_WHEN_OPTIONS.map((o) => (
+        <Button
+          key={o.value}
+          size="sm"
+          variant={value === o.value ? 'default' : 'outline'}
+          onClick={() => onPick(o.value)}
+          disabled={disabled}
+          className="h-auto min-h-9 whitespace-normal py-2"
+        >
+          {o.label}
+        </Button>
+      ))}
+    </div>
+  );
+}
+
+// "Only vibrate when your phone is on silent, vibrate or Do Not Disturb?"
+// (User.alarm_vibrate_when_quiet; the phone gets its own copy through
+// pushAlarmQuietWhen). On builds from 1.3.12 the yes is split three ways:
+// silent or vibrate mode only, Do Not Disturb only, or both
+// (User.alarm_quiet_when); older builds get the plain yes or no. The
+// first-time alarm set-up won't close until it's answered; the Settings card
+// shows it for changing later. `value`: true / false, or anything else = not
+// answered yet; `when`: the saved alarm_quiet_when. Renders nothing on a
+// build that can't do it.
+export function AlarmQuietChoice({ value, when, onChange, theme, className = '' }) {
   const dark = theme === 'dark';
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [picked, setPicked] = useState(null);
   if (!alarmQuietChoiceSupported()) return null;
+  const split = alarmQuietWhenSupported();
 
   const pick = async (on) => {
     setBusy(true);
@@ -365,8 +400,41 @@ export function AlarmQuietChoice({ value, onChange, theme, className = '' }) {
     }
   };
 
+  const pickWhen = async (w) => {
+    const on = w !== 'off';
+    setBusy(true);
+    setError('');
+    try {
+      await base44.auth.updateMe(on ? { alarm_vibrate_when_quiet: true, alarm_quiet_when: w } : { alarm_vibrate_when_quiet: false });
+      await pushAlarmQuietWhen(w);
+      setPicked(w);
+      if (onChange) onChange(on);
+    } catch (e) {
+      setError("Couldn't save that. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const textMain = dark ? 'text-gray-200' : 'text-gray-900';
   const textSub = dark ? 'text-gray-400' : 'text-gray-600';
+
+  if (split) {
+    const current = picked
+      || (value === false ? 'off' : value === true ? (['silent', 'dnd', 'both'].includes(when) ? when : 'both') : null);
+    return (
+      <div className={className}>
+        <p className={`text-sm font-medium ${textMain}`}>
+          Should alarms only vibrate when your phone is quiet?
+        </p>
+        <p className={`text-xs mt-1 ${textSub}`}>
+          Then alarms and timers buzz and light up the screen with no sound. Pick when that happens.
+        </p>
+        <QuietWhenButtons value={current} onPick={pickWhen} disabled={busy} />
+        {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
+      </div>
+    );
+  }
 
   return (
     <div className={className}>
@@ -612,6 +680,7 @@ export function AlarmCard({ user, theme }) {
 
         <AlarmQuietChoice
           value={quietVibrate}
+          when={user?.alarm_quiet_when}
           onChange={setQuietVibrate}
           theme={theme}
           className={`mt-4 border-t pt-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}
