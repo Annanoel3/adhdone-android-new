@@ -1259,16 +1259,21 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
 // don't add a second update popup.
 //
 // Shows on the phone app only, at most once a day, until the newest build is
-// installed. The Update button opens the Play Store on builds that can
-// (NotifyBridge.openPlayStore, from 1.3.9 on); older builds can't open
-// another app from here (the app keeps web links inside itself), so there it
-// shows the three steps instead.
+// installed, and only while NEWEST_BUILD_ON_PLAY is true. The Update button
+// opens the Play Store on builds that can (NotifyBridge.openPlayStore, added
+// to the phone code after the first 1.3.9 AAB was built, so it ships in the
+// next build made); older builds can't open another app from here (the app
+// keeps web links inside itself), so there it shows the three steps instead.
 //
 // Alarm users are also asked the vibrate-only question here. The answer is
 // saved to the account now and reaches the phone after the update
 // (WidgetTaskSync hands it over on every app open), so first-time alarm
 // set-up won't ask it again.
 const UPDATE_PROMPT_KEY = 'app_update_prompt_last_shown';
+// Switch to true only once the newest build is out on Google Play to everyone
+// (not partway through a staged rollout). Before that there is nothing to
+// update to, so the popup must stay hidden.
+const NEWEST_BUILD_ON_PLAY = false;
 // The newest build is 1.3.9: the one that can quiet notifications.
 const hasNewestBuild = () =>
   typeof window !== 'undefined' &&
@@ -1292,6 +1297,7 @@ export function AppUpdatePrompt({ user, theme }) {
 
   useEffect(() => {
     // Once per app open; not restarted when the account record refreshes.
+    if (!NEWEST_BUILD_ON_PLAY) return;
     if (!user || checked.current) return;
     checked.current = true;
     if (!window.Capacitor?.isNativePlatform?.()) return;
