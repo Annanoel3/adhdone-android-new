@@ -27,6 +27,7 @@ import { isBirthdayTask } from "../components/utils/birthdayHelpers";
 import { countCompletionForGif } from "../components/utils/completionMilestone";
 import PullToRefresh from "../components/shared/PullToRefresh";
 import { checkCompletionEggs } from "../components/eastereggs/completionEggs";
+import { trackFire } from "@/lib/appTrack";
 
 export default function Tasks() {
   const navigate = useNavigate();
@@ -157,6 +158,11 @@ export default function Tasks() {
   };
 
   const handleComplete = async (task) => {
+    // Already finished (a second tap, or the details card's button on a done
+    // task): nothing to finish again — doing it made a second copy of a
+    // repeating task.
+    if (task.status === 'completed') return;
+
     // Confetti fires immediately — before any awaits. Only for real tasks.
     if (!task.parent_task_id) {
       setShowCelebration(false);
@@ -181,6 +187,13 @@ export default function Tasks() {
     // Save + side effects in the background
     (async () => {
       try {
+        const { isAlreadyCompleted, createNextRecurrence } = await import('../components/utils/taskRecurrence');
+        // The saved record, not the card: finished elsewhere (its
+        // notification, another screen) already means its next copy exists.
+        if (await isAlreadyCompleted(task)) {
+          loadTasks();
+          return;
+        }
         await Task.update(task.id, { status: 'completed', completed_at: localISOString });
         // A finished task's alarms come off the phone now, not whenever Home
         // is next opened.
@@ -189,7 +202,6 @@ export default function Tasks() {
         const { completeSubtasks } = await import('../components/utils/subtaskCompletion');
         await completeSubtasks(task.id);
         if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
-          const { createNextRecurrence } = await import('../components/utils/taskRecurrence');
           const result = await createNextRecurrence(task);
           // Show the next occurrence the moment it exists — it lands in the
           // section for its day — rather than waiting on a full reload.
@@ -205,15 +217,25 @@ export default function Tasks() {
     })();
   };
 
-  const handleUncomplete = async (task) => {
+  // `source` says which control did it (the card, a step on the card, …).
+  const handleUncomplete = async (task, source = 'tasks_page') => {
     // Optimistic — update UI instantly
     setAllTasks(prev => prev.map(t =>
       t.id === task.id ? { ...t, status: 'active', completed_at: null } : t
     ));
+    // Counted, so we can see how often a finished task is taken back (and
+    // from where).
+    trackFire('task_uncompleted', { props: { task_id: task.id, source } });
 
     (async () => {
       try {
         await Task.update(task.id, { status: 'active', completed_at: null });
+        // Checking a repeating task off made its next occurrence; taking the
+        // check back takes that copy back too (only while it's untouched) —
+        // otherwise checking it again made a second one.
+        const { removeNextRecurrence } = await import('../components/utils/taskRecurrence');
+        const removedId = await removeNextRecurrence(task);
+        if (removedId) setAllTasks(prev => prev.filter(t => t.id !== removedId));
         refreshAlarms().catch(() => {});
         await updateTodaysSummary();
       } catch (error) {
