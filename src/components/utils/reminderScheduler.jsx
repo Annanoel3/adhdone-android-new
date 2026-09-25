@@ -40,20 +40,28 @@ export function isInQuietHours(dateTime) {
  */
 function adjustForQuietHours(dateTime) {
   let adjustedTime = new Date(dateTime);
-  
-  while (isInQuietHours(adjustedTime)) {
+  let guard = 0;
+
+  while (isInQuietHours(adjustedTime) && guard++ < 3) {
     const quietEnd = localStorage.getItem('quiet_hours_end') || '08:00';
     const [endHour, endMin] = quietEnd.split(':').map(Number);
-    
-    // Jump to the end of quiet hours
+    const slot = new Date(adjustedTime);
+
+    // Jump to the end of THIS quiet stretch: the first quiet-end after the
+    // slot. Setting the end time on the slot's own day moved a late-evening
+    // slot on a later day (11 PM Friday) to 8 AM that same Friday — earlier
+    // than the time it was asked for.
     adjustedTime.setHours(endHour, endMin, 0, 0);
-    
+    if (adjustedTime <= slot) {
+      adjustedTime.setDate(adjustedTime.getDate() + 1);
+    }
+
     // If adjusted time is now in the past, move to tomorrow
     if (adjustedTime < new Date()) {
       adjustedTime.setDate(adjustedTime.getDate() + 1);
     }
   }
-  
+
   return adjustedTime;
 }
 
@@ -201,25 +209,35 @@ export async function scheduleRecurringReminders({
 }) {
   console.log('[scheduleRecurringReminders] Scheduling', count, 'notifications starting at', startTime);
   
-  const notificationIds = [];
   const baseData = {
     screen: "/Tasks",
     ...(taskId && { taskId }),
     ...(data || {})
   };
 
-  // Schedule all reminders in parallel
-  const schedulePromises = [];
+  // One at a time, not all at once. The send ledger (NotificationLedger) can
+  // only turn away a duplicate it has already seen recorded; ten bookings
+  // racing in parallel all got past it together.
+  const validIds = [];
+  const bookedMinutes = new Set();
+  let lastBookedAt = null;
   for (let i = 0; i < count; i++) {
     let sendAt = new Date(new Date(startTime).getTime() + (intervalMs * i));
-    
+
     // Adjust for quiet hours
     if (isInQuietHours(sendAt)) {
       sendAt = adjustForQuietHours(sendAt);
     }
-    
-    schedulePromises.push(
-      scheduleReminder({
+
+    // Every overnight slot of an hourly reminder moves to the same morning
+    // minute — that was nine identical pushes at 8 AM. Only the first one
+    // for any minute is booked.
+    const minute = Math.floor(sendAt.getTime() / 60000);
+    if (bookedMinutes.has(minute)) continue;
+    bookedMinutes.add(minute);
+
+    try {
+      const notificationId = await scheduleReminder({
         email,
         title,
         body,
@@ -228,27 +246,24 @@ export async function scheduleRecurringReminders({
         data: baseData,
         android_channel_id,
         buttons
-      }).then(notificationId => {
-        if (notificationId) {
-          console.log(`[scheduleRecurringReminders] Scheduled #${i + 1} for ${sendAt.toISOString()}: ${notificationId}`);
-        }
-        return notificationId;
-      }).catch(error => {
-        console.error(`[scheduleRecurringReminders] Failed to schedule #${i + 1}:`, error);
-        return null;
-      })
-    );
+      });
+      if (notificationId) {
+        console.log(`[scheduleRecurringReminders] Scheduled #${i + 1} for ${sendAt.toISOString()}: ${notificationId}`);
+        validIds.push(notificationId);
+        lastBookedAt = sendAt;
+      }
+    } catch (error) {
+      console.error(`[scheduleRecurringReminders] Failed to schedule #${i + 1}:`, error);
+    }
   }
-
-  const results = await Promise.all(schedulePromises);
-  const validIds = results.filter(id => id !== null);
 
   console.log(`[scheduleRecurringReminders] Scheduled ${validIds.length}/${count} notifications`);
 
-  // Return both the IDs and the last scheduled time so callers can persist last_scheduled_until
-  const lastScheduledUntil = validIds.length > 0
-    ? new Date(new Date(startTime).getTime() + intervalMs * (validIds.length - 1)).toISOString()
-    : null;
+  // Return both the IDs and the last scheduled time so callers can persist
+  // last_scheduled_until — the time the last one really goes out (slots moved
+  // or skipped for quiet hours no longer line up with start + n × interval),
+  // the same thing the refill cron records.
+  const lastScheduledUntil = lastBookedAt ? lastBookedAt.toISOString() : null;
 
   return { notificationIds: validIds, lastScheduledUntil };
 }
