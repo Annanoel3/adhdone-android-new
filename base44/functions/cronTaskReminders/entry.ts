@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { pushPhoneAlarms } from '../../shared/reminderTitle.ts';
 
 // cronTaskReminders: bookkeeping only — advances next_reminder so cronRefillReminders
 // knows when to schedule the next batch. Does NOT send any notifications itself.
@@ -73,6 +74,11 @@ Deno.serve(async (req) => {
           reminder_count: (t.reminder_count || 0) + 1,
           next_reminder: next
         });
+        // "Keep reminding me": the phone only knew the one reminder that just
+        // went off, so the next ones came as plain notifications until the app
+        // was opened. Its alarm moves on to the next one now.
+        await pushPhoneAlarms({ ...t, next_reminder: next }, user,
+          { before: t, changedAt: Date.now(), source: 'cronTaskReminders' });
 
         console.log(`[cronTaskReminders] Advanced next_reminder for "${t.title}" → ${next}`);
         advanced++;
