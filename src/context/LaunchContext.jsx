@@ -69,6 +69,10 @@ async function finishTimerTask(sp) {
       toast({ title: `"${name}" was already done ✓` });
       return;
     }
+    // Its booked reminders go now, as when it's ticked off on Home.
+    if (task.onesignal_notification_ids?.length) {
+      cancelScheduledReminder(task.onesignal_notification_ids).catch(() => {});
+    }
     const completedAt = new Date().toISOString();
     window.dispatchEvent(new CustomEvent('tasks-changed', {
       detail: { taskId: task.id, patch: { status: 'completed', completed_at: completedAt } },
