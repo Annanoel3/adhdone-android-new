@@ -4,9 +4,10 @@ import { Timer } from 'lucide-react';
 import { useLaunch } from '@/context/LaunchContext';
 
 // The task timer: pick how long, and it starts right away. The countdown stays
-// on screen (SprintPopup) with an "I'm done" button the whole time; when it's
-// up it rings like an alarm and offers "Keep going" (Focus Mode on this task)
-// or "I'm done". Replaced the old Launchpad and 5-min Sprint buttons.
+// on screen (SprintPopup) with "I finished the task" and "Stop working" the
+// whole time; when it's up it rings like an alarm and offers "Keep going"
+// (Focus Mode on this task) or the same two. Replaced the old Launchpad and
+// 5-min Sprint buttons.
 //
 // (The file keeps its old name so everything that shows it keeps working: the
 // task's details, the Home "Timer" picker.)
