@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
-import { Brain, CheckCircle2, Sparkles, Bell, Lightbulb, Rocket, Cake, Share2, TrendingUp } from "lucide-react";
+import { Brain, CheckCircle2, Sparkles, Bell, Lightbulb, Timer, Cake, Share2, TrendingUp } from "lucide-react";
 import BrandBackdrop from "@/components/brand/BrandBackdrop";
 import GoogleDisclosure from "@/components/brand/GoogleDisclosure";
 import DeveloperCredit from "@/components/brand/DeveloperCredit";
@@ -11,7 +11,7 @@ import { Card } from "@/components/brand/BrandSection";
 const BLURBS = [
   { icon: Bell, tint: "#DCF5E4", color: "#2E8B57", title: "Smart reminders that actually work", desc: "ADHDone figures out what deserves your attention and when — so the important stuff doesn't get buried." },
   { icon: Share2, tint: "#E9E4FF", color: "#7C5CE6", title: "Add tasks without opening the app", desc: "However it reaches you, it becomes a task.", fine: "Highlight text · Screenshots · Home-screen widget · Pinned notification" },
-  { icon: Rocket, tint: "#FFE6D6", color: "#E0743F", title: "Launch into a task", desc: "A 5-minute countdown to liftoff, or a no-pressure sprint. Whichever gets you moving." },
+  { icon: Timer, tint: "#FFE6D6", color: "#E0743F", title: "Time any task", desc: "Pick how long, watch it count down, then keep going or call it done when it rings." },
   { icon: Lightbulb, tint: "#FFF3D6", color: "#D69A1E", title: "A parking lot for 2am ideas", desc: "Random idea you don't want to lose? Toss it in the Parking Lot and come back when you're ready." },
   { icon: Cake, tint: "#FFE0E8", color: "#E05A7A", title: "Never forget birthdays again", desc: "Reminders plus a drafted text ready to send. You just tap." },
   { icon: TrendingUp, tint: "#DDEBFF", color: "#3B7DD8", title: "Your data, your patterns", desc: "See when you actually get things done — without ever being guilt-tripped about it." },
