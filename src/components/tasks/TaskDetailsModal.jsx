@@ -1255,8 +1255,8 @@ Return JSON:
   const currentClassification = task.classification || itemClassification || (task.birthday_person ? 'birthday' : 'task');
   const isEvent = currentClassification === 'event';
   const currentType = getCurrentReminderType(task);
-  // Birthdays and events aren't things to start or put off: no Launch, no
-  // Sprint, no Back Burner, no Parking Lot on them. Tasks keep all four.
+  // Birthdays and events aren't things to start or put off: no timer, no Back
+  // Burner, no Parking Lot on them. Tasks keep all three.
   const isEventOrBirthday = isEvent || currentClassification === 'birthday' || currentType === 'birthday';
   const dueLabel = isEvent ? 'Event Date' : 'Due Date';
 
@@ -2388,10 +2388,10 @@ Return JSON:
               </div>
             )}
 
-            {/* v2: Launch / Sprint sit with the task, not in the footer. */}
+            {/* v2: the timer sits with the task, not in the footer. */}
             {v2 && task.status !== 'completed' && !isEventOrBirthday && (
               <div className={v2Group}>
-                <div className={v2Label}>Get going</div>
+                <div className={v2Label}>Timer</div>
                 <LaunchButtons task={task} theme={theme} />
               </div>
             )}
