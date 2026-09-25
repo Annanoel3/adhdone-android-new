@@ -43,7 +43,7 @@ export const FEATURE_GROUPS = [
     group: "Actually getting it done",
     items: [
       { name: "Smart reminders", what: "Deadline-aware, traffic-aware, quiet-hours-aware, and deduplicated so they never stack up." },
-      { name: "Launchpad & Sprint", what: "A 5-minute countdown to liftoff, or a no-pressure 'just start right now.' Whichever one works today." },
+      { name: "Task timer", what: "Pick how long, watch it count down, and when it rings, keep going in Focus Mode or call it done." },
       { name: "Focus Mode & Pomodoro", what: "Hourly check-ins on one task, focus sessions with breaks built in, completion sounds, optional music." },
       { name: "Break it into steps", what: "One tap turns an overwhelming task into a short, ordered list of real first steps." },
     ],
