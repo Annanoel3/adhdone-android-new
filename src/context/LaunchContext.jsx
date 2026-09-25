@@ -9,11 +9,14 @@ import { timerAlarmsSupported, bookOwnAlarm, cancelOwnAlarm, requestAlarmPermiss
 import SprintPopup from '@/components/launch/SprintPopup';
 import { Timer } from 'lucide-react';
 import { readThemeState, chipClasses } from '@/components/utils/launchTheme';
+import { toast } from '@/components/ui/use-toast';
 
 // The task timer. Pick how long (LaunchButtons), and the countdown stays on
-// screen (SprintPopup) with "I'm done" there the whole time. When it's up it
-// rings, and the choices are "Keep going" (Focus Mode on the task, carrying the
-// time already spent) or "I'm done". This used to be two things, the Launchpad
+// screen (SprintPopup) with "Stop working" and "I finished the task" there the
+// whole time. When it's up it rings, and the choices are "Keep going" (Focus
+// Mode on the task, carrying the time already spent), "I finished the task"
+// (checks it off) or "Stop working" (the task stays open, e.g. laundry that
+// isn't done yet). Both stops log the time. This used to be two things, the Launchpad
 // (a 5-minute countdown into Focus Mode) and the 5-minute Sprint; the Launchpad
 // is gone and the Sprint became this timer, any length.
 //
@@ -27,12 +30,13 @@ const TIMER_ALARM_ID = 'timer:sprint';
 const OLD_LAUNCHPAD_ALARM_ID = 'timer:launchpad';
 const launchSoundUrl = () => COMPLETION_SOUNDS[getLaunchAlertSound()]?.url || '';
 const ringHere = () => { if (!timerAlarmsSupported()) startAlertLoop(getLaunchAlertSound()); };
-// The alarm screen carries the end choices as buttons. A tap stops the ring
-// and opens the app at one of these paths; the effect below turns that into
-// the same "keep going" / "I'm done" the popup's buttons run.
+// The alarm screen carries the end choices as buttons (it has room for three).
+// A tap stops the ring and opens the app at one of these paths; the effect
+// below turns that into the same thing the popup's buttons do.
 const TIMER_ALARM_ACTIONS = [
   { label: 'Keep going', path: '/Home?sprint=keep' },
-  { label: "I'm done", path: '/Home?sprint=stop' },
+  { label: 'I finished the task', path: '/Home?sprint=finish' },
+  { label: 'Stop working', path: '/Home?sprint=stop' },
 ];
 // The timer that most recently ran, kept outside React state so an alarm
 // button tapped after the popup has gone can still act on it.
@@ -51,6 +55,43 @@ const GRACE_MS = 10 * 60 * 1000;
 // were always 5 minutes.
 export const sessionDurationMs = (s) => (s && s.durationMs > 0 ? s.durationMs : DEFAULT_MINUTES * MINUTE_MS);
 const minutesWord = (n) => (n === 1 ? '1 minute' : `${n} minutes`);
+
+// "I finished the task": the same finish as ticking it off on Home. The task
+// and its open subtasks are done, a repeating task gets its next copy, and the
+// lists update right away. The server takes care of its reminders and alarms.
+async function finishTimerTask(sp) {
+  if (!sp?.taskId) return;
+  try {
+    const task = await base44.entities.Task.get(sp.taskId).catch(() => null);
+    if (!task) return;
+    const name = (task.title || sp.title || '').trim() || 'Your task';
+    if (task.status === 'completed') {
+      toast({ title: `"${name}" was already done ✓` });
+      return;
+    }
+    const completedAt = new Date().toISOString();
+    window.dispatchEvent(new CustomEvent('tasks-changed', {
+      detail: { taskId: task.id, patch: { status: 'completed', completed_at: completedAt } },
+    }));
+    await base44.entities.Task.update(task.id, { status: 'completed', completed_at: completedAt });
+    toast({ title: `"${name}" is done 🎉` });
+    try {
+      const { completeSubtasks } = await import('@/components/utils/subtaskCompletion');
+      await completeSubtasks(task.id);
+    } catch (e) { console.error('Failed to finish subtasks:', e); }
+    if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
+      try {
+        const { createNextRecurrence } = await import('@/components/utils/taskRecurrence');
+        await createNextRecurrence(task);
+      } catch (e) { console.error('Failed to create next recurrence:', e); }
+    }
+  } catch (e) {
+    console.error('Failed to finish the task from the timer:', e);
+    toast({ title: "Couldn't check the task off. Try it from the task itself." });
+  }
+  // After the save: pages that re-fetched too early catch up with the real state.
+  window.dispatchEvent(new CustomEvent('tasks-changed'));
+}
 
 export function LaunchProvider({ children }) {
   const navigate = useNavigate();
@@ -221,8 +262,9 @@ export function LaunchProvider({ children }) {
     setSprintEnded(false);
   }, [navigate]);
 
-  // "I'm done": from the popup while it's counting, at the end, or from the
-  // alarm screen. The timer stops and the time spent is logged.
+  // "Stop working": from the popup while it's counting, at the end, from the
+  // tucked-away chip, or from the alarm screen. The timer stops and the time
+  // spent is logged; the task stays open.
   const stopAfterSprint = useCallback((sp) => {
     stopAlertLoop();
     cancelOwnAlarm(TIMER_ALARM_ID);
@@ -235,8 +277,15 @@ export function LaunchProvider({ children }) {
     setSprintEnded(false);
   }, [logSprintSession]);
 
-  // A button tapped on the alarm screen lands here as ?sprint=keep or
-  // ?sprint=stop. The query is cleared first so a remount can't replay it.
+  // "I finished the task": the same stop, and the task is checked off.
+  const finishAfterSprint = useCallback((sp) => {
+    stopAfterSprint(sp);
+    finishTimerTask(sp);
+  }, [stopAfterSprint]);
+
+  // A button tapped on the alarm screen lands here as ?sprint=keep,
+  // ?sprint=finish or ?sprint=stop. The query is cleared first so a remount
+  // can't replay it.
   useEffect(() => {
     const action = new URLSearchParams(location.search).get('sprint');
     if (!action) return;
@@ -247,6 +296,7 @@ export function LaunchProvider({ children }) {
       try { sp = JSON.parse(localStorage.getItem(SPRINT_KEY) || 'null'); } catch { sp = null; }
     }
     if (action === 'keep') keepGoingAfterSprint(sp);
+    else if (action === 'finish') finishAfterSprint(sp);
     else if (action === 'stop') stopAfterSprint(sp);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
@@ -274,6 +324,7 @@ export function LaunchProvider({ children }) {
             setSprintEnded(true);
           }}
           onKeepGoing={() => keepGoingAfterSprint(sprint)}
+          onFinish={() => finishAfterSprint(sprint)}
           onStop={() => stopAfterSprint(sprint)}
           onMinimize={() => { setSprintMinimized(true); localStorage.setItem(SPRINT_KEY, JSON.stringify({ ...sprint, minimized: true })); }}
         />
@@ -285,7 +336,8 @@ export function LaunchProvider({ children }) {
           theme={theme}
           specialMode={specialMode}
           onResume={() => { setSprintMinimized(false); localStorage.setItem(SPRINT_KEY, JSON.stringify({ ...sprint, minimized: false })); }}
-          onDone={() => stopAfterSprint(sprint)}
+          onStop={() => stopAfterSprint(sprint)}
+          onFinish={() => finishAfterSprint(sprint)}
         />
       )}
     </LaunchContext.Provider>
@@ -293,8 +345,8 @@ export function LaunchProvider({ children }) {
 }
 
 // The timer tucked away: time left and the task, tap to open it again, and
-// "I'm done" right there too.
-function MinimizedChip({ session, ended, theme, specialMode, onResume, onDone }) {
+// both ways to stop right there too (short words: the chip is small).
+function MinimizedChip({ session, ended, theme, specialMode, onResume, onStop, onFinish }) {
   const endMs = new Date(session.endTimeISO).getTime();
   const [left, setLeft] = useState(() => Math.max(0, endMs - Date.now()));
   useEffect(() => {
@@ -309,15 +361,22 @@ function MinimizedChip({ session, ended, theme, specialMode, onResume, onDone })
       style={{ bottom: 'max(5rem, calc(5rem + env(safe-area-inset-bottom)))' }}
     >
       <Timer className="w-4 h-4 text-emerald-500 flex-shrink-0" />
-      <button onClick={onResume} className="text-sm font-medium max-w-[45vw] truncate hover:underline">
+      <button onClick={onResume} className="text-sm font-medium max-w-[30vw] truncate hover:underline">
         <span className="tabular-nums">{ended || left === 0 ? "Time's up" : clock}</span> · {session.title}
       </button>
       <button
-        onClick={onDone}
+        onClick={onStop}
         className="ml-1 text-xs font-semibold px-2.5 py-1 rounded-full hover:bg-black/10 flex-shrink-0"
-        aria-label="I'm done"
+        aria-label="Stop working"
       >
-        I'm done
+        Stop
+      </button>
+      <button
+        onClick={onFinish}
+        className="text-xs font-semibold px-2.5 py-1 rounded-full hover:bg-black/10 flex-shrink-0"
+        aria-label="I finished the task"
+      >
+        Finished ✓
       </button>
     </div>
   );
