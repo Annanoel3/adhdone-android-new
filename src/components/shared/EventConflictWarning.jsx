@@ -84,7 +84,12 @@ export default function EventConflictWarning({ theme }) {
         classification: 'event',
       });
       if (ids) await base44.entities.Task.update(task.id, { onesignal_notification_ids: ids });
-      window.dispatchEvent(new CustomEvent('tasks-updated'));
+      // 'tasks-changed' is the event the pages listen for (Home reloads, and
+      // its reload re-sends the phone's alarm set); nothing listened for the
+      // 'tasks-updated' this used to send. The alarm set is also rebuilt
+      // directly, for the screens that don't reload.
+      window.dispatchEvent(new CustomEvent('tasks-changed'));
+      import('@/components/utils/widgetBridge').then((m) => m.refreshAlarms()).catch(() => {});
     } catch (e) {
       console.error('Failed to reschedule event:', e);
     }
