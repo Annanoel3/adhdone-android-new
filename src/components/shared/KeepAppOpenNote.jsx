@@ -3,7 +3,7 @@ import { Smartphone } from 'lucide-react';
 
 /**
  * Small reminder shown during actions that stop working if the app is closed
- * (calendar sync, 5-minute sprints, the launchpad countdown).
+ * (calendar sync, and task timers on builds that can't ring).
  */
 export default function KeepAppOpenNote({ text = 'Keep ADHDone open — closing the app stops this.', className = '' }) {
   return (
