@@ -433,7 +433,7 @@ export function AlarmPermissionsDialog({ theme }) {
   const [quietAnswer, setQuietAnswer] = useState(undefined);
   // ...and the same for "Silent alarms during events?".
   const [eventAnswer, setEventAnswer] = useState(undefined);
-  // 'timers': asked the first time a focus timer, sprint or launchpad starts —
+  // 'timers': asked the first time a focus timer or task timer starts —
   // those always ring like an alarm, so the wording says why.
   const [feature, setFeature] = useState('');
 
@@ -573,7 +573,7 @@ export function AlarmPermissionsDialog({ theme }) {
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
             {feature === 'timers'
-              ? "The focus timer, 5-minute sprints and the launchpad ring when their time is up, so Android needs these switched on. You can say no — they'll still work, just quieter and easier to miss."
+              ? "The focus timer and task timers ring when their time is up, so Android needs these switched on. You can say no — they'll still work, just quieter and easier to miss."
               : setup
               ? (allOk
                 ? 'Pick the sound it rings with. Every switch Android needed is already on.'
