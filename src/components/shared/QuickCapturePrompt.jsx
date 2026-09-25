@@ -1273,7 +1273,7 @@ const UPDATE_PROMPT_KEY = 'app_update_prompt_last_shown';
 // Switch to true only once the newest build is out on Google Play to everyone
 // (not partway through a staged rollout). Before that there is nothing to
 // update to, so the popup must stay hidden.
-const NEWEST_BUILD_ON_PLAY = false;
+const NEWEST_BUILD_ON_PLAY = true; // 1.3.9 approved on Play, Sep 2026
 // The newest build is 1.3.9: the one that can quiet notifications.
 const hasNewestBuild = () =>
   typeof window !== 'undefined' &&
