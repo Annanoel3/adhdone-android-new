@@ -6,14 +6,14 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Rocket } from "lucide-react";
+import { Timer } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { isTodayTask } from "@/components/utils/todayTasks";
 import LaunchButtons from "./LaunchButtons";
 import LaunchSoundPicker from "./LaunchSoundPicker";
 
-// Home-level entry point for Launchpad / 5-min Sprint. Lets the user pick any
-// today-active task and fire off a launch without digging into a task card.
+// Home's "Timer": pick one of today's tasks and how long, without digging into
+// the task itself. (See LaunchButtons for the timer.)
 export default function LaunchPicker({ open, onOpenChange, theme }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -56,11 +56,10 @@ export default function LaunchPicker({ open, onOpenChange, theme }) {
       <DialogContent className={`max-w-md ${cardClass}`}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Rocket className="w-5 h-5 text-indigo-500" /> Launch a task
+            <Timer className="w-5 h-5 text-emerald-500" /> Start a timer
           </DialogTitle>
           <DialogDescription>
-            Pick a task to start a Launchpad (5-min countdown to liftoff) or a 5-min Sprint (start
-            right now, no pressure).
+            Pick a task and how long. The timer counts down on screen and rings when it's up.
           </DialogDescription>
         </DialogHeader>
         <div className="py-2 max-h-80 overflow-y-auto space-y-2">
@@ -68,7 +67,7 @@ export default function LaunchPicker({ open, onOpenChange, theme }) {
             <p className="text-sm opacity-60 text-center py-4">Loading your tasks…</p>
           ) : tasks.length === 0 ? (
             <p className="text-sm opacity-60 text-center py-4">
-              No active tasks for today yet. Add one and come back to launch it.
+              No active tasks for today yet. Add one and come back to time it.
             </p>
           ) : (
             tasks.map((t) => (
