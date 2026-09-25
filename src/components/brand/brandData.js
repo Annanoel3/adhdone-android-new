@@ -46,7 +46,7 @@ export const FEATURES = [
   { icon: Mic, title: "Smart task capture", desc: "Type it, say it, or snap a photo. The AI figures out the date, the priority, and whether it's a task, an event, a bill, or a birthday." },
   { icon: Share2, title: "Create tasks from any text", desc: "Highlight a text from Mom, share it to ADHDone, done. Works from any app on the phone." },
   { icon: Bell, title: "Smart notifications", desc: "Reminders that know a 3pm ping doesn't get anything done. Deadline-aware, quiet-hours aware, and they never pile up on each other." },
-  { icon: Rocket, title: "Launch into tasks", desc: "Launchpad gives you a 5-minute countdown to liftoff. Sprint says 'just start right now, no pressure.'" },
+  { icon: Timer, title: "Task timer", desc: "Pick how long, watch it count down, then keep going or call it done when it rings." },
   { icon: Timer, title: "Pomodoro timer", desc: "Focus sessions with a break baked in, completion sounds, and optional background music." },
   { icon: Lightbulb, title: "Parking Lot", desc: "Where random ideas go. Brain dump now, turn into tasks later — or never. Both are fine." },
   { icon: CalendarDays, title: "Google Calendar sync", desc: "Optional read-only import. Events, tasks, and birthdays get routed to the right place automatically." },
