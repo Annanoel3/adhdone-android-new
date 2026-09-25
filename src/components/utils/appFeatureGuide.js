@@ -12,7 +12,7 @@ DATES & REMINDERS: "on Friday" = happens that day (night-before heads-up + day-o
 
 TASK FIELDS: priority (low/medium/high/urgent), energy required (low/medium/high), notes, photos, location (only if you gave one — used to suggest combining errands using real drive distance from your home zip, set in Settings), start date & end date for multi-day items, recurrence (daily/weekly/every other week/monthly/yearly).
 
-TASKS PAGE: grouped into Today, Tomorrow, Next 7 Days, Upcoming, No Date, Back Burner. Empty groups start collapsed. Sort options in the dropdown. Swipe/tap a task for details, edit, push due date later (push count is tracked so Insights can flag chronically postponed tasks), snooze, silence, or delete. The rocket icon starts a Focus/Launch sprint on that task.
+TASKS PAGE: grouped into Today, Tomorrow, Next 7 Days, Upcoming, No Date, Back Burner. Empty groups start collapsed. Sort options in the dropdown. Swipe/tap a task for details, edit, push due date later (push count is tracked so Insights can flag chronically postponed tasks), snooze, silence, or delete. Open a task to start a timer on it (5, 10, 15, 25 or 45 minutes, or any length): it counts down on screen with an "I'm done" button, rings when time is up, then offers "Keep going" (Focus Mode on that task) or "I'm done". The Home "Timer" button does the same for any of today's tasks.
 
 BACK BURNER 🔥: silences a task's notifications and drops it out of Today and nudges, but keeps it in the list. Its priority is forced to low while parked and restored when you bring it back. Back-burnered rows show only the task name.
 
