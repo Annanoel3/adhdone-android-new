@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import ContactPickerButton from "../birthdays/ContactPickerButton";
 import { rescheduleScheduledTextReminder } from "../utils/scheduledTextScheduler";
+import { getLocalDateString } from "../utils/todayTasks";
 
 /**
  * Create / edit a general scheduled text. Mirrors BirthdayTextDialog:
@@ -49,7 +50,9 @@ export default function ScheduledTextDialog({ isOpen, onClose, onSaved, user, ed
       setOccasion(editScheduledText.occasion || "");
       setDraft(editScheduledText.message || "");
       if (editScheduledText.send_at) {
-        setDate(new Date(editScheduledText.send_at).toISOString().slice(0, 10));
+        // The person's own calendar day. The UTC day showed an evening text
+        // as the next day, and saving moved it a day later.
+        setDate(getLocalDateString(new Date(editScheduledText.send_at)));
       }
       if (editScheduledText.send_time) {
         setTime(editScheduledText.send_time);
