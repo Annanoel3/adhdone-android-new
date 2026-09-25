@@ -334,10 +334,15 @@ export default function TaskCard({
     // Parking it leaves a permanent mark, so finishing it later still counts
     // as a rescue on the Progress page.
     const patch = newSilenced ? { silenced: true, was_back_burnered: true } : { silenced: false };
-    Task.update(task.id, patch).catch(error => {
-      console.error("Error toggling silenced:", error);
-      if (onRefreshTasks) onRefreshTasks();
-    });
+    Task.update(task.id, patch)
+      // The phone's full-screen alarms are its own copy: parking the task
+      // takes them off, bringing it back puts them back — now, not whenever
+      // Home is next opened.
+      .then(() => import('../utils/widgetBridge').then((m) => m.refreshAlarms()))
+      .catch(error => {
+        console.error("Error toggling silenced:", error);
+        if (onRefreshTasks) onRefreshTasks();
+      });
   };
 
   const getCurrentReminderTime = (taskItem) => {
@@ -502,9 +507,9 @@ export default function TaskCard({
       // Optimistic — update UI instantly
       if (onUpdateTask) onUpdateTask({ ...task, next_reminder: nextReminder.toISOString(), ...namedTime });
 
-      if (interval && interval !== 'once') {
-        // Recurring task: the onTaskUpdate entity automation handles cancelling old
-        // notifications and rescheduling new ones. Frontend only updates next_reminder.
+      if (interval && interval !== 'once' && task.focus_mode_original_interval) {
+        // In Focus Mode the session owns this task's pushes (its check-ins);
+        // only the time is saved, and leaving Focus Mode puts the rhythm back.
         Task.update(task.id, {
           next_reminder: nextReminder.toISOString(),
           ...namedTime,
@@ -512,6 +517,66 @@ export default function TaskCard({
           console.error("Error updating reminder date/time:", error);
           if (onRefreshTasks) onRefreshTasks();
         });
+      } else if (interval && interval !== 'once') {
+        // Recurring task: cancel and rebook here, the same way the details
+        // card does. The server does NOT do it — onTaskUpdate ignores
+        // next_reminder edits (the pings move it every hour) and only
+        // re-books on a title, interval or due-date change — so the pushes
+        // already booked kept going off at the old time.
+        (async () => {
+          try {
+            const oldIds = Array.from(new Set([
+              ...(task.onesignal_notification_ids || []),
+              ...((task.reminder_schedule || []).map(r => r.notification_id)),
+            ])).filter(id => id && !String(id).startsWith('planned_'));
+            if (oldIds.length > 0) {
+              const { cancelScheduledReminder } = await import('../utils/reminderScheduler');
+              await cancelScheduledReminder(oldIds).catch(e => console.error("Cancel failed:", e));
+            }
+
+            const { INTERVAL_MS } = await import('../utils/taskSchedule');
+            const ms = INTERVAL_MS[interval];
+            // A time already gone by starts the pings one interval from now
+            // (same rule as the details card).
+            const startAt = !ms || nextReminder.getTime() > Date.now() + 2 * 60 * 1000
+              ? nextReminder
+              : new Date(Date.now() + ms);
+
+            let notificationIds = [];
+            let lastScheduledUntil = null;
+            if (ms) {
+              const { base44 } = await import('@/api/base44Client');
+              const currentUser = await base44.auth.me();
+              const { scheduleRecurringReminders } = await import('../utils/reminderScheduler');
+              const { getReminderCopy } = await import('../utils/reminderCopy');
+              const booked = await scheduleRecurringReminders({
+                email: currentUser.email,
+                ...getReminderCopy(task, startAt),
+                startTime: startAt.toISOString(),
+                intervalMs: ms,
+                count: 10,
+                taskId: task.id,
+                data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency, type: 'task_reminder' },
+                buttons: [{ id: "snooze_15", text: "Snooze 15 min" }, { id: "snooze_60", text: "Snooze 1 hour" }, { id: "complete", text: "✅ Done" }]
+              });
+              notificationIds = booked.notificationIds || [];
+              lastScheduledUntil = booked.lastScheduledUntil || null;
+            }
+
+            // An empty list with no last_scheduled_until tells the refill cron
+            // to book a fresh run, so a failed booking isn't silent for good.
+            await Task.update(task.id, {
+              next_reminder: startAt.toISOString(),
+              ...namedTime,
+              onesignal_notification_ids: notificationIds,
+              last_scheduled_until: lastScheduledUntil,
+            });
+            import('../utils/widgetBridge').then((m) => m.refreshAlarms()).catch(() => {});
+          } catch (error) {
+            console.error("Error updating reminder date/time:", error);
+            if (onRefreshTasks) onRefreshTasks();
+          }
+        })();
       } else {
         // One-time task: backend automation skips these, so frontend must cancel + reschedule.
         // Fire in the background — UI already updated optimistically.
@@ -566,6 +631,8 @@ export default function TaskCard({
               onesignal_notification_ids: notificationIds,
               reminder_schedule: multiIds ? undefined : null,
             });
+            // The phone's alarms move with the pushes.
+            import('../utils/widgetBridge').then((m) => m.refreshAlarms()).catch(() => {});
           } catch (error) {
             console.error("Error updating reminder date/time:", error);
             if (onRefreshTasks) onRefreshTasks();
@@ -682,7 +749,7 @@ export default function TaskCard({
         <div className="flex items-center gap-2 min-w-0">
           {task.status === 'completed' ? (
             <button
-              onClick={() => onUncomplete && onUncomplete(task)}
+              onClick={() => onUncomplete && onUncomplete(task, 'task_card')}
               className={`flex-shrink-0 ${theme === 'dark' ? 'text-green-400 hover:text-green-300' : 'text-green-600 hover:text-green-700'}`}
               aria-label="Mark as active"
             >
@@ -1237,7 +1304,7 @@ export default function TaskCard({
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => onUncomplete && onUncomplete(task)}
+                  onClick={() => onUncomplete && onUncomplete(task, 'task_card_make_active')}
                   className={`flex items-center gap-2 flex-shrink-0 ${theme === 'dark' ? 'hover:bg-gray-700 text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-700'}`}
                   aria-label="Mark as active"
                 >
@@ -1299,7 +1366,7 @@ export default function TaskCard({
                     }`}
                   >
                     <button
-                      onClick={(e) => { e.stopPropagation(); subtask.status === 'completed' ? onUncomplete(subtask) : onComplete(subtask); }}
+                      onClick={(e) => { e.stopPropagation(); subtask.status === 'completed' ? onUncomplete(subtask, 'task_card_step') : onComplete(subtask); }}
                       className={`flex-shrink-0 transition-colors ${
                         subtask.status === 'completed'
                           ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
