@@ -1274,6 +1274,10 @@ const UPDATE_PROMPT_KEY = 'app_update_prompt_last_shown';
 // (not partway through a staged rollout). Before that there is nothing to
 // update to, so the popup must stay hidden.
 const NEWEST_BUILD_ON_PLAY = true; // 1.3.9 approved on Play, Sep 2026
+// TEMPORARY preview: Anna's test account sees the popup on every app open,
+// even on a phone that already has the newest build, so she can look at it.
+// Delete this list and the `preview` checks below once she has.
+const UPDATE_PREVIEW_EMAILS = ['s2kap2chick@gmail.com'];
 // The newest build is 1.3.9: the one that can quiet notifications.
 const hasNewestBuild = () =>
   typeof window !== 'undefined' &&
@@ -1297,25 +1301,30 @@ export function AppUpdatePrompt({ user, theme }) {
 
   useEffect(() => {
     // Once per app open; not restarted when the account record refreshes.
-    if (!NEWEST_BUILD_ON_PLAY) return;
     if (!user || checked.current) return;
+    const preview = UPDATE_PREVIEW_EMAILS.includes(String(user.email || '').toLowerCase());
+    if (!NEWEST_BUILD_ON_PLAY && !preview) return;
     checked.current = true;
     if (!window.Capacitor?.isNativePlatform?.()) return;
     (async () => {
-      // The phone's plugins can show up a moment after the page loads (the
-      // side menu's quiet button waits for them too): give the newest build
-      // time to announce itself before calling it old.
-      for (let i = 0; i < 16; i++) {
+      if (!preview) {
+        // The phone's plugins can show up a moment after the page loads (the
+        // side menu's quiet button waits for them too): give the newest build
+        // time to announce itself before calling it old.
+        for (let i = 0; i < 16; i++) {
+          if (!mounted.current || hasNewestBuild()) return;
+          await new Promise((r) => setTimeout(r, 500));
+        }
         if (!mounted.current || hasNewestBuild()) return;
-        await new Promise((r) => setTimeout(r, 500));
+        const today = new Date().toDateString();
+        try {
+          if (localStorage.getItem(UPDATE_PROMPT_KEY) === today) return;
+          localStorage.setItem(UPDATE_PROMPT_KEY, today);
+        } catch (e) { /* no storage: still show it this once */ }
       }
-      if (!mounted.current || hasNewestBuild()) return;
-      const today = new Date().toDateString();
-      try {
-        if (localStorage.getItem(UPDATE_PROMPT_KEY) === today) return;
-        localStorage.setItem(UPDATE_PROMPT_KEY, today);
-      } catch (e) { /* no storage: still show it this once */ }
-      setAskVibrate(user.alarm_mode === 'alarm' && typeof user.alarm_vibrate_when_quiet !== 'boolean');
+      if (!mounted.current) return;
+      // The preview always shows the vibrate question so the whole card can be seen.
+      setAskVibrate(preview || (user.alarm_mode === 'alarm' && typeof user.alarm_vibrate_when_quiet !== 'boolean'));
       trackFire('update_prompt', { props: { action: 'shown' } });
       setWanted(true);
     })();
