@@ -5,6 +5,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { getLocalDateString } from '../utils/todayTasks';
 
 // Due date for a Smart Reminders task. Smart tasks have no fixed reminder time
 // — the AI decides when to nudge — but they can still be due by a day, and the
@@ -46,7 +47,11 @@ export default function SmartDueDatePill({ task, theme, onSave }) {
           <label className={`text-sm font-medium block ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>Due Date:</label>
           <input
             type="date"
-            defaultValue={due ? new Date(due).toISOString().split('T')[0] : ''}
+            // The day on the person's own calendar, the same day the pill shows.
+            // This used to be the UTC day: a task due Sep 25 at 11:59 PM showed
+            // Sep 26 here, and picking Sep 26 did nothing (the box already
+            // said Sep 26, so the phone reported no change).
+            defaultValue={due ? getLocalDateString(new Date(due)) : ''}
             onChange={(e) => { if (e.target.value) { save(e.target.value); setOpen(false); } }}
             className={`w-full border rounded px-3 py-2 ${isDark ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
           />
