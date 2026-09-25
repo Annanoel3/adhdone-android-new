@@ -41,7 +41,7 @@ import {
   alarmQuietChoiceSupported,
   eventQuietSupported,
 } from '../utils/widgetBridge';
-import { AlarmSoundPicker, AlarmQuietChoice, AlarmEventQuietChoice } from '../settings/QuickCaptureCard';
+import { AlarmSoundPicker, AlarmQuietChoice, AlarmEventQuietChoice, QuietWhenButtons } from '../settings/QuickCaptureCard';
 
 const SEEN_KEY = 'quick_capture_prompt_seen';
 
@@ -1278,16 +1278,29 @@ const NEWEST_BUILD_ON_PLAY = true; // 1.3.9 approved on Play, Sep 2026
 // even on a phone that already has the newest build, so she can look at it.
 // Delete this list and the `preview` checks below once she has.
 const UPDATE_PREVIEW_EMAILS = ['s2kap2chick@gmail.com'];
-// The newest build is 1.3.9: the one that can quiet notifications.
-const hasNewestBuild = () =>
+// Switch to true once 1.3.12 is out on Google Play to everyone. It becomes the
+// newest build then (the one that can tell silent mode and Do Not Disturb
+// apart for vibrate-only alarms), so 1.3.9-1.3.11 phones get this same popup
+// too, and it offers that choice. Until then the newest build is 1.3.9.
+const QUIET_CHOICE_ON_PLAY = false;
+const hasQuietHoursBuild = () =>
   typeof window !== 'undefined' &&
   typeof window.Capacitor?.Plugins?.AlarmBridge?.quietFor === 'function';
+const hasQuietChoiceBuild = () =>
+  typeof window !== 'undefined' &&
+  typeof window.Capacitor?.Plugins?.AlarmBridge?.setQuietWhen === 'function';
+const hasNewestBuild = () => (QUIET_CHOICE_ON_PLAY ? hasQuietChoiceBuild() : hasQuietHoursBuild());
 
 export function AppUpdatePrompt({ user, theme }) {
   const dark = theme === 'dark';
   const [wanted, setWanted] = useState(false);
   const [askVibrate, setAskVibrate] = useState(false);
   const [vibrate, setVibrate] = useState(null);
+  // The 1.3.12 wording and the four-way vibrate question (see QUIET_CHOICE_ON_PLAY).
+  const [choiceLive, setChoiceLive] = useState(false);
+  const [quietWhen, setQuietWhen] = useState(null);
+  // This phone already has 1.3.9's "quiet for 1, 2 or 3 hours".
+  const [hasQuietHours, setHasQuietHours] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showSteps, setShowSteps] = useState(false);
@@ -1323,8 +1336,16 @@ export function AppUpdatePrompt({ user, theme }) {
         } catch (e) { /* no storage: still show it this once */ }
       }
       if (!mounted.current) return;
+      const live = QUIET_CHOICE_ON_PLAY || preview;
+      setChoiceLive(live);
+      setHasQuietHours(hasQuietHoursBuild());
       // The preview always shows the vibrate question so the whole card can be seen.
-      setAskVibrate(preview || (user.alarm_mode === 'alarm' && typeof user.alarm_vibrate_when_quiet !== 'boolean'));
+      // With the four-way choice: alarm users who haven't picked which quiet
+      // counts yet, except anyone who already said "ring out loud".
+      const askFour = user.alarm_mode === 'alarm' && user.alarm_vibrate_when_quiet !== false
+        && !['silent', 'dnd', 'both'].includes(user.alarm_quiet_when);
+      const askTwo = user.alarm_mode === 'alarm' && typeof user.alarm_vibrate_when_quiet !== 'boolean';
+      setAskVibrate(preview || (live ? askFour : askTwo));
       trackFire('update_prompt', { props: { action: 'shown' } });
       setWanted(true);
     })();
@@ -1336,6 +1357,22 @@ export function AppUpdatePrompt({ user, theme }) {
     try {
       await base44.auth.updateMe({ alarm_vibrate_when_quiet: on });
       setVibrate(on);
+    } catch (e) {
+      setError("Couldn't save that. Try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Saved to the account now; the phone gets it on the next app open after
+  // the update (WidgetTaskSync).
+  const pickQuietWhen = async (w) => {
+    const on = w !== 'off';
+    setSaving(true);
+    setError('');
+    try {
+      await base44.auth.updateMe(on ? { alarm_vibrate_when_quiet: true, alarm_quiet_when: w } : { alarm_vibrate_when_quiet: false });
+      setQuietWhen(w);
     } catch (e) {
       setError("Couldn't save that. Try again.");
     } finally {
@@ -1373,21 +1410,44 @@ export function AppUpdatePrompt({ user, theme }) {
             There's an update!
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
-            The new version of ADHDone lets you quiet your reminders and alarms for 1, 2 or 3 hours.
-            They still show up, just with no sound.
+            {choiceLive && hasQuietHours ? (
+              <>The new version of ADHDone lets you pick when alarms only vibrate: on silent or vibrate mode, on Do Not Disturb, or both.</>
+            ) : (
+              <>
+                The new version of ADHDone lets you quiet your reminders and alarms for 1, 2 or 3 hours.
+                They still show up, just with no sound.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
-        <div className={`text-sm ${main}`}>
-          <p className="font-medium">Three ways to quiet them:</p>
-          <ul className={`mt-2 space-y-1.5 ${sub}`}>
-            <li>🔕 Expand the pinned notification and pick 1, 2 or 3 hours.</li>
-            <li>📱 Tap "Silence 1 hr" on the home-screen widget.</li>
-            <li>☰ Tap "Quiet notifications" in the side menu.</li>
-          </ul>
-        </div>
+        {!(choiceLive && hasQuietHours) && (
+          <div className={`text-sm ${main}`}>
+            <p className="font-medium">Three ways to quiet them:</p>
+            <ul className={`mt-2 space-y-1.5 ${sub}`}>
+              <li>🔕 Expand the pinned notification and pick 1, 2 or 3 hours.</li>
+              <li>📱 Tap "Silence 1 hr" on the home-screen widget.</li>
+              <li>☰ Tap "Quiet notifications" in the side menu.</li>
+            </ul>
+            {choiceLive && (
+              <p className={`mt-2 ${sub}`}>You can also pick when alarms only vibrate: on silent or vibrate mode, on Do Not Disturb, or both.</p>
+            )}
+          </div>
+        )}
 
-        {askVibrate && (
+        {askVibrate && choiceLive && (
+          <div className={`rounded-xl border p-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
+            <p className={`text-sm font-medium ${main}`}>
+              Should alarms only vibrate when your phone is quiet?
+            </p>
+            <p className={`text-xs mt-1 ${sub}`}>
+              This starts working once you update. You can change it any time in Settings.
+            </p>
+            <QuietWhenButtons value={quietWhen} onPick={pickQuietWhen} disabled={saving} />
+          </div>
+        )}
+
+        {askVibrate && !choiceLive && (
           <div className={`rounded-xl border p-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
             <p className={`text-sm font-medium ${main}`}>
               When your phone is on silent, vibrate or Do Not Disturb, should alarms only vibrate?
