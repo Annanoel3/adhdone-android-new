@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { pushPhoneAlarms } from '../../shared/reminderTitle.ts';
+import { userTimeZone, rhythmNamedMin, notBeforeNamedTime } from '../../shared/quietHours.ts';
 
 // cronTaskReminders: bookkeeping only — advances next_reminder so cronRefillReminders
 // knows when to schedule the next batch. Does NOT send any notifications itself.
@@ -68,6 +69,11 @@ Deno.serve(async (req) => {
         const ms = intervalMs[t.reminder_interval];
         let nextTime = when + ms;
         while (nextTime <= now) nextTime += ms;
+        // A repeating task's rhythm waits for the time they named (see
+        // rhythmNamedMin), so the phone's alarm and the refill both pick up
+        // there, not first thing in the morning.
+        const namedMin = rhythmNamedMin(t, ms);
+        if (namedMin !== null) nextTime = notBeforeNamedTime(new Date(nextTime), namedMin, userTimeZone(user)).getTime();
         const next = new Date(nextTime).toISOString();
 
         await base44.asServiceRole.entities.Task.update(t.id, {
