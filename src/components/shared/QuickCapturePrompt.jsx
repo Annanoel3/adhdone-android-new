@@ -1274,10 +1274,6 @@ const UPDATE_PROMPT_KEY = 'app_update_prompt_last_shown';
 // (not partway through a staged rollout). Before that there is nothing to
 // update to, so the popup must stay hidden.
 const NEWEST_BUILD_ON_PLAY = true; // 1.3.9 approved on Play, Sep 2026
-// TEMPORARY preview: Anna's test account sees the popup on every app open,
-// even on a phone that already has the newest build, so she can look at it.
-// Delete this list and the `preview` checks below once she has.
-const UPDATE_PREVIEW_EMAILS = ['s2kap2chick@gmail.com'];
 // 1.3.12 is the newest build (the one that can tell silent mode and Do Not
 // Disturb apart for vibrate-only alarms), so 1.3.9-1.3.11 phones get this same
 // popup too, and it offers that choice. Approved on Google Play Sep 25, 2026.
@@ -1314,37 +1310,33 @@ export function AppUpdatePrompt({ user, theme }) {
   useEffect(() => {
     // Once per app open; not restarted when the account record refreshes.
     if (!user || checked.current) return;
-    const preview = UPDATE_PREVIEW_EMAILS.includes(String(user.email || '').toLowerCase());
-    if (!NEWEST_BUILD_ON_PLAY && !preview) return;
+    if (!NEWEST_BUILD_ON_PLAY) return;
     checked.current = true;
     if (!window.Capacitor?.isNativePlatform?.()) return;
     (async () => {
-      if (!preview) {
-        // The phone's plugins can show up a moment after the page loads (the
-        // side menu's quiet button waits for them too): give the newest build
-        // time to announce itself before calling it old.
-        for (let i = 0; i < 16; i++) {
-          if (!mounted.current || hasNewestBuild()) return;
-          await new Promise((r) => setTimeout(r, 500));
-        }
+      // The phone's plugins can show up a moment after the page loads (the
+      // side menu's quiet button waits for them too): give the newest build
+      // time to announce itself before calling it old.
+      for (let i = 0; i < 16; i++) {
         if (!mounted.current || hasNewestBuild()) return;
-        const today = new Date().toDateString();
-        try {
-          if (localStorage.getItem(UPDATE_PROMPT_KEY) === today) return;
-          localStorage.setItem(UPDATE_PROMPT_KEY, today);
-        } catch (e) { /* no storage: still show it this once */ }
+        await new Promise((r) => setTimeout(r, 500));
       }
+      if (!mounted.current || hasNewestBuild()) return;
+      const today = new Date().toDateString();
+      try {
+        if (localStorage.getItem(UPDATE_PROMPT_KEY) === today) return;
+        localStorage.setItem(UPDATE_PROMPT_KEY, today);
+      } catch (e) { /* no storage: still show it this once */ }
       if (!mounted.current) return;
-      const live = QUIET_CHOICE_ON_PLAY || preview;
+      const live = QUIET_CHOICE_ON_PLAY;
       setChoiceLive(live);
       setHasQuietHours(hasQuietHoursBuild());
-      // The preview always shows the vibrate question so the whole card can be seen.
       // With the four-way choice: alarm users who haven't picked which quiet
       // counts yet, except anyone who already said "ring out loud".
       const askFour = user.alarm_mode === 'alarm' && user.alarm_vibrate_when_quiet !== false
         && !['silent', 'dnd', 'both'].includes(user.alarm_quiet_when);
       const askTwo = user.alarm_mode === 'alarm' && typeof user.alarm_vibrate_when_quiet !== 'boolean';
-      setAskVibrate(preview || (live ? askFour : askTwo));
+      setAskVibrate(live ? askFour : askTwo);
       trackFire('update_prompt', { props: { action: 'shown' } });
       setWanted(true);
     })();
