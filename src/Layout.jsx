@@ -122,6 +122,13 @@ import {
 // Labels for the seasonal/special slot in the theme rotation, so the button
 // names the theme you're actually looking at instead of falling back to the
 // base theme's label ("Light Theme") while a seasonal skin is on screen.
+// "Last looked at the app" (last_active_at) also counts coming back to it —
+// the phone keeps the app alive in the background, so most looks are a resume,
+// not a fresh load. The nudge planner reads it to tell whether its reminders
+// are being seen. Written at most every 10 minutes.
+const SEEN_WRITE_EVERY_MS = 10 * 60 * 1000;
+let lastSeenWriteMs = 0;
+
 const SPECIAL_MODE_LABELS = {
   kawaii: 'Kawaii ✨',
   halloween: 'Halloween 🎃',
@@ -1407,6 +1414,19 @@ export default function Layout({ children, currentPageName }) {
   useEffect(() => {
     checkUserStatusAndTrial();
   }, [checkUserStatusAndTrial]);
+
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      const nowMs = Date.now();
+      if (nowMs - lastSeenWriteMs < SEEN_WRITE_EVERY_MS) return;
+      lastSeenWriteMs = nowMs;
+      base44.auth.updateMe({ last_active_at: new Date(nowMs).toISOString() }).catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [user?.id]);
 
   if (!authCheckComplete) {
     return (
