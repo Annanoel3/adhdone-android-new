@@ -158,6 +158,17 @@ export function nextOccurrence(task, now = new Date()) {
     next = advance(next, task.recurrence_pattern, task.recurrence_days);
   }
   if (at(next) <= now) next = advance(now, task.recurrence_pattern, task.recurrence_days);
+  // A late finish covers the day it happened. Finishing an occurrence from an
+  // earlier day (last night's 9 PM litter box, done at 8:45 the next morning)
+  // counts as today's as well, so the next copy is the first one AFTER today.
+  // It used to be tonight's, back on Today the moment it was checked off.
+  // Finishing on time or early changes nothing here.
+  if (dayDelta(base, now) > 0) {
+    let lateGuard = 0;
+    while (sameLocalDay(at(next), now) && lateGuard++ < 400) {
+      next = advance(next, task.recurrence_pattern, task.recurrence_days);
+    }
+  }
   return { base, nextDate: at(next) };
 }
 
