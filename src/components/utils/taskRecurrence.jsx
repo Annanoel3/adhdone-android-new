@@ -4,6 +4,8 @@ import { scheduleReminder, cancelScheduledReminder } from './reminderScheduler';
 import { commitNotificationIds } from './notificationOwnership';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// Until this hour a finish still counts toward the day before (see nextOccurrence).
+const LATE_NIGHT_ENDS_HOUR = 4;
 
 // Advance a date by one cycle of the pattern. 'weekdays' steps forward a day
 // and then skips Saturday/Sunday, so a business-days habit never lands on the
@@ -162,10 +164,14 @@ export function nextOccurrence(task, now = new Date()) {
   // earlier day (last night's 9 PM litter box, done at 8:45 the next morning)
   // counts as today's as well, so the next copy is the first one AFTER today.
   // It used to be tonight's, back on Today the moment it was checked off.
-  // Finishing on time or early changes nothing here.
-  if (dayDelta(base, now) > 0) {
+  // Finishing on time or early changes nothing here. The small hours still
+  // belong to the night before: last night's litter box done at 12:30 AM is
+  // just late, and tonight's copy stays.
+  const finishDay = new Date(now);
+  if (finishDay.getHours() < LATE_NIGHT_ENDS_HOUR) finishDay.setDate(finishDay.getDate() - 1);
+  if (dayDelta(base, finishDay) > 0) {
     let lateGuard = 0;
-    while (sameLocalDay(at(next), now) && lateGuard++ < 400) {
+    while (sameLocalDay(at(next), finishDay) && lateGuard++ < 400) {
       next = advance(next, task.recurrence_pattern, task.recurrence_days);
     }
   }
