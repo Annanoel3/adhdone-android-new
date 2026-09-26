@@ -30,8 +30,14 @@ export default function WidgetOpenReceiver() {
     const deliver = (rawPath) => {
       if (!isSafePath(rawPath)) return;
       // A widget task tap should land on the task's details card, not the
-      // reminder/snooze screen the push notifications use.
-      const path = rawPath.startsWith('/TaskNotification')
+      // reminder/snooze screen the push notifications use. "Done" on a
+      // reminder or on the phone's alarm comes through here too, with done=1,
+      // and only the reminder screen finishes a task from that. Sending it to
+      // the details card as well meant Done did nothing: the reminder went
+      // away and the task stayed unfinished ("Take Pills" done from its
+      // notification in the car, and asked about again an hour later).
+      const finishIt = rawPath.startsWith('/TaskNotification') && /[?&]done=1(&|$)/.test(rawPath);
+      const path = rawPath.startsWith('/TaskNotification') && !finishIt
         ? rawPath.replace('/TaskNotification', '/Tasks')
         : rawPath;
       const now = Date.now();
