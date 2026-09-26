@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent, pushPhoneAlarms } from '../../shared/reminderTitle.ts';
-import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime } from '../../shared/quietHours.ts';
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
@@ -292,6 +292,10 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // A repeating task's rhythm never pings before the time they named
+      // (see rhythmNamedMin): those slots are left out.
+      const namedMin = rhythmNamedMin(task, interval);
+
       const notificationIds = [];
       let lastScheduledAt: Date | null = null; // de-dupe quiet-hour slots that collapse to the same time
       let rejected = false; // OneSignal refused a booking — not the same as "the digest covers it"
@@ -312,6 +316,7 @@ Deno.serve(async (req) => {
             continue;
           }
         }
+        if (namedMin !== null && notBeforeNamedTime(sendAt, namedMin, timeZone).getTime() !== sendAt.getTime()) continue;
         if (sendAt.getTime() <= now.getTime()) continue;
         const sendAtISO = sendAt.toISOString();
         // Focus Mode: the focused task gets check-in style reminders.
