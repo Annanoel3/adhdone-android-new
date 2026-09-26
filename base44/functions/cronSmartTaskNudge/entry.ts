@@ -323,12 +323,59 @@ Deno.serve(async (req) => {
         nowMs - plannedAtMs >= SINCE_LAST_LOOK &&
         minsBeforeQuiet >= 60;
 
-      if (!hasValidSchedule || secondLook) {
+      // Are they landing? The day's plan was made expecting its nudges to be
+      // seen. When two of today's have gone out since they last looked at the
+      // app and more are still planned, the rest aren't sent blind: the
+      // planner looks again, now knowing they haven't been seen, and decides
+      // what (if anything) is still worth their attention today. Once per
+      // unseen nudge: after the new plan, it takes another one going unseen.
+      const seenMs = utcMs(user.last_active_at);
+      const unseenSentMs = todaysEntries
+        .filter((e: any) => e.sent && !e.skipped_reason)
+        .map((e: any) => utcMs(e.sent_at || e.send_at))
+        .filter((ms: number) => Number.isFinite(ms) && !(Number.isFinite(seenMs) && ms <= seenMs));
+      const lastUnseenMs = unseenSentMs.length ? Math.max(...unseenSentMs) : NaN;
+      const notLanding = !onlyEmail && hasValidSchedule &&
+        todaysEntries.some((e: any) => !e.sent) &&
+        unseenSentMs.length >= 2 && Number.isFinite(lastUnseenMs) && plannedAtMs < lastUnseenMs;
+      if (notLanding) {
+        console.log(`[SMART NUDGE] ${email}: ${unseenSentMs.length} of today's nudges went out since they last looked — re-planning before sending more`);
+      }
+
+      if (!hasValidSchedule || secondLook || notLanding) {
+        // Everything the app sends them today, from every sender (the send
+        // ledger keeps three days), and how much has gone out since they last
+        // looked at the app: the planner budgets their attention for the whole
+        // day, not just its own nudges.
+        const localMin = localMinutesOfDay(now, timeZone);
+        const dayStartMs = nowMs - localMin * 60 * 1000;
+        const dayPushes: { at: number; title: string; mine: boolean }[] = [];
+        let sentSinceSeen = 0;
+        try {
+          const ledgerFrom = Math.min(dayStartMs, Number.isFinite(seenMs) ? Math.max(seenMs, nowMs - 3 * DAY_MS) : dayStartMs);
+          const rows = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
+            user_email: email,
+            send_at: { $gte: new Date(ledgerFrom).toISOString() },
+          });
+          for (const r of rows) {
+            const at = utcMs(r.send_at);
+            if (!Number.isFinite(at)) continue;
+            if (at <= nowMs && Number.isFinite(seenMs) && at > seenMs) sentSinceSeen++;
+            if (at >= dayStartMs && at < dayStartMs + DAY_MS) {
+              dayPushes.push({ at, title: String(r.title || r.kind || 'a notification').slice(0, 80), mine: r.kind === 'smart_nudge' });
+            }
+          }
+          dayPushes.sort((a, b) => a.at - b.at);
+        } catch (e) {
+          console.error(`[SMART NUDGE] ${email}: today's notifications unavailable:`, e);
+        }
+
         // Nudges from today already queued to go out within the next half
         // hour stay queued (the planner is told about them), as long as every
         // task they name is still open and still ours. Anything left over from
-        // an earlier day is dropped, as before.
-        const queued = schedule.filter((e: any) => {
+        // an earlier day is dropped, as before. Not when they aren't being
+        // seen: then nothing goes out unless this new plan says so.
+        const queued = notLanding ? [] : schedule.filter((e: any) => {
           if (e.sent) return false;
           const at = utcMs(e.send_at);
           const ids = entryTaskIds(e);
@@ -337,7 +384,6 @@ Deno.serve(async (req) => {
             ids.length > 0 && ids.every((id: string) => openTaskIds.has(id));
         });
 
-        const localMin = localMinutesOfDay(now, timeZone);
         const newEntries = await generateDailySchedule(pool, {
           localMin,
           timeZone,
@@ -362,6 +408,10 @@ Deno.serve(async (req) => {
             .map((c) => c.title)
             .filter(Boolean),
           showReactions: hasEnoughHistory(email),
+          dayPushes,
+          lastSeenMs: seenMs,
+          sentSinceSeen,
+          seenCountIsFloor: Number.isFinite(seenMs) && seenMs < nowMs - 3 * DAY_MS,
         });
 
         // null = the planner failed: change nothing, send what's already
@@ -828,12 +878,19 @@ interface PlanContext {
   work: { lines: string[]; remote: boolean; quietAtWork: boolean };
   doneToday: string[];
   showReactions: boolean;
+  // Every notification the app sends them today (all senders), and whether
+  // they're looking at the app at all.
+  dayPushes: { at: number; title: string; mine: boolean }[];
+  lastSeenMs: number;
+  sentSinceSeen: number;
+  seenCountIsFloor: boolean;
 }
 
 async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<any[] | null> {
   const {
     localMin, timeZone, quietStartMin, quietEndMin, subtasksByParent, events,
     homeOrigin, aboutMe, avoidTolls, nudgeHistory, queued, recentSent, work, doneToday, showReactions,
+    dayPushes, lastSeenMs, sentSinceSeen, seenCountIsFloor,
   } = ctx;
   const hour = Math.floor(localMin / 60);
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
@@ -1059,6 +1116,17 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
   const doneBlock = doneToday.length
     ? `\nALREADY FINISHED TODAY (context only — good for momentum, never list them back):\n${doneToday.slice(0, 15).map((d) => `- "${d}"`).join('\n')}\n`
     : '';
+  // The whole day's notifications, from every part of the app.
+  const pushesSent = dayPushes.filter((p) => p.at <= nowMs).length;
+  const pushesBooked = dayPushes.length - pushesSent;
+  const dayBlock = `\nTHE BOSS'S DAY SO FAR — every notification the app sends them today, not only yours (the morning digest, appointment and "at" reminders, rhythms they asked for, commute alerts, your nudges):\n${
+    dayPushes.length
+      ? dayPushes.slice(0, 40).map((p) => `- ${clock(p.at)} ${p.title}${p.mine ? ' (your nudge)' : ''}${p.at > nowMs ? ' — booked, not sent yet' : ''}`).join('\n')
+      : '- nothing yet'
+  }\n(${pushesSent} sent so far today, ${pushesBooked} still booked for later)\n`;
+  const seenLine = Number.isFinite(lastSeenMs)
+    ? `- Last looked at the app: ${whenLabel(lastSeenMs)} (${daysAgoLabel(lastSeenMs)})${sentSinceSeen > 0 ? ` — ${seenCountIsFloor ? 'at least ' : ''}${sentSinceSeen} notification${sentSinceSeen === 1 ? ' has' : 's have'} gone out since then` : ' — nothing has gone out since'}\n`
+    : '';
   const queuedBlock = queued.length
     ? `\nALREADY QUEUED — going out in the next few minutes no matter what (don't plan these again; space anything else around them):\n${queued.map((e) => `- "${e.title}" at ${clock(utcMs(e.send_at))}`).join('\n')}\n`
     : '';
@@ -1071,11 +1139,11 @@ CURRENT CONTEXT:
 - Today: ${todayLabel}
 - Current time: ${timeStr} (${timeOfDay})
 - Timezone: ${timeZone}
-${aboutMe.trim() ? `- ABOUT YOUR BOSS, in their own words: ${aboutMe.trim()}\n  Use this only to judge what a task really involves and how much it matters to THEM. Never quote it back at them in a notification.\n` : ''}- Quiet hours: ${noQuietHours ? 'NONE — this user has quiet hours turned off and is often up until around midnight, so late-evening nudges are welcome' : `${quietStartStr} - ${quietEndStr} (never schedule during these)`}
+${seenLine}${aboutMe.trim() ? `- ABOUT YOUR BOSS, in their own words: ${aboutMe.trim()}\n  Use this only to judge what a task really involves and how much it matters to THEM. Never quote it back at them in a notification.\n` : ''}- Quiet hours: ${noQuietHours ? 'NONE — this user has quiet hours turned off and is often up until around midnight, so late-evening nudges are welcome' : `${quietStartStr} - ${quietEndStr} (never schedule during these)`}
 ${workBlock}
 FULL TASK LIST (you decide what's relevant today — you have the week ahead):
 ${taskList}
-${eventList ? `\nFIXED APPOINTMENTS TODAY (context only — do NOT nudge these, they have their own reminders):\n${eventList}\n` : ''}${upcomingList ? `\nCOMING UP THIS WEEK (context only — never nudge these; use them to spot prep a task needs before one, and to judge timing):\n${upcomingList}\n` : ''}${proximityNotes ? `\n${proximityNotes}\n` : ''}${doneBlock}${nudgedTodayTitles.length > 0 ? `\nTASKS ALREADY NUDGED TODAY (use check-in style — "Have you done X yet?"):\n${nudgedTodayTitles.map(t => `- "${t}"`).join('\n')}\n` : ''}${queuedBlock}
+${eventList ? `\nFIXED APPOINTMENTS TODAY (context only — do NOT nudge these, they have their own reminders):\n${eventList}\n` : ''}${upcomingList ? `\nCOMING UP THIS WEEK (context only — never nudge these; use them to spot prep a task needs before one, and to judge timing):\n${upcomingList}\n` : ''}${proximityNotes ? `\n${proximityNotes}\n` : ''}${doneBlock}${dayBlock}${nudgedTodayTitles.length > 0 ? `\nTASKS ALREADY NUDGED TODAY (use check-in style — "Have you done X yet?"):\n${nudgedTodayTitles.map(t => `- "${t}"`).join('\n')}\n` : ''}${queuedBlock}
 YOUR APPROACH:
 - USE EVERYTHING ON A TASK'S LINE, together: what they said when they added it ("in their words" — often says more than the title about what it involves, when, and why), the notes, the time they named, whether it's work or personal, whether it's a bill, whether it repeats, how long it has been sitting there, and when you last nudged it. Decide the way an assistant who knew all of that would.
 - A REMINDER WISH on a task is the boss's own instruction about how, when or how often to nudge THAT task ("keep reminding me until I finish", "just once", "don't bug me before noon", "only on weekdays"). Obey it over every rule below for that task: it sets the count, the spacing and the earliest hour — and today's date and weekday are at the top. Where the wish is silent, the rules below apply.
@@ -1094,6 +1162,9 @@ YOUR APPROACH:
 - "DEADLINE in N days" vs "happens on [day]" — TREAT THESE COMPLETELY DIFFERENTLY:
   * DEADLINE tasks can be worked on ahead of time, so give them RUNWAY. The app already sends every deadline a fixed heads-up the evening before and one at 9 AM on the due day (a deadline with a clock time also gets one about an hour before it) — those are not yours to repeat; the run-up and the rest of the due day are. How much runway depends on how much work the task actually is — judge that from the task itself: a one-step thing (pay a bill, send an email, book something online) needs 1-2 days; an errand or anything involving another person, an office, or paperwork needs 3-5 days; a genuinely big multi-step job (taxes, a report, applications, packing, cleaning out a room) deserves nudges starting a week or two out, framed around ONE small first step. Never let a big deadline task get its first nudge the day before.
   * "happens on [day]" tasks are tied to that specific day and CANNOT be done sooner — do not nudge in the days leading up (at most a heads-up the night before). Nudging early just makes the user feel behind on something they can't act on yet.
+- PICK YOUR BATTLES. The boss's patience is ONE budget for the whole day, shared by every notification the app sends them — everything under THE BOSS'S DAY SO FAR, not just yours. Every nudge spends some of it, and once they start swiping without reading, even the important ones stop landing. Before adding a nudge, ask whether it's worth more than what's already landing today. Spend the budget on what matters most — deadlines, anything overdue, urgent things, anything a person, a pet, their health or their money depends on — and let the rest wait for a better day or ride along in one combined mention. A good assistant never lets the day turn into a pile of pings.
+- READ WHETHER THE BOSS IS AROUND. If they haven't looked at the app since several notifications went out, more notifications aren't reaching them: go quiet — at most one well-timed nudge today, for the single thing that matters most, and none if nothing is pressing. If they haven't opened it in days, treat it like a boss who's away: only something with a real deadline or real consequences gets a nudge, once. When they're back in the app, pick things up again.
+- A CHECK-IN HAS TO EARN ITS PLACE: only when the first nudge had a fair chance to land (they've looked at the app since, or it went out a good while ago) and the task is worth asking about twice. On an everyday task, one check-in that goes unanswered is enough for the day.
 - NOT EVERY TASK NEEDS A NUDGE TODAY: a low-priority task with no deadline can wait. Use judgment — you're the assistant, you decide what matters now.
 - A TASK WITH NO DATE ISN'T A SOMEDAY. People rarely put a day on everyday things: "remind me to take my pills", "feed the cat", "call the vet" almost always mean today, and the app lists a task with no date under Today. Unless it's low priority or plainly a someday idea, plan it as one of today's: nudge it, and when it's the kind of thing that really does need doing today, also plan a friendly check-in in case it's still open. Time that check-in by when the thing is normally done: something most people do first thing (morning pills, feeding a pet, taking something out of the freezer) gets checked on within an hour or two of the first nudge, not in the afternoon. You usually plan only once a day, so plan that follow-up now. Anything they finish first is skipped automatically, so a check-in never lands on something already done.
 - A TASK THAT REPEATS (daily pills, weekly trash) is shown as its current occurrence — treat it like any other task with that date and time.
@@ -1120,7 +1191,7 @@ ${urgentCount >= 2 ? `- There are ${urgentCount} URGENT tasks. Consider one noti
 - LATE EVENING (after 8 PM local): only nudge things that can actually be done right then — at home, online, or by phone. Anything that would mean buying something, going somewhere, or dealing with a business or another person is not actionable at that hour, so hold it for the morning instead. And never word a late nudge as if they can go get it now ("grab that on your way") — if you surface a shopping-type task late, frame it as ordering it or lining it up for tomorrow.
 - delay_minutes: minutes from NOW to send this nudge (e.g., 30 = 30 min from now, 120 = 2 hours from now).
 - Don't schedule past ${cutoffLabel}.
-- You decide HOW MANY nudges. There's no cap, no formula. Use your judgment — some days need 2, some need 6.
+- You decide HOW MANY nudges. There's no cap and no formula — just judgment. Some days need one, some need several; most need fewer than it seems, and none at all is a fine answer.
 
 Return ONLY valid JSON:
 {
