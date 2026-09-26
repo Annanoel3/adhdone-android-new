@@ -3,7 +3,8 @@ import { ledgerCancel } from '../../shared/sendLedger.ts';
 
 Deno.serve(async (req) => {
   try {
-    const { taskId } = await req.json();
+    const body = await req.json();
+    const { taskId } = body || {};
 
     if (!taskId) {
       return Response.json({ 
@@ -23,6 +24,25 @@ Deno.serve(async (req) => {
     }
 
     const base44 = createClientFromRequest(req);
+
+    // Who's asking. Only the task's owner (or its reminder recipient), an app
+    // admin, or the app's own backend (the internal key) may cancel a task's
+    // reminders. Anyone holding a task id used to be able to silence it.
+    const internalKey = Deno.env.get('CRON_SECRET')?.trim();
+    const presentedKey = typeof body?.internalKey === 'string' ? body.internalKey.trim() : '';
+    const isInternal = !!internalKey && presentedKey === internalKey;
+    let me: any = null;
+    if (!isInternal) {
+      try {
+        me = await base44.auth.me();
+      } catch {
+        me = null;
+      }
+      if (!me?.email) {
+        return Response.json({ success: false, error: 'Sign in required' }, { status: 401 });
+      }
+    }
+
     const task = await base44.asServiceRole.entities.Task.get(taskId);
 
     if (!task) {
@@ -30,6 +50,17 @@ Deno.serve(async (req) => {
         success: false, 
         error: 'Task not found' 
       }, { status: 404 });
+    }
+
+    if (!isInternal) {
+      const email = String(me.email).toLowerCase();
+      const allowed = email === String(task.created_by || '').toLowerCase() ||
+        email === String(task.notification_recipient_email || '').toLowerCase() ||
+        me.role === 'admin';
+      if (!allowed) {
+        console.warn('[cancelTaskNotifications] refused: caller does not own this task');
+        return Response.json({ success: false, error: 'Not allowed' }, { status: 403 });
+      }
     }
 
     let canceledCount = 0;
