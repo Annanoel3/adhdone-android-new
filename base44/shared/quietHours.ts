@@ -149,6 +149,28 @@ export function anchorToDaytime(
   return new Date(windowEnd.getTime() + (slotMin - endMin + keepMinutes) * 60000);
 }
 
+// A REPEATING task's "keep reminding me until I do it" runs from the time the
+// person named, each day, and never before it. "Clean the litter box every day
+// at 9 PM and keep reminding me until I mark it complete", left undone at
+// night, used to start pinging again the minute quiet hours ended (hourly from
+// 8 AM) for a chore they do at 9 PM; now it comes back at 9 PM. The named time
+// in minutes after midnight, or null when this doesn't apply: not a repeating
+// task, no named time, or a rhythm of a day or longer (those keep their slot).
+export function rhythmNamedMin(task: any, intervalMs: number): number | null {
+  if (!task || intervalMs >= 24 * 60 * 60 * 1000) return null;
+  if (!task.recurrence_pattern || task.recurrence_pattern === 'none') return null;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(task.anchor_time || ''));
+  if (!m) return null;
+  const min = Number(m[1]) * 60 + Number(m[2]);
+  return min >= 0 && min < 24 * 60 ? min : null;
+}
+
+// That day's named time when the moment falls before it, else the moment.
+export function notBeforeNamedTime(utcDate: Date, namedMin: number, timeZone: string): Date {
+  const local = localMinutesOfDay(utcDate, timeZone);
+  return local >= namedMin ? utcDate : new Date(utcDate.getTime() + (namedMin - local) * 60000);
+}
+
 // Where one slot of a repeating reminder goes when the owner's quiet hours
 // are on. Returns null when the slot is dropped.
 //
