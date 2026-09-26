@@ -15,47 +15,35 @@ export default function EasterEggVideo() {
   // Default fallback GIFs. Giphy doesn't fail a GIF it has taken down: it
   // serves a "THIS CONTENT IS NOT AVAILABLE" picture in its place, so the
   // onError fallback below never fires for those. Ten such GIFs were removed
-  // from these lists (checked Sept 2026), plus three that said the opposite
-  // of the message ("Wrong", a tear) on a "You're crushing it!" card.
+  // from these lists (checked Sept 2026).
+  //
+  // Every GIF here was looked at, not picked by its label, and has to say the
+  // same thing as the card it sits on. The labels had been guesses: a facepalm,
+  // "The More You Know", a waving bear and a champagne toast sat on "Too many
+  // ideas!", and "You can do it", a side-eyeing puppet, "Welcome to the party,
+  // pal" and a political clip sat on "You're crushing it!" (all taken out,
+  // Sept 2026). Check a new one the same way before adding it.
   const defaultIdeasGifs = [
-    "https://media.giphy.com/media/l0IylOPCNkiqOgMyA/giphy.gif", // Mind blown
-    "https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif", // Head exploding
-    "https://media.giphy.com/media/3o7btPCcdNniyf0ArS/giphy.gif", // Brain on fire
-    "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif", // Too much info
-    "https://media.giphy.com/media/3og0INyCmHlNylks9O/giphy.gif", // Mind racing
-    "https://media.giphy.com/media/APqEbxBsVlkWSuFpth/giphy.gif", // Brain overload
-    "https://media.giphy.com/media/SDogLD4FOZMM8/giphy.gif", // Thinking too much
-    "https://media.giphy.com/media/Um3ljJl8jrnHy/giphy.gif", // Hamster wheel brain
-    "https://media.giphy.com/media/3og0IMJcSI8p6hYQXS/giphy.gif", // Mind blown cat
-    "https://media.giphy.com/media/26xBI73gWquCBBCDe/giphy.gif", // Brain freeze
-    "https://media.giphy.com/media/3o7TKMt1VVNkHV2PaE/giphy.gif", // Confused math lady
-    "https://media.giphy.com/media/l3q2K5jinAlChoCLS/giphy.gif", // Static brain
-    "https://media.giphy.com/media/QMkPpxPDYY0fu/giphy.gif", // Overloaded
-    "https://media.giphy.com/media/l0HlHFRbmaZtBRhXG/giphy.gif", // Wait what
-    "https://media.giphy.com/media/26tPplGWjN0xLybiU/giphy.gif", // So many tabs open
-    "https://media.giphy.com/media/l46Cy1rHbQ92uuLXa/giphy.gif", // Chaotic energy
+    "https://media.giphy.com/media/l0IylOPCNkiqOgMyA/giphy.gif", // Conspiracy board, ideas pinned everywhere
+    "https://media.giphy.com/media/Std5LmuAIw111DB2wh/giphy.gif", // "Too many ideas at once"
+    "https://media.giphy.com/media/re8C954MvHH3FkFmfl/giphy.gif", // Lightbulbs raining on someone: "Too many ideas"
+    "https://media.giphy.com/media/MLwbnkL1MuPhnlvOnq/giphy.gif", // A brain juggling lightbulbs
+    "https://media.giphy.com/media/xT0xeJpnrWC4XWblEk/giphy.gif", // Head bursting into sparkles
+    "https://media.giphy.com/media/26ufdipQqU2lhNA4g/giphy.gif", // Mind blown, fireworks
+    "https://media.giphy.com/media/Um3ljJl8jrnHy/giphy.gif", // Mind blown, stars
+    "https://media.giphy.com/media/OK27wINdQS5YQ/giphy.gif", // Kramer, mind blown
   ];
 
   const defaultAwesomeGifs = [
-    "https://media.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif", // Applause
-    "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif", // You're amazing
-    "https://media.giphy.com/media/g9582DNuQppxC/giphy.gif", // Clapping
-    "https://media.giphy.com/media/26tknCqiJrBQG6bxC/giphy.gif", // Excited
-    "https://media.giphy.com/media/l0MYEqEzwMWFCg8rm/giphy.gif", // Celebration
-    "https://media.giphy.com/media/3otPoS81loriI9sO8o/giphy.gif", // Fist pump
-    "https://media.giphy.com/media/26u4cqiYI30juCOGY/giphy.gif", // Yes!
-    "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif", // Ron Swanson giggle
-    "https://media.giphy.com/media/yoJC2K6rCzwNY2EngA/giphy.gif", // Dance celebration
-    "https://media.giphy.com/media/Is1O1TWV0LEJi/giphy.gif", // Kid dancing
-    "https://media.giphy.com/media/26BGIqWh2R1fi6JDa/giphy.gif", // Mind blown good job
-    "https://media.giphy.com/media/ZdlN56usaKaQg/giphy.gif", // Cat thumbs up
-    "https://media.giphy.com/media/IwAZ6dvvvaTtdI8SD5/giphy.gif", // You're a star
-    "https://media.giphy.com/media/3o6ZtaO9BZHcOjmErm/giphy.gif", // High five
-    "https://media.giphy.com/media/3ohzdIuqJoo8QdKlnW/giphy.gif", // Proud clapping
-    "https://media.giphy.com/media/l0MYGb1LuZ3n7dRnO/giphy.gif", // Standing ovation
-    "https://media.giphy.com/media/l3q2XhfQ8oCkm1Ts4/giphy.gif", // Dog excited
-    "https://media.giphy.com/media/3o72F8t9TDi2xVnxOE/giphy.gif", // Victory spin
-    "https://media.giphy.com/media/13GIgrGdslD9oQ/giphy.gif", // Thumbs up
+    "https://media.giphy.com/media/3otPoS81loriI9sO8o/giphy.gif", // Elf: "You did it!"
+    "https://media.giphy.com/media/3o7abKhOpu0NwenH3O/giphy.gif", // SpongeBob thumbs up
+    "https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif", // The Office dance party
+    "https://media.giphy.com/media/g9582DNuQppxC/giphy.gif", // Champagne toast
+    "https://media.giphy.com/media/26u4cqiYI30juCOGY/giphy.gif", // Trophy and confetti
+    "https://media.giphy.com/media/111ebonMs90YLu/giphy.gif", // Thumbs-up kid at the computer
+    "https://media.giphy.com/media/Is1O1TWV0LEJi/giphy.gif", // Michael and Dwight raise the roof
+    "https://media.giphy.com/media/3ohzdIuqJoo8QdKlnW/giphy.gif", // Will Ferrell: "Awesome! Yes!"
+    "https://media.giphy.com/media/l3q2XhfQ8oCkm1Ts4/giphy.gif", // Morgan Freeman applauding
   ];
 
   // Remember every GIF already shown (persisted across sessions) so the user
