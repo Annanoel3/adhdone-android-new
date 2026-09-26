@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 // Reminder wording: every body names the task (the spoken alarm reads it).
 import { getReminderContent, pushPhoneAlarms, platformTimeMs } from '../../shared/reminderTitle.ts';
-import { adjustForQuietHours, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone } from '../../shared/quietHours.ts';
+import { adjustForQuietHours, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, rhythmNamedMin, notBeforeNamedTime } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID');
@@ -150,9 +150,13 @@ async function dropPhoneAlarms(base44, task, taskId) {
 // job dropped as "the morning digest covers it", every single day — so a daily
 // task un-checked at night never rang again. Shorter rhythms still wait for
 // quiet hours to end.
-function nextRhythmStart(at: Date, rhythmMs: number, quietEnabled: boolean, startMin: number, endMin: number, timeZone: string): Date {
+// A repeating task's rhythm also never starts before the time they named
+// (see rhythmNamedMin in quietHours).
+function nextRhythmStart(at: Date, rhythmMs: number, quietEnabled: boolean, startMin: number, endMin: number, timeZone: string, task?: any): Date {
   if (rhythmMs >= 24 * 60 * 60 * 1000) return anchorToDaytime(at, startMin, endMin, timeZone);
-  return quietEnabled ? adjustForQuietHours(at, startMin, endMin, timeZone) : at;
+  const next = quietEnabled ? adjustForQuietHours(at, startMin, endMin, timeZone) : at;
+  const namedMin = rhythmNamedMin(task, rhythmMs);
+  return namedMin === null ? next : notBeforeNamedTime(next, namedMin, timeZone);
 }
 
 // ── Smart nudges ─────────────────────────────────────────────────────────────
@@ -498,7 +502,7 @@ async function handleTaskEvent(req: Request): Promise<Response> {
       if (rhythmMs) {
         rhythmNext = new Date(now + rhythmMs);
         const { enabled: quietEnabled, startMin, endMin } = resolveQuietHours(user);
-        rhythmNext = nextRhythmStart(rhythmNext, rhythmMs, quietEnabled, startMin, endMin, userTimeZone(user));
+        rhythmNext = nextRhythmStart(rhythmNext, rhythmMs, quietEnabled, startMin, endMin, userTimeZone(user), { ...old_data, ...data });
       }
 
       // The "next step" follow-up booked when it was checked off ("move the
@@ -623,7 +627,7 @@ async function handleTaskEvent(req: Request): Promise<Response> {
         const ms = intervalMs[data.reminder_interval];
         // Kept out of the night; a daily rhythm gets a real daytime slot (see
         // nextRhythmStart — the exact quiet-hours-end minute silenced it).
-        const sendAt = nextRhythmStart(new Date(now + ms), ms, quietEnabled, startMin, endMin, timeZone);
+        const sendAt = nextRhythmStart(new Date(now + ms), ms, quietEnabled, startMin, endMin, timeZone, { ...old_data, ...data });
         await base44.asServiceRole.entities.Task.update(event.entity_id, {
           next_reminder: sendAt.toISOString(),
           ...restoreUrgency,
