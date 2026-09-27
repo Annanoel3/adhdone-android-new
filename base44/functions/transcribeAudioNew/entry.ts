@@ -29,7 +29,10 @@ import OpenAI, { toFile } from "npm:openai";
 
 const NOTES_FREE_MINUTES = 60;
 const TRANSCRIBE_MODEL = "gpt-transcribe";
-const NOTES_MODEL = "gpt-6-astra";
+// Luna wrote notes as good as Astra's in side-by-side tests (Sept 27 2026) at
+// about a hundredth of the cost and twice the speed. Astra steps in if Luna fails.
+const NOTES_MODEL = "gpt-6-luna";
+const NOTES_BACKUP_MODEL = "gpt-6-astra";
 const NOTES_EFFORT = "low";
 const TRY_MODELS = ["gpt-6-astra", "gpt-6-luna"];
 
@@ -70,9 +73,13 @@ function decodeBase64(b64: string): Uint8Array {
 
 async function getRecording(base44: any, id: string) {
   if (!id) return null;
-  const rows = await base44.entities.EnergyLog.filter({ id });
-  const rec = rows?.[0];
-  return rec && rec.kind === "note_recording" ? rec : null;
+  try {
+    const rows = await base44.entities.EnergyLog.filter({ id });
+    const rec = rows?.[0];
+    return rec && rec.kind === "note_recording" ? rec : null;
+  } catch (_) {
+    return null; // not an id this person can see
+  }
 }
 
 function clock(ms: number): string {
@@ -284,13 +291,20 @@ async function notesMake(base44: any, user: any, body: any) {
     notes = cleanNotes({ title: rec.title || "Recording", gist: ["This recording didn't pick up any speech."] });
   } else {
     const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
+    const when = whenRecorded(rec.started_at, user?.timezone);
+    const length = lengthOf(rec.duration_ms);
+    const aboutMe = String(user?.about_me || "").slice(0, 400);
     try {
-      notes = await writeNotes(openai, transcript, whenRecorded(rec.started_at, user?.timezone),
-        lengthOf(rec.duration_ms), String(user?.about_me || "").slice(0, 400));
+      notes = await writeNotes(openai, transcript, when, length, aboutMe);
     } catch (e) {
-      console.error(`[notes] notes failed for ${recordId}:`, e?.message || e);
-      await base44.entities.EnergyLog.update(recordId, { status: "notes_failed" });
-      return Response.json({ ok: false, error: "notes_failed" }, { status: 502 });
+      console.error(`[notes] ${NOTES_MODEL} failed for ${recordId}, trying ${NOTES_BACKUP_MODEL}:`, e?.message || e);
+      try {
+        notes = await writeNotes(openai, transcript, when, length, aboutMe, NOTES_BACKUP_MODEL);
+      } catch (e2) {
+        console.error(`[notes] notes failed for ${recordId}:`, e2?.message || e2);
+        await base44.entities.EnergyLog.update(recordId, { status: "notes_failed" });
+        return Response.json({ ok: false, error: "notes_failed" }, { status: 502 });
+      }
     }
   }
   const title = String(rec.title || "").trim() || notes.title || "Recording";
