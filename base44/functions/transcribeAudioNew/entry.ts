@@ -15,6 +15,9 @@ import OpenAI, { toFile } from "npm:openai";
 //        answers { ok: false, over_limit: true } without transcribing.
 //    { mode: "notes_make", record_id }
 //        turns the whole transcript into ADHD-friendly notes and saves them.
+//        When the recording has questions (written down before an appointment
+//        on the Notes page), the notes say which got answered and what the
+//        answer was.
 //    Admin only, nothing saved: { mode: "notes_try", transcript, started_at?, model? }
 //        shows the notes a transcript would get.
 //
@@ -165,8 +168,20 @@ const NOTES_SYSTEM =
   "or conversation, the way a sharp, caring assistant who sat in on it would. They will glance at these " +
   "notes later, probably in a hurry, so every line has to earn its place. Answer with JSON only.";
 
-function notesPrompt(transcript: string, when: string, length: string, aboutMe: string) {
-  return `Recorded: ${when} (${length} long).${aboutMe ? `\nAbout the person who recorded it: ${aboutMe}` : ""}
+function notesPrompt(transcript: string, when: string, length: string, aboutMe: string, asked: string[] = []) {
+  const askedIntro = asked.length
+    ? `\nBefore it, they wrote down questions they wanted to ask:\n${asked.map((q, i) => `${i + 1}. ${q}`).join("\n")}\n`
+    : "";
+  const askedField = asked.length
+    ? `\n- asked: one entry for each question they wrote down, in the same order, with the question
+  copied as written. "answered" is true only when the recording clearly answers it; then "answer" is
+  that answer in one short line (exact details like doses, dates and numbers copied as said). When
+  it never came up or the answer isn't clear, "answered" is false and "answer" is empty. Never guess.`
+    : "";
+  const askedJson = asked.length
+    ? `,\n  "asked": [{ "question": "...", "answered": true, "answer": "...", "at": "0:00" }]`
+    : "";
+  return `Recorded: ${when} (${length} long).${aboutMe ? `\nAbout the person who recorded it: ${aboutMe}` : ""}${askedIntro}
 
 The transcript, with [time] marks where each stretch starts:
 """
@@ -194,7 +209,7 @@ one idea per line, and keep lines short. Skip small talk and anything that doesn
 - sections: the rest of what was covered, grouped by topic under short plain headings, with a
   few short points under each.
 - decisions: what was decided or agreed.
-- questions: questions nobody answered and things someone said they would find out.
+- questions: questions nobody answered and things someone said they would find out.${askedField}
 
 Say who said something only when it's clear from the conversation itself (the doctor, the
 professor, someone called by name); otherwise don't attribute it. Keep technical and medical
@@ -210,11 +225,11 @@ Return JSON:
   "details": [{ "label": "...", "value": "...", "at": "0:00" }],
   "sections": [{ "heading": "...", "points": ["..."], "at": "0:00" }],
   "decisions": [{ "text": "...", "at": "0:00" }],
-  "questions": [{ "text": "...", "at": "0:00" }]
+  "questions": [{ "text": "...", "at": "0:00" }]${askedJson}
 }`;
 }
 
-function cleanNotes(r: any) {
+function cleanNotes(r: any, asked: string[] = []) {
   const str = (v: any, max = 400) => String(v ?? "").replace(/\s+/g, " ").trim().slice(0, max);
   const list = (v: any) => (Array.isArray(v) ? v : []);
   const items = (v: any) => list(v)
@@ -238,7 +253,23 @@ function cleanNotes(r: any) {
       .filter((s) => s.heading && s.points.length).slice(0, 12),
     decisions: items(r?.decisions).slice(0, 20),
     questions: items(r?.questions).slice(0, 20),
+    // The questions themselves come from what they wrote, never from the model.
+    asked: asked.map((q, i) => {
+      const got = list(r?.asked);
+      const a = got.find((x) => str(x?.question) === q) || got[i] || {};
+      const answer = str(a?.answer);
+      const answered = a?.answered === true && !!answer;
+      return { question: q, answered, answer: answered ? answer : "", at: answered ? str(a?.at, 12) : "" };
+    }),
   };
+}
+
+// The questions saved on a recording, cleaned up.
+function questionsOf(rec: any): string[] {
+  return (Array.isArray(rec?.questions) ? rec.questions : [])
+    .map((q: any) => String(q ?? "").replace(/\s+/g, " ").trim().slice(0, 300))
+    .filter(Boolean)
+    .slice(0, 20);
 }
 
 function whenRecorded(startedAt: string, timeZone?: string): string {
@@ -261,18 +292,18 @@ function lengthOf(ms: number): string {
   return `${h} hour${h === 1 ? "" : "s"}${m ? ` ${m} minute${m === 1 ? "" : "s"}` : ""}`;
 }
 
-async function writeNotes(openai: OpenAI, transcript: string, when: string, length: string, aboutMe: string, model = NOTES_MODEL) {
+async function writeNotes(openai: OpenAI, transcript: string, when: string, length: string, aboutMe: string, model = NOTES_MODEL, asked: string[] = []) {
   const completion = await openai.chat.completions.create({
     model,
     messages: [
       { role: "system", content: NOTES_SYSTEM },
-      { role: "user", content: notesPrompt(transcript, when, length, aboutMe) },
+      { role: "user", content: notesPrompt(transcript, when, length, aboutMe, asked) },
     ],
     response_format: { type: "json_object" },
     reasoning_effort: NOTES_EFFORT as any,
     max_completion_tokens: 16000,
   } as any);
-  return cleanNotes(JSON.parse(completion.choices[0]?.message?.content || "{}"));
+  return cleanNotes(JSON.parse(completion.choices[0]?.message?.content || "{}"), asked);
 }
 
 async function notesMake(base44: any, user: any, body: any) {
@@ -286,20 +317,21 @@ async function notesMake(base44: any, user: any, body: any) {
     .map((p) => `[${clock(p.start_ms)}] ${String(p.text).trim()}`)
     .join("\n\n");
 
+  const asked = questionsOf(rec);
   let notes;
   if (transcript.replace(/\[[^\]]*\]/g, "").trim().length < 20) {
-    notes = cleanNotes({ title: rec.title || "Recording", gist: ["This recording didn't pick up any speech."] });
+    notes = cleanNotes({ title: rec.title || "Recording", gist: ["This recording didn't pick up any speech."] }, asked);
   } else {
     const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
     const when = whenRecorded(rec.started_at, user?.timezone);
     const length = lengthOf(rec.duration_ms);
     const aboutMe = String(user?.about_me || "").slice(0, 400);
     try {
-      notes = await writeNotes(openai, transcript, when, length, aboutMe);
+      notes = await writeNotes(openai, transcript, when, length, aboutMe, NOTES_MODEL, asked);
     } catch (e) {
       console.error(`[notes] ${NOTES_MODEL} failed for ${recordId}, trying ${NOTES_BACKUP_MODEL}:`, e?.message || e);
       try {
-        notes = await writeNotes(openai, transcript, when, length, aboutMe, NOTES_BACKUP_MODEL);
+        notes = await writeNotes(openai, transcript, when, length, aboutMe, NOTES_BACKUP_MODEL, asked);
       } catch (e2) {
         console.error(`[notes] notes failed for ${recordId}:`, e2?.message || e2);
         await base44.entities.EnergyLog.update(recordId, { status: "notes_failed" });
@@ -319,7 +351,7 @@ async function notesTry(user: any, body: any) {
   const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
   const started = Date.now();
   const notes = await writeNotes(openai, transcript, whenRecorded(body?.started_at, user?.timezone),
-    lengthOf(Number(body?.duration_ms) || 30 * 60000), String(body?.about_me || ""), model);
+    lengthOf(Number(body?.duration_ms) || 30 * 60000), String(body?.about_me || ""), model, questionsOf(body));
   return Response.json({ model, seconds: Math.round((Date.now() - started) / 100) / 10, notes });
 }
 
