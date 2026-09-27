@@ -337,6 +337,7 @@ const KINDS = ["task", "parking_lot", "birthday", "app_feedback", "mixed"];
 export const TASK_KIND = { category: "task", is_list: false, main_idea: "", items: [], parts: [] };
 
 export async function classifyCapture(base44: any, text: string, opts: { today?: string; aboutMe?: string } = {}) {
+  let problem = "";
   try {
     const out = await callFunction(base44, "checkTaskCategory", {
       text,
@@ -345,14 +346,15 @@ export async function classifyCapture(base44: any, text: string, opts: { today?:
     });
     const r = out?.response ?? out;
     if (r && KINDS.includes(r.category)) return r;
-    console.error("[captureToTasks] unusable category answer:", JSON.stringify(r)?.slice(0, 200));
+    problem = `unusable answer ${JSON.stringify(r)?.slice(0, 200)}`;
   } catch (e) {
-    console.error("[captureToTasks] category check failed:", e?.message);
+    problem = `check failed: ${e?.response?.status || ""} ${e?.message || e}`.trim();
   }
+  console.error(`[captureToTasks] ${problem}`);
   // A failed or unrecognised answer must NEVER lose the capture. Falling back
   // to "task" keeps the old behaviour, which is a misfiled idea at worst —
-  // never a dropped one.
-  return { ...TASK_KIND };
+  // never a dropped one. "why" says so in the capture's own log line.
+  return { ...TASK_KIND, why: `(fell back to task: ${problem})` };
 }
 
 // The person's own calendar date, for "her birthday is tomorrow".
