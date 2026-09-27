@@ -33,6 +33,9 @@ import Birthdays from '@/pages/Birthdays';
 import DecisionMaker from '@/pages/DecisionMaker';
 import Diary from '@/pages/Diary';
 import Places from '@/pages/Places';
+// The Notes page lives in the old InstallInstructions file (new files can't be
+// added from the code editor); it opens at /Notes.
+import NotesPage from '@/pages/InstallInstructions';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
 import ForgotPassword from '@/pages/ForgotPassword';
@@ -128,6 +131,7 @@ const AuthenticatedApp = () => {
         <Route path="/DecisionMaker" element={<LayoutWrapper currentPageName="DecisionMaker"><DecisionMaker /></LayoutWrapper>} />
         <Route path="/Diary" element={<LayoutWrapper currentPageName="Diary"><Diary /></LayoutWrapper>} />
         <Route path="/Places" element={<LayoutWrapper currentPageName="Places"><Places /></LayoutWrapper>} />
+        <Route path="/Notes" element={<LayoutWrapper currentPageName="Notes"><NotesPage /></LayoutWrapper>} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
