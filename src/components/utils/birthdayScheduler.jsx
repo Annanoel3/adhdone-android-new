@@ -226,6 +226,51 @@ export async function ensureBirthdayReminders(birthdayTasks) {
 }
 
 /**
+ * A birthday the capture check (checkTaskCategory) recognised — it already
+ * worked out whose it is and the month and day — saved as the yearly birthday
+ * record. Someone else's gets the three cake reminders booked right away; your
+ * own is a single "Happy Birthday" on the day, which the hourly refill job plans
+ * (the same record the calendar import makes: "🎂 Your Birthday").
+ * Returns { task, person, own, nextDate }, or null when there's no usable day,
+ * or no name for someone else's birthday — then it is saved as a task instead.
+ */
+export async function createBirthdayFromKind(kind, inputText, email) {
+  const month = Number(kind?.birthday_month);
+  const day = Number(kind?.birthday_day);
+  if (!email || !Number.isInteger(month) || !Number.isInteger(day) || month < 1 || month > 12 || day < 1 || day > 31) {
+    return null;
+  }
+  const own = kind?.birthday_is_own === true;
+  const person = own ? null : (String(kind?.birthday_person || '').trim() || null);
+  if (!own && !person) return null;
+
+  const nextDate = computeNextBirthdayDate(month, day);
+  const task = await base44.entities.Task.create({
+    title: own ? '🎂 Your Birthday' : `🎂 ${person}'s Birthday`,
+    description: own ? 'Your birthday.' : `Birthday reminder for ${person}.`,
+    original_input: inputText || null,
+    urgency: "medium",
+    energy_required: "low",
+    status: "active",
+    reminder_interval: "once",
+    recurrence_pattern: "yearly",
+    classification: "birthday",
+    is_own_birthday: own,
+    birthday_person: person,
+    birthday_remind_week_before: !own,
+    birthday_remind_day_before: !own,
+    birthday_remind_day_of: true,
+    next_reminder: nextDate.toISOString(),
+    notification_recipient_email: email,
+    onesignal_notification_ids: [],
+  });
+
+  if (!own) await scheduleBirthdayReminders(task);
+  window.dispatchEvent(new CustomEvent('birthday-created', { detail: { task } }));
+  return { task, person, own, nextDate };
+}
+
+/**
  * Detects whether free-form task input is actually a birthday reminder and, if so,
  * creates a yearly birthday task (with the 3 cake reminders) and schedules them.
  * Returns { task, person, nextDate } when a birthday was created, or null otherwise.
