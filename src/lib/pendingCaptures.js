@@ -60,6 +60,7 @@ function persist(capture) {
     fromIdea: capture.fromIdea || null,
     ownerEmail: capture.ownerEmail || null,
     parts: capture.parts || null,
+    kind: capture.kind || null,
     doneCount: capture.doneCount || 0,
     createdAt: capture.createdAt,
     touchedAt: Date.now(),
@@ -115,6 +116,7 @@ export function resumeAbandonedCaptures(email) {
       fromIdea: entry.fromIdea || null,
       ownerEmail: entry.ownerEmail,
       parts: Array.isArray(entry.parts) ? entry.parts : null,
+      kind: entry.kind || null,
       doneCount: entry.doneCount || 0,
       createdAt: entry.createdAt || now,
       resumed: true,
@@ -152,6 +154,7 @@ export function enqueueCapture({ text, presetDate = null, presetDueDateISO = nul
     fromIdea,
     ownerEmail: null,
     parts: fromIdea ? [clean] : null,
+    kind: null,
     doneCount: 0,
     createdAt: Date.now(),
     resumed: false,
@@ -184,12 +187,14 @@ export function claimNextCapture() {
   return next;
 }
 
-// Remembers how a capture was split and how many parts are finished, so a
-// resumed capture carries on from the part that was interrupted.
-export function saveCaptureProgress(id, { parts, doneCount }) {
+// Remembers what kind of thing a capture turned out to be, how it was split and
+// how many parts are finished, so a resumed capture carries on from the part
+// that was interrupted without asking the AI again.
+export function saveCaptureProgress(id, { parts, doneCount, kind }) {
   const capture = captures.find((c) => c.id === id);
   if (!capture) return;
   if (parts) capture.parts = parts;
+  if (kind) capture.kind = kind;
   if (typeof doneCount === 'number') capture.doneCount = doneCount;
   persist(capture);
 }
