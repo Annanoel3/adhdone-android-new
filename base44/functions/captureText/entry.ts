@@ -10,7 +10,8 @@
 // Parking Lot with an offer to send it to the developer (see captureToTasks).
 // (Last redeployed Sept 27 2026 for the parse fixes in the shared files bundled
 // below: a clock time with no day gets its day, "Grandma" stays in the title,
-// "next Tuesday" is next week's Tuesday.)
+// "next Tuesday" is next week's Tuesday, and a failed kind check says why in
+// this function's log.)
 
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import { runTaskParse } from "../../shared/runTaskParse.ts";
