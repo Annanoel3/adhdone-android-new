@@ -350,6 +350,10 @@
     "notes_seconds_used": {
       "type": "number",
       "description": "Recorded notes: seconds of recording transcribed in notes_minutes_month, counted by transcribeAudioNew. The free allowance is NOTES_FREE_MINUTES in that function."
+    },
+    "notes_can_record": {
+      "type": "boolean",
+      "description": "Recorded notes: true once this person has opened an app build that can record (36+). The reminder planner only words an appointment's reminders around recording notes for them."
     }
   },
   "name": "User"
