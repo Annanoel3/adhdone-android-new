@@ -19,8 +19,9 @@ export const TASK_PARSE_SYSTEM_PROMPT =
   "You are not matching keywords; there is no list of magic words. Judge intent. " +
   "Two hard rules: never invent a clock time and never invent a place (both come only from the user's own words), " +
   "and never lose a day, time, place, or person the user did state. " +
-  "Never put a placeholder in any field. If you don't know someone's name, leave the name out of the title entirely — " +
-  "text like '[Name]', 'TBD' or 'someone' must never appear. " +
+  "Keep people the way the user referred to them: a name (\"Sarah\") or a relationship (\"Grandma\", \"my boss\", \"the vet\") " +
+  "both stay in the title. Never invent a name and never put a placeholder in any field: text like '[Name]', 'TBD' or " +
+  "'someone' must never appear. " +
   "Respond with valid JSON only, populating every field in the requested schema.";
 
 // The server runs in UTC, but "today" has to be the USER's today. At 9pm
@@ -62,19 +63,21 @@ export function buildTaskParsePrompt(inputText: string, tz?: string): string {
   // The ONE thing a language model genuinely cannot do reliably is calendar
   // arithmetic. Everything it might need is computed here and handed over.
   const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  // "next X" is the X in next week (weeks run Sunday to Saturday). Said on a
-  // Saturday, "next Tuesday" is three days away, not ten: it used to be "the
-  // coming one plus a week" whatever day it was said on. Same rule as
-  // resolveDateWords.ts, so the prompt and the code can't disagree.
+  // "next X" is the X in next week, the way people talk: the week runs Monday
+  // to Sunday, so the weekend closes it. Said on a Saturday, "next Tuesday" is
+  // three days away, not ten (it used to be "the coming one plus a week" whatever
+  // day it was said on), and "next Sunday" is a week from tomorrow, not
+  // tomorrow. Same rule as resolveDateWords.ts, so the prompt and the code
+  // can't disagree.
   const nextWeekStart = new Date(now);
-  nextWeekStart.setDate(now.getDate() + (7 - now.getDay()));
+  nextWeekStart.setDate(now.getDate() + (((8 - now.getDay()) % 7) || 7));
   const weekdayTable = WEEKDAY_NAMES.map((name, i) => {
     const thisOne = new Date(now);
     let diff = i - now.getDay();
     if (diff <= 0) diff += 7;
     thisOne.setDate(now.getDate() + diff);
     const nextOne = new Date(nextWeekStart);
-    nextOne.setDate(nextWeekStart.getDate() + i);
+    nextOne.setDate(nextWeekStart.getDate() + ((i + 6) % 7));
     return `        this ${name}: ${fmt(thisOne)}   |   next ${name}: ${fmt(nextOne)}`;
   }).join('\n');
 
@@ -133,8 +136,9 @@ If it's messy, that's normal — reason through it:
   • Never echo the raw input back as the title, and never quote a message as
     the title. Write a short, natural title for the plan, like a person would
     put on their calendar.
-  • Only name a person in the title if their real name is actually in the text.
-    No placeholders, ever.
+  • Name people the way the user did: a name or a relationship ("Grandma",
+    "my landlord") both stay in the title. Never add a name that isn't in the
+    text, and no placeholders, ever.
 
 Then be honest about what you do and don't know:
   • If the user named a day in any wording at all, it HAS a date — resolve it
@@ -159,7 +163,7 @@ TOMORROW: ${tomorrowISO}
 END OF THIS WEEK (Sun): ${endOfThisWeekISO}   END OF NEXT WEEK (Sun): ${endOfNextWeekISO}
 
 Day names — "this X" is the next one coming up, "next X" is the one in next
-week (weeks run Sunday to Saturday, so late in the week they can be the same
+week (weeks run Monday to Sunday, so late in the week they can be the same
 day); a bare day name ("on Friday", "Saturday") means the "this X" value:
 ${weekdayTable}
 
