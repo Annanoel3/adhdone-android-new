@@ -10,7 +10,6 @@
 // plan, schedulePush for the actual OneSignal scheduling. Copies of that logic
 // are exactly how this app ended up with two parsers that disagreed.
 
-import OpenAI from "npm:openai";
 import { runTaskParse } from "./runTaskParse.ts";
 import { decideReminderInterval, isRecurringInterval } from "./reminderIntervalDecision.ts";
 import { getHomeOrigin } from "./homeOrigin.ts";
@@ -36,44 +35,21 @@ export async function callFunction(base44: any, name: string, body: unknown) {
 // One shared text can hold several unrelated errands ("grab milk and also I
 // need to call the vet"). Steps of ONE outing are not separate tasks — that
 // over-splitting is what produced piles of near-duplicate rows before.
-const SPLIT_PROMPT = `Read this and decide whether it describes ONE thing to do or SEVERAL SEPARATE ones.
-
-"""
-%TEXT%
-"""
-
-Separate means they'd be done at different times or places and neither depends on the other.
-Steps of a single outing, or two ways of saying the same thing, are ONE thing — never split those.
-Most input is ONE thing. Only split when it's genuinely unmistakable.
-
-For each thing, return the user's own wording for that part, kept whole enough to still
-carry its day, time and place. Do not summarize, rewrite, or add anything.
-
-Return JSON: { "items": ["...", "..."] }`;
-
-// `_base44` is kept so the caller's signature stays the same; the split runs
-// on OpenAI with the app's own key (RULES.md rule 1), not on Base44 credits.
-export async function splitCapture(_base44: any, text: string): Promise<string[]> {
-  const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
-  const completion = await openai.chat.completions.create({
-    model: "gpt-5.4",
-    messages: [{ role: "user", content: SPLIT_PROMPT.replace("%TEXT%", text) }],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "capture_split",
-        strict: true,
-        schema: {
-          type: "object",
-          additionalProperties: false,
-          properties: { items: { type: "array", items: { type: "string" } } },
-          required: ["items"],
-        },
-      },
-    },
-  });
-  const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}");
-  const items = (parsed?.items || [])
+//
+// The question is asked by the detectMultipleTasks function, the same one the
+// app itself asks, so a capture splits the same way wherever it came from. It
+// used to have its own shorter prompt here, on a different model.
+export async function splitCapture(base44: any, text: string): Promise<string[]> {
+  let parsed: any = {};
+  try {
+    const out = await callFunction(base44, "detectMultipleTasks", { text });
+    parsed = out?.response ?? out ?? {};
+  } catch (e) {
+    // Never lose a capture over a failed split: keep it whole.
+    console.error("[captureToTasks] split check failed, keeping it whole:", e?.message || e);
+    return [text];
+  }
+  const items = (Array.isArray(parsed?.tasks) ? parsed.tasks : [])
     .map((s: string) => String(s || "").trim())
     .filter(Boolean);
 
