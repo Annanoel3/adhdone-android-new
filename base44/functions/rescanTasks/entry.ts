@@ -2,8 +2,8 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 // Shared files are bundled into this function when it is deployed, so a change
 // to the shared prompt (taskParsePrompt.ts) only reaches users after this
-// function is saved and redeployed again (last redeploy: the parser telling
-// "by 5" — a deadline — apart from "at 5").
+// function is saved and redeployed again (last redeploy: "next Tuesday" means
+// next week's Tuesday, not the coming one plus a week).
 import { adjustForQuietHours, localMinutesOfDay, resolveQuietHours, userTimeZone, placeRepeatingSlot } from '../../shared/quietHours.ts';
 import { localReminderUtc } from '../../shared/timezoneReminders.ts';
 // Same wording the refill job uses, so every push names the task.
