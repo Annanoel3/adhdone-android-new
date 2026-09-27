@@ -3,7 +3,7 @@ import { buildTaskParsePrompt } from "../../../base44/shared/taskParsePrompt";
 import { scheduleReminder } from "./reminderScheduler";
 import { getReminderCopy } from "./reminderCopy";
 import dedupeSplitTasks from "./dedupeSplitTasks";
-import { createBirthdayFromInput } from "./birthdayScheduler";
+import { createBirthdayFromKind } from "./birthdayScheduler";
 import { toast } from "@/components/ui/use-toast";
 import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule, anchorToDaytime, wantsRhythmFromTime } from "./taskSchedule";
 import { announceEventConflict } from "./eventConflicts";
@@ -137,37 +137,153 @@ export async function detectMultipleTasks(inputText) {
   }
 }
 
-// Processes ONE task string. Resolves to a descriptor:
-//   { status: 'done', taskId? }
+// What kind of thing is this: a task, an idea for the Parking Lot, a birthday,
+// something meant for ADHDone itself, or a mix of those? The prompt lives in the
+// checkTaskCategory function, the same one the outside-the-app captures
+// (captureText) ask, so the two can never answer differently. It is asked about
+// the WHOLE capture before anything is split up or broken into steps (see
+// TaskCaptureProcessor): an idea with several parts used to be split into
+// several tasks, or turned into a task with steps, before anyone asked whether
+// it was an idea at all. It gets the phone's own date, so "her birthday is
+// tomorrow" means this person's tomorrow.
+const KINDS = ['task', 'parking_lot', 'birthday', 'app_feedback', 'mixed'];
+export const TASK_KIND = { category: 'task', is_list: false, main_idea: '', items: [], parts: [] };
+
+export async function classifyCapture(text) {
+  try {
+    const d = new Date();
+    const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const r = (await base44.functions.invoke('checkTaskCategory', { text, today }))?.data?.response;
+    if (r && KINDS.includes(r.category)) return r;
+  } catch (e) {
+    console.error('[CAPTURE] What-kind-of-thing check failed, treating it as a task:', e);
+  }
+  // Never lose a capture: when in doubt it is a task.
+  return { ...TASK_KIND };
+}
+
+// An idea: into the Parking Lot. A real list becomes a parent idea with the
+// items the person wrote as checkboxes; anything else is one idea holding
+// their own words.
+async function saveIdeas(kind, inputText) {
+  if (kind.is_list && Array.isArray(kind.items) && kind.items.length > 1) {
+    const mainIdea = await base44.entities.ParkingLotIdea.create({
+      idea: kind.main_idea || inputText.trim(),
+      converted_to_task: false,
+      list_format: 'checkbox'
+    });
+    for (const item of kind.items) {
+      await base44.entities.ParkingLotIdea.create({
+        idea: item,
+        parent_idea_id: mainIdea.id,
+        converted_to_task: false,
+        list_format: 'checkbox'
+      });
+    }
+    toast({
+      title: 'Added to Parking Lot! 📝',
+      description: `"${mainIdea.idea}" with ${kind.items.length} items`,
+      duration: 3000
+    });
+  } else {
+    await base44.entities.ParkingLotIdea.create({
+      idea: inputText.trim(),
+      converted_to_task: false,
+      list_format: 'plain'
+    });
+    toast({
+      title: 'Added to Parking Lot! 📝',
+      description: inputText.trim().substring(0, 50) + (inputText.length > 50 ? '...' : ''),
+      duration: 3000
+    });
+  }
+  window.dispatchEvent(new Event('parking-lot-changed'));
+}
+
+// Something meant for ADHDone itself: a feature they want, something broken or
+// confusing. Their words are kept in the Parking Lot so nothing is lost, and
+// the app asks whether to send them to the developer (FeedbackPrompt). Nothing
+// is sent unless they say yes there. A question already waiting for an answer
+// is left alone rather than replaced.
+async function saveAppFeedback(inputText) {
+  const text = inputText.trim();
+  await base44.entities.ParkingLotIdea.create({
+    idea: text,
+    converted_to_task: false,
+    list_format: 'plain'
+  });
+  window.dispatchEvent(new Event('parking-lot-changed'));
+  toast({
+    title: 'Saved to your Parking Lot 📝',
+    description: text.substring(0, 50) + (text.length > 50 ? '...' : ''),
+    duration: 3000
+  });
+  try {
+    const me = await base44.auth.me();
+    const waiting = me?.pending_feedback_prompt;
+    if (waiting?.text && !waiting?.answered_at) return;
+    const queued = { text: text.slice(0, 2000), queued_at: new Date().toISOString() };
+    await base44.auth.updateMe({ pending_feedback_prompt: queued });
+    window.dispatchEvent(new CustomEvent('feedback-prompt-queued', { detail: queued }));
+  } catch (e) {
+    console.error('[CAPTURE] Could not queue the send-to-the-developer question:', e);
+  }
+}
+
+// Processes ONE piece of a capture. Resolves to a descriptor:
+//   { status: 'done', taskId?, kind? }   (kind: 'idea' | 'feedback' | 'birthday' when it wasn't a task)
 //   { status: 'needs_priority', data }
 //   { status: 'needs_date', data }
 //   { status: 'error', message }
 export async function processAndCreateTask(inputText, opts = {}) {
+  // kind: what the whole capture already turned out to be (see
+  // TaskCaptureProcessor), so it isn't asked twice. Without it, this piece is
+  // asked on its own (a piece of a capture that mixed several kinds).
   // skipIdeaCheck: the text is already known to be a task (a Parking Lot idea
-  // the user chose to turn into one), so the task-or-idea question is skipped
-  // — asking it would just file the idea straight back into the Parking Lot.
-  const { presetDate = null, presetDueDateISO = null, skipIdeaCheck = false } = opts;
+  // the user chose to turn into one), so it can only become a task — or a
+  // birthday, if that's what it is. Filing it as an idea would just put it
+  // straight back into the Parking Lot.
+  const { presetDate = null, presetDueDateISO = null, skipIdeaCheck = false, kind: knownKind = null } = opts;
 
   if (!inputText.trim()) return { status: 'error', message: 'Empty input' };
 
   try {
     const currentUser = await base44.auth.me();
 
-    // Birthdays are tracked as their own thing (🎂 card), not as tasks.
-    if (/birthday|bday|b-day/i.test(inputText)) {
+    let kind = knownKind || await classifyCapture(inputText);
+    trace('categoryCheck', { result: kind });
+    // Already split once: a piece that still reads as a mix is handled as a task.
+    if (kind.category === 'mixed') kind = TASK_KIND;
+    if (skipIdeaCheck && kind.category !== 'birthday') kind = TASK_KIND;
+
+    // Birthdays are tracked as their own thing (🎂 card), not as tasks. With no
+    // usable day (or no name) it carries on as a task instead of being lost.
+    if (kind.category === 'birthday') {
       try {
-        const birthday = await createBirthdayFromInput(inputText, currentUser.email);
+        const birthday = await createBirthdayFromKind(kind, inputText, currentUser.email);
         if (birthday) {
           toast({
-            title: `🎂 Added ${birthday.person}'s birthday!`,
-            description: "We'll remind you 1 week before, the day before, and the day of — every year.",
+            title: birthday.own ? '🎂 Added your birthday!' : `🎂 Added ${birthday.person}'s birthday!`,
+            description: birthday.own
+              ? "We'll wish you a happy birthday on the day, every year."
+              : "We'll remind you 1 week before, the day before, and the day of — every year.",
             duration: 4000,
           });
-          return { status: 'done' };
+          return { status: 'done', kind: 'birthday' };
         }
       } catch (e) {
-        console.error('🎂 [PROCESS] Birthday detection failed, continuing as task', e);
+        console.error('🎂 [PROCESS] Saving the birthday failed, continuing as task', e);
       }
+    }
+
+    if (kind.category === 'parking_lot') {
+      await saveIdeas(kind, inputText);
+      return { status: 'done', kind: 'idea' };
+    }
+
+    if (kind.category === 'app_feedback') {
+      await saveAppFeedback(inputText);
+      return { status: 'done', kind: 'feedback' };
     }
 
     // Does the user want ONE task WITH subtasks?
@@ -206,7 +322,9 @@ Return JSON:
   "subtasks": ["subtask 1", "subtask 2", ...] (if has_subtasks, IN ORDER)
 }`;
 
-    const subtaskCheck = (await base44.functions.invoke('checkSubtasks', { prompt: subtaskCheckPrompt }))?.data?.response;
+    // A failed check just means no steps: the task itself must still be made.
+    const subtaskCheck = (await base44.functions.invoke('checkSubtasks', { prompt: subtaskCheckPrompt })
+      .catch((e) => { console.error('[PROCESS] Steps check failed, carrying on without steps:', e); return null; }))?.data?.response || {};
     trace('subtaskCheck', { input: inputText.slice(0, 80), result: subtaskCheck });
 
     if (subtaskCheck.has_subtasks && subtaskCheck.subtasks && subtaskCheck.subtasks.length > 0) {
@@ -309,51 +427,6 @@ Return JSON:
 
     const now = new Date();
     const prompt = buildTaskParsePrompt(inputText);
-
-    // Parking lot vs task
-    // Task or idea? The prompt for this lives inside the checkTaskCategory
-    // function, not here — the same call is made by the outside-the-app captures
-    // (captureText → classifyCapture), so both ways of adding ask the question
-    // identically and can never drift apart. Send raw text and nothing else.
-    const categoryCheck = skipIdeaCheck
-      ? null
-      : (await base44.functions.invoke('checkTaskCategory', { text: inputText }))?.data?.response;
-    trace('categoryCheck', { result: categoryCheck });
-
-    if (categoryCheck?.category === 'parking_lot') {
-      if (categoryCheck.is_list && categoryCheck.items && categoryCheck.items.length > 1) {
-        const mainIdea = await base44.entities.ParkingLotIdea.create({
-          idea: categoryCheck.main_idea,
-          converted_to_task: false,
-          list_format: 'checkbox'
-        });
-        for (const item of categoryCheck.items) {
-          await base44.entities.ParkingLotIdea.create({
-            idea: item,
-            parent_idea_id: mainIdea.id,
-            converted_to_task: false,
-            list_format: 'checkbox'
-          });
-        }
-        toast({
-          title: 'Added to Parking Lot! 📝',
-          description: `"${categoryCheck.main_idea}" with ${categoryCheck.items.length} items`,
-          duration: 3000
-        });
-      } else {
-        await base44.entities.ParkingLotIdea.create({
-          idea: inputText.trim(),
-          converted_to_task: false,
-          list_format: 'plain'
-        });
-        toast({
-          title: 'Added to Parking Lot! 📝',
-          description: inputText.trim().substring(0, 50) + (inputText.length > 50 ? '...' : ''),
-          duration: 3000
-        });
-      }
-      return { status: 'done' };
-    }
 
     const parsed = (await base44.functions.invoke('parseTask', { prompt }))?.data?.response;
     trace('parsed', { title: parsed?.title, classification: parsed?.classification, target_date: parsed?.target_date });
