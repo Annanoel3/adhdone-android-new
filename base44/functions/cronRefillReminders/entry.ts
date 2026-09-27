@@ -826,6 +826,7 @@ Deno.serve(async (req) => {
         homeOrigin: getHomeOrigin(owner),
         avoidTolls: owner?.commute_avoid_tolls === true,
         reminderWish: task.reminder_wish || null,
+        canRecord: owner?.notes_can_record === true,
       });
       const data = res?.data || res || {};
       const plan = buildEventReminderPlan({
