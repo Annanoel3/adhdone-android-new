@@ -322,20 +322,29 @@ export async function scheduleTaskReminders(
   return { planned: (plan?.reminders || []).length, scheduled: ids.length };
 }
 
-// ── Task or idea ───────────────────────────────────────────────────────────
+// ── What kind of thing is it ───────────────────────────────────────────────
 // The SAME question the in-app Add button asks, asked in the SAME place, so a
 // capture from the share sheet / pinned notification / widget lands where it
-// would have landed had it been typed into the app. Before this existed,
-// everything captured from outside the app became a Task, even a pure idea.
+// would have landed had it been typed into the app: a task, an idea for the
+// Parking Lot, a birthday, something meant for ADHDone itself, or a mix.
+// Before this existed, everything captured from outside the app became a Task,
+// even a pure idea.
 //
 // The prompt itself lives inside the checkTaskCategory function, not here and
 // not in the web pipeline, so the two entry points cannot drift apart. Send it
-// raw text and nothing else.
-export async function classifyCapture(base44: any, text: string) {
+// raw text, the person's own date and their about-me line, nothing else.
+const KINDS = ["task", "parking_lot", "birthday", "app_feedback", "mixed"];
+export const TASK_KIND = { category: "task", is_list: false, main_idea: "", items: [], parts: [] };
+
+export async function classifyCapture(base44: any, text: string, opts: { today?: string; aboutMe?: string } = {}) {
   try {
-    const out = await callFunction(base44, "checkTaskCategory", { text });
+    const out = await callFunction(base44, "checkTaskCategory", {
+      text,
+      today: opts.today || undefined,
+      about_me: opts.aboutMe || "",
+    });
     const r = out?.response ?? out;
-    if (r && (r.category === "parking_lot" || r.category === "task")) return r;
+    if (r && KINDS.includes(r.category)) return r;
     console.error("[captureToTasks] unusable category answer:", JSON.stringify(r)?.slice(0, 200));
   } catch (e) {
     console.error("[captureToTasks] category check failed:", e?.message);
@@ -343,7 +352,89 @@ export async function classifyCapture(base44: any, text: string) {
   // A failed or unrecognised answer must NEVER lose the capture. Falling back
   // to "task" keeps the old behaviour, which is a misfiled idea at worst —
   // never a dropped one.
-  return { category: "task", is_list: false, main_idea: "", items: [] };
+  return { ...TASK_KIND };
+}
+
+// The person's own calendar date, for "her birthday is tomorrow".
+export function localToday(tz: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+  } catch (_) {
+    return new Date().toISOString().slice(0, 10);
+  }
+}
+
+// A birthday the classifier recognised: the same yearly record the in-app
+// Add button and the calendar import make. The hourly refill job plans and
+// books its reminders (1 week before, the day before, the day of), the same way
+// it keeps every birthday going year after year. Null when there is no usable
+// day, or no name for someone else's birthday: then it is saved as a task.
+export async function createBirthdayTask(
+  base44: any,
+  kind: any,
+  rawText: string,
+  opts: { email: string; tz: string; captureId?: string },
+) {
+  const month = Number(kind?.birthday_month);
+  const day = Number(kind?.birthday_day);
+  if (!Number.isInteger(month) || !Number.isInteger(day) || month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const own = kind?.birthday_is_own === true;
+  const person = own ? null : (String(kind?.birthday_person || "").trim() || null);
+  if (!own && !person) return null;
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const year = Number(localToday(opts.tz).slice(0, 4));
+  // Feb 29 falls back to Feb 28 in a year that doesn't have it.
+  const dateFor = (y: number) => {
+    const leap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+    return `${y}-${pad(month)}-${pad(month === 2 && day === 29 && !leap ? 28 : day)}`;
+  };
+  let at = localToUTC(dateFor(year), "09:00", opts.tz);
+  if (!at || new Date(at).getTime() <= Date.now()) at = localToUTC(dateFor(year + 1), "09:00", opts.tz);
+  if (!at) return null;
+
+  const record: Record<string, unknown> = {
+    title: own ? "🎂 Your Birthday" : `🎂 ${person}'s Birthday`,
+    description: own ? "Your birthday." : `Birthday reminder for ${person}.`,
+    original_input: rawText,
+    urgency: "medium",
+    energy_required: "low",
+    status: "active",
+    reminder_interval: "once",
+    recurrence_pattern: "yearly",
+    classification: "birthday",
+    is_own_birthday: own,
+    birthday_person: person,
+    birthday_remind_week_before: !own,
+    birthday_remind_day_before: !own,
+    birthday_remind_day_of: true,
+    next_reminder: at,
+    notification_recipient_email: opts.email,
+    onesignal_notification_ids: [],
+  };
+  if (opts.captureId) record.capture_id = opts.captureId;
+  // Created as the USER: Task RLS keys off created_by.
+  return await base44.entities.Task.create(record);
+}
+
+// Something meant for ADHDone itself (a feature they want, something broken).
+// Their words are kept in the Parking Lot so nothing is lost, and the app
+// offers to send them to the developer the next time it opens (the
+// FeedbackPrompt popup). Nothing leaves the app unless they say yes there. A
+// popup that is already waiting for an answer is left alone.
+export async function queueFeedbackPrompt(base44: any, text: string) {
+  try {
+    const me = await base44.auth.me();
+    const waiting = me?.pending_feedback_prompt;
+    if (waiting?.text && !waiting?.answered_at) return false;
+    await base44.auth.updateMe({
+      pending_feedback_prompt: { text: String(text).trim().slice(0, 2000), queued_at: new Date().toISOString() },
+    });
+    return true;
+  } catch (e) {
+    console.error("[captureToTasks] could not queue the send-to-the-developer question:", e?.message);
+    return false;
+  }
 }
 
 // Creates the parking lot row(s) for a capture the classifier called an idea.
