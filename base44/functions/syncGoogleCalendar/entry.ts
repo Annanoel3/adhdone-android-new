@@ -1,7 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 // The shared prompt is bundled at deploy time; this function was last redeployed
-// for "next Tuesday" meaning next week's Tuesday, not the coming one plus a week.
+// for "Grandma" staying in the title and "next Tuesday" meaning next week's Tuesday.
 import { runTaskParse } from '../../shared/runTaskParse.ts';
 import { wallClockToUtc, nextLocalOccurrence } from '../../shared/timezoneReminders.ts';
 import { isRecurringInterval, INTERVAL_MS } from '../../shared/reminderIntervalDecision.ts';
