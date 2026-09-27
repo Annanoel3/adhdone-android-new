@@ -19,6 +19,7 @@ import {
   resumeAbandonedCaptures,
 } from "@/lib/pendingCaptures";
 import {
+  classifyCapture,
   detectMultipleTasks,
   processAndCreateTask,
   createAdvanceTask,
@@ -116,11 +117,29 @@ export default function TaskCaptureProcessor({ userEmail }) {
             // A resumed capture keeps the split it already had — asking the AI
             // again could split it differently and redo finished parts.
             let taskList = capture.parts;
+            // What the whole capture turned out to be. 'task': every part is a
+            // task. 'mixed': each part is asked on its own. Anything else (an
+            // idea, a birthday, something for ADHDone itself) is ONE piece,
+            // never split — an idea chopped into errands was how ideas used to
+            // turn into piles of tasks.
+            let wholeKind = capture.kind;
             if (!taskList) {
-              taskList = await detectMultipleTasks(capture.text);
-              saveCaptureProgress(capture.id, { parts: taskList, doneCount: 0 });
+              wholeKind = await classifyCapture(capture.text);
+              trace('wholeKind', { category: wholeKind.category, why: wholeKind.why });
+              if (wholeKind.category === 'mixed') {
+                taskList = Array.isArray(wholeKind.parts) && wholeKind.parts.length > 1
+                  ? wholeKind.parts
+                  : await detectMultipleTasks(capture.text);
+              } else if (wholeKind.category === 'task') {
+                taskList = await detectMultipleTasks(capture.text);
+              } else {
+                taskList = [capture.text];
+              }
+              saveCaptureProgress(capture.id, { parts: taskList, doneCount: 0, kind: wholeKind });
             }
             trace('splitResult', { count: taskList.length, tasks: taskList.map(t => t.slice(0, 60)) });
+            // A mixed capture that couldn't be pulled apart is sorted as one piece.
+            const partKind = wholeKind && (wholeKind.category !== 'mixed' || taskList.length === 1) ? wholeKind : null;
             const firstPart = capture.doneCount || 0;
             for (let part = firstPart; part < taskList.length; part++) {
               const text = taskList[part];
@@ -134,6 +153,7 @@ export default function TaskCaptureProcessor({ userEmail }) {
                 presetDate: capture.presetDate,
                 presetDueDateISO: capture.presetDueDateISO,
                 skipIdeaCheck: !!capture.fromIdea,
+                kind: partKind,
               });
 
               if (result.status === 'done') {
