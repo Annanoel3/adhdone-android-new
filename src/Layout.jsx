@@ -570,6 +570,11 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           url: createPageUrl("ParkingLot"),
           icon: Lightbulb,
         },
+        // Recording notes needs the phone's recorder (app build 36+), so the
+        // menu only offers it where it works.
+        ...(typeof window !== "undefined" && window.Capacitor?.Plugins?.RecorderBridge
+          ? [{ title: "Record Notes", url: createPageUrl("Notes"), icon: Mic }]
+          : []),
         {
           title: "Decision Maker",
           url: createPageUrl("DecisionMaker"),
@@ -1162,7 +1167,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               {children}
             </div>
 
-            {currentPageName !== "Home" && currentPageName !== "ParkingLot" && currentPageName !== "SupportSpace" && currentPageName !== "AddTask" && currentPageName !== "Tasks" && currentPageName !== "Diary" && (
+            {currentPageName !== "Home" && currentPageName !== "ParkingLot" && currentPageName !== "SupportSpace" && currentPageName !== "AddTask" && currentPageName !== "Tasks" && currentPageName !== "Diary" && currentPageName !== "Notes" && (
               <Button
                 onClick={() => {
                   const event = new CustomEvent('open-voice-assistant');
