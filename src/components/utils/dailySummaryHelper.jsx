@@ -37,7 +37,8 @@ export async function updateTodaysSummary() {
     }
 
     // Get energy logs for today
-    const energyLogs = await base44.entities.EnergyLog.list('-logged_at', 100);
+    // Recorded notes share this table (kind: "note_recording"); only old energy check-ins count here.
+    const energyLogs = (await base44.entities.EnergyLog.list('-logged_at', 100)).filter(log => !log.kind && log.logged_at);
     const todayEnergy = energyLogs.filter(log => {
       const logDate = new Date(log.logged_at).toISOString().split('T')[0];
       return logDate === today;
