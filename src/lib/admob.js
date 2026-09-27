@@ -70,6 +70,26 @@ export function resetAdLaunchState() {
 // Never while the phone is recording notes: an ad would interrupt, and its sound
 // would be recorded. The Notes page sets window.__notesRecording, but a recording
 // keeps going when the page isn't open, so the phone is asked directly too.
+// Only while ADHDone is the app on screen. Timers keep running for a while after
+// someone switches to another app, and an interstitial shown then pulls ADHDone
+// back up over whatever they're doing (AdMob's rules also forbid ads that show
+// while the app isn't in use).
+const NOT_ON_SCREEN = 'skipped: app not on screen';
+export function adWaitingForScreen() {
+  return getLastAdStatus().endsWith(NOT_ON_SCREEN);
+}
+async function appOnScreen() {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return false;
+  try {
+    const App = window.Capacitor?.Plugins?.App;
+    if (App?.getState) {
+      const st = await App.getState();
+      if (st && st.isActive === false) return false;
+    }
+  } catch (e) { /* go by the page's own answer */ }
+  return true;
+}
+
 async function isRecordingNotes() {
   if (window.__notesRecording) return true;
   try {
@@ -83,6 +103,11 @@ async function isRecordingNotes() {
 }
 
 export async function showInterstitialAd(source = 'auto') {
+  if (!(await appOnScreen())) {
+    setStatus(NOT_ON_SCREEN);
+    trackFire('ad_skipped', { props: { source, reason: 'app not on screen' } });
+    return false;
+  }
   if (await isRecordingNotes()) {
     setStatus('skipped: recording notes');
     trackFire('ad_skipped', { props: { source, reason: 'recording notes' } });
@@ -104,10 +129,16 @@ export async function showInterstitialAd(source = 'auto') {
   adInFlight = true;
   try {
     await AdMob.prepareInterstitial({ adId: AD_UNIT_ID, isTesting: false });
-    // Loading takes a few seconds; recording may have started meanwhile.
+    // Loading takes a few seconds; recording may have started meanwhile, or
+    // they may have switched to another app.
     if (await isRecordingNotes()) {
       setStatus('skipped: recording notes');
       trackFire('ad_skipped', { props: { source, reason: 'recording notes' } });
+      return false;
+    }
+    if (!(await appOnScreen())) {
+      setStatus(NOT_ON_SCREEN);
+      trackFire('ad_skipped', { props: { source, reason: 'app not on screen' } });
       return false;
     }
     shownThisLaunch = true;              // set before show so a retry can't double-show
