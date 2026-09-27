@@ -24,7 +24,7 @@ import OpenAI from "npm:openai";
 // bundle keeps working right after a deploy.
 //
 // Answer: { response: { category, is_list, main_idea, items, birthday_person,
-// birthday_month, birthday_day, birthday_is_own, why } }. category is "task", "parking_lot",
+// birthday_month, birthday_day, birthday_is_own, parts, why } }. category is "task", "parking_lot",
 // "birthday", "app_feedback" or "mixed". Anything a caller doesn't know how to
 // handle it treats as a task, so a capture is never lost.
 //
@@ -114,6 +114,11 @@ date comes around, this month if it's still ahead and otherwise next month. Both
 gave no day at all. For every other category birthday_person, birthday_month and birthday_day are
 null and birthday_is_own is false.
 
+For "mixed": parts are the separate pieces, each written so it makes sense on its own, in their
+words, keeping the day, time, place or person that goes with it. "Mom's birthday is Oct 5 and I
+need to buy her a gift" → ["Mom's birthday is Oct 5", "Buy Mom a birthday gift before Oct 5"].
+For every other category parts is [].
+
 "why" is one short sentence saying why, for the app's own logs.
 
 Return JSON:
@@ -126,6 +131,7 @@ Return JSON:
   "birthday_month": integer | null,
   "birthday_day": integer | null,
   "birthday_is_own": boolean,
+  "parts": string[],
   "why": string
 }`;
 
@@ -153,6 +159,9 @@ function clean(raw: any) {
     birthday_month: hasDay ? month : null,
     birthday_day: hasDay ? day : null,
     birthday_is_own: category === "birthday" && r.birthday_is_own === true,
+    parts: category === "mixed" && Array.isArray(r.parts)
+      ? r.parts.map((s: any) => String(s || "").trim()).filter(Boolean).slice(0, 8)
+      : [],
     why: String(r.why || "").trim().slice(0, 300),
   };
 }
