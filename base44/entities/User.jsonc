@@ -342,6 +342,14 @@
     "calendar_use_emoji": {
       "type": "boolean",
       "description": "Calendar display mode: true = emoji icons, false = text titles. Saved from the Emoji/Text toggle on the Calendar page so the choice follows the user across devices."
+    },
+    "notes_minutes_month": {
+      "type": "string",
+      "description": "Recorded notes: the month (YYYY-MM, in the person's own time zone) that notes_seconds_used counts. A different month means nothing has been used yet this month."
+    },
+    "notes_seconds_used": {
+      "type": "number",
+      "description": "Recorded notes: seconds of recording transcribed in notes_minutes_month, counted by transcribeAudioNew. The free allowance is NOTES_FREE_MINUTES in that function."
     }
   },
   "name": "User"
