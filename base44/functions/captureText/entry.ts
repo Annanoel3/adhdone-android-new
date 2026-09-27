@@ -142,9 +142,10 @@ Deno.serve(async (req) => {
     console.log(`[captureText] ${category.category}: ${category.why || ""}`);
     // How it was sorted, sent back with the answer so a misfiled capture can
     // be traced (the phone ignores it). No content beyond the kind and reason.
-    const sorted: { whole: string; why: string; pieces: { kind: string; why: string }[] } = {
+    const sorted: { whole: string; why: string; fields: string[]; pieces: { kind: string; why: string }[] } = {
       whole: category.category,
       why: String(category.why || ""),
+      fields: Object.keys(category || {}),
       pieces: [],
     };
 
