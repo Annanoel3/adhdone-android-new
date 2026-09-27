@@ -45,7 +45,8 @@ export default function SupportSpace() {
     try {
       const user = await base44.auth.me();
       const tasks = await base44.entities.Task.list('-created_date', 20);
-      const energyLogs = await base44.entities.EnergyLog.list('-logged_at', 5);
+      // Recorded notes share this table (kind: "note_recording"); only old energy check-ins count here.
+      const energyLogs = (await base44.entities.EnergyLog.list('-logged_at', 5)).filter(log => !log.kind && log.logged_at);
       const summaries = await base44.entities.DailySummary.list('-date', 7);
 
       const activeTasks = tasks.filter(t => t.status === 'active');
