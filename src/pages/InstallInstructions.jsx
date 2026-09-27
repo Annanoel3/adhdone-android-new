@@ -64,6 +64,22 @@ function cleanQuestions(list) {
   return (Array.isArray(list) ? list : []).map((q) => String(q || "").trim()).filter(Boolean).slice(0, 20);
 }
 
+// Questions checked off by hand during a recording: only a reminder on screen
+// while it's going (the notes work out the answers from the recording either
+// way), so they're kept on this phone, per recording, until it stops.
+const checkedKey = (sessionId) => `notes_checked_${sessionId}`;
+function readChecked(sessionId) {
+  try {
+    const v = JSON.parse(localStorage.getItem(checkedKey(sessionId)) || "[]");
+    return Array.isArray(v) ? v : [];
+  } catch (e) {
+    return [];
+  }
+}
+function forgetChecked(sessionId) {
+  try { localStorage.removeItem(checkedKey(sessionId)); } catch (e) { /* nothing kept */ }
+}
+
 function monthKey(timeZone) {
   try {
     if (timeZone) {
@@ -148,6 +164,7 @@ export default function NotesPage() {
   const [prepTask, setPrepTask] = useState(null);
   const [draft, setDraft] = useState("");
   const [liveQuestions, setLiveQuestions] = useState([]);
+  const [checked, setChecked] = useState([]);
   const [, setTick] = useState(0);
   const recordsRef = useRef([]);
   recordsRef.current = records;
@@ -386,6 +403,7 @@ export default function NotesPage() {
             }).catch(() => {});
           } else if (e?.type === "stopped" && s) {
             setLive(null);
+            forgetChecked(s.id);
             if (e.error === "time_limit") {
               // Stopped at the free minutes (not the 8 hour safety stop).
               refreshUser().then((me) => {
@@ -440,6 +458,21 @@ export default function NotesPage() {
   }, [!!live]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const elapsed = live ? live.baseMs + (live.paused ? 0 : Date.now() - live.baseAt) : 0;
+
+  // Checked-off questions come back if they leave this page and return mid-recording.
+  const liveSessionId = live?.sessionId || null;
+  useEffect(() => {
+    setChecked(liveSessionId ? readChecked(liveSessionId) : []);
+  }, [liveSessionId]);
+
+  const toggleChecked = (i) => {
+    if (!liveSessionId) return;
+    setChecked((cur) => {
+      const next = cur.includes(i) ? cur.filter((x) => x !== i) : [...cur, i];
+      try { localStorage.setItem(checkedKey(liveSessionId), JSON.stringify(next)); } catch (e) { /* on screen only */ }
+      return next;
+    });
+  };
 
   // ── Controls ───────────────────────────────────────────────────────────────
 
@@ -509,6 +542,7 @@ export default function NotesPage() {
     try {
       const res = await R.stop();
       setLive(null);
+      forgetChecked(live.sessionId);
       if (res?.session) await finishSession(res.session);
     } finally {
       setBusy(false);
@@ -871,9 +905,31 @@ export default function NotesPage() {
           </p>
           {liveQuestions.length > 0 && (
             <div className={`${card} text-left`}>
-              <h2 className={`text-lg font-bold mb-2 ${heading}`}>Your questions</h2>
-              <ul className="space-y-1.5">
-                {liveQuestions.map((q, i) => <li key={i} className={heading}>• {q}</li>)}
+              <h2 className={`text-lg font-bold ${heading}`}>Your questions</h2>
+              <p className={`text-xs mb-2 ${soft}`}>Tap one to check it off, if you like.</p>
+              <ul className="space-y-1">
+                {liveQuestions.map((q, i) => {
+                  const done = checked.includes(i);
+                  return (
+                    <li key={i}>
+                      <button
+                        type="button"
+                        onClick={() => toggleChecked(i)}
+                        aria-pressed={done}
+                        className="w-full flex items-start gap-2 py-1.5 text-left"
+                      >
+                        <span
+                          className={`mt-0.5 w-5 h-5 shrink-0 rounded-full border-2 flex items-center justify-center ${
+                            done ? "bg-green-600 border-green-600" : dark ? "border-gray-500" : "border-gray-400"
+                          }`}
+                        >
+                          {done && <Check className="w-3.5 h-3.5 text-white" />}
+                        </span>
+                        <span className={done ? `line-through ${soft}` : heading}>{q}</span>
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}
