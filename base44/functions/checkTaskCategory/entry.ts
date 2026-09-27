@@ -115,8 +115,12 @@ gave no day at all. For every other category birthday_person, birthday_month and
 null and birthday_is_own is false.
 
 For "mixed": parts are the separate pieces, each written so it makes sense on its own, in their
-words, keeping the day, time, place or person that goes with it. "Mom's birthday is Oct 5 and I
-need to buy her a gift" → ["Mom's birthday is Oct 5", "Buy Mom a birthday gift before Oct 5"].
+words, keeping the day, time, place or person that goes with it. Each piece is sorted again on
+its own, with nothing else to go on, so keep whatever in their wording shows what kind of thing
+that piece is: if they marked it as a note to self or an idea, that stays with it. "Mom's
+birthday is Oct 5 and I need to buy her a gift" → ["Mom's birthday is Oct 5", "Buy Mom a
+birthday gift before Oct 5"]. "Buy envelopes, and note to self: someday learn watercolor" →
+["Buy envelopes", "Note to self: someday learn watercolor"].
 For every other category parts is [].
 
 "why" is one short sentence saying why, for the app's own logs.
