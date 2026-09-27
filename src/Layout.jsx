@@ -585,11 +585,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           url: createPageUrl("Places"),
           icon: MapPin,
         },
-        {
-          title: "Talk It Out",
-          url: createPageUrl("SupportSpace"),
-          icon: MessageCircleHeart,
-        },
       ],
     },
     {
@@ -597,6 +592,13 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       isCollapsible: true,
       icon: Sparkles,
       subItems: [
+        // How they're feeling sits with the other looking-inward pages, not
+        // with the doing tools (Anna, Sept 27 2026).
+        {
+          title: "Talk It Out",
+          url: createPageUrl("SupportSpace"),
+          icon: MessageCircleHeart,
+        },
         {
           title: "Insights",
           url: createPageUrl("Progress"),
