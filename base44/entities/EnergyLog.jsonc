@@ -33,6 +33,17 @@
       "type": "string",
       "description": "Recorded notes: the recording's id on the phone (RecorderBridge), which holds the audio until it has been transcribed."
     },
+    "task_id": {
+      "type": "string",
+      "description": "Recorded notes: the calendar event (Task) this recording was made at, when it was started from that event."
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Recorded notes: the questions the user wrote down for that event (Task.prep_questions), as they were when recording started. The notes' \"asked\" list answers them."
+    },
     "started_at": {
       "type": "string",
       "format": "date-time",
@@ -69,7 +80,7 @@
     },
     "notes": {
       "type": "object",
-      "description": "Recorded notes: { title, gist[], todos[{text, who, at}], details[{label, value, at}], sections[{heading, points[], at}], decisions[{text, at}], questions[{text, at}] }. \"at\" is the time mark in the transcript it came from."
+      "description": "Recorded notes: { title, gist[], todos[{text, who, at}], details[{label, value, at}], sections[{heading, points[], at}], decisions[{text, at}], questions[{text, at}], asked[{question, answered, answer, at}] }. \"asked\" is there when the recording had questions. \"at\" is the time mark in the transcript it came from."
     }
   },
   "required": [],
