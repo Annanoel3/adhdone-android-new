@@ -57,6 +57,21 @@ export function resolveDateWord(value: unknown, now = new Date()): string | null
 // Normalizes every date field on a parsed task in place.
 export function resolveParsedDates(parsed: any, now = new Date()) {
   if (!parsed) return parsed;
+  // A clock time with no day ("pick up my sister at 3") is the next time that
+  // clock time comes round: later today, or tomorrow once it has gone by.
+  // With no day at all the task was saved with no reminder, the time the
+  // person gave thrown away. (A weekly repeat on named days is left to the
+  // parser, which knows which day comes next.)
+  const time = typeof parsed.target_time === 'string' ? parsed.target_time.trim() : '';
+  const hm = /^(\d{1,2}):(\d{2})$/.exec(time);
+  const pattern = parsed.recurrence_pattern || 'none';
+  if (parsed.target_date == null && hm && (pattern === 'none' || pattern === 'daily')) {
+    const at = new Date(now);
+    at.setHours(Number(hm[1]), Number(hm[2]), 0, 0);
+    if (at.getTime() <= now.getTime()) at.setDate(at.getDate() + 1);
+    parsed.target_date = fmt(at);
+    console.log(`[resolveParsedDates] time with no day: ${time} → ${parsed.target_date}`);
+  }
   for (const field of ['target_date', 'due_date', 'end_date']) {
     if (parsed[field] == null) continue;
     const resolved = resolveDateWord(parsed[field], now);
