@@ -31,6 +31,15 @@ export default function WidgetTaskSync({ user }) {
       .catch(() => {});
   }, [userId, alarmMode]);
 
+  // The reminder planner words an appointment's reminders around recording
+  // notes only for people whose phone can record (app build 36+), so it has
+  // to be told once.
+  const canRecordSaved = user?.notes_can_record === true;
+  useEffect(() => {
+    if (!userId || canRecordSaved || !window.Capacitor?.Plugins?.RecorderBridge) return;
+    base44.auth.updateMe({ notes_can_record: true }).catch(() => {});
+  }, [userId, canRecordSaved]);
+
   const soundUrl = user?.alarm_sound_url;
   useEffect(() => {
     if (!userId || !window.Capacitor?.Plugins?.AlarmBridge) return;
