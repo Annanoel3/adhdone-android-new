@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { initAdMob, showInterstitialAd, resetAdLaunchState } from '@/lib/admob';
+import { initAdMob, showInterstitialAd, resetAdLaunchState, adWaitingForScreen } from '@/lib/admob';
 
 const AD_OPEN_KEY = 'admgr_open_count';
 const LAST_LAUNCH_KEY = 'admgr_last_launch_at';
@@ -36,6 +36,10 @@ export default function AdManager() {
   const [countdown, setCountdown] = useState(null);
   const delayRef = useRef(null);
   const countRef = useRef(null);
+  // This launch is due an ad that hasn't shown yet. Switching to another app
+  // cancels the countdown (an ad must never pop up over another app); coming
+  // back picks it up again.
+  const pendingRef = useRef(false);
 
   useEffect(() => {
     if (!isCapacitor()) return;
@@ -49,6 +53,8 @@ export default function AdManager() {
     }
 
     function tryShowAd() {
+      delayRef.current = null;
+      if (document.visibilityState === 'hidden') return; // picked up again on return
       if (isUserBusy()) {
         delayRef.current = setTimeout(tryShowAd, 5000);
         return;
@@ -66,8 +72,11 @@ export default function AdManager() {
         c -= 1;
         if (c <= 0) {
           clearInterval(countRef.current);
+          countRef.current = null;
           setCountdown(null);
-          showInterstitialAd().catch(() => {});
+          showInterstitialAd()
+            .then(() => { pendingRef.current = adWaitingForScreen(); })
+            .catch(() => { pendingRef.current = false; });
         } else {
           setCountdown(c);
         }
@@ -76,10 +85,11 @@ export default function AdManager() {
 
     // Counts a launch at most once per gap window, so route changes (which
     // remount this component) never inflate the count.
+    // Returns true when this counted as a new launch.
     function registerLaunch() {
       const lastRaw = localStorage.getItem(LAST_LAUNCH_KEY);
       const lastMs = lastRaw ? parseInt(lastRaw, 10) : 0;
-      if (Date.now() - lastMs < NEW_LAUNCH_GAP_MS) return;
+      if (Date.now() - lastMs < NEW_LAUNCH_GAP_MS) return false;
 
       localStorage.setItem(LAST_LAUNCH_KEY, String(Date.now()));
       const count = parseInt(localStorage.getItem(AD_OPEN_KEY) || '0', 10) + 1;
@@ -88,8 +98,9 @@ export default function AdManager() {
       resetAdLaunchState();
       clearTimers();
       setCountdown(null);
-      if (!shouldShowAd(count)) return;
-      delayRef.current = setTimeout(tryShowAd, 15000);
+      pendingRef.current = shouldShowAd(count);
+      if (pendingRef.current) delayRef.current = setTimeout(tryShowAd, 15000);
+      return true;
     }
 
     registerLaunch();
@@ -99,7 +110,17 @@ export default function AdManager() {
       try {
         const { App } = window.Capacitor.Plugins;
         handle = await App.addListener('appStateChange', ({ isActive }) => {
-          if (isActive) registerLaunch();
+          if (!isActive) {
+            // Left the app: no ad may land on top of whatever they switched to.
+            clearTimers();
+            setCountdown(null);
+            return;
+          }
+          if (!registerLaunch() && pendingRef.current) {
+            // Back within the same launch, still owed its ad: the same wait again.
+            clearTimers();
+            delayRef.current = setTimeout(tryShowAd, 15000);
+          }
         });
       } catch (e) {}
     })();
