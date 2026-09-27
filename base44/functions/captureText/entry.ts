@@ -12,7 +12,8 @@
 // below: a clock time with no day gets its day, "Grandma" stays in the title,
 // "next Tuesday" is next week's Tuesday, a failed kind check says why in this
 // function's log, and splitting asks detectMultipleTasks, the same check the
-// app uses.)
+// app uses. Redeployed again the same day so an appointment captured from outside
+// the app can get reminders worded for recording notes.)
 
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import { runTaskParse } from "../../shared/runTaskParse.ts";
