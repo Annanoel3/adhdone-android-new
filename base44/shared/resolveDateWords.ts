@@ -41,11 +41,12 @@ export function resolveDateWord(value: unknown, now = new Date()): string | null
     const [, modifier, dayName] = match;
     const target = WEEKDAYS[dayName];
     const d = new Date(now);
-    // A bare or "this" day name means the next one coming up — same rule the
-    // prompt's weekday table uses, so code and prompt can't disagree.
+    // A bare or "this" day name means the next one coming up; "next X" is the
+    // X in next week (weeks run Sunday to Saturday). Same rule the prompt's
+    // weekday table uses, so code and prompt can't disagree.
     let diff = target - now.getDay();
     if (diff <= 0) diff += 7;
-    if (modifier === 'next') diff += 7;
+    if (modifier === 'next') diff = (7 - now.getDay()) + target;
     d.setDate(now.getDate() + diff);
     return fmt(d);
   }
