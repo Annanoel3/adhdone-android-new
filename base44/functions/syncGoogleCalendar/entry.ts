@@ -905,6 +905,8 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
             avoidTolls: (user as any)?.commute_avoid_tolls === true,
             reminderWish: (createdTask as any)?.reminder_wish || null,
             timezone: (user as any)?.timezone || undefined,
+            // Lets an appointment's reminders offer recording notes (build 36+).
+            canRecord: (user as any)?.notes_can_record === true,
           });
           const scheduleData = scheduleRes?.data || scheduleRes || {};
           rawReminders = scheduleData.reminders || [];
