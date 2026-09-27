@@ -62,13 +62,19 @@ export function buildTaskParsePrompt(inputText: string, tz?: string): string {
   // The ONE thing a language model genuinely cannot do reliably is calendar
   // arithmetic. Everything it might need is computed here and handed over.
   const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  // "next X" is the X in next week (weeks run Sunday to Saturday). Said on a
+  // Saturday, "next Tuesday" is three days away, not ten: it used to be "the
+  // coming one plus a week" whatever day it was said on. Same rule as
+  // resolveDateWords.ts, so the prompt and the code can't disagree.
+  const nextWeekStart = new Date(now);
+  nextWeekStart.setDate(now.getDate() + (7 - now.getDay()));
   const weekdayTable = WEEKDAY_NAMES.map((name, i) => {
     const thisOne = new Date(now);
     let diff = i - now.getDay();
     if (diff <= 0) diff += 7;
     thisOne.setDate(now.getDate() + diff);
-    const nextOne = new Date(thisOne);
-    nextOne.setDate(thisOne.getDate() + 7);
+    const nextOne = new Date(nextWeekStart);
+    nextOne.setDate(nextWeekStart.getDate() + i);
     return `        this ${name}: ${fmt(thisOne)}   |   next ${name}: ${fmt(nextOne)}`;
   }).join('\n');
 
@@ -152,8 +158,9 @@ TODAY: ${todayISO} (${dayOfWeek})   CURRENT TIME: ${currentTime}
 TOMORROW: ${tomorrowISO}
 END OF THIS WEEK (Sun): ${endOfThisWeekISO}   END OF NEXT WEEK (Sun): ${endOfNextWeekISO}
 
-Day names — "this X" is the next one coming up, "next X" is a week later; a
-bare day name ("on Friday", "Saturday") means the "this X" value:
+Day names — "this X" is the next one coming up, "next X" is the one in next
+week (weeks run Sunday to Saturday, so late in the week they can be the same
+day); a bare day name ("on Friday", "Saturday") means the "this X" value:
 ${weekdayTable}
 
 Nth weekday of a month ("first Monday of next month", "last Friday"):
