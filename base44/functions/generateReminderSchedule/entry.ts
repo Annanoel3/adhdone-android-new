@@ -43,6 +43,58 @@ function leaveNowBody(t, lead) {
     : `"${t}" is about a ${lead.driveMinutes} min drive, so head out now to get there on time. 🚗`;
 }
 
+// ── Events worth recording ─────────────────────────────────────────────────
+// For someone whose phone can record notes (app build 36+, User.notes_can_record),
+// an event where they'll be told things worth keeping — a doctor's visit, a
+// meeting, a class — gets its night-before reminder turned into "anything you
+// want to ask?" and its at-the-time one into "want notes?". The reminder page
+// (TaskNotification) and the Notes page offer the buttons for these; they spot
+// them by these labels, so keep the labels in step with NOTES_LABELS there.
+const NOTES_LABELS = {
+  'night before': 'night before · questions',
+  'at the time': 'at the time · record notes',
+};
+
+// Judged by what the event is, never by words in its name. No answer in time,
+// or any doubt, means the plain reminders.
+async function notesWouldHelp(title, location) {
+  try {
+    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+    const ask = openai.chat.completions.create({
+      model: 'gpt-6-luna',
+      reasoning_effort: 'low',
+      response_format: { type: 'json_object' },
+      max_completion_tokens: 2000,
+      messages: [
+        { role: 'system', content: 'You decide whether someone with ADHD would want to record an event on their calendar and get notes from it afterward. Answer with JSON only.' },
+        { role: 'user', content: `Event: "${String(title).slice(0, 200)}"${location ? `, at ${String(location).slice(0, 200)}` : ''}.
+
+Would they likely want a recording of this and notes from it? Yes when it's the kind of event where someone will tell them things they need to remember or act on afterward: instructions, information, decisions, plans or next steps. No when it's something they just attend, do or enjoy, where nothing said needs keeping. If you can't tell what the event is, answer no.
+
+Return {"notes": true} or {"notes": false}.` },
+      ],
+    });
+    const late = new Promise((resolve) => setTimeout(() => resolve(null), 4000));
+    const res = await Promise.race([ask, late]);
+    if (!res) return false;
+    return JSON.parse(res.choices?.[0]?.message?.content || '{}')?.notes === true;
+  } catch (e) {
+    console.log('[generateReminderSchedule] notes check failed, plain reminders:', e?.message || e);
+    return false;
+  }
+}
+
+function notesText(label, title) {
+  const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
+  if (label === 'night before') {
+    return { title: `📝 ${t} is tomorrow`, body: `Anything you want to ask or bring up? Tap to write your questions down so they're ready.` };
+  }
+  if (label === 'at the time') {
+    return { title: `🎙️ ${t}`, body: `It's time for "${t}". Want notes from it? Tap here, then tap Record notes.` };
+  }
+  return null;
+}
+
 function getEventNotificationText(label, title, lead) {
   const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
 
@@ -74,7 +126,10 @@ export default async function(req) {
     }
 
     const bodyText = await req.text();
-    const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, timezone, location, homeOrigin, avoidTolls, reminderWish } = JSON.parse(bodyText);
+    const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, timezone, location, homeOrigin, avoidTolls, reminderWish, canRecord } = JSON.parse(bodyText);
+    // Can this person's phone record notes? Service-role callers (calendar sync,
+    // captures, the refill cron) say so for the task's owner.
+    const ownerCanRecord = canRecord === true || user?.notes_can_record === true;
     // The user's own instruction about reminding ("the night before and the
     // morning of", "just once"). When there is one, the fixed ladders below are
     // skipped and the planner is told to obey it over every rule of its own.
@@ -132,19 +187,20 @@ export default async function(req) {
     // prevents "2 months before" reminders for far-future events.
     if (classification === 'event' && !wish) {
       const schedule = getEventSchedule(lead);
+      const notes = ownerCanRecord && !dayOnly ? await notesWouldHelp(title, location) : false;
       const reminders = schedule.map(r => {
-        const text = getEventNotificationText(r.label, title, lead);
+        const text = (notes && notesText(r.label, title)) || getEventNotificationText(r.label, title, lead);
         return {
           days_before: r.days_before,
           hour: r.hour,
           minute: r.minute,
           relative_minutes_before: r.relative_minutes_before,
-          label: r.label,
+          label: (notes && NOTES_LABELS[r.label]) || r.label,
           notification_title: text.title,
           notification_body: text.body,
         };
       });
-      console.log(`[generateReminderSchedule] Deterministic event schedule for "${title}" — ${reminders.length} reminders (no LLM call)`);
+      console.log(`[generateReminderSchedule] Event schedule for "${title}" — ${reminders.length} reminders${notes ? ', worded for recording notes' : ''}`);
       return Response.json({ reminders });
     }
 
