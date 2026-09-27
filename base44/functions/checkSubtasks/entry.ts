@@ -45,9 +45,10 @@ Would a good assistant set this up as one task with a short checklist of steps u
 
 Yes when they named one goal and listed its pieces themselves: the bills under "pay my bills",
 the items under "grocery run", the rooms under "clean the house", or steps they spelled out in
-order ("call the dentist, then book the appointment, then check my insurance"). The steps are
-exactly the pieces they wrote, in their order and their words. Never invent steps they didn't
-say, and never break a simple action into steps nobody asked for.
+order ("call the dentist, then book the appointment, then check my insurance"). Each step is
+one of the pieces they wrote, in their order, worded so it reads on its own as a line on a
+checklist ("Pay the electric bill" under "Pay bills"; just "Milk" under "Grocery run"). Never
+add a step they didn't say, and never break a simple action into steps nobody asked for.
 
 No when it is one action, even with details ("call the dentist about my tooth"), or an event or
 appointment, even one with several times in it ("get to the depot at 2:30 to check in, the train
