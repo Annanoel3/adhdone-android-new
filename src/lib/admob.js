@@ -67,7 +67,27 @@ export function resetAdLaunchState() {
 // `source` says WHO asked for the ad ('auto' = the open-count schedule,
 // 'manual' = the diagnostics test button) so the two can be told apart in the
 // per-user numbers.
+// Never while the phone is recording notes: an ad would interrupt, and its sound
+// would be recorded. The Notes page sets window.__notesRecording, but a recording
+// keeps going when the page isn't open, so the phone is asked directly too.
+async function isRecordingNotes() {
+  if (window.__notesRecording) return true;
+  try {
+    const R = window.Capacitor?.Plugins?.RecorderBridge;
+    if (!R) return false;
+    const st = await R.status();
+    return !!st?.recording;
+  } catch (e) {
+    return false;
+  }
+}
+
 export async function showInterstitialAd(source = 'auto') {
+  if (await isRecordingNotes()) {
+    setStatus('skipped: recording notes');
+    trackFire('ad_skipped', { props: { source, reason: 'recording notes' } });
+    return false;
+  }
   if (shownThisLaunch || adInFlight) {
     const reason = shownThisLaunch ? 'already shown this launch' : 'another attempt in flight';
     setStatus(`skipped: ${reason}`);
@@ -84,6 +104,12 @@ export async function showInterstitialAd(source = 'auto') {
   adInFlight = true;
   try {
     await AdMob.prepareInterstitial({ adId: AD_UNIT_ID, isTesting: false });
+    // Loading takes a few seconds; recording may have started meanwhile.
+    if (await isRecordingNotes()) {
+      setStatus('skipped: recording notes');
+      trackFire('ad_skipped', { props: { source, reason: 'recording notes' } });
+      return false;
+    }
     shownThisLaunch = true;              // set before show so a retry can't double-show
     await AdMob.showInterstitial();
     setStatus('shown');
