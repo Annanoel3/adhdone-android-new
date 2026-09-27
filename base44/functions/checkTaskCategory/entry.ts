@@ -29,7 +29,8 @@ import OpenAI from "npm:openai";
 // handle it treats as a task, so a capture is never lost.
 //
 // Checking it: an admin can send { texts: [...], today?, about_me? } to see how
-// several captures would be sorted, without saving anything.
+// several captures would be sorted, without saving anything, optionally with
+// { model, effort } to try another model.
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -170,15 +171,20 @@ function clean(raw: any) {
   };
 }
 
-async function classify(openai: OpenAI, prompt: string) {
+const MODEL = "gpt-6-astra";
+const EFFORT = "low";
+const TRY_MODELS = ["gpt-6-astra", "gpt-6-luna"];
+const TRY_EFFORTS = ["none", "low", "medium"];
+
+async function classify(openai: OpenAI, prompt: string, opts: { model?: string; effort?: string } = {}) {
   const completion = await openai.chat.completions.create({
-    model: "gpt-6-astra",
+    model: opts.model || MODEL,
     messages: [
       { role: "system", content: SYSTEM },
       { role: "user", content: prompt },
     ],
     response_format: { type: "json_object" },
-    reasoning_effort: "low",
+    reasoning_effort: (opts.effort || EFFORT) as any,
     max_completion_tokens: 4000,
   });
   return clean(JSON.parse(completion.choices[0].message.content || "{}"));
@@ -221,15 +227,17 @@ Deno.serve(async (req) => {
     // Admin check of several captures at once; nothing is saved.
     if (Array.isArray(body?.texts)) {
       if (user?.role !== "admin") return Response.json({ error: "Forbidden" }, { status: 403 });
+      const model = TRY_MODELS.includes(body?.model) ? body.model : MODEL;
+      const effort = TRY_EFFORTS.includes(body?.effort) ? body.effort : EFFORT;
       const results = await Promise.all(body.texts.slice(0, 40).map(async (t: any) => {
         const text = String(t || "");
         try {
-          return { text, ...(await classify(openai, buildPrompt(text, today, aboutMe))) };
+          return { text, ...(await classify(openai, buildPrompt(text, today, aboutMe), { model, effort })) };
         } catch (e) {
           return { text, error: String(e?.message || e) };
         }
       }));
-      return Response.json({ today, results });
+      return Response.json({ today, model, effort, results });
     }
 
     // Old callers sent a ready-made prompt; its answer only knows task / parking_lot.
