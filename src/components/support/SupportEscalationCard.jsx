@@ -68,13 +68,18 @@ export default function SupportEscalationCard({ message, transcript, theme, onDi
   );
 }
 
-// ── "I think this was a feature request" ─────────────────────────────────────
+// ── "Want to send this to the developer?" ────────────────────────────────────
 //
-// One-time popup for when something a person captured was really a request for
-// the app itself — a feature they want — and it wrongly became a task. It shows
-// when their profile carries pending_feedback_prompt ({ text, task_id, queued_at })
-// that has not been answered yet. The app speaks in its own voice here: it is the
-// app that noticed, not a person reading their notes.
+// One-time popup for when something a person captured was really meant for the
+// app itself: a feature they want, or something that isn't working right. It
+// shows when their profile carries pending_feedback_prompt ({ text, queued_at },
+// plus task_id when an admin queued it for something that wrongly became a
+// task) that has not been answered yet. The capture check queues it on its own
+// now (checkTaskCategory's "app_feedback"): their words are kept in the Parking
+// Lot and this asks whether to send them on. A capture made while the app is
+// open shows it right away (the 'feedback-prompt-queued' event); one made from
+// outside the app shows it the next time the app opens. The app speaks in its
+// own voice here: it is the app that noticed, not a person reading their notes.
 //
 // Same consent rule as the card above: nothing leaves the app unless they tap
 // "Yes, send it". They see their OWN words and can change them first — the app
@@ -88,21 +93,38 @@ export default function SupportEscalationCard({ message, transcript, theme, onDi
 // as an answer. Once answered it never shows again, and the ways-to-add popup is
 // marked seen so first-run education never lands on top of this.
 export function FeedbackPrompt({ user }) {
-  const pending = user?.pending_feedback_prompt;
+  // Queued during this visit, or waiting on the profile from before.
+  const [queued, setQueued] = useState(null);
+  useEffect(() => {
+    const onQueued = (e) => { if (e?.detail?.text) setQueued(e.detail); };
+    window.addEventListener('feedback-prompt-queued', onQueued);
+    return () => window.removeEventListener('feedback-prompt-queued', onQueued);
+  }, []);
+  const pending = queued || user?.pending_feedback_prompt;
   const waiting = !!(pending?.text && !pending?.answered_at);
+  // Which question this is. Keyed by a plain string, so the account record
+  // refreshing underneath (a new object, same question) can't cancel the wait
+  // or show it twice.
+  const key = waiting ? String(pending.queued_at || pending.text) : '';
   const [open, setOpen] = useState(false);
   const [text, setText] = useState('');
   const [status, setStatus] = useState('idle');
-  const started = useRef(false);
+  const shownFor = useRef('');
+  const pendingRef = useRef(pending);
+  pendingRef.current = pending;
 
   useEffect(() => {
-    if (!waiting || started.current) return;
-    started.current = true;
-    setText(String(pending.text));
+    if (!key || shownFor.current === key) return;
     let cancelled = false;
-    waitForCalm().then(() => { if (!cancelled) setOpen(true); });
+    waitForCalm().then(() => {
+      if (cancelled || shownFor.current === key) return;
+      shownFor.current = key;
+      setText(String(pendingRef.current?.text || ''));
+      setStatus('idle');
+      setOpen(true);
+    });
     return () => { cancelled = true; };
-  }, [waiting, pending]);
+  }, [key]);
 
   useEffect(() => {
     if (!open) return;
@@ -113,13 +135,15 @@ export function FeedbackPrompt({ user }) {
   // Keeps what was queued and adds the answer on top. Overwritten, never set to
   // null: the schema types this field as an object and would reject null.
   const record = async (fields) => {
+    const answeredAt = new Date().toISOString();
+    setQueued((q) => (q ? { ...q, answered_at: answeredAt } : q));
     try {
       await base44.auth.updateMe({
         pending_feedback_prompt: {
           text: pending?.text,
-          task_id: pending?.task_id,
+          ...(pending?.task_id ? { task_id: pending.task_id } : {}),
           queued_at: pending?.queued_at,
-          answered_at: new Date().toISOString(),
+          answered_at: answeredAt,
           ...fields,
         },
       });
@@ -140,7 +164,9 @@ export function FeedbackPrompt({ user }) {
       await base44.functions.invoke('sendSupportRequest', {
         message,
         transcript:
-          'Sent from the "I think this was a feature request" popup. What they originally captured: "' +
+          (pending?.task_id
+            ? 'Sent from the "I think this was a feature request" popup. What they originally captured: "'
+            : 'Sent from the "send this to the developer?" popup, right after they added it in the app. What they originally captured: "') +
           String(pending?.text || '').slice(0, 1000) + '"',
       });
       await record({ answer: 'yes', sent_text: message, email: 'sent' });
@@ -192,11 +218,24 @@ export function FeedbackPrompt({ user }) {
           </div>
         ) : (
           <div className="space-y-4 pt-2">
-            <h2 className="text-xl font-bold text-foreground">I think this was a feature request</h2>
-            <p className="text-[15px] leading-relaxed text-muted-foreground">
-              It turned into a task, but it sounds like something you'd like ADHDone to do. Want
-              to send it to the developer? You can change the wording first.
-            </p>
+            {pending?.task_id ? (
+              <>
+                <h2 className="text-xl font-bold text-foreground">I think this was a feature request</h2>
+                <p className="text-[15px] leading-relaxed text-muted-foreground">
+                  It turned into a task, but it sounds like something you'd like ADHDone to do. Want
+                  to send it to the developer? You can change the wording first.
+                </p>
+              </>
+            ) : (
+              <>
+                <h2 className="text-xl font-bold text-foreground">Want to send this to the developer?</h2>
+                <p className="text-[15px] leading-relaxed text-muted-foreground">
+                  This sounds like it's about ADHDone itself, like a feature you'd like or something
+                  that isn't working right. I saved it in your Parking Lot. Want to send it to the
+                  developer too? You can change the wording first.
+                </p>
+              </>
+            )}
             <Textarea
               value={text}
               onChange={(e) => setText(e.target.value)}
