@@ -5,7 +5,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/use-toast";
 import { enqueueCapture } from "@/lib/pendingCaptures";
 import {
-  Mic, Pause, Play, Square, ChevronLeft, Trash2, Plus, Check, Loader2, Info, RotateCcw, ListChecks, X,
+  Mic, Pause, Play, Square, ChevronLeft, ChevronRight, Trash2, Plus, Check, Loader2, Info, RotateCcw, X, Pencil,
 } from "lucide-react";
 
 // ── Notes: record a meeting, appointment or class; get ADHD-friendly notes ────
@@ -32,10 +32,14 @@ import {
 // Ads never show while a recording is going (window.__notesRecording, and a
 // check with the phone itself in lib/admob.js).
 //
-// Appointments: events in the next two days are listed under "Coming up".
-// Questions written down for one are saved on the task (prep_questions), show
-// on screen while it's recorded, and the notes say which got answered. The
-// reminder page links here with ?task=ID&prep=1 (write questions) or
+// The page is a list of cards, one per meeting. A meeting coming up in the next
+// week (one the reminder planner judged worth notes, see NOTES_LABELS) already
+// has its card, drawn dashed because nothing's recorded yet. Its page is where
+// questions go beforehand (saved on the task as prep_questions) and where
+// recording starts. A recording's card opens its notes and full transcript;
+// the notes can be edited by hand in case something came out wrong. Questions
+// show on screen while it's recorded, and the notes say which got answered. The
+// reminder page links here with ?task=ID&prep=1 (the meeting's page) or
 // ?task=ID&record=1 (start recording it right away).
 
 // Same number as NOTES_FREE_MINUTES in base44/functions/transcribeAudioNew,
@@ -58,6 +62,38 @@ const HOUR = 60 * MIN;
 function startOf(task) {
   const ms = new Date(task?.event_time || task?.next_reminder || "").getTime();
   return Number.isFinite(ms) ? ms : null;
+}
+
+// Same labels as NOTES_LABELS in base44/functions/generateReminderSchedule: an
+// event whose reminders carry one was judged worth recording.
+const NOTES_LABELS = ["night before · questions", "at the time · record notes"];
+function isMeeting(task) {
+  return (task?.reminder_schedule || []).some((r) => NOTES_LABELS.includes(r?.label))
+    || (task?.prep_questions || []).length > 0;
+}
+
+// Notes after a hand edit: trimmed, empty lines dropped, an answer counts as
+// answered once it has words in it.
+function cleanEditedNotes(n) {
+  const s = (v) => String(v ?? "").trim();
+  const texts = (list) => (list || []).map((x) => ({ ...x, text: s(x.text) })).filter((x) => x.text);
+  return {
+    ...n,
+    title: s(n.title),
+    gist: (n.gist || []).map(s).filter(Boolean),
+    todos: (n.todos || []).map((t) => ({ ...t, text: s(t.text), who: s(t.who) || "you" })).filter((t) => t.text),
+    details: (n.details || []).map((d) => ({ ...d, label: s(d.label), value: s(d.value) })).filter((d) => d.label || d.value),
+    sections: (n.sections || [])
+      .map((x) => ({ ...x, heading: s(x.heading), points: (x.points || []).map(s).filter(Boolean) }))
+      .filter((x) => x.heading || x.points.length),
+    decisions: texts(n.decisions),
+    questions: texts(n.questions),
+    asked: (n.asked || []).map((a) => {
+      const answer = s(a.answer);
+      return { ...a, answer, answered: !!answer };
+    }),
+    edited: true,
+  };
 }
 
 function cleanQuestions(list) {
@@ -165,6 +201,8 @@ export default function NotesPage() {
   const [draft, setDraft] = useState("");
   const [liveQuestions, setLiveQuestions] = useState([]);
   const [checked, setChecked] = useState([]);
+  const [editDraft, setEditDraft] = useState(null); // the notes being edited by hand
+  const [savingEdits, setSavingEdits] = useState(false);
   const [, setTick] = useState(0);
   const recordsRef = useRef([]);
   recordsRef.current = records;
@@ -194,20 +232,26 @@ export default function NotesPage() {
     }
   }, []);
 
-  // Events from three hours ago to two days ahead: the ones worth prepping for
-  // or recording.
+  // Meetings from three hours ago to a week ahead: the ones worth prepping for
+  // or recording. Read newest first and stops once past the window.
   const loadUpcoming = useCallback(async () => {
     try {
-      const rows = await base44.entities.Task.filter({ status: "active", classification: "event" }, "event_time", 200);
       const now = Date.now();
-      const soon = (rows || [])
-        .filter((t) => !t.parent_task_id && !t.birthday_person && !t.day_only_task)
+      const rows = [];
+      for (let skip = 0; skip < 1000; skip += 200) {
+        const page = (await base44.entities.Task.filter({ status: "active", classification: "event" }, "-event_time", 200, skip)) || [];
+        rows.push(...page);
+        const last = page.length ? startOf(page[page.length - 1]) : null;
+        if (page.length < 200 || (last !== null && last < now - 3 * HOUR)) break;
+      }
+      const soon = rows
+        .filter((t) => !t.parent_task_id && !t.birthday_person && !t.day_only_task && isMeeting(t))
         .filter((t) => {
           const s = startOf(t);
-          return s !== null && s > now - 3 * HOUR && s < now + 48 * HOUR;
+          return s !== null && s > now - 3 * HOUR && s < now + 7 * 24 * HOUR;
         })
         .sort((a, b) => startOf(a) - startOf(b))
-        .slice(0, 4);
+        .slice(0, 6);
       setUpcoming(soon);
     } catch (e) {
       console.error("[Notes] could not load upcoming events", e);
@@ -582,6 +626,22 @@ export default function NotesPage() {
     }
   };
 
+  const saveEdits = async (record) => {
+    if (!editDraft || savingEdits) return;
+    const notes = cleanEditedNotes(editDraft);
+    const fields = { notes, ...(notes.title ? { title: notes.title } : {}) };
+    setSavingEdits(true);
+    try {
+      await base44.entities.EnergyLog.update(record.id, fields);
+      setRecords((rows) => rows.map((r) => (r.id === record.id ? { ...r, ...fields } : r)));
+      setEditDraft(null);
+    } catch (e) {
+      toast({ title: "Your changes didn't save", description: "Check your connection and try again." });
+    } finally {
+      setSavingEdits(false);
+    }
+  };
+
   // Questions for an event, saved on the task as they're typed in.
   const saveQuestions = (task, next) => {
     const questions = cleanQuestions(next);
@@ -690,20 +750,144 @@ export default function NotesPage() {
     const mine = (notes?.todos || []).map((t, i) => ({ ...t, i })).filter((t) => (t.who || "you").toLowerCase() === "you");
     const theirs = (notes?.todos || []).filter((t) => (t.who || "you").toLowerCase() !== "you");
     const working = progress?.recordId === open.id;
+    // Hand edits: called as plain functions (not components) so a text box keeps
+    // its focus while typing.
+    const inputCls = `w-full rounded-lg border px-2.5 py-2 text-[15px] outline-none ${dark ? "bg-gray-900 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900"}`;
+    const edit = (fn) => setEditDraft((cur) => {
+      const next = JSON.parse(JSON.stringify(cur || {}));
+      fn(next);
+      return next;
+    });
+    const line = (key, value, onChange, onRemove, placeholder = "") => (
+      <div key={key} className="flex items-start gap-2">
+        <textarea rows={2} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} className={`${inputCls} resize-y`} />
+        {onRemove && (
+          <button type="button" aria-label="Remove this line" onClick={onRemove} className={`mt-2 shrink-0 ${soft}`}>
+            <X className="w-4 h-4" />
+          </button>
+        )}
+      </div>
+    );
+    const addBtn = (label, onClick) => (
+      <button type="button" onClick={onClick} className={`text-sm font-semibold flex items-center gap-1 ${dark ? "text-purple-300" : "text-purple-700"}`}>
+        <Plus className="w-4 h-4" />{label}
+      </button>
+    );
 
     return (
       <div className="p-4 md:p-8 w-full" style={pagePad}>
         {capDialog}
         {deleteDialog}
         <div className="max-w-2xl mx-auto space-y-4">
-          <button type="button" onClick={() => setOpenId(null)} className={`flex items-center gap-1 text-sm ${soft}`}>
-            <ChevronLeft className="w-4 h-4" /> All recordings
+          <button type="button" onClick={() => { setOpenId(null); setEditDraft(null); }} className={`flex items-center gap-1 text-sm ${soft}`}>
+            <ChevronLeft className="w-4 h-4" /> All notes
           </button>
           <div>
             <h1 className={`text-2xl font-bold ${heading}`}>{open.title || notes?.title || "Recording"}</h1>
             <p className={`text-sm ${soft}`}>{whenText(open.started_at)}{open.duration_ms ? ` · ${clock(open.duration_ms)}` : ""}</p>
           </div>
 
+          {editDraft && (
+            <div className="space-y-4">
+              <p className={`text-sm ${soft}`}>Fix anything that came out wrong. Empty lines are dropped when you save.</p>
+
+              <div className={`${card} space-y-2`}>
+                <h2 className={`text-lg font-bold ${heading}`}>Title</h2>
+                <input value={editDraft.title || ""} onChange={(e) => edit((n) => { n.title = e.target.value; })} className={inputCls} />
+              </div>
+
+              <div className={`${card} space-y-2`}>
+                <h2 className={`text-lg font-bold ${heading}`}>The gist</h2>
+                {(editDraft.gist || []).map((g, i) => line(`g${i}`, g, (v) => edit((n) => { n.gist[i] = v; }), () => edit((n) => { n.gist.splice(i, 1); })))}
+                {addBtn("Add a line", () => edit((n) => { n.gist = [...(n.gist || []), ""]; }))}
+              </div>
+
+              {(editDraft.asked || []).length > 0 && (
+                <div className={`${card} space-y-3`}>
+                  <h2 className={`text-lg font-bold ${heading}`}>Your questions</h2>
+                  {editDraft.asked.map((a, i) => (
+                    <div key={`a${i}`} className="space-y-1">
+                      <div className={`font-semibold ${heading}`}>{a.question}</div>
+                      {line(`aa${i}`, a.answer || "", (v) => edit((n) => { n.asked[i].answer = v; }), null, "The answer (leave empty if it didn't come up)")}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className={`${card} space-y-3`}>
+                <h2 className={`text-lg font-bold ${heading}`}>To-dos</h2>
+                {(editDraft.todos || []).map((t, i) => (
+                  <div key={`t${i}`} className="space-y-1">
+                    {line(`tt${i}`, t.text || "", (v) => edit((n) => { n.todos[i].text = v; }), () => edit((n) => { n.todos.splice(i, 1); }))}
+                    <input
+                      value={t.who || ""}
+                      onChange={(e) => edit((n) => { n.todos[i].who = e.target.value; })}
+                      placeholder="Whose (you, or a name)"
+                      className={`${inputCls} text-sm`}
+                    />
+                  </div>
+                ))}
+                {addBtn("Add a to-do", () => edit((n) => { n.todos = [...(n.todos || []), { text: "", who: "you", at: "" }]; }))}
+              </div>
+
+              <div className={`${card} space-y-3`}>
+                <h2 className={`text-lg font-bold ${heading}`}>Details to keep</h2>
+                {(editDraft.details || []).map((d, i) => (
+                  <div key={`d${i}`} className="space-y-1">
+                    <input
+                      value={d.label || ""}
+                      onChange={(e) => edit((n) => { n.details[i].label = e.target.value; })}
+                      placeholder="What it is (like Dose)"
+                      className={`${inputCls} text-sm`}
+                    />
+                    {line(`dv${i}`, d.value || "", (v) => edit((n) => { n.details[i].value = v; }), () => edit((n) => { n.details.splice(i, 1); }))}
+                  </div>
+                ))}
+                {addBtn("Add a detail", () => edit((n) => { n.details = [...(n.details || []), { label: "", value: "", at: "" }]; }))}
+              </div>
+
+              {(editDraft.sections || []).map((s, i) => (
+                <div key={`s${i}`} className={`${card} space-y-2`}>
+                  <div className="flex items-start gap-2">
+                    <input
+                      value={s.heading || ""}
+                      onChange={(e) => edit((n) => { n.sections[i].heading = e.target.value; })}
+                      placeholder="Topic"
+                      className={`${inputCls} font-semibold`}
+                    />
+                    <button type="button" aria-label="Remove this topic" onClick={() => edit((n) => { n.sections.splice(i, 1); })} className={`mt-2 shrink-0 ${soft}`}>
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  {(s.points || []).map((p, j) => line(`s${i}p${j}`, p, (v) => edit((n) => { n.sections[i].points[j] = v; }), () => edit((n) => { n.sections[i].points.splice(j, 1); })))}
+                  {addBtn("Add a point", () => edit((n) => { n.sections[i].points = [...(n.sections[i].points || []), ""]; }))}
+                </div>
+              ))}
+              {addBtn("Add a topic", () => edit((n) => { n.sections = [...(n.sections || []), { heading: "", points: [""], at: "" }]; }))}
+
+              <div className={`${card} space-y-2`}>
+                <h2 className={`text-lg font-bold ${heading}`}>Decided</h2>
+                {(editDraft.decisions || []).map((x, i) => line(`dc${i}`, x.text || "", (v) => edit((n) => { n.decisions[i].text = v; }), () => edit((n) => { n.decisions.splice(i, 1); })))}
+                {addBtn("Add a line", () => edit((n) => { n.decisions = [...(n.decisions || []), { text: "", at: "" }]; }))}
+              </div>
+
+              <div className={`${card} space-y-2`}>
+                <h2 className={`text-lg font-bold ${heading}`}>Still open</h2>
+                {(editDraft.questions || []).map((x, i) => line(`q${i}`, x.text || "", (v) => edit((n) => { n.questions[i].text = v; }), () => edit((n) => { n.questions.splice(i, 1); })))}
+                {addBtn("Add a line", () => edit((n) => { n.questions = [...(n.questions || []), { text: "", at: "" }]; }))}
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setEditDraft(null)} disabled={savingEdits}>Cancel</Button>
+                <Button className="flex-1" onClick={() => saveEdits(open)} disabled={savingEdits}>
+                  {savingEdits ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
+                  Save
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {!editDraft && (<>
           <div className={`flex rounded-xl p-1 ${dark ? "bg-gray-800" : "bg-gray-100"}`}>
             {["notes", "transcript"].map((t) => (
               <button
@@ -746,6 +930,15 @@ export default function NotesPage() {
 
           {tab === "notes" && notes && (
             <div className="space-y-4">
+              <div className="flex justify-end">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEditDraft(JSON.parse(JSON.stringify({ ...notes, title: open.title || notes.title || "" })))}
+                >
+                  <Pencil className="w-4 h-4 mr-1.5" />Edit notes
+                </Button>
+              </div>
               {notes.gist?.length > 0 && (
                 <div className={card}>
                   <h2 className={`text-lg font-bold mb-2 ${heading}`}>The gist</h2>
@@ -869,6 +1062,7 @@ export default function NotesPage() {
           <Button variant="outline" onClick={() => setConfirmDelete(open)} className="w-full text-red-600 border-red-300">
             <Trash2 className="w-4 h-4 mr-2" /> Delete recording
           </Button>
+          </>)}
         </div>
       </div>
     );
@@ -942,17 +1136,16 @@ export default function NotesPage() {
   if (prepTask) {
     const qs = cleanQuestions(prepTask.prep_questions);
     const s = startOf(prepTask);
-    const canRecordNow = s !== null && Date.now() >= s - 30 * MIN;
     return (
       <div className="p-4 md:p-8 w-full" style={pagePad}>
         {capDialog}
         <div className="max-w-2xl mx-auto space-y-4">
           <button type="button" onClick={() => { setPrepTask(null); setDraft(""); }} className={`flex items-center gap-1 text-sm ${soft}`}>
-            <ChevronLeft className="w-4 h-4" /> Notes
+            <ChevronLeft className="w-4 h-4" /> All notes
           </button>
           <div>
             <h1 className={`text-2xl font-bold ${heading}`}>{prepTask.title}</h1>
-            {s !== null && <p className={`text-sm ${soft}`}>{whenText(s)}</p>}
+            {s !== null && <p className={`text-sm ${soft}`}>{whenText(s)} · Not recorded yet</p>}
           </div>
           <div className={`${card} space-y-3`}>
             <h2 className={`text-lg font-bold ${heading}`}>Questions to ask</h2>
@@ -989,20 +1182,27 @@ export default function NotesPage() {
               </Button>
             </form>
           </div>
-          {canRecordNow ? (
-            <Button onClick={() => startRecording({ task: prepTask })} disabled={busy || !!progress} className="w-full h-14 rounded-2xl text-base bg-red-600 hover:bg-red-700 text-white">
-              {busy ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Mic className="w-5 h-5 mr-2" />}
-              Record it now
-            </Button>
-          ) : (
-            <p className={`text-sm ${soft}`}>When it's about to start, open Notes and tap Record next to it.</p>
-          )}
+          <Button onClick={() => startRecording({ task: prepTask })} disabled={busy || !!progress} className="w-full h-14 rounded-2xl text-base bg-red-600 hover:bg-red-700 text-white">
+            {busy ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Mic className="w-5 h-5 mr-2" />}
+            Start recording
+          </Button>
+          <p className={`text-xs ${soft}`}>
+            {minutesText(usage.left_seconds)} of {FREE_MINUTES} free minutes left this month. Afterward, this page has
+            your notes and the full transcript.
+          </p>
+          <p className={`text-xs flex gap-1.5 ${soft}`}>
+            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            In 12 states, including California and Florida, everyone has to agree before you record them.
+          </p>
         </div>
       </div>
     );
   }
 
-  // ── Start screen and past recordings ──
+  // ── Start screen: a card per meeting ──
+  // A meeting that already has a recording shows as that recording's card.
+  const recordedTaskIds = new Set(records.map((r) => r.task_id).filter(Boolean));
+  const upcomingCards = upcoming.filter((t) => !recordedTaskIds.has(t.id));
   return (
     <div className="p-4 md:p-8 w-full" style={pagePad}>
       {capDialog}
@@ -1033,28 +1233,26 @@ export default function NotesPage() {
           </p>
         </div>
 
-        {upcoming.length > 0 && (
+        {upcomingCards.length > 0 && (
           <div className="space-y-2">
             <h2 className={`text-lg font-bold ${heading}`}>Coming up</h2>
-            {upcoming.map((t) => {
-              const s = startOf(t);
+            {upcomingCards.map((t) => {
               const n = cleanQuestions(t.prep_questions).length;
-              const recordable = Date.now() >= s - 30 * MIN;
               return (
-                <div key={t.id} className={card}>
-                  <div className={`font-semibold ${heading}`}>{t.title}</div>
-                  <div className={`text-sm ${soft}`}>{whenText(s)}</div>
-                  <div className="flex gap-2 mt-3">
-                    <Button variant="outline" className="flex-1" onClick={() => setPrepTask(t)}>
-                      <ListChecks className="w-4 h-4 mr-2" />{n ? `Questions (${n})` : "Jot down questions"}
-                    </Button>
-                    {recordable && (
-                      <Button onClick={() => startRecording({ task: t })} disabled={busy || !!progress} className="flex-1 bg-red-600 hover:bg-red-700 text-white">
-                        <Mic className="w-4 h-4 mr-2" />Record
-                      </Button>
-                    )}
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setPrepTask(t)}
+                  className={`w-full text-left rounded-2xl border-2 border-dashed p-4 flex items-center gap-3 ${dark ? "border-gray-600 bg-gray-800/40" : "border-gray-300 bg-white/60"}`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className={`font-semibold truncate ${heading}`}>{t.title}</div>
+                    <div className={`text-sm ${soft}`}>
+                      {whenText(startOf(t))} · Not recorded yet{n ? ` · ${n} question${n === 1 ? "" : "s"}` : ""}
+                    </div>
                   </div>
-                </div>
+                  <span className={`text-sm flex items-center shrink-0 ${soft}`}>Details<ChevronRight className="w-4 h-4" /></span>
+                </button>
               );
             })}
           </div>
@@ -1076,14 +1274,17 @@ export default function NotesPage() {
               <button
                 key={r.id}
                 type="button"
-                onClick={() => { setOpenId(r.id); setTab("notes"); }}
-                className={`${card} w-full text-left`}
+                onClick={() => { setOpenId(r.id); setTab("notes"); setEditDraft(null); }}
+                className={`${card} w-full text-left flex items-center gap-3`}
               >
-                <div className={`font-semibold ${heading}`}>{r.title || r.notes?.title || "Recording"}</div>
-                <div className={`text-sm ${soft}`}>
-                  {whenText(r.started_at)}{r.duration_ms ? ` · ${clock(r.duration_ms)}` : ""}
-                  {STATUS_TEXT[r.status] ? ` · ${progress?.recordId === r.id ? "Working on it…" : STATUS_TEXT[r.status]}` : ""}
+                <div className="flex-1 min-w-0">
+                  <div className={`font-semibold truncate ${heading}`}>{r.title || r.notes?.title || "Recording"}</div>
+                  <div className={`text-sm ${soft}`}>
+                    {whenText(r.started_at)}{r.duration_ms ? ` · ${clock(r.duration_ms)}` : ""}
+                    {STATUS_TEXT[r.status] ? ` · ${progress?.recordId === r.id ? "Working on it…" : STATUS_TEXT[r.status]}` : ""}
+                  </div>
                 </div>
+                <span className={`text-sm flex items-center shrink-0 ${soft}`}>Details<ChevronRight className="w-4 h-4" /></span>
               </button>
             ))}
           </div>
