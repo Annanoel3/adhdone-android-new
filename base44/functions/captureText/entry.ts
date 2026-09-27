@@ -8,6 +8,8 @@
 // save is silent and instant. Ideas go to the Parking Lot, birthdays become
 // yearly birthday records, and anything meant for ADHDone itself is kept in the
 // Parking Lot with an offer to send it to the developer (see captureToTasks).
+// (Last redeployed for "next Tuesday" meaning next week's Tuesday, from the
+// shared parse prompt bundled below.)
 
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import { runTaskParse } from "../../shared/runTaskParse.ts";
