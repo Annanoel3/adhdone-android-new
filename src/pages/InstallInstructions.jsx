@@ -5,7 +5,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/use-toast";
 import { enqueueCapture } from "@/lib/pendingCaptures";
 import {
-  Mic, Pause, Play, Square, ChevronLeft, Trash2, Plus, Check, Loader2, Info, RotateCcw,
+  Mic, Pause, Play, Square, ChevronLeft, Trash2, Plus, Check, Loader2, Info, RotateCcw, ListChecks, X,
 } from "lucide-react";
 
 // ── Notes: record a meeting, appointment or class; get ADHD-friendly notes ────
@@ -31,6 +31,12 @@ import {
 //
 // Ads never show while a recording is going (window.__notesRecording, and a
 // check with the phone itself in lib/admob.js).
+//
+// Appointments: events in the next two days are listed under "Coming up".
+// Questions written down for one are saved on the task (prep_questions), show
+// on screen while it's recorded, and the notes say which got answered. The
+// reminder page links here with ?task=ID&prep=1 (write questions) or
+// ?task=ID&record=1 (start recording it right away).
 
 // Same number as NOTES_FREE_MINUTES in base44/functions/transcribeAudioNew,
 // which is the one that's enforced.
@@ -42,6 +48,21 @@ const recorder = () => (typeof window !== "undefined" && window.Capacitor?.Plugi
 // never send the same recording off twice.
 let processingLock = false;
 const finishing = new Set();
+// Which event a recording on the phone belongs to, until its row is saved.
+const sessionLinks = new Map();
+
+const MIN = 60 * 1000;
+const HOUR = 60 * MIN;
+
+// An event's start time, if it has one.
+function startOf(task) {
+  const ms = new Date(task?.event_time || task?.next_reminder || "").getTime();
+  return Number.isFinite(ms) ? ms : null;
+}
+
+function cleanQuestions(list) {
+  return (Array.isArray(list) ? list : []).map((q) => String(q || "").trim()).filter(Boolean).slice(0, 20);
+}
 
 function monthKey(timeZone) {
   try {
@@ -123,6 +144,10 @@ export default function NotesPage() {
   const [progress, setProgress] = useState(null); // { recordId, step, done, total }
   const [capOpen, setCapOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [upcoming, setUpcoming] = useState([]);
+  const [prepTask, setPrepTask] = useState(null);
+  const [draft, setDraft] = useState("");
+  const [liveQuestions, setLiveQuestions] = useState([]);
   const [, setTick] = useState(0);
   const recordsRef = useRef([]);
   recordsRef.current = records;
@@ -149,6 +174,26 @@ export default function NotesPage() {
       return recordsRef.current;
     } finally {
       setLoaded(true);
+    }
+  }, []);
+
+  // Events from three hours ago to two days ahead: the ones worth prepping for
+  // or recording.
+  const loadUpcoming = useCallback(async () => {
+    try {
+      const rows = await base44.entities.Task.filter({ status: "active", classification: "event" }, "event_time", 200);
+      const now = Date.now();
+      const soon = (rows || [])
+        .filter((t) => !t.parent_task_id && !t.birthday_person && !t.day_only_task)
+        .filter((t) => {
+          const s = startOf(t);
+          return s !== null && s > now - 3 * HOUR && s < now + 48 * HOUR;
+        })
+        .sort((a, b) => startOf(a) - startOf(b))
+        .slice(0, 4);
+      setUpcoming(soon);
+    } catch (e) {
+      console.error("[Notes] could not load upcoming events", e);
     }
   }, []);
 
@@ -266,6 +311,7 @@ export default function NotesPage() {
           title: session.title || "",
           device_session_id: session.id,
           started_at: new Date(session.startedAt || Date.now()).toISOString(),
+          ...(sessionLinks.get(session.id) || {}),
           ...fields,
         });
       }
@@ -306,12 +352,17 @@ export default function NotesPage() {
     let cancelled = false;
     (async () => {
       await refreshUser();
-      await loadRecords();
+      const rows = await loadRecords();
+      loadUpcoming();
       const R = recorder();
       if (!R || cancelled) return;
+      let recordingNow = false;
       try {
         const st = await R.status();
         if (st?.recording && st.session) {
+          recordingNow = true;
+          const row = (rows || []).find((r) => r.device_session_id === st.session.id);
+          setLiveQuestions(cleanQuestions(row?.questions));
           setLive({
             sessionId: st.session.id,
             paused: st.session.state === "paused",
@@ -345,6 +396,18 @@ export default function NotesPage() {
           }
         });
       } catch (e) { /* no events on this build */ }
+      // Opened from an event's reminder: write questions, or record it now.
+      const params = new URLSearchParams(window.location.search);
+      const taskId = params.get("task");
+      if (taskId && !cancelled) {
+        window.history.replaceState(null, "", window.location.pathname);
+        const found = await base44.entities.Task.filter({ id: taskId }).catch(() => []);
+        const task = found?.[0];
+        if (task && !cancelled) {
+          if (params.get("record") === "1" && !recordingNow) startRecording({ task });
+          else if (!recordingNow) setPrepTask(task);
+        }
+      }
       await resumeUnfinished();
     })();
     return () => {
@@ -380,9 +443,12 @@ export default function NotesPage() {
 
   // ── Controls ───────────────────────────────────────────────────────────────
 
-  const startRecording = async () => {
+  // link: { task } when it's for an event, so the recording carries the event
+  // and its questions.
+  const startRecording = async (link = null) => {
     const R = recorder();
     if (!R || busy) return;
+    const name = (link?.task?.title || title).trim();
     const now = usageFrom(await refreshUser());
     if (now.left_seconds < 60) {
       setCapOpen(true);
@@ -390,7 +456,7 @@ export default function NotesPage() {
     }
     setBusy(true);
     try {
-      const res = await R.start({ title: title.trim(), maxMinutes: Math.max(1, Math.floor(now.left_seconds / 60)) });
+      const res = await R.start({ title: name, maxMinutes: Math.max(1, Math.floor(now.left_seconds / 60)) });
       if (!res?.ok) {
         toast({
           title: res?.error === "mic_permission_denied" ? "ADHDone needs the microphone to record" : "Recording didn't start",
@@ -402,14 +468,21 @@ export default function NotesPage() {
       }
       setLive({ sessionId: res.sessionId, paused: false, baseMs: 0, baseAt: Date.now() });
       if (!res.alreadyRecording) {
+        const linkFields = link?.task
+          ? { task_id: link.task.id, questions: cleanQuestions(link.task.prep_questions) }
+          : {};
+        sessionLinks.set(res.sessionId, linkFields);
+        setLiveQuestions(linkFields.questions || []);
         base44.entities.EnergyLog.create({
           kind: "note_recording",
-          title: title.trim(),
+          title: name,
           status: "recording",
           device_session_id: res.sessionId,
           started_at: new Date().toISOString(),
+          ...linkFields,
         }).then(() => loadRecords()).catch(() => {});
       }
+      setPrepTask(null);
       setTitle("");
     } finally {
       setBusy(false);
@@ -473,6 +546,24 @@ export default function NotesPage() {
     } catch (e) {
       toast({ title: "Couldn't delete that recording", description: "Try again in a moment." });
     }
+  };
+
+  // Questions for an event, saved on the task as they're typed in.
+  const saveQuestions = (task, next) => {
+    const questions = cleanQuestions(next);
+    const updated = { ...task, prep_questions: questions };
+    setPrepTask(updated);
+    setUpcoming((rows) => rows.map((t) => (t.id === task.id ? updated : t)));
+    base44.entities.Task.update(task.id, { prep_questions: questions }).catch(() => {
+      toast({ title: "That question didn't save", description: "Check your connection and try again." });
+    });
+  };
+
+  const addQuestion = () => {
+    const q = draft.trim();
+    if (!q || !prepTask) return;
+    saveQuestions(prepTask, [...cleanQuestions(prepTask.prep_questions), q]);
+    setDraft("");
   };
 
   const addTodo = async (record, index) => {
@@ -630,6 +721,22 @@ export default function NotesPage() {
                 </div>
               )}
 
+              {notes.asked?.length > 0 && (
+                <div className={card}>
+                  <h2 className={`text-lg font-bold mb-2 ${heading}`}>Your questions</h2>
+                  <ul className="space-y-3">
+                    {notes.asked.map((a, i) => (
+                      <li key={i}>
+                        <div className={`font-semibold ${heading}`}>{a.question}</div>
+                        <div className={a.answered ? heading : soft}>
+                          {a.answered ? a.answer : "No clear answer in the recording"}<At at={a.at} />
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               {mine.length > 0 && (
                 <div className={card}>
                   <h2 className={`text-lg font-bold mb-2 ${heading}`}>Your to-dos</h2>
@@ -758,6 +865,82 @@ export default function NotesPage() {
           <p className={`text-xs ${soft}`}>
             {minutesText(usage.left_seconds)} of free recording left this month.
           </p>
+          <p className={`text-xs flex gap-1.5 justify-center ${soft}`}>
+            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            In 12 states, including California and Florida, everyone has to agree before you record them.
+          </p>
+          {liveQuestions.length > 0 && (
+            <div className={`${card} text-left`}>
+              <h2 className={`text-lg font-bold mb-2 ${heading}`}>Your questions</h2>
+              <ul className="space-y-1.5">
+                {liveQuestions.map((q, i) => <li key={i} className={heading}>• {q}</li>)}
+              </ul>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Questions for an event ──
+  if (prepTask) {
+    const qs = cleanQuestions(prepTask.prep_questions);
+    const s = startOf(prepTask);
+    const canRecordNow = s !== null && Date.now() >= s - 30 * MIN;
+    return (
+      <div className="p-4 md:p-8 w-full" style={pagePad}>
+        {capDialog}
+        <div className="max-w-2xl mx-auto space-y-4">
+          <button type="button" onClick={() => { setPrepTask(null); setDraft(""); }} className={`flex items-center gap-1 text-sm ${soft}`}>
+            <ChevronLeft className="w-4 h-4" /> Notes
+          </button>
+          <div>
+            <h1 className={`text-2xl font-bold ${heading}`}>{prepTask.title}</h1>
+            {s !== null && <p className={`text-sm ${soft}`}>{whenText(s)}</p>}
+          </div>
+          <div className={`${card} space-y-3`}>
+            <h2 className={`text-lg font-bold ${heading}`}>Questions to ask</h2>
+            <p className={`text-sm ${soft}`}>
+              Anything you want to ask or bring up. They'll be on screen while you record, and your notes will say
+              which ones got answered.
+            </p>
+            {qs.length > 0 && (
+              <ul className="space-y-2">
+                {qs.map((q, i) => (
+                  <li key={i} className="flex items-start gap-2">
+                    <span className={`flex-1 ${heading}`}>• {q}</span>
+                    <button
+                      type="button"
+                      aria-label="Remove this question"
+                      onClick={() => saveQuestions(prepTask, qs.filter((_, j) => j !== i))}
+                      className={soft}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <form onSubmit={(e) => { e.preventDefault(); addQuestion(); }} className="flex gap-2">
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="Type a question"
+                className={`flex-1 rounded-xl border px-3 py-2.5 text-[15px] outline-none ${dark ? "bg-gray-900 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900"}`}
+              />
+              <Button type="submit" disabled={!draft.trim()}>
+                <Plus className="w-4 h-4 mr-1" />Add
+              </Button>
+            </form>
+          </div>
+          {canRecordNow ? (
+            <Button onClick={() => startRecording({ task: prepTask })} disabled={busy || !!progress} className="w-full h-14 rounded-2xl text-base bg-red-600 hover:bg-red-700 text-white">
+              {busy ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Mic className="w-5 h-5 mr-2" />}
+              Record it now
+            </Button>
+          ) : (
+            <p className={`text-sm ${soft}`}>When it's about to start, open Notes and tap Record next to it.</p>
+          )}
         </div>
       </div>
     );
@@ -781,7 +964,7 @@ export default function NotesPage() {
             placeholder="What is it? (optional, like “Dr. Patel, knee”)"
             className={`w-full rounded-xl border px-3 py-2.5 text-[15px] outline-none ${dark ? "bg-gray-900 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900"}`}
           />
-          <Button onClick={startRecording} disabled={busy || !!progress} className="w-full h-14 rounded-2xl text-base bg-red-600 hover:bg-red-700 text-white">
+          <Button onClick={() => startRecording()} disabled={busy || !!progress} className="w-full h-14 rounded-2xl text-base bg-red-600 hover:bg-red-700 text-white">
             {busy ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Mic className="w-5 h-5 mr-2" />}
             Record
           </Button>
@@ -793,6 +976,33 @@ export default function NotesPage() {
             In 12 states, including California and Florida, everyone has to agree before you record them.
           </p>
         </div>
+
+        {upcoming.length > 0 && (
+          <div className="space-y-2">
+            <h2 className={`text-lg font-bold ${heading}`}>Coming up</h2>
+            {upcoming.map((t) => {
+              const s = startOf(t);
+              const n = cleanQuestions(t.prep_questions).length;
+              const recordable = Date.now() >= s - 30 * MIN;
+              return (
+                <div key={t.id} className={card}>
+                  <div className={`font-semibold ${heading}`}>{t.title}</div>
+                  <div className={`text-sm ${soft}`}>{whenText(s)}</div>
+                  <div className="flex gap-2 mt-3">
+                    <Button variant="outline" className="flex-1" onClick={() => setPrepTask(t)}>
+                      <ListChecks className="w-4 h-4 mr-2" />{n ? `Questions (${n})` : "Jot down questions"}
+                    </Button>
+                    {recordable && (
+                      <Button onClick={() => startRecording({ task: t })} disabled={busy || !!progress} className="flex-1 bg-red-600 hover:bg-red-700 text-white">
+                        <Mic className="w-4 h-4 mr-2" />Record
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
 
         {progress && !open && (
           <div className={`${card} flex items-center gap-2`}>
