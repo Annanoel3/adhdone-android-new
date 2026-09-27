@@ -260,6 +260,13 @@
       "default": 0,
       "description": "How many times a full-screen alarm for this task was stopped with \"Later\" (put off without picking a snooze time; the task stays active, so smart nudges bring it back once its time has passed). Data only: nothing is rescheduled because of it."
     },
+    "prep_questions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Recorded notes: questions the user wrote down to ask at this event (the Notes page). They show on screen while it's recorded, and the notes say which ones got answered."
+    },
     "original_interval": {
       "type": "string",
       "description": "Original reminder interval before adaptation"
