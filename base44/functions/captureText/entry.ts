@@ -5,8 +5,9 @@
 // Native does nothing but hand over the raw text: this parses it, splits it if
 // it holds several separate errands, creates the Task records, and schedules
 // the reminder pushes — all server-side, so the app never has to open and the
-// save is silent and instant. (Last redeployed for the parser telling "by 5"
-// — a deadline — apart from "at 5", bundled from the shared files below.)
+// save is silent and instant. Ideas go to the Parking Lot, birthdays become
+// yearly birthday records, and anything meant for ADHDone itself is kept in the
+// Parking Lot with an offer to send it to the developer (see captureToTasks).
 
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import { runTaskParse } from "../../shared/runTaskParse.ts";
@@ -20,6 +21,10 @@ import {
   scheduleTaskReminders,
   classifyCapture,
   createParkingLotIdeas,
+  createBirthdayTask,
+  queueFeedbackPrompt,
+  localToday,
+  TASK_KIND,
 } from "../../shared/captureToTasks.ts";
 
 // Two deliveries of the SAME capture can arrive at once — the phone re-sending
@@ -123,12 +128,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Task or idea? Asked once, on the WHOLE capture, before any splitting —
-    // exactly where the in-app Add button asks it. An idea is not an errand and
-    // must never be chopped into several; the splitter is for errands only.
-    const category = await classifyCapture(base44, raw);
-    if (category.category === "parking_lot") {
-      const ideas = await createParkingLotIdeas(base44, category, raw, capture_id);
+    // What kind of thing is it? Asked once, on the WHOLE capture, before any
+    // splitting — exactly where the in-app Add button asks it. An idea is not
+    // an errand and must never be chopped into several; the splitter is for
+    // errands only.
+    const today = localToday(tz);
+    const sortOpts = { today, aboutMe: user.about_me || "" };
+    const category = await classifyCapture(base44, raw, sortOpts);
+    console.log(`[captureText] ${category.category}: ${category.why || ""}`);
+
+    // An idea, or something meant for ADHDone itself: kept in the Parking Lot
+    // (feedback too, so it is never lost), and for feedback the app offers to
+    // send it to the developer the next time it opens.
+    if (category.category === "parking_lot" || category.category === "app_feedback") {
+      const feedback = category.category === "app_feedback";
+      const ideas = await createParkingLotIdeas(base44, feedback ? { is_list: false } : category, raw, capture_id);
       if (capture_id && ideas.length) {
         const winner = await lostCaptureRace(base44, capture_id, { entity: "ParkingLotIdea", ids: ideas.map((i: any) => i.id) });
         if (winner) {
@@ -136,6 +150,7 @@ Deno.serve(async (req) => {
           return duplicateResponse(winner);
         }
       }
+      if (feedback) await queueFeedbackPrompt(base44, raw);
       console.log(`[captureText] ${ideas.length} parking lot idea(s) from ${raw.length} chars`);
       return Response.json({
         success: true,
@@ -147,14 +162,88 @@ Deno.serve(async (req) => {
       });
     }
 
-    const split = await splitCapture(base44, raw);
-    // When it's a single task, parse the ORIGINAL text — never the splitter's
-    // echo of it. The splitter paraphrases, and a dropped word there is a
-    // dropped date ("Saturday" vanished, so the task saved with no day at all).
-    const pieces = split.length > 1 ? split : [raw];
+    // Someone's birthday: the yearly birthday record, not a one-off task. With
+    // no usable day it carries on below as a task instead of being lost.
+    if (category.category === "birthday") {
+      const birthday = await createBirthdayTask(base44, category, raw, { email: user.email, tz, captureId: capture_id });
+      if (birthday) {
+        if (capture_id) {
+          const winner = await lostCaptureRace(base44, capture_id, { entity: "Task", ids: [birthday.id] });
+          if (winner) {
+            console.log(`[captureText] ${capture_id} already handled by a parallel delivery; removed this copy`);
+            return duplicateResponse(winner);
+          }
+        }
+        return Response.json({
+          success: true,
+          duplicate: false,
+          kind: "task",
+          count: 1,
+          tasks: [{ id: birthday.id, title: birthday.title }],
+        });
+      }
+    }
+
+    // Tasks, or a mix of kinds. A mix comes apart into the pieces the
+    // classifier found, and each piece is sorted on its own.
+    let pieces: string[];
+    const mixed = category.category === "mixed";
+    if (mixed) {
+      pieces = Array.isArray(category.parts) && category.parts.length > 1 ? category.parts : await splitCapture(base44, raw);
+    } else {
+      const split = await splitCapture(base44, raw);
+      // When it's a single task, parse the ORIGINAL text — never the splitter's
+      // echo of it. The splitter paraphrases, and a dropped word there is a
+      // dropped date ("Saturday" vanished, so the task saved with no day at all).
+      pieces = split;
+    }
+    if (pieces.length <= 1) pieces = [raw];
+    const sortPieces = mixed && pieces.length > 1;
     const created: Record<string, unknown>[] = [];
+    const parked: { id: string; title: string }[] = [];
+    let first = true;
+
+    // The first thing this capture saves settles who handles it when two
+    // deliveries of it arrive at once.
+    const claim = async (entity: string, ids: string[]) => {
+      if (!capture_id || !first || !ids.length) return null;
+      first = false;
+      return await lostCaptureRace(base44, capture_id, { entity, ids });
+    };
 
     for (const piece of pieces) {
+      let kind: any = TASK_KIND;
+      if (sortPieces) {
+        kind = await classifyCapture(base44, piece, sortOpts);
+        if (kind.category === "mixed") kind = TASK_KIND;
+      }
+
+      if (kind.category === "parking_lot" || kind.category === "app_feedback") {
+        const feedback = kind.category === "app_feedback";
+        const ideas = await createParkingLotIdeas(base44, feedback ? { is_list: false } : kind, piece, capture_id);
+        const winner = await claim("ParkingLotIdea", ideas.map((i: any) => i.id));
+        if (winner) {
+          console.log(`[captureText] ${capture_id} already handled by a parallel delivery; removed this copy`);
+          return duplicateResponse(winner);
+        }
+        if (feedback) await queueFeedbackPrompt(base44, piece);
+        parked.push(...ideas);
+        continue;
+      }
+
+      if (kind.category === "birthday") {
+        const birthday = await createBirthdayTask(base44, kind, piece, { email: user.email, tz, captureId: capture_id });
+        if (birthday) {
+          const winner = await claim("Task", [birthday.id]);
+          if (winner) {
+            console.log(`[captureText] ${capture_id} already handled by a parallel delivery; removed this copy`);
+            return duplicateResponse(winner);
+          }
+          created.push({ id: birthday.id, title: birthday.title });
+          continue;
+        }
+      }
+
       // about_me goes in here too, exactly like the in-app add path — otherwise
       // a task shared from the phone gets classified for a generic person.
       const parsed = await runTaskParse(base44, buildTaskParsePrompt(piece, tz), tz, user.about_me);
@@ -174,14 +263,12 @@ Deno.serve(async (req) => {
       // so a service-role insert saves a record the user can never see.
       const task = await base44.entities.Task.create(record);
 
-      // First task of this capture: make sure no parallel delivery beat us to
-      // it before any reminders get scheduled.
-      if (capture_id && created.length === 0) {
-        const winner = await lostCaptureRace(base44, capture_id, { entity: "Task", ids: [task.id] });
-        if (winner) {
-          console.log(`[captureText] ${capture_id} already handled by a parallel delivery; removed this copy`);
-          return duplicateResponse(winner);
-        }
+      // First thing saved from this capture: make sure no parallel delivery
+      // beat us to it before any reminders get scheduled.
+      const winner = await claim("Task", [task.id]);
+      if (winner) {
+        console.log(`[captureText] ${capture_id} already handled by a parallel delivery; removed this copy`);
+        return duplicateResponse(winner);
       }
 
       // Reminder failures must not lose the task — the record is already safe,
@@ -197,6 +284,11 @@ Deno.serve(async (req) => {
       created.push({ id: task.id, title: task.title, reminders: reminderResult });
     }
 
+    if (!created.length && parked.length) {
+      console.log(`[captureText] ${parked.length} parking lot idea(s) from ${raw.length} chars`);
+      return Response.json({ success: true, duplicate: false, kind: "idea", count: parked.length, tasks: parked, ideas: parked });
+    }
+
     console.log(`[captureText] ${created.length} task(s) from ${raw.length} chars`);
     // kind/count let the phone show an honest confirmation without inspecting
     // the array itself. kind is "task" here and "idea" on the parking lot
@@ -206,8 +298,9 @@ Deno.serve(async (req) => {
       success: true,
       duplicate: false,
       kind: "task",
-      count: created.length,
+      count: created.length + parked.length,
       tasks: created,
+      ...(parked.length ? { ideas: parked } : {}),
     });
   } catch (error) {
     console.error("[captureText] error:", error);
