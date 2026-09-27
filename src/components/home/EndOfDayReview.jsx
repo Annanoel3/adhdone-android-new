@@ -98,7 +98,8 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
 
 
     // Get energy logs
-    const energyLogs = await EnergyLog.list('-logged_at', 10);
+    // Recorded notes share this table (kind: "note_recording"); only old energy check-ins count here.
+    const energyLogs = (await EnergyLog.list('-logged_at', 10)).filter(log => !log.kind && log.logged_at);
     const todayEnergy = energyLogs.filter(log => {
       const logDate = new Date(log.logged_at).toISOString().split('T')[0];
       return logDate === today;
