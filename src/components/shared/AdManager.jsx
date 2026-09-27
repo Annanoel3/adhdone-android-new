@@ -19,6 +19,9 @@ function isUserBusy() {
   if (['input', 'textarea', 'select'].includes(tag)) return true;
   if (el.isContentEditable || el.contentEditable === 'true') return true;
   if (window.__microphoneActive) return true;
+  // Recording notes (Notes page): an ad would interrupt it, and its sound would
+  // end up in the recording.
+  if (window.__notesRecording) return true;
   if (document.querySelector('[data-mic-active="true"]')) return true;
   return false;
 }
