@@ -42,11 +42,11 @@ export function resolveDateWord(value: unknown, now = new Date()): string | null
     const target = WEEKDAYS[dayName];
     const d = new Date(now);
     // A bare or "this" day name means the next one coming up; "next X" is the
-    // X in next week (weeks run Sunday to Saturday). Same rule the prompt's
+    // X in next week, a week that runs Monday to Sunday. Same rule the prompt's
     // weekday table uses, so code and prompt can't disagree.
     let diff = target - now.getDay();
     if (diff <= 0) diff += 7;
-    if (modifier === 'next') diff = (7 - now.getDay()) + target;
+    if (modifier === 'next') diff = (((8 - now.getDay()) % 7) || 7) + ((target + 6) % 7);
     d.setDate(now.getDate() + diff);
     return fmt(d);
   }
