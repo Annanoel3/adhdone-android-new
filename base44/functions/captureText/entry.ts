@@ -140,6 +140,13 @@ Deno.serve(async (req) => {
     const sortOpts = { today, aboutMe: user.about_me || "" };
     const category = await classifyCapture(base44, raw, sortOpts);
     console.log(`[captureText] ${category.category}: ${category.why || ""}`);
+    // How it was sorted, sent back with the answer so a misfiled capture can
+    // be traced (the phone ignores it). No content beyond the kind and reason.
+    const sorted: { whole: string; why: string; pieces: { kind: string; why: string }[] } = {
+      whole: category.category,
+      why: String(category.why || ""),
+      pieces: [],
+    };
 
     // An idea, or something meant for ADHDone itself: kept in the Parking Lot
     // (feedback too, so it is never lost), and for feedback the app offers to
@@ -219,6 +226,7 @@ Deno.serve(async (req) => {
       let kind: any = TASK_KIND;
       if (sortPieces) {
         kind = await classifyCapture(base44, piece, sortOpts);
+        sorted.pieces.push({ kind: kind.category, why: String(kind.why || "") });
         if (kind.category === "mixed") kind = TASK_KIND;
       }
 
@@ -290,7 +298,7 @@ Deno.serve(async (req) => {
 
     if (!created.length && parked.length) {
       console.log(`[captureText] ${parked.length} parking lot idea(s) from ${raw.length} chars`);
-      return Response.json({ success: true, duplicate: false, kind: "idea", count: parked.length, tasks: parked, ideas: parked });
+      return Response.json({ success: true, duplicate: false, kind: "idea", count: parked.length, tasks: parked, ideas: parked, sorted });
     }
 
     console.log(`[captureText] ${created.length} task(s) from ${raw.length} chars`);
@@ -305,6 +313,7 @@ Deno.serve(async (req) => {
       count: created.length + parked.length,
       tasks: created,
       ...(parked.length ? { ideas: parked } : {}),
+      sorted,
     });
   } catch (error) {
     console.error("[captureText] error:", error);
