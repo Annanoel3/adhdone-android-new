@@ -255,6 +255,11 @@
       "default": 0,
       "description": "How many times a full-screen alarm for this task rang out with no response at all. Data only: nothing is rescheduled because of it \u2014 the task's remaining reminders carry on as booked."
     },
+    "later_count": {
+      "type": "number",
+      "default": 0,
+      "description": "How many times a full-screen alarm for this task was stopped with \"Later\" (put off without picking a snooze time; the task stays active, so smart nudges bring it back once its time has passed). Data only: nothing is rescheduled because of it."
+    },
     "original_interval": {
       "type": "string",
       "description": "Original reminder interval before adaptation"
