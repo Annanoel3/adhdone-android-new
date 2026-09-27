@@ -209,7 +209,9 @@ target_date / target_time — WHEN the thing happens (YYYY-MM-DD / 24h "HH:MM").
   or a part of the day (see above). Sanity check: if the thing is happening
   later TODAY, the time you return must be AFTER the current time. Handing back
   today with no time (which the app anchors at 9 AM) for something the user
-  wants done "in an hour" at 9 PM is a broken answer.
+  wants done "in an hour" at 9 PM is a broken answer. A clock time with no day
+  ("pick up my sister at 3") is the next time that clock time comes around:
+  today if it's still ahead of CURRENT TIME, otherwise tomorrow.
 
 end_date — for a stated multi-day range, the LAST day. Otherwise null.
 
