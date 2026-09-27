@@ -63,72 +63,12 @@ function announceTaskCreated(task) {
   } catch (e) {}
 }
 
+// One task or several? The prompt lives in the detectMultipleTasks function,
+// the same one the outside-the-app captures (captureText) ask, so the two can
+// never split differently. Send raw text and nothing else.
 export async function detectMultipleTasks(inputText) {
-  const multiTaskPrompt = `Analyze this input and determine if it contains multiple separate tasks:
-
-  INPUT: "${inputText}"
-
-  CRITICAL RULE: Two UNRELATED actions = SPLIT. Related/dependent parts = KEEP AS ONE.
-
-  Check if the second part DEPENDS on the first:
-  - Uses pronouns (them, they, it, her, him) referring to first part? → ONE task
-  - Requires context from first part to make sense? → ONE task
-  - Completely unrelated actions that can be done independently? → SPLIT
-
-  Examples of MULTIPLE independent tasks (SPLIT THESE):
-  - "clean the dishes and take out the trash" → 2 tasks (unrelated chores)
-  - "call dentist and pay rent" → 2 tasks (completely different)
-  - "buy milk, call mom, and do laundry" → 3 tasks (all independent)
-  - "water the plants and schedule dentist appointment" → 2 tasks (unrelated)
-
-  ITINERARY / SCHEDULED EVENTS (SPLIT THESE):
-  If the input is an itinerary, schedule, or plan with MULTIPLE DISTINCT TIMED EVENTS
-  (travel segments, appointments, or activities at different times/locations), SPLIT
-  each distinct event into its own task — even though the events are part of the same
-  trip or day. Each event = a separate activity or destination with its own start time.
-  - "On Sunday October 4 leave the Airbnb at 12:30 PM for Cañon City. Arrive at the Royal Gorge train depot at 2:30 PM to check in. Train runs 3:30 PM to 5:30 PM." → 2 tasks:
-    1. "On Sunday October 4 leave the Airbnb at 12:30 PM for Cañon City"
-    2. "On Sunday October 4 arrive at the Royal Gorge train depot at 2:30 PM to check in. Train runs 3:30 PM to 5:30 PM"
-    (The 2:30 arrival/check-in and the 3:30-5:30 train ride are ONE event — same outing — so keep them together; only split distinct outings/activities. Do NOT split "check in" from "train runs" — they are the same activity.)
-  - "Monday: dentist at 9am, lunch with mom at 12pm, pick up kids at 3pm" → 3 tasks (one per timed event)
-  GROUPING RULE: Sub-actions that belong to the SAME outing (arriving early, check-in, the activity itself, the ride home) stay together in ONE task. Only split when there are separate activities/destinations at different times.
-
-  NEVER OUTPUT THE SAME TASK TWICE. Each action from the input appears in the
-  output EXACTLY ONCE. Do not restate an action with different wording as a
-  second task, and do not add a summary/umbrella task alongside the split tasks.
-  - "do the dishes" → ["do the dishes"] — NEVER ["do dishes", "do the dishes"]
-  - "clean the kitchen and do the dishes" → 2 tasks ONLY if they are genuinely
-    different actions; if one restates the other, return just one.
-  Before returning, re-read your "tasks" array and delete any entry that means
-  the same thing as another entry.
-
-  CRITICAL: When splitting, PRESERVE any time/date words (e.g., "today", "tomorrow",
-  "tonight") on EACH split task so the user's timing intent is not lost.
-  - "clean the dishes and the floor today" → ["clean the dishes today", "clean the floor today"]
-
-  PASTED CONVERSATIONS / SHARED TEXT (KEEP AS ONE):
-  If the input looks like a copied text-message thread, chat, or email (multiple
-  lines, back-and-forth messages, questions like "are you still down to go?", a
-  bare address on its own line, timestamps, app chrome), it is describing ONE plan
-  spread across several messages — return is_multiple=false with the whole text as
-  the single task. Do NOT create a task per message or per line. Only split if the
-  conversation genuinely covers two unrelated plans.
-
-  Examples of SINGLE task (KEEP AS ONE):
-  - "call the mini place and ask them to send recommendations" → ONE ("them" = mini place)
-  - "text Sarah and see if she wants to meet up" → ONE ("she" = Sarah)
-  - "open the document and add the notes" → ONE (same document)
-  - "call dentist about my tooth pain" → ONE (additional detail)
-  - "buy milk and eggs" → ONE (same shopping trip)
-
-  Return JSON:
-  {
-  "is_multiple": true/false,
-  "tasks": ["task 1", "task 2", ...] (if multiple) or ["original input"] (if single)
-  }`;
-
   try {
-    const result = (await base44.functions.invoke('detectMultipleTasks', { prompt: multiTaskPrompt }))?.data?.response;
+    const result = (await base44.functions.invoke('detectMultipleTasks', { text: inputText }))?.data?.response;
     const tasks = dedupeSplitTasks(result.tasks || [inputText]);
     return propagateDateWords(inputText, tasks);
   } catch (error) {
@@ -286,44 +226,10 @@ export async function processAndCreateTask(inputText, opts = {}) {
       return { status: 'done', kind: 'feedback' };
     }
 
-    // Does the user want ONE task WITH subtasks?
-    const subtaskCheckPrompt = `Analyze this input: "${inputText}"
-
-Does the user want to create ONE main task WITH subtasks/steps?
-
-STRONG signals for ONE TASK WITH SUBTASKS:
-- User names a category/goal and then lists specific items under it
-- "I need to pay all my bills: electric, rent, insurance" → main: "Pay bills", subtasks: [electric, rent, insurance]
-- "I need to pay all my bills and then listed the bills [electric, rent, insurance]" → main: "Pay bills", subtasks: each bill
-- "grocery shopping: milk, eggs, bread" → main: "Grocery shopping", subtasks: each item
-- "clean the house: kitchen, bathroom, vacuum" → main: "Clean the house", subtasks: each room
-- "prepare for meeting with steps: review slides, print handouts" → main: "Prepare for meeting", subtasks: steps
-- "call dentist and then schedule appointment and then confirm insurance" → main task with sequential steps
-- ANY time items are listed as children of a main goal/action
-
-NOT subtasks (these are separate independent tasks OR a single event):
-- "call dentist and also buy groceries" (two unrelated actions, neither is a parent of the other)
-- "clean dishes and take out trash" (two equal, unrelated chores)
-- A TIMED SEQUENCE of actions that form ONE event/outing is NOT subtasks — it is ONE task.
-  Example: "arrive at the depot at 2:30 PM to check in. Train runs 3:30 PM to 5:30 PM" → ONE task
-  (a single event with a time span), NOT a parent with subtasks. The "check in" and "train ride"
-  are sequential parts of the same outing, not independent to-do items.
-- Any input where the parts are connected by specific TIMES (arrive at 2:30, activity at 3:30)
-  is a scheduled EVENT, not a parent-with-subtasks. Return has_subtasks=false for these.
-
-KEY RULE: If the items listed are all INSTANCES of the same category named first, they are subtasks.
-Example: "pay my bills" + list of bills = subtasks. "Buy groceries" + list of items = subtasks.
-BUT: a timed itinerary (arrive → check in → activity) is ONE event, NOT subtasks.
-
-Return JSON:
-{
-  "has_subtasks": true/false,
-  "main_task": "concise main task title (e.g. 'Pay bills', not the full sentence)",
-  "subtasks": ["subtask 1", "subtask 2", ...] (if has_subtasks, IN ORDER)
-}`;
-
-    // A failed check just means no steps: the task itself must still be made.
-    const subtaskCheck = (await base44.functions.invoke('checkSubtasks', { prompt: subtaskCheckPrompt })
+    // Should it get a checklist of steps? The prompt lives in the checkSubtasks
+    // function; send raw text and nothing else. A failed check just means no
+    // steps: the task itself must still be made.
+    const subtaskCheck = (await base44.functions.invoke('checkSubtasks', { text: inputText })
       .catch((e) => { console.error('[PROCESS] Steps check failed, carrying on without steps:', e); return null; }))?.data?.response || {};
     trace('subtaskCheck', { input: inputText.slice(0, 80), result: subtaskCheck });
 
