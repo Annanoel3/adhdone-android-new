@@ -4,12 +4,30 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Clock, Zap, Loader2, Send, Sparkles } from "lucide-react";
+import { CheckCircle2, Clock, Zap, Loader2, Send, Sparkles, Mic, ListChecks } from "lucide-react";
 import BirthdayTextDialog from "../components/birthdays/BirthdayTextDialog";
 import { createPageUrl } from "@/utils";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { cancelScheduledReminder } from "../components/utils/reminderScheduler";
 import { snoozeTask, recordReminderDismissed } from "../components/utils/snoozeTask";
+
+// An event the reminder planner worded for recording notes (see NOTES_LABELS in
+// base44/functions/generateReminderSchedule) gets "Jot down questions" before it
+// and "Record notes" around it, on app builds that can record (36+).
+const NOTES_LABELS = ["night before · questions", "at the time · record notes"];
+
+function notesButtonsFor(task, nowMs) {
+  if (typeof window === "undefined" || !window.Capacitor?.Plugins?.RecorderBridge) return null;
+  if (!task || task.classification !== "event") return null;
+  const flagged = (task.reminder_schedule || []).some((r) => NOTES_LABELS.includes(r?.label))
+    || (task.prep_questions || []).length > 0;
+  if (!flagged) return null;
+  const start = new Date(task.event_time || task.next_reminder || "").getTime();
+  if (!Number.isFinite(start)) return null;
+  const prep = nowMs < start;
+  const record = nowMs >= start - 20 * 60 * 1000 && nowMs <= start + 3 * 60 * 60 * 1000;
+  return prep || record ? { prep, record } : null;
+}
 
 const SNOOZE_OPTIONS = [
   { label: "10 min", minutes: 10 },
@@ -179,6 +197,11 @@ export default function TaskNotification() {
   if (!task) return null;
 
   const isProcessing = !!processingAction;
+  const notesButtons = notesButtonsFor(task, Date.now());
+  const openNotes = (what) => {
+    actedRef.current = true; // going to prep or record isn't brushing the reminder off
+    navigate(`${createPageUrl("Notes")}?task=${encodeURIComponent(task.id)}&${what}=1`);
+  };
 
   return (
     <div className={`min-h-screen p-4 flex items-center justify-center ${
@@ -267,6 +290,23 @@ export default function TaskNotification() {
               <Sparkles className="w-5 h-5 mr-2" />
               Draft Birthday Text 🎂
             </Button>
+          )}
+
+          {notesButtons && (
+            <div className="flex gap-2 mb-4">
+              {notesButtons.prep && (
+                <Button variant="outline" onClick={() => openNotes("prep")} disabled={isProcessing} className="flex-1 h-12">
+                  <ListChecks className="w-5 h-5 mr-2" />
+                  {(task.prep_questions || []).length ? `Questions (${task.prep_questions.length})` : "Jot down questions"}
+                </Button>
+              )}
+              {notesButtons.record && (
+                <Button onClick={() => openNotes("record")} disabled={isProcessing} className="flex-1 h-12 bg-red-600 hover:bg-red-700 text-white">
+                  <Mic className="w-5 h-5 mr-2" />
+                  Record notes
+                </Button>
+              )}
+            </div>
           )}
 
           {/* Complete button */}
