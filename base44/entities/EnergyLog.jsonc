@@ -16,11 +16,63 @@
     "logged_at": {
       "type": "string",
       "format": "date-time"
+    },
+    "kind": {
+      "type": "string",
+      "description": "\"note_recording\" for a recorded-notes row; empty on the old energy check-ins. Two unrelated kinds of row share this table. Old energy check-ins (energy_level, mood_note, logged_at): nothing writes these any more. Recorded notes (kind = \"note_recording\"): one row per recording made on the Notes page, written by the person and by the transcribeAudioNew function acting as them. The table is reused because a new one can't be added from the code editor; anything reading energy check-ins must skip rows that have a kind."
+    },
+    "title": {
+      "type": "string",
+      "description": "Recorded notes: what the person called it, or the title the notes gave it."
+    },
+    "status": {
+      "type": "string",
+      "description": "Recorded notes: recording, transcribing (parts being turned into text), ready (notes made), notes_failed (transcript saved, notes not made yet), over_limit (stopped at the monthly free minutes)."
+    },
+    "device_session_id": {
+      "type": "string",
+      "description": "Recorded notes: the recording's id on the phone (RecorderBridge), which holds the audio until it has been transcribed."
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Recorded notes: when recording began."
+    },
+    "duration_ms": {
+      "type": "number",
+      "description": "Recorded notes: how long it recorded, not counting pauses."
+    },
+    "parts_total": {
+      "type": "number",
+      "description": "Recorded notes: how many ~10 minute parts the phone saved."
+    },
+    "transcript_parts": {
+      "type": "array",
+      "description": "Recorded notes: the word-for-word transcript, one entry per part, in order.",
+      "items": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "number"
+          },
+          "start_ms": {
+            "type": "number"
+          },
+          "end_ms": {
+            "type": "number"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "notes": {
+      "type": "object",
+      "description": "Recorded notes: { title, gist[], todos[{text, who, at}], details[{label, value, at}], sections[{heading, points[], at}], decisions[{text, at}], questions[{text, at}] }. \"at\" is the time mark in the transcript it came from."
     }
   },
-  "required": [
-    "energy_level"
-  ],
+  "required": [],
   "rls": {
     "read": {
       "created_by": "{{user.email}}"
