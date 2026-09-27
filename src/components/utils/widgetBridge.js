@@ -301,7 +301,7 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
 }
 
 // What happened to alarms since we last asked — snoozes, dismissals, rings
-// nobody answered — added to the task's counters. Data only: no reminder is
+// nobody answered, "Later" taps — added to the task's counters. Data only: no reminder is
 // changed, cancelled or moved because of any of it.
 async function drainAlarmActivity(tasks) {
   const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
@@ -323,6 +323,9 @@ async function drainAlarmActivity(tasks) {
     }
     if (row.dismissed) patch.dismissed_count = (t.dismissed_count || 0) + 1;
     if (row.ignored > 0) patch.ignored_count = (t.ignored_count || 0) + row.ignored;
+    // "Later" (builds from 1.3.13 on): stopped with no set time; the task stays in
+    // the smart-nudge pool, so nothing else changes here.
+    if (row.later > 0) patch.later_count = (t.later_count || 0) + row.later;
     if (Object.keys(patch).length === 0) continue;
     Object.assign(t, patch);
     try {
