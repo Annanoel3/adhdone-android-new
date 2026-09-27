@@ -196,13 +196,16 @@ export async function scheduleTaskReminders(
 
   // Service-role calls have no end-user session, so the home origin the
   // travel-aware "leave now" reminder needs has to be looked up and passed.
+  // An event also needs to know whether the owner's phone can record notes.
   let homeOrigin = "";
   let avoidTolls = false;
-  if (task.location) {
+  let canRecord = false;
+  if (task.location || task.classification === "event") {
     try {
       const users = await base44.asServiceRole.entities.User.filter({ email });
       homeOrigin = getHomeOrigin(users?.[0]);
       avoidTolls = users?.[0]?.commute_avoid_tolls === true;
+      canRecord = users?.[0]?.notes_can_record === true;
     } catch (e) {
       console.error("[captureToTasks] home origin lookup failed:", e);
     }
@@ -220,6 +223,7 @@ export async function scheduleTaskReminders(
     avoidTolls,
     reminderWish: task.reminder_wish || parsed?.reminder_wish || null,
     timezone: tz,
+    canRecord,
   });
 
   const scheduled = new Date(task.next_reminder).getTime();
