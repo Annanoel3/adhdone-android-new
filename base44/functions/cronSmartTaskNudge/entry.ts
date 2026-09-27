@@ -1043,6 +1043,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if ((t.dismissed_count || 0) > 0) parts.push(`reminders closed or swiped away ${t.dismissed_count}x`);
       if ((t.snooze_count || 0) > 0) parts.push(`snoozed ${t.snooze_count}x`);
       if ((t.ignored_count || 0) > 0) parts.push(`alarm rang with no answer ${t.ignored_count}x`);
+      if ((t.later_count || 0) > 0) parts.push(`alarm put off with "Later" ${t.later_count}x`);
       if (parts.length) reactInfo = `, HOW THEY'VE REACTED: ${parts.join(', ')}`;
     }
     return `${i + 1}. "${t.title}"${descInfo}${saidInfo} (${dueInfo}${windowInfo}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${areaInfo}${billInfo}${repeatInfo}${oldRhythmInfo}${anchorInfo}${locInfo}${ageInfo}${pushInfo}${wishInfo}${historyInfo}${reactInfo}${subInfo})`;
