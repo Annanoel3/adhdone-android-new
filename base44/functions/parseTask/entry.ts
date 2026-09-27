@@ -2,9 +2,10 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import { runTaskParse } from "../../shared/runTaskParse.ts";
 // Shared files are bundled into this function when it is deployed, so a change
 // to the shared prompt (taskParsePrompt.ts) only reaches users after this
-// function is saved and redeployed again (last redeploy: "Grandma" stays in the
-// title, "next Tuesday" is next week's Tuesday; only signed-in people may use
-// it, and an admin can check several inputs at once).
+// function is saved and redeployed again (last redeploy, Sept 27 2026: a clock
+// time with no day gets its day, "Grandma" stays in the title, "next Tuesday"
+// is next week's Tuesday; only signed-in people may use it, and an admin can
+// check several inputs at once).
 
 // The platform's calls occasionally fail once and pass a moment later.
 async function whoIsAsking(base44: any) {
