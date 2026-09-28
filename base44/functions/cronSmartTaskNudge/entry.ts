@@ -213,9 +213,13 @@ Deno.serve(async (req) => {
     const results: any[] = [];
     const runStartIso = now.toISOString();
 
-    // Her rule: a person's own history only shapes their reminders once they
-    // have finished 10 tasks spread over at least a week. Until then everyone
-    // gets the same defaults, so the planner isn't shown how they've reacted.
+    // Her rule: a person's long-term patterns only shape their reminders once
+    // they have finished 10 tasks spread over at least a week, so the planner
+    // never reads trends into a few days of data. It was wrongly applied to
+    // the short-term signal too: how a task's reminders are being received
+    // right now (snoozed, swiped away, rung out) is shown for everyone, from
+    // day one, because a brand-new person getting the same alarm nine times
+    // is exactly who it's for.
     const hasEnoughHistory = (email: string) => {
       const list = completionsByUser[email] || [];
       if (list.length < 10) return false;
@@ -1051,13 +1055,17 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     } else if (h && Number.isFinite(h.lastBefore)) {
       historyInfo = `, last nudged ${daysAgoLabel(h.lastBefore)} — not yet today`;
     }
+    // Always shown (see hasEnoughHistory): the planner has to know when a
+    // task's reminders are being pushed away, whoever the person is.
     let reactInfo = '';
-    if (showReactions) {
+    {
       const parts: string[] = [];
       if ((t.dismissed_count || 0) > 0) parts.push(`reminders closed or swiped away ${t.dismissed_count}x`);
       if ((t.snooze_count || 0) > 0) parts.push(`snoozed ${t.snooze_count}x`);
       if ((t.ignored_count || 0) > 0) parts.push(`alarm rang with no answer ${t.ignored_count}x`);
       if ((t.later_count || 0) > 0) parts.push(`alarm put off with "Later" ${t.later_count}x`);
+      const putOff = (t.dismissed_count || 0) + (t.snooze_count || 0) + (t.ignored_count || 0) + (t.later_count || 0);
+      if (putOff >= 3) parts.push(`PUT OFF ${putOff} TIMES IN ALL — the reminders for this task are not working`);
       if (parts.length) reactInfo = `, HOW THEY'VE REACTED: ${parts.join(', ')}`;
     }
     return `${i + 1}. "${t.title}"${descInfo}${saidInfo} (${dueInfo}${windowInfo}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${areaInfo}${billInfo}${repeatInfo}${oldRhythmInfo}${anchorInfo}${locInfo}${ageInfo}${pushInfo}${wishInfo}${historyInfo}${reactInfo}${subInfo})`;
@@ -1185,7 +1193,8 @@ YOUR APPROACH:
 - A TASK WITH NO DATE ISN'T A SOMEDAY. People rarely put a day on everyday things: "remind me to take my pills", "feed the cat", "call the vet" almost always mean today, and the app lists a task with no date under Today. Unless it's low priority or plainly a someday idea, plan it as one of today's: nudge it, and when it's the kind of thing that really does need doing today, also plan a friendly check-in in case it's still open. Time that check-in by when the thing is normally done: something most people do first thing (morning pills, feeding a pet, taking something out of the freezer) gets checked on within an hour or two of the first nudge, not in the afternoon. You usually plan only once a day, so plan that follow-up now. Anything they finish first is skipped automatically, so a check-in never lands on something already done.
 - A TASK THAT REPEATS (daily pills, weekly trash) is shown as its current occurrence — treat it like any other task with that date and time.
 - NUDGE HISTORY: "NUDGED TODAY at …" means it already got nudged today — use check-in style, and space any further nudge well after the last one. "last nudged N days ago — not yet today" means today's first nudge about it is still yours to decide.
-${showReactions ? `- HOW THEY'VE REACTED: when a task shows reminders being swiped away, snoozed or left ringing, the reminders aren't landing — change the angle or the time of day (a smaller first step, a different part of the day), not the volume. Never mention these counts to the boss.\n` : ''}${work.lines.length ? `- WORK: respect the WORK SCHEDULE above; a work task belongs in or right around work hours, a personal one outside them unless it takes a minute.\n` : ''}- NO EMPTY NOTIFICATIONS: every nudge must be about at least one specific task and name it in the body. Never send generic filler like "quick check on your tasks", "nothing urgent today", or an "energy boost" — a notification that doesn't tell the boss what to do is noise. If nothing genuinely needs surfacing today, return {"nudges": []}.
+- HOW THEY'VE REACTED: when a task shows reminders being swiped away, snoozed or left ringing, the reminders aren't landing — change the angle or the time of day (a smaller first step, a different part of the day), not the volume. A task PUT OFF 3 OR MORE TIMES gets at most ONE nudge today, worded differently from before and at a different time of day than the ones they pushed away — or none, if nothing about it is pressing. Someone being annoyed by reminders is told by their swipes, not their words; more of the same is how people turn the app's notifications off. Never mention these counts to the boss.
+${work.lines.length ? `- WORK: respect the WORK SCHEDULE above; a work task belongs in or right around work hours, a personal one outside them unless it takes a minute.\n` : ''}- NO EMPTY NOTIFICATIONS: every nudge must be about at least one specific task and name it in the body. Never send generic filler like "quick check on your tasks", "nothing urgent today", or an "energy boost" — a notification that doesn't tell the boss what to do is noise. If nothing genuinely needs surfacing today, return {"nudges": []}.
 - DON'T BE ANNOYING: fewer, well-timed, meaningful nudges. Not one per hour. Not one per task. If only low-priority stuff remains, ONE combined heads-up is better than a nudge per task.
 - For tasks ALREADY NUDGED: check-in style ("Have you done X yet?") — supportive, never shaming.
 - For URGENT tasks: surface them with direct urgency ("Hey, this one's urgent — you've got this 💪").
