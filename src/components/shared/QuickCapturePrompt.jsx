@@ -1394,8 +1394,15 @@ export function AppUpdatePrompt({ user, theme }) {
         await NotifyBridge.openPlayStore();
         setWanted(false);
         return;
-      } catch (e) { /* show the steps instead */ }
+      } catch (e) { /* the Play link below instead */ }
     }
+    // Builds before 1.3.10 can't open the Play Store from here: a Play Store
+    // link is the phone's own way of opening it, and if that does nothing the
+    // steps stay up with a button that closes this (an Update button that
+    // does nothing got tapped a dozen times).
+    try {
+      window.location.href = 'market://details?id=co.median.android.odxqpdy';
+    } catch (e) { /* the steps say what to do */ }
     setShowSteps(true);
   };
 
@@ -1493,12 +1500,20 @@ export function AppUpdatePrompt({ user, theme }) {
         )}
 
         <div className="flex gap-2 pt-1">
-          <Button variant="outline" onClick={notNow} disabled={saving} className="flex-1">
-            Not now
-          </Button>
-          <Button onClick={update} disabled={saving} className="flex-1">
-            Update
-          </Button>
+          {showSteps ? (
+            <Button onClick={notNow} disabled={saving} className="flex-1">
+              Got it
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={notNow} disabled={saving} className="flex-1">
+                Not now
+              </Button>
+              <Button onClick={update} disabled={saving} className="flex-1">
+                Update
+              </Button>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
