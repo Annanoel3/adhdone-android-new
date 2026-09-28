@@ -1334,6 +1334,11 @@ export function AppUpdatePrompt({ user, theme }) {
       const live = QUIET_CHOICE_ON_PLAY;
       setChoiceLive(live);
       setHasQuietHours(hasQuietHoursBuild());
+      // Only a build that can open the Play Store from here (1.3.10+) gets an
+      // Update button. An older one is shown the steps straight away, with
+      // nothing to tap that can't do anything.
+      const NotifyBridge = window.Capacitor?.Plugins?.NotifyBridge;
+      setShowSteps(!(typeof NotifyBridge?.startAppUpdate === 'function' || typeof NotifyBridge?.openPlayStore === 'function'));
       // With the four-way choice: alarm users who haven't picked which quiet
       // counts yet, except anyone who already said "ring out loud".
       const askFour = user.alarm_mode === 'alarm' && user.alarm_vibrate_when_quiet !== false
@@ -1394,15 +1399,9 @@ export function AppUpdatePrompt({ user, theme }) {
         await NotifyBridge.openPlayStore();
         setWanted(false);
         return;
-      } catch (e) { /* the Play link below instead */ }
+      } catch (e) { /* show the steps instead */ }
     }
-    // Builds before 1.3.10 can't open the Play Store from here: a Play Store
-    // link is the phone's own way of opening it, and if that does nothing the
-    // steps stay up with a button that closes this (an Update button that
-    // does nothing got tapped a dozen times).
-    try {
-      window.location.href = 'market://details?id=co.median.android.odxqpdy';
-    } catch (e) { /* the steps say what to do */ }
+    // The store couldn't be opened: the steps take the button's place.
     setShowSteps(true);
   };
 
