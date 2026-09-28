@@ -26,7 +26,7 @@ import TaskSortDropdown from "../tasks/TaskSortDropdown";
 import BreakIntoStepsButton from "../tasks/BreakIntoStepsButton";
 import LifeAreaPill from "../tasks/LifeAreaPill";
 
-export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails, onUpdateTask }) {
+export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails, onUpdateTask, loadFailed = false, onRetry }) {
   const navigate = useNavigate();
   const { sortBy } = useTaskSort();
   const [reminderPopoverTaskId, setReminderPopoverTaskId] = useState(null);
@@ -486,7 +486,21 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
       </CardHeader>
       <CardContent className="p-6">
         <div className="space-y-3">
-          {activeTasks.length === 0 ? (
+          {activeTasks.length === 0 && loadFailed ? (
+            <div className="text-center py-10">
+              <p className={`${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'} font-semibold`}>
+                Couldn't load your tasks just now.
+              </p>
+              <p className={`mt-1 text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                They're all still saved. Check your connection and try again.
+              </p>
+              {onRetry && (
+                <Button variant="outline" size="sm" onClick={onRetry} className="mt-4">
+                  <RefreshCw className="w-4 h-4 mr-2" /> Try again
+                </Button>
+              )}
+            </div>
+          ) : activeTasks.length === 0 ? (
             <div className="text-center py-10">
               <div className={`w-14 h-14 rounded-full mx-auto mb-3 flex items-center justify-center ${
                 theme === 'minimalist' ? 'bg-green-100' :
