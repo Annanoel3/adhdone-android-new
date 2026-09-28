@@ -5,6 +5,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { base44 } from "@/api/base44Client";
 import { ONBOARDING_STEPS, isStepDone, markStepDone } from "@/components/onboarding/onboardingGate";
 import { usePopupTurn } from "@/components/onboarding/onboardingSurface";
+import { alarmPermissionStatus } from "@/components/utils/widgetBridge";
 
 // Asked once per app launch, not every time the user comes back to Home.
 let blockedThisLaunch = null;
@@ -27,9 +28,19 @@ function reaskDue() {
 
 // True only when there is proof that reminders cannot reach this phone.
 async function pushIsBlocked() {
+  // The phone's own answer comes first (AlarmBridge.getStatus, builds 1.3.9+):
+  // Android's notification permission for ADHDone, as it is right now. OneSignal
+  // is asked only when the phone can't say, because what it has on file lags
+  // behind: right after a reinstall or an update it can still list only the
+  // old, switched-off subscription, and this told people with notifications
+  // on that they were off.
+  try {
+    const st = await alarmPermissionStatus();
+    if (typeof st?.notifications === "boolean") return !st.notifications;
+  } catch (e) {
+    /* this build can't say — ask OneSignal instead */
+  }
   const bridge = window.Capacitor?.Plugins?.NotifyBridge;
-
-  // Newer app builds can ask the phone directly.
   try {
     const state = await bridge?.getPermissionState?.();
     if (typeof state?.granted === "boolean") return !state.granted;
