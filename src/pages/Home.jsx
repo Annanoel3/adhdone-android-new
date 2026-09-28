@@ -24,6 +24,9 @@ import { ONBOARDING_STEPS, isStepDone } from "../components/onboarding/onboardin
 
 export default function Home() {
   const [tasks, setTasks] = useState([]);
+  // The task list couldn't be fetched (no signal, the server not answering):
+  // Today's Focus says so instead of looking like an empty day.
+  const [tasksLoadFailed, setTasksLoadFailed] = useState(false);
   const [user, setUser] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [showEndOfDayReview, setShowEndOfDayReview] = useState(false);
@@ -119,6 +122,7 @@ export default function Home() {
       const allTasks = [...activeTasks, ...(recentlyDone || []).filter(t => !seen.has(t.id))];
       if (seq !== loadSeq.current) return;
       setTasks(allTasks);
+      setTasksLoadFailed(false);
       // Roll over passed birthdays to next year and ensure reminders exist
       const birthdayTasks = allTasks.filter(t => t.birthday_person && t.status === "active" && t.next_reminder);
       if (birthdayTasks.length > 0) {
@@ -126,6 +130,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Error loading tasks:', error);
+      if (seq === loadSeq.current) setTasksLoadFailed(true);
     }
   };
 
@@ -301,6 +306,8 @@ export default function Home() {
                   onViewDetails={handleViewDetails}
                   onUpdateTask={handleTaskUpdate}
                   specialMode={specialMode}
+                  loadFailed={tasksLoadFailed}
+                  onRetry={loadTasks}
                 />
               </div>
 
