@@ -249,6 +249,12 @@ Deno.serve(async (req) => {
       const endMin = quietEnabled ? quiet.endMin : 0;
       if (isInQuietHours(now, startMin, endMin, timeZone)) continue;
 
+      // Notifications are off for ADHDone on their phone (as the app saw it the
+      // last time it was open): nothing sent can reach them, so there's nothing
+      // to plan (an AI call every run) or send. The app re-checks every time it
+      // opens, so this picks up again as soon as they turn them back on.
+      if (user.alarm_permissions?.notifications === false) continue;
+
       const todayStr = getLocalDateString(now, timeZone);
       const pool = tasksByUser[email];
       const openTaskIds = new Set(pool.map((t: any) => t.id));
@@ -570,7 +576,15 @@ Deno.serve(async (req) => {
           // its earlier heads-ups stay pushes whatever the priority.
           const pinnedLater = Number.isFinite(anchorMs) && !isDeadline && !dueToday && anchorMs > nowMs;
           const noDate = !Number.isFinite(anchorMs);
-          ringsOutLoud = overdue || dueToday || inWindow || noDate || (pressing && !pinnedLater);
+          // A chore with no date (laundry, clean the car) never rings as a full
+          // alarm late at night, or once it's been put off 3 times: ringing
+          // wasn't working, and an alarm about laundry at 2 AM is how people end
+          // up turning ADHDone's notifications off. It still comes, as a regular
+          // notification.
+          const putOff = (nudgedTask.snooze_count || 0) + (nudgedTask.dismissed_count || 0) + (nudgedTask.later_count || 0);
+          const localHour = Math.floor(localMinutesOfDay(now, timeZone) / 60);
+          const quietChore = noDate && (localHour >= 22 || localHour < 7 || putOff >= 3);
+          ringsOutLoud = !quietChore && (overdue || dueToday || inWindow || noDate || (pressing && !pinnedLater));
         }
         const sent = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id, ringsOutLoud);
         if (sent) {
