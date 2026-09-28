@@ -64,6 +64,9 @@ export default function QuickCapturePrompt() {
 
   const settle = () => {
     localStorage.setItem(SEEN_KEY, 'true');
+    // When it was answered: a "no" here gets asked once more, plainly, on a
+    // later launch (NotificationsOffBanner), never right after.
+    try { localStorage.setItem('notifications_setup_answered_at', String(Date.now())); } catch (e) { /* asked later anyway */ }
     markStepDone(ONBOARDING_STEPS.permissions);
   };
 
