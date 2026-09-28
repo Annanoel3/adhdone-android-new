@@ -150,10 +150,19 @@ export default function QuickCapturePrompt() {
 
         {declined ? (
           <div className="space-y-4 pt-2">
-            <p className="text-sm text-gray-600">
-              No problem — both are waiting in Settings whenever you want them.
+            <p className="text-sm font-medium">
+              Without notifications, ADHDone can't remind you of anything.
             </p>
-            <Button onClick={() => setOpen(false)} className="w-full">Got it</Button>
+            <p className="text-sm text-gray-600">
+              Reminders, alarms and check-ins all come through as notifications. You can turn them on now, or
+              later in Settings.
+            </p>
+            <div className="flex gap-2">
+              <Button onClick={() => setOpen(false)} variant="outline" className="flex-1">Maybe later</Button>
+              <Button onClick={handleAllow} disabled={busy} className="flex-1">
+                {busy ? 'One sec...' : 'Turn on'}
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="space-y-4 pt-2">
