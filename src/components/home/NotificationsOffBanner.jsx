@@ -1,11 +1,29 @@
 import React, { useEffect, useState } from "react";
 import { BellOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { base44 } from "@/api/base44Client";
-import { ONBOARDING_STEPS, isStepDone } from "@/components/onboarding/onboardingGate";
+import { ONBOARDING_STEPS, isStepDone, markStepDone } from "@/components/onboarding/onboardingGate";
+import { usePopupTurn } from "@/components/onboarding/onboardingSurface";
 
 // Asked once per app launch, not every time the user comes back to Home.
 let blockedThisLaunch = null;
+
+// Someone who said no to notifications during setup is asked once more, in a
+// plain popup, the next time they open the app: never in the same sitting as
+// their answer (that would be nagging), and never a second time.
+const REASK_STEP = "onboarding_notifications_reask_done";
+const launchedAt = Date.now();
+function reaskDue() {
+  if (isStepDone(REASK_STEP) || !isStepDone(ONBOARDING_STEPS.permissions)) return false;
+  let answeredAt = 0;
+  try {
+    answeredAt = Number(localStorage.getItem("notifications_setup_answered_at")) || 0;
+  } catch (e) {
+    /* answered before this was kept: that was an earlier launch */
+  }
+  return !answeredAt || answeredAt < launchedAt || Date.now() - answeredAt > 12 * 60 * 60 * 1000;
+}
 
 // True only when there is proof that reminders cannot reach this phone.
 async function pushIsBlocked() {
@@ -33,19 +51,27 @@ async function pushIsBlocked() {
 export default function NotificationsOffBanner({ theme, specialMode }) {
   const [blocked, setBlocked] = useState(blockedThisLaunch === true);
   const [working, setWorking] = useState(false);
+  const [reask, setReask] = useState(false);
+  const reaskShown = usePopupTurn(reask);
 
   useEffect(() => {
     if (!window.Capacitor?.isNativePlatform?.()) return;
     // During first run the app has not asked for permission yet (that comes
     // after the Home tour), so there is nothing to report in that session.
     if (!isStepDone(ONBOARDING_STEPS.homeTour)) return;
-    if (blockedThisLaunch !== null) return;
+    if (blockedThisLaunch !== null) {
+      if (blockedThisLaunch && reaskDue()) setReask(true);
+      return;
+    }
 
     let cancelled = false;
     pushIsBlocked()
       .then((result) => {
         blockedThisLaunch = result;
-        if (!cancelled) setBlocked(result);
+        if (!cancelled) {
+          setBlocked(result);
+          if (result && reaskDue()) setReask(true);
+        }
       })
       .catch(() => {});
     return () => {
@@ -58,7 +84,13 @@ export default function NotificationsOffBanner({ theme, specialMode }) {
   // Shows Android's own permission prompt or, when Android won't show it again,
   // OneSignal's prompt that opens this app's notification settings. Resolves once
   // the user has answered (or come back from settings).
+  const closeReask = () => {
+    markStepDone(REASK_STEP);
+    setReask(false);
+  };
+
   const turnOn = async () => {
+    if (reask) closeReask();
     setWorking(true);
     try {
       await window.Capacitor?.Plugins?.NotifyBridge?.requestPermission?.();
@@ -82,6 +114,27 @@ export default function NotificationsOffBanner({ theme, specialMode }) {
   }`;
 
   return (
+    <>
+    <Dialog open={reaskShown} onOpenChange={(o) => { if (!o) closeReask(); }}>
+      <DialogContent className="max-w-md w-[calc(100vw-2rem)] bg-card text-card-foreground border-border">
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center gap-2">
+            <BellOff className="w-5 h-5 text-amber-600" />
+            <h2 className="text-xl font-bold text-foreground">Your reminders can't reach you</h2>
+          </div>
+          <p className="text-[15px] leading-relaxed text-muted-foreground">
+            Notifications are off for ADHDone on this phone, so none of your reminders, alarms or check-ins
+            ever show up. Turn them on and they'll start coming through.
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={closeReask}>Not now</Button>
+            <Button className="flex-1 bg-amber-600 hover:bg-amber-700 text-white" onClick={turnOn} disabled={working}>
+              Turn on
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
     <div className={shell} role="status">
       <BellOff className="w-4 h-4 text-amber-600 flex-shrink-0" />
       <span className={`flex-1 min-w-0 text-sm ${dark ? "text-gray-200" : "text-gray-800"}`}>
@@ -96,5 +149,6 @@ export default function NotificationsOffBanner({ theme, specialMode }) {
         Turn on
       </Button>
     </div>
+    </>
   );
 }
