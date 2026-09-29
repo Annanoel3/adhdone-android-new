@@ -262,6 +262,11 @@
       "default": 0,
       "description": "How many times a full-screen alarm for this task was stopped with \"Later\" (put off without picking a snooze time; the task stays active, so smart nudges bring it back once its time has passed). Data only: nothing is rescheduled because of it."
     },
+    "quiet_hours_exempt": {
+      "type": "boolean",
+      "default": false,
+      "description": "This task's repeating reminders keep going through the owner's quiet hours, and each one rings as an alarm on a phone set to full-screen reminders, until it is done. Set only when the user asked to be reminded until they finish (reminder_wish) AND said yes when the app asked whether that may run through the night. Never set by the parser or a cron."
+    },
     "prep_questions": {
       "type": "array",
       "items": {
