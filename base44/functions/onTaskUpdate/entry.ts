@@ -39,7 +39,17 @@ async function cancelOneSignalNotification(notificationId) {
   }
 }
 
-async function scheduleOneSignalNotification(email, title, body, sendAfterIsoString, taskId) {
+// Task.quiet_hours_exempt: "keep reminding me until I mark it complete", and a
+// yes to running through the night. Its rhythm ignores quiet hours, and each
+// ping rings as an alarm on a phone set to full-screen reminders.
+function nagsThroughNight(t: any): boolean {
+  return t?.quiet_hours_exempt === true;
+}
+function ringsEachPing(t: any, user: any): boolean {
+  return nagsThroughNight(t) && (t.alert_style === 'alarm' || (t.alert_style !== 'notification' && user?.alarm_mode === 'alarm'));
+}
+
+async function scheduleOneSignalNotification(email, title, body, sendAfterIsoString, taskId, alarm = false) {
   if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
     console.log('[onTaskUpdate] OneSignal credentials missing, skipping schedule');
     return null;
@@ -60,8 +70,12 @@ async function scheduleOneSignalNotification(email, title, body, sendAfterIsoStr
       data: {
         screen: '/TaskNotification',
         taskId: taskId,
-        type: 'task_reminder'
-      }
+        type: 'task_reminder',
+        ...(alarm ? { alarm: true } : {})
+      },
+      // A ring-on-arrival push: not held by Doze, and never re-delivered by
+      // OneSignal's restore after 10 minutes (same as schedulePush).
+      ...(alarm ? { priority: 10, ttl: 10 * 60 } : {})
     };
 
     const response = await fetch('https://onesignal.com/api/v1/notifications', {
@@ -154,7 +168,7 @@ async function dropPhoneAlarms(base44, task, taskId) {
 // (see rhythmNamedMin in quietHours).
 function nextRhythmStart(at: Date, rhythmMs: number, quietEnabled: boolean, startMin: number, endMin: number, timeZone: string, task?: any): Date {
   if (rhythmMs >= 24 * 60 * 60 * 1000) return anchorToDaytime(at, startMin, endMin, timeZone);
-  const next = quietEnabled ? adjustForQuietHours(at, startMin, endMin, timeZone) : at;
+  const next = quietEnabled && !nagsThroughNight(task) ? adjustForQuietHours(at, startMin, endMin, timeZone) : at;
   const namedMin = rhythmNamedMin(task, rhythmMs);
   return namedMin === null ? next : notBeforeNamedTime(next, namedMin, timeZone);
 }
@@ -762,7 +776,8 @@ async function handleTaskEvent(req: Request): Promise<Response> {
         // reschedule here never fires at 4 AM.
         const { enabled: quietEnabled, startMin, endMin } = resolveQuietHours(user);
         const timeZone = userTimeZone(user);
-        const useQuiet = quietEnabled;
+        const useQuiet = quietEnabled && !nagsThroughNight(currentTask);
+        const ringEach = ringsEachPing(currentTask, user);
 
         // Schedule the next 10 notifications with updated title
         const newNotificationIds = [];
@@ -797,7 +812,8 @@ async function handleTaskEvent(req: Request): Promise<Response> {
               title,
               body,
               sendAtISO,
-              currentTask.id
+              currentTask.id,
+              ringEach
             );
 
             if (notificationId) {
