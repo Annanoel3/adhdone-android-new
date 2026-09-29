@@ -148,7 +148,7 @@ export function phoneAlarmsFor(task: any, owner: any, now: number = Date.now()):
   const out: any[] = [];
   for (const m of reminderMoments(task, timeZone)) {
     if (m.at <= now) continue;
-    if (quiet.enabled && isInQuietHours(new Date(m.at), quiet.startMin, quiet.endMin, timeZone)) continue;
+    if (quiet.enabled && task.quiet_hours_exempt !== true && isInQuietHours(new Date(m.at), quiet.startMin, quiet.endMin, timeZone)) continue;
     if (!ringsOutLoudOn(task, m.at, timeZone)) continue;
     const alarm: any = { id: `${task.id}:${m.at}`, at: m.at, title: task.title || 'Task', heading: m.heading, body: m.body };
     if (task.birthday_person && !task.is_own_birthday) {
