@@ -3,8 +3,9 @@
 // quiet-hours-end) with ONE friendly summary of the user's day. Runs every
 // 30 minutes via a scheduled automation; for each user whose local time is
 // within their morning window (quiet_hours_end ± 30 min, or 8 AM default),
-// it sends a single OneSignal push summarizing today's tasks — or a
-// motivational "your day is clear!" message if there are none.
+// it sends a single OneSignal push summarizing today's tasks. Nothing on the
+// list today means no digest at all (it used to send "your day is clear!",
+// every morning, to people who had never made a task).
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
@@ -45,7 +46,7 @@ Deno.serve(async (req) => {
 
     // 3. Collect users who should get a digest:
     //    anyone with active tasks, OR anyone active in the last 30 days
-    //    (so users with zero tasks still get the "clear day!" nudge)
+    //    (their list is checked below; an empty day sends nothing)
     const thirtyDaysAgo = now.getTime() - 30 * 24 * 60 * 60 * 1000;
     const digestEmails = new Set<string>();
 
@@ -84,6 +85,11 @@ Deno.serve(async (req) => {
       // Get today's tasks
       const userTasks = activeTasksByUser[email] || [];
       const todaysTasks = getTodaysTasks(userTasks, now, timeZone);
+
+      // Nothing on the list today: no digest. "Your day is clear — what else
+      // can we tackle?" went out every single morning to people who had never
+      // made a task, which reads as spam from an app they opened once.
+      if (todaysTasks.length === 0) continue;
 
       // Claim today BEFORE sending. If this write fails (or the run is cut off
       // after the push goes out), the next 30-min run would otherwise re-send
