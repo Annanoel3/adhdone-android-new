@@ -160,6 +160,24 @@ export async function maybeAutoSync() {
 // same AI classification, reminder plans and dedupe as Google ones.
 
 const DEVICE_GATE_KEY = 'device_calendar_last_synced_at';
+// Set (to when) while the phone refuses to let ADHDone read its calendars —
+// the background sync on app open fails silently otherwise, and someone whose
+// reinstall or update reset the permission would go on believing their phone
+// calendar was still coming in. Home shows a row while this is set.
+export const DEVICE_PERMISSION_LOST_KEY = 'device_calendar_permission_lost';
+export const DEVICE_PERMISSION_EVENT = 'device-calendar-permission';
+
+export function deviceCalendarPermissionLost() {
+  try { return !!localStorage.getItem(DEVICE_PERMISSION_LOST_KEY); } catch (e) { return false; }
+}
+
+function notePermission(lost) {
+  try {
+    if (lost) localStorage.setItem(DEVICE_PERMISSION_LOST_KEY, new Date().toISOString());
+    else localStorage.removeItem(DEVICE_PERMISSION_LOST_KEY);
+    window.dispatchEvent(new CustomEvent(DEVICE_PERMISSION_EVENT, { detail: { lost } }));
+  } catch (e) { /* nothing to show, then */ }
+}
 const DEVICE_DAYS = 365;
 let deviceInFlight = null;
 
@@ -263,10 +281,12 @@ export function runDeviceCalendarSync(calendarIds, { background = false } = {}) 
   deviceInFlight = (async () => {
     const read = await plugin.listEvents({ calendarIds: ids, days: DEVICE_DAYS });
     if (!read?.granted) {
+      notePermission(true);
       const err = new Error('calendar_permission');
       err.code = 'calendar_permission';
       throw err;
     }
+    notePermission(false);
     const events = (read.events || []).map(deviceRowToEvent).filter(Boolean);
     const res = await base44.functions.invoke('syncGoogleCalendar', {
       source: 'device',
