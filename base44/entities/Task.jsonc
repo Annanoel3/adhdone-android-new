@@ -169,9 +169,11 @@
       "enum": [
         "active",
         "completed",
-        "snoozed"
+        "snoozed",
+        "cancelled"
       ],
-      "default": "active"
+      "default": "active",
+      "description": "cancelled: an event that isn't happening (the task page's \"Cancelled\" link, events only). Its reminders and alarms are taken down like a completion's, but it never counts as done. It drops out of every active list; a Google Calendar copy of it stays cancelled on the next sync because the task row is kept."
     },
     "alert_style": {
       "type": "string",
