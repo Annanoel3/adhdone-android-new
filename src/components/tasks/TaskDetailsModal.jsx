@@ -28,6 +28,7 @@ import {
   Check,
   X,
   Lightbulb,
+  CalendarOff,
   Image as ImageIcon,
   Upload,
   FileText,
@@ -46,6 +47,7 @@ import { AlertStyleInfo } from "../shared/QuickCapturePrompt";
 import VoiceTaskInput from "./VoiceTaskInput";
 import { scheduleReminder, cancelScheduledReminder } from "../utils/reminderScheduler";
 import { deleteTaskWithUndo } from "../utils/snoozeTask";
+import { ToastAction } from "@/components/ui/toast";
 import { User } from "@/entities/User";
 import { base44 } from "@/api/base44Client";
 import ImageViewer from "../shared/ImageViewer";
@@ -1116,6 +1118,47 @@ Return JSON:
       }
     } catch (error) {
       console.error("Error completing task:", error);
+    }
+  };
+
+  // Events only: it isn't happening. Not a completion (it never counts as
+  // done) and not a deletion (the row stays, so a calendar copy of it stays
+  // cancelled on the next sync instead of coming back). Its reminders and
+  // alarms come down through onTaskUpdate. A repeating event moves on to its
+  // next occurrence, the same as finishing it would. Undo for a few seconds.
+  const handleCancelEvent = async () => {
+    if (!task || task.status !== 'active') return;
+    if (onDelete) onDelete(); // off the list it came from; nothing is deleted
+    onClose();
+    try {
+      await base44.entities.Task.update(task.id, { status: 'cancelled' });
+      refreshAlarms().catch(() => {});
+      if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
+        const { createNextRecurrence } = await import('../utils/taskRecurrence');
+        await createNextRecurrence(task).catch(() => null);
+      }
+      window.dispatchEvent(new CustomEvent('tasks-changed'));
+      toast({
+        title: `Cancelled "${task.title}"`,
+        description: "Its reminders are off. It won't count as done.",
+        duration: 6000,
+        action: React.createElement(ToastAction, {
+          altText: 'Undo',
+          onClick: async () => {
+            try {
+              await base44.entities.Task.update(task.id, { status: 'active' });
+              refreshAlarms().catch(() => {});
+              window.dispatchEvent(new CustomEvent('tasks-changed'));
+            } catch (e) {
+              toast({ title: "Couldn't undo that", description: 'Check your connection and try again.' });
+            }
+          },
+        }, 'Undo'),
+      });
+    } catch (e) {
+      console.error('Error cancelling event:', e);
+      toast({ title: "Couldn't cancel that event", description: 'Check your connection and try again.' });
+      window.dispatchEvent(new CustomEvent('tasks-changed'));
     }
   };
 
@@ -2437,6 +2480,11 @@ Return JSON:
                   {!isEventOrBirthday && (
                   <button type="button" onClick={handleToParkingLot} className={`flex items-center gap-1 ${theme === 'dark' ? 'text-purple-300' : 'text-purple-600'}`}>
                     <Lightbulb className="w-4 h-4" /> To Parking Lot
+                  </button>
+                  )}
+                  {isEvent && task.status === 'active' && (
+                  <button type="button" onClick={handleCancelEvent} className={`flex items-center gap-1 ${theme === 'dark' ? 'text-amber-300' : 'text-amber-700'}`}>
+                    <CalendarOff className="w-4 h-4" /> Cancelled
                   </button>
                   )}
                   <button type="button" onClick={handleDelete} className="flex items-center gap-1 text-red-600">
