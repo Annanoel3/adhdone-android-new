@@ -34,6 +34,8 @@ function FrameZoomRange() {
     let first = true;
 
     const apply = () => {
+      // Gone already (torn down while the timer or a move event was pending).
+      if (!map._mapPane || !map._container) return;
       const size = map.getSize();
       const minDim = Math.min(size.x, size.y);
       if (!minDim) return;
@@ -50,14 +52,17 @@ function FrameZoomRange() {
 
       // Open at the closest zoom, then leave the user's chosen zoom alone —
       // only pull it back when it has drifted outside the safe range.
+      // Snap, don't animate: a zoom animation still running when the map is
+      // taken down (the dialog closes, the page changes) is what crashed
+      // Leaflet, and these corrections are tiny.
       const current = map.getZoom();
       if (first) {
         first = false;
-        if (Math.abs(current - zIn) > 0.01) map.setZoom(zIn);
+        if (Math.abs(current - zIn) > 0.01) map.setZoom(zIn, { animate: false });
       } else if (current > zIn + 0.01) {
-        map.setZoom(zIn);
+        map.setZoom(zIn, { animate: false });
       } else if (current < zOut - 0.01) {
-        map.setZoom(zOut);
+        map.setZoom(zOut, { animate: false });
       }
     };
 
@@ -91,7 +96,7 @@ function SearchFlyTo({ dark, onMoved }) {
     <AreaSearchBox
       dark={dark}
       onPick={(r) => {
-        map.setView([r.lat, r.lng], map.getZoom());
+        map.setView([r.lat, r.lng], map.getZoom(), { animate: false });
         onMoved({ lat: r.lat, lng: r.lng });
       }}
     />
