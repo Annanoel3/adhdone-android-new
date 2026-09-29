@@ -1,11 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { BellOff } from "lucide-react";
+import { BellOff, CalendarOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { base44 } from "@/api/base44Client";
 import { ONBOARDING_STEPS, isStepDone, markStepDone } from "@/components/onboarding/onboardingGate";
 import { usePopupTurn } from "@/components/onboarding/onboardingSurface";
-import { alarmPermissionStatus } from "@/components/utils/widgetBridge";
+import { alarmPermissionStatus, refreshAlarms } from "@/components/utils/widgetBridge";
+import {
+  deviceCalendarPermissionLost,
+  DEVICE_PERMISSION_EVENT,
+  requestDeviceCalendarPermission,
+  runDeviceCalendarSync,
+} from "@/lib/calendarSync";
 
 // Asked once per app launch, not every time the user comes back to Home.
 let blockedThisLaunch = null;
@@ -161,5 +167,72 @@ export default function NotificationsOffBanner({ theme, specialMode }) {
       </Button>
     </div>
     </>
+  );
+}
+
+// One row on Home while the phone won't let ADHDone read the calendars the
+// user chose to import. A reinstall or an update can take that permission
+// away; the sync on app open then fails quietly, and the calendar's events
+// stop coming in with nothing on screen to say so.
+export function CalendarOffBanner({ theme, specialMode, user }) {
+  const [lost, setLost] = useState(() => deviceCalendarPermissionLost());
+  const [working, setWorking] = useState(false);
+  const [denied, setDenied] = useState(false);
+
+  useEffect(() => {
+    const onChange = (e) => setLost(!!e?.detail?.lost);
+    window.addEventListener(DEVICE_PERMISSION_EVENT, onChange);
+    return () => window.removeEventListener(DEVICE_PERMISSION_EVENT, onChange);
+  }, []);
+
+  const ids = user?.device_calendar_ids;
+  if (!window.Capacitor?.isNativePlatform?.() || !lost || !Array.isArray(ids) || ids.length === 0) return null;
+
+  const allow = async () => {
+    setWorking(true);
+    try {
+      const ok = await requestDeviceCalendarPermission();
+      if (ok) {
+        // A successful read clears the flag (and this row) on its own.
+        await runDeviceCalendarSync(ids);
+        refreshAlarms().catch(() => {});
+      } else {
+        // Android stops asking after two refusals; only Settings can turn it on.
+        setDenied(true);
+      }
+    } catch (e) {
+      setDenied(true);
+    }
+    setWorking(false);
+  };
+
+  const dark = theme === "dark";
+  const shell = `rounded-xl border px-3 py-2 flex items-center gap-2.5 ${
+    specialMode && specialMode !== "normal"
+      ? `${specialMode}-card`
+      : dark
+        ? "bg-gray-800 border-gray-700"
+        : "bg-amber-50 border-amber-200"
+  }`;
+
+  return (
+    <div className={shell} role="status">
+      <CalendarOff className="w-4 h-4 text-amber-600 flex-shrink-0" />
+      <span className={`flex-1 min-w-0 text-sm ${dark ? "text-gray-200" : "text-gray-800"}`}>
+        {denied
+          ? "Your phone didn't ask. Turn on Calendar for ADHDone under Settings → Apps → ADHDone → Permissions, then open the app again."
+          : "ADHDone can't read your phone's calendar any more, so those events aren't coming in."}
+      </span>
+      {!denied && (
+        <Button
+          size="sm"
+          onClick={allow}
+          disabled={working}
+          className="h-8 px-2.5 flex-shrink-0 bg-amber-600 hover:bg-amber-700 text-white"
+        >
+          Allow
+        </Button>
+      )}
+    </div>
   );
 }
