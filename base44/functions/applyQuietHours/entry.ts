@@ -58,6 +58,7 @@ Deno.serve(async (req) => {
     // cancelled too, and their time wiped — nothing ever booked them again, so
     // saving quiet hours in Settings silently deleted them.
     const tasksWithNotifs = tasks.filter(t =>
+      t.quiet_hours_exempt !== true && // asked to run through the night: quiet hours don't apply
       isRecurringInterval(t.reminder_interval) &&
       Array.isArray(t.onesignal_notification_ids) && t.onesignal_notification_ids.length > 0 &&
       t.last_scheduled_until
