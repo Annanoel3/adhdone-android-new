@@ -262,7 +262,13 @@ Deno.serve(async (req) => {
       const owner = userMap[email];
       const { enabled: quietEnabled, startMin, endMin } = resolveQuietHours(owner);
       const timeZone = userTimeZone(owner);
-      const useQuiet = quietEnabled;
+      // "Keep reminding me until I mark it complete" + a yes to running through
+      // the night (Task.quiet_hours_exempt): no quiet window for this one.
+      const useQuiet = quietEnabled && task.quiet_hours_exempt !== true;
+      // ...and on a phone set to full-screen reminders, each of its pings rings
+      // as an alarm on arrival (the phone's own alarm only covers the first).
+      const ringsEachTime = task.quiet_hours_exempt === true &&
+        (task.alert_style === 'alarm' || (task.alert_style !== 'notification' && owner?.alarm_mode === 'alarm'));
 
       // RULES.md hard rule 3. A schedule that is starting from scratch (a task the
       // server created, or one whose bookings had lapsed) takes its time of day
@@ -316,7 +322,9 @@ Deno.serve(async (req) => {
             continue;
           }
         }
-        if (namedMin !== null && notBeforeNamedTime(sendAt, namedMin, timeZone).getTime() !== sendAt.getTime()) continue;
+        // The named-time floor keeps a 9 PM chore from pinging all morning — but
+        // one the user asked to run through the night keeps going past midnight.
+        if (namedMin !== null && task.quiet_hours_exempt !== true && notBeforeNamedTime(sendAt, namedMin, timeZone).getTime() !== sendAt.getTime()) continue;
         if (sendAt.getTime() <= now.getTime()) continue;
         const sendAtISO = sendAt.toISOString();
         // Focus Mode: the focused task gets check-in style reminders.
@@ -335,7 +343,8 @@ Deno.serve(async (req) => {
               screen: '/TaskNotification',
               taskId: task.id,
               urgency: task.urgency || 'medium',
-              type: 'task_reminder'
+              type: 'task_reminder',
+              ...(ringsEachTime ? { alarm: true } : {})
             },
             buttons: [
               { id: "snooze_15", text: "Snooze 15 min" },
