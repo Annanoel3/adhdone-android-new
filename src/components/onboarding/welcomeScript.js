@@ -7,22 +7,28 @@
 // that it's the app talking to the user, so everything below stays in the app's
 // voice ("this app", "we") and never says "I'm Anna" again.
 //
-// Shape: the whole first sitting is one task, one time, one permission, one
-// alert-style question — under a minute. It used to open with a name, a bio
+// Shape: the whole first sitting is a name, one task, one time, one permission
+// and one alert-style question — about a minute. It used to open with a bio
 // and a Places explainer before the first task, and most new people left
-// inside four minutes with nothing set up that could reach them. The name
-// and about-you questions now come after their first task is checked off.
+// inside four minutes with nothing set up that could reach them. The about-you
+// question now comes after their first task is checked off.
 const SCRIPT = [
   {
     text: () => "Hey — welcome to ADHDone. Built by Anna, a girl who just wants to stop missing doctors appointments and got tired of apps that just don't work.",
   },
   {
-    // The first win comes FIRST. One real thing on the list inside the first
-    // minute, before a name, a bio, a tour or a permission — so there is a
-    // reminder to arrive, and a reason to come back. (Name and about-you are
-    // asked after their first task gets checked off; see catchUpScript.)
-    text: () =>
-      "What's one thing you keep forgetting? Type it in and it's on your list.",
+    text: () => "First things first: what should we call you? This becomes your username — you can change it in Settings anytime.",
+    input: 'name',
+  },
+  {
+    // The first win comes right after the name. One real thing on the list
+    // inside the first minute, before a bio, a tour or a permission — so there
+    // is a reminder to arrive, and a reason to come back. (The about-you
+    // question waits until their first task is checked off; see catchUpScript.)
+    text: (name, handle) =>
+      handle
+        ? `Nice to meet you, ${name}! Your handle is @${handle} — that's how friends will find you once sharing goes live. Now: what's one thing you keep forgetting? Type it in and it's on your list.`
+        : `Nice to meet you, ${name}! What's one thing you keep forgetting? Type it in and it's on your list.`,
     input: 'task',
   },
   {
