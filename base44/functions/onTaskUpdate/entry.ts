@@ -384,8 +384,10 @@ async function handleTaskEvent(req: Request): Promise<Response> {
     // cleared (e.g. by the frontend or by setFocusMode exit) would skip this block
     // and keep its reminder_interval / next_reminder set, leaving orphaned push
     // notifications in OneSignal that fire long after completion.
-    if (data.status === 'completed') {
-      console.log('[onTaskUpdate] Task completed — cancelling all notifications and clearing scheduling fields');
+    // A cancelled event (not happening) takes its reminders down the same way;
+    // it just never counts as done.
+    if (data.status === 'completed' || data.status === 'cancelled') {
+      console.log(`[onTaskUpdate] Task ${data.status} — cancelling all notifications and clearing scheduling fields`);
       // Fall back to old_data IDs when the update cleared them — otherwise the
       // real OneSignal notifications would be orphaned and keep firing forever.
       const ids = (data.onesignal_notification_ids?.length
@@ -419,7 +421,7 @@ async function handleTaskEvent(req: Request): Promise<Response> {
       await Promise.all([
         // Once, on the change itself — not again when the clean-up write below
         // re-triggers this function with the task already completed.
-        ...(old_data?.status && old_data.status !== 'completed'
+        ...(old_data?.status && old_data.status !== 'completed' && old_data.status !== 'cancelled'
           ? [dropPhoneAlarms(base44, { ...old_data, ...data }, event.entity_id)]
           : []),
         ...[...toCancel].map((notificationId) => cancelOneSignalNotification(notificationId)),
@@ -479,7 +481,7 @@ async function handleTaskEvent(req: Request): Promise<Response> {
     //    at-time reminder. (Every task used to get the appointment set, "Time
     //    to head out! 🚗" included — a day-only chore got them at 11 PM and
     //    midnight.)
-    if (data.status === 'active' && old_data?.status === 'completed') {
+    if (data.status === 'active' && (old_data?.status === 'completed' || old_data?.status === 'cancelled')) {
       const email = data.notification_recipient_email || data.created_by || user.email;
       const now = Date.now();
       const isEvent = data.classification === 'event';
@@ -854,7 +856,7 @@ async function movePhoneAlarms(client: any, payload: any) {
     if (!event || (event.type !== 'update' && event.type !== 'create') || !event.entity_id) return;
     const rows = await client.asServiceRole.entities.Task.filter({ id: event.entity_id });
     const task = rows?.[0];
-    if (!task || !task.created_by || task.status === 'completed') return;
+    if (!task || !task.created_by || task.status === 'completed' || task.status === 'cancelled') return;
     const oldData = payload.old_data && Object.keys(payload.old_data).length > 0 ? payload.old_data : null;
     // Set to plain notifications, now and before: it never rang as an alarm.
     if (task.alert_style === 'notification' && (!oldData || oldData.alert_style === 'notification')) return;
