@@ -250,6 +250,20 @@ export async function scheduleMultiReminders({
         notification_body: r.notification_body,
       }));
       base44.entities.Task.update(taskId, { reminder_schedule: structured }).catch(() => {});
+    } else {
+      // Nothing could be booked (this phone isn't subscribed for pushes yet —
+      // notifications were declined, or the link isn't there). The plan is
+      // kept as PLANNED entries, the same placeholder ids the refill job
+      // promotes for far-off dates, so the moment pushes can reach this
+      // account the reminders get booked instead of being lost for good.
+      const planned = reminderTimes.map((r, i) => ({
+        notification_id: `planned_${i}_${Date.now().toString(36)}`,
+        send_at: resolveSendTime(r.sendAtISO, r.exact),
+        label: r.label,
+        notification_title: r.notification_title,
+        notification_body: r.notification_body,
+      }));
+      base44.entities.Task.update(taskId, { reminder_schedule: planned }).catch(() => {});
     }
 
     return notificationIds.length > 0 ? notificationIds : (clockDeadline ? [] : null);
