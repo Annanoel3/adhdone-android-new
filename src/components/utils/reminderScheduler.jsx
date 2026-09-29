@@ -79,6 +79,28 @@ export function resolveSendTime(sendAtISO, exact) {
 /**
  * Schedules push notifications and returns OneSignal notification ID
  */
+// A push booked before this phone is linked for pushes is refused by OneSignal
+// and lost. On a brand-new account that is exactly the moment the first task
+// goes in: the notifications question was just answered and OneSignalInit is
+// still telling OneSignal whose phone this is. So a booking waits for the
+// link (the first one on a fresh install waits a few seconds; every later one
+// finds it already made), plus a short settle so OneSignal's side has the
+// subscription before it is asked to deliver to it. Phone app only — in a
+// browser there is nothing to wait for.
+const PUSH_LINK_WAIT_MS = 45000;
+const PUSH_LINK_SETTLE_MS = 2500;
+async function waitForPushLink() {
+  if (!window.Capacitor?.isNativePlatform?.()) return;
+  if (window.__adhdonePushLinked) return;
+  const linked = await new Promise((resolve) => {
+    const done = (ok) => { window.removeEventListener('adhdone:push-linked', onLinked); clearTimeout(t); resolve(ok); };
+    const onLinked = () => done(true);
+    const t = setTimeout(() => done(!!window.__adhdonePushLinked), PUSH_LINK_WAIT_MS);
+    window.addEventListener('adhdone:push-linked', onLinked);
+  });
+  if (linked) await new Promise((r) => setTimeout(r, PUSH_LINK_SETTLE_MS));
+}
+
 export async function scheduleReminder({
   email,
   title,
@@ -96,6 +118,8 @@ export async function scheduleReminder({
   if (!email) throw new Error("email required");
   if (!title) throw new Error("title required");
   if (!body) throw new Error("body required");
+
+  await waitForPushLink();
 
   const payload = {
     toUserExternalId: email,
