@@ -194,6 +194,95 @@ export default function QuickCapturePrompt() {
   );
 }
 
+// ── "Keep reminding me until I mark it complete" vs quiet hours ─────────────
+//
+// A repeating rhythm the user asked for ("every hour until I finish") stops at
+// quiet hours like everything else — so a 9 PM litter-box task rang once and
+// the rest of the night was lost. When a task comes in with a short rhythm AND
+// the user's own instruction to keep going, this asks once, right then: run
+// through the night too? Yes marks the task exempt (Task.quiet_hours_exempt):
+// its pings keep coming every interval, day and night, ringing as alarms on a
+// full-screen phone, until it's done. No leaves quiet hours as they are.
+const NAG_INTERVALS = { '10min': 'every 10 minutes', '20min': 'every 20 minutes', '30min': 'every 30 minutes', '1hour': 'every hour', '2hours': 'every 2 hours', '4hours': 'every 4 hours' };
+
+function clockWords(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
+  if (!m) return hhmm || '';
+  const h = Number(m[1]);
+  const suffix = h >= 12 ? 'PM' : 'AM';
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return m[2] === '00' ? `${hour12} ${suffix}` : `${hour12}:${m[2]} ${suffix}`;
+}
+
+export function QuietHoursNagPrompt({ user, theme }) {
+  const dark = theme === 'dark';
+  const [task, setTask] = useState(null);
+  const [busy, setBusy] = useState(false);
+  // Takes its turn with other popups, but as the answer to something the user
+  // just did it shows the moment the screen is free.
+  const shown = usePopupTurn(!!task, { reactive: true });
+  const quietOn = user?.quiet_hours_enabled !== false;
+
+  useEffect(() => {
+    if (!quietOn) return undefined;
+    const onCreated = (e) => {
+      const t = e?.detail?.task;
+      if (!t?.id || t.quiet_hours_exempt || t.parent_task_id) return;
+      if (!NAG_INTERVALS[t.reminder_interval]) return;
+      if (!String(t.reminder_wish || '').trim()) return;
+      setTask(t);
+    };
+    window.addEventListener('task-created', onCreated);
+    return () => window.removeEventListener('task-created', onCreated);
+  }, [quietOn]);
+
+  if (!task) return null;
+
+  const answer = async (yes) => {
+    setBusy(true);
+    if (yes) {
+      try {
+        await base44.entities.Task.update(task.id, { quiet_hours_exempt: true });
+        // The batch booked at creation left the night out. Take it back; the
+        // refill job re-books it within the hour, this time straight through.
+        await base44.functions.invoke('cancelTaskNotifications', { taskId: task.id }).catch(() => {});
+        refreshAlarms().catch(() => {});
+      } catch (e) {
+        // Left as a normal rhythm; the task's own switch in its details can change it.
+      }
+    }
+    setBusy(false);
+    setTask(null);
+  };
+
+  const every = NAG_INTERVALS[task.reminder_interval] || 'every hour';
+  const start = clockWords(user?.quiet_hours_start || '22:00');
+  const end = clockWords(user?.quiet_hours_end || '08:00');
+  const title = task.title.length > 60 ? `${task.title.slice(0, 57)}...` : task.title;
+
+  return (
+    <Dialog open={shown} onOpenChange={(o) => { if (!o && !busy) setTask(null); }}>
+      <DialogContent className={`max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
+        <DialogHeader>
+          <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
+            <Moon className="w-5 h-5" />
+            Keep going through the night?
+          </DialogTitle>
+          <DialogDescription className={dark ? 'text-gray-400' : ''}>
+            "{title}" will keep reminding you {every} until you mark it done. Your quiet hours are {start} to {end} — should it keep going through those too?
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex gap-2 pt-2">
+          <Button variant="outline" onClick={() => answer(false)} disabled={busy} className="flex-1">No, stay quiet</Button>
+          <Button onClick={() => answer(true)} disabled={busy} className="flex-1">
+            {busy ? 'One sec...' : 'Yes, keep going'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── "You don't even have to open the app" ────────────────────────────────────
 
 // The two share-sheet screenshots, cropped out of the Play Store graphics down
