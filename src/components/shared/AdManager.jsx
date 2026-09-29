@@ -32,10 +32,34 @@ function shouldShowAd(count) {
   return false;
 }
 
-export default function AdManager() {
+// No ads for a brand-new account: the first 3 days after signing up or the
+// first 5 opens, whichever ends first. The 2nd open used to get an
+// interstitial 15 seconds in — for one new user that was 8 hours after she
+// signed up, right after a crash, and she never came back.
+const GRACE_DAYS = 3;
+const GRACE_OPENS = 5;
+function inGrace(signedUpAt, count) {
+  if (count > GRACE_OPENS) return false;
+  // Not known yet (the profile hasn't loaded): treat as new rather than risk
+  // an ad on someone's first day.
+  if (signedUpAt === null) return true;
+  const t = Date.parse(signedUpAt || '');
+  if (!Number.isFinite(t)) return false; // an old account with no sign-up date
+  return Date.now() - t < GRACE_DAYS * 24 * 60 * 60 * 1000;
+}
+
+export default function AdManager({ user }) {
   const [countdown, setCountdown] = useState(null);
   const delayRef = useRef(null);
   const countRef = useRef(null);
+  // When this account signed up (null until the profile is here) and this
+  // launch's open count, read again at show time: the grace is judged then,
+  // because the profile usually arrives after the launch was counted.
+  const signedUpRef = useRef(null);
+  const launchCountRef = useRef(0);
+  useEffect(() => {
+    signedUpRef.current = user ? (user.signed_up_at || user.created_date || '') : null;
+  }, [user?.signed_up_at, user?.created_date, !!user]);
   // This launch is due an ad that hasn't shown yet. Switching to another app
   // cancels the countdown (an ad must never pop up over another app); coming
   // back picks it up again.
@@ -55,6 +79,10 @@ export default function AdManager() {
     function tryShowAd() {
       delayRef.current = null;
       if (document.visibilityState === 'hidden') return; // picked up again on return
+      if (inGrace(signedUpRef.current, launchCountRef.current)) {
+        pendingRef.current = false;
+        return;
+      }
       if (isUserBusy()) {
         delayRef.current = setTimeout(tryShowAd, 5000);
         return;
@@ -94,6 +122,7 @@ export default function AdManager() {
       localStorage.setItem(LAST_LAUNCH_KEY, String(Date.now()));
       const count = parseInt(localStorage.getItem(AD_OPEN_KEY) || '0', 10) + 1;
       localStorage.setItem(AD_OPEN_KEY, String(count));
+      launchCountRef.current = count;
 
       resetAdLaunchState();
       clearTimers();
