@@ -435,6 +435,41 @@ export function AlarmPermissionsDialog({ theme }) {
   const dark = theme === 'dark';
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState(null);
+
+  // Second and later times: a switch the phone once had can go missing again
+  // (a reinstall, an update, a battery-saver toggle), and the set-up above
+  // only ever ran once per account — Sally finished it with full-screen,
+  // overlay and battery all still off and was never asked again. So on open,
+  // for anyone who chose alarms and already did the set-up, if the phone says
+  // something is off, this same screen comes back with just the missing rows.
+  // At most once a day, only once notifications themselves are on (the Home
+  // row and its popup handle those first, and two popups never stack), and
+  // only after the first-run tour and a calm moment.
+  useEffect(() => {
+    if (!window.Capacitor?.isNativePlatform?.()) return;
+    let cancelled = false;
+    (async () => {
+      if (!isStepDone(ALARM_SETUP_STEP)) return;
+      let last = 0;
+      try { last = Number(localStorage.getItem(ALARM_RECHECK_KEY)) || 0; } catch (e) { /* fresh */ }
+      if (Date.now() - last < 24 * 60 * 60 * 1000) return;
+      const plugin = await waitForPlugin('AlarmBridge', 5000);
+      if (cancelled || !plugin) return;
+      let u = null;
+      try { u = await base44.auth.me(); } catch (e) { return; }
+      if (cancelled || u?.alarm_mode !== 'alarm') return;
+      const st = await alarmPermissionStatus();
+      if (cancelled || !st || !st.notifications) return;
+      const missing = !st.exactAlarms || !st.fullScreen || !st.ignoringBatteryOptimizations || st.overlay === false;
+      if (!missing) return;
+      await waitForStep(ONBOARDING_STEPS.homeTour);
+      await waitForCalm();
+      if (cancelled) return;
+      try { localStorage.setItem(ALARM_RECHECK_KEY, String(Date.now())); } catch (e) { /* asks again next open, then */ }
+      window.dispatchEvent(new CustomEvent('alarm-permissions-needed', { detail: st }));
+    })();
+    return () => { cancelled = true; };
+  }, []);
   // First-time set-up: the same dialog also carries the alarm-sound chooser,
   // which needs the account record for the current choice.
   const [setup, setSetup] = useState(false);
@@ -681,6 +716,9 @@ let trialStartedThisSession = '';
 // marked done and the permissions screen only opens when Android is missing a
 // switch.
 const ALARM_SETUP_STEP = 'onboarding_alarm_setup_done';
+// When this phone last re-opened the walk-through on its own (see
+// AlarmPermissionsDialog): once a day at most.
+const ALARM_RECHECK_KEY = 'alarm_permissions_recheck_at';
 // The demo push the welcome chat plans a few minutes out (same key there):
 // its words and time, plus its id once booked.
 const FIRST_WIN_DEMO_KEY = 'first_win_demo_push';
