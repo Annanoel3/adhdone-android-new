@@ -1,71 +1,53 @@
 // The first-run conversation, as data. Each beat is one line the app types; a
-// beat with `input` waits for the user before moving on. Keeping the script
-// separate from the flow component means the copy can be reworded without
-// touching logic.
+// beat with `input` waits for the user before moving on; a beat with `skip`
+// is left out when it returns true. Keeping the script separate from the flow
+// component means the copy can be reworded without touching logic.
 //
 // Voice: the first line is the ONE place the builder introduces herself — after
 // that it's the app talking to the user, so everything below stays in the app's
 // voice ("this app", "we") and never says "I'm Anna" again.
-const SCHEDULE_HINTS = [
-  'irregular', 'shift', 'shifts', 'rotating', 'varies', 'vary', 'different every',
-  'changes every', 'night', 'nights', 'overnight', 'graveyard', 'on call', 'on-call',
-  'no set', 'never the same', 'weekends', 'schedule',
-];
-
-const mentionsSchedule = (about) => {
-  const text = (about || '').toLowerCase();
-  return SCHEDULE_HINTS.some((w) => text.includes(w));
-};
-
+//
+// Shape: the whole first sitting is one task, one time, one permission, one
+// alert-style question — under a minute. It used to open with a name, a bio
+// and a Places explainer before the first task, and most new people left
+// inside four minutes with nothing set up that could reach them. The name
+// and about-you questions now come after their first task is checked off.
 const SCRIPT = [
   {
     text: () => "Hey — welcome to ADHDone. Built by Anna, a girl who just wants to stop missing doctors appointments and got tired of apps that just don't work.",
   },
   {
-    text: () => "First things first: what should we call you? This becomes your username — you can change it in Settings anytime.",
-    input: 'name',
-  },
-  {
-    text: (name, handle) =>
-      handle
-        ? `Nice to meet you, ${name}! Your handle is @${handle} — that's how friends will find you once sharing goes live.`
-        : `Nice to meet you, ${name}!`,
-  },
-  {
-    text: () => "One quick question before you get started.",
-  },
-  {
+    // The first win comes FIRST. One real thing on the list inside the first
+    // minute, before a name, a bio, a tour or a permission — so there is a
+    // reminder to arrive, and a reason to come back. (Name and about-you are
+    // asked after their first task gets checked off; see catchUpScript.)
     text: () =>
-      "Tell us a little about yourself — anything that helps ADHDone judge what actually matters to you. Stuff like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
-    input: 'about',
-  },
-  {
-    // Someone who mentions shifts / irregular hours has just told us something
-    // the free-text note can't actually act on — the acknowledgment points them
-    // straight at the place where it becomes real.
-    text: (name, handle, about) =>
-      mentionsSchedule(about)
-        ? "Got it. Since your hours move around, head to Places whenever a new schedule gets posted — drop in a photo of it or type the week in, and this app will work around your shifts instead of guessing."
-        : "Got it. That'll shape what counts as urgent and how hard this app nudges you about it.",
-  },
-  {
-    // The first win: one real thing on the list before they ever see Home,
-    // so a reminder exists to arrive. The app also books a test notification a
-    // few minutes out, so they learn what a reminder looks like today, not
-    // whenever the first due time happens to come around.
-    text: () =>
-      "Now let's get you a win. What's one thing you need to do today? Type it with a time if you know one — like \"call the pharmacy at 3\" — and this app will remind you.",
+      "What's one thing you keep forgetting? Type it in and it's on your list.",
     input: 'task',
   },
   {
-    text: (name, handle, about, task) =>
-      task
-        ? "On the list, reminder set. In a couple of minutes you'll get a test notification so you know they're reaching you."
-        : "No problem — add one from Home whenever you're ready.",
+    // Three taps, no typing. Skipped when they skipped the task.
+    text: () => "When should it remind you?",
+    input: 'when',
+    skip: (name, handle, about, task) => !task,
   },
   {
-    text: () =>
-      "Last thing: when you get a chance, open Places in the menu and set your schedule. That's how ADHDone knows when to nudge you — and when to leave you alone at work.",
+    // The notifications question, asked at the one moment it makes sense —
+    // right after they set a time — with the reason on it. Only in the phone
+    // app; the browser has nothing to ask (WelcomeChat skips it there).
+    text: (name, handle, about, task, when) =>
+      task
+        ? `${when ? `Set for ${when}. ` : ''}So it can reach you, Android's about to ask if ADHDone can send notifications.`
+        : "So reminders can reach you, Android's about to ask if ADHDone can send notifications.",
+    input: 'notify',
+  },
+  {
+    text: (name, handle, about, task, when, notify) =>
+      notify === 'declined'
+        ? "Without notifications nothing from ADHDone can reach you. You can turn them on any time from the row at the top of Home."
+        : task
+          ? `You're set. ${when ? `First reminder: ${when}.` : "It'll remind you when it's time."}`
+          : "You're set — add something from Home whenever you're ready.",
     final: true,
   },
 ];
