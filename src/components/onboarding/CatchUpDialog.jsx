@@ -4,7 +4,7 @@ import { ONBOARDING_STEPS, isStepDone, markStepDone } from './onboardingGate';
 import { enterOnboardingSurface, exitOnboardingSurface } from './onboardingSurface';
 import WelcomeChat from './WelcomeChat';
 import { base44 } from '@/api/base44Client';
-import CATCH_UP_SCRIPT, { CATCH_UP_ABOUT_ONLY_SCRIPT, FIRST_DONE_SCRIPT } from './catchUpScript';
+import CATCH_UP_SCRIPT, { CATCH_UP_ABOUT_ONLY_SCRIPT, FIRST_DONE_SCRIPT, FIRST_DONE_ABOUT_ONLY_SCRIPT } from './catchUpScript';
 
 // The name + about-me questions, for anyone whose profile is missing them:
 // accounts that finished onboarding before those questions existed, and (since
@@ -49,7 +49,9 @@ export default function CatchUpDialog({ user }) {
   // gets the "first one done" version; an older one gets the welcome-back.
   const NEW_FLOW_SINCE = Date.parse('2026-09-29T00:00:00Z');
   const newFlow = Date.parse(user?.created_date || '') >= NEW_FLOW_SINCE;
-  const script = knownName ? CATCH_UP_ABOUT_ONLY_SCRIPT : (newFlow ? FIRST_DONE_SCRIPT : CATCH_UP_SCRIPT);
+  const script = newFlow
+    ? (knownName ? FIRST_DONE_ABOUT_ONLY_SCRIPT : FIRST_DONE_SCRIPT)
+    : (knownName ? CATCH_UP_ABOUT_ONLY_SCRIPT : CATCH_UP_SCRIPT);
 
   useEffect(() => {
     if (!open) return;
