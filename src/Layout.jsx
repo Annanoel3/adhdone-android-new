@@ -627,7 +627,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       }}
     >
       {user && <OneSignalInit user={user} />}
-      <AdManager />
+      <AdManager user={user} />
       {specialMode === 'kawaii' && <KawaiiMode />}
       {specialMode === 'halloween' && <HalloweenMode />}
       {specialMode === 'fall' && <FallMode />}
