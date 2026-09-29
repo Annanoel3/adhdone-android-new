@@ -10,6 +10,7 @@ import SCRIPT from './welcomeScript';
 import { claimHandle } from '@/functions/claimHandle';
 import { enqueueCapture } from '@/lib/pendingCaptures';
 import { firstUseSeen, markFirstUseSeen } from './FirstUseDialog';
+import { ONBOARDING_STEPS, markStepDone } from './onboardingGate';
 
 // The "this is what a reminder looks like" push: booked once per account, a
 // few minutes after the first task goes in, through the same reminder pipe
@@ -23,6 +24,34 @@ const FIRST_WIN_DEMO_KEY = 'first_win_demo_push';
 // linked for pushes (then it books straight away).
 const FIRST_WIN_PLANNED_EVENT = 'adhdone:first-win-planned';
 
+// "When should it remind you?" — three taps that fit the time of day, plus a
+// way out for someone who already typed a time. `phrase` is what gets added
+// to the capture, in the same plain words the parser reads from anyone;
+// `said` is how the chat repeats it back.
+function whenOptions(now = new Date()) {
+  const h = now.getHours();
+  const opts = [];
+  if (h < 21) opts.push({ label: 'In an hour', phrase: 'in 1 hour', said: 'an hour from now' });
+  if (h < 18) opts.push({ label: 'Tonight at 7', phrase: 'tonight at 7pm', said: 'tonight at 7' });
+  opts.push({ label: 'Tomorrow at 9', phrase: 'tomorrow at 9am', said: 'tomorrow at 9' });
+  if (h >= 18) opts.push({ label: 'Tomorrow at 7 PM', phrase: 'tomorrow at 7pm', said: 'tomorrow at 7 PM' });
+  if (h >= 21) opts.push({ label: 'Tomorrow at noon', phrase: 'tomorrow at 12pm', said: 'tomorrow at noon' });
+  return opts.slice(0, 3);
+}
+
+// The notifications question used to be its own card after the chat (with the
+// pinned-shortcut offer). Answered here instead, at the moment it makes sense,
+// and settled the same way that card did, so everything downstream — the
+// re-ask on Home, OneSignal waiting for an answer, the shortcut offer on the
+// second open — behaves exactly as before.
+function settleNotifications() {
+  try {
+    localStorage.setItem('quick_capture_prompt_seen', 'true');
+    localStorage.setItem('notifications_setup_answered_at', String(Date.now()));
+  } catch (e) { /* asked again later, then */ }
+  markStepDone(ONBOARDING_STEPS.permissions);
+}
+
 // The first-run conversation. Answers are saved as they're given (not batched at
 // the end) so someone who closes the app halfway through still keeps their name.
 export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' }) {
@@ -34,11 +63,29 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   const [handle, setHandle] = useState('');
   const [about, setAbout] = useState('');
   const [task, setTask] = useState('');
+  // How they answered "when should it remind you?" (the spoken form), and
+  // the notifications question ('allowed' / 'declined').
+  const [when, setWhen] = useState('');
+  const [notify, setNotify] = useState('');
+  const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState('');
   const endRef = useRef(null);
 
+  // Beats that don't apply are stepped over (a "when?" with no task; the
+  // notifications question outside the phone app, where there is nothing to
+  // ask). Decided as each beat comes up, not once at the start: the phone's
+  // notification bridge attaches a moment after the web layer boots.
+  useEffect(() => {
+    const b = script[idx];
+    if (!b) return;
+    const gone =
+      (typeof b.skip === 'function' && b.skip(name, handle, about, task, when, notify)) ||
+      (b.input === 'notify' && !window.Capacitor?.Plugins?.NotifyBridge?.requestPermission);
+    if (gone) setIdx((i) => i + 1);
+  }, [idx, script, name, handle, about, task, when, notify]);
+
   const beat = script[idx];
-  const line = beat ? beat.text(name || 'you', handle, about, task) : '';
+  const line = beat ? beat.text(name || 'you', handle, about, task, when, notify) : '';
   const { shown, done } = useTypewriter(line, 28, idx);
 
   useEffect(() => {
@@ -86,12 +133,14 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     answer(value);
   };
 
-  const submitTask = () => {
-    const value = draft.trim();
-    if (!value) return;
-    setTask(value);
-    // Same path as typing it on Home: parsed, saved, reminders scheduled.
-    enqueueCapture({ text: value });
+  // The task waits for the time they pick, then goes in once. A script with
+  // no "when" beat (the catch-up) adds it straight away.
+  const hasWhenBeat = script.some((b) => b.input === 'when');
+
+  const captureTask = (value, phrase) => {
+    // Same path as typing it on Home: parsed, saved, reminders scheduled. The
+    // time they tapped rides along in plain words, the way anyone would type it.
+    enqueueCapture({ text: phrase ? `${value}. Remind me ${phrase}.` : value });
     if (!firstUseSeen(FIRST_WIN_KEY)) {
       markFirstUseSeen(FIRST_WIN_KEY);
       // Only planned here, not booked. On a new phone nothing is linked to
@@ -107,7 +156,33 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
       try { localStorage.setItem(FIRST_WIN_DEMO_KEY, JSON.stringify(demo)); } catch (e) {}
       window.dispatchEvent(new Event(FIRST_WIN_PLANNED_EVENT));
     }
+  };
+
+  const submitTask = () => {
+    const value = draft.trim();
+    if (!value) return;
+    setTask(value);
+    if (!hasWhenBeat) captureTask(value, '');
     answer(value);
+  };
+
+  const submitWhen = (opt) => {
+    setWhen(opt ? opt.said : '');
+    captureTask(task, opt ? opt.phrase : '');
+    answer(opt ? opt.label : 'It already has a time');
+  };
+
+  // Android's own prompt, from the chat. Whatever they answer, the question
+  // counts as asked; a "no" is asked once more, plainly, on a later open.
+  const submitNotify = async (allow) => {
+    if (allow) {
+      setBusy(true);
+      try { await window.Capacitor?.Plugins?.NotifyBridge?.requestPermission?.(); } catch (e) { /* the row on Home takes it from here */ }
+      setBusy(false);
+    }
+    settleNotifications();
+    setNotify(allow ? 'allowed' : 'declined');
+    answer(allow ? 'Allow notifications' : 'Not now');
   };
 
   return (
@@ -163,12 +238,34 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submitTask()}
-            placeholder="One thing you need to do today"
+            placeholder="Like: call the pharmacy"
           />
           <div className="flex gap-2">
             <Button onClick={submitTask} disabled={!draft.trim()} className="flex-1">Add it</Button>
             <Button variant="ghost" onClick={() => answer('')}>Skip</Button>
           </div>
+        </div>
+      )}
+
+      {done && beat?.input === 'when' && (
+        <div className="space-y-2">
+          <div className="grid grid-cols-3 gap-2">
+            {whenOptions().map((opt) => (
+              <Button key={opt.label} variant="outline" onClick={() => submitWhen(opt)} className="h-auto py-2 text-sm leading-tight whitespace-normal">
+                {opt.label}
+              </Button>
+            ))}
+          </div>
+          <Button variant="ghost" onClick={() => submitWhen(null)} className="w-full text-xs">It already has a time</Button>
+        </div>
+      )}
+
+      {done && beat?.input === 'notify' && (
+        <div className="flex gap-2">
+          <Button onClick={() => submitNotify(true)} disabled={busy} className="flex-1">
+            {busy ? 'One sec...' : 'Allow notifications'}
+          </Button>
+          <Button variant="outline" onClick={() => submitNotify(false)} disabled={busy}>Not now</Button>
         </div>
       )}
 
