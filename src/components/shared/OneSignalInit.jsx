@@ -148,7 +148,10 @@ export default function OneSignalInit({ user }) {
           // for notifications right after the Home tour, with a sentence on
           // why — so the ask happens there, not here. If that card never
           // shows (no bridge on this build), fall back to asking directly.
-          await waitForStep(ONBOARDING_STEPS.homeTour);
+          // The question is asked inside the welcome chat now, so the link is
+          // made the moment it's answered — before the chat closes — and the
+          // first task's reminders are booked to a phone that can receive them.
+          await Promise.race([waitForStep(ONBOARDING_STEPS.homeTour), waitForStep(ONBOARDING_STEPS.permissions)]);
           const cardAnswered = await Promise.race([
             waitForStep(ONBOARDING_STEPS.permissions).then(() => true),
             new Promise((resolve) => setTimeout(() => resolve(false), 90000)),
