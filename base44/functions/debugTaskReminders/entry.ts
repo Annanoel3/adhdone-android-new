@@ -24,6 +24,20 @@ Deno.serve(async (req) => {
     const now = Date.now();
 
     const svc = base44.asServiceRole.entities;
+
+    // Raw look-up (read only): { q: { entity, where, limit, fields } } returns
+    // matching rows, newest first, trimmed to the fields asked for.
+    if (body?.q && typeof body.q === 'object') {
+      const q = body.q;
+      const ent = (svc as any)[String(q.entity || 'AppEvent')];
+      if (!ent) return Response.json({ ok: false, error: 'unknown entity' }, { status: 400 });
+      const where = (q.where && typeof q.where === 'object') ? q.where : {};
+      const limit = Math.min(500, Math.max(1, Number(q.limit) || 100));
+      const rows = await ent.filter(where, '-created_date', limit);
+      const fields: string[] = Array.isArray(q.fields) ? q.fields : [];
+      const pick = (r: any) => fields.length ? Object.fromEntries(fields.map((f) => [f, f.split('.').reduce((o: any, k: string) => (o == null ? o : o[k]), r)])) : r;
+      return Response.json({ ok: true, count: rows.length, rows: rows.map(pick) });
+    }
     const [users, tasks, events, ledger, feedback] = await Promise.all([
       listAll(svc.User),
       listAll(svc.Task),
