@@ -88,4 +88,22 @@ export const FIRST_DONE_SCRIPT = [
   },
 ];
 
+// Same, for an account that already gave its name in the welcome chat (the
+// usual case): just the about-you question.
+export const FIRST_DONE_ABOUT_ONLY_SCRIPT = [
+  {
+    text: (name) => `First one done — nice work, ${name}. One quick question now that you've seen how this works.`,
+  },
+  {
+    text: () =>
+      "Tell us a little about yourself — anything that helps ADHDone judge what actually matters to you. Stuff like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
+    input: 'about',
+  },
+  {
+    text: () =>
+      "Got it. That'll shape what counts as urgent and how hard this app nudges you about it. That's everything — back to your list.",
+    final: true,
+  },
+];
+
 export default CATCH_UP_SCRIPT;
