@@ -59,4 +59,33 @@ export const CATCH_UP_ABOUT_ONLY_SCRIPT = [
   },
 ];
 
+// For a NEW account, after its first task is checked off: the first sitting
+// asks for nothing but a task and a time, so the name and about-you come
+// here, once the app has done something for them.
+export const FIRST_DONE_SCRIPT = [
+  {
+    text: () => "First one done — nice. Two quick questions now that you've seen how this works.",
+  },
+  {
+    text: () => "What should we call you? This becomes your username — you can change it in Settings anytime.",
+    input: 'name',
+  },
+  {
+    text: (name, handle) =>
+      handle
+        ? `Thanks, ${name}! Your handle is @${handle} — that's how friends will find you once sharing goes live.`
+        : `Thanks, ${name}!`,
+  },
+  {
+    text: () =>
+      "And tell us a little about yourself — anything that helps ADHDone judge what actually matters to you. Stuff like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
+    input: 'about',
+  },
+  {
+    text: () =>
+      "Got it. That'll shape what counts as urgent and how hard this app nudges you about it. That's everything — back to your list.",
+    final: true,
+  },
+];
+
 export default CATCH_UP_SCRIPT;
