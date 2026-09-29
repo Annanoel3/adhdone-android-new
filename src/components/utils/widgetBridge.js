@@ -284,7 +284,8 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
     if (alertStyleFor(t, userDefault) !== 'alarm') continue;
     for (const m of reminderMomentsFor(t)) {
       if (m.at <= cutoff) continue;
-      if (isInQuietHours(new Date(m.at))) continue;
+      // A task the user asked to run through the night keeps its night alarms.
+      if (!t.quiet_hours_exempt && isInQuietHours(new Date(m.at))) continue;
       // Heads-ups stay regular pushes; see ringsOutLoud.
       if (!ringsOutLoud(t, m.at)) continue;
       const alarm = { id: `${t.id}:${m.at}`, taskId: t.id, title: t.title || 'Task', at: m.at, heading: m.heading, body: m.body };
