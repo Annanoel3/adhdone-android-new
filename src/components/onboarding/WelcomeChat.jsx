@@ -82,9 +82,11 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   useEffect(() => {
     const b = script[idx];
     if (!b) return;
+    const noBridge = b.input === 'notify' && !window.Capacitor?.Plugins?.NotifyBridge?.requestPermission;
     const gone =
-      (typeof b.skip === 'function' && b.skip(name, handle, about, task, when, notify)) ||
-      (b.input === 'notify' && !window.Capacitor?.Plugins?.NotifyBridge?.requestPermission);
+      (typeof b.skip === 'function' && b.skip(name, handle, about, task, when, notify)) || noBridge;
+    // No notifications question here (a browser): the task goes in now instead.
+    if (noBridge && task && hasWhenBeat) captureTask(task, phraseRef.current);
     if (gone) setIdx((i) => i + 1);
   }, [idx, script, name, handle, about, task, when, notify]);
 
@@ -141,7 +143,11 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   // no "when" beat (the catch-up) adds it straight away.
   const hasWhenBeat = script.some((b) => b.input === 'when');
 
+  // Once, whichever path gets there first (see submitNotify and the skip above).
+  const capturedRef = useRef(false);
   const captureTask = (value, phrase) => {
+    if (capturedRef.current) return;
+    capturedRef.current = true;
     // Same path as typing it on Home: parsed, saved, reminders scheduled. The
     // time they tapped rides along in plain words, the way anyone would type it.
     enqueueCapture({ text: phrase ? `${value}. Remind me ${phrase}.` : value });
@@ -170,9 +176,12 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     answer(value);
   };
 
+  // The time they tapped is kept until the notifications question is answered;
+  // the task goes in right after that (see submitNotify).
+  const phraseRef = useRef('');
   const submitWhen = (opt) => {
     setWhen(opt ? opt.said : '');
-    captureTask(task, opt ? opt.phrase : '');
+    phraseRef.current = opt ? opt.phrase : '';
     answer(opt ? opt.label : 'It already has a time');
   };
 
@@ -191,6 +200,13 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     }
     settleNotifications();
     setNotify(allow ? 'allowed' : 'declined');
+    // Only now does the task go in. Its reminders are pushes, and a push booked
+    // before this phone is linked for them is refused and lost — the link
+    // starts the moment the question is answered (OneSignalInit), and the
+    // booking itself waits for it (scheduleReminder). Answered either way,
+    // the task still goes in: with a "no" nothing can be booked, and the
+    // reminder plan is kept for when notifications get turned on.
+    if (task) captureTask(task, phraseRef.current);
     answer(allow ? 'Allow notifications' : 'Not now');
   };
 
