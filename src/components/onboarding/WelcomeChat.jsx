@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { base44 } from '@/api/base44Client';
 import ChatBubble from './ChatBubble';
 import OnboardingBrandMark from './OnboardingBrandMark';
@@ -67,6 +68,9 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   // the notifications question ('allowed' / 'declined').
   const [when, setWhen] = useState('');
   const [notify, setNotify] = useState('');
+  // The pinned quick-capture shortcut rides with the notifications question
+  // (it IS a notification), on by default, same as the card it replaced.
+  const [pinWanted, setPinWanted] = useState(true);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState('');
   const endRef = useRef(null);
@@ -172,12 +176,17 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     answer(opt ? opt.label : 'It already has a time');
   };
 
-  // Android's own prompt, from the chat. Whatever they answer, the question
-  // counts as asked; a "no" is asked once more, plainly, on a later open.
+  // Android's own prompt, from the chat, and the pinned shortcut right behind
+  // it when they left it on. Whatever they answer, the question counts as
+  // asked; a "no" is asked once more, plainly, on a later open.
   const submitNotify = async (allow) => {
     if (allow) {
       setBusy(true);
-      try { await window.Capacitor?.Plugins?.NotifyBridge?.requestPermission?.(); } catch (e) { /* the row on Home takes it from here */ }
+      const plugins = window.Capacitor?.Plugins || {};
+      try { await plugins.NotifyBridge?.requestPermission?.(); } catch (e) { /* the row on Home takes it from here */ }
+      if (pinWanted) {
+        try { await plugins.ShareBridge?.setQuickCaptureEnabled?.({ enabled: true }); } catch (e) { /* the Settings toggle shows the real error */ }
+      }
       setBusy(false);
     }
     settleNotifications();
@@ -261,11 +270,20 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
       )}
 
       {done && beat?.input === 'notify' && (
-        <div className="flex gap-2">
-          <Button onClick={() => submitNotify(true)} disabled={busy} className="flex-1">
-            {busy ? 'One sec...' : 'Allow notifications'}
-          </Button>
-          <Button variant="outline" onClick={() => submitNotify(false)} disabled={busy}>Not now</Button>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium">Pin a quick-capture shortcut</p>
+              <p className="text-xs text-muted-foreground">A shortcut in your notification tray. Thought hits, you tap it, it's saved — no opening the app.</p>
+            </div>
+            <Switch checked={pinWanted} onCheckedChange={setPinWanted} aria-label="Pin the quick-capture shortcut" />
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={() => submitNotify(true)} disabled={busy} className="flex-1">
+              {busy ? 'One sec...' : 'Allow notifications'}
+            </Button>
+            <Button variant="outline" onClick={() => submitNotify(false)} disabled={busy}>Not now</Button>
+          </div>
         </div>
       )}
 
