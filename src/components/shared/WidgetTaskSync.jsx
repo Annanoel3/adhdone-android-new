@@ -99,8 +99,17 @@ export default function WidgetTaskSync({ user }) {
   // full-screen, display over other apps, battery), saved on the profile so
   // the dashboard shows who is missing a switch that reminders and alarms
   // need. Information only: nothing about reminders changes because of it.
-  // Read on open and whenever the app comes back to the front (at most once a
-  // minute); written only when something changed, or once a day.
+  // Read on open and whenever the app comes back to the front; written only
+  // when something changed, or once a day.
+  //
+  // "Back to the front" has to include Android's own permission dialogs: they
+  // pause the app without hiding the page, so visibilitychange never fires for
+  // them. The first read happens the instant a new account opens the app —
+  // before any prompt — and with nothing re-reading after the prompts, someone
+  // who allowed notifications a minute later stayed on file as "off" for good
+  // (and the nudge planner now skips people whose phone says off). So the
+  // app-state change is watched too, and the read is cheap enough (a local
+  // call, no network) to repeat every few seconds.
   const savedPermissions = user?.alarm_permissions;
   useEffect(() => {
     if (!userId || !window.Capacitor?.Plugins?.AlarmBridge) return;
@@ -108,7 +117,7 @@ export default function WidgetTaskSync({ user }) {
     let last = 0;
     const check = async () => {
       if (document.visibilityState !== 'visible') return;
-      if (Date.now() - last < 60 * 1000) return;
+      if (Date.now() - last < 5 * 1000) return;
       last = Date.now();
       const st = await alarmPermissionStatus();
       if (!st) return;
@@ -148,7 +157,18 @@ export default function WidgetTaskSync({ user }) {
     };
     check();
     document.addEventListener('visibilitychange', check);
-    return () => document.removeEventListener('visibilitychange', check);
+    let stateHandle = null;
+    let gone = false;
+    Promise.resolve(window.Capacitor?.Plugins?.App?.addListener?.('appStateChange', ({ isActive }) => {
+      if (isActive) check();
+    }))
+      .then((h) => { if (gone) h?.remove?.(); else stateHandle = h; })
+      .catch(() => {});
+    return () => {
+      gone = true;
+      document.removeEventListener('visibilitychange', check);
+      stateHandle?.remove?.();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
