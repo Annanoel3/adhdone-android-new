@@ -202,6 +202,20 @@ classification — what KIND of thing this is:
   "birthday" only when it's genuinely about someone's birthday.
 
 target_date / target_time — WHEN the thing happens (YYYY-MM-DD / 24h "HH:MM").
+  First ask WHOSE date it is. A date in the text is the task's date only when
+  it is when the user will DO the thing. When the task is an action ABOUT
+  something that has its own date — cancel, reschedule, confirm or move an
+  appointment "on October 15th at 9:15"; RSVP to a party "on the 25th"; return
+  the rental "due November 9"; dispute the charge "from the 3rd" — that date
+  belongs to the appointment, the party, the rental, not to the doing. It goes
+  in the title ("Cancel Dr. Seade's appointment (Oct 15, 9:15)") and NOT into
+  target_date, target_time or due_date. The doing gets the timing the user
+  gave IT: "asap" / "right away" / nothing said → no date at all (target_date
+  null, due_date null) with urgency high, so the app's nudges take it from
+  here; "today" / "this week" / "before the appointment" → that as a "by"
+  deadline. Booking a cancellation call as an event on the appointment's day
+  is the worst possible reading: it reminds them to cancel after it's too
+  late.
   target_date must ALWAYS be a real calendar date copied from the table above —
   "2026-09-05", never a day word like "Saturday" or "tomorrow". Repeating the
   user's wording here is a broken answer; look the day up and write the date.
