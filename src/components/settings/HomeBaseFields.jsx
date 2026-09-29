@@ -13,7 +13,12 @@ export default function HomeBaseFields({ user, theme, onSaved, compact = false }
   const [editing, setEditing] = useState(false);
   const [center, setCenter] = useState(null);
   const [saving, setSaving] = useState(false);
-  const showMap = editing || !hasHome;
+  // Nothing until the profile is here. Places and Settings render this before
+  // the profile has loaded, and "no user yet" read as "no home yet": the map
+  // mounted, the profile arrived a moment later, and the map was torn down
+  // mid-animation — Leaflet's "_leaflet_pos of undefined" crash on every visit
+  // for anyone with a home area set.
+  const showMap = !!user && (editing || !hasHome);
   const start = useApproxCenter(user, showMap);
   // No zoom guard needed: the map locks its zoom so the real 5-mile circle is
   // always fully framed, which makes a wildly-off save impossible by geometry.
@@ -34,6 +39,8 @@ export default function HomeBaseFields({ user, theme, onSaved, compact = false }
       setSaving(false);
     }
   };
+
+  if (!user) return null;
 
   if (!showMap) {
     return (
