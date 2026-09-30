@@ -180,8 +180,15 @@ export default function Settings() {
   };
 
   const toggleTheme = () => {
-    // If in seasonal/kawaii mode, exit back to light
+    // Seasonal → kawaii → back to light (both come with the secret).
     if (specialMode !== 'normal') {
+      if (specialMode !== 'kawaii') {
+        setSpecialMode('kawaii');
+        setTheme('minimalist');
+        saveThemeToProfile('minimalist', 'kawaii', seasonalUnlocked);
+        setTimeout(() => window.location.reload(), 100);
+        return;
+      }
       setSpecialMode('normal');
       setTheme('minimalist');
       saveThemeToProfile('minimalist', 'normal', seasonalUnlocked);
@@ -222,10 +229,12 @@ export default function Settings() {
     if (month === 2 && day >= 10 && day <= 16) return 'valentines';
     if (month === 3 && day >= 10 && day <= 20) return 'stpatricks';
     if (month === 7 && day >= 1 && day <= 7) return 'fourthjuly';
-    if ((month === 10 && day >= 25) || (month === 11 && day <= 5)) return 'halloween';
+    // Same table as the Layout's: all of October is Halloween.
+    if (month === 10 || (month === 11 && day === 1)) return 'halloween';
     if ((month === 3 && day >= 21) || month === 4 || month === 5) return 'spring';
     if (month === 6 || (month === 7 && day > 7) || month === 8) return 'summer';
-    if (month === 9 || (month === 10 && day <= 24) || (month === 11 && day >= 6)) return 'fall';
+    if (month === 11 && day >= 22 && day <= 26) return 'harvest';
+    if (month === 9 || (month === 11 && day >= 2)) return 'fall';
     if (month === 12 && day <= 19) return 'winter';
     if ((month === 1 && day >= 6) || (month === 2 && (day < 10 || day > 16)) || (month === 3 && day < 10)) return 'winter';
 
