@@ -339,6 +339,11 @@
       "default": false,
       "description": "Set to true when a task is marked urgent (or other significant change) to trigger schedule regeneration on the next cron run."
     },
+    "tag_colors": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Colours the user picked for their custom task tags: tag text (lower-cased, spaces collapsed) -> palette colour name (rose, orange, amber, lime, emerald, teal, sky, indigo, violet, fuchsia, pink, cyan). A tag with no entry gets a colour worked out from its letters. Saved from the tag picker on a task card."
+    },
     "calendar_use_emoji": {
       "type": "boolean",
       "description": "Calendar display mode: true = emoji icons, false = text titles. Saved from the Emoji/Text toggle on the Calendar page so the choice follows the user across devices."
