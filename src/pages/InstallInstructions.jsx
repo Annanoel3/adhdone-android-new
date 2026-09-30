@@ -147,6 +147,32 @@ function clock(ms) {
   return `${h > 0 ? `${h}:` : ""}${h > 0 ? String(m).padStart(2, "0") : m}:${String(s).padStart(2, "0")}`;
 }
 
+// Highlights: the notes model wraps the few words that matter most on a line
+// in ==double equals== (the thing to do, the name, the number). Shown as a
+// highlighter mark, so an eye skimming the page lands on them first. Plain
+// text in, an array of text and <mark>s out.
+function hi(text) {
+  const s = String(text || "");
+  if (!s.includes("==")) return s;
+  const out = [];
+  const re = /==([^=]{1,80}?)==/g;
+  let last = 0;
+  let m;
+  while ((m = re.exec(s)) !== null) {
+    if (m.index > last) out.push(s.slice(last, m.index));
+    out.push(<mark key={m.index} className="rounded px-0.5 bg-yellow-200/80 text-inherit dark:bg-yellow-500/40">{m[1]}</mark>);
+    last = m.index + m[0].length;
+  }
+  if (last < s.length) out.push(s.slice(last));
+  return out;
+}
+
+// The same line with the highlight marks taken out — for anything that leaves
+// the page as plain text (a to-do added to the task list).
+function unhi(text) {
+  return String(text || "").replace(/==([^=]{1,80}?)==/g, "$1");
+}
+
 function clockToMs(at) {
   const bits = String(at || "").split(":").map((x) => parseInt(x, 10));
   if (bits.some((b) => Number.isNaN(b)) || !bits.length) return null;
@@ -698,7 +724,7 @@ export default function NotesPage() {
     if (!todo || todo.added) return;
     // Same path as anything typed into ADHDone: the parser decides the day, time
     // and reminders.
-    enqueueCapture({ text: todo.text });
+    enqueueCapture({ text: unhi(todo.text) });
     const todos = notes.todos.map((t, i) => (i === index ? { ...t, added: true } : t));
     const next = { ...notes, todos };
     setRecords((rows) => rows.map((r) => (r.id === record.id ? { ...r, notes: next } : r)));
@@ -776,9 +802,13 @@ export default function NotesPage() {
       setTab("transcript");
       setTimeout(() => document.getElementById(`notes-part-${target.index}`)?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
     };
-    const At = ({ at }) => (at ? (
-      <button type="button" onClick={() => jump(at)} className={`ml-2 text-xs underline ${soft}`}>at {at}</button>
-    ) : null);
+    // No "at 0:00" links on the notes for now: the only time the transcript
+    // knows is where each ten-minute stretch starts, so on most recordings
+    // every link read the same and all led to the top of the transcript. A
+    // real link needs word-level times from the transcription, which this one
+    // doesn't return. (jump() stays for when it does.)
+    void jump;
+    const At = () => null;
     const mine = (notes?.todos || []).map((t, i) => ({ ...t, i })).filter((t) => (t.who || "you").toLowerCase() === "you");
     const theirs = (notes?.todos || []).filter((t) => (t.who || "you").toLowerCase() !== "you");
     const working = progress?.recordId === open.id;
@@ -975,7 +1005,7 @@ export default function NotesPage() {
                 <div className={card}>
                   <h2 className={`text-lg font-bold mb-2 ${heading}`}>The gist</h2>
                   <ul className="space-y-1.5">
-                    {notes.gist.map((g, i) => <li key={i} className={heading}>• {g}</li>)}
+                    {notes.gist.map((g, i) => <li key={i} className={heading}>• {hi(g)}</li>)}
                   </ul>
                 </div>
               )}
@@ -988,7 +1018,7 @@ export default function NotesPage() {
                       <li key={i}>
                         <div className={`font-semibold ${heading}`}>{a.question}</div>
                         <div className={a.answered ? heading : soft}>
-                          {a.answered ? a.answer : "No clear answer in the recording"}<At at={a.at} />
+                          {a.answered ? hi(a.answer) : "No clear answer in the recording"}<At at={a.at} />
                         </div>
                       </li>
                     ))}
@@ -1003,7 +1033,7 @@ export default function NotesPage() {
                     {mine.map((t) => (
                       <li key={t.i} className="flex items-start gap-2">
                         <div className="flex-1">
-                          <span className={heading}>{t.text}</span>
+                          <span className={heading}>{hi(t.text)}</span>
                           <At at={t.at} />
                         </div>
                         <Button
@@ -1027,7 +1057,7 @@ export default function NotesPage() {
                   <ul className="space-y-1.5">
                     {theirs.map((t, i) => (
                       <li key={i} className={heading}>
-                        <span className="font-semibold">{t.who}:</span> {t.text}<At at={t.at} />
+                        <span className="font-semibold">{t.who}:</span> {hi(t.text)}<At at={t.at} />
                       </li>
                     ))}
                   </ul>
@@ -1040,7 +1070,7 @@ export default function NotesPage() {
                   <ul className="space-y-1.5">
                     {notes.details.map((d, i) => (
                       <li key={i} className={heading}>
-                        {d.label ? <span className="font-semibold">{d.label}: </span> : null}{d.value}<At at={d.at} />
+                        {d.label ? <span className="font-semibold">{d.label}: </span> : null}{hi(d.value)}<At at={d.at} />
                       </li>
                     ))}
                   </ul>
@@ -1051,7 +1081,7 @@ export default function NotesPage() {
                 <div key={i} className={card}>
                   <h2 className={`text-lg font-bold mb-2 ${heading}`}>{s.heading}<At at={s.at} /></h2>
                   <ul className="space-y-1.5">
-                    {s.points.map((p, j) => <li key={j} className={heading}>• {p}</li>)}
+                    {s.points.map((p, j) => <li key={j} className={heading}>• {hi(p)}</li>)}
                   </ul>
                 </div>
               ))}
@@ -1060,7 +1090,7 @@ export default function NotesPage() {
                 <div className={card}>
                   <h2 className={`text-lg font-bold mb-2 ${heading}`}>Decided</h2>
                   <ul className="space-y-1.5">
-                    {notes.decisions.map((d, i) => <li key={i} className={heading}>• {d.text}<At at={d.at} /></li>)}
+                    {notes.decisions.map((d, i) => <li key={i} className={heading}>• {hi(d.text)}<At at={d.at} /></li>)}
                   </ul>
                 </div>
               )}
@@ -1069,7 +1099,7 @@ export default function NotesPage() {
                 <div className={card}>
                   <h2 className={`text-lg font-bold mb-2 ${heading}`}>Still open</h2>
                   <ul className="space-y-1.5">
-                    {notes.questions.map((d, i) => <li key={i} className={heading}>• {d.text}<At at={d.at} /></li>)}
+                    {notes.questions.map((d, i) => <li key={i} className={heading}>• {hi(d.text)}<At at={d.at} /></li>)}
                   </ul>
                 </div>
               )}
@@ -1081,7 +1111,9 @@ export default function NotesPage() {
               {parts.length === 0 && <div className={card}><p className={soft}>No transcript yet.</p></div>}
               {parts.map((p) => (
                 <div key={p.index} id={`notes-part-${p.index}`} className={card}>
-                  <p className={`text-xs font-semibold mb-2 ${soft}`}>{clock(p.start_ms)}</p>
+                  {parts.length > 1 && (
+                    <p className={`text-xs font-semibold mb-2 ${soft}`}>{clock(p.index === 0 ? 0 : p.start_ms)}</p>
+                  )}
                   {paragraphs(p.text).map((para, i) => (
                     <p key={i} className={`mb-3 leading-relaxed ${heading}`}>{para}</p>
                   ))}
