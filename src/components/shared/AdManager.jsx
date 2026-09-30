@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { initAdMob, showInterstitialAd, resetAdLaunchState, adWaitingForScreen } from '@/lib/admob';
 
 const AD_OPEN_KEY = 'admgr_open_count';
@@ -49,7 +49,6 @@ function inGrace(signedUpAt, count) {
 }
 
 export default function AdManager({ user }) {
-  const [countdown, setCountdown] = useState(null);
   const delayRef = useRef(null);
   const countRef = useRef(null);
   // When this account signed up (null until the profile is here) and this
@@ -87,13 +86,15 @@ export default function AdManager({ user }) {
         delayRef.current = setTimeout(tryShowAd, 5000);
         return;
       }
+      // Five quiet seconds first: if they start typing or recording in that
+      // window, the ad waits. Nothing is shown during the wait — the old
+      // "Ad in 5…" badge counting down in the corner was its own annoyance.
       let c = 5;
-      setCountdown(c);
       countRef.current = setInterval(() => {
-        // Cancel if the user became busy (e.g. started recording) mid-countdown
+        // Cancel if the user became busy (e.g. started recording) mid-wait
         if (isUserBusy()) {
           clearInterval(countRef.current);
-          setCountdown(null);
+          countRef.current = null;
           delayRef.current = setTimeout(tryShowAd, 30000);
           return;
         }
@@ -101,12 +102,9 @@ export default function AdManager({ user }) {
         if (c <= 0) {
           clearInterval(countRef.current);
           countRef.current = null;
-          setCountdown(null);
           showInterstitialAd()
             .then(() => { pendingRef.current = adWaitingForScreen(); })
             .catch(() => { pendingRef.current = false; });
-        } else {
-          setCountdown(c);
         }
       }, 1000);
     }
@@ -126,7 +124,6 @@ export default function AdManager({ user }) {
 
       resetAdLaunchState();
       clearTimers();
-      setCountdown(null);
       pendingRef.current = shouldShowAd(count);
       if (pendingRef.current) delayRef.current = setTimeout(tryShowAd, 15000);
       return true;
@@ -142,7 +139,6 @@ export default function AdManager({ user }) {
           if (!isActive) {
             // Left the app: no ad may land on top of whatever they switched to.
             clearTimers();
-            setCountdown(null);
             return;
           }
           if (!registerLaunch() && pendingRef.current) {
@@ -160,23 +156,5 @@ export default function AdManager({ user }) {
     };
   }, []);
 
-  if (countdown === null) return null;
-
-  return (
-    <div style={{
-      position: 'fixed',
-      bottom: '80px',
-      right: '12px',
-      background: 'rgba(0,0,0,0.55)',
-      color: '#fff',
-      padding: '3px 7px',
-      borderRadius: '4px',
-      fontSize: '10px',
-      zIndex: 9999,
-      pointerEvents: 'none',
-      letterSpacing: '0.02em',
-    }}>
-      Ad in {countdown}...
-    </div>
-  );
+  return null;
 }
