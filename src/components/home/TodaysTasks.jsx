@@ -24,7 +24,7 @@ import {
 import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
 import TaskSortDropdown from "../tasks/TaskSortDropdown";
 import BreakIntoStepsButton from "../tasks/BreakIntoStepsButton";
-import LifeAreaPill from "../tasks/LifeAreaPill";
+import LifeAreaPill, { TagPill } from "../tasks/LifeAreaPill";
 
 export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails, onUpdateTask, loadFailed = false, onRetry }) {
   const navigate = useNavigate();
@@ -580,6 +580,9 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                         <LifeAreaPill task={task} theme={theme} onUpdateTask={onUpdateTask} />
                       )}
 
+                      {/* The custom tag, same pill and picker as the task list's card. */}
+                      <TagPill task={task} theme={theme} onUpdateTask={onUpdateTask} />
+
                       {/* Energy deliberately does NOT appear on the closed card. It's
                           rarely what you're scanning for, and it pushed the pills that
                           are (priority, when, type) onto a second line. It's still
@@ -655,32 +658,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                               </div>
                             </PopoverContent>
                           </Popover>
-                        ) : (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button 
-                                onClick={(e) => e.stopPropagation()}
-                                className="flex items-center gap-1 border border-dashed border-gray-300 px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors text-gray-500"
-                              >
-                                <CalendarClock className="w-3 h-3" />
-                                Add Due Date
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`} onClick={(e) => e.stopPropagation()}>
-                              <div className="space-y-2 p-1">
-                                <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : ''}`}>Due Date:</label>
-                                <input
-                                  type="date"
-                                  onChange={(e) => { if (e.target.value) handleDueDateChange(task, e.target.value); }}
-                                  className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : ''}`}
-                                />
-                                <p className="text-xs text-gray-500">
-                                  Reminders continue until this date, then switch to overdue reminders.
-                                </p>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        )
+                        ) : null
                       )}
 
                       {/* Events: the pill IS the event date/time — never a "due date", never an empty "Add Due Date" prompt. */}
@@ -739,9 +717,9 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                               </div>
                             </PopoverContent>
                           </Popover>
-                        ) : (
-                          /* This pill is the task's WHEN: the reminder time when it has one, and
-                             only an empty "Add Due Date" when it has no timing at all. */
+                        ) : task.next_reminder ? (
+                          /* This pill is the task's WHEN: its reminder time. A task with no
+                             timing at all shows nothing here — no empty "Add Due Date". */
                           <Popover>
                             <PopoverTrigger asChild>
                               <button
@@ -755,7 +733,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                                   : 'flex items-center gap-1 border border-dashed border-gray-300 px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors text-gray-500'}
                               >
                                 <CalendarClock className="w-3 h-3" />
-                                {task.next_reminder ? formatReminderMoment(task.next_reminder) : 'Add Due Date'}
+                                {formatReminderMoment(task.next_reminder)}
                               </button>
                             </PopoverTrigger>
                             <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`} onClick={(e) => e.stopPropagation()}>
@@ -774,7 +752,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                               </div>
                             </PopoverContent>
                           </Popover>
-                        )
+                        ) : null
                       )}
 
                       {/* Recurrence badge */}
