@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { Task } from "@/entities/Task";
+import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Plus, Filter, Download, Loader2, List, CalendarDays } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
@@ -49,9 +50,23 @@ export default function Tasks() {
   const [showCelebration, setShowCelebration] = useState(false);
   const { sortBy } = useTaskSort();
 
+  // Sections or Days: kept on this phone and on the account, so it survives a
+  // reinstall and follows the user to a new phone. Layout fills the local copy
+  // from the profile when this phone has none (and says so), so a fresh
+  // install lands on the layout they use.
+  const chooseViewMode = (mode) => {
+    setViewMode(mode);
+    localStorage.setItem('tasks_view_mode', mode);
+    base44.auth.updateMe({ tasks_view_mode: mode }).catch(() => {});
+  };
   useEffect(() => {
-    localStorage.setItem('tasks_view_mode', viewMode);
-  }, [viewMode]);
+    const onSeeded = (e) => {
+      const mode = e.detail?.mode;
+      if (mode === 'sections' || mode === 'days') setViewMode(mode);
+    };
+    window.addEventListener('tasks-view-mode-seeded', onSeeded);
+    return () => window.removeEventListener('tasks-view-mode-seeded', onSeeded);
+  }, []);
 
   useEffect(() => {
     loadTasks();
@@ -438,7 +453,7 @@ export default function Tasks() {
             <Button
               variant={viewMode === 'sections' ? 'secondary' : 'ghost'}
               size="sm"
-              onClick={() => setViewMode('sections')}
+              onClick={() => chooseViewMode('sections')}
               className={`h-8 px-3 text-xs ${
                 isSeasonalTheme() ? 'bg-white/70 text-gray-800' : ''
               }`}
@@ -449,7 +464,7 @@ export default function Tasks() {
             <Button
               variant={viewMode === 'days' ? 'secondary' : 'ghost'}
               size="sm"
-              onClick={() => setViewMode('days')}
+              onClick={() => chooseViewMode('days')}
               className={`h-8 px-3 text-xs ${
                 isSeasonalTheme() ? 'bg-white/70 text-gray-800' : ''
               }`}
