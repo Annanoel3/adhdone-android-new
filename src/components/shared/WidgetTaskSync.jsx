@@ -57,6 +57,31 @@ export default function WidgetTaskSync({ user }) {
       .catch(() => {});
   }, [userId, alarmMode]);
 
+  // Which build this phone runs and which of our plugins it has, on file so
+  // "why isn't X showing for them?" has an answer. Read once the plugins have
+  // had a moment to land (they can announce themselves after the first
+  // render); written only when something changed.
+  const savedBuild = user?.app_build;
+  const savedPlugins = Array.isArray(user?.phone_plugins) ? user.phone_plugins.join(',') : '';
+  useEffect(() => {
+    if (!userId || !window.Capacitor?.isNativePlatform?.()) return;
+    let gone = false;
+    const t = setTimeout(async () => {
+      if (gone) return;
+      const OURS = ['AlarmBridge', 'NotifyBridge', 'ShareBridge', 'WidgetBridge', 'CalendarBridge', 'RecorderBridge', 'ContactPickerBridge'];
+      const plugins = OURS.filter((n) => !!window.Capacitor?.Plugins?.[n]);
+      let info = null;
+      try { info = await window.Capacitor?.Plugins?.App?.getInfo?.(); } catch (e) { /* older build */ }
+      const build = info?.build ? String(info.build) : '';
+      const version = info?.version ? String(info.version) : '';
+      const patch = {};
+      if (build && build !== savedBuild) { patch.app_build = build; patch.app_version = version; }
+      if (plugins.join(',') !== savedPlugins) patch.phone_plugins = plugins;
+      if (Object.keys(patch).length) base44.auth.updateMe(patch).catch(() => {});
+    }, 12000);
+    return () => { gone = true; clearTimeout(t); };
+  }, [userId, savedBuild, savedPlugins]);
+
   // The reminder planner words an appointment's reminders around recording
   // notes only for people whose phone can record (app build 36+), so it has
   // to be told once.
