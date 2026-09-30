@@ -142,3 +142,74 @@ export function deleteTaskWithUndo(task, subtasks = []) {
     action: React.createElement(ToastAction, { altText: "Undo delete", onClick: undo }, "Undo"),
   });
 }
+
+// ── Events: cancelled, not done and not deleted ─────────────────────────────
+
+// Events only: "it isn't happening". Not a completion (it never counts as
+// done) and not a deletion — the row stays, crossed out on the task list and
+// the calendar, and a calendar copy of it stays cancelled on the next sync
+// instead of coming back. Its reminders and alarms come down through
+// onTaskUpdate. A repeating event moves on to its next occurrence, the same
+// as finishing it would. Undo for a few seconds. Shared by the task card and
+// the details card, so both behave the same. Returns true once saved.
+export async function cancelEventWithUndo(task) {
+  if (!task?.id || task.status !== "active") return false;
+  try {
+    await base44.entities.Task.update(task.id, { status: "cancelled" });
+  } catch (e) {
+    console.error("[cancelEvent] failed:", e);
+    toast({ title: "Couldn't cancel that event", description: "Check your connection and try again." });
+    window.dispatchEvent(new CustomEvent("tasks-changed"));
+    return false;
+  }
+  refreshAlarms().catch(() => {});
+  if (task.recurrence_pattern && task.recurrence_pattern !== "none") {
+    try {
+      const { createNextRecurrence } = await import("./taskRecurrence");
+      await createNextRecurrence(task);
+    } catch (e) {
+      console.warn("[cancelEvent] next occurrence not made:", e?.message || e);
+    }
+  }
+  window.dispatchEvent(new CustomEvent("tasks-changed"));
+  toast({
+    title: `Cancelled "${task.title || "event"}"`,
+    description: "Its reminders are off. It stays on the list, crossed out.",
+    duration: 6000,
+    action: React.createElement(ToastAction, {
+      altText: "Undo",
+      onClick: () => restoreEvent({ ...task, status: "cancelled" }),
+    }, "Undo"),
+  });
+  return true;
+}
+
+// It is happening after all: back to active. onTaskUpdate books its
+// reminders again from the saved schedule; the phone's alarms follow.
+export async function restoreEvent(task) {
+  if (!task?.id || task.status !== "cancelled") return false;
+  try {
+    await base44.entities.Task.update(task.id, { status: "active" });
+  } catch (e) {
+    console.error("[restoreEvent] failed:", e);
+    toast({ title: "Couldn't bring that event back", description: "Check your connection and try again." });
+    window.dispatchEvent(new CustomEvent("tasks-changed"));
+    return false;
+  }
+  refreshAlarms().catch(() => {});
+  window.dispatchEvent(new CustomEvent("tasks-changed"));
+  return true;
+}
+
+// A cancelled event stays on the list and the calendar only while its day
+// hasn't passed; after that it drops off the way a finished one does, rather
+// than sitting in "Today" for good.
+export function cancelledStillListed(task, now = new Date()) {
+  if (!task || task.status !== "cancelled") return false;
+  const at = task.end_date || task.event_time || task.due_date || task.next_reminder;
+  if (!at) return false;
+  const d = new Date(at);
+  if (isNaN(d.getTime())) return false;
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  return d.getTime() >= startOfToday.getTime();
+}
