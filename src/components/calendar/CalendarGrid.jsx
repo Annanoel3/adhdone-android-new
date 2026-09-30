@@ -126,6 +126,8 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
     tasks.forEach((t) => {
       const kind = kindFromClassification(t.classification) ||
         (t.birthday_person ? 'birthday' : 'task');
+      // A cancelled event: on its day, crossed out, never overdue.
+      const cancelled = t.status === 'cancelled';
       // Multi-day span: show the task on each day from its start through its end.
       //  - start_date + due_date: "in progress" interval task (start_date → due_date)
       //  - due_date + end_date (no start_date): one-time multi-day event (due_date → end_date)
@@ -136,7 +138,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
         const startD = new Date(spanStart);
         const endD = new Date(spanEnd);
         if (startD.toDateString() === endD.toDateString()) {
-          push(startD, { kind, silenced: !!t.silenced, at: t.event_time || null, title: t.title, id: t.id, taskId: t.id, task: t });
+          push(startD, { kind, cancelled, silenced: !!t.silenced, at: t.event_time || null, title: t.title, id: t.id, taskId: t.id, task: t });
         } else {
           const dayCursor = new Date(startD.getFullYear(), startD.getMonth(), startD.getDate());
           const last = new Date(endD.getFullYear(), endD.getMonth(), endD.getDate());
@@ -144,7 +146,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           while (dayCursor <= last) {
             const isLast = dayCursor.toDateString() === last.toDateString();
             push(new Date(dayCursor), {
-              kind, silenced: !!t.silenced, at: t.event_time || null, title: t.title, id: t.id, taskId: t.id, task: t,
+              kind, cancelled, silenced: !!t.silenced, at: t.event_time || null, title: t.title, id: t.id, taskId: t.id, task: t,
               spanPos: isLast ? 'end' : isFirst ? 'start' : 'middle',
             });
             isFirst = false;
@@ -160,7 +162,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
       // passed. Show it on every day from the due date through today so it
       // stays visible (and red) until the user completes it — not just on
       // the original due date.
-      if (t.status !== 'completed') {
+      if (t.status !== 'completed' && !cancelled) {
         const now = new Date();
         const dueDay = new Date(dueD.getFullYear(), dueD.getMonth(), dueD.getDate());
         const todayDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -176,7 +178,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           return;
         }
       }
-      push(new Date(raw), { kind, silenced: !!t.silenced, at: t.event_time || null, title: t.title, id: t.id, taskId: t.id, task: t });
+      push(new Date(raw), { kind, cancelled, silenced: !!t.silenced, at: t.event_time || null, title: t.title, id: t.id, taskId: t.id, task: t });
     });
     events.forEach((e) => {
       if (!e.start_time) return;
@@ -457,7 +459,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                             {useEmoji ? (
                               <span className="text-xs flex-shrink-0">{emojiFor(it)}</span>
                             ) : (
-                              <span className="overflow-hidden whitespace-nowrap flex-1">{it.title}</span>
+                              <span className={`overflow-hidden whitespace-nowrap flex-1 ${it.cancelled ? 'line-through opacity-60' : ''}`}>{it.title}</span>
                             )}
                           </div>
                         );
@@ -469,13 +471,13 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                     useEmoji ? (
                       <div className="flex flex-wrap gap-0.5">
                         {regularShown.map((it, i) => (
-                          <span key={i} className={`text-sm rounded ${it.overdue ? 'bg-red-100 px-0.5' : ''}`}>{emojiFor(it)}</span>
+                          <span key={i} className={`text-sm rounded ${it.overdue ? 'bg-red-100 px-0.5' : ''} ${it.cancelled ? 'opacity-40' : ''}`}>{emojiFor(it)}</span>
                         ))}
                       </div>
                     ) : (
                       <div className="space-y-0.5">
                         {regularShown.map((it, i) => (
-                          <div key={i} className={`text-[9px] leading-tight tracking-tight overflow-hidden whitespace-nowrap rounded px-0.5 ${it.overdue ? 'bg-red-100 text-red-700 font-medium' : textSecondary}`} title={it.title}>
+                          <div key={i} className={`text-[9px] leading-tight tracking-tight overflow-hidden whitespace-nowrap rounded px-0.5 ${it.overdue ? 'bg-red-100 text-red-700 font-medium' : textSecondary} ${it.cancelled ? 'line-through opacity-60' : ''}`} title={it.cancelled ? `${it.title} (cancelled)` : it.title}>
                             {it.title}
                           </div>
                         ))}
@@ -545,9 +547,11 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                     }`}
                   >
                     <span className="text-base flex-shrink-0">{emojiFor(it)}</span>
-                    <span className={`text-sm flex-1 truncate ${it.overdue ? (isDark ? 'text-red-300' : 'text-red-600') + ' font-medium' : textPrimary}`}>{it.title}</span>
+                    <span className={`text-sm flex-1 truncate ${it.overdue ? (isDark ? 'text-red-300' : 'text-red-600') + ' font-medium' : textPrimary} ${it.cancelled ? 'line-through opacity-60' : ''}`}>{it.title}</span>
                     {it.overdue ? (
                       <Badge className="text-xs border flex-shrink-0 bg-red-100 text-red-700 border-red-200">Overdue</Badge>
+                    ) : it.cancelled ? (
+                      <Badge className="text-xs border flex-shrink-0 bg-amber-50 text-amber-700 border-amber-200">Cancelled</Badge>
                     ) : (
                       <Badge className={`text-xs border flex-shrink-0 ${KIND_BADGE[it.kind]}`}>{KIND_LABEL[it.kind]}</Badge>
                     )}
