@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { BellOff, CalendarOff } from "lucide-react";
+import { BellOff, CalendarOff, AlarmClock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { base44 } from "@/api/base44Client";
@@ -167,6 +167,101 @@ export default function NotificationsOffBanner({ theme, specialMode }) {
       </Button>
     </div>
     </>
+  );
+}
+
+// One row on Home for someone on full-screen alarms whose phone still has a
+// switch off that alarms need (exact alarms, full-screen, display over other
+// apps, battery). Without it an alarm is late, quiet, or stuck in the tray —
+// and the only other time the app raised it was a popup at most once a day.
+// "Finish setup" opens the same walkthrough, with just the missing rows.
+// Stays quiet while notifications themselves are off (the row above covers
+// that, and alarms can't work without them anyway) and during first run.
+const ALARM_SETUP_STEP = "onboarding_alarm_setup_done";
+function alarmSwitchesMissing(st) {
+  if (!st) return 0;
+  return [
+    !st.exactAlarms,
+    !st.fullScreen,
+    !st.ignoringBatteryOptimizations,
+    st.overlay === false,
+  ].filter(Boolean).length;
+}
+
+export function AlarmSetupBanner({ theme, specialMode, user }) {
+  const [status, setStatus] = useState(null);
+  const [working, setWorking] = useState(false);
+  const alarmsOn = user?.alarm_mode === "alarm";
+
+  useEffect(() => {
+    if (!alarmsOn || !window.Capacitor?.isNativePlatform?.()) return;
+    if (!isStepDone(ONBOARDING_STEPS.homeTour) || !isStepDone(ALARM_SETUP_STEP)) return;
+    let gone = false;
+    const check = () => {
+      alarmPermissionStatus()
+        .then((st) => { if (!gone) setStatus(st || null); })
+        .catch(() => {});
+    };
+    check();
+    // Coming back from a settings screen, or from the walkthrough's own
+    // bounces out to Android, re-reads the switches so the row goes away.
+    const onVisible = () => { if (document.visibilityState === "visible") check(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", check);
+    let handle = null;
+    Promise.resolve(window.Capacitor?.Plugins?.App?.addListener?.("appStateChange", ({ isActive }) => {
+      if (isActive) check();
+    }))
+      .then((h) => { if (gone) h?.remove?.(); else handle = h; })
+      .catch(() => {});
+    // The walkthrough grants some switches in a dialog drawn over the app, so
+    // nothing above fires: a slow poll catches those.
+    const poll = setInterval(check, 15000);
+    return () => {
+      gone = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", check);
+      clearInterval(poll);
+      handle?.remove?.();
+    };
+  }, [alarmsOn]);
+
+  if (!alarmsOn || !status || status.notifications === false) return null;
+  const missing = alarmSwitchesMissing(status);
+  if (missing === 0) return null;
+
+  const finish = () => {
+    setWorking(true);
+    window.dispatchEvent(new CustomEvent("alarm-permissions-needed", { detail: status }));
+    setTimeout(() => setWorking(false), 1500);
+  };
+
+  const dark = theme === "dark";
+  const shell = `rounded-xl border px-3 py-2 flex items-center gap-2.5 ${
+    specialMode && specialMode !== "normal"
+      ? `${specialMode}-card`
+      : dark
+        ? "bg-gray-800 border-gray-700"
+        : "bg-amber-50 border-amber-200"
+  }`;
+
+  return (
+    <div className={shell} role="status">
+      <AlarmClock className="w-4 h-4 text-amber-600 flex-shrink-0" />
+      <span className={`flex-1 min-w-0 text-sm ${dark ? "text-gray-200" : "text-gray-800"}`}>
+        {missing === 1
+          ? "One switch your alarms need is still off, so they may be late or silent."
+          : `${missing} switches your alarms need are still off, so they may be late or silent.`}
+      </span>
+      <Button
+        size="sm"
+        onClick={finish}
+        disabled={working}
+        className="h-8 px-2.5 flex-shrink-0 bg-amber-600 hover:bg-amber-700 text-white"
+      >
+        Finish setup
+      </Button>
+    </div>
   );
 }
 
