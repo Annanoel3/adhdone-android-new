@@ -42,6 +42,7 @@ import {
   eventQuietSupported,
 } from '../utils/widgetBridge';
 import { AlarmSoundPicker, AlarmQuietChoice, AlarmEventQuietChoice, QuietWhenButtons } from '../settings/QuickCaptureCard';
+import { NAG_INTERVALS } from '../utils/reminderScheduler';
 
 const SEEN_KEY = 'quick_capture_prompt_seen';
 
@@ -196,14 +197,12 @@ export default function QuickCapturePrompt() {
 
 // ── "Keep reminding me until I mark it complete" vs quiet hours ─────────────
 //
-// A repeating rhythm the user asked for ("every hour until I finish") stops at
-// quiet hours like everything else — so a 9 PM litter-box task rang once and
-// the rest of the night was lost. When a task comes in with a short rhythm AND
-// the user's own instruction to keep going, this asks once, right then: run
-// through the night too? Yes marks the task exempt (Task.quiet_hours_exempt):
-// its pings keep coming every interval, day and night, ringing as alarms on a
-// full-screen phone, until it's done. No leaves quiet hours as they are.
-const NAG_INTERVALS = { '10min': 'every 10 minutes', '20min': 'every 20 minutes', '30min': 'every 30 minutes', '1hour': 'every hour', '2hours': 'every 2 hours', '4hours': 'every 4 hours' };
+// The question the task pipeline asks BEFORE it books a repeating rhythm the
+// user wants nagged until done (see reminderScheduler.askQuietHoursNag): run
+// through the night too? This only puts it on screen and hands the answer
+// back; the pipeline marks the task and books it right the first time.
+// Closing it, or five minutes of silence, counts as no.
+const NAG_ANSWER_TIMEOUT_MS = 5 * 60 * 1000;
 
 function clockWords(hhmm) {
   const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
@@ -216,44 +215,39 @@ function clockWords(hhmm) {
 
 export function QuietHoursNagPrompt({ user, theme }) {
   const dark = theme === 'dark';
-  const [task, setTask] = useState(null);
-  const [busy, setBusy] = useState(false);
+  // { task, resolve } while a question is waiting for its answer.
+  const [pending, setPending] = useState(null);
   // Takes its turn with other popups, but as the answer to something the user
   // just did it shows the moment the screen is free.
-  const shown = usePopupTurn(!!task, { reactive: true });
-  const quietOn = user?.quiet_hours_enabled !== false;
+  const shown = usePopupTurn(!!pending, { reactive: true });
 
   useEffect(() => {
-    if (!quietOn) return undefined;
-    const onCreated = (e) => {
-      const t = e?.detail?.task;
-      if (!t?.id || t.quiet_hours_exempt || t.parent_task_id) return;
-      if (!NAG_INTERVALS[t.reminder_interval]) return;
-      if (!String(t.reminder_wish || '').trim()) return;
-      setTask(t);
-    };
-    window.addEventListener('task-created', onCreated);
-    return () => window.removeEventListener('task-created', onCreated);
-  }, [quietOn]);
+    window.__quietHoursNagAsk = (task) => new Promise((resolve) => {
+      setPending((prev) => {
+        // One at a time: a second question while one is up is answered no.
+        if (prev) { resolve(false); return prev; }
+        return { task, resolve };
+      });
+    });
+    return () => { if (window.__quietHoursNagAsk) delete window.__quietHoursNagAsk; };
+  }, []);
 
-  if (!task) return null;
+  // Unanswered too long: no, and the pipeline books with quiet hours.
+  useEffect(() => {
+    if (!pending) return undefined;
+    const t = setTimeout(() => answer(false), NAG_ANSWER_TIMEOUT_MS);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pending]);
 
-  const answer = async (yes) => {
-    setBusy(true);
-    if (yes) {
-      try {
-        await base44.entities.Task.update(task.id, { quiet_hours_exempt: true });
-        // The batch booked at creation left the night out. Take it back; the
-        // refill job re-books it within the hour, this time straight through.
-        await base44.functions.invoke('cancelTaskNotifications', { taskId: task.id }).catch(() => {});
-        refreshAlarms().catch(() => {});
-      } catch (e) {
-        // Left as a normal rhythm; the task's own switch in its details can change it.
-      }
-    }
-    setBusy(false);
-    setTask(null);
+  const answer = (yes) => {
+    const p = pending;
+    setPending(null);
+    try { p?.resolve(!!yes); } catch (e) { /* already answered */ }
   };
+
+  if (!pending) return null;
+  const task = pending.task;
 
   const every = NAG_INTERVALS[task.reminder_interval] || 'every hour';
   const start = clockWords(user?.quiet_hours_start || '22:00');
@@ -261,7 +255,7 @@ export function QuietHoursNagPrompt({ user, theme }) {
   const title = task.title.length > 60 ? `${task.title.slice(0, 57)}...` : task.title;
 
   return (
-    <Dialog open={shown} onOpenChange={(o) => { if (!o && !busy) setTask(null); }}>
+    <Dialog open={shown} onOpenChange={(o) => { if (!o) answer(false); }}>
       <DialogContent className={`max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
         <DialogHeader>
           <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
@@ -273,10 +267,8 @@ export function QuietHoursNagPrompt({ user, theme }) {
           </DialogDescription>
         </DialogHeader>
         <div className="flex gap-2 pt-2">
-          <Button variant="outline" onClick={() => answer(false)} disabled={busy} className="flex-1">No, stay quiet</Button>
-          <Button onClick={() => answer(true)} disabled={busy} className="flex-1">
-            {busy ? 'One sec...' : 'Yes, keep going'}
-          </Button>
+          <Button variant="outline" onClick={() => answer(false)} className="flex-1">No, stay quiet</Button>
+          <Button onClick={() => answer(true)} className="flex-1">Yes, keep going</Button>
         </div>
       </DialogContent>
     </Dialog>
