@@ -28,8 +28,6 @@ export default function FocusTimer() {
   const [showMusicPlayer, setShowMusicPlayer] = useState(false);
   const specialMode = localStorage.getItem('special_mode') || 'normal';
   const wakeLockRef = useRef(null);
-  const [showSeasonalPopup, setShowSeasonalPopup] = useState(false);
-  const [showKawaiiPopup, setShowKawaiiPopup] = useState(false);
   const [viewMode, setViewMode] = useState('pomodoro');
   const [stopwatchElapsed, setStopwatchElapsed] = useState(0);
   const [stopwatchRunning, setStopwatchRunning] = useState(false);
@@ -130,27 +128,6 @@ export default function FocusTimer() {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [isActive]);
 
-  const getCurrentSeasonalTheme = () => {
-    const now = new Date();
-    const month = now.getMonth() + 1;
-    const day = now.getDate();
-    if (month === 1 && day <= 2) return 'newyears';
-    if ((month === 1 && day >= 3) || (month === 2 && day <= 7)) return 'winter';
-    if (month === 2 && day >= 8 && day <= 14) return 'valentines';
-    if ((month === 2 && day >= 15) || (month === 3 && day <= 16)) return 'winter';
-    if (month === 3 && day === 17) return 'stpatricks';
-    if ((month === 3 && day >= 18) || month === 4 || month === 5 || (month === 6 && day <= 21)) return 'spring';
-    if ((month === 6 && day >= 22) || (month === 7 && day <= 3)) return 'summer';
-    if (month === 7 && day === 4) return 'fourthjuly';
-    if ((month === 7 && day >= 5) || (month === 8 && day <= 20)) return 'summer';
-    if ((month === 8 && day >= 21) || month === 9) return 'fall';
-    if (month === 10) return 'halloween';
-    if (month === 11) return 'fall';
-    if (month === 12 && day <= 25) return 'christmas';
-    if (month === 12 && day >= 26 && day <= 30) return 'winter';
-    if (month === 12 && day === 31) return 'newyears';
-    return 'spring';
-  };
 
   const formatStopwatchTime = (ms) => {
     const totalSeconds = Math.floor(ms / 1000);
@@ -173,55 +150,9 @@ export default function FocusTimer() {
     setStopwatchElapsed(0);
   };
 
-  const handleEasterEgg = async () => {
-    const currentMode = localStorage.getItem('special_mode') || 'normal';
-    const seasonalTheme = getCurrentSeasonalTheme();
+  // The seasonal-theme secret used to live here as a permanent "what's this?"
+  // button. It wanders now — one page a day until it's found (see Layout).
 
-    if (currentMode === 'normal' || currentMode === 'kawaii') {
-      // Go to seasonal mode
-      localStorage.setItem('special_mode', seasonalTheme);
-      localStorage.setItem('seasonal_unlocked', 'true');
-      try {
-        await base44.auth.updateMe({ special_mode: seasonalTheme, seasonal_unlocked: true });
-      } catch (e) {
-        console.error('Failed to save theme to profile:', e);
-      }
-
-      if (!localStorage.getItem('seasonal_popup_shown')) {
-        setShowSeasonalPopup(true);
-        localStorage.setItem('seasonal_popup_shown', 'true');
-        persistOnboardingFlag('seasonal_popup_shown');
-      } else {
-        window.location.reload();
-      }
-    } else {
-      // From seasonal: go to kawaii
-      localStorage.setItem('special_mode', 'kawaii');
-      try {
-        await base44.auth.updateMe({ special_mode: 'kawaii' });
-      } catch (e) {
-        console.error('Failed to save theme to profile:', e);
-      }
-
-      if (!localStorage.getItem('kawaii_popup_shown')) {
-        setShowKawaiiPopup(true);
-        localStorage.setItem('kawaii_popup_shown', 'true');
-        persistOnboardingFlag('kawaii_popup_shown');
-      } else {
-        window.location.reload();
-      }
-    }
-  };
-
-  const closeSeasonalPopup = () => {
-    setShowSeasonalPopup(false);
-    window.location.reload();
-  };
-
-  const closeKawaiiPopup = () => {
-    setShowKawaiiPopup(false);
-    window.location.reload();
-  };
 
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
@@ -523,41 +454,6 @@ export default function FocusTimer() {
       </Card>
       )}
 
-      {/* Easter Egg Button */}
-      <div className="mt-6 text-center" style={{ marginBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
-        <Button onClick={handleEasterEgg} variant="ghost"
-          className={`text-sm opacity-70 hover:opacity-100 ${theme === 'dark' || ['halloween', 'christmas', 'newyears', 'fourthjuly'].includes(specialMode) ? 'text-gray-500 hover:text-gray-400' : 'text-gray-500 hover:text-gray-700'}`}>
-          what's this? 👀
-        </Button>
-      </div>
-
-      {/* Seasonal Discovery Popup */}
-      <Dialog open={showSeasonalPopup} onOpenChange={(open) => { if (!open) closeSeasonalPopup(); }}>
-        <DialogContent className="max-w-md text-center">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">🎉 You found a secret!</DialogTitle>
-            <DialogDescription className="text-base pt-4 space-y-3">
-              <p>You've unlocked the <strong>Seasonal Theme</strong>! 🍂❄️🌸</p>
-              <p>It changes with the seasons and has been added to your theme rotation. Cycle through your themes in Settings to find it again!</p>
-            </DialogDescription>
-          </DialogHeader>
-          <Button onClick={closeSeasonalPopup} className="w-full bg-green-600 hover:bg-green-700 text-white">Cool! 🎨</Button>
-        </DialogContent>
-      </Dialog>
-
-      {/* Kawaii Discovery Popup */}
-      <Dialog open={showKawaiiPopup} onOpenChange={(open) => { if (!open) closeKawaiiPopup(); }}>
-        <DialogContent className="max-w-md text-center">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">🌈 You found Kawaii Mode!</DialogTitle>
-            <DialogDescription className="text-base pt-4 space-y-3">
-              <p>Everything is now extra cute! ✨🧸💕</p>
-              <p>Kawaii Mode is a secret theme — click the easter egg again to switch back to seasonal. It won't appear in your normal theme rotation.</p>
-            </DialogDescription>
-          </DialogHeader>
-          <Button onClick={closeKawaiiPopup} className="w-full bg-pink-500 hover:bg-pink-600 text-white">So cute! 💕</Button>
-        </DialogContent>
-      </Dialog>
-    </div>
+      {/* The secret theme button used to sit here; it wanders now (Layout). */}    </div>
   );
 }
