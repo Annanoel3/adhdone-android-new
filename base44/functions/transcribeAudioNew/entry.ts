@@ -190,6 +190,15 @@ ${transcript}
 
 Write their notes.
 
+These are notes on what was SAID, not a diary. The person who recorded this may not have said a
+word — it may be a podcast, a lecture, a meeting they sat in on, a doctor talking to them. So
+report each point as the speaker's, never as the reader's: a host saying "I quit sugar for a
+year" becomes "The host quit sugar for a year" (or "[Name] quit…" when the name is clear), never
+"You quit sugar for a year". Never turn a speaker's "I", "me" or "my" into "you" or "your". The
+only "you" in these notes is the person who recorded it, and only where the recording itself
+makes clear something is theirs (the doctor telling them to take a pill, a task they took on).
+When it isn't clear who said something, state the point with no person at all.
+
 Put what matters most first, in short plain lines they can take in at a glance. No paragraphs:
 one idea per line, and keep lines short. Skip small talk and anything that doesn't matter later.
 
@@ -199,9 +208,10 @@ one idea per line, and keep lines short. Skip small talk and anything that doesn
 - todos: everything someone has to do because of this conversation, each written as one line
   that works on its own as a task in their to-do list: start with a verb, and include who or what
   it's about and when. Turn relative days into real dates using the date it was recorded ("by
-  Friday" said on a Wednesday becomes "by Friday, October 2"). "who" is "you" when it's the
-  person who recorded this or it isn't clear, otherwise the name or role of whoever took it on.
-  Only things that were actually said; never invent one.
+  Friday" said on a Wednesday becomes "by Friday, October 2"). "who" is "you" only when the
+  person who recorded this took it on or was told to do it; otherwise the name or role of whoever
+  took it on. A speaker's own errand (a podcast host's "I need to call my dentist") is not the
+  reader's to-do — leave it out. Only things that were actually said; never invent one.
 - details: the exact things they'll need to look up later, like doses and how to take them,
   dates and times, numbers, prices, names, phone numbers, addresses, due dates, page or chapter
   numbers. Copy them exactly as said. If the transcript is unclear about one, say it was unclear
