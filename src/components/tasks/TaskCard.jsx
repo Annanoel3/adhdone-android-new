@@ -21,6 +21,8 @@ import {
   PlayCircle,
   Brain,
   RefreshCw,
+  CalendarOff,
+  RotateCcw,
 } from "lucide-react";
 import {
   Popover,
@@ -31,6 +33,7 @@ import { formatTimeRange } from "../utils/timeRangeLabel";
 import SubtaskQuickAdd from "./SubtaskQuickAdd";
 import LifeAreaPill from "./LifeAreaPill";
 import { checkDuePushEgg } from "../eastereggs/duePushEgg";
+import { cancelEventWithUndo, restoreEvent } from "../utils/snoozeTask";
 
 export default function TaskCard({
   task,
@@ -61,6 +64,11 @@ export default function TaskCard({
   // editor mid-edit) and then failed to book a push for a past time, at which
   // point the refresh put the old date back. Editing looked possessed.
   const [dateTimeOpen, setDateTimeOpen] = useState(false);
+  // The closed card's date chip opens a small date (and time) editor of its
+  // own, so a date can be changed without opening the task at all.
+  const [chipDateOpen, setChipDateOpen] = useState(false);
+  const chipDateRef = useRef(null);
+  const chipTimeRef = useRef(null);
 
   const commitDateTime = () => {
     const newDate = dateInputRef.current?.value || '';
@@ -146,6 +154,9 @@ export default function TaskCard({
   const timeRange = formatTimeRange(task);
 
   const isEvent = task.classification === 'event';
+  // An event that isn't happening: kept on the list, crossed out (see
+  // cancelEventWithUndo). Only events get this status.
+  const isCancelled = task.status === 'cancelled';
   const typeEmoji = task.classification === 'event' ? '📅' : task.classification === 'birthday' ? '🎂' : task.classification === 'payment' ? '💳' : null;
 
   const taskDate = dueDate.toLocaleDateString('en-US', {
@@ -185,6 +196,23 @@ export default function TaskCard({
 
   const handleCompleteTask = () => {
     onComplete(task);
+  };
+
+  // Events only: it isn't happening. The row stays, crossed out here and on
+  // the calendar, with Undo for a few seconds — the same as the details card.
+  const handleCancelEvent = async () => {
+    if (!isEvent || task.status !== 'active') return;
+    if (onUpdateTask) onUpdateTask({ ...task, status: 'cancelled' });
+    const ok = await cancelEventWithUndo(task);
+    if (!ok && onRefreshTasks) onRefreshTasks();
+  };
+
+  // It's happening after all.
+  const handleRestoreEvent = async () => {
+    if (task.status !== 'cancelled') return;
+    if (onUpdateTask) onUpdateTask({ ...task, status: 'active' });
+    const ok = await restoreEvent(task);
+    if (!ok && onRefreshTasks) onRefreshTasks();
   };
 
   const handleDeleteTask = async () => {
@@ -681,6 +709,61 @@ export default function TaskCard({
     }
   };
 
+  // An event's own date and time (event_time). Its lead-time reminders are
+  // booked from that moment, so the old ones come down and a fresh set goes
+  // up from the new one — the same as the details card does — and the
+  // phone's alarm moves with it. Its due date (the day it sits under on the
+  // list and the calendar) moves too.
+  const handleEventDateTimeChange = async (newDate, newTime) => {
+    try {
+      const [y, mo, d] = String(newDate).split('-').map((n) => parseInt(n, 10));
+      const src = task.event_time || task.due_date || task.next_reminder;
+      const old = src ? new Date(src) : new Date();
+      const [h, mi] = newTime
+        ? String(newTime).split(':').map((n) => parseInt(n, 10))
+        : [old.getHours(), old.getMinutes()];
+      const at = new Date(y, mo - 1, d, h, mi, 0, 0);
+      if (isNaN(at.getTime())) return;
+      const iso = at.toISOString();
+      const updates = {
+        event_time: iso,
+        next_reminder: iso,
+        ...(task.due_date ? { due_date: iso } : {}),
+        onesignal_notification_ids: [],
+        reminder_schedule: [],
+      };
+      if (onUpdateTask) onUpdateTask({ ...task, ...updates });
+      const oldIds = Array.from(new Set([
+        ...(task.onesignal_notification_ids || []),
+        ...(task.reminder_schedule || []).map((r) => r.notification_id),
+      ])).filter((id) => id && !String(id).startsWith('planned_'));
+      if (oldIds.length > 0) {
+        const { cancelScheduledReminder } = await import('../utils/reminderScheduler');
+        await cancelScheduledReminder(oldIds).catch((e) => console.error("Cancel failed:", e));
+      }
+      await Task.update(task.id, updates);
+      const { base44 } = await import('@/api/base44Client');
+      const currentUser = await base44.auth.me();
+      const { scheduleMultiReminders } = await import('../utils/multiReminderScheduler');
+      const multiIds = await scheduleMultiReminders({
+        email: currentUser.email,
+        title: task.title,
+        scheduledDateISO: iso,
+        taskId: task.id,
+        urgency: task.urgency,
+        classification: 'event',
+      });
+      if (multiIds && multiIds.length > 0) {
+        await Task.update(task.id, { onesignal_notification_ids: multiIds });
+      }
+      import('../utils/widgetBridge').then((m) => m.refreshAlarms()).catch(() => {});
+      if (onRefreshTasks) onRefreshTasks();
+    } catch (error) {
+      console.error("Error moving the event:", error);
+      if (onRefreshTasks) onRefreshTasks();
+    }
+  };
+
   const handleDueDateChange = async (newDate) => {
     try {
       let dueDateValue = null;
@@ -728,6 +811,65 @@ export default function TaskCard({
     return true;
   })();
 
+  // Which date the closed card's chip stands for, so tapping it edits THAT
+  // (an event's own time, a birthday, a one-time task's reminder, a "by"
+  // deadline) and not some other field. A repeating task with no date shows
+  // "Today" as a placeholder — nothing to edit there.
+  const chipDateKind = (() => {
+    if (isEvent) return (task.event_time || task.due_date || task.next_reminder) ? 'event' : null;
+    if (isBirthday) return task.next_reminder ? 'birthday' : null;
+    if (task.reminder_interval === 'once' && task.next_reminder) return 'reminder';
+    if (task.due_date) return 'due';
+    if (task.next_reminder) return 'reminder';
+    return null;
+  })();
+  const chipSourceISO = chipDateKind === 'event'
+    ? (task.event_time || task.due_date || task.next_reminder)
+    : chipDateKind === 'due' ? task.due_date : task.next_reminder;
+  const chipHasTime = chipDateKind === 'birthday'
+    || ((chipDateKind === 'event' || chipDateKind === 'reminder') && !task.day_only_task);
+  const chipDateLabel = chipDateKind === 'event' ? 'Event date'
+    : chipDateKind === 'birthday' ? 'Birthday'
+      : chipDateKind === 'due' ? 'Due date' : 'Date';
+  const dateValueOf = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const timeValueOf = (iso) => {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  };
+  // Saves once, when the chip's editor closes (same reason as commitDateTime).
+  const commitChipDate = () => {
+    if (!chipDateKind) return;
+    const newDate = chipDateRef.current?.value || '';
+    const newTime = chipHasTime ? (chipTimeRef.current?.value || '') : '';
+    if (!newDate && !newTime) return;
+    const oldDate = dateValueOf(chipSourceISO);
+    const oldTime = timeValueOf(chipSourceISO);
+    const date = newDate || oldDate;
+    const time = newTime || oldTime;
+    if (date === oldDate && (!chipHasTime || time === oldTime)) return;
+    if (chipDateKind === 'event') { handleEventDateTimeChange(date, chipHasTime ? time : null); return; }
+    if (chipDateKind === 'birthday') { handleBirthdayDateTimeChange(date, time); return; }
+    if (chipDateKind === 'due') { handleDueDateChange(date); return; }
+    handleReminderDateChange(date, chipHasTime && time !== oldTime ? time : null);
+  };
+  const chipClass = `flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${
+    collapsedDate?.overdue
+      ? 'border-red-700 bg-red-600 text-white font-semibold'
+      : collapsedDate?.isTodayLabel
+        ? theme === 'dark' ? 'border-green-700 bg-green-900/30 text-green-400' : 'border-green-300 bg-green-50 text-green-700'
+        : theme === 'dark' ? 'border-gray-700 bg-gray-800 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-600'
+  }`;
+  const chipText = collapsedDate
+    ? `${collapsedDate.overdue ? `Overdue · ${collapsedDate.label}` : collapsedDate.label}${timeRange ? ` · ${timeRange}` : ''}`
+    : '';
+
   return (
     <Card
       className={`relative overflow-hidden border transition-all duration-200 hover:shadow-lg ${
@@ -746,7 +888,16 @@ export default function TaskCard({
       <CardContent className="p-2 sm:p-3">
         {/* Compact single-line row: complete · date · title · priority · expand */}
         <div className="flex items-center gap-2 min-w-0">
-          {task.status === 'completed' ? (
+          {isCancelled ? (
+            <button
+              onClick={handleRestoreEvent}
+              className={`flex-shrink-0 ${theme === 'dark' ? 'text-amber-400 hover:text-amber-300' : 'text-amber-600 hover:text-amber-700'}`}
+              aria-label="Put the event back on"
+              title="It's happening after all"
+            >
+              <RotateCcw className="w-5 h-5" />
+            </button>
+          ) : task.status === 'completed' ? (
             <button
               onClick={() => onUncomplete && onUncomplete(task, 'task_card')}
               className={`flex-shrink-0 ${theme === 'dark' ? 'text-green-400 hover:text-green-300' : 'text-green-600 hover:text-green-700'}`}
@@ -767,14 +918,58 @@ export default function TaskCard({
           {/* Back-burnered tasks show the title only — no date, status, or
               priority pills. They're parked, so the row stays quiet. */}
           {collapsedDate && !task.silenced && (
+            chipDateKind && task.status === 'active' ? (
+              // Tap the date to change it, right here.
+              <Popover open={chipDateOpen} onOpenChange={(o) => { setChipDateOpen(o); if (!o) commitChipDate(); }}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={(e) => e.stopPropagation()}
+                    className={`${chipClass} cursor-pointer hover:opacity-80 transition-opacity`}
+                    aria-label="Change the date"
+                    title="Change the date"
+                  >
+                    {chipText}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className={`w-64 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
+                  <div className="space-y-3">
+                    <div>
+                      <label className={`text-sm font-medium block mb-1 ${theme === 'dark' ? 'text-gray-200' : ''}`}>{chipDateLabel}</label>
+                      <input
+                        type="date"
+                        ref={chipDateRef}
+                        defaultValue={dateValueOf(chipSourceISO)}
+                        className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
+                      />
+                    </div>
+                    {chipHasTime && (
+                      <div>
+                        <label className={`text-sm font-medium block mb-1 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Time</label>
+                        <input
+                          type="time"
+                          ref={chipTimeRef}
+                          defaultValue={timeValueOf(chipSourceISO)}
+                          className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200' : ''}`}
+                        />
+                      </div>
+                    )}
+                    <Button size="sm" className="w-full" onClick={(e) => { e.stopPropagation(); setChipDateOpen(false); commitChipDate(); }}>
+                      Done
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            ) : (
+              <span className={chipClass}>{chipText}</span>
+            )
+          )}
+
+          {isCancelled && (
             <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${
-              collapsedDate.overdue
-                ? 'border-red-700 bg-red-600 text-white font-semibold'
-                : collapsedDate.isTodayLabel
-                  ? theme === 'dark' ? 'border-green-700 bg-green-900/30 text-green-400' : 'border-green-300 bg-green-50 text-green-700'
-                  : theme === 'dark' ? 'border-gray-700 bg-gray-800 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-600'
+              theme === 'dark' ? 'border-amber-700 bg-amber-900/30 text-amber-300' : 'border-amber-300 bg-amber-50 text-amber-700'
             }`}>
-              {collapsedDate.overdue ? `Overdue · ${collapsedDate.label}` : collapsedDate.label}{timeRange ? ` · ${timeRange}` : ''}
+              Cancelled
             </span>
           )}
 
@@ -791,7 +986,7 @@ export default function TaskCard({
 
           <h3
             className={`flex-1 min-w-0 line-clamp-2 break-words text-sm font-medium leading-snug ${
-              task.status === 'completed' ? 'line-through opacity-60' : ''
+              task.status === 'completed' || isCancelled ? 'line-through opacity-60' : ''
             } ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}
             onClick={() => setExpanded(v => !v)}
           >
@@ -829,7 +1024,7 @@ export default function TaskCard({
               />
             ) : (
               <div className="flex items-center gap-2 min-w-0">
-                <h3 className={`text-base font-medium break-words flex-1 min-w-0 ${task.status === 'completed' ? 'line-through opacity-60' : ''} ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
+                <h3 className={`text-base font-medium break-words flex-1 min-w-0 ${task.status === 'completed' || isCancelled ? 'line-through opacity-60' : ''} ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
                   {typeEmoji && <span className="mr-1">{typeEmoji}</span>}{task.life_area === 'work' && <span className="mr-1">💼</span>}{task.title}
                 </h3>
                 <button
@@ -1251,20 +1446,48 @@ export default function TaskCard({
                   <ListChecks className="w-4 h-4" />
                   {isEvent ? 'Event Details' : 'Task Details'}
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleToggleSilenced}
-                  className={`h-8 gap-1.5 ${
-                    task.silenced
-                      ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50'
-                      : theme === 'dark' ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'
-                  }`}
-                  title={task.silenced ? 'Reactivate reminders' : 'Silence reminders (back burner)'}
-                >
-                  {task.silenced ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
-                  {task.silenced ? 'Reactivate' : 'Silence'}
-                </Button>
+                {/* An event isn't something to put on the back burner: its
+                    one extra action is "Cancelled" (and "Back on" after). */}
+                {isEvent ? (
+                  isCancelled ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleRestoreEvent}
+                      className={`h-8 gap-1.5 ${theme === 'dark' ? 'text-amber-300 hover:bg-gray-700' : 'text-amber-700 hover:bg-amber-50'}`}
+                      title="It's happening after all"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      Back on
+                    </Button>
+                  ) : task.status === 'active' ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCancelEvent}
+                      className={`h-8 gap-1.5 ${theme === 'dark' ? 'text-amber-300 hover:bg-gray-700' : 'text-amber-700 hover:bg-amber-50'}`}
+                      title="Not happening — it stays on the list, crossed out"
+                    >
+                      <CalendarOff className="w-4 h-4" />
+                      Cancelled
+                    </Button>
+                  ) : null
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleToggleSilenced}
+                    className={`h-8 gap-1.5 ${
+                      task.silenced
+                        ? 'text-amber-600 hover:text-amber-700 hover:bg-amber-50'
+                        : theme === 'dark' ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'
+                    }`}
+                    title={task.silenced ? 'Reactivate reminders' : 'Silence reminders (back burner)'}
+                  >
+                    {task.silenced ? <Bell className="w-4 h-4" /> : <BellOff className="w-4 h-4" />}
+                    {task.silenced ? 'Reactivate' : 'Silence'}
+                  </Button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
@@ -1298,7 +1521,9 @@ export default function TaskCard({
               />
             )}
 
-            {(task.type === 'task' || task.type === 'reminder') && (
+            {/* Snooze is a task thing: an event or a birthday can't be put off
+                a quarter of an hour, and a finished one has nothing to snooze. */}
+            {(task.type === 'task' || task.type === 'reminder') && !isEvent && !isBirthday && task.status === 'active' && (
               <div className={`flex flex-wrap gap-2 pt-2 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-100'}`}>
                 <Button
                   variant="outline"
