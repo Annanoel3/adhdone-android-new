@@ -10,10 +10,9 @@ import { Timer } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { isTodayTask } from "@/components/utils/todayTasks";
 import LaunchButtons from "./LaunchButtons";
-import LaunchSoundPicker from "./LaunchSoundPicker";
 
-// Home's "Timer": pick one of today's tasks and how long, without digging into
-// the task itself. (See LaunchButtons for the timer.)
+// Home's "Timer": pick one of today's tasks and start its stopwatch, without
+// digging into the task itself. (See LaunchButtons for the timer.)
 export default function LaunchPicker({ open, onOpenChange, theme }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -59,7 +58,7 @@ export default function LaunchPicker({ open, onOpenChange, theme }) {
             <Timer className="w-5 h-5 text-emerald-500" /> Start a timer
           </DialogTitle>
           <DialogDescription>
-            Pick a task and how long. The timer counts down on screen and rings when it's up.
+            Pick a task. The timer counts up on screen until you stop it, so you can see how long things really take.
           </DialogDescription>
         </DialogHeader>
         <div className="py-2 max-h-80 overflow-y-auto space-y-2">
@@ -95,7 +94,6 @@ export default function LaunchPicker({ open, onOpenChange, theme }) {
             ))
           )}
         </div>
-        <LaunchSoundPicker theme={theme} />
       </DialogContent>
     </Dialog>
   );
