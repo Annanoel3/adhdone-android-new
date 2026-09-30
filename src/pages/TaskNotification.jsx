@@ -121,32 +121,40 @@ export default function TaskNotification() {
         status: 'completed',
         completed_at: now.toISOString()
       });
+    } catch (error) {
+      console.error("Error completing task:", error);
+      setProcessingAction(null);
+      return;
+    }
 
-      // Cancel any remaining scheduled notifications
-      if (task.onesignal_notification_ids?.length > 0) {
-        await cancelScheduledReminder(task.onesignal_notification_ids).catch(() => {});
-      }
-
-      await updateTodaysSummary();
-
+    // The task is done — that is the one call worth waiting for. What follows
+    // is bookkeeping: the next copy of a repeating task, cancelling the pushes
+    // still booked, today's summary. It used to run here, one request after
+    // another, before the page moved on: 10–15 seconds on a phone connection
+    // with the Done button spinning, which looked like the app had frozen. It
+    // runs in the background now; Home reloads once the next copy exists.
+    (async () => {
       // A repeating task finished from its own reminder screen used to end
       // here for good — only Home and the task list made the next occurrence.
       if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
         try {
           const { createNextRecurrence } = await import('../components/utils/taskRecurrence');
           await createNextRecurrence(task);
+          window.dispatchEvent(new CustomEvent('tasks-changed'));
         } catch (e) {
           console.error('Failed to create next recurrence:', e);
         }
       }
+      // Cancel any remaining scheduled notifications
+      if (task.onesignal_notification_ids?.length > 0) {
+        await cancelScheduledReminder(task.onesignal_notification_ids).catch(() => {});
+      }
+      await updateTodaysSummary().catch(() => {});
+    })();
 
-      navigate(createPageUrl("Home"), {
-        state: { reload: true, message: "Great job! Task completed! 🎉" }
-      });
-    } catch (error) {
-      console.error("Error completing task:", error);
-      setProcessingAction(null);
-    }
+    navigate(createPageUrl("Home"), {
+      state: { reload: true, message: "Great job! Task completed! 🎉" }
+    });
   };
 
   const handleSnooze = async (minutes) => {
