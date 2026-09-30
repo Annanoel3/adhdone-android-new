@@ -24,6 +24,11 @@ const SNOOZE_OPTIONS = [
   { label: "Tomorrow", minutes: null },
 ];
 
+// RETIRED (not mounted anywhere). This used to open by itself on every app
+// open — for any task whose reminder time had passed, and for the latest
+// smart nudge — and people answered No or Later every time. The one place the
+// app still asks "Did you do it?" is the TaskNotification page, which a
+// notification tap opens. Kept only so nothing that imports it breaks.
 export default function NotificationFollowupModal({ user, theme }) {
   const [isOpen, setIsOpen] = useState(false);
   // Takes its turn with other popups (never stacks on one), but as the answer
