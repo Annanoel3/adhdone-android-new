@@ -78,15 +78,17 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
   });
   const [selected, setSelected] = useState(() => new Date());
   const [useEmoji, setUseEmoji] = useState(() => {
-    // Profile first — it's the saved choice. Only fall back to the device
-    // cache (then the emoji default) when the profile has no value yet.
-    if (typeof user?.calendar_use_emoji === 'boolean') return user.calendar_use_emoji;
+    // The choice made on THIS phone wins. The profile copy is for a new
+    // device that has no choice saved yet. It used to be the other way round,
+    // and the profile handed to this page can be a copy read at app start —
+    // so picking Text, leaving and coming back snapped it back to Emoji.
     const stored = localStorage.getItem('calendar_use_emoji');
-    return stored === null ? true : stored === 'true';
+    if (stored !== null) return stored === 'true';
+    if (typeof user?.calendar_use_emoji === 'boolean') return user.calendar_use_emoji;
+    return true;
   });
-  // Profile is the source of truth so the choice survives app restarts and
-  // follows the user across devices; localStorage is just a fast first paint.
   useEffect(() => {
+    if (localStorage.getItem('calendar_use_emoji') !== null) return;
     if (typeof user?.calendar_use_emoji === 'boolean') {
       setUseEmoji(user.calendar_use_emoji);
       localStorage.setItem('calendar_use_emoji', String(user.calendar_use_emoji));
@@ -389,9 +391,9 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           textSecondary={textSecondary}
         />
       ) : (
-      <div className="grid grid-cols-7 gap-0.5">
+      <div className="grid grid-cols-7 gap-px">
         {cells.map((cell, idx) => {
-          if (!cell) return <div key={`b-${idx}`} className={`min-h-[58px] rounded-lg border ${cellMuted}`} />;
+          if (!cell) return <div key={`b-${idx}`} className={`min-h-[80px] rounded-md border ${cellMuted}`} />;
           const k = dateKey(cell);
           const dayItems = itemsByDate.get(k) || [];
           const isToday = sameDayKey(cell, today);
@@ -404,7 +406,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           // Separate multi-day span bars from regular items for cleaner rendering.
           const spanItems = liveItems.filter((it) => it.spanPos);
           const regularItems = liveItems.filter((it) => !it.spanPos);
-          const regularShown = regularItems.slice(0, 3);
+          const regularShown = regularItems.slice(0, 4);
           const spanShown = spanItems.slice(0, 3);
           const totalOverflow = liveItems.length - spanShown.length - regularShown.length;
           const hasOverdue = liveItems.some((it) => it.overdue);
@@ -413,26 +415,25 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
             <button
               key={k}
               onClick={() => setSelected(cell)}
-              className={`min-h-[58px] rounded-lg border px-0.5 py-1 text-left transition-all overflow-hidden ${
+              className={`min-h-[80px] rounded-md border px-0.5 pt-0.5 pb-1 text-left transition-all overflow-hidden ${
                 isSelected
                   ? 'ring-2 ring-blue-400 ' + cellBase
                   : cellBase + ' hover:border-blue-300'
               }`}
             >
-              <div className="flex items-center justify-between">
+              {/* Just the day number: the item count took a whole line's
+                  width on a phone, and the rows below say it anyway. */}
+              <div className="flex items-center">
                 <span
-                  className={`text-xs font-semibold w-5 h-5 flex items-center justify-center rounded-full ${
+                  className={`text-[11px] font-semibold w-5 h-5 flex items-center justify-center rounded-full ${
                     isToday ? 'bg-blue-500 text-white' : textSecondary
                   }`}
                 >
                   {cell.getDate()}
                 </span>
-                {dayItems.length > 0 && (
-                  <span className={`text-[10px] ${textSecondary}`}>{dayItems.length}</span>
-                )}
               </div>
               {dayItems.length > 0 && (
-                <div className="mt-1 leading-none space-y-0.5">
+                <div className="mt-0.5 leading-none space-y-0.5">
                   {/* Multi-day span bars: start = pill with label, middle = thin stripe, end = pill */}
                   {spanItems.length > 0 && (
                     <div className="space-y-0.5">
@@ -442,7 +443,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                           return (
                             <div
                               key={`span-${i}`}
-                              className={`h-1 rounded-full ${colors.bar} -mx-1`}
+                              className={`h-1.5 rounded-full ${colors.bar} -mx-1`}
                               title={it.title}
                             />
                           );
@@ -451,8 +452,8 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                         return (
                           <div
                             key={`span-${i}`}
-                            className={`flex items-center gap-0.5 text-[9px] leading-tight tracking-tight overflow-hidden whitespace-nowrap ${colors.pill} ${colors.text} ${
-                              isStart ? 'rounded-l-full pl-0.5 -mr-0.5' : 'rounded-r-full pr-0.5 -ml-0.5'
+                            className={`flex items-center gap-0.5 text-[11px] leading-[1.25] overflow-hidden whitespace-nowrap ${colors.pill} ${colors.text} ${
+                              isStart ? 'rounded-l pl-1 -mr-0.5' : 'rounded-r pr-1 -ml-0.5'
                             }`}
                             title={it.title}
                           >
@@ -477,7 +478,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                     ) : (
                       <div className="space-y-0.5">
                         {regularShown.map((it, i) => (
-                          <div key={i} className={`text-[9px] leading-tight tracking-tight overflow-hidden whitespace-nowrap rounded px-0.5 ${it.overdue ? 'bg-red-100 text-red-700 font-medium' : textSecondary} ${it.cancelled ? 'line-through opacity-60' : ''}`} title={it.cancelled ? `${it.title} (cancelled)` : it.title}>
+                          <div key={i} className={`text-[11px] leading-[1.25] overflow-hidden whitespace-nowrap rounded px-1 ${it.overdue ? 'bg-red-100 text-red-700 font-medium' : (KIND_BADGE[it.kind] || (isDark ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-700'))} ${it.cancelled ? 'line-through opacity-60' : ''}`} title={it.cancelled ? `${it.title} (cancelled)` : it.title}>
                             {it.title}
                           </div>
                         ))}
