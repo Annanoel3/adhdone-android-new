@@ -99,11 +99,26 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
     localStorage.setItem('calendar_use_emoji', String(val));
     base44.auth.updateMe({ calendar_use_emoji: val }).catch(() => {});
   };
-  const [viewMode, setViewMode] = useState(() => localStorage.getItem('calendar_view_mode') || 'month');
+  // Month or week: same rule as Emoji/Text above — this phone's choice wins,
+  // the profile copy fills in a phone that has none (a reinstall, a new phone).
+  const [viewMode, setViewMode] = useState(() => {
+    const stored = localStorage.getItem('calendar_view_mode');
+    if (stored === 'month' || stored === 'week') return stored;
+    return user?.calendar_view_mode === 'week' ? 'week' : 'month';
+  });
+  useEffect(() => {
+    if (localStorage.getItem('calendar_view_mode') !== null) return;
+    const v = user?.calendar_view_mode;
+    if (v === 'month' || v === 'week') {
+      setViewMode(v);
+      localStorage.setItem('calendar_view_mode', v);
+    }
+  }, [user]);
   const [weekCursor, setWeekCursor] = useState(() => new Date());
   const setView = (mode) => {
     setViewMode(mode);
     localStorage.setItem('calendar_view_mode', mode);
+    base44.auth.updateMe({ calendar_view_mode: mode }).catch(() => {});
   };
 
   // Group all items by local-date key.
@@ -128,6 +143,15 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
     tasks.forEach((t) => {
       const kind = kindFromClassification(t.classification) ||
         (t.birthday_person ? 'birthday' : 'task');
+      // A finished task stays on its day, greyed and ticked, so a passed day
+      // still says what it held. Its day is the one it was due or set for;
+      // with no date, the day it was finished.
+      if (t.status === 'completed') {
+        const raw = t.due_date || t.next_reminder || t.completed_at;
+        if (!raw) return;
+        push(new Date(raw), { kind, done: true, silenced: false, at: t.event_time || null, title: t.title, id: t.id, taskId: t.id, task: t });
+        return;
+      }
       // A cancelled event: on its day, crossed out, never overdue.
       const cancelled = t.status === 'cancelled';
       // Multi-day span: show the task on each day from its start through its end.
@@ -160,23 +184,19 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
       const raw = t.due_date || t.next_reminder;
       if (!raw) return;
       const dueD = new Date(raw);
-      // Overdue: an active (not completed) task whose due date has already
-      // passed. Show it on every day from the due date through today so it
-      // stays visible (and red) until the user completes it — not just on
-      // the original due date.
+      // Overdue: an active task whose due date has already passed. It stays on
+      // the day it was due (red) and shows again on today, so it's in view
+      // until it's done — never on the days in between. (It used to sit on
+      // every day from the due date through today, which buried every passed
+      // day under the same few overdue tasks.)
       if (t.status !== 'completed' && !cancelled) {
         const now = new Date();
         const dueDay = new Date(dueD.getFullYear(), dueD.getMonth(), dueD.getDate());
         const todayDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
         if (dueDay.getTime() < todayDay.getTime()) {
-          const dayCursor = new Date(dueDay);
-          while (dayCursor <= todayDay) {
-            push(new Date(dayCursor), {
-              kind, silenced: !!t.silenced, at: t.event_time || null, title: t.title, id: t.id, taskId: t.id, task: t,
-              overdue: true,
-            });
-            dayCursor.setDate(dayCursor.getDate() + 1);
-          }
+          const late = { kind, silenced: !!t.silenced, at: t.event_time || null, title: t.title, id: t.id, taskId: t.id, task: t, overdue: true };
+          push(dueDay, late);
+          push(todayDay, { ...late });
           return;
         }
       }
@@ -229,6 +249,8 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
     const titlesNeedingResolution = new Set();
     itemsByDate.forEach((items) => {
       items.forEach((it) => {
+        // Finished tasks keep their type's emoji: no lookups for the past.
+        if (it.done) return;
         if (!keywordEmojiForTitle(it.title) && !getCachedAiEmoji(it.title)) {
           titlesNeedingResolution.add(it.title);
         }
@@ -472,14 +494,14 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                     useEmoji ? (
                       <div className="flex flex-wrap gap-0.5">
                         {regularShown.map((it, i) => (
-                          <span key={i} className={`text-sm rounded ${it.overdue ? 'bg-red-100 px-0.5' : ''} ${it.cancelled ? 'opacity-40' : ''}`}>{emojiFor(it)}</span>
+                          <span key={i} className={`text-sm rounded ${it.overdue ? 'bg-red-100 px-0.5' : ''} ${it.cancelled || it.done ? 'opacity-40' : ''}`} title={it.done ? `${it.title} (done)` : undefined}>{emojiFor(it)}</span>
                         ))}
                       </div>
                     ) : (
                       <div className="space-y-0.5">
                         {regularShown.map((it, i) => (
-                          <div key={i} className={`text-[11px] leading-[1.25] overflow-hidden whitespace-nowrap rounded px-1 ${it.overdue ? 'bg-red-100 text-red-700 font-medium' : (KIND_BADGE[it.kind] || (isDark ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-700'))} ${it.cancelled ? 'line-through opacity-60' : ''}`} title={it.cancelled ? `${it.title} (cancelled)` : it.title}>
-                            {it.title}
+                          <div key={i} className={`text-[11px] leading-[1.25] overflow-hidden whitespace-nowrap rounded px-1 ${it.overdue ? 'bg-red-100 text-red-700 font-medium' : it.done ? (isDark ? 'bg-gray-700/60 text-gray-400' : 'bg-gray-100 text-gray-500') : (KIND_BADGE[it.kind] || (isDark ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-700'))} ${it.cancelled ? 'line-through opacity-60' : ''}`} title={it.cancelled ? `${it.title} (cancelled)` : it.done ? `${it.title} (done)` : it.title}>
+                            {it.done ? `✓ ${it.title}` : it.title}
                           </div>
                         ))}
                       </div>
@@ -548,9 +570,11 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                     }`}
                   >
                     <span className="text-base flex-shrink-0">{emojiFor(it)}</span>
-                    <span className={`text-sm flex-1 truncate ${it.overdue ? (isDark ? 'text-red-300' : 'text-red-600') + ' font-medium' : textPrimary} ${it.cancelled ? 'line-through opacity-60' : ''}`}>{it.title}</span>
+                    <span className={`text-sm flex-1 truncate ${it.overdue ? (isDark ? 'text-red-300' : 'text-red-600') + ' font-medium' : it.done ? textSecondary : textPrimary} ${it.cancelled ? 'line-through opacity-60' : ''}`}>{it.title}</span>
                     {it.overdue ? (
                       <Badge className="text-xs border flex-shrink-0 bg-red-100 text-red-700 border-red-200">Overdue</Badge>
+                    ) : it.done ? (
+                      <Badge className="text-xs border flex-shrink-0 bg-green-100 text-green-700 border-green-200">Done</Badge>
                     ) : it.cancelled ? (
                       <Badge className="text-xs border flex-shrink-0 bg-amber-50 text-amber-700 border-amber-200">Cancelled</Badge>
                     ) : (
