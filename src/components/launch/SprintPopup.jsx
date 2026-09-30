@@ -36,11 +36,24 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
   const totalMs = sessionDurationMs(session);
   const totalMin = Math.round(totalMs / 60000);
   const endTime = new Date(session.endTimeISO).getTime();
+  // A stopwatch (the task's own timer) counts UP from when it started and
+  // never ends; only the buttons stop it.
+  const stopwatch = !!session.stopwatch;
+  const startTime = stopwatch && session.startedAtISO ? new Date(session.startedAtISO).getTime() : endTime - totalMs;
+  const [elapsed, setElapsed] = useState(() => Math.max(0, Date.now() - startTime));
   const [remaining, setRemaining] = useState(() => Math.max(0, endTime - Date.now()));
   const [overtime, setOvertime] = useState(() => Math.max(0, Date.now() - endTime));
 
   useEffect(() => {
-    if (ended) return;
+    if (!stopwatch) return;
+    const tick = () => setElapsed(Math.max(0, Date.now() - startTime));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [stopwatch, startTime]);
+
+  useEffect(() => {
+    if (ended || stopwatch) return;
     const id = setInterval(() => {
       const r = Math.max(0, endTime - Date.now());
       setRemaining(r);
@@ -103,26 +116,31 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
               <Timer className="w-7 h-7 text-white" />
             </div>
             <div className="text-xs font-semibold uppercase tracking-wider text-emerald-600 mb-1">
-              {minutesWord(totalMin)} timer
+              {stopwatch ? 'Timer' : `${minutesWord(totalMin)} timer`}
             </div>
             <h2 className="text-xl font-bold mb-4">{session.title}</h2>
 
             <div className="relative mx-auto w-44 h-44 mb-5">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 200 200">
                 <circle cx="100" cy="100" r={R} stroke={trackStroke} strokeWidth="12" fill="none" />
-                <motion.circle
-                  cx="100" cy="100" r={R}
-                  stroke="#10b981"
-                  strokeWidth="12" fill="none"
-                  strokeLinecap="round"
-                  strokeDasharray={C}
-                  animate={{ strokeDashoffset: C * (progress / 100) }}
-                  transition={{ duration: 0.3 }}
-                />
+                {!stopwatch && (
+                  <motion.circle
+                    cx="100" cy="100" r={R}
+                    stroke="#10b981"
+                    strokeWidth="12" fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray={C}
+                    animate={{ strokeDashoffset: C * (progress / 100) }}
+                    transition={{ duration: 0.3 }}
+                  />
+                )}
+                {stopwatch && (
+                  <circle cx="100" cy="100" r={R} stroke="#10b981" strokeWidth="12" fill="none" strokeLinecap="round" />
+                )}
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="text-4xl font-bold tabular-nums">{clock(remaining)}</div>
-                <div className={`text-[10px] uppercase tracking-wider mt-1 ${subtle}`}>left</div>
+                <div className="text-4xl font-bold tabular-nums">{stopwatch ? clock(elapsed) : clock(remaining)}</div>
+                <div className={`text-[10px] uppercase tracking-wider mt-1 ${subtle}`}>{stopwatch ? 'so far' : 'left'}</div>
               </div>
             </div>
 
@@ -141,13 +159,15 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
               </button>
             </div>
 
-            {!timerAlarmsSupported() && (
+            {!stopwatch && !timerAlarmsSupported() && (
               <KeepAppOpenNote className="mb-1" text="Keep the app open — closing it stops the timer." />
             )}
             <p className={`text-xs ${subtle}`}>
-              {timerAlarmsSupported()
-                ? "You can close this. It rings when time's up."
-                : 'Close this to keep working. It keeps counting.'}
+              {stopwatch
+                ? 'Close this to keep working. It keeps counting until you stop it.'
+                : timerAlarmsSupported()
+                  ? "You can close this. It rings when time's up."
+                  : 'Close this to keep working. It keeps counting.'}
             </p>
           </div>
         ) : (
