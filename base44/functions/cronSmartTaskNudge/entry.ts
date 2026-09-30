@@ -768,7 +768,7 @@ async function freshUser(base44: any, user: any): Promise<any | null> {
 const PRINT_FIELDS = [
   'title', 'description', 'notes', 'original_input', 'urgency', 'energy_required',
   'due_date', 'start_date', 'next_reminder', 'event_time', 'anchor_time', 'day_only_task',
-  'deadline_style', 'location', 'reminder_wish', 'classification', 'life_area',
+  'deadline_style', 'location', 'reminder_wish', 'tag', 'classification', 'life_area',
   'recurrence_pattern', 'recurrence_days', 'reminder_interval', 'due_date_pushes',
 ];
 function hashString(str: string): string {
@@ -1045,6 +1045,9 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     // The boss's own instruction about reminding this one, when they gave one.
     const wish = String(t.reminder_wish || '').trim().replace(/\s+/g, ' ').slice(0, 200);
     const wishInfo = wish ? `, REMINDER WISH: "${wish}"` : '';
+    // A label the boss typed and put on the task themselves, in any words.
+    const tag = String(t.tag || '').trim().replace(/\s+/g, ' ').slice(0, 40);
+    const tagInfo = tag ? `, TAG: "${tag}"` : '';
     const areaInfo = t.life_area === 'work' ? ', work' : ', personal';
     const billInfo = t.classification === 'payment' ? ', a bill/payment' : '';
     const repeatInfo = recurrenceLabel(t) ? `, repeats ${recurrenceLabel(t)} (this is the current one)` : '';
@@ -1073,7 +1076,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if (putOff >= 3) parts.push(`PUT OFF ${putOff} TIMES IN ALL — the reminders for this task are not working`);
       if (parts.length) reactInfo = `, HOW THEY'VE REACTED: ${parts.join(', ')}`;
     }
-    return `${i + 1}. "${t.title}"${descInfo}${saidInfo} (${dueInfo}${windowInfo}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${areaInfo}${billInfo}${repeatInfo}${oldRhythmInfo}${anchorInfo}${locInfo}${ageInfo}${pushInfo}${wishInfo}${historyInfo}${reactInfo}${subInfo})`;
+    return `${i + 1}. "${t.title}"${descInfo}${saidInfo} (${dueInfo}${windowInfo}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${areaInfo}${billInfo}${repeatInfo}${oldRhythmInfo}${anchorInfo}${locInfo}${ageInfo}${pushInfo}${wishInfo}${tagInfo}${historyInfo}${reactInfo}${subInfo})`;
   }).join('\n');
 
   const urgentCount = tasks.filter(t => t.urgency === 'urgent').length;
@@ -1180,7 +1183,8 @@ Adding nothing is a complete answer on a later look. Judge it; there is no formu
 ` : ''}
 YOUR APPROACH:
 - USE EVERYTHING ON A TASK'S LINE, together: what they said when they added it ("in their words" — often says more than the title about what it involves, when, and why), the notes, the time they named, whether it's work or personal, whether it's a bill, whether it repeats, how long it has been sitting there, and when you last nudged it. Decide the way an assistant who knew all of that would.
-- A REMINDER WISH on a task is the boss's own instruction about how, when or how often to nudge THAT task ("keep reminding me until I finish", "just once", "don't bug me before noon", "only on weekdays"). Obey it over every rule below for that task: it sets the count, the spacing and the earliest hour — and today's date and weekday are at the top. Where the wish is silent, the rules below apply.
+- A REMINDER WISH on a task is the boss's own instruction about how, when or how often to nudge THAT task ("keep reminding me until I finish", "just once", "don't bug me before noon", "only on weekdays"). Obey it over every rule below for that task (except a TAG they put on afterwards — next point): it sets the count, the spacing and the earliest hour — and today's date and weekday are at the top. Where the wish is silent, the rules below apply.
+- A TAG on a task is a label the boss typed in their own words and put on that task, from its card, after adding it. Read it the way you'd read a note from them about how to treat the task, and let it change what you do: it can say how loosely the task is held ("play it by ear", "maybe", "someday", "if I feel like it" — then it isn't something to chase: at most a light mention when it happens to fit, often nothing at all, whatever its date, priority or wish says), where things stand ("called", "waiting on them" — then don't push them to do what's already done), how much it matters, that several tasks belong together (tasks sharing a tag can ride along in one mention instead of one each), or where or when it fits. Judge what the words mean; a tag that says nothing about reminding (a colour, a category) changes nothing. Because a tag goes on after the task was added, it is the boss's later word: where it disagrees with the REMINDER WISH or the priority they set when adding it, the tag wins. Never quote the tag back at them.
 - "KEEP REMINDING ME UNTIL I DO IT" (a wish like that, with no pace named) means two different things depending on the task, and you decide which. A thing done in one sitting at home — the dishes, the litter box, a load of laundry, a call, the trash — is a TODAY thing: keep at it through today, every 2-3 hours, worded differently each time, until it's checked off, and if it's still open tomorrow it is overdue and you keep at it again. A thing that needs them to be somewhere or to fit a trip in — drop the package at FedEx, return the library books, pick up the prescription, the oil change — is a THIS WEEK thing: once or twice a day, at hours they could actually go, spread across the week, and a little more insistent each day it sits. Judge by what the task involves, never by its wording, and never turn either into an hourly drumbeat — that only happens when they named a pace themselves.
 - You can see the whole week. Plan TODAY's reminders — what to surface, when, what to say.
 - MEET ALL DEADLINES: if something is due today or tomorrow, it must be surfaced. If something is overdue, surface it — with the urgency its priority earns (see OVERDUE DOESN'T OUTRANK PRIORITY).
@@ -1215,6 +1219,7 @@ ${urgentCount >= 2 ? `- There are ${urgentCount} URGENT tasks. Consider one noti
 - Afternoon (noon-5pm): keep momentum going.
 - Evening (after 5pm): surface the most urgent remaining tasks.
 - Each notification body: ONE supportive sentence. Warm, like a friend. Never productivity-shame. Never say "you should" or "you need to".
+- SAY WHAT, NOT WHY: the body tells them the thing (and, when it helps, when). It never carries your reasoning or a condition — no "if a quick message from your phone is an option", "if you're at your desk", "if you get a minute", "since you're working". The rules above are for deciding, not for saying. By the time you write the body you've decided it fits right now; if it only fits under a condition, it doesn't fit — hold it.
 - NEVER INVENT PROGRESS: only ✓ steps are done. If 0 steps are done, do NOT imply they've started ("you're halfway there", "next up") — point at the FIRST step instead. Never name a step as "next" unless every step before it is ✓.
 - SUB-TASK PROGRESS: when a task shows step progress (✓/○), use it to acknowledge where they are — e.g. "you've got the laundry going — don't forget to move it to the dryer" or "great progress on printing — just the label left to ship". Never list every step; just acknowledge the current spot naturally.
 - PUSHED TASKS: when a task shows "pushed Nx" (the user moved its due date later N times), it's being avoided. Don't shame — gently name it: "this one's been bumped a few times — want to break it into a tiny first step?" or "no rush, but this keeps getting pushed — is it still something you actually want to do?" Higher push counts deserve more attention but never guilt.
