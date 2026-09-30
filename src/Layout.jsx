@@ -69,7 +69,7 @@ import BirthdayTextPromptPopup from "./components/birthdays/BirthdayTextPromptPo
 import OwnBirthdayPopup from "./components/birthdays/OwnBirthdayPopup";
 import SharedTextReceiver from "./components/shared/SharedTextReceiver";
 import SharedImageReceiver from "./components/shared/SharedImageReceiver";
-import WidgetTaskSync from "./components/shared/WidgetTaskSync";
+import WidgetTaskSync, { usePluginPresent } from "./components/shared/WidgetTaskSync";
 import { pushAlarmTheme } from "./components/utils/widgetBridge";
 import WidgetOpenReceiver from "./components/shared/WidgetOpenReceiver";
 import HomeZipPrompt from "./components/shared/HomeZipPrompt";
@@ -81,6 +81,7 @@ import WelcomeDialog from "./components/onboarding/WelcomeDialog";
 import CatchUpDialog from "./components/onboarding/CatchUpDialog";
 import { applyOnboardingReplay } from "./components/onboarding/onboardingReplay";
 import { hydrateOnboardingFlags, clearOnboardingFlags, persistOnboardingFlag } from "./components/onboarding/onboardingSync";
+import { trackFire } from "@/lib/appTrack";
 import TaskCaptureProcessor from "./components/shared/TaskCaptureProcessor";
 import UsageTracker from "./components/shared/UsageTracker";
 import { base44 } from "@/api/base44Client";
@@ -237,6 +238,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   });
   const [openSections, setOpenSections] = useState({});
   const [accountabilityNotifications, setAccountabilityNotifications] = useState(0);
+  // The recorder plugin (app build 36+) can announce itself a moment after
+  // the first render; the menu waits for it rather than deciding once.
+  const canRecordNotes = usePluginPresent('RecorderBridge');
   const getDateBasedMode = () => {
     const now = new Date();
     const month = now.getMonth() + 1; // 1-12
@@ -252,16 +256,16 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     if (month === 3 && day >= 10 && day <= 20) return 'stpatricks';
     // Fourth of July: Jul 1 - Jul 7
     if (month === 7 && day >= 1 && day <= 7) return 'fourthjuly';
-    // Halloween: Oct 10 - Nov 1 (through the day after Halloween)
-    if ((month === 10 && day >= 10) || (month === 11 && day === 1)) return 'halloween';
+    // Halloween: all of October, through the day after Halloween
+    if (month === 10 || (month === 11 && day === 1)) return 'halloween';
     // Spring: Mar 21 - May 31
     if ((month === 3 && day >= 21) || month === 4 || month === 5) return 'spring';
     // Summer: Jun 1 - Aug 31 (excluding Jul 1-7)
     if (month === 6 || (month === 7 && day > 7) || month === 8) return 'summer';
     // Harvest: Nov 22 - Nov 26
     if (month === 11 && day >= 22 && day <= 26) return 'harvest';
-    // Fall: Sep 1 - Oct 9, Nov 2 - Nov 21, Nov 27 - Nov 30
-    if (month === 9 || (month === 10 && day <= 9) || (month === 11 && day >= 2)) return 'fall';
+    // Fall: September, Nov 2 - Nov 21, Nov 27 - Nov 30
+    if (month === 9 || (month === 11 && day >= 2)) return 'fall';
     // Winter: Dec 1 - Dec 19
     if (month === 12 && day <= 19) return 'winter';
     // Jan 6 - Feb 9, Feb 17 - Mar 9
@@ -280,9 +284,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   // Focus Timer page only, where hardly anyone scrolled, so hardly anyone
   // found it. Now it's on one page a day, from the pages people actually
   // visit; today's page comes from the date, so it stays put all day and
-  // moves overnight. Found once, it stops wandering (the Focus Timer keeps
-  // its own button, which is also the way to the second secret).
-  const SECRET_PAGES = ['Home', 'Tasks', 'Calendar', 'Progress', 'Diary', 'ParkingLot', 'Settings', 'Notes'];
+  // moves overnight. Found once, it stops wandering: the seasonal theme AND
+  // kawaii both join the theme rotation (light → dark → colorful → spicy →
+  // seasonal → kawaii → light).
+  const SECRET_PAGES = ['Home', 'Tasks', 'Calendar', 'Progress', 'Diary', 'ParkingLot', 'Settings', 'Notes', 'FocusTimer'];
   const secretPageToday = (() => {
     const d = new Date();
     const dayIndex = Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 86400000);
@@ -295,10 +300,15 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     setSeasonalUnlocked(true);
     setSpecialMode(seasonal);
     setTheme('minimalist');
-    try { localStorage.setItem('seasonal_popup_shown', 'true'); } catch (e) { /* the popup just shows once more some day */ }
+    try {
+      localStorage.setItem('seasonal_popup_shown', 'true');
+      localStorage.setItem('kawaii_popup_shown', 'true');
+    } catch (e) { /* the popup just shows once more some day */ }
     persistOnboardingFlag('seasonal_popup_shown');
+    persistOnboardingFlag('kawaii_popup_shown');
     setSecretFound(true);
     saveThemeToProfile('minimalist', seasonal, true);
+    trackFire('easter_egg_found', { egg: 'Seasonal theme', found_on: currentPageName });
   };
   const [showAppGuide, setShowAppGuide] = useState(false);
   const quietNotifications = useQuietNotifications();
@@ -442,10 +452,16 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   };
 
   const toggleTheme = () => {
-    // If in seasonal/kawaii mode, exit back to light. No page reload — the
-    // seasonal overlays and the theme CSS both render off state, so reloading
-    // was pure jank (and could land before the profile save finished).
+    // Seasonal → kawaii → back to light (both come with the secret). No page
+    // reload — the seasonal overlays and the theme CSS both render off state,
+    // so reloading was pure jank (and could land before the profile save).
     if (specialMode !== 'normal') {
+      if (specialMode !== 'kawaii') {
+        setSpecialMode('kawaii');
+        setTheme('minimalist');
+        saveThemeToProfile('minimalist', 'kawaii', seasonalUnlocked);
+        return;
+      }
       setSpecialMode('normal');
       setTheme('minimalist');
       saveThemeToProfile('minimalist', 'normal', seasonalUnlocked);
@@ -599,7 +615,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         },
         // Recording notes needs the phone's recorder (app build 36+), so the
         // menu only offers it where it works.
-        ...(typeof window !== "undefined" && window.Capacitor?.Plugins?.RecorderBridge
+        ...(canRecordNotes
           ? [{ title: "Record Notes", url: createPageUrl("Notes"), icon: Mic }]
           : []),
         {
