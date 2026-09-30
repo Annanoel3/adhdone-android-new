@@ -10,6 +10,7 @@ import { createPageUrl } from "@/utils";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { cancelScheduledReminder } from "../components/utils/reminderScheduler";
 import { snoozeTask, recordReminderDismissed } from "../components/utils/snoozeTask";
+import { usePluginPresent } from "../components/shared/WidgetTaskSync";
 
 // An event the reminder planner worded for recording notes (see NOTES_LABELS in
 // base44/functions/generateReminderSchedule) gets "Jot down questions" before it
@@ -57,6 +58,9 @@ export default function TaskNotification() {
   }, []);
   const [showBirthdayDraft, setShowBirthdayDraft] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
+  // The recorder plugin can land a moment after this page renders; the
+  // notes buttons below re-check once it has.
+  const recorderPresent = usePluginPresent('RecorderBridge');
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -205,7 +209,7 @@ export default function TaskNotification() {
   if (!task) return null;
 
   const isProcessing = !!processingAction;
-  const notesButtons = notesButtonsFor(task, Date.now());
+  const notesButtons = recorderPresent ? notesButtonsFor(task, Date.now()) : null;
   const openNotes = (what) => {
     actedRef.current = true; // going to prep or record isn't brushing the reminder off
     navigate(`${createPageUrl("Notes")}?task=${encodeURIComponent(task.id)}&${what}=1`);
