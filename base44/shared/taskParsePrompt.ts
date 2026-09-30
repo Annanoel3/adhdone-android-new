@@ -216,6 +216,15 @@ target_date / target_time — WHEN the thing happens (YYYY-MM-DD / 24h "HH:MM").
   deadline. Booking a cancellation call as an event on the appointment's day
   is the worst possible reading: it reminds them to cancel after it's too
   late.
+  "Remind me until I do it" with no rhythm named: judge what KIND of thing it
+  is. Something done in one sitting at home, today — the dishes, the litter
+  box, a load of laundry, a call, taking out the trash — is a TODAY thing:
+  target_date today, deadline_style "by", no time, so it's kept at through the
+  day and counts as overdue tomorrow. Something that needs them to be
+  somewhere or to fit a trip in — drop the package at FedEx, return the
+  library books, pick up the prescription, get the oil changed — is a THIS
+  WEEK thing: no date at all, and the planner spreads it across the week. Go
+  by what the task involves, not by how it's worded.
   target_date must ALWAYS be a real calendar date copied from the table above —
   "2026-09-05", never a day word like "Saturday" or "tomorrow". Repeating the
   user's wording here is a broken answer; look the day up and write the date.
@@ -263,12 +272,17 @@ user_asked_to_repeat_every — answer ONLY this narrow question: did the user
   other day"). If yes, give that rhythm: 10min / 20min / 30min / 1hour /
   2hours / 4hours / daily / every_other_day. If they didn't ask for repeated
   pings — which is the overwhelming majority of the time — this is null.
-  Asking to be reminded again and again UNTIL it is done, with no rhythm
-  named ("keep reminding me until I finish", "nag me until it's done", "don't
-  let me forget — keep at me"), IS a rhythm request: answer 1hour. When a
-  clock time is on the same task, the pings START at that time ("take my
-  pills at 10 am every day and keep reminding me until I finish" = a daily
-  task at 10:00, first ping at 10:00, then hourly until it's checked off).
+  Only a NAMED rhythm goes here. Asking to be reminded again and again UNTIL
+  it is done with no rhythm named ("keep reminding me until I finish", "nag
+  me until it's done", "don't let me forget — keep at me") is NOT a rhythm:
+  leave this null and put their words in reminder_wish; the app's nudge
+  planner reads the wish and keeps at them, at a pace that fits the task
+  (see the "until I do it" note under target_date). Naming the pace is what
+  makes it a rhythm: "every hour until I'm done", "nag me every 20 minutes",
+  "hourly", "twice a day". When a clock time is on the same task, the pings
+  START at that time ("take my pills at 10 am every day and remind me every
+  hour until I finish" = a daily task at 10:00, first ping at 10:00, then
+  hourly until it's checked off).
   A repeat that has a CLOCK TIME and a calendar rhythm of a day or longer
   ("every day at 9", "every other day at 8 am", "Wednesdays and Thursdays at
   noon") is NOT this field — it is the thing itself recurring on the calendar:
