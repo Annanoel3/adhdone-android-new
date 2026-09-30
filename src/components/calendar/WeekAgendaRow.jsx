@@ -26,7 +26,7 @@ function formatTime(at) {
 export default function WeekAgendaRow({ item, emojiFor, useEmoji, isDark, onItemOpen, textPrimary, textSecondary }) {
   const clickable = !!(item.task || item.taskId);
   const time = formatTime(item.at);
-  const label = item.overdue ? 'Overdue' : KIND_LABEL[item.kind] || '';
+  const label = item.overdue ? 'Overdue' : item.cancelled ? 'Cancelled' : KIND_LABEL[item.kind] || '';
   return (
     <button
       onClick={() => clickable && onItemOpen?.(item)}
@@ -46,7 +46,7 @@ export default function WeekAgendaRow({ item, emojiFor, useEmoji, isDark, onItem
       <div className="flex-1 min-w-0">
         <div className={`text-sm leading-snug line-clamp-2 break-words ${
           item.overdue ? (isDark ? 'text-red-300' : 'text-red-700') + ' font-medium' : textPrimary
-        }`}>
+        } ${item.cancelled ? 'line-through opacity-60' : ''}`}>
           {useEmoji && <span className="mr-1">{emojiFor(item)}</span>}
           {item.title}
         </div>
