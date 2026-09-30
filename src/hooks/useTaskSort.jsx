@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { base44 } from "@/api/base44Client";
 
 const STORAGE_KEY = "task_sort_preference";
 const SORT_EVENT = "task_sort_change";
@@ -45,6 +46,20 @@ export function sortTasks(tasks, sortBy) {
   return sorted;
 }
 
+// A reinstall or a new phone starts with no local copy; the account remembers
+// the choice (User.task_sort). Fills in only when nothing is stored here — a
+// choice made on this phone always wins over the profile copy. Called from
+// Layout once the profile is known; mounted lists pick it up through the event.
+export function seedTaskSortFromProfile(user) {
+  try {
+    if (localStorage.getItem(STORAGE_KEY)) return;
+    const v = user?.task_sort;
+    if (!v || !SORT_OPTIONS[v]) return;
+    localStorage.setItem(STORAGE_KEY, v);
+    window.dispatchEvent(new CustomEvent(SORT_EVENT, { detail: { sortBy: v } }));
+  } catch (e) { /* no storage */ }
+}
+
 export function useTaskSort() {
   const [sortBy, setSortByState] = useState(
     () => localStorage.getItem(STORAGE_KEY) || "created_date"
@@ -53,6 +68,8 @@ export function useTaskSort() {
   const setSortBy = useCallback((value) => {
     setSortByState(value);
     localStorage.setItem(STORAGE_KEY, value);
+    // And on the account, for the next phone or reinstall.
+    base44.auth.updateMe({ task_sort: value }).catch(() => {});
     // Notify other mounted instances (Home + Tasks) in the same tab.
     window.dispatchEvent(new CustomEvent(SORT_EVENT, { detail: { sortBy: value } }));
   }, []);
