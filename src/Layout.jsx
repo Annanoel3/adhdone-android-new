@@ -58,7 +58,10 @@ import {
 import MiniPomodoroBar from "./components/shared/MiniPomodoroBar";
 import UniversalVoiceAssistant from "./components/shared/UniversalVoiceAssistant";
 import PokeNotification from "./components/shared/PokeNotification";
-import NotificationFollowupModal from "./components/shared/NotificationFollowupModal";
+// NotificationFollowupModal ("Did you do it?") is no longer mounted: it popped
+// up on its own on every open for any overdue task and for the latest smart
+// nudge, and people just tapped No. The only "did you do it?" now is the one a
+// notification tap lands on (the TaskNotification page).
 import AppGuideModal from "./components/shared/AppGuideModal";
 import FocusModePrompt from "./components/shared/FocusModePrompt";
 import ScheduledTextSendPopup from "./components/scheduledtexts/ScheduledTextSendPopup";
@@ -1197,7 +1200,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           <MiniPomodoroBar theme={theme} />
           <UniversalVoiceAssistant theme={theme} currentPageName={currentPageName} />
           <PokeNotification theme={theme} />
-          <NotificationFollowupModal user={user} theme={theme} />
 
         <FocusModePrompt user={user} theme={theme} />
         <ScheduledTextSendPopup user={user} theme={theme} />
