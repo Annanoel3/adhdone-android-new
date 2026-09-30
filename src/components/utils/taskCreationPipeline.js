@@ -64,9 +64,10 @@ function maybeAskForHomeZip(text, location) {
 // the task exempt when the answer was yes — BEFORE anything is booked, so the
 // first batch is right and nothing has to be cancelled and re-booked.
 async function rhythmBookingOptions(task, user) {
-  if (!shouldAskQuietHoursNag(task, user)) return {};
+  const plain = { throughQuietHours: false, alarm: false };
+  if (!shouldAskQuietHoursNag(task, user)) return plain;
   const yes = await askQuietHoursNag(task);
-  if (!yes) return {};
+  if (!yes) return plain;
   await base44.entities.Task.update(task.id, { quiet_hours_exempt: true }).catch(() => {});
   task.quiet_hours_exempt = true;
   return { throughQuietHours: true, alarm: alertStyleFor(task, user?.alarm_mode) === 'alarm' };
