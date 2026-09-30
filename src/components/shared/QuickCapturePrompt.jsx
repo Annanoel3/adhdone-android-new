@@ -1405,12 +1405,18 @@ const UPDATE_PROMPT_KEY = 'app_update_prompt_last_shown';
 // (not partway through a staged rollout). Before that there is nothing to
 // update to, so the popup must stay hidden.
 const NEWEST_BUILD_ON_PLAY = true; // 1.3.9 approved on Play, Sep 2026
-// The newest build is the one that records notes (RecorderBridge, approved on
-// Google Play Sep 30, 2026). Every phone without it gets this one card, which
-// leads with notes; a phone that is also missing 1.3.12's vibrate-only choice
-// (AlarmBridge.setQuietWhen) or 1.3.9's quiet hours (AlarmBridge.quietFor) is
-// told about those too, and asked the vibrate question, as before.
+// 1.3.12 is the build that can tell silent mode and Do Not Disturb apart for
+// vibrate-only alarms (AlarmBridge.setQuietWhen). Approved on Google Play
+// Sep 25, 2026, so 1.3.9-1.3.11 phones get this card and it offers that choice.
 const QUIET_CHOICE_ON_PLAY = true;
+// Flip to true only once the build that records notes (RecorderBridge) is out
+// on Google Play to everyone. Then every phone without it gets this one card,
+// leading with notes; a phone also missing the vibrate-only choice or 1.3.9's
+// quiet hours (AlarmBridge.quietFor) is told about those too. Until then the
+// card stays about 1.3.12, so nobody is sent to Play for a build that isn't
+// there. (Sep 30, 2026: the build Play approved that day turned out not to
+// have the recorder - Anna's phone lost Record Notes on updating to it.)
+const NOTES_BUILD_ON_PLAY = false;
 const hasQuietHoursBuild = () =>
   typeof window !== 'undefined' &&
   typeof window.Capacitor?.Plugins?.AlarmBridge?.quietFor === 'function';
@@ -1419,7 +1425,10 @@ const hasQuietChoiceBuild = () =>
   typeof window.Capacitor?.Plugins?.AlarmBridge?.setQuietWhen === 'function';
 const hasRecorderBuild = () =>
   typeof window !== 'undefined' && !!window.Capacitor?.Plugins?.RecorderBridge;
-const hasNewestBuild = () => hasRecorderBuild();
+const hasNewestBuild = () =>
+  NOTES_BUILD_ON_PLAY
+    ? hasRecorderBuild()
+    : QUIET_CHOICE_ON_PLAY ? hasQuietChoiceBuild() : hasQuietHoursBuild();
 
 export function AppUpdatePrompt({ user, theme }) {
   const dark = theme === 'dark';
@@ -1554,13 +1563,24 @@ export function AppUpdatePrompt({ user, theme }) {
             There's an update!
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
-            The new version of ADHDone records notes. Tap Record on the Notes page during an appointment,
-            a lecture or a meeting, and you get the gist, your to-dos and the details worth keeping — in
-            plain words, with the parts that matter highlighted.
+            {NOTES_BUILD_ON_PLAY ? (
+              <>
+                The new version of ADHDone records notes. Tap Record on the Notes page during an appointment,
+                a lecture or a meeting, and you get the gist, your to-dos and the details worth keeping — in
+                plain words, with the parts that matter highlighted.
+              </>
+            ) : choiceLive && hasQuietHours ? (
+              <>The new version of ADHDone lets you pick when alarms only vibrate: on silent or vibrate mode, on Do Not Disturb, or both.</>
+            ) : (
+              <>
+                The new version of ADHDone lets you quiet your reminders and alarms for 1, 2 or 3 hours.
+                They still show up, just with no sound.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
-        {choiceLive && hasQuietHours && !hasQuietChoiceBuild() && (
+        {NOTES_BUILD_ON_PLAY && choiceLive && hasQuietHours && !hasQuietChoiceBuild() && (
           <p className={`text-sm ${sub}`}>
             It also lets you pick when alarms only vibrate: on silent or vibrate mode, on Do Not Disturb, or both.
           </p>
@@ -1568,7 +1588,11 @@ export function AppUpdatePrompt({ user, theme }) {
 
         {!hasQuietHours && (
           <div className={`text-sm ${main}`}>
-            <p className="font-medium">It also lets you quiet reminders and alarms for 1, 2 or 3 hours — three ways:</p>
+            <p className="font-medium">
+              {NOTES_BUILD_ON_PLAY
+                ? 'It also lets you quiet reminders and alarms for 1, 2 or 3 hours — three ways:'
+                : 'Three ways to quiet them:'}
+            </p>
             <ul className={`mt-2 space-y-1.5 ${sub}`}>
               <li>🔕 Expand the pinned notification and pick 1, 2 or 3 hours.</li>
               <li>📱 Tap "Silence 1 hr" on the home-screen widget.</li>
