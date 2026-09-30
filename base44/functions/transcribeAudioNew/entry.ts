@@ -117,7 +117,11 @@ async function notesPart(base44: any, user: any, body: any) {
   const b64 = String(body?.audio_base64 || "");
   if (!b64) return Response.json({ ok: false, error: "audio_base64 is required" }, { status: 400 });
   const bytes = decodeBase64(b64);
-  const startMs = Math.max(0, Number(body?.start_ms) || 0);
+  // The first part always starts at 0. The phone's recorder reported the time
+  // since the phone was switched on for it (its own clock is started a moment
+  // after the first part is opened), which put "13:16:53" on every line of a
+  // short recording's notes. Later parts carry a real offset.
+  const startMs = index === 0 ? 0 : Math.max(0, Number(body?.start_ms) || 0);
   const endMs = Math.max(startMs, Number(body?.end_ms) || 0);
   // The phone's own timing, or (64 kbps) the file size, whichever says longer.
   const seconds = Math.max(1, Math.round((endMs - startMs) / 1000), Math.round(bytes.length / 8000));
@@ -201,6 +205,11 @@ When it isn't clear who said something, state the point with no person at all.
 
 Put what matters most first, in short plain lines they can take in at a glance. No paragraphs:
 one idea per line, and keep lines short. Skip small talk and anything that doesn't matter later.
+
+Highlight the part of each line that matters most by wrapping it in ==double equals==: the thing
+to do, the name, the number, the date, the dose — the few words an eye should land on first.
+One highlight per line, two to six words, and only where a line has something worth landing
+on; a line with nothing to single out gets none. Never highlight a whole line.
 
 - title: a short, specific name for this recording ("Knee follow-up with Dr. Patel", "Bio 101:
   cell division", "Budget meeting").
