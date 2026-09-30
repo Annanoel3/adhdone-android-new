@@ -276,6 +276,30 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   const [seasonalUnlocked, setSeasonalUnlocked] = useState(() => {
     return localStorage.getItem('seasonal_unlocked') === 'true';
   });
+  // The seasonal-theme secret wanders. It used to sit at the bottom of the
+  // Focus Timer page only, where hardly anyone scrolled, so hardly anyone
+  // found it. Now it's on one page a day, from the pages people actually
+  // visit; today's page comes from the date, so it stays put all day and
+  // moves overnight. Found once, it stops wandering (the Focus Timer keeps
+  // its own button, which is also the way to the second secret).
+  const SECRET_PAGES = ['Home', 'Tasks', 'Calendar', 'Progress', 'Diary', 'ParkingLot', 'Settings', 'Notes'];
+  const secretPageToday = (() => {
+    const d = new Date();
+    const dayIndex = Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 86400000);
+    return SECRET_PAGES[dayIndex % SECRET_PAGES.length];
+  })();
+  const secretHere = !seasonalUnlocked && currentPageName === secretPageToday;
+  const [secretFound, setSecretFound] = useState(false);
+  const findSecret = () => {
+    const seasonal = getDateBasedMode();
+    setSeasonalUnlocked(true);
+    setSpecialMode(seasonal);
+    setTheme('minimalist');
+    try { localStorage.setItem('seasonal_popup_shown', 'true'); } catch (e) { /* the popup just shows once more some day */ }
+    persistOnboardingFlag('seasonal_popup_shown');
+    setSecretFound(true);
+    saveThemeToProfile('minimalist', seasonal, true);
+  };
   const [showAppGuide, setShowAppGuide] = useState(false);
   const quietNotifications = useQuietNotifications();
   const [showQuietPicker, setShowQuietPicker] = useState(false);
@@ -1170,6 +1194,17 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
               {children}
+              {secretHere && (
+                <div className="text-center pt-2" style={{ paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
+                  <button
+                    type="button"
+                    onClick={findSecret}
+                    className={`text-sm opacity-70 hover:opacity-100 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}
+                  >
+                    what's this? 👀
+                  </button>
+                </div>
+              )}
             </div>
 
             {currentPageName !== "Home" && currentPageName !== "ParkingLot" && currentPageName !== "SupportSpace" && currentPageName !== "AddTask" && currentPageName !== "Tasks" && currentPageName !== "Diary" && currentPageName !== "Notes" && (
@@ -1279,6 +1314,19 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             </DialogContent>
           </Dialog>
         )}
+
+        <Dialog open={secretFound} onOpenChange={(o) => { if (!o) setSecretFound(false); }}>
+          <DialogContent className="max-w-md text-center">
+            <DialogHeader>
+              <DialogTitle className="text-2xl">🎉 You found a secret!</DialogTitle>
+              <DialogDescription className="text-base pt-4 space-y-3">
+                <p>You've unlocked the <strong>Seasonal Theme</strong>! 🍂❄️🌸</p>
+                <p>It changes with the seasons and has been added to your theme rotation. Cycle through your themes in Settings to find it again!</p>
+              </DialogDescription>
+            </DialogHeader>
+            <Button onClick={() => setSecretFound(false)} className="w-full bg-green-600 hover:bg-green-700 text-white">Cool! 🎨</Button>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={showSpicyBrainsExplanation} onOpenChange={setShowSpicyBrainsExplanation}>
           <DialogContent className="max-w-2xl bg-gradient-to-br from-pink-100 via-purple-100 to-cyan-100 border-4 border-yellow-400">
