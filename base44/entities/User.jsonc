@@ -348,6 +348,18 @@
       "type": "boolean",
       "description": "Calendar display mode: true = emoji icons, false = text titles. Saved from the Emoji/Text toggle on the Calendar page so the choice follows the user across devices."
     },
+    "task_sort": {
+      "type": "string",
+      "description": "How the task list is sorted (created_date, priority, due_date or energy), saved from the sort dropdown on Home and My Tasks so the choice survives a reinstall and follows the user to a new phone. The phone's own copy wins while it exists; this only fills in when the phone has none."
+    },
+    "tasks_view_mode": {
+      "type": "string",
+      "description": "My Tasks layout, sections or days, saved from the Sections/Days switch. Same rule as task_sort."
+    },
+    "calendar_view_mode": {
+      "type": "string",
+      "description": "Calendar layout, month or week, saved from the Month/Week switch. Same rule as task_sort."
+    },
     "notes_minutes_month": {
       "type": "string",
       "description": "Recorded notes: the month (YYYY-MM, in the person's own time zone) that notes_seconds_used counts. A different month means nothing has been used yet this month."
