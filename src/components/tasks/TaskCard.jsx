@@ -23,6 +23,7 @@ import {
   RefreshCw,
   CalendarOff,
   RotateCcw,
+  Tag as TagIcon,
 } from "lucide-react";
 import {
   Popover,
@@ -31,7 +32,7 @@ import {
 } from "@/components/ui/popover";
 import { formatTimeRange } from "../utils/timeRangeLabel";
 import SubtaskQuickAdd from "./SubtaskQuickAdd";
-import LifeAreaPill from "./LifeAreaPill";
+import LifeAreaPill, { tagPillClass, normalizeTag, TAG_MAX } from "./LifeAreaPill";
 import { checkDuePushEgg } from "../eastereggs/duePushEgg";
 import { cancelEventWithUndo, restoreEvent } from "../utils/snoozeTask";
 
@@ -69,6 +70,11 @@ export default function TaskCard({
   const [chipDateOpen, setChipDateOpen] = useState(false);
   const chipDateRef = useRef(null);
   const chipTimeRef = useRef(null);
+  // The custom tag (see LifeAreaPill's tag helpers): typed in a small popover
+  // off the tag pill, with the tags already in use offered as one-tap picks.
+  const [tagOpen, setTagOpen] = useState(false);
+  const [tagDraft, setTagDraft] = useState(task.tag || '');
+  const [tagOptions, setTagOptions] = useState([]);
 
   const commitDateTime = () => {
     const newDate = dateInputRef.current?.value || '';
@@ -196,6 +202,35 @@ export default function TaskCard({
 
   const handleCompleteTask = () => {
     onComplete(task);
+  };
+
+  // The tags already on this account's active tasks, most used first, for the
+  // picker. Read when the picker opens, so it's never a cost on the list.
+  const loadTagOptions = async () => {
+    try {
+      const rows = await Task.filter({ status: 'active' }, '-updated_date', 200);
+      const counts = new Map();
+      for (const r of rows || []) {
+        const t = normalizeTag(r.tag);
+        if (!t) continue;
+        const k = t.toLowerCase();
+        counts.set(k, { tag: counts.get(k)?.tag || t, n: (counts.get(k)?.n || 0) + 1 });
+      }
+      setTagOptions(Array.from(counts.values()).sort((a, b) => b.n - a.n).map((x) => x.tag).slice(0, 12));
+    } catch (e) {
+      setTagOptions([]);
+    }
+  };
+
+  const commitTag = (value) => {
+    const next = normalizeTag(value) || null;
+    setTagOpen(false);
+    if ((task.tag || null) === next) return;
+    if (onUpdateTask) onUpdateTask({ ...task, tag: next });
+    Task.update(task.id, { tag: next }).catch((error) => {
+      console.error("Error updating tag:", error);
+      if (onRefreshTasks) onRefreshTasks();
+    });
   };
 
   // Events only: it isn't happening. The row stays, crossed out here and on
@@ -992,6 +1027,68 @@ export default function TaskCard({
           >
             {typeEmoji && <span className="mr-1">{typeEmoji}</span>}{task.life_area === 'work' && <span className="mr-1">💼</span>}{task.title}
           </h3>
+
+          {/* The custom tag, just left of the priority. Tap it (or the faint
+              tag mark when there is none) to type one. */}
+          {!task.silenced && (
+            <Popover open={tagOpen} onOpenChange={(o) => { setTagOpen(o); if (o) { setTagDraft(task.tag || ''); loadTagOptions(); } }}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label={task.tag ? `Tag: ${task.tag}. Tap to change it` : 'Add a tag'}
+                  title={task.tag ? 'Change the tag' : 'Add a tag'}
+                  className={task.tag
+                    ? `flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap max-w-[6.5rem] truncate cursor-pointer hover:opacity-80 transition-opacity ${tagPillClass(task.tag, theme)}`
+                    : `flex-shrink-0 p-1 rounded transition-colors ${theme === 'dark' ? 'text-gray-600 hover:text-gray-400' : 'text-gray-300 hover:text-gray-500'}`}
+                >
+                  {task.tag ? task.tag : <TagIcon className="w-3.5 h-3.5" />}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className={`w-64 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
+                <form className="space-y-3" onSubmit={(e) => { e.preventDefault(); commitTag(tagDraft); }}>
+                  <div>
+                    <label className={`text-sm font-medium block mb-1 ${theme === 'dark' ? 'text-gray-200' : ''}`}>Tag</label>
+                    <input
+                      type="text"
+                      value={tagDraft}
+                      onChange={(e) => setTagDraft(e.target.value)}
+                      maxLength={TAG_MAX}
+                      autoFocus
+                      placeholder="Anything — mom, work, errand"
+                      className={`w-full border rounded px-3 py-2 text-sm ${theme === 'dark' ? 'bg-gray-700 border-gray-600 text-gray-200 placeholder-gray-500' : 'bg-white border-gray-300 text-gray-900'}`}
+                    />
+                  </div>
+                  {tagOptions.filter((t) => t.toLowerCase() !== normalizeTag(tagDraft).toLowerCase()).length > 0 && (
+                    <div className="flex flex-wrap gap-1.5">
+                      {tagOptions
+                        .filter((t) => t.toLowerCase() !== normalizeTag(tagDraft).toLowerCase())
+                        .map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => commitTag(t)}
+                            className={`text-xs px-2 py-1 rounded border cursor-pointer hover:opacity-80 ${tagPillClass(t, theme)}`}
+                          >
+                            {t}
+                          </button>
+                        ))}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <Button type="submit" size="sm" className="flex-1" disabled={!normalizeTag(tagDraft)}>
+                      Save
+                    </Button>
+                    {task.tag && (
+                      <Button type="button" size="sm" variant="ghost" onClick={() => commitTag('')} className={theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}>
+                        Remove
+                      </Button>
+                    )}
+                  </div>
+                </form>
+              </PopoverContent>
+            </Popover>
+          )}
 
           {!task.silenced && (
             <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${getUrgencyColor(task.urgency)}`}>
