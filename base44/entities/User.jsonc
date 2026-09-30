@@ -359,6 +359,21 @@
     "notes_can_record": {
       "type": "boolean",
       "description": "Recorded notes: true once this person has opened an app build that can record (36+). The reminder planner only words an appointment's reminders around recording notes for them."
+    },
+    "app_build": {
+      "type": "string",
+      "description": "The phone app's build number (Android versionCode) as last opened, from the phone itself. Data only, for knowing which build each person is on. Empty for web-only accounts."
+    },
+    "app_version": {
+      "type": "string",
+      "description": "The phone app's version name (1.3.12, ...) as last opened, alongside app_build."
+    },
+    "phone_plugins": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Which of ADHDone's own phone plugins the installed build has (AlarmBridge, RecorderBridge, CalendarBridge, ...), read on app open. Data only: says what the phone can do, e.g. whether Record Notes can show for them."
     }
   },
   "name": "User"
