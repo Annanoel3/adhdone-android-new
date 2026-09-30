@@ -82,6 +82,7 @@ import CatchUpDialog from "./components/onboarding/CatchUpDialog";
 import { applyOnboardingReplay } from "./components/onboarding/onboardingReplay";
 import { hydrateOnboardingFlags, clearOnboardingFlags, persistOnboardingFlag } from "./components/onboarding/onboardingSync";
 import { trackFire } from "@/lib/appTrack";
+import { seedTaskSortFromProfile } from "@/hooks/useTaskSort";
 import TaskCaptureProcessor from "./components/shared/TaskCaptureProcessor";
 import UsageTracker from "./components/shared/UsageTracker";
 import { base44 } from "@/api/base44Client";
@@ -391,6 +392,18 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         setSeasonalUnlocked(true);
         localStorage.setItem('seasonal_unlocked', 'true');
       }
+      // Choices the account remembers for a reinstall or a new phone: how the
+      // task list is sorted and whether My Tasks shows sections or days. This
+      // phone's own copy wins while it exists (a fresh choice here is never
+      // snapped back); these only fill in when the phone has none.
+      seedTaskSortFromProfile(user);
+      try {
+        const mode = user.tasks_view_mode;
+        if ((mode === 'sections' || mode === 'days') && localStorage.getItem('tasks_view_mode') === null) {
+          localStorage.setItem('tasks_view_mode', mode);
+          window.dispatchEvent(new CustomEvent('tasks-view-mode-seeded', { detail: { mode } }));
+        }
+      } catch (e) { /* no storage */ }
     }
   }, [user, authCheckComplete]);
 
