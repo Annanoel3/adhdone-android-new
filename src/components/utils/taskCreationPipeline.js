@@ -1,6 +1,7 @@
 import { base44 } from "@/api/base44Client";
 import { buildTaskParsePrompt } from "../../../base44/shared/taskParsePrompt";
-import { scheduleReminder } from "./reminderScheduler";
+import { scheduleReminder, shouldAskQuietHoursNag, askQuietHoursNag } from "./reminderScheduler";
+import { alertStyleFor } from "./widgetBridge";
 import { getReminderCopy } from "./reminderCopy";
 import dedupeSplitTasks from "./dedupeSplitTasks";
 import { createBirthdayFromKind } from "./birthdayScheduler";
@@ -57,6 +58,20 @@ function maybeAskForHomeZip(text, location) {
 
 // Every path that creates a main task says so. The one-time "how should
 // reminders reach you?" ask (AlertStylePrompt) keys off the first of these.
+// A rhythm with "keep reminding me until I'm done": asked, right now, whether
+// it may run through quiet hours (see reminderScheduler.askQuietHoursNag).
+// Returns the two booking options for scheduleRecurringReminders, and marks
+// the task exempt when the answer was yes — BEFORE anything is booked, so the
+// first batch is right and nothing has to be cancelled and re-booked.
+async function rhythmBookingOptions(task, user) {
+  if (!shouldAskQuietHoursNag(task, user)) return {};
+  const yes = await askQuietHoursNag(task);
+  if (!yes) return {};
+  await base44.entities.Task.update(task.id, { quiet_hours_exempt: true }).catch(() => {});
+  task.quiet_hours_exempt = true;
+  return { throughQuietHours: true, alarm: alertStyleFor(task, user?.alarm_mode) === 'alarm' };
+}
+
 function announceTaskCreated(task) {
   try {
     window.dispatchEvent(new CustomEvent('task-created', { detail: { task } }));
@@ -309,7 +324,8 @@ export async function processAndCreateTask(inputText, opts = {}) {
           return commitNotificationIds(parentTask.id, multiIds || []);
         }).catch(error => console.error("Failed to schedule reminders:", error));
       } else if (nextReminder && INTERVAL_MS[sched.interval]) {
-        import('./reminderScheduler').then(module => module.scheduleRecurringReminders({
+        rhythmBookingOptions(parentTask, currentUser).then((opts) => import('./reminderScheduler').then(module => module.scheduleRecurringReminders({
+          ...opts,
           email: currentUser.email,
           ...getReminderCopy(parentTask, nextReminder),
           startTime: nextReminder.toISOString(),
@@ -322,7 +338,7 @@ export async function processAndCreateTask(inputText, opts = {}) {
             { id: "snooze_60", text: "Snooze 1 hour" },
             { id: "complete", text: "✅ Done" }
           ]
-        })).then(({ notificationIds, lastScheduledUntil }) => {
+        }))).then(({ notificationIds, lastScheduledUntil }) => {
           return commitNotificationIds(parentTask.id, notificationIds || [],
             lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {});
         }).catch(error => console.error("Failed to schedule reminders:", error));
@@ -576,7 +592,8 @@ export async function processAndCreateTask(inputText, opts = {}) {
           })
           .catch(error => console.error("Failed to schedule reminder:", error));
       } else if (INTERVAL_MS[actualReminderInterval]) {
-        import('./reminderScheduler').then(module => module.scheduleRecurringReminders({
+        rhythmBookingOptions(createdTask, currentUser).then((opts) => import('./reminderScheduler').then(module => module.scheduleRecurringReminders({
+          ...opts,
           email: currentUser.email,
           ...getReminderCopy(createdTask, nextReminder),
           startTime: nextReminder.toISOString(),
@@ -589,7 +606,7 @@ export async function processAndCreateTask(inputText, opts = {}) {
             { id: "snooze_60", text: "Snooze 1 hour" },
             { id: "complete", text: "✅ Done" }
           ]
-        })).then(({ notificationIds, lastScheduledUntil }) => {
+        }))).then(({ notificationIds, lastScheduledUntil }) => {
           return commitNotificationIds(createdTask.id, notificationIds || [],
             lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {});
         }).catch(error => console.error("Failed to schedule recurring reminders:", error));
