@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
 import { setChaos, isChaosOn } from "../eastereggs/chaosMode";
 import { showEggBadge } from "../eastereggs/eggBadge";
@@ -7,9 +7,24 @@ const APP_VERSION = "1.0.0";
 const TAPS_NEEDED = 7;
 
 // The version line at the bottom of Settings. Tap it seven times.
+// On the phone it shows the installed build's own version and build number
+// (the web app's number told nobody anything about which APK they had).
 export default function VersionTap({ user, theme }) {
   const taps = useRef(0);
   const timer = useRef(null);
+  const [native, setNative] = useState(null);
+  useEffect(() => {
+    if (!window.Capacitor?.isNativePlatform?.()) return;
+    let gone = false;
+    const read = async () => {
+      try {
+        const info = await window.Capacitor?.Plugins?.App?.getInfo?.();
+        if (!gone && info?.version) setNative({ version: String(info.version), build: info.build ? String(info.build) : '' });
+      } catch (e) { /* older build: the web number stays */ }
+    };
+    read();
+    return () => { gone = true; };
+  }, []);
 
   const handleTap = async () => {
     clearTimeout(timer.current);
@@ -43,7 +58,7 @@ export default function VersionTap({ user, theme }) {
         theme === 'dark' ? 'text-gray-500' : 'text-gray-400'
       }`}
     >
-      ADHDone v{APP_VERSION}
+      ADHDone v{native ? native.version : APP_VERSION}{native?.build ? ` (build ${native.build})` : ''}
     </p>
   );
 }
