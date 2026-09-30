@@ -1405,9 +1405,11 @@ const UPDATE_PROMPT_KEY = 'app_update_prompt_last_shown';
 // (not partway through a staged rollout). Before that there is nothing to
 // update to, so the popup must stay hidden.
 const NEWEST_BUILD_ON_PLAY = true; // 1.3.9 approved on Play, Sep 2026
-// 1.3.12 is the newest build (the one that can tell silent mode and Do Not
-// Disturb apart for vibrate-only alarms), so 1.3.9-1.3.11 phones get this same
-// popup too, and it offers that choice. Approved on Google Play Sep 25, 2026.
+// The newest build is the one that records notes (RecorderBridge, approved on
+// Google Play Sep 30, 2026). Every phone without it gets this one card, which
+// leads with notes; a phone that is also missing 1.3.12's vibrate-only choice
+// (AlarmBridge.setQuietWhen) or 1.3.9's quiet hours (AlarmBridge.quietFor) is
+// told about those too, and asked the vibrate question, as before.
 const QUIET_CHOICE_ON_PLAY = true;
 const hasQuietHoursBuild = () =>
   typeof window !== 'undefined' &&
@@ -1415,7 +1417,9 @@ const hasQuietHoursBuild = () =>
 const hasQuietChoiceBuild = () =>
   typeof window !== 'undefined' &&
   typeof window.Capacitor?.Plugins?.AlarmBridge?.setQuietWhen === 'function';
-const hasNewestBuild = () => (QUIET_CHOICE_ON_PLAY ? hasQuietChoiceBuild() : hasQuietHoursBuild());
+const hasRecorderBuild = () =>
+  typeof window !== 'undefined' && !!window.Capacitor?.Plugins?.RecorderBridge;
+const hasNewestBuild = () => hasRecorderBuild();
 
 export function AppUpdatePrompt({ user, theme }) {
   const dark = theme === 'dark';
@@ -1550,20 +1554,21 @@ export function AppUpdatePrompt({ user, theme }) {
             There's an update!
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
-            {choiceLive && hasQuietHours ? (
-              <>The new version of ADHDone lets you pick when alarms only vibrate: on silent or vibrate mode, on Do Not Disturb, or both.</>
-            ) : (
-              <>
-                The new version of ADHDone lets you quiet your reminders and alarms for 1, 2 or 3 hours.
-                They still show up, just with no sound.
-              </>
-            )}
+            The new version of ADHDone records notes. Tap Record on the Notes page during an appointment,
+            a lecture or a meeting, and you get the gist, your to-dos and the details worth keeping — in
+            plain words, with the parts that matter highlighted.
           </DialogDescription>
         </DialogHeader>
 
-        {!(choiceLive && hasQuietHours) && (
+        {choiceLive && hasQuietHours && !hasQuietChoiceBuild() && (
+          <p className={`text-sm ${sub}`}>
+            It also lets you pick when alarms only vibrate: on silent or vibrate mode, on Do Not Disturb, or both.
+          </p>
+        )}
+
+        {!hasQuietHours && (
           <div className={`text-sm ${main}`}>
-            <p className="font-medium">Three ways to quiet them:</p>
+            <p className="font-medium">It also lets you quiet reminders and alarms for 1, 2 or 3 hours — three ways:</p>
             <ul className={`mt-2 space-y-1.5 ${sub}`}>
               <li>🔕 Expand the pinned notification and pick 1, 2 or 3 hours.</li>
               <li>📱 Tap "Silence 1 hr" on the home-screen widget.</li>
