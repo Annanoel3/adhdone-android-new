@@ -54,6 +54,11 @@ const GRACE_MS = 10 * 60 * 1000;
 // A session's length. Sessions saved before the timer had a choice of length
 // were always 5 minutes.
 export const sessionDurationMs = (s) => (s && s.durationMs > 0 ? s.durationMs : DEFAULT_MINUTES * MINUTE_MS);
+// When a session started: a stopwatch keeps its start; a countdown is worked
+// back from its end.
+export const sessionStartMs = (s) => (s?.stopwatch && s.startedAtISO
+  ? new Date(s.startedAtISO).getTime()
+  : new Date(s?.endTimeISO || 0).getTime() - sessionDurationMs(s));
 const minutesWord = (n) => (n === 1 ? '1 minute' : `${n} minutes`);
 
 // "I finished the task": the same finish as ticking it off on Home. The task
@@ -116,7 +121,7 @@ export function LaunchProvider({ children }) {
   // session from before the timer (no durationMs) still has one to stop; a
   // Pomodoro the person started on their own is never touched.
   const stopLegacyPomodoro = (sp) => {
-    if (sp && !sp.durationMs) {
+    if (sp && !sp.durationMs && !sp.stopwatch) {
       const p = pomodoroRef.current;
       if (p) p.resetTimer();
     }
@@ -138,7 +143,8 @@ export function LaunchProvider({ children }) {
       const spRaw = localStorage.getItem(SPRINT_KEY);
       if (spRaw) {
         const sp = JSON.parse(spRaw);
-        const passed = Date.now() - new Date(sp.endTimeISO).getTime();
+        // A stopwatch has no end: it is simply still running.
+        const passed = sp?.stopwatch ? -1 : Date.now() - new Date(sp.endTimeISO).getTime();
         if (passed > GRACE_MS) {
           localStorage.removeItem(SPRINT_KEY);
         } else if (passed >= 0) {
@@ -208,12 +214,36 @@ export function LaunchProvider({ children }) {
     setSprint(session);
   }, []);
 
+  // The task's own timer: a stopwatch. Tap it and it counts UP from zero — for
+  // finding out how long the dishes actually take — with "I finished the task"
+  // and "Stop" the whole time; nothing rings. Its start is kept on disk, so it
+  // keeps counting with the app closed. (The countdown with presets stays for
+  // the places that ask for a set length.)
+  const startStopwatch = useCallback(async (task) => {
+    if (!task?.id) return;
+    const session = {
+      taskId: task.id,
+      title: task.title,
+      stopwatch: true,
+      startedAtISO: new Date().toISOString(),
+      // Kept so nothing that reads a session's end breaks; never reached.
+      endTimeISO: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      notifId: null,
+      durationMs: 0,
+    };
+    lastSprint = session;
+    localStorage.setItem(SPRINT_KEY, JSON.stringify(session));
+    setSprintEnded(false);
+    setSprintMinimized(false);
+    setSprint(session);
+  }, []);
+
   // A timed session is real timed work: log it so Insights learns how long
   // this task actually takes (Focus Mode logs its own sessions, so the "keep
   // going" path is left out here to avoid counting it twice).
   const logSprintSession = useCallback(async (sp) => {
     if (!sp?.title) return;
-    const startMs = new Date(sp.endTimeISO).getTime() - sessionDurationMs(sp);
+    const startMs = sessionStartMs(sp);
     const seconds = Math.round((Date.now() - startMs) / 1000);
     if (seconds < 60) return;
     try {
@@ -242,7 +272,7 @@ export function LaunchProvider({ children }) {
       try {
         // Carry the timer's time into Focus Mode so its elapsed clock keeps
         // counting from the timer's start instead of restarting at zero.
-        const startISO = new Date(new Date(sp.endTimeISO).getTime() - sessionDurationMs(sp)).toISOString();
+        const startISO = new Date(sessionStartMs(sp)).toISOString();
         // setFocusMode writes the session onto the profile FIRST and then
         // spends several seconds booking check-ins and quieting other tasks.
         // Wait only until the profile shows Focus Mode on (a beat), then move;
@@ -309,6 +339,7 @@ export function LaunchProvider({ children }) {
     <LaunchContext.Provider
       value={{
         startTimer,
+        startStopwatch,
         // The reminder follow-up's "Just 5 minutes" starts a 5-minute timer.
         startSprint: (task) => startTimer(task, DEFAULT_MINUTES),
         hasActiveLaunch: !!sprint,
@@ -352,11 +383,15 @@ export function LaunchProvider({ children }) {
 // both ways to stop right there too (short words: the chip is small).
 function MinimizedChip({ session, ended, theme, specialMode, onResume, onStop, onFinish }) {
   const endMs = new Date(session.endTimeISO).getTime();
-  const [left, setLeft] = useState(() => Math.max(0, endMs - Date.now()));
+  const startMs = sessionStartMs(session);
+  // A stopwatch shows time spent; a countdown shows time left.
+  const read = () => (session.stopwatch ? Math.max(0, Date.now() - startMs) : Math.max(0, endMs - Date.now()));
+  const [left, setLeft] = useState(read);
   useEffect(() => {
-    const id = setInterval(() => setLeft(Math.max(0, endMs - Date.now())), 1000);
+    const id = setInterval(() => setLeft(read()), 1000);
     return () => clearInterval(id);
-  }, [endMs]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [endMs, startMs, session.stopwatch]);
   const sec = Math.floor(left / 1000);
   const clock = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
   return (
@@ -366,7 +401,7 @@ function MinimizedChip({ session, ended, theme, specialMode, onResume, onStop, o
     >
       <Timer className="w-4 h-4 text-emerald-500 flex-shrink-0" />
       <button onClick={onResume} className="text-sm font-medium max-w-[30vw] truncate hover:underline">
-        <span className="tabular-nums">{ended || left === 0 ? "Time's up" : clock}</span> · {session.title}
+        <span className="tabular-nums">{!session.stopwatch && (ended || left === 0) ? "Time's up" : clock}</span> · {session.title}
       </button>
       <button
         onClick={onStop}
