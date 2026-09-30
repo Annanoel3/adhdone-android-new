@@ -325,6 +325,16 @@ export default function Calendar() {
       } catch (e) {
         // The rest of the calendar still shows.
       }
+      // Finished tasks too (the 300 most recent), so a passed day still says
+      // what it held instead of going blank once everything on it was done.
+      try {
+        const done = (await base44.entities.Task.filter({ status: 'completed' }, '-updated_date', 300)) || [];
+        for (const t of done) {
+          if (!seen.has(t.id)) { seen.add(t.id); all.push(t); }
+        }
+      } catch (e) {
+        // The rest of the calendar still shows.
+      }
       setTasks(all);
     } catch {
       setTasks([]);
