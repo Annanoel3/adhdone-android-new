@@ -15,7 +15,7 @@ import { isTodayTask, isCompletedToday } from "../components/utils/todayTasks";
 import { ensureBirthdayReminders } from "../components/utils/birthdayScheduler";
 import { listActiveTasks } from "../components/utils/widgetBridge";
 import BirthdayStrip from "../components/home/BirthdayStrip";
-import NotificationsOffBanner, { CalendarOffBanner } from "../components/home/NotificationsOffBanner";
+import NotificationsOffBanner, { CalendarOffBanner, AlarmSetupBanner } from "../components/home/NotificationsOffBanner";
 import { countCompletionForGif } from "../components/utils/completionMilestone";
 import PullToRefresh from "../components/shared/PullToRefresh";
 import { checkCompletionEggs } from "../components/eastereggs/completionEggs";
@@ -289,6 +289,7 @@ export default function Home() {
 
         <div className="space-y-6">
           <NotificationsOffBanner theme={theme} specialMode={specialMode} />
+          <AlarmSetupBanner theme={theme} specialMode={specialMode} user={user} />
           <CalendarOffBanner theme={theme} specialMode={specialMode} user={user} />
 
           <WelcomeCard userName={user?.full_name} theme={theme} specialMode={specialMode} user={user} />
