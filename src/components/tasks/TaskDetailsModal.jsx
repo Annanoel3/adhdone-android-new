@@ -29,6 +29,7 @@ import {
   X,
   Lightbulb,
   CalendarOff,
+  RotateCcw,
   Image as ImageIcon,
   Upload,
   FileText,
@@ -46,7 +47,7 @@ import { supportsAlarms, alertStyleFor, refreshAlarms, requestAlarmPermissions }
 import { AlertStyleInfo } from "../shared/QuickCapturePrompt";
 import VoiceTaskInput from "./VoiceTaskInput";
 import { scheduleReminder, cancelScheduledReminder } from "../utils/reminderScheduler";
-import { deleteTaskWithUndo } from "../utils/snoozeTask";
+import { deleteTaskWithUndo, cancelEventWithUndo, restoreEvent } from "../utils/snoozeTask";
 import { ToastAction } from "@/components/ui/toast";
 import { User } from "@/entities/User";
 import { base44 } from "@/api/base44Client";
@@ -1128,38 +1129,18 @@ Return JSON:
   // next occurrence, the same as finishing it would. Undo for a few seconds.
   const handleCancelEvent = async () => {
     if (!task || task.status !== 'active') return;
-    if (onDelete) onDelete(); // off the list it came from; nothing is deleted
+    onUpdate({ ...task, status: 'cancelled' });
+    if (onDelete) onDelete(); // the list it came from reloads; nothing is deleted
     onClose();
-    try {
-      await base44.entities.Task.update(task.id, { status: 'cancelled' });
-      refreshAlarms().catch(() => {});
-      if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
-        const { createNextRecurrence } = await import('../utils/taskRecurrence');
-        await createNextRecurrence(task).catch(() => null);
-      }
-      window.dispatchEvent(new CustomEvent('tasks-changed'));
-      toast({
-        title: `Cancelled "${task.title}"`,
-        description: "Its reminders are off. It won't count as done.",
-        duration: 6000,
-        action: React.createElement(ToastAction, {
-          altText: 'Undo',
-          onClick: async () => {
-            try {
-              await base44.entities.Task.update(task.id, { status: 'active' });
-              refreshAlarms().catch(() => {});
-              window.dispatchEvent(new CustomEvent('tasks-changed'));
-            } catch (e) {
-              toast({ title: "Couldn't undo that", description: 'Check your connection and try again.' });
-            }
-          },
-        }, 'Undo'),
-      });
-    } catch (e) {
-      console.error('Error cancelling event:', e);
-      toast({ title: "Couldn't cancel that event", description: 'Check your connection and try again.' });
-      window.dispatchEvent(new CustomEvent('tasks-changed'));
-    }
+    // Same save, toast and Undo as the task card's Cancelled button.
+    await cancelEventWithUndo(task);
+  };
+
+  // It's happening after all.
+  const handleRestoreEvent = async () => {
+    if (!task || task.status !== 'cancelled') return;
+    onUpdate({ ...task, status: 'active' });
+    await restoreEvent(task);
   };
 
   const handleDelete = async () => {
@@ -2485,6 +2466,11 @@ Return JSON:
                   {isEvent && task.status === 'active' && (
                   <button type="button" onClick={handleCancelEvent} className={`flex items-center gap-1 ${theme === 'dark' ? 'text-amber-300' : 'text-amber-700'}`}>
                     <CalendarOff className="w-4 h-4" /> Cancelled
+                  </button>
+                  )}
+                  {isEvent && task.status === 'cancelled' && (
+                  <button type="button" onClick={handleRestoreEvent} className={`flex items-center gap-1 ${theme === 'dark' ? 'text-amber-300' : 'text-amber-700'}`}>
+                    <RotateCcw className="w-4 h-4" /> Back on
                   </button>
                   )}
                   <button type="button" onClick={handleDelete} className="flex items-center gap-1 text-red-600">
