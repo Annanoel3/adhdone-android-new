@@ -316,6 +316,15 @@ export default function Calendar() {
         }
         if (page.length < PAGE || added === 0) break;
       }
+      // Cancelled events stay on the calendar, crossed out on their day.
+      try {
+        const cancelled = (await base44.entities.Task.filter({ status: 'cancelled', classification: 'event' }, '-updated_date', 200)) || [];
+        for (const t of cancelled) {
+          if (!seen.has(t.id)) { seen.add(t.id); all.push(t); }
+        }
+      } catch (e) {
+        // The rest of the calendar still shows.
+      }
       setTasks(all);
     } catch {
       setTasks([]);
