@@ -15,7 +15,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import TaskEditModal from "../components/tasks/TaskEditModal";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
-import { snoozeTask, deleteTaskWithUndo } from "../components/utils/snoozeTask";
+import { snoozeTask, deleteTaskWithUndo, cancelledStillListed } from "../components/utils/snoozeTask";
 import { refreshAlarms } from "../components/utils/widgetBridge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
@@ -109,7 +109,10 @@ export default function Tasks() {
     // for their day, on a birthday card, and can be filtered to on their own.
     // They are still birthdays, not tasks: the card says so.
     let topLevelTasks = allTasks.filter(t => !t.parent_task_id);
-    let filtered = topLevelTasks.filter(t => t.status === statusFilter);
+    // A cancelled event stays in the Active list, crossed out, until its day
+    // has passed (cancelledStillListed): it isn't done and it isn't gone.
+    let filtered = topLevelTasks.filter(t => t.status === statusFilter
+      || (statusFilter === 'active' && t.classification === 'event' && cancelledStillListed(t)));
     
     if (urgencyFilter !== 'all') {
       filtered = filtered.filter(t => t.urgency === urgencyFilter);
