@@ -219,6 +219,38 @@ export async function cancelScheduledReminder(notificationIds) {
 /**
  * Schedules multiple recurring reminders and returns array of notification IDs
  */
+// ── "Keep reminding me until I mark it complete" vs quiet hours ─────────────
+// A repeating rhythm the user asked for stops at quiet hours like everything
+// else, so a 9 PM chore rang once and the night was lost. When a task comes in
+// with a short rhythm AND the user's own instruction to keep going, the app
+// asks BEFORE its reminders are booked (QuietHoursNagPrompt puts the question
+// on screen): run through the night too? Yes marks the task exempt
+// (Task.quiet_hours_exempt) and books it right the first time — straight
+// through, ringing as an alarm on a full-screen phone. Asking after the
+// booking, then cancelling and waiting for the hourly refill job, left a gap
+// of twenty minutes to two hours, and could miss the batch still being booked.
+export const NAG_INTERVALS = { '10min': 'every 10 minutes', '20min': 'every 20 minutes', '30min': 'every 30 minutes', '1hour': 'every hour', '2hours': 'every 2 hours', '4hours': 'every 4 hours' };
+
+export function shouldAskQuietHoursNag(task, user) {
+  if (!task || task.parent_task_id || task.quiet_hours_exempt) return false;
+  if (!NAG_INTERVALS[task.reminder_interval]) return false;
+  if (!String(task.reminder_wish || '').trim()) return false;
+  return user?.quiet_hours_enabled !== false;
+}
+
+// Resolves true only when the person taps yes. No popup mounted (nothing
+// registered on the window), or no answer within five minutes: no, and quiet
+// hours stand.
+export async function askQuietHoursNag(task) {
+  const ask = window.__quietHoursNagAsk;
+  if (typeof ask !== 'function') return false;
+  try {
+    return !!(await ask(task));
+  } catch (e) {
+    return false;
+  }
+}
+
 export async function scheduleRecurringReminders({
   email,
   title,
@@ -229,14 +261,19 @@ export async function scheduleRecurringReminders({
   taskId,
   data,
   android_channel_id,
-  buttons
+  buttons,
+  // Task.quiet_hours_exempt: no quiet-hours moves, and (alarm) each ping asks
+  // the phone to ring on arrival.
+  throughQuietHours = false,
+  alarm = false
 }) {
   console.log('[scheduleRecurringReminders] Scheduling', count, 'notifications starting at', startTime);
   
   const baseData = {
     screen: "/Tasks",
     ...(taskId && { taskId }),
-    ...(data || {})
+    ...(data || {}),
+    ...(alarm ? { alarm: true } : {})
   };
 
   // One at a time, not all at once. The send ledger (NotificationLedger) can
@@ -248,8 +285,9 @@ export async function scheduleRecurringReminders({
   for (let i = 0; i < count; i++) {
     let sendAt = new Date(new Date(startTime).getTime() + (intervalMs * i));
 
-    // Adjust for quiet hours
-    if (isInQuietHours(sendAt)) {
+    // Adjust for quiet hours — unless this task was asked, and said yes, to
+    // keep going through them.
+    if (!throughQuietHours && isInQuietHours(sendAt)) {
       sendAt = adjustForQuietHours(sendAt);
     }
 
@@ -269,7 +307,9 @@ export async function scheduleRecurringReminders({
         taskId,
         data: baseData,
         android_channel_id,
-        buttons
+        buttons,
+        // Keeps the slot where it is (no second quiet-hours move below).
+        exact: throughQuietHours
       });
       if (notificationId) {
         console.log(`[scheduleRecurringReminders] Scheduled #${i + 1} for ${sendAt.toISOString()}: ${notificationId}`);
