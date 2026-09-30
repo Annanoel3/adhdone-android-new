@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { pushWidgetTasks, pushAlarms, pushAlarmSound, setAlarmMode, pushAlarmQuietWhen, quietWhenFor, pushEventQuiet, refreshAlarms, alarmPermissionStatus, listActiveTasks } from '../utils/widgetBridge';
 import { maybeAutoSyncDevice } from '@/lib/calendarSync';
@@ -12,7 +12,33 @@ import { maybeAutoSyncDevice } from '@/lib/calendarSync';
 // (their default alert style, alarm_mode, lives on the profile), and hands
 // native the ring sound they chose. Only runs on an app build that has the
 // AlarmBridge plugin.
+
+// The phone's plugins can show up a moment after the page loads (the update
+// prompt and the quiet button wait for them too). Anything that decides what
+// to show by "is the plugin there?" at first render gets the wrong answer
+// once and never looks again — that's how a phone with the new recorder
+// build showed no Record Notes in the menu. This watches for the plugin and
+// re-renders when it lands.
+export function usePluginPresent(name, timeoutMs = 20000) {
+  const [present, setPresent] = useState(() => !!(typeof window !== "undefined" && window.Capacitor?.Plugins?.[name]));
+  useEffect(() => {
+    if (present || typeof window === "undefined" || !window.Capacitor?.isNativePlatform?.()) return;
+    const startedAt = Date.now();
+    const poll = setInterval(() => {
+      if (window.Capacitor?.Plugins?.[name]) {
+        clearInterval(poll);
+        setPresent(true);
+      } else if (Date.now() - startedAt > timeoutMs) {
+        clearInterval(poll);
+      }
+    }, 500);
+    return () => clearInterval(poll);
+  }, [name, present, timeoutMs]);
+  return present;
+}
+
 export default function WidgetTaskSync({ user }) {
+  const recorderPresent = usePluginPresent('RecorderBridge');
   useEffect(() => {
     if (!window.Capacitor?.Plugins?.WidgetBridge) return;
     base44.entities.Task.list('-updated_date', 500)
@@ -36,9 +62,9 @@ export default function WidgetTaskSync({ user }) {
   // to be told once.
   const canRecordSaved = user?.notes_can_record === true;
   useEffect(() => {
-    if (!userId || canRecordSaved || !window.Capacitor?.Plugins?.RecorderBridge) return;
+    if (!userId || canRecordSaved || !recorderPresent) return;
     base44.auth.updateMe({ notes_can_record: true }).catch(() => {});
-  }, [userId, canRecordSaved]);
+  }, [userId, canRecordSaved, recorderPresent]);
 
   const soundUrl = user?.alarm_sound_url;
   useEffect(() => {
