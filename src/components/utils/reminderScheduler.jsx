@@ -263,11 +263,28 @@ export async function scheduleRecurringReminders({
   android_channel_id,
   buttons,
   // Task.quiet_hours_exempt: no quiet-hours moves, and (alarm) each ping asks
-  // the phone to ring on arrival.
-  throughQuietHours = false,
-  alarm = false
+  // the phone to ring on arrival. Left out by a caller (an edit, an un-check,
+  // a Back Burner return re-booking the rhythm): read off the task, so a task
+  // that said yes keeps running through the night after any of those too.
+  throughQuietHours,
+  alarm
 }) {
   console.log('[scheduleRecurringReminders] Scheduling', count, 'notifications starting at', startTime);
+
+  if (throughQuietHours === undefined && taskId) {
+    try {
+      const t = await base44.entities.Task.get(taskId);
+      throughQuietHours = t?.quiet_hours_exempt === true;
+      if (throughQuietHours && alarm === undefined) {
+        alarm = t.alert_style === 'alarm' ||
+          (t.alert_style !== 'notification' && (await base44.auth.me().catch(() => null))?.alarm_mode === 'alarm');
+      }
+    } catch (e) {
+      throughQuietHours = false;
+    }
+  }
+  throughQuietHours = throughQuietHours === true;
+  alarm = alarm === true;
   
   const baseData = {
     screen: "/Tasks",
