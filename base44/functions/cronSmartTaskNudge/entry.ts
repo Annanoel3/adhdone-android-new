@@ -422,6 +422,7 @@ Deno.serve(async (req) => {
           lastSeenMs: seenMs,
           sentSinceSeen,
           seenCountIsFloor: Number.isFinite(seenMs) && seenMs < nowMs - 3 * DAY_MS,
+          laterLook: todaysEntries.some((e: any) => e.sent && !e.skipped_reason),
         });
 
         // null = the planner failed: change nothing, send what's already
@@ -902,13 +903,17 @@ interface PlanContext {
   lastSeenMs: number;
   sentSinceSeen: number;
   seenCountIsFloor: boolean;
+  // A look taken after at least one of today's nudges has already gone out
+  // (a second look, an "are they landing?" look, a re-plan after an edit):
+  // the planner is told so, and judges any addition against the whole day.
+  laterLook: boolean;
 }
 
 async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<any[] | null> {
   const {
     localMin, timeZone, quietStartMin, quietEndMin, subtasksByParent, events,
     homeOrigin, aboutMe, avoidTolls, nudgeHistory, queued, recentSent, work, doneToday, showReactions,
-    dayPushes, lastSeenMs, sentSinceSeen, seenCountIsFloor,
+    dayPushes, lastSeenMs, sentSinceSeen, seenCountIsFloor, laterLook,
   } = ctx;
   const hour = Math.floor(localMin / 60);
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
@@ -1166,7 +1171,13 @@ ${seenLine}${aboutMe.trim() ? `- ABOUT YOUR BOSS, in their own words: ${aboutMe.
 ${workBlock}
 FULL TASK LIST (you decide what's relevant today — you have the week ahead):
 ${taskList}
-${eventList ? `\nFIXED APPOINTMENTS TODAY (context only — do NOT nudge these, they have their own reminders):\n${eventList}\n` : ''}${upcomingList ? `\nCOMING UP THIS WEEK (context only — never nudge these; use them to spot prep a task needs before one, and to judge timing):\n${upcomingList}\n` : ''}${proximityNotes ? `\n${proximityNotes}\n` : ''}${doneBlock}${dayBlock}${nudgedTodayTitles.length > 0 ? `\nTASKS ALREADY NUDGED TODAY (use check-in style — "Have you done X yet?"):\n${nudgedTodayTitles.map(t => `- "${t}"`).join('\n')}\n` : ''}${queuedBlock}
+${eventList ? `\nFIXED APPOINTMENTS TODAY (context only — do NOT nudge these, they have their own reminders):\n${eventList}\n` : ''}${upcomingList ? `\nCOMING UP THIS WEEK (context only — never nudge these; use them to spot prep a task needs before one, and to judge timing):\n${upcomingList}\n` : ''}${proximityNotes ? `\n${proximityNotes}\n` : ''}${doneBlock}${dayBlock}${nudgedTodayTitles.length > 0 ? `\nTASKS ALREADY NUDGED TODAY (use check-in style — "Have you done X yet?"):\n${nudgedTodayTitles.map(t => `- "${t}"`).join('\n')}\n` : ''}${queuedBlock}${laterLook ? `
+THIS IS A LATER LOOK AT THE SAME DAY, NOT A FRESH ONE. Part of today's plan has already gone out (THE BOSS'S DAY SO FAR above, and each task's NUDGED TODAY times). Whatever you add now lands on top of all of that: "one more" raises the day's total by one, so decide it from the shape of the whole day, not from this moment alone —
+- how much is on their plate today and what else still needs their attention;
+- whether this task is the only thing they have today (then another well-timed reminder can be exactly right — nothing else is competing for them) or one of several (then it has to earn its place against the rest);
+- how today's reminders have landed so far — answered, snoozed, swiped away, or left ringing — and how many times this task has already been raised today. A task raised several times today with no response is not more likely to land on the next try: change the approach, or leave it for tomorrow. A task raised once, on a day with nothing else going on, may well deserve a second.
+Adding nothing is a complete answer on a later look. Judge it; there is no formula.
+` : ''}
 YOUR APPROACH:
 - USE EVERYTHING ON A TASK'S LINE, together: what they said when they added it ("in their words" — often says more than the title about what it involves, when, and why), the notes, the time they named, whether it's work or personal, whether it's a bill, whether it repeats, how long it has been sitting there, and when you last nudged it. Decide the way an assistant who knew all of that would.
 - A REMINDER WISH on a task is the boss's own instruction about how, when or how often to nudge THAT task ("keep reminding me until I finish", "just once", "don't bug me before noon", "only on weekdays"). Obey it over every rule below for that task: it sets the count, the spacing and the earliest hour — and today's date and weekday are at the top. Where the wish is silent, the rules below apply.
@@ -1188,13 +1199,13 @@ YOUR APPROACH:
   * DEADLINE tasks can be worked on ahead of time, so give them RUNWAY. The app already sends every deadline a fixed heads-up the evening before and one at 9 AM on the due day (a deadline with a clock time also gets one about an hour before it) — those are not yours to repeat; the run-up and the rest of the due day are. How much runway depends on how much work the task actually is — judge that from the task itself: a one-step thing (pay a bill, send an email, book something online) needs 1-2 days; an errand or anything involving another person, an office, or paperwork needs 3-5 days; a genuinely big multi-step job (taxes, a report, applications, packing, cleaning out a room) deserves nudges starting a week or two out, framed around ONE small first step. Never let a big deadline task get its first nudge the day before.
   * "happens on [day]" tasks are tied to that specific day and CANNOT be done sooner — do not nudge in the days leading up (at most a heads-up the night before). Nudging early just makes the user feel behind on something they can't act on yet.
 - PICK YOUR BATTLES. The boss's patience is ONE budget for the whole day, shared by every notification the app sends them — everything under THE BOSS'S DAY SO FAR, not just yours. Every nudge spends some of it, and once they start swiping without reading, even the important ones stop landing. Before adding a nudge, ask whether it's worth more than what's already landing today. Spend the budget on what matters most — what the boss marked high or urgent, deadlines, anything a person, a pet, their health or their money depends on, and overdue things at their own priority — and let the rest wait for a better day or ride along in one combined mention. A good assistant never lets the day turn into a pile of pings.
-- READ WHETHER THE BOSS IS AROUND. If they haven't looked at the app since several notifications went out, more notifications aren't reaching them: go quiet — at most one well-timed nudge today, for the single thing that matters most, and none if nothing is pressing. If they haven't opened it in days, treat it like a boss who's away: only something with a real deadline or real consequences gets a nudge, once. When they're back in the app, pick things up again.
-- A CHECK-IN HAS TO EARN ITS PLACE: only when the first nudge had a fair chance to land (they've looked at the app since, or it went out a good while ago) and the task is worth asking about twice. On an everyday task, one check-in that goes unanswered is enough for the day.
+- READ WHETHER THE BOSS IS AROUND. If they haven't looked at the app since several notifications went out, more notifications aren't reaching them: go quiet — at most one well-timed nudge today, for the single thing that matters most, and none if nothing is pressing ("today" counts what has already gone out, not just what you add now). If they haven't opened it in days, treat it like a boss who's away: only something with a real deadline or real consequences gets a nudge, once. When they're back in the app, pick things up again.
+- A CHECK-IN HAS TO EARN ITS PLACE: only when the first nudge had a fair chance to land (they've looked at the app since, or it went out a good while ago) and the task is worth asking about twice. On an everyday task, one check-in that goes unanswered is enough for the day — and a check-in that already went out today counts.
 - NOT EVERY TASK NEEDS A NUDGE TODAY: a low-priority task with no deadline can wait. Use judgment — you're the assistant, you decide what matters now.
 - A TASK WITH NO DATE ISN'T A SOMEDAY. People rarely put a day on everyday things: "remind me to take my pills", "feed the cat", "call the vet" almost always mean today, and the app lists a task with no date under Today. Unless it's low priority or plainly a someday idea, plan it as one of today's: nudge it, and when it's the kind of thing that really does need doing today, also plan a friendly check-in in case it's still open. Time that check-in by when the thing is normally done: something most people do first thing (morning pills, feeding a pet, taking something out of the freezer) gets checked on within an hour or two of the first nudge, not in the afternoon. You usually plan only once a day, so plan that follow-up now. Anything they finish first is skipped automatically, so a check-in never lands on something already done.
 - A TASK THAT REPEATS (daily pills, weekly trash) is shown as its current occurrence — treat it like any other task with that date and time.
 - NUDGE HISTORY: "NUDGED TODAY at …" means it already got nudged today — use check-in style, and space any further nudge well after the last one. "last nudged N days ago — not yet today" means today's first nudge about it is still yours to decide.
-- HOW THEY'VE REACTED: when a task shows reminders being swiped away, snoozed or left ringing, the reminders aren't landing — change the angle or the time of day (a smaller first step, a different part of the day), not the volume. A task PUT OFF 3 OR MORE TIMES gets at most ONE nudge today, worded differently from before and at a different time of day than the ones they pushed away — or none, if nothing about it is pressing. Someone being annoyed by reminders is told by their swipes, not their words; more of the same is how people turn the app's notifications off. Never mention these counts to the boss.
+- HOW THEY'VE REACTED: when a task shows reminders being swiped away, snoozed or left ringing, the reminders aren't landing — change the angle or the time of day (a smaller first step, a different part of the day), not the volume. A task PUT OFF 3 OR MORE TIMES gets at most ONE nudge today (counting any that already went out today), worded differently from before and at a different time of day than the ones they pushed away — or none, if nothing about it is pressing. Someone being annoyed by reminders is told by their swipes, not their words; more of the same is how people turn the app's notifications off. Never mention these counts to the boss.
 ${work.lines.length ? `- WORK: respect the WORK SCHEDULE above; a work task belongs in or right around work hours, a personal one outside them unless it takes a minute.\n` : ''}- NO EMPTY NOTIFICATIONS: every nudge must be about at least one specific task and name it in the body. Never send generic filler like "quick check on your tasks", "nothing urgent today", or an "energy boost" — a notification that doesn't tell the boss what to do is noise. If nothing genuinely needs surfacing today, return {"nudges": []}.
 - DON'T BE ANNOYING: fewer, well-timed, meaningful nudges. Not one per hour. Not one per task. If only low-priority stuff remains, ONE combined heads-up is better than a nudge per task.
 - For tasks ALREADY NUDGED: check-in style ("Have you done X yet?") — supportive, never shaming.
