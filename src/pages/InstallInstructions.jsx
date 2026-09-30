@@ -153,6 +153,33 @@ function clockToMs(at) {
   return bits.reduce((acc, b) => acc * 60 + b, 0) * 1000;
 }
 
+// The recording-consent heads-up, with the full list one tap away. "12
+// states, including California and Florida" sent people to Google; nobody
+// does that, so the states are right here. Everyone in the conversation has to
+// agree in: California, Delaware, Florida, Illinois, Maryland, Massachusetts,
+// Montana, Nevada, New Hampshire, Oregon, Pennsylvania and Washington
+// (in-person recordings; Oregon is all-party in person, and Nevada is treated
+// that way after a state supreme court ruling).
+const CONSENT_STATES = "California, Delaware, Florida, Illinois, Maryland, Massachusetts, Montana, Nevada, New Hampshire, Oregon, Pennsylvania and Washington";
+
+function ConsentNote({ soft, center = false }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={`text-xs ${soft} ${center ? "text-center" : ""}`}>
+      <p className={`flex gap-1.5 ${center ? "justify-center" : ""}`}>
+        <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+        <span>
+          In 12 states, everyone has to agree before you record them.{" "}
+          <button type="button" className="underline" onClick={() => setOpen((o) => !o)}>
+            {open ? "Hide the list" : "Which states?"}
+          </button>
+        </span>
+      </p>
+      {open && <p className="mt-1 pl-5">{CONSENT_STATES}.</p>}
+    </div>
+  );
+}
+
 function minutesText(seconds) {
   const m = Math.floor((Number(seconds) || 0) / 60);
   return `${m} minute${m === 1 ? "" : "s"}`;
@@ -614,15 +641,20 @@ export default function NotesPage() {
     }
   };
 
+  // Gone from the screen the moment Delete is tapped; the server and the
+  // phone's copy catch up behind it. Waiting on both first left the card
+  // sitting there for seconds looking stuck. If the server says no, the card
+  // comes back with a note.
   const deleteRecording = async (record) => {
     setConfirmDelete(null);
+    setOpenId(null);
+    setRecords((rows) => rows.filter((r) => r.id !== record.id));
     try {
       await base44.entities.EnergyLog.delete(record.id);
-      if (record.device_session_id) await recorder()?.deleteSession({ sessionId: record.device_session_id }).catch(() => {});
-      setOpenId(null);
-      await loadRecords();
+      if (record.device_session_id) recorder()?.deleteSession({ sessionId: record.device_session_id }).catch(() => {});
     } catch (e) {
-      toast({ title: "Couldn't delete that recording", description: "Try again in a moment." });
+      setRecords((rows) => (rows.some((r) => r.id === record.id) ? rows : [record, ...rows]));
+      toast({ title: "Couldn't delete that recording", description: "It's still here. Try again in a moment." });
     }
   };
 
@@ -1093,10 +1125,7 @@ export default function NotesPage() {
           <p className={`text-xs ${soft}`}>
             {minutesText(usage.left_seconds)} of free recording left this month.
           </p>
-          <p className={`text-xs flex gap-1.5 justify-center ${soft}`}>
-            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-            In 12 states, including California and Florida, everyone has to agree before you record them.
-          </p>
+          <ConsentNote soft={soft} center />
           {liveQuestions.length > 0 && (
             <div className={`${card} text-left`}>
               <h2 className={`text-lg font-bold ${heading}`}>Your questions</h2>
@@ -1190,10 +1219,7 @@ export default function NotesPage() {
             {minutesText(usage.left_seconds)} of {FREE_MINUTES} free minutes left this month. Afterward, this page has
             your notes and the full transcript.
           </p>
-          <p className={`text-xs flex gap-1.5 ${soft}`}>
-            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-            In 12 states, including California and Florida, everyone has to agree before you record them.
-          </p>
+          <ConsentNote soft={soft} />
         </div>
       </div>
     );
@@ -1227,10 +1253,7 @@ export default function NotesPage() {
           <p className={`text-xs ${soft}`}>
             {minutesText(usage.left_seconds)} of {FREE_MINUTES} free minutes left this month.
           </p>
-          <p className={`text-xs flex gap-1.5 ${soft}`}>
-            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-            In 12 states, including California and Florida, everyone has to agree before you record them.
-          </p>
+          <ConsentNote soft={soft} />
         </div>
 
         {upcomingCards.length > 0 && (
