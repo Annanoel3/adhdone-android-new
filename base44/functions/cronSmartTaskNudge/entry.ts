@@ -442,7 +442,10 @@ Deno.serve(async (req) => {
           } else if (newEntries.length === 0 && secondLook) {
             // Nothing more today: note the look so it isn't asked again every run.
             try {
-              await base44.asServiceRole.entities.User.update(user.id, { smart_nudge_planned_at: runStartIso });
+              await base44.asServiceRole.entities.User.update(user.id, {
+                smart_nudge_planned_at: runStartIso,
+                smart_nudge_passed: mergePassed(fresh?.smart_nudge_passed ?? user.smart_nudge_passed, lastPassed, nowMs),
+              });
             } catch (e) {
               console.error(`[SMART NUDGE] Failed to note second look for ${email}:`, e);
             }
@@ -465,6 +468,7 @@ Deno.serve(async (req) => {
                 smart_nudge_schedule_dirty: stillDirty,
                 smart_nudge_planned_at: runStartIso,
                 smart_nudge_plan_prints: prints,
+                smart_nudge_passed: mergePassed(fresh?.smart_nudge_passed ?? user.smart_nudge_passed, lastPassed, nowMs),
               });
               schedulesGenerated++;
               console.log(`[SMART NUDGE] ${onlyEmail ? 'Re-planned' : 'Generated schedule'} for ${email}: ${newEntries.length} new nudge(s), ${stillQueued.length} kept`);
@@ -909,7 +913,23 @@ interface PlanContext {
   laterLook: boolean;
 }
 
+// What the last plan chose to leave alone, and why — read by the caller
+// right after generateDailySchedule returns (one person at a time), and kept
+// on the person's record as smart_nudge_passed for reviewing the planner's
+// judgment ("why didn't it nudge X?"). Never sent to anyone.
+let lastPassed: any[] = [];
+const PASSED_KEEP_MS = 3 * 24 * 60 * 60 * 1000;
+const PASSED_MAX = 60;
+function mergePassed(prev: any, add: any[], nowMs: number): any[] {
+  const kept = (Array.isArray(prev) ? prev : []).filter((p: any) => {
+    const at = utcMs(p?.at);
+    return Number.isFinite(at) && nowMs - at < PASSED_KEEP_MS;
+  });
+  return [...kept, ...add].slice(-PASSED_MAX);
+}
+
 async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<any[] | null> {
+  lastPassed = [];
   const {
     localMin, timeZone, quietStartMin, quietEndMin, subtasksByParent, events,
     homeOrigin, aboutMe, avoidTolls, nudgeHistory, queued, recentSent, work, doneToday, showReactions,
@@ -1246,8 +1266,16 @@ Return ONLY valid JSON:
       "body": "<one supportive sentence>",
       "rationale": "<one short phrase: why this nudge, why this time>"
     }
+  ],
+  "passed": [
+    {
+      "task_index": <1-based index of a task you weighed and chose NOT to nudge today>,
+      "why": "<one short phrase: what on its line decided it — its tag, its priority, how far off it is, how reminders have landed>"
+    }
   ]
-}`;
+}
+
+"passed" is for the boss's own review of your judgment and is never sent to them. List the tasks that had a real claim on today and that you set aside on purpose: anything with a TAG or a REMINDER WISH, anything high or urgent, anything due within a few days or overdue, anything nudged before. Leave out tasks that were never in contention (far off and low priority). A phrase each.`;
 
   try {
     const response = await openai.chat.completions.create({
@@ -1268,6 +1296,20 @@ Return ONLY valid JSON:
 
     const parsed = JSON.parse(response.choices[0].message.content);
     const nudges = parsed.nudges || [];
+    // The tasks it looked at and left alone, with its reason (see lastPassed).
+    lastPassed = (Array.isArray(parsed.passed) ? parsed.passed : [])
+      .map((p: any) => {
+        const task = tasks[Number(p?.task_index) - 1];
+        if (!task) return null;
+        return {
+          at: new Date(nowMs).toISOString(),
+          task_id: task.id,
+          title: String(task.title || '').slice(0, 80),
+          why: String(p?.why || '').replace(/\s+/g, ' ').trim().slice(0, 160),
+        };
+      })
+      .filter(Boolean)
+      .slice(0, 30);
 
     const entries = nudges.map((n: any) => {
       const task = n.task_index > 0 ? tasks[n.task_index - 1] : null;
