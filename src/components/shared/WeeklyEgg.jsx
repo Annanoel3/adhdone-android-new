@@ -3,7 +3,7 @@ import { trackFire } from "@/lib/appTrack";
 
 // A hidden easter-egg trigger that lives in ONE of several spots on a page.
 // Which spot it picks rotates every week, so finding it is a little game. It
-// was text-xs and nobody saw it (Anna, Sep 30 2026): now a full-size emoji.
+// was text-xs and nobody saw it (Anna, Sep 30 2026): now 18px (text-lg).
 const SLOT_COUNT = 4;
 
 function currentWeek() {
@@ -23,7 +23,7 @@ export default function WeeklyEgg({ slot, type = "ideas", emoji = "💡" }) {
         window.triggerEasterEgg?.(type);
       }}
       aria-label="A little something"
-      className="text-2xl leading-none p-1 select-none"
+      className="text-lg leading-none p-1 select-none"
     >
       {emoji}
     </button>
