@@ -309,7 +309,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     persistOnboardingFlag('kawaii_popup_shown');
     setSecretFound(true);
     saveThemeToProfile('minimalist', seasonal, true);
-    trackFire('easter_egg_found', { egg: 'Seasonal theme', found_on: currentPageName });
+    trackFire('easter_egg_found', { props: { egg: 'Seasonal theme', found_on: currentPageName } });
   };
   const [showAppGuide, setShowAppGuide] = useState(false);
   const quietNotifications = useQuietNotifications();
@@ -1228,7 +1228,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                   <button
                     type="button"
                     onClick={findSecret}
-                    className={`text-sm opacity-70 hover:opacity-100 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}
+                    className={`text-base opacity-80 hover:opacity-100 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}
                   >
                     what's this? 👀
                   </button>
