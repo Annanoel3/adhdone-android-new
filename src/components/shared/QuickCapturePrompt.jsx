@@ -530,7 +530,9 @@ export function AlarmPermissionsDialog({ theme }) {
     if (!window.Capacitor?.isNativePlatform?.()) return;
     let cancelled = false;
     (async () => {
-      if (!isStepDone(ALARM_SETUP_STEP)) return;
+      // Picking alarms counts too: closing the app on the sound step skips
+      // the set-up for good, and this is then the only thing that asks.
+      if (!isStepDone(ALARM_SETUP_STEP) && !isStepDone(ALERT_STYLE_STEP)) return;
       let last = 0;
       try { last = Number(localStorage.getItem(ALARM_RECHECK_KEY)) || 0; } catch (e) { /* fresh */ }
       if (Date.now() - last < 24 * 60 * 60 * 1000) return;
