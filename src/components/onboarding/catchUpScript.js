@@ -106,4 +106,22 @@ export const FIRST_DONE_ABOUT_ONLY_SCRIPT = [
   },
 ];
 
+// For someone who closed the welcome chat before giving a name (so the app has
+// nothing to call them): asked once more, on a later open, for the name alone.
+// The about-you question still comes after their first checked-off task.
+export const NAME_ONLY_SCRIPT = [
+  {
+    text: () =>
+      "Quick one — we never caught your name. What should we call you? This becomes your username; you can change it in Settings anytime.",
+    input: 'name',
+  },
+  {
+    text: (name, handle) =>
+      handle
+        ? `Thanks, ${name}! Your handle is @${handle} — that's how friends will find you once sharing goes live. That's all — back to your list.`
+        : `Thanks, ${name}! That's all — back to your list.`,
+    final: true,
+  },
+];
+
 export default CATCH_UP_SCRIPT;
