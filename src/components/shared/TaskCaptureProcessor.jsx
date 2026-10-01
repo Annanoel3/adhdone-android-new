@@ -14,6 +14,7 @@ import {
   subscribeCaptures,
   claimNextCapture,
   removeCapture,
+  releaseCapture,
   stampCaptureOwner,
   saveCaptureProgress,
   resumeAbandonedCaptures,
@@ -73,6 +74,13 @@ async function finishIdeaConversion(idea, madeTask, taskId) {
   }
 }
 
+// An attempt that fails while the app is on screen and online is tried again
+// after these pauses; after the last one the capture is given up on (with a
+// toast saying so). A failure while the app is off screen or offline is not
+// counted at all — Android cuts a background app's requests, so the attempt
+// simply waits for the app to be back.
+const RETRY_PAUSES_MS = [3000, 10000, 30000];
+
 // Lives in the app Layout so task parsing keeps running after the user leaves
 // the Add Task screen. Drains the pending-capture queue and asks the user for
 // the few things the AI can't infer (priority, date, advance reminder).
@@ -82,6 +90,7 @@ async function finishIdeaConversion(idea, madeTask, taskId) {
 export default function TaskCaptureProcessor({ userEmail }) {
   const runningRef = useRef(false);
   const emailRef = useRef(null);
+  const drainRef = useRef(() => {});
 
   const resolveRef = useRef(null);
   const [ask, setAsk] = useState(null); // { type, data }
@@ -109,6 +118,9 @@ export default function TaskCaptureProcessor({ userEmail }) {
           // A Parking Lot idea being turned into a task: which task it became.
           let madeTask = false;
           let madeTaskId = null;
+          // Set when this attempt didn't finish; the capture is then kept for
+          // another go instead of being dropped.
+          let failure = null;
           try {
             trace('captureClaimed', { text: capture.text.slice(0, 200), resumed: !!capture.resumed });
             if (capture.resumed) {
@@ -143,7 +155,7 @@ export default function TaskCaptureProcessor({ userEmail }) {
             const firstPart = capture.doneCount || 0;
             for (let part = firstPart; part < taskList.length; part++) {
               const text = taskList[part];
-              if (capture.resumed && part === firstPart && await alreadyCreated(text, capture.createdAt)) {
+              if ((capture.resumed || capture.retrying) && part === firstPart && await alreadyCreated(text, capture.createdAt)) {
                 trace('captureAlreadyCreated', { text: text.slice(0, 60) });
                 madeTask = true;
                 saveCaptureProgress(capture.id, { doneCount: part + 1 });
@@ -187,31 +199,68 @@ export default function TaskCaptureProcessor({ userEmail }) {
                 madeTask = true;
                 madeTaskId = t?.id || madeTaskId;
               } else if (result.status === 'error') {
-                toast({ title: 'Failed to create task: ' + result.message, variant: 'destructive' });
+                // Same handling as a thrown error: kept and tried again.
+                throw new Error(result.message || 'Could not set up the task');
               }
               saveCaptureProgress(capture.id, { doneCount: part + 1 });
             }
           } catch (e) {
+            failure = e;
             trace('captureFailed', { message: String(e?.message || e) });
             console.error('[CAPTURE] Failed:', e);
-            toast({ title: 'Failed to create task: ' + e.message, variant: 'destructive' });
           } finally {
-            if (capture.fromIdea?.id) await finishIdeaConversion(capture.fromIdea, madeTask, madeTaskId);
-            removeCapture(capture.id);
-            window.dispatchEvent(new Event('tasks-changed'));
+            let keep = false;
+            if (failure) {
+              const hidden = document.visibilityState === 'hidden';
+              const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+              const attempts = capture.attempts || 0;
+              if (hidden || offline) {
+                // Not this attempt's fault: wait for the app to be back on
+                // screen / back online, then go again (drain runs on both).
+                releaseCapture(capture.id, { afterVisible: true, counted: false, error: failure.message });
+                trace('captureWaiting', { hidden, offline, attempts });
+                keep = true;
+              } else if (attempts < RETRY_PAUSES_MS.length) {
+                const pause = RETRY_PAUSES_MS[attempts];
+                releaseCapture(capture.id, { retryInMs: pause, error: failure.message });
+                trace('captureRetry', { attempt: attempts + 1, pause });
+                setTimeout(() => drainRef.current(), pause + 100);
+                keep = true;
+              } else {
+                toast({ title: "Couldn't set up this task: " + capture.text.slice(0, 60), description: 'Please add it again. ' + (failure.message || ''), variant: 'destructive' });
+              }
+            }
+            if (!keep) {
+              if (capture.fromIdea?.id) await finishIdeaConversion(capture.fromIdea, madeTask, madeTaskId);
+              removeCapture(capture.id);
+              window.dispatchEvent(new Event('tasks-changed'));
+            }
           }
         }
       } finally {
         runningRef.current = false;
       }
     };
+    drainRef.current = drain;
 
-    return subscribeCaptures(() => {
+    // A capture waiting for the app to be back on screen, or back online, is
+    // picked up the moment that happens.
+    const onVisible = () => { if (document.visibilityState === 'visible') drain(); };
+    const onOnline = () => drain();
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', onOnline);
+
+    const unsubscribe = subscribeCaptures(() => {
       // Tie each new capture to the signed-in account the moment it arrives, so
       // a stored capture is only ever resumed for the account that made it.
       if (emailRef.current) stampCaptureOwner(emailRef.current);
       drain();
     });
+    return () => {
+      unsubscribe();
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', onOnline);
+    };
   }, []);
 
   // Once we know who is signed in: claim anything not yet tied to an account,
