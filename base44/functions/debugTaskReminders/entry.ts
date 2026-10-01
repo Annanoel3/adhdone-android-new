@@ -24,6 +24,15 @@ Deno.serve(async (req) => {
     const now = Date.now();
 
     const svc = base44.asServiceRole.entities;
+    // Admin upload: { upload: { name, type, base64 } } puts a file in the app's
+    // storage and returns its URL (used to hand the app re-mastered alarm
+    // sounds, Oct 1 2026). Nothing else is touched.
+    if (body?.upload?.base64 && body.upload.name) {
+      const bytes = Uint8Array.from(atob(String(body.upload.base64)), (c) => c.charCodeAt(0));
+      const file = new File([bytes], String(body.upload.name), { type: String(body.upload.type || 'application/octet-stream') });
+      const up = await base44.integrations.Core.UploadFile({ file });
+      return Response.json({ ok: !!up?.file_url, name: body.upload.name, bytes: bytes.length, file_url: up?.file_url || null });
+    }
     // Read-only: what OneSignal says about one push it was handed
     // ({ os: { id } }) — delivered, failed, still queued, cancelled.
     if (body?.os?.id) {
