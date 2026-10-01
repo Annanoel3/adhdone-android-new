@@ -175,7 +175,7 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
           <div>
             <h2 className={`text-xl font-bold ${textPrimary}`}>Phone calendars</h2>
             <p className={`text-sm ${textSecondary}`}>
-              Samsung Calendar, Outlook, or any calendar your phone's calendar app shows. Tick the ones to bring in; they work exactly like Google Calendar imports.
+              Google, Samsung, Outlook — any calendar your phone's calendar app shows. Tick the ones to bring in; their events become tasks with reminders.
             </p>
           </div>
           {granted && chosenIds.length > 0 && (
