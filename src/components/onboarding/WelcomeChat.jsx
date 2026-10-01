@@ -72,6 +72,11 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   // (it IS a notification), on by default, same as the card it replaced.
   const [pinWanted, setPinWanted] = useState(true);
   const [busy, setBusy] = useState(false);
+  // Between sending the name and the next line: that line names the handle,
+  // which the server mints a moment later. Starting the line without it and
+  // then swapping its words in mid-typing read as the chat stuttering, so the
+  // next line waits for the handle (2.5 s at most), with a "…" meanwhile.
+  const [waitingHandle, setWaitingHandle] = useState(false);
   const [draft, setDraft] = useState('');
   const endRef = useRef(null);
 
@@ -118,7 +123,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     setIdx((i) => i + 1);
   };
 
-  const submitName = () => {
+  const submitName = async () => {
     const value = draft.trim();
     if (!value) return;
     setName(value);
@@ -126,10 +131,21 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     // Settings page edits. Names collide, so the server also mints a unique
     // handle (name + number) that future social features can key on.
     base44.auth.updateMe({ preferred_name: value, display_name: value }).catch(() => {});
-    claimHandle({ name: value })
-      .then((r) => setHandle(r?.data?.handle || ''))
-      .catch(() => {});
-    answer(value);
+    // Their answer shows at once; the next line holds until the handle is in
+    // (or 2.5 s have passed — then it simply doesn't mention one).
+    setHistory((h) => [...h, { from: 'app', text: line }, { from: 'user', text: value }]);
+    setDraft('');
+    setWaitingHandle(true);
+    try {
+      const r = await Promise.race([
+        claimHandle({ name: value }),
+        new Promise((resolve) => setTimeout(() => resolve(null), 2500)),
+      ]);
+      const got = r?.data?.handle || '';
+      if (got) setHandle(got);
+    } catch (e) { /* the line reads fine without a handle */ }
+    setWaitingHandle(false);
+    setIdx((i) => i + 1);
   };
 
   const submitAbout = () => {
@@ -218,7 +234,10 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
         {history.map((m, i) => (
           <ChatBubble key={i} from={m.from}>{m.text}</ChatBubble>
         ))}
-        {beat && (
+        {waitingHandle && (
+          <ChatBubble from="app"><span className="opacity-40">…</span></ChatBubble>
+        )}
+        {beat && !waitingHandle && (
           <ChatBubble from="app">
             {shown}
             {!done && <span className="opacity-40">▍</span>}
@@ -227,7 +246,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
         <div ref={endRef} />
       </div>
 
-      {done && beat?.input === 'name' && (
+      {done && !waitingHandle && beat?.input === 'name' && (
         <div className="flex gap-2">
           <Input
             autoFocus
