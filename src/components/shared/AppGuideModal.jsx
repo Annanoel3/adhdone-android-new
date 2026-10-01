@@ -66,7 +66,7 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
     {
       icon: CalendarDays,
       title: "Calendar",
-      description: "See your tasks and events by day or week, always starting on today. Connect Google Calendar to pull your real events in — they show up labeled so you can tell them from your own tasks."
+      description: "See your tasks and events by day or week, always starting on today. Bring in your phone's calendars to pull your real events in — they show up labeled so you can tell them from your own tasks."
     },
     {
       icon: Cake,
