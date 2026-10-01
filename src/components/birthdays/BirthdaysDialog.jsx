@@ -186,7 +186,7 @@ export default function BirthdaysDialog({ isOpen, onClose, tasks, user, onRefres
             <div className="space-y-2 max-h-[50vh] overflow-y-auto">
               {birthdays.length === 0 && (
                 <p className="text-sm text-gray-500 text-center py-6">
-                  No birthdays yet. Add one — or sync Google Calendar to pull them in.
+                  No birthdays yet. Add one — or bring in your phone's calendars to pull them in.
                 </p>
               )}
               {birthdays.map((b) => (
