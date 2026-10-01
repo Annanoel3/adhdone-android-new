@@ -9,10 +9,7 @@ import { isRecurringInterval, INTERVAL_MS } from '../../shared/reminderIntervalD
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { filterAll } from '../../shared/listAll.ts';
 import { buildEventReminderPlan, isBookableNow, isBookedId } from '../../shared/eventReminderPlan.ts';
-import { getGoogleAccessToken } from '../../shared/googleOAuth.ts';
 import { withChallengeRetry } from '../../shared/sdkRetry.ts';
-
-const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
 
 // Payment detection for imported calendar items. Calendar payment entries are
 // usually terse ("Discover payment", "$450 rent", "Pay water bill", "Chase"),
@@ -275,7 +272,6 @@ async function acquireSyncLock(base44, user) {
 // date patches — is shared with Google imports. Ids are "device:<cal>:<id>".
 async function syncCalendarAccount(base44, user, accessToken, calendarEmail, heartbeat = async () => {}, device = null) {
   const runId = crypto.randomUUID().slice(0, 8);
-  const authHeader = { Authorization: `Bearer ${accessToken}` };
   // All-day calendar items have no clock time, so we anchor them at 9 AM in the
   // USER'S timezone. Without this the server's UTC clock made that 9 AM UTC,
   // i.e. 4 AM local — and its "1 hour before" nudge landed at 3 AM.
@@ -284,34 +280,11 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
   // Fetch the connected Gmail account info
   let connectedEmail = calendarEmail;
   let allItems = [];
-  if (device) {
-    connectedEmail = 'this phone';
-    allItems = Array.isArray(device.events) ? device.events.filter(e => e && e.id && String(e.id).startsWith('device:')) : [];
-  } else {
-  try {
-    const profileRes = await fetch('https://www.googleapis.com/oauth2/v1/userinfo?alt=json', { headers: authHeader });
-    if (profileRes.ok) {
-      const profile = await profileRes.json();
-      connectedEmail = profile.email || calendarEmail;
-    }
-    } catch { /* use fallback */ }
-    console.log('[syncGoogleCalendar] token actually belongs to =', connectedEmail, '| passed calendarEmail =', calendarEmail);
-
-  // Fetch upcoming events (next 12 months)
-  const timeMin = new Date().toISOString();
-  const timeMax = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
-  const calUrl = `https://www.googleapis.com/calendar/v3/calendars/primary/events?maxResults=2500&singleEvents=false&timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&fields=items(id,summary,start,end,attendees,recurrence,description,location,status,organizer,conferenceData)`;
-
-  const calRes = await fetch(calUrl, { headers: authHeader });
-  if (!calRes.ok) {
-    const err = await calRes.json().catch(() => ({}));
-    console.log('[syncGoogleCalendar] calendar API failed status=', calRes.status, 'err=', JSON.stringify(err), 'for=', connectedEmail);
-    return { error: 'calendar_api_error', details: err, connectedEmail };
-  }
-
-  const calData = await calRes.json();
-  allItems = calData.items || [];
-  }
+  // Only the phone's calendars are read now (Google's own calendar API was the
+  // original source, retired Oct 1, 2026 — nobody had connected one, and the
+  // phone's calendars cover Google, Samsung, Outlook and the rest).
+  connectedEmail = 'this phone';
+  allItems = device && Array.isArray(device.events) ? device.events.filter(e => e && e.id && String(e.id).startsWith('device:')) : [];
   let events = allItems.filter(e => e.status !== 'cancelled');
   const cancelledItems = allItems.filter(e => e.status === 'cancelled');
   console.log('[syncGoogleCalendar] calendar fetch OK for=', connectedEmail, '| raw items=', allItems.length, '| active events=', events.length, '| cancelled=', cancelledItems.length);
@@ -992,55 +965,15 @@ Deno.serve(async (req) => {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     // Get the user's Google Calendar token from the platform
-    let accessToken;
     let connectedEmail = user.email;
-    
+
     const body = await req.json().catch(() => ({}));
 
-    // Probe mode: check whether a Google Calendar connection exists without
-    // running a full sync (used by the Calendar page to render connect state).
+    // Probe: the web Calendar page used to ask whether a Google Calendar was
+    // connected. Google's calendar API is retired; the phone's calendars are
+    // the only source, so the answer is always no.
     if (body.probe) {
-      // App-owned grant first — this is the source of truth now. Only fall
-      // through to the platform connector so users who linked before the
-      // switch keep working until they reconnect.
-      step = 'probe.ownGrant';
-      try {
-        const own = await getGoogleAccessToken(user);
-        if (own) {
-          return Response.json({
-            connected: true,
-            connected_email: user.google_account_email || user.email,
-            source: 'app',
-          });
-        }
-      } catch (err) {
-        console.log('[syncGoogleCalendar] probe: own grant rejected by Google:', err.message);
-        return Response.json({ error: 'reconnect_required', message: 'Google access expired — reconnect.' }, { status: 400 });
-      }
-
-      step = 'probe.getCurrentAppUserConnection';
-      try {
-        const conn = await base44.asServiceRole.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
-        if (conn?.accessToken) {
-          // The platform often doesn't populate conn.email, so resolve the
-          // real connected account straight from the token via userinfo.
-          let realEmail = conn.email;
-          if (!realEmail) {
-            try {
-              const ui = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                headers: { Authorization: `Bearer ${conn.accessToken}` }
-              });
-              if (ui.ok) realEmail = (await ui.json()).email;
-            } catch (e) {
-              console.log('[syncGoogleCalendar] probe userinfo failed:', e.message);
-            }
-          }
-          return Response.json({ connected: true, connected_email: realEmail || user.email });
-        }
-      } catch (err) {
-        console.log('[syncGoogleCalendar] probe: no connection', err.message);
-      }
-      return Response.json({ error: 'not_connected', message: 'Google Calendar not connected' }, { status: 400 });
+      return Response.json({ connected: false, retired: true });
     }
 
     // Phone calendars: the app already read the events on the device and sends
@@ -1083,75 +1016,9 @@ Deno.serve(async (req) => {
         results: dresult.results,
       });
     }
-
-    // Phone calendars are in use on this account: the Google path is retired
-    // for it, so a stray Google sync can't bring the same events in twice.
-    if (Array.isArray(user.device_calendar_ids) && user.device_calendar_ids.length > 0) {
-      return Response.json({ success: true, skipped: true, reason: 'phone_calendars_in_use' });
-    }
-
-    // App-owned grant first (see shared/googleOAuth.ts for why).
-    step = 'ownGrant';
-    try {
-      accessToken = await getGoogleAccessToken(user);
-      if (accessToken && user.google_account_email) connectedEmail = user.google_account_email;
-    } catch (err) {
-      console.log('[syncGoogleCalendar] own grant rejected by Google:', err.message);
-      return Response.json({ error: 'reconnect_required', message: 'Google access expired — reconnect.' }, { status: 400 });
-    }
-
-    // Legacy path: platform app-user connector, for anyone still on it.
-    step = 'getCurrentAppUserConnection';
-    if (!accessToken) {
-      try {
-        const conn = await base44.asServiceRole.connectors.getCurrentAppUserConnection(CONNECTOR_ID);
-        accessToken = conn?.accessToken;
-        if (conn?.email) connectedEmail = conn.email;
-      } catch (err) {
-        console.log('[syncGoogleCalendar] No platform connection available:', err.message);
-      }
-    }
-
-    if (!accessToken) {
-      return Response.json({ error: 'not_connected', message: 'Google Calendar not connected' }, { status: 400 });
-    }
-
-    // One run per account at a time. A second trigger while a sync is live gets
-    // a clean "already running" instead of a second import.
-    step = 'acquireSyncLock';
-    const lock = await acquireSyncLock(base44, user);
-    if (!lock.acquired) {
-      console.log('[syncGoogleCalendar] sync already in progress for', user.email, 'since', lock.since);
-      return Response.json({ success: true, in_progress: true, skipped: true, since: lock.since || null });
-    }
-
-    let result;
-    try {
-      step = 'syncCalendarAccount';
-      result = await syncCalendarAccount(base44, user, accessToken, user.email, lock.heartbeat);
-    } finally {
-      step = 'lock.release';
-      await lock.release();
-    }
-
-    if (result.error) {
-      console.log('[syncGoogleCalendar] sync returned error for=', result.connectedEmail, 'err=', JSON.stringify(result.details));
-      return Response.json({ error: result.error, details: result.details }, { status: 502 });
-    }
-
-    console.log('[syncGoogleCalendar] sync done for=', result.connectedEmail, '| created=', result.created, 'updated=', result.updated, 'skipped=', result.skipped, 'total=', result.total_events);
-
-    return Response.json({
-      success: true,
-      synced_at: new Date().toISOString(),
-      total_events: result.total_events,
-      created: result.created,
-      updated: result.updated,
-      skipped: result.skipped,
-      cancelled_removed: result.cancelledRemoved,
-      connected_email: result.connectedEmail,
-      results: result.results
-    });
+    // Anything else was the Google Calendar sync. Retired: the phone's
+    // calendars are the only source now, and nobody had connected Google.
+    return Response.json({ success: true, skipped: true, reason: 'google_calendar_retired', connected_email: connectedEmail });
 
   } catch (error) {
     const status = error?.response?.status ?? error?.status ?? null;
