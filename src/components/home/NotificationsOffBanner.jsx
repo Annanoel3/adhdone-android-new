@@ -178,6 +178,11 @@ export default function NotificationsOffBanner({ theme, specialMode }) {
 // Stays quiet while notifications themselves are off (the row above covers
 // that, and alarms can't work without them anyway) and during first run.
 const ALARM_SETUP_STEP = "onboarding_alarm_setup_done";
+// Answering the alarms-or-notifications question is enough to be asked about
+// the switches: someone who picked alarms and then closed the app on the
+// sound step never reaches the set-up step, and used to be left with alarms
+// on and nothing ever pointing at the switches (Rycher, Sep 30 2026).
+const ALERT_STYLE_STEP = "onboarding_alert_style_done";
 function alarmSwitchesMissing(st) {
   if (!st) return 0;
   return [
@@ -195,7 +200,8 @@ export function AlarmSetupBanner({ theme, specialMode, user }) {
 
   useEffect(() => {
     if (!alarmsOn || !window.Capacitor?.isNativePlatform?.()) return;
-    if (!isStepDone(ONBOARDING_STEPS.homeTour) || !isStepDone(ALARM_SETUP_STEP)) return;
+    if (!isStepDone(ONBOARDING_STEPS.homeTour)) return;
+    if (!isStepDone(ALARM_SETUP_STEP) && !isStepDone(ALERT_STYLE_STEP)) return;
     let gone = false;
     const check = () => {
       alarmPermissionStatus()
