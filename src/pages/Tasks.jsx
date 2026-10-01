@@ -29,6 +29,7 @@ import { countCompletionForGif } from "../components/utils/completionMilestone";
 import PullToRefresh from "../components/shared/PullToRefresh";
 import { checkCompletionEggs } from "../components/eastereggs/completionEggs";
 import { trackFire } from "@/lib/appTrack";
+import PendingTaskCards, { usePendingCaptures } from "../components/home/PendingTaskCards";
 
 export default function Tasks() {
   const navigate = useNavigate();
@@ -68,15 +69,26 @@ export default function Tasks() {
     return () => window.removeEventListener('tasks-view-mode-seeded', onSeeded);
   }, []);
 
+  // Tasks still being set up: rows at the top of the list, so a task just
+  // typed is on the page before the AI has finished with it.
+  const pending = usePendingCaptures();
+
   useEffect(() => {
     loadTasks();
     const handleTasksChanged = () => loadTasks();
+    // A task just saved goes straight onto the list; the reload confirms it.
+    const handleTaskCreated = (e) => {
+      const task = e?.detail?.task;
+      if (!task?.id) return;
+      setAllTasks(prev => prev.some(t => t.id === task.id) ? prev : [task, ...prev]);
+    };
     // Tasks captured from the native share sheet land while the app is in the
     // background — refetch whenever the app comes back to the foreground.
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') loadTasks();
     };
     window.addEventListener('tasks-changed', handleTasksChanged);
+    window.addEventListener('task-created', handleTaskCreated);
     document.addEventListener('visibilitychange', handleVisibilityChange);
     const interval = setInterval(() => {
       const newTheme = localStorage.getItem('adhd_theme') || 'minimalist';
@@ -86,6 +98,7 @@ export default function Tasks() {
     }, 100);
     return () => {
       window.removeEventListener('tasks-changed', handleTasksChanged);
+      window.removeEventListener('task-created', handleTaskCreated);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       clearInterval(interval);
     };
@@ -476,6 +489,12 @@ export default function Tasks() {
           </div>
         </div>
 
+        {pending.length > 0 && (
+          <div className="space-y-3 mb-4">
+            <PendingTaskCards theme={theme} captures={pending} />
+          </div>
+        )}
+
         {filteredTasks.length > 0 ? (
           <TaskSections
             tasks={filteredTasks}
@@ -507,7 +526,7 @@ export default function Tasks() {
             specialMode={specialMode}
             viewMode={viewMode}
           />
-        ) : (
+        ) : pending.length > 0 ? null : (
           <div className="text-center py-12">
             <p className="text-gray-500 text-lg">No tasks found</p>
           </div>
