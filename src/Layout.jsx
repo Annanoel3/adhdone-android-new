@@ -1462,11 +1462,14 @@ export default function Layout({ children, currentPageName }) {
       setAuthCheckComplete(true);
 
       // Set signed_up_at on first login; update last_active_at every session.
+      // The sign-up moment is when the account was made, not whichever open
+      // first manages to write it (a new account's first write once didn't
+      // stick and the stamp came out 38 minutes late).
       // Keep the device timezone on the profile so backend cron jobs (e.g.
       // reminder refill) can apply quiet hours in the user's local time.
       const now = new Date().toISOString();
       const updates = { last_active_at: now };
-      if (!currentUser.signed_up_at) updates.signed_up_at = now;
+      if (!currentUser.signed_up_at) updates.signed_up_at = currentUser.created_date || now;
       // Written whenever the phone's zone differs from the profile's, so a
       // move or a trip is picked up on the next open — not only the first one.
       const deviceTz = Intl.DateTimeFormat().resolvedOptions().timeZone;
