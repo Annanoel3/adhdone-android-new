@@ -93,18 +93,21 @@ export default function QuickCaptureCard({ theme }) {
 // ring SOUND (a preset from the sound bucket, or a file the user uploads; the
 // phone downloads it once and rings from the copy). Neither changes when a
 // task reminds — only how loud it is when it does.
-const ALARM_SOUND_BASE = 'https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/';
+// Re-mastered to alarm loudness on Oct 1, 2026 (see LOUD_ALARM_SOUND_FOR in
+// widgetBridge for the why): the same nine sounds, each brought up to the
+// level of a real alarm tone, stored in the app's own files.
+const ALARM_SOUND_BASE = 'https://base44.app/api/apps/68dd79726fce6eca73056b9b/files/mp/public/68dd79726fce6eca73056b9b/';
 const ALARM_SOUND_PRESETS = [
-  { name: 'Joyful Melody', file: 'Joyful Melody.wav' },
-  { name: 'Piano Melody', file: 'Piano Melody.mp3' },
-  { name: 'Short Piano', file: 'Short Piano Notification.mp3' },
-  { name: 'Short Notification', file: 'Short Notification.wav' },
-  { name: 'Applause', file: 'Applause.wav' },
-  { name: 'JR Station', file: 'JR Station Notification 3.mp3' },
-  { name: 'JR Osaka Loop', file: 'JR Osaka Loop 4.mp3' },
-  { name: 'JR Morning Tranquility', file: 'JR Morning Tranquility.mp3' },
-  { name: 'JR Flower Shop', file: 'JR Flower Shop.mp3' },
-].map((p) => ({ ...p, url: ALARM_SOUND_BASE + encodeURIComponent(p.file) }));
+  { name: 'Joyful Melody', file: '6cf12ae4d_alarm-joyful-melody-loud.wav' },
+  { name: 'Piano Melody', file: '669ebca15_alarm-piano-melody-loud.wav' },
+  { name: 'Short Piano', file: '25a474e03_alarm-short-piano-loud.wav' },
+  { name: 'Short Notification', file: '72a4ce0cc_alarm-short-notification-loud.wav' },
+  { name: 'Applause', file: 'd76ebf735_alarm-applause-loud.wav' },
+  { name: 'JR Station', file: '2a20b0ce0_alarm-jr-station-loud.wav' },
+  { name: 'JR Osaka Loop', file: 'cd9302e06_alarm-jr-osaka-loop-loud.wav' },
+  { name: 'JR Morning Tranquility', file: '5828ed87c_alarm-jr-morning-tranquility-loud.wav' },
+  { name: 'JR Flower Shop', file: '7bae5a00b_alarm-jr-flower-shop-loud.wav' },
+].map((p) => ({ ...p, url: ALARM_SOUND_BASE + p.file }));
 const ALARM_SOUND_MAX_BYTES = 10 * 1024 * 1024;
 // The spoken alarm: not a file — the phone's own voice reads the reminder out
 // loud (native AlarmSpeech). Saved in the same field as a sound URL, as this
