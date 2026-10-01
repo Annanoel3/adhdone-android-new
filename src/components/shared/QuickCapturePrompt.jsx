@@ -43,6 +43,7 @@ import {
 } from '../utils/widgetBridge';
 import { AlarmSoundPicker, AlarmQuietChoice, AlarmEventQuietChoice, QuietWhenButtons } from '../settings/QuickCaptureCard';
 import { NAG_INTERVALS } from '../utils/reminderScheduler';
+import { subscribeCaptures } from '@/lib/pendingCaptures';
 
 const SEEN_KEY = 'quick_capture_prompt_seen';
 
@@ -941,10 +942,17 @@ export function AlertStylePrompt({ user, theme }) {
         .then(() => { if (!cancelled) setOpen(true); });
     };
     const onCreated = () => show('first');
+    // The welcome chat's first task counts from the moment it is typed, not
+    // once it is saved: setting it up takes a few seconds and can be cut off
+    // (the app sent to the background mid-parse), and the question is about
+    // how reminders arrive, not about that one task. Gated on the saved task
+    // alone, one failed first task meant never being asked at all.
+    let unsubscribe = () => {};
 
     waitForPlugin('AlarmBridge').then((plugin) => {
       if (cancelled || !plugin) return;
       window.addEventListener('task-created', onCreated);
+      unsubscribe = subscribeCaptures((list) => { if (list.length) show('first'); });
       // Already has a task (an account from before full-screen reminders
       // existed, or a capture made outside the app)? Then it's an introduction.
       base44.entities.Task.filter({ status: 'active' }, '-created_date', 1)
@@ -955,6 +963,7 @@ export function AlertStylePrompt({ user, theme }) {
     return () => {
       cancelled = true;
       window.removeEventListener('task-created', onCreated);
+      unsubscribe();
     };
   }, [user]);
 
