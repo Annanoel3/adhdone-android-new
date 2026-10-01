@@ -25,11 +25,14 @@ import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
 import TaskSortDropdown from "../tasks/TaskSortDropdown";
 import BreakIntoStepsButton from "../tasks/BreakIntoStepsButton";
 import LifeAreaPill, { TagPill } from "../tasks/LifeAreaPill";
+import PendingTaskCards, { usePendingCaptures } from "./PendingTaskCards";
 
 export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails, onUpdateTask, loadFailed = false, onRetry }) {
   const navigate = useNavigate();
   const { sortBy } = useTaskSort();
   const [reminderPopoverTaskId, setReminderPopoverTaskId] = useState(null);
+  // Tasks still being set up go at the top of this list, as rows.
+  const pending = usePendingCaptures();
   // Filter out subtasks, sort by the shared preference, then take the top 5.
   const activeTasks = sortTasks(
     // Birthdays only join the list on the day itself — never before.
@@ -486,7 +489,8 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
       </CardHeader>
       <CardContent className="p-6">
         <div className="space-y-3">
-          {activeTasks.length === 0 && loadFailed ? (
+          <PendingTaskCards theme={theme} captures={pending} />
+          {activeTasks.length === 0 && pending.length === 0 && loadFailed ? (
             <div className="text-center py-10">
               <p className={`${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'} font-semibold`}>
                 Couldn't load your tasks just now.
@@ -500,7 +504,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                 </Button>
               )}
             </div>
-          ) : activeTasks.length === 0 ? (
+          ) : activeTasks.length === 0 && pending.length === 0 ? (
             <div className="text-center py-10">
               <div className={`w-14 h-14 rounded-full mx-auto mb-3 flex items-center justify-center ${
                 theme === 'minimalist' ? 'bg-green-100' :
