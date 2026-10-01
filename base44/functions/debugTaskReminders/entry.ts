@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
         perms_missing: u.alarm_permissions_missing || '',
         perms_checked: day(u.alarm_permissions?.checked_at),
         onboarding: Array.isArray(u.onboarding_flags) ? u.onboarding_flags.length : 0,
-        calendar: (Array.isArray(u.device_calendar_ids) && u.device_calendar_ids.length > 0) || !!u.google_connected_at,
+        calendar: Array.isArray(u.device_calendar_ids) && u.device_calendar_ids.length > 0,
         quiet: `${u.quiet_hours_enabled === false ? 'off' : (u.quiet_hours_start || '22:00') + '-' + (u.quiet_hours_end || '08:00')}`,
         players: Array.isArray(u.onesignal_player_ids) ? u.onesignal_player_ids.length : 0,
         about: String(u.about_me || '').slice(0, 80),
