@@ -121,7 +121,7 @@ export default function TaskCard({
   const specialMode = localStorage.getItem('special_mode') || 'normal';
 
   const isSeasonalTheme = () => {
-    return ['christmas', 'valentines', 'newyears', 'stpatricks', 'fourthjuly', 'summer', 'spring', 'kawaii', 'halloween', 'fall', 'winter'].includes(specialMode);
+    return ['christmas', 'valentines', 'newyears', 'stpatricks', 'fourthjuly', 'summer', 'spring', 'kawaii', 'halloween', 'harvest', 'fall', 'winter'].includes(specialMode);
   };
 
   const getUrgencyColor = (urgency) => {
