@@ -229,8 +229,12 @@ export async function pushPhoneAlarms(
         // only for the OneSignal dashboard.
         name: "Silent: update a task's alarms on the phone",
         content_available: true,
-        // High priority, or a sleeping phone may only get it after the old time rang.
-        priority: 10,
+        // Normal priority, on purpose: this push shows nothing, and Google (FCM)
+        // demotes every push to a phone whose high-priority pushes keep showing
+        // nothing — real reminders then arrive late (see onTaskUpdate's drop
+        // push). A sleeping phone may get a changed alarm time a little late;
+        // the app also re-syncs alarms on every open.
+        priority: 5,
         // Six hours. A late copy is harmless: the phone keeps the newest list.
         ttl: 6 * 60 * 60,
         data: { set_alarms_task: task.id, alarms: alarmListJson(after), changed_at: changedAt },
