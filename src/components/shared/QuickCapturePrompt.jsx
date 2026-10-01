@@ -1416,7 +1416,9 @@ const QUIET_CHOICE_ON_PLAY = true;
 // card stays about 1.3.12, so nobody is sent to Play for a build that isn't
 // there. (Sep 30, 2026: the build Play approved that day turned out not to
 // have the recorder - Anna's phone lost Record Notes on updating to it.)
-const NOTES_BUILD_ON_PLAY = false;
+// Oct 1, 2026: on. A brand-new Play install (build 36, 1.3.13) reports
+// RecorderBridge, and Anna's phone does too.
+const NOTES_BUILD_ON_PLAY = true;
 const hasQuietHoursBuild = () =>
   typeof window !== 'undefined' &&
   typeof window.Capacitor?.Plugins?.AlarmBridge?.quietFor === 'function';
