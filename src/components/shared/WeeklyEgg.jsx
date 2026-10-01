@@ -1,7 +1,9 @@
 import React from "react";
+import { trackFire } from "@/lib/appTrack";
 
-// A tiny hidden easter-egg trigger that lives in ONE of several spots on a page.
-// Which spot it picks rotates every week, so finding it is a little game.
+// A hidden easter-egg trigger that lives in ONE of several spots on a page.
+// Which spot it picks rotates every week, so finding it is a little game. It
+// was text-xs and nobody saw it (Anna, Sep 30 2026): now a full-size emoji.
 const SLOT_COUNT = 4;
 
 function currentWeek() {
@@ -16,9 +18,12 @@ export default function WeeklyEgg({ slot, type = "ideas", emoji = "💡" }) {
   return (
     <button
       type="button"
-      onClick={() => window.triggerEasterEgg?.(type)}
+      onClick={() => {
+        trackFire('easter_egg_found', { props: { egg: `${emoji} (${type} GIF)`, slot } });
+        window.triggerEasterEgg?.(type);
+      }}
       aria-label="A little something"
-      className="text-xs leading-none p-1 select-none"
+      className="text-2xl leading-none p-1 select-none"
     >
       {emoji}
     </button>
