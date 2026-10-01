@@ -135,13 +135,19 @@ async function dropPhoneAlarms(base44, task, taskId) {
         // where a push with no title is otherwise listed as "Untitled Message".
         name: "Silent: remove a finished task's alarms and reminders from the phone",
         content_available: true,
-        // High priority. At normal priority a sleeping phone's battery saver
-        // (Doze) can hold this until its next wake-up, and by then the alarm
-        // it is meant to take off has already rung for a task that's done.
-        priority: 10,
-        // Ten minutes. OneSignal replays recent pushes when the app starts
-        // fresh; this one is stale long before that could matter.
-        ttl: 10 * 60,
+        // Normal priority, on purpose. This push never shows anything, and
+        // Google (FCM) watches for exactly that: an app whose high-priority
+        // pushes keep arriving with nothing shown gets ALL its pushes to that
+        // phone knocked down to normal priority for a while — which is how a
+        // demo reminder reached Anna's phone 30 minutes after OneSignal sent it
+        // (Oct 1, 2026). Every edit and every finished task used to send one of
+        // these at high priority. A sleeping phone may now get this a little
+        // late; the phone also takes a finished task's alarms off on its own
+        // when the task is finished there, and re-syncs on every open.
+        priority: 5,
+        // Six hours: at normal priority a sleeping phone may not get it for a
+        // while, and a late copy is harmless (taking off alarms twice is nothing).
+        ttl: 6 * 60 * 60,
         data: { drop_alarms_task: taskId, changed_at: Date.now() }
       })
     });
