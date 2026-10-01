@@ -24,6 +24,23 @@ Deno.serve(async (req) => {
     const now = Date.now();
 
     const svc = base44.asServiceRole.entities;
+    // Read-only: what OneSignal says about one push it was handed
+    // ({ os: { id } }) — delivered, failed, still queued, cancelled.
+    if (body?.os?.id) {
+      const appId = Deno.env.get('ONESIGNAL_APP_ID');
+      const restKey = Deno.env.get('ONESIGNAL_REST_API_KEY');
+      if (!appId || !restKey) return Response.json({ ok: false, error: 'OneSignal credentials missing' }, { status: 500 });
+      const res = await fetch(`https://onesignal.com/api/v1/notifications/${encodeURIComponent(String(body.os.id))}?app_id=${appId}`, {
+        headers: { Authorization: `Basic ${restKey}` },
+      });
+      const j: any = await res.json().catch(() => ({}));
+      return Response.json({
+        ok: res.ok, http_status: res.status, id: j.id, send_after: j.send_after, completed_at: j.completed_at,
+        queued: j.queued, remaining: j.remaining, successful: j.successful, failed: j.failed, errored: j.errored,
+        converted: j.converted, canceled: j.canceled, errors: j.errors, headings: j.headings, contents: j.contents,
+        include_player_ids: j.include_player_ids, include_subscription_ids: j.include_subscription_ids, include_aliases: j.include_aliases,
+      });
+    }
 
     // Raw look-up (read only): { q: { entity, where, limit, fields } } returns
     // matching rows, newest first, trimmed to the fields asked for.
