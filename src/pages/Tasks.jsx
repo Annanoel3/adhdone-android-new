@@ -30,6 +30,7 @@ import PullToRefresh from "../components/shared/PullToRefresh";
 import { checkCompletionEggs } from "../components/eastereggs/completionEggs";
 import { trackFire } from "@/lib/appTrack";
 import PendingTaskCards, { usePendingCaptures } from "../components/home/PendingTaskCards";
+import { isSeasonal } from "../components/utils/launchTheme";
 
 export default function Tasks() {
   const navigate = useNavigate();
@@ -338,9 +339,10 @@ export default function Tasks() {
     }
   };
 
-  const isSeasonalTheme = () => {
-    return ['christmas', 'valentines', 'newyears', 'stpatricks', 'fourthjuly', 'summer', 'spring'].includes(specialMode);
-  };
+  // The shared list — this page kept its own, which left out halloween, kawaii,
+  // harvest, fall and winter, so on those five it fell back to the plain light
+  // look: a white card and black text sitting on the wallpaper.
+  const isSeasonalTheme = () => isSeasonal(specialMode);
 
   return (
     <div className={`min-h-screen p-4 md:p-8 w-full pb-0 ${
@@ -528,7 +530,7 @@ export default function Tasks() {
           />
         ) : pending.length > 0 ? null : (
           <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">No tasks found</p>
+            <p className={`text-lg ${isSeasonalTheme() ? `${specialMode}-text` : 'text-gray-500'}`}>No tasks found</p>
           </div>
         )}
 
