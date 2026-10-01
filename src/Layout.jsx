@@ -846,7 +846,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 
           .christmas-card,
           .kawaii-card,
-          .halloween-card,
           .fall-card,
           .harvest-card,
           .winter-card,
@@ -861,6 +860,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             -webkit-backdrop-filter: blur(12px) !important;
             border: 1px solid rgba(255, 255, 255, 0.3) !important;
           }
+          /* Halloween's cards are dark glass: see HalloweenMode.jsx. */
         `}</style>
 
       <TooltipProvider>
@@ -1184,6 +1184,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 
           <main className="flex-1 flex flex-col min-w-0 min-h-screen relative z-10 overflow-x-hidden">
             <header className={`backdrop-blur-md border-b px-6 sticky top-0 z-10 pointer-events-auto ${
+              isSeasonalTheme() ? `${specialMode}-chrome` : ''
+            } ${
               isSeasonalTheme()
                 ? 'bg-white/60 border-white/30'
                 : theme === 'dark'
