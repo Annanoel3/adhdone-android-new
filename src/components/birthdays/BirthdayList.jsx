@@ -44,7 +44,7 @@ export default function BirthdayList({ birthdays, theme, onRefresh }) {
   if (birthdays.length === 0) {
     return (
       <p className={`text-sm text-center py-10 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}>
-        No birthdays yet. Add one — or sync Google Calendar to pull them in.
+        No birthdays yet. Add one — or bring in your phone's calendars to pull them in.
       </p>
     );
   }
