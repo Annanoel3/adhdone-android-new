@@ -39,6 +39,7 @@ Deno.serve(async (req) => {
         queued: j.queued, remaining: j.remaining, successful: j.successful, failed: j.failed, errored: j.errored,
         converted: j.converted, canceled: j.canceled, errors: j.errors, headings: j.headings, contents: j.contents,
         include_player_ids: j.include_player_ids, include_subscription_ids: j.include_subscription_ids, include_aliases: j.include_aliases,
+        include_external_user_ids: j.include_external_user_ids, data: j.data, priority: j.priority, android_channel_id: j.android_channel_id,
       });
     }
 
