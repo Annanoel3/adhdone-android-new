@@ -2,7 +2,7 @@ import React from "react";
 import { trackFire } from "@/lib/appTrack";
 
 // A hidden star that lives in ONE of several spots on the Tasks page. It was
-// text-xs and nobody saw it (Anna, Sep 30 2026): now a full-size emoji.
+// text-xs and nobody saw it (Anna, Sep 30 2026): now 18px (text-lg).
 // Which spot it picks rotates every week, so it's a little "find me" game.
 // Tapping it fires the celebration GIF easter egg.
 const SLOT_COUNT = 4;
@@ -24,7 +24,7 @@ export default function WeeklyStar({ slot }) {
         window.triggerEasterEgg?.('awesome');
       }}
       aria-label="A little something"
-      className="text-2xl leading-none p-1 select-none"
+      className="text-lg leading-none p-1 select-none"
     >
       ⭐
     </button>
