@@ -24,7 +24,7 @@ export default function LongPressBrandTitle({ className }) {
       const next = randomFact(lastFact.current);
       lastFact.current = next;
       setFact(next);
-      trackFire('easter_egg_found', { egg: 'Attention fact (held the title)' });
+      trackFire('easter_egg_found', { props: { egg: 'Attention fact (held the title)' } });
     }, HOLD_MS);
   };
 
