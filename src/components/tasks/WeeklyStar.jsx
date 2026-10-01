@@ -1,6 +1,8 @@
 import React from "react";
+import { trackFire } from "@/lib/appTrack";
 
-// A tiny hidden star that lives in ONE of several spots on the Tasks page.
+// A hidden star that lives in ONE of several spots on the Tasks page. It was
+// text-xs and nobody saw it (Anna, Sep 30 2026): now a full-size emoji.
 // Which spot it picks rotates every week, so it's a little "find me" game.
 // Tapping it fires the celebration GIF easter egg.
 const SLOT_COUNT = 4;
@@ -17,9 +19,12 @@ export default function WeeklyStar({ slot }) {
   return (
     <button
       type="button"
-      onClick={() => window.triggerEasterEgg?.('awesome')}
+      onClick={() => {
+        trackFire('easter_egg_found', { props: { egg: '⭐ (My Tasks star)', slot } });
+        window.triggerEasterEgg?.('awesome');
+      }}
       aria-label="A little something"
-      className="text-xs leading-none p-1 select-none"
+      className="text-2xl leading-none p-1 select-none"
     >
       ⭐
     </button>
