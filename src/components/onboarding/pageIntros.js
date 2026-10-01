@@ -49,7 +49,7 @@ export const PAGE_TOURS = {
   Calendar: [
     {
       title: "Your calendar 📅",
-      body: "Pull in your Google Calendar and reminders get timed around what you've already got going on.",
+      body: "Bring in your phone's calendars and reminders get timed around what you've already got going on.",
     },
   ],
   FocusTimer: [
