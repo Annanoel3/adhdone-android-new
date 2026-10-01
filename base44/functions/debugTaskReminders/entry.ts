@@ -50,8 +50,10 @@ Deno.serve(async (req) => {
     for (const u of users) {
       byEmail[u.email] = {
         email: u.email, name: u.preferred_name || u.full_name || '', role: u.role || '',
-        signed_up: day(u.signed_up_at || u.created_date), last_active: day(u.last_active_at),
-        days_since_signup: Math.floor((now - ms(u.signed_up_at || u.created_date)) / DAY),
+        // The account's own creation time is the sign-up; the signed_up_at
+        // stamp is written by the app and can land a session late.
+        signed_up: day(u.created_date || u.signed_up_at), last_active: day(u.last_active_at),
+        days_since_signup: Math.floor((now - ms(u.created_date || u.signed_up_at)) / DAY),
         days_since_active: Number.isFinite(ms(u.last_active_at)) ? Math.floor((now - ms(u.last_active_at)) / DAY) : null,
         tz: u.timezone || '', alarm_mode: u.alarm_mode || '',
         notifications: u.alarm_permissions?.notifications ?? null,
