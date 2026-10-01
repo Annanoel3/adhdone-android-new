@@ -26,6 +26,7 @@ import {
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { User } from "@/entities/User";
+import { trackFire } from "@/lib/appTrack";
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -273,13 +274,14 @@ export default function Profile() {
       <div className="mt-6 text-center">
         <Button
           onClick={() => {
+            trackFire('easter_egg_found', { props: { egg: '✨ what\'s this? (Profile)' } });
             if (window.triggerEasterEgg) {
               window.triggerEasterEgg('awesome');
             }
           }}
           variant="ghost"
           size="sm"
-          className={`text-xs opacity-40 hover:opacity-100 transition-opacity ${
+          className={`text-sm opacity-60 hover:opacity-100 transition-opacity ${
             theme === 'dark' || ['halloween', 'christmas', 'newyears', 'fourthjuly'].includes(specialMode)
               ? 'text-gray-500 hover:text-gray-400'
               : 'text-gray-400 hover:text-gray-600'
