@@ -28,6 +28,7 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
+  PopoverClose,
 } from "@/components/ui/popover";
 import { formatTimeRange } from "../utils/timeRangeLabel";
 import SubtaskQuickAdd from "./SubtaskQuickAdd";
@@ -1060,10 +1061,10 @@ export default function TaskCard({
                 </PopoverTrigger>
                 <PopoverContent className={`w-48 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                   <div className="space-y-1">
-                    <button onClick={() => handleUrgencyChange('low')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Low</button>
-                    <button onClick={() => handleUrgencyChange('medium')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Medium</button>
-                    <button onClick={() => handleUrgencyChange('high')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>High</button>
-                    <button onClick={() => handleUrgencyChange('urgent')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Urgent</button>
+                    <PopoverClose asChild><button onClick={() => handleUrgencyChange('low')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Low</button></PopoverClose>
+                    <PopoverClose asChild><button onClick={() => handleUrgencyChange('medium')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Medium</button></PopoverClose>
+                    <PopoverClose asChild><button onClick={() => handleUrgencyChange('high')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>High</button></PopoverClose>
+                    <PopoverClose asChild><button onClick={() => handleUrgencyChange('urgent')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Urgent</button></PopoverClose>
                   </div>
                 </PopoverContent>
               </Popover>
@@ -1087,9 +1088,9 @@ export default function TaskCard({
                   </PopoverTrigger>
                   <PopoverContent className={`w-48 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                     <div className="space-y-1">
-                      <button onClick={() => handleEnergyChange('low')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Low</button>
-                      <button onClick={() => handleEnergyChange('medium')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Medium</button>
-                      <button onClick={() => handleEnergyChange('high')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>High</button>
+                      <PopoverClose asChild><button onClick={() => handleEnergyChange('low')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Low</button></PopoverClose>
+                      <PopoverClose asChild><button onClick={() => handleEnergyChange('medium')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Medium</button></PopoverClose>
+                      <PopoverClose asChild><button onClick={() => handleEnergyChange('high')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>High</button></PopoverClose>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -1121,15 +1122,15 @@ export default function TaskCard({
                   </PopoverTrigger>
                   <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                     <div className="space-y-1">
-                      <button onClick={() => handleIntervalChange('10min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 10 minutes</button>
-                      <button onClick={() => handleIntervalChange('20min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 20 minutes</button>
-                      <button onClick={() => handleIntervalChange('30min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 30 minutes</button>
-                      <button onClick={() => handleIntervalChange('1hour')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button>
-                      <button onClick={() => handleIntervalChange('2hours')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button>
-                      <button onClick={() => handleIntervalChange('daily')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Daily</button>
-                      <button onClick={() => handleIntervalChange('every_other_day')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every other day</button>
+                      <PopoverClose asChild><button onClick={() => handleIntervalChange('10min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 10 minutes</button></PopoverClose>
+                      <PopoverClose asChild><button onClick={() => handleIntervalChange('20min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 20 minutes</button></PopoverClose>
+                      <PopoverClose asChild><button onClick={() => handleIntervalChange('30min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 30 minutes</button></PopoverClose>
+                      <PopoverClose asChild><button onClick={() => handleIntervalChange('1hour')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button></PopoverClose>
+                      <PopoverClose asChild><button onClick={() => handleIntervalChange('2hours')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button></PopoverClose>
+                      <PopoverClose asChild><button onClick={() => handleIntervalChange('daily')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Daily</button></PopoverClose>
+                      <PopoverClose asChild><button onClick={() => handleIntervalChange('every_other_day')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every other day</button></PopoverClose>
                       <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : ''}`}></div>
-                      <button onClick={() => handleIntervalChange('once')} className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}>📅 Set Specific Date Instead</button>
+                      <PopoverClose asChild><button onClick={() => handleIntervalChange('once')} className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}>📅 Set Specific Date Instead</button></PopoverClose>
                     </div>
                   </PopoverContent>
                 </Popover>
@@ -1404,12 +1405,12 @@ export default function TaskCard({
                   <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
                     <div className="space-y-1">
                       <div className={`px-3 py-2 text-xs font-semibold uppercase ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Recurring</div>
-                      <button onClick={() => handleIntervalChange('30min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 30 minutes</button>
-                      <button onClick={() => handleIntervalChange('1hour')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button>
-                      <button onClick={() => handleIntervalChange('2hours')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button>
-                      <button onClick={() => handleIntervalChange('daily')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Daily</button>
+                      <PopoverClose asChild><button onClick={() => handleIntervalChange('30min')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 30 minutes</button></PopoverClose>
+                      <PopoverClose asChild><button onClick={() => handleIntervalChange('1hour')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every hour</button></PopoverClose>
+                      <PopoverClose asChild><button onClick={() => handleIntervalChange('2hours')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Every 2 hours</button></PopoverClose>
+                      <PopoverClose asChild><button onClick={() => handleIntervalChange('daily')} className={`w-full text-left px-3 py-2 text-sm rounded ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}>Daily</button></PopoverClose>
                       <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : ''}`}></div>
-                      <button onClick={() => handleIntervalChange('once')} className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}>📅 Set Specific Date</button>
+                      <PopoverClose asChild><button onClick={() => handleIntervalChange('once')} className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-blue-900 text-blue-400' : 'hover:bg-blue-50 text-blue-600'}`}>📅 Set Specific Date</button></PopoverClose>
                     </div>
                   </PopoverContent>
                 </Popover>
