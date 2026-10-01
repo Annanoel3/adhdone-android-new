@@ -551,6 +551,25 @@ export async function pushAlarmQuietVibrate(on) {
   }
 }
 
+// The alarm-sound presets used to point at the Focus Room's chimes on the
+// sound bucket — gentle notification sounds mastered 7–9 dB below a real alarm
+// tone, which is why alarms got quiet once people picked one (the bundled
+// tone they replaced was loud). On Oct 1, 2026 each was re-mastered to alarm
+// loudness and stored under a new address (phones keep a copy by address, so
+// the old one must change). An account still on an old address is moved to
+// the loud copy on open (WidgetTaskSync) — same sound, just at alarm level.
+export const LOUD_ALARM_SOUND_FOR = new Map([
+  ['https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/Joyful%20Melody.wav', 'https://base44.app/api/apps/68dd79726fce6eca73056b9b/files/mp/public/68dd79726fce6eca73056b9b/6cf12ae4d_alarm-joyful-melody-loud.wav'],
+  ['https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/Piano%20Melody.mp3', 'https://base44.app/api/apps/68dd79726fce6eca73056b9b/files/mp/public/68dd79726fce6eca73056b9b/669ebca15_alarm-piano-melody-loud.wav'],
+  ['https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/Short%20Piano%20Notification.mp3', 'https://base44.app/api/apps/68dd79726fce6eca73056b9b/files/mp/public/68dd79726fce6eca73056b9b/25a474e03_alarm-short-piano-loud.wav'],
+  ['https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/Short%20Notification.wav', 'https://base44.app/api/apps/68dd79726fce6eca73056b9b/files/mp/public/68dd79726fce6eca73056b9b/72a4ce0cc_alarm-short-notification-loud.wav'],
+  ['https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/Applause.wav', 'https://base44.app/api/apps/68dd79726fce6eca73056b9b/files/mp/public/68dd79726fce6eca73056b9b/d76ebf735_alarm-applause-loud.wav'],
+  ['https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/JR%20Station%20Notification%203.mp3', 'https://base44.app/api/apps/68dd79726fce6eca73056b9b/files/mp/public/68dd79726fce6eca73056b9b/2a20b0ce0_alarm-jr-station-loud.wav'],
+  ['https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/JR%20Osaka%20Loop%204.mp3', 'https://base44.app/api/apps/68dd79726fce6eca73056b9b/files/mp/public/68dd79726fce6eca73056b9b/cd9302e06_alarm-jr-osaka-loop-loud.wav'],
+  ['https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/JR%20Morning%20Tranquility.mp3', 'https://base44.app/api/apps/68dd79726fce6eca73056b9b/files/mp/public/68dd79726fce6eca73056b9b/5828ed87c_alarm-jr-morning-tranquility-loud.wav'],
+  ['https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/JR%20Flower%20Shop.mp3', 'https://base44.app/api/apps/68dd79726fce6eca73056b9b/files/mp/public/68dd79726fce6eca73056b9b/7bae5a00b_alarm-jr-flower-shop-loud.wav'],
+]);
+
 // Hands native the ring sound the user chose ('' = the phone's default alarm
 // tone). Native downloads it once and rings from the copy. Resolves the
 // plugin's { result, ready }, or null when there is nothing to do.
