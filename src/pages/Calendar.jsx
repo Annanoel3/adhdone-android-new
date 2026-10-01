@@ -361,30 +361,6 @@ export default function Calendar() {
     loadSyncedEvents();
   };
 
-  // All sync starts go through the shared module: it joins a run that's
-  // already in flight (from the layout, or from this page before a navigation)
-  // instead of launching a second one.
-  const attemptSync = useCallback(() => runCalendarSync(), []);
-
-  // Lightweight connection check — does NOT trigger a full sync, so a sync
-  // error for any other reason can't be mistaken for "not connected".
-  const probeConnection = useCallback(async () => {
-    try {
-      const res = await base44.functions.invoke('syncGoogleCalendar', { probe: true });
-      const result = res.data;
-      if (result?.connected) {
-        setConnected(true);
-        setCalendarConnected(true);
-        if (result.connected_email) setConnectedEmail(result.connected_email);
-        return true;
-      }
-    } catch { /* not connected */ }
-    setConnected(false);
-    setCalendarConnected(false);
-    setConnectedEmail(null);
-    return false;
-  }, []);
-
   // On mount: check auth, load events, probe connection
   useEffect(() => {
     const init = async () => {
@@ -404,133 +380,12 @@ export default function Calendar() {
           }
           if (hadGoogle) setSwitchNote(true);
         }
-        // Straight back from our own OAuth callback, which lands here as
-        // ?gcal=connected (or an explicit failure reason). A brand-new grant
-        // isn't always readable on the first ask, so retry briefly rather than
-        // letting one "no" stick as "not connected".
-        const gcal = new URLSearchParams(window.location.search).get('gcal');
-        if (gcal && gcal !== 'connected') {
-          setSyncError(
-            gcal === 'denied' ? 'Google sign-in was cancelled.'
-            : gcal === 'expired' ? 'That sign-in link timed out — tap Connect again.'
-            : gcal === 'no_refresh_token' ? "Google didn't return a lasting permission — tap Connect again and approve the calendar access."
-            : 'Connecting to Google failed — tap Connect to try again.'
-          );
-        }
-        const justConnected = gcal === 'connected'
-          || sessionStorage.getItem('adhd_calendar_just_connected') === '1';
-        sessionStorage.removeItem('adhd_calendar_just_connected');
-        // The phone build reads calendars from the phone; Google is never
-        // probed or synced there.
-        let isConnected = hasDeviceCalendars() ? false : await probeConnection();
-        if (!hasDeviceCalendars() && !isConnected && justConnected) {
-          for (let i = 0; i < 4 && !isConnected; i++) {
-            await new Promise((r) => setTimeout(r, 1500));
-            isConnected = await probeConnection();
-          }
-        }
-        // Background auto-sync — at most once per the user's chosen interval,
-        // via the shared module (joins any run already in flight). If a sync
-        // is running when this page opens, surface it as "Syncing…" and
-        // refresh the grid when it lands.
-        const running = isConnected ? (getInFlightSync() || maybeAutoSync()) : null;
-        if (running) {
-          setSyncing(true);
-          running
-            .then(async (result) => {
-              if (result?.synced_at) {
-                setLastSyncedAt(result.synced_at);
-                localStorage.setItem('calendar_last_synced_at', result.synced_at);
-              }
-              await Promise.all([loadSyncedEvents(), loadTasks()]);
-            })
-            .catch(() => {})
-            .finally(() => setSyncing(false));
-        }
       }
       setLoading(false);
     };
     init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loadSyncedEvents, probeConnection]);
-
-  // Re-check connection status every time the page becomes visible
-  useEffect(() => {
-    if (hasDeviceCalendars()) return undefined;
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') probeConnection();
-    };
-    probeConnection();
-    document.addEventListener('visibilitychange', onVisible);
-    return () => document.removeEventListener('visibilitychange', onVisible);
-  }, [probeConnection]);
-
-  // Runs OAuth in a POPUP, which is how per-user connections are meant to be
-  // made. It used to be a full-page redirect: that dumped the user back on the
-  // app root instead of here, and the connection never ended up stored. This
-  // page never unloads now — when the popup closes we just re-check.
-  const [connecting, setConnecting] = useState(false);
-
-  const handleConnect = async () => {
-    setConnecting(true);
-    setSyncError(null);
-    try {
-      // App-owned OAuth. Full-page hand-off, deliberately: the Android app has
-      // no popups. Google returns to our OWN callback, which redirects straight
-      // back to this page with ?gcal=…, so there is no detour through a Base44
-      // host and nothing depends on connector storage.
-      const res = await base44.functions.invoke('googleCalendarConnect', {});
-      const url = res.data?.url;
-      if (!url) throw new Error('Could not start Google sign-in');
-      window.location.href = url;
-    } catch (e) {
-      setSyncError(e.message || 'Could not start Google sign-in');
-      setConnecting(false);
-    }
-  };
-
-  const handleDisconnect = async () => {
-    await base44.functions.invoke('googleCalendarDisconnect', {});
-    setConnected(false);
-    setCalendarConnected(false);
-    setConnectedEmail(null);
-    setSyncResult(null);
-    setSyncedEvents([]);
-    setLastSyncedAt(null);
-  };
-
-  const handleSync = async () => {
-    setSyncing(true);
-    setSyncError(null);
-    setSyncResult(null);
-    try {
-      const ok = await probeConnection();
-      if (!ok) {
-        setSyncError('Google Calendar disconnected. Please reconnect.');
-      } else {
-        const result = await attemptSync();
-        if (result?.aborted) {
-          // Page/app went away mid-sync — nothing to report.
-        } else if (result?.in_progress) {
-          setSyncError('A sync is already running for your account — give it a minute and it will finish on its own.');
-        } else {
-          setSyncResult(result);
-        }
-        if (result?.synced_at) {
-          setLastSyncedAt(result.synced_at);
-          localStorage.setItem('calendar_last_synced_at', result.synced_at);
-        }
-        if (result?.connected_email) setConnectedEmail(result.connected_email);
-        // Reload both imported events AND in-app tasks — synced calendar
-        // events become Task records too, and the grid shows both.
-        await Promise.all([loadSyncedEvents(), loadTasks()]);
-      }
-    } catch (e) {
-      setSyncError(e.message || 'Sync failed');
-    } finally {
-      setSyncing(false);
-    }
-  };
+  }, [loadSyncedEvents]);
 
   const isDark = theme === 'dark';
   // Phone build: calendars come from the phone, the Google sign-in card is gone.
@@ -556,170 +411,29 @@ export default function Calendar() {
     );
   }
 
-  const GoogleLogo = () => (
-    <svg width="18" height="18" viewBox="0 0 18 18">
-      <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"/>
-      <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/>
-      <path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/>
-      <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
-    </svg>
-  );
-
   return (
     <div className={`min-h-screen p-4 md:p-8 ${isDark ? 'bg-gray-900' : ''}`}
       style={{ paddingBottom: 'max(8rem, calc(8rem + env(safe-area-inset-bottom)))' }}>
       <div className="max-w-4xl mx-auto space-y-6">
 
-        {/* Google sign-in card — web only */}
+        {/* On the web there is nothing to connect: calendars are read by the
+            phone app (Google Calendar's own sign-in was retired Oct 1, 2026 —
+            nobody had used it, and the phone's calendars cover every account). */}
         {!phone && (
-        <Card className={`border-none shadow-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
-          <CardContent className="p-6 space-y-4">
-            {/* Header */}
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 rounded-2xl bg-blue-500 flex items-center justify-center shadow">
-                <CalendarDays className="w-6 h-6 text-white" />
-              </div>
-              <div className="flex-1">
-                <h1 className={`text-2xl font-bold ${textPrimary}`}>Google Calendar</h1>
-                <p className={`text-sm ${textSecondary}`}>
-                  {connected
-                    ? 'Syncing your calendar events as smart tasks'
-                    : 'Connect to import events as smart tasks'}
-                </p>
-              </div>
-            </div>
-
-            {/* Connected account info */}
-            {connected && connectedEmail && (
-              <>
-                <div className={`flex items-center gap-2 p-2.5 rounded-xl border text-sm ${isDark ? 'bg-gray-700 border-gray-600' : 'bg-blue-50 border-blue-100'}`}>
-                  <Mail className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                  <span className={`font-medium truncate min-w-0 ${isDark ? 'text-gray-200' : 'text-blue-800'}`}>{connectedEmail}</span>
-                  <Badge className="ml-auto text-xs bg-blue-100 text-blue-700 border-blue-200 border flex-shrink-0">Connected</Badge>
+          <Card className={`border-none shadow-lg ${isDark ? 'bg-gray-800' : 'bg-white'}`}>
+            <CardContent className="p-6 space-y-3">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-blue-500 flex items-center justify-center shadow">
+                  <CalendarDays className="w-6 h-6 text-white" />
                 </div>
-                <div className={`flex items-center gap-2 text-sm ${textSecondary}`}>
-                  <Clock className="w-3.5 h-3.5" />
-                  Last synced: {formatLastSynced(lastSyncedAt)}
-                </div>
-              </>
-            )}
-
-            {/* Action buttons */}
-            {connected && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleSync}
-                  disabled={syncing}
-                  className={`gap-2 ${isDark ? 'border-gray-600 text-gray-300 hover:bg-gray-700' : ''}`}
-                >
-                  {syncing ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                  {syncing ? 'Syncing…' : 'Sync now'}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={handleDisconnect}
-                  className="gap-2 text-red-500 hover:text-red-600 hover:bg-red-50"
-                >
-                  <Unlink className="w-4 h-4" />
-                  Disconnect
-                </Button>
-              </div>
-            )}
-
-            {syncing && (
-              <KeepAppOpenNote className="justify-start" text="Keep the app open while syncing — closing it cancels the sync." />
-            )}
-
-            {/* Auto-sync setting */}
-            {connected && (
-              <div className={`flex items-center gap-2 text-sm`}>
-                <label className={textSecondary}>Auto-sync:</label>
-                <select
-                  value={autoSyncInterval}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setAutoSyncInterval(val);
-                    localStorage.setItem('calendar_auto_sync_interval', val);
-                  }}
-                  className={`text-xs rounded px-2 py-1 border ${isDark ? 'bg-gray-700 border-gray-600 text-gray-200' : 'bg-white border-gray-300'}`}
-                >
-                  <option value="never">Never</option>
-                  <option value="6hours">Every 6 hours</option>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                </select>
-              </div>
-            )}
-
-            {/* Switch account button */}
-            {connected && (
-              <button
-                onClick={handleConnect}
-                className={`flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-colors ${isDark ? 'border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-gray-200' : 'border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-700'}`}
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Switch / reconnect Google account
-              </button>
-            )}
-
-            {/* Sync result banner */}
-            {syncResult && !syncError && (
-              <div className="mt-4 flex items-start gap-2 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
-                <CheckCircle2 className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <span>
-                  Synced {syncResult.results?.length || syncResult.created || 0} events —{' '}
-                  {syncResult.created} new tasks created, {syncResult.updated} tasks refreshed, {syncResult.skipped} unchanged.
-                </span>
-              </div>
-            )}
-            {syncError && (
-              <div className="mt-4 flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">
-                <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                <span>{syncError}</span>
-              </div>
-            )}
-
-            {/* Connect button + privacy notice */}
-            {!connected && (
-              <div className="mt-5 space-y-3">
-                <Button
-                  onClick={handleConnect}
-                  disabled={connecting}
-                  className="gap-3 px-6 py-3 h-auto bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 shadow-sm font-medium rounded-xl"
-                  variant="outline"
-                >
-                  {connecting ? <Loader2 className="w-4 h-4 animate-spin" /> : <GoogleLogo />}
-                  {connecting ? 'Waiting for Google…' : 'Connect Google Calendar'}
-                </Button>
-                <div className={`flex items-start gap-2 p-3 rounded-xl border text-xs ${isDark ? 'bg-gray-700 border-gray-600 text-gray-300' : 'bg-gray-50 border-gray-200 text-gray-500'}`}>
-                  <Lock className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-gray-400" />
-                  <span>
-                    ADHDone requests <strong>read-only</strong> access to your Google Calendar to set smart reminders. Your data is never sold or used for ads.{' '}
-                    <Link to="/privacypolicy" className="text-blue-500 hover:underline">Privacy Policy</Link>
-                    {' '}·{' '}
-                    <Link to="/Terms" className="text-blue-500 hover:underline">Terms</Link>
-                  </span>
+                <div className="flex-1">
+                  <h1 className={`text-2xl font-bold ${textPrimary}`}>Calendar</h1>
+                  <p className={`text-sm ${textSecondary}`}>Events come in through the ADHDone app on your phone.</p>
                 </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
-        )}
-
-        {/* How it works — shown only when not connected (web only) */}
-        {!phone && !connected && (
-          <Card className={`border-none shadow-sm ${isDark ? 'bg-gray-800' : 'bg-blue-50/50 border border-blue-100'}`}>
-            <CardContent className="p-5 space-y-3">
-              <h3 className={`font-semibold ${textPrimary}`}>How it works</h3>
-              <ul className={`space-y-2 text-sm ${textSecondary}`}>
-                <li className="flex gap-2"><Zap className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" /> AI reads each event and decides importance (low / medium / high) from the title, timing, and attendees.</li>
-                <li className="flex gap-2"><CalendarDays className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" /> Events become ADHDone tasks with smart reminders scaled to importance, including notes, location, and attendees.</li>
-                <li className="flex gap-2"><Cake className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" /> Yearly birthday events (e.g. "John's Birthday") go into the Birthday tracker automatically.</li>
-                <li className="flex gap-2"><RefreshCw className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" /> Syncs daily in the background. Re-syncing never duplicates existing tasks.</li>
-              </ul>
+              <p className={`text-sm ${textSecondary}`}>
+                Open ADHDone on your phone and pick which of its calendars to bring in — Google, Samsung, Outlook, whatever the phone has. Their events become tasks with reminders, and they show up here too.
+              </p>
             </CardContent>
           </Card>
         )}
@@ -745,11 +459,11 @@ export default function Calendar() {
           </CardContent>
         </Card>
 
-        {connected && syncedEvents.length === 0 && tasks.length === 0 && !syncing && (
+        {syncedEvents.length === 0 && tasks.length === 0 && !syncing && (
           <div className="text-center py-12">
             <CalendarDays className={`w-12 h-12 mx-auto mb-4 ${textSecondary}`} />
             <p className={`font-medium ${textPrimary}`}>Nothing on the calendar yet</p>
-            <p className={`text-sm mt-1 ${textSecondary}`}>Add tasks in the app or sync Google Calendar to see them here.</p>
+            <p className={`text-sm mt-1 ${textSecondary}`}>Add a task, or bring in your phone's calendars from the ADHDone app, and it shows up here.</p>
           </div>
         )}
 
