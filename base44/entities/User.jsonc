@@ -320,6 +320,14 @@
       },
       "description": "The last week of smart nudges sent (or skipped) for this person. Written only by the run that sends them, so a re-plan written at the same moment can never make a sent nudge look unsent and send it twice."
     },
+    "smart_nudge_passed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "description": "Smart Reminders' own record of tasks it weighed and chose NOT to nudge, with its reason: {at, task_id, title, why}. Written on every look, kept for three days (60 at most), never sent to the user. For reviewing its judgment: why didn't it remind me about X?"
+    },
     "smart_nudge_plan_prints": {
       "type": "object",
       "description": "Task id \u2192 a short fingerprint of what the smart-nudge planner read on that task (and its steps) when it last made this person's plan. A task that no longer matches has changed since, however it was changed, so the plan is redone."
