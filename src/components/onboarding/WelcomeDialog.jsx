@@ -83,6 +83,10 @@ export default function WelcomeDialog({ user }) {
   const handleClose = () => {
     setMode(null);
     markStepDone(ONBOARDING_STEPS.welcome);
+    // Closed without a name? CatchUpDialog asks for the name once more — on a
+    // LATER open, not the moment this closes. (sessionStorage: gone when the
+    // app is next launched.)
+    try { sessionStorage.setItem('onboarding_name_retry_hold', '1'); } catch (e) {}
     // There is no Home tour any more; its step is what releases what comes
     // after the welcome (the notifications card for a new account, the alarm
     // question). It's released here, when the chat closes — releasing it any
