@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { pushWidgetTasks, pushAlarms, pushAlarmSound, setAlarmMode, pushAlarmQuietWhen, quietWhenFor, pushEventQuiet, refreshAlarms, alarmPermissionStatus, listActiveTasks } from '../utils/widgetBridge';
+import { pushWidgetTasks, pushAlarms, pushAlarmSound, LOUD_ALARM_SOUND_FOR, setAlarmMode, pushAlarmQuietWhen, quietWhenFor, pushEventQuiet, refreshAlarms, alarmPermissionStatus, listActiveTasks } from '../utils/widgetBridge';
 import { maybeAutoSyncDevice } from '@/lib/calendarSync';
 
 // Seeds the home-screen widget once on app open, from anywhere in the app — a
@@ -94,6 +94,15 @@ export default function WidgetTaskSync({ user }) {
   const soundUrl = user?.alarm_sound_url;
   useEffect(() => {
     if (!userId || !window.Capacitor?.Plugins?.AlarmBridge) return;
+    // A chime from the old, quiet set is swapped for its loud re-master (same
+    // sound, alarm loudness — see LOUD_ALARM_SOUND_FOR): the account is moved
+    // and the phone gets the loud file now, not on the next open.
+    const loud = LOUD_ALARM_SOUND_FOR.get(soundUrl);
+    if (loud) {
+      base44.auth.updateMe({ alarm_sound_url: loud }).catch(() => {});
+      pushAlarmSound({ ...user, alarm_sound_url: loud });
+      return;
+    }
     pushAlarmSound(user);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, soundUrl]);
