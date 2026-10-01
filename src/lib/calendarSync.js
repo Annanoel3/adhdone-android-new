@@ -139,13 +139,10 @@ async function probeConnected() {
 // user's chosen interval has elapsed.
 // Returns the shared promise (or null when nothing needed to run).
 export async function maybeAutoSync() {
-  if (inFlight) return inFlight;
-  // The phone build syncs from the phone's calendars (maybeAutoSyncDevice);
-  // Google is retired there.
-  if (hasDeviceCalendars()) return null;
-  if (!isAutoSyncDue()) return null;
-  if (!(await probeConnected())) return null;
-  return runCalendarSync({ background: true }).catch(() => null);
+  // Google Calendar's own sync is retired everywhere (Oct 1, 2026): the phone's
+  // calendars are the only source (maybeAutoSyncDevice), and the browser has
+  // nothing to sync. Kept so the layout's call stays harmless.
+  return null;
 }
 // ---------------------------------------------------------------------------
 // Phone calendars (Samsung Calendar, Outlook, any account the phone's calendar
