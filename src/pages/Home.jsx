@@ -5,7 +5,6 @@ import WelcomeCard from "../components/home/WelcomeCard";
 import DailyTipCard from "../components/home/DailyTipCard";
 import QuickActions from "../components/home/QuickActions";
 import TodaysTasks from "../components/home/TodaysTasks";
-import PendingTaskCards from "../components/home/PendingTaskCards";
 import EndOfDayReview from "../components/home/EndOfDayReview";
 import BirthdayTextDialog from "../components/birthdays/BirthdayTextDialog";
 import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
@@ -90,12 +89,21 @@ export default function Home() {
     const handleBirthdayCreated = (e) => {
       setBirthdayTextTask(e.detail?.task || null);
     };
+    // A task just saved goes straight onto the list — the reload that follows
+    // ('tasks-changed', once the capture is fully done) only confirms it.
+    const handleTaskCreated = (e) => {
+      const task = e?.detail?.task;
+      if (!task?.id) return;
+      setTasks(prev => prev.some(t => t.id === task.id) ? prev : [task, ...prev]);
+    };
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('tasks-changed', handleTasksChanged);
+    window.addEventListener('task-created', handleTaskCreated);
     window.addEventListener('birthday-created', handleBirthdayCreated);
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('tasks-changed', handleTasksChanged);
+      window.removeEventListener('task-created', handleTaskCreated);
       window.removeEventListener('birthday-created', handleBirthdayCreated);
     };
   }, []);
@@ -298,8 +306,6 @@ export default function Home() {
 
           <div className="grid lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 space-y-6 min-w-0">
-              <PendingTaskCards theme={theme} />
-
               <div data-tour="todays-tasks">
                 <TodaysTasks
                   tasks={tasks}
