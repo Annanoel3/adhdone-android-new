@@ -92,6 +92,10 @@ export function overlayClasses(theme, specialMode) {
 
 // Dialog content surface (Sprint popup, Confirm dialog).
 export function surfaceClasses(theme, specialMode) {
+  // Halloween is dark glass everywhere (see HalloweenMode.jsx).
+  if (specialMode === 'halloween') {
+    return 'bg-[#0e091a]/85 backdrop-blur-md text-gray-100 border-white/15';
+  }
   if (isSeasonal(specialMode)) {
     return 'bg-white/80 backdrop-blur-md text-gray-900 border-white/40';
   }
@@ -108,6 +112,7 @@ export function surfaceClasses(theme, specialMode) {
 }
 
 export function mutedText(theme, specialMode) {
+  if (specialMode === 'halloween') return 'text-gray-300';
   if (isSeasonal(specialMode)) return 'text-gray-700';
   if (theme === 'dark') return 'text-gray-300';
   if (theme === 'spicybrains') return 'text-gray-800';
@@ -115,6 +120,7 @@ export function mutedText(theme, specialMode) {
 }
 
 export function subtleText(theme, specialMode) {
+  if (specialMode === 'halloween') return 'text-gray-400';
   if (isSeasonal(specialMode)) return 'text-gray-500';
   if (theme === 'dark') return 'text-gray-400';
   if (theme === 'spicybrains') return 'text-gray-700';
@@ -129,6 +135,7 @@ export function primaryButton(theme, specialMode) {
 
 // Secondary / outline action that sits inside the dialog surface.
 export function outlineButton(theme, specialMode) {
+  if (specialMode === 'halloween') return 'border border-white/20 bg-white/10 hover:bg-white/20 text-gray-100';
   if (isSeasonal(specialMode)) return 'border border-gray-300 bg-white/60 hover:bg-white/80 text-gray-900';
   if (theme === 'dark') return 'border border-gray-600 bg-gray-800 hover:bg-gray-700 text-gray-100';
   if (theme === 'spicybrains') return 'border-2 border-cyan-400 bg-white/60 hover:bg-white/80 text-gray-900';
@@ -143,6 +150,7 @@ export function destructiveButton() {
 
 // Floating minimized chip.
 export function chipClasses(theme, specialMode) {
+  if (specialMode === 'halloween') return 'bg-[#0e091a]/85 backdrop-blur-md text-gray-100 border border-white/15';
   if (isSeasonal(specialMode)) return 'bg-white/80 backdrop-blur-md text-gray-900 border border-white/40';
   if (theme === 'dark') return 'bg-gray-800 text-white border border-gray-700';
   if (theme === 'spicybrains') return 'bg-gradient-to-r from-pink-300 to-yellow-300 text-gray-900 border-2 border-cyan-400';
