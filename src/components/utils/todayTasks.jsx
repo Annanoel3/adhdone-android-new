@@ -71,6 +71,21 @@ export const isCompletedToday = (task, todayStr = getLocalDateString()) => {
   return getLocalDateString(new Date(when)) === todayStr;
 };
 
+// A date given to a task that never had one is a DEADLINE — "do this BY then",
+// not "on that day" (Anna, Oct 2 2026). People add a date to a task that has
+// sat on today's list too long to get it off the list, and still want to be
+// nudged about it right up to that day; "on that day" went quiet until then.
+// Same for a task that only had a time. A task that already had a date keeps
+// whatever it was ("on" stays "on", "by" stays "by"). Repeats, calendar
+// events and birthdays are tied to their day and are left alone.
+export const firstDateMakesDeadline = (task, nextDueISO) => {
+  if (!task || !nextDueISO || task.due_date) return {};
+  if (task.recurrence_pattern && task.recurrence_pattern !== 'none') return {};
+  if (task.event_time || task.device_event_id || task.google_event_id || task.classification === 'event') return {};
+  if (task.birthday_person || task.classification === 'birthday') return {};
+  return { deadline_style: 'by' };
+};
+
 // effective start date strictly in the future
 export const isUpcomingTask = (task, todayStr = getLocalDateString()) => {
   const start = getTaskDueLocalDate(task);
