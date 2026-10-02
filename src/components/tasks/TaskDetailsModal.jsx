@@ -72,6 +72,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Cake } from "lucide-react";
 import { trackFire } from "@/lib/appTrack";
+import { firstDateMakesDeadline } from "../utils/todayTasks";
 
 // A task nagging at a rhythm ("at 10 am, keep reminding me until I do it")
 // has its next_reminder moved along with every ping, so next_reminder is when
@@ -774,7 +775,10 @@ Return JSON:
       // a repeating task starts) — even when a rhythm task's first ping has to
       // wait an interval because that time already went by today.
       const namedTime = dayOnly ? null : finalEffectiveTime;
-      onUpdate({ ...task, next_reminder: nextReminder.toISOString(), due_date: nextReminder.toISOString(), day_only_task: dayOnly, anchor_time: namedTime });
+      // First date on a dateless task: a deadline ("by"), see todayTasks.
+      const styleFix = firstDateMakesDeadline(task, nextReminder.toISOString());
+      const becomesDeadline = styleFix.deadline_style === 'by';
+      onUpdate({ ...task, next_reminder: nextReminder.toISOString(), due_date: nextReminder.toISOString(), day_only_task: dayOnly, anchor_time: namedTime, ...styleFix });
       const savedRdNow = `${nextReminder.getFullYear()}-${String(nextReminder.getMonth()+1).padStart(2,'0')}-${String(nextReminder.getDate()).padStart(2,'0')}`;
       const savedRtNow = `${String(nextReminder.getHours()).padStart(2,'0')}:${String(nextReminder.getMinutes()).padStart(2,'0')}`;
       setReminderDate(savedRdNow);
@@ -783,9 +787,13 @@ Return JSON:
       reminderTimeRef.current = dayOnly ? '' : savedRtNow;
       toast({
         title: "Due date saved ✓",
-        description: dayOnly
-          ? `Due ${nextReminder.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — we'll nudge you the night before and that day.`
-          : `We'll remind you an hour before and at ${nextReminder.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`,
+        description: becomesDeadline
+          ? (dayOnly
+            ? `Due by ${nextReminder.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — we'll keep nudging you until then.`
+            : `Due by ${nextReminder.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })} — we'll keep nudging you until then.`)
+          : dayOnly
+            ? `Due ${nextReminder.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} — we'll nudge you the night before and that day.`
+            : `We'll remind you an hour before and at ${nextReminder.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true })}`,
       });
 
       (async () => {
@@ -852,6 +860,7 @@ Return JSON:
             due_date: nextReminder.toISOString(),
             day_only_task: dayOnly,
             anchor_time: namedTime,
+            ...styleFix,
             onesignal_notification_ids: newNotificationIds,
             reminder_schedule: null,
             ...(lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {})
@@ -898,6 +907,7 @@ Return JSON:
             due_date: nextReminder.toISOString(),
             day_only_task: dayOnly,
             anchor_time: namedTime,
+            ...styleFix,
             onesignal_notification_ids: newNotificationIds,
             // A plan that was booked has just been saved by the scheduler
             // itself (reminder_schedule, with each entry's own id and time);
@@ -929,7 +939,8 @@ Return JSON:
     // Track when the user pushes a due date LATER — used by Insights and the
     // smart-nudge LLM to spot chronically postponed tasks. Only counts as a
     // push when there was an existing due date and the new one is later.
-    const updates = { due_date: dueDateValue };
+    // A first date makes the task a deadline ("by") — see todayTasks.
+    const updates = { due_date: dueDateValue, ...firstDateMakesDeadline(task, dueDateValue) };
     if (dueDateValue && task.due_date) {
       const oldDate = new Date(task.due_date);
       const newDateObj = new Date(dueDateValue);
