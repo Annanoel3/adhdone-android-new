@@ -274,6 +274,26 @@ function ringsOutLoud(task, momentMs) {
 // inside them is never booked as a full-screen alarm — that moment keeps its
 // regular push, which the scheduler has already placed by the same rules —
 // so nothing rings out loud at 3 AM.
+// Two alarms at the same minute (two daily things at 9 PM) rang on top of each
+// other: the phone rings one alarm at a time, so the second took over and the
+// first was never answered or counted. The later one is pushed back so each
+// gets its own ring — a ring lasts a minute and then ends by itself, so two
+// minutes apart can't overlap. Only the ring moves; the task keeps the time it
+// was given. Never pushed into quiet hours (a clash beats ringing at night).
+const ALARM_GAP_MS = 2 * 60 * 1000;
+function spaceOut(entries) {
+  entries.sort((a, b) => a.alarm.at - b.alarm.at);
+  for (let i = 1; i < entries.length; i++) {
+    const prev = entries[i - 1].alarm;
+    const cur = entries[i];
+    if (cur.alarm.at - prev.at >= ALARM_GAP_MS) continue;
+    const shifted = prev.at + ALARM_GAP_MS;
+    if (!cur.quietExempt && isInQuietHours(new Date(shifted))) continue;
+    cur.alarm.at = shifted;
+  }
+  return entries.map((e) => e.alarm);
+}
+
 export function alarmSetFor(tasks, userDefault = alarmMode) {
   const cutoff = Date.now() - ALARM_KEEP_PAST_MS;
   const out = [];
@@ -295,10 +315,10 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
       if (t.birthday_person && !t.is_own_birthday) {
         alarm.openLabel = t.birthday_text_message ? 'Send a text' : 'Write a text';
       }
-      out.push(alarm);
+      out.push({ alarm, quietExempt: !!t.quiet_hours_exempt });
     }
   }
-  return out.sort((a, b) => a.at - b.at).slice(0, ALARM_MAX);
+  return spaceOut(out).slice(0, ALARM_MAX);
 }
 
 // What happened to alarms since we last asked — snoozes, dismissals, rings
