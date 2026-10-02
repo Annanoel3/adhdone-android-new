@@ -867,9 +867,17 @@ export default function TaskCard({
         ? theme === 'dark' ? 'border-green-700 bg-green-900/30 text-green-400' : 'border-green-300 bg-green-50 text-green-700'
         : theme === 'dark' ? 'border-gray-700 bg-gray-800 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-600'
   }`;
+  // A repeating task's collapsed chip says when it repeats ("Daily at 9 PM")
+  // instead of the day — the section already says the day, and two daily
+  // doses with the same title otherwise read as duplicates (Anna, Oct 2 2026).
+  // Overdue still wins: that's the signal that matters.
+  const chipRepeats = !!(collapsedDate && showRepeatPill && !collapsedDate.overdue && repeatScheduleLabel);
   const chipText = collapsedDate
-    ? `${collapsedDate.overdue ? `Overdue · ${collapsedDate.label}` : collapsedDate.label}${timeRange ? ` · ${timeRange}` : ''}`
+    ? chipRepeats
+      ? repeatScheduleLabel
+      : `${collapsedDate.overdue ? `Overdue · ${collapsedDate.label}` : collapsedDate.label}${timeRange ? ` · ${timeRange}` : ''}`
     : '';
+  const chipIcon = chipRepeats ? <RefreshCw className="w-3 h-3 inline-block mr-1 -mt-0.5" /> : null;
 
   return (
     <Card
@@ -930,7 +938,7 @@ export default function TaskCard({
                     aria-label="Change the date"
                     title="Change the date"
                   >
-                    {chipText}
+                    {chipIcon}{chipText}
                   </button>
                 </PopoverTrigger>
                 <PopoverContent className={`w-64 p-3 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
@@ -962,7 +970,7 @@ export default function TaskCard({
                 </PopoverContent>
               </Popover>
             ) : (
-              <span className={chipClass}>{chipText}</span>
+              <span className={chipClass}>{chipIcon}{chipText}</span>
             )
           )}
 
