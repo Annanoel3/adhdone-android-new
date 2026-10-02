@@ -34,6 +34,7 @@ import { formatTimeRange } from "../utils/timeRangeLabel";
 import SubtaskQuickAdd from "./SubtaskQuickAdd";
 import LifeAreaPill, { TagPill } from "./LifeAreaPill";
 import { checkDuePushEgg } from "../eastereggs/duePushEgg";
+import { firstDateMakesDeadline } from "../utils/todayTasks";
 import { cancelEventWithUndo, restoreEvent } from "../utils/snoozeTask";
 
 export default function TaskCard({
@@ -526,11 +527,18 @@ export default function TaskCard({
       // with a time isn't all-day any more. An all-day task moved to another
       // day moves its due date with it (the day smart nudges plan around).
       const allDayMove = !newTime && !!task.day_only_task && !!newDate;
-      const namedTime = newTime
-        ? { anchor_time: newTime, day_only_task: false, ...(task.day_only_task ? { due_date: nextReminder.toISOString() } : {}) }
-        : allDayMove
-          ? { due_date: new Date(nextReminder.getFullYear(), nextReminder.getMonth(), nextReminder.getDate(), 23, 59, 0, 0).toISOString() }
-          : {};
+      // A date given to a task that only had a time: it gets that date as its
+      // due date and becomes a deadline ("by") — see todayTasks.
+      const styleFix = newDate ? firstDateMakesDeadline(task, nextReminder.toISOString()) : {};
+      const firstDate = styleFix.deadline_style ? { ...styleFix, due_date: nextReminder.toISOString() } : {};
+      const namedTime = {
+        ...firstDate,
+        ...(newTime
+          ? { anchor_time: newTime, day_only_task: false, ...(task.day_only_task ? { due_date: nextReminder.toISOString() } : {}) }
+          : allDayMove
+            ? { due_date: new Date(nextReminder.getFullYear(), nextReminder.getMonth(), nextReminder.getDate(), 23, 59, 0, 0).toISOString() }
+            : {}),
+      };
 
       // Optimistic — update UI instantly
       if (onUpdateTask) onUpdateTask({ ...task, next_reminder: nextReminder.toISOString(), ...namedTime });
@@ -776,8 +784,10 @@ export default function TaskCard({
         dueDateValue = new Date(year, month - 1, day, hours, minutes, 0, 0).toISOString();
       }
       checkDuePushEgg(task, task.due_date, dueDateValue);
-      if (onUpdateTask) onUpdateTask({ ...task, due_date: dueDateValue });
-      Task.update(task.id, { due_date: dueDateValue }).catch(error => {
+      // A first date makes the task a deadline ("by") — see todayTasks.
+      const updates = { due_date: dueDateValue, ...firstDateMakesDeadline(task, dueDateValue) };
+      if (onUpdateTask) onUpdateTask({ ...task, ...updates });
+      Task.update(task.id, updates).catch(error => {
         console.error("Error updating due date:", error);
         if (onRefreshTasks) onRefreshTasks();
       });
