@@ -10,7 +10,7 @@ import { awardPoints, getPointsForAction } from "../utils/gamification";
 import { base44 } from "@/api/base44Client";
 import { motion } from "framer-motion";
 import { updateTodaysSummary } from "../utils/dailySummaryHelper";
-import { isTodayTask, isUpcomingTask } from "../utils/todayTasks";
+import { isTodayTask, isUpcomingTask, firstDateMakesDeadline } from "../utils/todayTasks";
 import { isBirthdayTask, passesBirthdayDayFilter } from "../utils/birthdayHelpers";
 import { isSmartReminderTask } from "../utils/smartReminderTask";
 import { pushWidgetTasks, pushAlarms } from "../utils/widgetBridge";
@@ -363,8 +363,10 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
       })();
       return;
     }
-    if (onUpdateTask) onUpdateTask({ ...task, due_date: dueDateValue });
-    base44.entities.Task.update(task.id, { due_date: dueDateValue }).catch(error => {
+    // A first date makes the task a deadline ("by") — see todayTasks.
+    const updates = { due_date: dueDateValue, ...firstDateMakesDeadline(task, dueDateValue) };
+    if (onUpdateTask) onUpdateTask({ ...task, ...updates });
+    base44.entities.Task.update(task.id, updates).catch(error => {
       console.error("Error updating due date:", error);
     });
   };
