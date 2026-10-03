@@ -53,6 +53,7 @@ const TASK_PARSE_SCHEMA = {
     needs_date_pick: { type: "boolean" },
     is_flexible: { type: "boolean" },
     priority_uninferrable: { type: "boolean" },
+    takes_time: { type: "boolean" },
     life_area: { type: "string", enum: ["work", "personal"] },
     follow_up_title: { type: ["string", "null"] },
     follow_up_minutes: { type: ["integer", "null"] },
@@ -64,7 +65,7 @@ const TASK_PARSE_SCHEMA = {
     "target_date", "target_time", "end_date", "due_date",
     "user_asked_to_repeat_every", "recurrence_pattern", "deadline_style",
     "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
-    "life_area", "follow_up_title", "follow_up_minutes", "reminder_wish",
+    "takes_time", "life_area", "follow_up_title", "follow_up_minutes", "reminder_wish",
     "recurrence_days",
   ],
 };
