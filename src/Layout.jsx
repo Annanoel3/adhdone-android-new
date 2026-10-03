@@ -864,15 +864,12 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             box-sizing: border-box;
           }
 
-          .christmas-card,
           .kawaii-card,
           .fall-card,
           .harvest-card,
           .winter-card,
           .valentines-card,
-          .newyears-card,
           .stpatricks-card,
-          .fourthjuly-card,
           .summer-card,
           .spring-card {
             background: rgba(255, 255, 255, 0.7) !important;
