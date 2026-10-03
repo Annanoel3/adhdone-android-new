@@ -4,13 +4,38 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, Clock, Zap, Loader2, Send, Sparkles, Mic, ListChecks } from "lucide-react";
+import { CheckCircle2, Clock, Zap, Loader2, Send, Sparkles, Mic, ListChecks, CalendarDays, MapPin } from "lucide-react";
 import BirthdayTextDialog from "../components/birthdays/BirthdayTextDialog";
 import { createPageUrl } from "@/utils";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { cancelScheduledReminder } from "../components/utils/reminderScheduler";
 import { snoozeTask, recordReminderDismissed } from "../components/utils/snoozeTask";
 import { usePluginPresent } from "../components/shared/WidgetTaskSync";
+import { formatTimeRange } from "../components/utils/timeRangeLabel";
+
+// A calendar event's reminder is a heads-up, not a to-do (Anna, Oct 3 2026):
+// nothing to "do", nothing to snooze — just when and where, and "Got it".
+function eventWhen(task, nowMs) {
+  const start = new Date(task.event_time || task.next_reminder || task.due_date || "").getTime();
+  if (!Number.isFinite(start)) return { heading: "Event", line: "" };
+  const end = new Date(task.end_time || task.end_date || "").getTime();
+  const d = new Date(start);
+  const today = new Date(nowMs);
+  const sameDay = d.toDateString() === today.toDateString();
+  const tomorrow = new Date(nowMs + 24 * 60 * 60 * 1000).toDateString() === d.toDateString();
+  const day = sameDay ? "Today" : tomorrow ? "Tomorrow" : d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  const clock = (ms) => new Date(ms).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  const range = formatTimeRange(task) || (task.day_only_task ? "all day" : clock(start));
+  const mins = Math.round((start - nowMs) / 60000);
+  const over = Number.isFinite(end) ? nowMs > end : mins < -180;
+  let heading = "Coming up";
+  let rel = "";
+  if (over) heading = "Earlier today";
+  else if (mins <= 0) heading = "Happening now";
+  else if (mins < 60) rel = `in ${mins} min`;
+  else if (mins < 24 * 60) { const h = Math.round(mins / 60); rel = `in ${h} hour${h === 1 ? "" : "s"}`; }
+  return { heading, line: `${day} · ${range}${rel ? ` · ${rel}` : ""}` };
+}
 
 // An event the reminder planner worded for recording notes (see NOTES_LABELS in
 // base44/functions/generateReminderSchedule) gets "Jot down questions" before it
@@ -210,6 +235,10 @@ export default function TaskNotification() {
 
   const isProcessing = !!processingAction;
   const notesButtons = recorderPresent ? notesButtonsFor(task, Date.now()) : null;
+  const isEvent = task.classification === "event" || !!task.device_event_id;
+  const when = isEvent ? eventWhen(task, Date.now()) : null;
+  // "Got it" is an acknowledgment, not a brush-off: it isn't counted.
+  const gotIt = () => { actedRef.current = true; navigate(createPageUrl("Home")); };
   const openNotes = (what) => {
     actedRef.current = true; // going to prep or record isn't brushing the reminder off
     navigate(`${createPageUrl("Notes")}?task=${encodeURIComponent(task.id)}&${what}=1`);
@@ -228,13 +257,15 @@ export default function TaskNotification() {
             <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${
               theme === 'dark' ? 'bg-purple-900/30' : 'bg-gradient-to-br from-purple-100 to-pink-100'
             }`}>
-              <Clock className={`w-8 h-8 ${theme === 'dark' ? 'text-purple-400' : 'text-purple-600'}`} />
+              {isEvent
+                ? <CalendarDays className={`w-8 h-8 ${theme === 'dark' ? 'text-purple-400' : 'text-purple-600'}`} />
+                : <Clock className={`w-8 h-8 ${theme === 'dark' ? 'text-purple-400' : 'text-purple-600'}`} />}
             </div>
             <h2 className={`text-2xl font-bold mb-1 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-              Task Reminder
+              {isEvent ? when.heading : 'Task Reminder'}
             </h2>
             <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-              Time to check in on this task
+              {isEvent ? when.line : 'Time to check in on this task'}
             </p>
           </div>
 
@@ -245,6 +276,14 @@ export default function TaskNotification() {
             <h3 className={`text-lg font-semibold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
               {task.title}
             </h3>
+            {isEvent ? (
+              task.location ? (
+                <p className={`flex items-center gap-1 text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                  <MapPin className="w-4 h-4 flex-shrink-0" />
+                  {task.location}
+                </p>
+              ) : null
+            ) : (
             <div className="flex flex-wrap gap-2">
               {task.urgency && (
                 <Badge className={`${getUrgencyColor(task.urgency)} border`}>{task.urgency}</Badge>
@@ -256,6 +295,7 @@ export default function TaskNotification() {
                 </Badge>
               )}
             </div>
+            )}
             {task.description && (
               <p className={`mt-2 text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
                 {task.description}
@@ -321,7 +361,24 @@ export default function TaskNotification() {
             </div>
           )}
 
+          {/* An event: "Got it" and nothing else to answer. */}
+          {isEvent && (
+            <Button
+              onClick={gotIt}
+              disabled={isProcessing}
+              className={`w-full h-14 text-lg mb-2 ${
+                theme === 'minimalist'
+                  ? 'bg-green-600 hover:bg-green-700'
+                  : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
+              }`}
+            >
+              <CheckCircle2 className="w-5 h-5 mr-2" />
+              Got it
+            </Button>
+          )}
+
           {/* Complete button */}
+          {!isEvent && (
           <Button
             onClick={handleComplete}
             disabled={isProcessing}
@@ -338,8 +395,10 @@ export default function TaskNotification() {
             )}
             ✅ Yes, I did this!
           </Button>
+          )}
 
           {/* Snooze options — shown directly, no extra tap needed */}
+          {!isEvent && (
           <div className={`rounded-xl p-3 ${theme === 'dark' ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
             <p className={`text-xs font-semibold uppercase tracking-wide mb-3 text-center ${
               theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
@@ -368,6 +427,7 @@ export default function TaskNotification() {
               ))}
             </div>
           </div>
+          )}
 
           <BirthdayTextDialog
             isOpen={showBirthdayDraft}
@@ -379,6 +439,7 @@ export default function TaskNotification() {
             }}
           />
 
+          {!isEvent && (
           <button
             onClick={() => navigate(createPageUrl("Home"))}
             disabled={isProcessing}
@@ -388,6 +449,7 @@ export default function TaskNotification() {
           >
             Dismiss
           </button>
+          )}
         </CardContent>
       </Card>
     </div>
