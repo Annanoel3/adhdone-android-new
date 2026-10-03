@@ -2,7 +2,7 @@
 // Support Space prompt so the AI can answer "how does X work?" questions
 // accurately instead of guessing.
 export const APP_FEATURE_GUIDE = `
-NAVIGATION: Open the menu with the icon in the top-left. Main items: Home, Tasks, Calendar. "Tools" holds Focus Timer, Parking Lot, Scheduled Texts. "Reflect & Connect" holds Progress, Insights, Talk It Out, Community. Bottom of the menu: App Guide, theme toggle, Settings.
+NAVIGATION: Open the menu with the icon in the top-left. Main items: Home, Tasks, Calendar. "Tools" holds Focus Timer, Parking Lot, Scheduled Texts. "Reflect & Connect" holds Progress, Insights, Talk It Out, Community. Bottom of the menu: App Guide, Settings.
 
 HOME: Today's Tasks (due today, overdue, or spanning today), Quick Add (type or speak a task), daily tip, motivation coach, streak, upcoming birthday card, Focus Mode button, end-of-day review. Tap a task's circle to complete it (a little celebration plays). Completing a recurring task automatically creates the next occurrence.
 
@@ -32,7 +32,7 @@ TALK IT OUT (formerly "Support Space"): this chat — a judgment-free place to v
 
 COMMUNITY: Accountability partners, partner chat, Focus Rooms (shared co-working timers), mood check-ins, report/block tools.
 
-THEMES: the theme button in the menu cycles Light → Dark → Colorful → Spicy Brains (color-psychology theme with an explainer) → seasonal (if unlocked). Seasonal themes follow the real calendar (spring, summer, fall, harvest, winter, Halloween, Christmas, New Year's, Valentine's, St. Patrick's, 4th of July) and switch automatically. Kawaii is a manual pick.
+THEMES: pick one at the top of Settings, under "Look and feel": Light, Dark, Colorful, Spicy Brains (color-psychology theme with an explainer), plus Seasonal and Kawaii once unlocked. Seasonal themes follow the real calendar (spring, summer, fall, harvest, winter, Halloween, Christmas, New Year's, Valentine's, St. Patrick's, 4th of July) and switch automatically. Kawaii is a manual pick.
 
 SETTINGS: quiet hours, home zip code (for errand grouping), notification settings, Quick Capture (Android: a pinned notification you tap to add a task from anywhere — needs the notification permission), profile, account, subscription, delete data/account.
 
