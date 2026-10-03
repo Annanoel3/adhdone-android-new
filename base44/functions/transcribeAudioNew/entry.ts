@@ -206,10 +206,18 @@ When it isn't clear who said something, state the point with no person at all.
 Put what matters most first, in short plain lines they can take in at a glance. No paragraphs:
 one idea per line, and keep lines short. Skip small talk and anything that doesn't matter later.
 
-Highlight the part of each line that matters most by wrapping it in ==double equals==: the thing
-to do, the name, the number, the date, the dose — the few words an eye should land on first.
-One highlight per line, two to six words, and only where a line has something worth landing
-on; a line with nothing to single out gets none. Never highlight a whole line.
+Highlight the words that matter most on a line by wrapping them in ==double equals==, so an eye
+skimming the page lands on them first. Be generous with these: nearly every line in good notes
+carries something — a medicine, a dose, a number, a date, a name, a body part, the thing to do,
+a verdict ("the supplements ==did not cause== it"), a comparison ("something ==stronger than baby
+aspirin=="), a change ("==go back on== the statin") — and every line that does gets its key words
+marked, not only the rare standout. The highlight answers "what is this line actually telling
+me?": in "the doctor said it was a tiny blood vessel deep in the brain", mark ==tiny blood
+vessel==; in "she can take magnesium and potassium", mark ==magnesium and potassium==; in "the
+exam covers chapters four through six", mark ==chapters four through six==. Two to six words,
+inside the line, never the whole line, and usually one per line (two when a line really carries
+two separate facts). Only a line that is pure context, with nothing to look up, do or remember,
+goes without.
 
 - title: a short, specific name for this recording ("Knee follow-up with Dr. Patel", "Bio 101:
   cell division", "Budget meeting").
