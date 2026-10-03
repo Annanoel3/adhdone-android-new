@@ -73,6 +73,7 @@ import { useNavigate } from "react-router-dom";
 import { Cake } from "lucide-react";
 import { trackFire } from "@/lib/appTrack";
 import { firstDateMakesDeadline } from "../utils/todayTasks";
+import { appConfirm } from "@/components/ui/alert-dialog";
 
 // A task nagging at a rhythm ("at 10 am, keep reminding me until I do it")
 // has its next_reminder moved along with every ping, so next_reminder is when
@@ -1155,7 +1156,7 @@ Return JSON:
   };
 
   const handleDelete = async () => {
-    if (!task || !confirm(`Delete "${task.title}" and all its sub-tasks?`)) return;
+    if (!task || !(await appConfirm(`Delete "${task.title}" and all its sub-tasks?`, { okText: 'Delete', destructive: true }))) return;
 
     // Optimistic — close dialog and notify parent immediately
     if (onDelete) {
@@ -1807,7 +1808,7 @@ Return JSON:
     </div>
   );
   const handleToParkingLot = async () => {
-    if (!confirm(`Convert "${task.title}" to a parking lot idea?`)) return;
+    if (!(await appConfirm(`Convert "${task.title}" to a parking lot idea?`, { okText: 'Move it' }))) return;
 
     // Optimistic — close dialog and notify parent immediately
     if (onDelete) {
