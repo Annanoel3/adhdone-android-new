@@ -84,6 +84,7 @@ import { hydrateOnboardingFlags, clearOnboardingFlags, persistOnboardingFlag } f
 import { trackFire } from "@/lib/appTrack";
 import { seedTaskSortFromProfile } from "@/hooks/useTaskSort";
 import TaskCaptureProcessor from "./components/shared/TaskCaptureProcessor";
+import { AppDialogHost } from "@/components/ui/alert-dialog";
 import UsageTracker from "./components/shared/UsageTracker";
 import { base44 } from "@/api/base44Client";
 import { maybeAutoSync } from "@/lib/calendarSync";
@@ -1290,6 +1291,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         {/* The one "there's an update" popup (see AppUpdatePrompt). */}
         <AppUpdatePrompt user={user} theme={theme} />
         <TaskCaptureProcessor userEmail={user?.email} />
+        <AppDialogHost />
         <UsageTracker user={user} />
         <WelcomeDialog user={user} />
         <CatchUpDialog user={user} />
