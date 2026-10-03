@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { DarkSeasonGlass } from './HalloweenMode';
 
 export default function ChristmasMode() {
   const [items, setItems] = useState([]);
@@ -21,24 +22,11 @@ export default function ChristmasMode() {
 
   return (
     <>
-      <style>{`
-        .christmas-card {
-          background: rgba(255, 255, 255, 0.95) !important;
-          border: 2px solid #c41e3a !important;
-          box-shadow: 0 4px 20px rgba(196, 30, 58, 0.3) !important;
-        }
-        
-        .christmas-card * {
-          color: #1a472a !important;
-        }
-        
-        .christmas-card h1,
-        .christmas-card h2,
-        .christmas-card h3,
-        .christmas-card h4 {
-          color: #c41e3a !important;
-        }
-      `}</style>
+      {/* A night-time wallpaper: the same dark glass as Halloween, in this
+          season's colours, instead of the old white cards (Anna, Oct 3 2026:
+          "in all dark seasonal modes the cards should be darker than the
+          background, not lighter"). */}
+      <DarkSeasonGlass palette={{ mode: 'christmas', text: '#f2f7f1', muted: 'rgba(242, 247, 241, 0.72)', title: '#ffa3a3', base: '8, 22, 14' }} />
 
       <AnimatePresence>
         {items.map(item => (
