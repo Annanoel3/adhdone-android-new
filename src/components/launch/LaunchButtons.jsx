@@ -32,7 +32,7 @@ export function TimeItButton({ task, theme }) {
       title="Start a stopwatch on this task"
     >
       <Timer className="w-3 h-3" />
-      Time it
+      <span className="max-[420px]:hidden">Time it</span>
     </button>
   );
 }
