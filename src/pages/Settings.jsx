@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { 
   Sun, 
@@ -90,7 +90,7 @@ function AboutYouCard({ user, theme, onSaved }) {
           )}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="about-you-about" className={dark ? 'text-gray-300' : ''}>What matters to you</Label>
+          <Label htmlFor="about-you-about" className={dark ? 'text-gray-300' : ''}>Anything ADHDone should know about you</Label>
           <Textarea
             id="about-you-about"
             value={about}
@@ -101,7 +101,7 @@ function AboutYouCard({ user, theme, onSaved }) {
             className={dark ? 'bg-gray-700 border-gray-600 text-white' : ''}
           />
           <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
-            This is what ADHDone reads when it decides how urgent a task is and how hard to nudge you about it.
+            ADHDone reads this every time it sorts a task, breaks one down, nudges you, or writes your notes — so the more real it is, the better it fits your life.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -117,6 +117,21 @@ function AboutYouCard({ user, theme, onSaved }) {
 
 export default function Settings() {
   const navigate = useNavigate();
+  // Two sub-pages live at ?section=… (new page files can't be added from the
+  // code editor): Personalization — what ADHDone knows about you — and
+  // Reminders. They are rows in the Account list; the main page stays short
+  // (Anna, Oct 3 2026).
+  const location = useLocation();
+  const section = new URLSearchParams(location.search).get('section');
+  const SECTIONS = {
+    personalization: {
+      title: 'Personalization',
+      blurb: 'What ADHDone knows about you. It reads this every time it sorts a task, breaks one down, nudges you, or writes your notes.',
+    },
+    reminders: { title: 'Reminders', blurb: 'When and how ADHDone gets your attention.' },
+  };
+  const page = SECTIONS[section] || null;
+  useEffect(() => { window.scrollTo(0, 0); }, [section]);
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [specialMode, setSpecialMode] = useState(() => localStorage.getItem('special_mode') || 'normal');
   const [seasonalUnlocked, setSeasonalUnlocked] = useState(() => localStorage.getItem('seasonal_unlocked') === 'true');
@@ -290,6 +305,16 @@ export default function Settings() {
 
   const settingsItems = [
     {
+      icon: UserCircle,
+      label: 'Personalization',
+      onClick: () => navigate('/settings?section=personalization')
+    },
+    {
+      icon: Bell,
+      label: 'Reminders',
+      onClick: () => navigate('/settings?section=reminders')
+    },
+    {
       icon: Info,
       label: 'About ADHDone',
       onClick: () => navigate('/About')
@@ -323,24 +348,25 @@ export default function Settings() {
       <div className="max-w-2xl mx-auto">
         <Button
           variant="ghost"
-          onClick={() => navigate('/')}
+          onClick={() => navigate(page ? '/settings' : '/')}
           className="gap-2 p-3 h-12 text-base rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 mb-6"
         >
           <ArrowLeft className="w-5 h-5" />
-          Back
+          {page ? 'Settings' : 'Back'}
         </Button>
 
         <div className="mb-8">
           <h1 className={`text-3xl font-bold mb-2 ${
             theme === 'dark' ? 'text-white' : 'text-gray-900'
           }`}>
-            Settings
+            {page ? page.title : 'Settings'}
           </h1>
           <p className={`${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-            Customize your ADHDone experience
+            {page ? page.blurb : 'Customize your ADHDone experience'}
           </p>
         </div>
 
+        {!page && (<>
         {/* Feedback first: a direct line to the developer for anything at all. */}
         <Card className={`mb-6 border-none shadow-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
           <CardContent className="pt-6 flex items-center justify-between gap-4">
@@ -400,9 +426,14 @@ export default function Settings() {
           </CardContent>
         </Card>
 
-        <AboutYouCard user={user} theme={theme} onSaved={loadUser} />
+        </>)}
 
-        <p className={`text-xs font-bold uppercase tracking-wider mt-8 mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Reminders</p>
+        {section === 'personalization' && (<>
+        <AboutYouCard user={user} theme={theme} onSaved={loadUser} />
+        <HomeZipCard user={user} theme={theme} />
+        </>)}
+
+        {section === 'reminders' && (<>
         {/* Quiet Hours Section */}
         <Card className={`mb-6 border-none shadow-lg ${
           theme === 'dark' ? 'bg-gray-800' : 'bg-white'
@@ -473,9 +504,9 @@ export default function Settings() {
             AlarmBridge plugin (older installs, the browser), so it is safe for
             everyone. The one-time popups tell people it lives here. */}
         <AlarmCard user={user} theme={theme} />
+        </>)}
 
-        <HomeZipCard user={user} theme={theme} />
-
+        {!page && (<>
         <p className={`text-xs font-bold uppercase tracking-wider mt-8 mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Adding tasks</p>
         <QuickCaptureCard theme={theme} />
 
@@ -533,6 +564,7 @@ export default function Settings() {
         )}
 
         <VersionTap user={user} theme={theme} />
+        </>)}
 
         <div style={{ height: '80px' }} aria-hidden="true" />
       </div>
