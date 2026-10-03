@@ -450,6 +450,25 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     }
   }, [navigate]);
 
+  // The Settings page's theme picker tells the shell what was chosen, so the
+  // header, side menu and seasonal overlays switch at once — no reload.
+  useEffect(() => {
+    const onThemeChanged = (e) => {
+      const d = e?.detail || {};
+      if (d.theme) setTheme(d.theme);
+      if (d.specialMode) setSpecialMode(d.specialMode);
+      if (typeof d.seasonalUnlocked === 'boolean') setSeasonalUnlocked(d.seasonalUnlocked);
+      if (d.explainSpicy) setShowSpicyBrainsExplanation(true);
+      else if (d.theme === 'spicybrains' && !localStorage.getItem('spicybrains_explanation_seen')) {
+        localStorage.setItem('spicybrains_explanation_seen', 'true');
+        persistOnboardingFlag('spicybrains_explanation_seen');
+        setTimeout(() => setShowSpicyBrainsExplanation(true), 500);
+      }
+    };
+    window.addEventListener('adhd-theme-changed', onThemeChanged);
+    return () => window.removeEventListener('adhd-theme-changed', onThemeChanged);
+  }, []);
+
   const saveThemeToProfile = async (newTheme, newSpecialMode, newSeasonalUnlocked) => {
     localStorage.setItem('adhd_theme', newTheme);
     localStorage.setItem('special_mode', newSpecialMode);
@@ -928,7 +947,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             <SidebarContent className={`${
               theme === 'dark' ? 'bg-gray-950' : theme === 'spicybrains' ? 'bg-gradient-to-br from-pink-200 via-purple-200 to-cyan-200' : ''
             }`} style={{
-              paddingTop: '2.5rem',
+              paddingTop: '0.75rem',
               paddingBottom: '2.5rem',
               paddingLeft: '0.75rem',
               paddingRight: '0.75rem'
@@ -1110,60 +1129,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 <span>App Guide</span>
               </Button>
 
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  onClick={toggleTheme}
-                  className={`flex-1 flex items-center justify-center gap-2 rounded-xl ${
-                    isSeasonalTheme()
-                      ? 'bg-white/60 hover:bg-white/80 text-gray-800 border-white/40'
-                      : theme === 'dark'
-                        ? 'border-gray-700 hover:bg-gray-800 text-gray-300 bg-transparent'
-                        : theme === 'spicybrains'
-                          ? 'bg-gradient-to-r from-yellow-300 to-pink-300 hover:from-yellow-400 hover:to-pink-400 text-gray-900 font-bold border-2 border-cyan-400'
-                          : ''
-                  }`}
-                >
-                  {specialMode !== 'normal' ? (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>{SPECIAL_MODE_LABELS[specialMode] || 'Seasonal Theme'}</span>
-                    </>
-                  ) : theme === 'minimalist' ? (
-                    <>
-                      <Sun className="w-4 h-4" />
-                      <span>Light Theme</span>
-                    </>
-                  ) : theme === 'dark' ? (
-                    <>
-                      <Moon className="w-4 h-4" />
-                      <span>Dark Theme</span>
-                    </>
-                  ) : theme === 'spicybrains' ? (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>Spicy Brains ✨</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>Colorful Theme</span>
-                    </>
-                  )}
-                </Button>
-                {theme === 'spicybrains' && (
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setShowSpicyBrainsExplanation(true)}
-                    title="Why these colors?"
-                    className="flex-shrink-0 rounded-xl border-2 border-cyan-400 bg-gradient-to-r from-yellow-300 to-pink-300 hover:from-yellow-400 hover:to-pink-400 text-gray-900"
-                  >
-                    <HelpCircle className="w-4 h-4" />
-                  </Button>
-                )}
-              </div>
-
+              {/* The theme switcher lives in Settings → Look and feel now (Anna,
+                  Oct 3 2026): it was easy to miss here and cycled blindly. */}
               <Button
                 variant="outline"
                 onClick={() => { navigate('/settings'); handleNavClick(); }}
