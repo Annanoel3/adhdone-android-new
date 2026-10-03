@@ -101,7 +101,7 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
     {
       icon: Sparkles,
       title: "Themes",
-      description: "Light, dark, colorful, or Spicy Brains — plus seasonal themes that change with the calendar once you unlock them."
+      description: "Light, dark, colorful, or Spicy Brains — plus seasonal themes that change with the calendar once you unlock them. Pick yours at the top of Settings, under Look and feel."
     },
     {
       icon: Moon,
