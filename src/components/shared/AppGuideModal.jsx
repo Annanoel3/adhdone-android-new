@@ -106,7 +106,7 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
     {
       icon: Moon,
       title: "Quiet Hours",
-      description: "Set the hours you don't want to be bothered and reminders hold until morning. Set it in Settings."
+      description: "Set the hours you don't want to be bothered and reminders hold until morning. Set it in Settings → Reminders."
     },
     {
       icon: Users,
