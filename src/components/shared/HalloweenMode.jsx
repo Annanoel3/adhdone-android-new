@@ -9,17 +9,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 // shell, anything written for white (dark text, pale chips, white panels,
 // inputs) is turned over by class token, so every page reads right without
 // touching each one.
-const TEXT = '#f3ecff';
-const MUTED = 'rgba(243, 236, 255, 0.72)';
-const TITLE = '#ffb15c';
-// Cards and pale panels share one dark glass (Anna, Oct 3 2026: the lighter,
-// unblurred panels — the Add Task card — read as washed out next to Home's).
-const GLASS = 'rgba(14, 9, 26, 0.72)';
-const PANEL = GLASS;
-const CHROME = 'rgba(14, 9, 26, 0.78)';
-const LINE = 'rgba(255, 255, 255, 0.14)';
-const RAISED = 'rgba(255, 255, 255, 0.09)';
 const S = '#adhdone-app-bg';
+const LINE = 'rgba(255, 255, 255, 0.14)';
+// Inside a card a pale surface is a DARKER lift, never a lighter one (Anna,
+// Oct 3 2026: "cards darker than the background, not lighter").
+const RAISED = 'rgba(0, 0, 0, 0.28)';
+// One dark-glass look, parameterised per night-time season (darkGlassCss
+// below). Halloween's palette; Christmas, New Year's and the 4th of July pass
+// their own from their Mode files.
+const HALLOWEEN = { mode: 'halloween', text: '#f3ecff', muted: 'rgba(243, 236, 255, 0.72)', title: '#ffb15c', base: '14, 9, 26' };
 
 const PALE_COLORS = ['gray', 'stone', 'slate', 'zinc', 'neutral', 'purple', 'violet', 'indigo', 'fuchsia',
   'pink', 'rose', 'red', 'orange', 'amber', 'yellow', 'lime', 'green', 'emerald', 'teal', 'cyan', 'sky', 'blue'];
@@ -40,12 +38,21 @@ const DARK_TEXT = ['[class*="text-gray-"]', '[class*="text-stone-"]', '[class*="
   '[class~="text-card-foreground"]', '[class~="text-popover-foreground"]'];
 const MUTED_TEXT = ['4', '5', '6'].flatMap((n) => ['gray', 'stone', 'slate', 'zinc', 'neutral'].map((c) => `[class*="text-${c}-${n}"]`))
   .concat(['[class~="text-muted-foreground"]']);
-const CARDS = ['.halloween-card', '[class~="bg-card"]', '[class~="bg-white"]', '[class*="bg-white/"]'];
 const inShell = (sel) => `${S} ${sel}`;
-const inCards = (sel) => CARDS.map((c) => `${S} ${c} ${sel}`).join(', ');
 const list = (arr, fn) => arr.map(fn).join(',\n');
 
-const HALLOWEEN_CSS = `
+export function darkGlassCss({ mode, text, muted, title, base }) {
+  const TEXT = text, MUTED = muted, TITLE = title;
+  // Cards and pale panels share one dark glass (Anna, Oct 3 2026: the lighter,
+  // unblurred panels — the Add Task card — read as washed out next to Home's).
+  const GLASS = `rgba(${base}, 0.72)`;
+  const PANEL = GLASS;
+  const CHROME = `rgba(${base}, 0.78)`;
+  // A card that passes its own bg class (bg-white, bg-white/80) loses bg-card
+  // to tailwind-merge, so those count as cards too.
+  const CARDS = [`.${mode}-card`, '[class~="bg-card"]', '[class~="bg-white"]', '[class*="bg-white/"]'];
+  const inCards = (sel) => CARDS.map((c) => `${S} ${c} ${sel}`).join(', ');
+  return `
   ${S} { color: ${TEXT}; }
   /* Cards: dark glass */
   ${CARDS.map(inShell).join(', ')} {
@@ -59,8 +66,8 @@ const HALLOWEEN_CSS = `
   /* Text written for white: light. Muted greys stay a little softer. */
   ${list(DARK_TEXT, inShell)} { color: ${TEXT} !important; }
   ${list(MUTED_TEXT, inShell)} { color: ${MUTED} !important; }
-  ${S} h1, ${S} h2, ${S} .halloween-title, ${inCards('h3')}, ${inCards('h4')} { color: ${TITLE} !important; }
-  ${S} .halloween-text { color: ${TEXT} !important; }
+  ${S} h1, ${S} h2, ${S} .${mode}-title, ${inCards('h3')}, ${inCards('h4')} { color: ${TITLE} !important; }
+  ${S} .${mode}-text { color: ${TEXT} !important; }
   ${TINTS.map(([names, colour]) => names.map((n) => inShell(`[class*="text-${n}-"]`)).join(', ') + ` { color: ${colour} !important; }`).join('\n')}
   /* White and pale surfaces (panels, chips, rows, outline buttons): dark glass;
      inside a card a lighter translucent lift so they still read as raised. */
@@ -88,13 +95,22 @@ const HALLOWEEN_CSS = `
   ${inShell('::placeholder')} { color: rgba(243, 236, 255, 0.5) !important; }
   ${inShell('option')} { color: #111 !important; background: #fff !important; }
   /* The top bar (in the shell) and the side menu (portaled on the phone) */
-  ${S} .halloween-chrome { background: ${CHROME} !important; border-color: ${LINE} !important; }
-  ${S} .halloween-chrome * { color: ${TEXT} !important; }
+  ${S} .${mode}-chrome { background: ${CHROME} !important; border-color: ${LINE} !important; }
+  ${S} .${mode}-chrome * { color: ${TEXT} !important; }
   [data-sidebar="sidebar"] { background: ${CHROME} !important; border-color: ${LINE} !important; }
   [data-sidebar="sidebar"] * { color: ${TEXT} !important; }
   [data-sidebar="sidebar"] [class*="bg-white/"] { background-color: ${RAISED} !important; }
   [data-sidebar="sidebar"] [class*="border-white/"] { border-color: ${LINE} !important; }
 `;
+}
+
+const HALLOWEEN_CSS = darkGlassCss(HALLOWEEN);
+
+// The same dark glass for the other night-time seasons; each Mode file
+// mounts it with its own palette in place of the old white-card styles.
+export function DarkSeasonGlass({ palette }) {
+  return <style>{darkGlassCss(palette)}</style>;
+}
 
 export default function HalloweenMode() {
   const [items, setItems] = useState([]);
