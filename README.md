@@ -22,6 +22,9 @@
 - **Never state something about her data, her users, or app behavior as fact unless it was
   looked up in this session.** Query the entity, read the log, open the file. If it wasn't
   checked, say "I'm guessing — I'd have to look." Do not invent a reason she asked for a change.
+- **These accounts are ALL Anna — never count them as real users:** annanoelwenballew@gmail.com,
+  annanoelbusinessemail@gmail.com, s2kap2chick@gmail.com, mediocreatbestdev@outlook.com.
+  Leave them out of any "how are real users doing" analysis.
 - **At the end of every change, list every file you touched — including files Anna did not ask
   about — with one line each on what changed and why.** Base44 keeps no memory between
   conversations, so that list is the only record Anna gets. A change to a file she never
@@ -32,7 +35,7 @@
 
 Google consent completes, but the platform stores no app-user connection:
 `getCurrentAppUserConnection` returns no token (sync → 400), some calls → 500.
-Another user (s2kap2chick@gmail.com) connected successfully on 2026-09-17, so it worked recently.
+Anna's other account (s2kap2chick@gmail.com) connected successfully on 2026-09-17, so it worked recently.
 **Fixed by replacing the connector (2026-09-19):** the app now runs its OWN Google OAuth —
 `googleCalendarConnect` → Google → `googleCalendarCallback` (redirect URI
 `https://adhdone.space/functions/googleCalendarCallback`, must stay registered in Google Cloud) →
