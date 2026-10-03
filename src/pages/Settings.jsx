@@ -179,45 +179,37 @@ export default function Settings() {
     }
   };
 
-  const toggleTheme = () => {
-    // Seasonal → kawaii → back to light (both come with the secret).
-    if (specialMode !== 'normal') {
-      if (specialMode !== 'kawaii') {
-        setSpecialMode('kawaii');
-        setTheme('minimalist');
-        saveThemeToProfile('minimalist', 'kawaii', seasonalUnlocked);
-        setTimeout(() => window.location.reload(), 100);
-        return;
-      }
-      setSpecialMode('normal');
-      setTheme('minimalist');
-      saveThemeToProfile('minimalist', 'normal', seasonalUnlocked);
-      setTimeout(() => window.location.reload(), 100);
-      return;
-    }
-
-    // Cycle through the 4 main themes
-    const themeOrder = ['minimalist', 'dark', 'colorful', 'spicybrains'];
-    const currentIndex = themeOrder.indexOf(theme);
-
-    // After spicybrains: go to seasonal if unlocked, otherwise back to minimalist
-    if (currentIndex === themeOrder.length - 1) {
-      if (seasonalUnlocked) {
-        const seasonal = getDateBasedMode();
-        setSpecialMode(seasonal);
-        saveThemeToProfile('minimalist', seasonal, seasonalUnlocked);
-        setTimeout(() => window.location.reload(), 100);
-        return;
-      }
-      setTheme('minimalist');
-      saveThemeToProfile('minimalist', 'normal', seasonalUnlocked);
-      return;
-    }
-
-    const nextTheme = themeOrder[(currentIndex + 1) % themeOrder.length];
-    setTheme(nextTheme);
-    saveThemeToProfile(nextTheme, 'normal', seasonalUnlocked);
+  // The theme picker (Look and feel, top of the page). Each choice is its own
+  // button — the old single button cycled through them blind. The shell is
+  // told at once (adhd-theme-changed), so nothing reloads.
+  const SEASON_LABELS = {
+    kawaii: 'Kawaii ✨', halloween: 'Halloween 🎃', fall: 'Fall 🍂', harvest: 'Harvest 🦃', winter: 'Winter ❄️',
+    christmas: 'Christmas 🎄', valentines: "Valentine's 💗", newyears: "New Year's 🎉", stpatricks: "St. Patrick's ☘️",
+    fourthjuly: 'Fourth of July 🎆', summer: 'Summer ☀️', spring: 'Spring 🌸',
   };
+  const seasonToday = getDateBasedMode();
+  const chosenLook = specialMode === 'kawaii' ? 'kawaii' : specialMode !== 'normal' ? 'seasonal' : theme;
+  const chooseTheme = (key) => {
+    let nextTheme = 'minimalist';
+    let nextMode = 'normal';
+    if (key === 'seasonal') nextMode = seasonToday === 'normal' ? 'fall' : seasonToday;
+    else if (key === 'kawaii') nextMode = 'kawaii';
+    else nextTheme = key;
+    setTheme(nextTheme);
+    setSpecialMode(nextMode);
+    saveThemeToProfile(nextTheme, nextMode, seasonalUnlocked);
+    window.dispatchEvent(new CustomEvent('adhd-theme-changed', { detail: { theme: nextTheme, specialMode: nextMode } }));
+  };
+  const looks = [
+    { key: 'minimalist', label: 'Light', icon: <Sun className="w-5 h-5" />, swatch: 'bg-gradient-to-br from-stone-50 to-stone-200 border-stone-300' },
+    { key: 'dark', label: 'Dark', icon: <Moon className="w-5 h-5" />, swatch: 'bg-gradient-to-br from-gray-800 to-black border-gray-700 text-white' },
+    { key: 'colorful', label: 'Colorful', icon: <Sparkles className="w-5 h-5" />, swatch: 'bg-gradient-to-br from-purple-200 via-orange-100 to-teal-200 border-purple-300' },
+    { key: 'spicybrains', label: 'Spicy Brains ✨', icon: <Sparkles className="w-5 h-5" />, swatch: 'bg-gradient-to-r from-pink-300 via-yellow-200 to-cyan-300 border-cyan-400' },
+    ...(seasonalUnlocked ? [
+      { key: 'seasonal', label: SEASON_LABELS[seasonToday] || 'Seasonal', icon: <Sparkles className="w-5 h-5" />, swatch: 'bg-gradient-to-br from-orange-200 to-purple-300 border-orange-400' },
+      { key: 'kawaii', label: 'Kawaii ✨', icon: <Sparkles className="w-5 h-5" />, swatch: 'bg-gradient-to-br from-pink-200 to-pink-300 border-pink-400' },
+    ] : []),
+  ];
 
   const getDateBasedMode = () => {
     const now = new Date();
@@ -453,43 +445,37 @@ export default function Settings() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <Button
-              onClick={toggleTheme}
-              className={`w-full flex items-center justify-center gap-2 py-6 rounded-lg text-base ${
-                theme === 'minimalist'
-                  ? 'bg-green-600 hover:bg-green-700'
-                  : theme === 'dark'
-                    ? 'bg-purple-600 hover:bg-purple-700'
-                    : theme === 'spicybrains'
-                      ? 'bg-gradient-to-r from-pink-500 to-yellow-500 hover:from-pink-600 hover:to-yellow-600'
-                      : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
-              }`}
+            <div className="grid grid-cols-2 gap-3">
+              {looks.map((l) => {
+                const on = chosenLook === l.key;
+                return (
+                  <button
+                    key={l.key}
+                    type="button"
+                    onClick={() => chooseTheme(l.key)}
+                    aria-pressed={on}
+                    className={`relative rounded-2xl border-2 p-4 text-left transition-all ${l.swatch} ${
+                      on ? 'ring-4 ring-purple-500 ring-offset-2 scale-[1.02]' : 'opacity-90 hover:opacity-100'
+                    } ${theme === 'dark' ? 'ring-offset-gray-800' : 'ring-offset-white'}`}
+                  >
+                    <div className={`flex items-center gap-2 font-semibold ${l.key === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                      {l.icon}
+                      <span>{l.label}</span>
+                    </div>
+                    {on && (
+                      <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-purple-600 text-white text-xs flex items-center justify-center">✓</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('adhd-theme-changed', { detail: { explainSpicy: true } }))}
+              className={`mt-3 text-xs underline ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}
             >
-              {theme === 'minimalist' ? (
-                <>
-                  <Sun className="w-5 h-5" />
-                  Light Theme
-                </>
-              ) : theme === 'dark' ? (
-                <>
-                  <Moon className="w-5 h-5" />
-                  Dark Theme
-                </>
-              ) : theme === 'spicybrains' ? (
-                <>
-                  <Sparkles className="w-5 h-5" />
-                  Spicy Brains ✨
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5" />
-                  Colorful Theme
-                </>
-              )}
-            </Button>
-            <p className={`text-xs mt-3 text-center ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-              Click to cycle through themes
-            </p>
+              Why the Spicy Brains colors?
+            </button>
           </CardContent>
         </Card>
 
