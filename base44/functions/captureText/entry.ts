@@ -8,7 +8,8 @@
 // save is silent and instant. Ideas go to the Parking Lot, birthdays become
 // yearly birthday records, and anything meant for ADHDone itself is kept in the
 // Parking Lot with an offer to send it to the developer (see captureToTasks).
-// (Last redeployed Sept 27 2026 for the parse fixes in the shared files bundled
+// (Last redeployed Oct 3 2026 for the parser's takes_time flag — the card's Time
+// it button — and before that Sept 27 2026 for the parse fixes in the shared files bundled
 // below: a clock time with no day gets its day, "Grandma" stays in the title,
 // "next Tuesday" is next week's Tuesday, a failed kind check says why in this
 // function's log, and splitting asks detectMultipleTasks, the same check the
