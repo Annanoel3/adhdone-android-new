@@ -37,6 +37,7 @@ import { checkDuePushEgg } from "../eastereggs/duePushEgg";
 import { firstDateMakesDeadline } from "../utils/todayTasks";
 import { cancelEventWithUndo, restoreEvent } from "../utils/snoozeTask";
 import { appConfirm } from "@/components/ui/alert-dialog";
+import { TimeItButton } from "../launch/LaunchButtons";
 
 export default function TaskCard({
   task,
@@ -1017,6 +1018,8 @@ export default function TaskCard({
           {!task.silenced && (
             <TagPill task={task} theme={theme} onUpdateTask={onUpdateTask} onRefreshTasks={onRefreshTasks} />
           )}
+
+          <TimeItButton task={task} theme={theme} />
 
           {!task.silenced && (
             <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${getUrgencyColor(task.urgency)}`}>
