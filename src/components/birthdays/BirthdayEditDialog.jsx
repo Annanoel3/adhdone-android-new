@@ -20,6 +20,7 @@ import { cancelScheduledReminder } from "../utils/reminderScheduler";
 import SmartReminderEditor from "../tasks/SmartReminderEditor";
 import ContactPickerButton from "./ContactPickerButton";
 import BirthdayTextDialog from "./BirthdayTextDialog";
+import { appConfirm } from "@/components/ui/alert-dialog";
 
 export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved }) {
   const [name, setName] = useState("");
@@ -115,7 +116,7 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
   };
 
   const handleDeleteBirthday = async () => {
-    if (!confirm(`Delete ${birthday.birthday_person}'s birthday?`)) return;
+    if (!(await appConfirm(`Delete ${birthday.birthday_person}'s birthday?`, { okText: 'Delete', destructive: true }))) return;
     setSaving(true);
     try {
       if (notifIds.length) {
