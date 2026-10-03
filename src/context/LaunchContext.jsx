@@ -60,6 +60,9 @@ export const sessionStartMs = (s) => (s?.stopwatch && s.startedAtISO
   ? new Date(s.startedAtISO).getTime()
   : new Date(s?.endTimeISO || 0).getTime() - sessionDurationMs(s));
 const minutesWord = (n) => (n === 1 ? '1 minute' : `${n} minutes`);
+// Time on a stopwatch so far. While paused it stays frozen at the pause.
+export const stopwatchElapsedMs = (s) => Math.max(0,
+  (s?.pausedAtISO ? new Date(s.pausedAtISO).getTime() : Date.now()) - sessionStartMs(s));
 
 // "I finished the task": the same finish as ticking it off on Home. The task
 // and its open subtasks are done, a repeating task gets its next copy, and the
@@ -238,13 +241,37 @@ export function LaunchProvider({ children }) {
     setSprint(session);
   }, []);
 
+  // Pause / resume the stopwatch. Resuming moves its start forward by the
+  // paused stretch, so it picks up exactly where it left off. Saved to disk so
+  // a pause survives the app being closed.
+  const pauseStopwatch = useCallback(() => {
+    setSprint((s) => {
+      if (!s?.stopwatch || s.pausedAtISO) return s;
+      const next = { ...s, pausedAtISO: new Date().toISOString() };
+      lastSprint = next;
+      localStorage.setItem(SPRINT_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+  const resumeStopwatch = useCallback(() => {
+    setSprint((s) => {
+      if (!s?.stopwatch || !s.pausedAtISO) return s;
+      const pausedFor = Date.now() - new Date(s.pausedAtISO).getTime();
+      const next = { ...s, pausedAtISO: null, startedAtISO: new Date(new Date(s.startedAtISO).getTime() + pausedFor).toISOString() };
+      lastSprint = next;
+      localStorage.setItem(SPRINT_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   // A timed session is real timed work: log it so Insights learns how long
   // this task actually takes (Focus Mode logs its own sessions, so the "keep
   // going" path is left out here to avoid counting it twice).
   const logSprintSession = useCallback(async (sp) => {
     if (!sp?.title) return;
     const startMs = sessionStartMs(sp);
-    const seconds = Math.round((Date.now() - startMs) / 1000);
+    const endMs = sp.pausedAtISO ? new Date(sp.pausedAtISO).getTime() : Date.now();
+    const seconds = Math.round((endMs - startMs) / 1000);
     if (seconds < 60) return;
     try {
       const user = await base44.auth.me();
@@ -361,6 +388,8 @@ export function LaunchProvider({ children }) {
           onKeepGoing={() => keepGoingAfterSprint(sprint)}
           onFinish={() => finishAfterSprint(sprint)}
           onStop={() => stopAfterSprint(sprint)}
+          onPause={pauseStopwatch}
+          onResume={resumeStopwatch}
           onMinimize={() => { setSprintMinimized(true); localStorage.setItem(SPRINT_KEY, JSON.stringify({ ...sprint, minimized: true })); }}
         />
       )}
@@ -385,13 +414,13 @@ function MinimizedChip({ session, ended, theme, specialMode, onResume, onStop, o
   const endMs = new Date(session.endTimeISO).getTime();
   const startMs = sessionStartMs(session);
   // A stopwatch shows time spent; a countdown shows time left.
-  const read = () => (session.stopwatch ? Math.max(0, Date.now() - startMs) : Math.max(0, endMs - Date.now()));
+  const read = () => (session.stopwatch ? stopwatchElapsedMs(session) : Math.max(0, endMs - Date.now()));
   const [left, setLeft] = useState(read);
   useEffect(() => {
     const id = setInterval(() => setLeft(read()), 1000);
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endMs, startMs, session.stopwatch]);
+  }, [endMs, startMs, session.stopwatch, session.pausedAtISO]);
   const sec = Math.floor(left / 1000);
   const clock = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
   return (
@@ -401,7 +430,7 @@ function MinimizedChip({ session, ended, theme, specialMode, onResume, onStop, o
     >
       <Timer className="w-4 h-4 text-emerald-500 flex-shrink-0" />
       <button onClick={onResume} className="text-sm font-medium max-w-[30vw] truncate hover:underline">
-        <span className="tabular-nums">{!session.stopwatch && (ended || left === 0) ? "Time's up" : clock}</span> · {session.title}
+        <span className="tabular-nums">{!session.stopwatch && (ended || left === 0) ? "Time's up" : clock}{session.pausedAtISO ? ' ⏸' : ''}</span> · {session.title}
       </button>
       <button
         onClick={onStop}

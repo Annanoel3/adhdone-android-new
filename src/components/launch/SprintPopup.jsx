@@ -25,7 +25,7 @@ const sessionDurationMs = (s) => (s && s.durationMs > 0 ? s.durationMs : 5 * 60 
 // working" (it stays open) are there the whole time. When it's up: "Keep
 // going" (Focus Mode on the task) or the same two, and a small counter keeps
 // adding the time spent past the end, so none of it goes uncounted.
-export default function SprintPopup({ session, ended, onComplete, onKeepGoing, onFinish, onStop, onMinimize, theme, specialMode }) {
+export default function SprintPopup({ session, ended, onComplete, onKeepGoing, onFinish, onStop, onMinimize, onPause, onResume, theme, specialMode }) {
   const surface = surfaceClasses(theme, specialMode);
   const muted = mutedText(theme, specialMode);
   const subtle = subtleText(theme, specialMode);
@@ -40,17 +40,21 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
   // never ends; only the buttons stop it.
   const stopwatch = !!session.stopwatch;
   const startTime = stopwatch && session.startedAtISO ? new Date(session.startedAtISO).getTime() : endTime - totalMs;
-  const [elapsed, setElapsed] = useState(() => Math.max(0, Date.now() - startTime));
+  const pausedAt = session.pausedAtISO ? new Date(session.pausedAtISO).getTime() : null;
+  const readElapsed = () => Math.max(0, (pausedAt ?? Date.now()) - startTime);
+  const [elapsed, setElapsed] = useState(readElapsed);
   const [remaining, setRemaining] = useState(() => Math.max(0, endTime - Date.now()));
   const [overtime, setOvertime] = useState(() => Math.max(0, Date.now() - endTime));
 
   useEffect(() => {
     if (!stopwatch) return;
-    const tick = () => setElapsed(Math.max(0, Date.now() - startTime));
+    const tick = () => setElapsed(readElapsed());
     tick();
+    if (pausedAt) return;
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [stopwatch, startTime]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopwatch, startTime, pausedAt]);
 
   useEffect(() => {
     if (ended || stopwatch) return;
@@ -140,11 +144,19 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <div className="text-4xl font-bold tabular-nums">{stopwatch ? clock(elapsed) : clock(remaining)}</div>
-                <div className={`text-[10px] uppercase tracking-wider mt-1 ${subtle}`}>{stopwatch ? 'so far' : 'left'}</div>
+                <div className={`text-[10px] uppercase tracking-wider mt-1 ${subtle}`}>{stopwatch ? (pausedAt ? 'paused' : 'so far') : 'left'}</div>
               </div>
             </div>
 
             <div className="flex flex-col gap-2 mb-3">
+              {stopwatch && (
+                <button
+                  onClick={pausedAt ? onResume : onPause}
+                  className={`w-full rounded-xl text-sm font-semibold py-2.5 transition-colors ${primary}`}
+                >
+                  {pausedAt ? '▶ Resume' : '⏸ Pause'}
+                </button>
+              )}
               <button
                 onClick={onFinish}
                 className={`w-full rounded-xl text-sm font-semibold py-2.5 transition-colors ${outline}`}
@@ -164,7 +176,9 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
             )}
             <p className={`text-xs ${subtle}`}>
               {stopwatch
-                ? 'Close this to keep working. It keeps counting until you stop it.'
+                ? pausedAt
+                  ? "Paused. Go do your thing — tap Resume when you're back."
+                  : 'Close this to keep working. It keeps counting until you stop it.'
                 : timerAlarmsSupported()
                   ? "You can close this. It rings when time's up."
                   : 'Close this to keep working. It keeps counting.'}
