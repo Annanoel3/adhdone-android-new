@@ -274,8 +274,10 @@ export default function TaskSections({
               </span>
             </button>
 
+            {/* No left indent on the rows: it pushed every card right of the
+                page's own cards and filters (Anna, Oct 3 2026). */}
             {!isCollapsed && (
-              <div className="pl-6 pb-2 space-y-2">
+              <div className="px-1 pb-2 space-y-2">
                 {sectionTasks.map(renderTaskCard)}
                 {sectionTasks.length === 0 && (
                   <button
