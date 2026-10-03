@@ -226,7 +226,9 @@ export default function Settings() {
     ] : []),
   ];
 
-  const getDateBasedMode = () => {
+  // A hoisted function, not a const arrow: seasonToday above calls it before
+  // this line runs, and the const version crashed the page (white screen).
+  function getDateBasedMode() {
     const now = new Date();
     const month = now.getMonth() + 1;
     const day = now.getDate();
