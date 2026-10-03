@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
-import { Brain, CheckCircle2, Sparkles, Bell, Lightbulb, Timer, Cake, Share2, TrendingUp } from "lucide-react";
+import { Brain, CheckCircle2, Sparkles, Bell, Lightbulb, Timer, Cake, Share2, TrendingUp, Play } from "lucide-react";
 import BrandBackdrop from "@/components/brand/BrandBackdrop";
 import GoogleDisclosure from "@/components/brand/GoogleDisclosure";
 import DeveloperCredit from "@/components/brand/DeveloperCredit";
@@ -60,9 +60,23 @@ export default function LandingPage() {
         <p className="text-lg text-[#5A5252] mb-8 max-w-xl leading-relaxed">
           Because we all know a reminder at 3pm doesn't guarantee anything actually gets done. Just throw your tasks in and let ADHDone be your "get it done" coach.
         </p>
-        <Button onClick={handleSignIn} size="lg" className={`${cta} px-10 py-4 text-lg h-auto`}>
-          Get started — it's free
-        </Button>
+        <div className="flex flex-col sm:flex-row items-center gap-3">
+          <a
+            href="https://play.google.com/store/apps/details?id=co.median.android.odxqpdy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-3 rounded-xl bg-black text-white px-6 py-3 hover:bg-gray-800 transition-colors"
+          >
+            <Play className="w-6 h-6 fill-white" />
+            <span className="text-left leading-tight">
+              <span className="block text-[11px] uppercase tracking-wide opacity-80">Get it on</span>
+              <span className="block text-lg font-semibold">Google Play</span>
+            </span>
+          </a>
+          <Button onClick={handleSignIn} size="lg" className={`${cta} px-10 py-4 text-lg h-auto`}>
+            Get started — it's free
+          </Button>
+        </div>
         <div className="flex items-center gap-2 mt-4 text-sm text-[#7A6F6F]">
           <CheckCircle2 className="w-4 h-4 text-[#2E8B57]" /> No credit card required
         </div>
