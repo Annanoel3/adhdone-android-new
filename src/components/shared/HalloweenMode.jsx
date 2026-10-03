@@ -12,8 +12,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 const TEXT = '#f3ecff';
 const MUTED = 'rgba(243, 236, 255, 0.72)';
 const TITLE = '#ffb15c';
-const GLASS = 'rgba(14, 9, 26, 0.66)';
-const PANEL = 'rgba(14, 9, 26, 0.6)';
+// Cards and pale panels share one dark glass (Anna, Oct 3 2026: the lighter,
+// unblurred panels — the Add Task card — read as washed out next to Home's).
+const GLASS = 'rgba(14, 9, 26, 0.72)';
+const PANEL = GLASS;
 const CHROME = 'rgba(14, 9, 26, 0.78)';
 const LINE = 'rgba(255, 255, 255, 0.14)';
 const RAISED = 'rgba(255, 255, 255, 0.09)';
@@ -38,7 +40,7 @@ const DARK_TEXT = ['[class*="text-gray-"]', '[class*="text-stone-"]', '[class*="
   '[class~="text-card-foreground"]', '[class~="text-popover-foreground"]'];
 const MUTED_TEXT = ['4', '5', '6'].flatMap((n) => ['gray', 'stone', 'slate', 'zinc', 'neutral'].map((c) => `[class*="text-${c}-${n}"]`))
   .concat(['[class~="text-muted-foreground"]']);
-const CARDS = ['.halloween-card', '[class~="bg-card"]'];
+const CARDS = ['.halloween-card', '[class~="bg-card"]', '[class~="bg-white"]', '[class*="bg-white/"]'];
 const inShell = (sel) => `${S} ${sel}`;
 const inCards = (sel) => CARDS.map((c) => `${S} ${c} ${sel}`).join(', ');
 const list = (arr, fn) => arr.map(fn).join(',\n');
@@ -63,11 +65,17 @@ const HALLOWEEN_CSS = `
   /* White and pale surfaces (panels, chips, rows, outline buttons): dark glass;
      inside a card a lighter translucent lift so they still read as raised. */
   ${list(PALE_BG, (c) => inShell(`[class~="bg-${c}"]`))},
-  ${inShell('[class*="bg-white/"]')} { background-color: ${PANEL} !important; border-color: ${LINE} !important; }
-  ${list(PALE_BG, (c) => inShell(`[class~="from-${c}"]`))} { background-image: none !important; background-color: ${PANEL} !important; }
+  ${inShell('[class*="bg-white/"]')} {
+    background-color: ${PANEL} !important; border-color: ${LINE} !important;
+    backdrop-filter: blur(14px) !important; -webkit-backdrop-filter: blur(14px) !important;
+  }
+  ${list(PALE_BG, (c) => inShell(`[class~="from-${c}"]`))} {
+    background-image: none !important; background-color: ${PANEL} !important;
+    backdrop-filter: blur(14px) !important; -webkit-backdrop-filter: blur(14px) !important;
+  }
   ${list(PALE_BG, (c) => inCards(`[class~="bg-${c}"]`))},
-  ${inCards('[class*="bg-white/"]')} { background-color: ${RAISED} !important; }
-  ${list(PALE_BG, (c) => inCards(`[class~="from-${c}"]`))} { background-image: none !important; background-color: ${RAISED} !important; }
+  ${inCards('[class*="bg-white/"]')} { background-color: ${RAISED} !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
+  ${list(PALE_BG, (c) => inCards(`[class~="from-${c}"]`))} { background-image: none !important; background-color: ${RAISED} !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
   ${list(['[class*="border-gray-"]', '[class*="border-stone-"]', '[class*="border-slate-"]', '[class*="border-zinc-"]', '[class*="border-purple-1"]',
      '[class*="border-purple-2"]', '[class*="border-pink-"]', '[class*="border-orange-"]', '[class*="border-green-"]', '[class*="border-blue-"]',
      '[class*="border-white/"]', '[class~="border-input"]', '[class~="border-border"]'], inShell)} { border-color: ${LINE} !important; }
