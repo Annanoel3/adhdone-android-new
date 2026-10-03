@@ -872,7 +872,10 @@ export default function TaskCard({
     if (chipDateKind === 'due') { handleDueDateChange(date); return; }
     handleReminderDateChange(date, chipHasTime && time !== oldTime ? time : null);
   };
-  const chipClass = `flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${
+  // The chip shrinks (and ellipsizes) before anything else does: on a narrow
+  // phone a multi-day date plus a status pill used to squeeze the title to
+  // nothing and push the expand arrow off the card (Anna, Oct 3 2026).
+  const chipClass = `min-w-0 shrink truncate text-xs px-2 py-1 rounded border whitespace-nowrap ${
     collapsedDate?.overdue
       ? 'border-red-700 bg-red-600 text-white font-semibold'
       : collapsedDate?.isTodayLabel
@@ -1006,7 +1009,7 @@ export default function TaskCard({
           )}
 
           <h3
-            className={`flex-1 min-w-0 line-clamp-2 break-words text-sm font-medium leading-snug ${
+            className={`flex-1 min-w-[4.5rem] line-clamp-2 break-words text-sm font-medium leading-snug ${
               task.status === 'completed' || isCancelled ? 'line-through opacity-60' : ''
             } ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}
             onClick={() => setExpanded(v => !v)}
@@ -1015,13 +1018,13 @@ export default function TaskCard({
           </h3>
 
           {/* The custom tag, just left of the priority (see TagPill). */}
-          {!task.silenced && (
+          {!task.silenced && !isCancelled && (
             <TagPill task={task} theme={theme} onUpdateTask={onUpdateTask} onRefreshTasks={onRefreshTasks} />
           )}
 
           <TimeItButton task={task} theme={theme} />
 
-          {!task.silenced && (
+          {!task.silenced && !isCancelled && (
             <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${getUrgencyColor(task.urgency)}`}>
               {task.urgency === 'medium' ? 'med' : task.urgency}
             </span>
