@@ -507,7 +507,9 @@ Return ONLY the category name, nothing else.`;
         ? 'bg-gradient-to-br from-yellow-300 via-purple-300 to-yellow-400'
         : ''
     }`}>
-      <div className="mb-6 flex items-center justify-between">
+      {/* On a seasonal theme the heading sits in the same frosted card Focus
+          Timer uses for its title — bare text over the pattern was unreadable. */}
+      <div className={`mb-6 flex items-center justify-between ${specialMode !== 'normal' ? `${specialMode}-card rounded-2xl border border-purple-400/30 bg-white/70 backdrop-blur-md shadow-lg p-5` : ''}`}>
         <div>
           <h1 className={`text-3xl font-bold mb-2 ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
             Parking Lot 🅿️
