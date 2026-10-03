@@ -122,6 +122,7 @@ export function buildTaskRecord(
     classification: parsed.classification || "task",
     urgency: parsed.urgency || "medium",
     energy_required: parsed.energy_required || "medium",
+    takes_time: parsed.takes_time === true,
     recurrence_pattern: parsed.recurrence_pattern || "none",
     recurrence_days: Array.isArray(parsed.recurrence_days) && parsed.recurrence_days.length ? parsed.recurrence_days : null,
     // The next step this chore leads to, scheduled the moment the task is
