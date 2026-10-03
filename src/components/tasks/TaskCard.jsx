@@ -36,6 +36,7 @@ import LifeAreaPill, { TagPill } from "./LifeAreaPill";
 import { checkDuePushEgg } from "../eastereggs/duePushEgg";
 import { firstDateMakesDeadline } from "../utils/todayTasks";
 import { cancelEventWithUndo, restoreEvent } from "../utils/snoozeTask";
+import { appConfirm } from "@/components/ui/alert-dialog";
 
 export default function TaskCard({
   task,
@@ -218,7 +219,7 @@ export default function TaskCard({
   };
 
   const handleDeleteTask = async () => {
-    if (confirm(`Delete "${task.title}"?`)) {
+    if (await appConfirm(`Delete "${task.title}"?`, { okText: 'Delete', destructive: true })) {
       // Nothing is cancelled here any more: the page's delete handler gives a
       // five-second Undo, and the task's reminders are only cancelled once
       // that window has passed (see deleteTaskWithUndo). Cancelling first
