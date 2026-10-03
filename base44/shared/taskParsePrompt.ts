@@ -337,6 +337,14 @@ energy_required — effort. Anything that means leaving the house is "high"
   (the app batches those into one trip). At-home and online things are low or
   medium.
 
+takes_time — true when DOING it is a stretch of hands-on work someone might
+  put a stopwatch on and want to know how long it took: the dishes, laundry,
+  cleaning a room, cooking, packing, a workout, studying, writing, mowing,
+  sorting the mail pile. False when it's over in a moment or is mostly waiting
+  on something else: sending a text, a call, paying a bill, booking or
+  ordering something, taking a pill, feeding the cat, an appointment, an
+  event. Judge by the work itself, not the words used for it.
+
 is_flexible — true when the task can be done any day. priority_uninferrable —
   true only if the input is so vague that no urgency can be guessed at all;
   this should be almost never, so default urgency "medium" instead.
@@ -378,6 +386,7 @@ Return JSON with exactly these keys:
   "needs_date_pick": boolean,
   "is_flexible": boolean,
   "priority_uninferrable": boolean,
+  "takes_time": boolean,
   "life_area": "work" | "personal",
   "follow_up_title": string | null,
   "follow_up_minutes": integer | null,
