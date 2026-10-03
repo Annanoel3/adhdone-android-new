@@ -1321,7 +1321,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               <DialogTitle className="text-2xl">🎉 You found a secret!</DialogTitle>
               <DialogDescription className="text-base pt-4 space-y-3">
                 <p>You've unlocked the <strong>Seasonal Theme</strong>! 🍂❄️🌸</p>
-                <p>It changes with the seasons and has been added to your theme rotation. Cycle through your themes in Settings to find it again!</p>
+                <p>It changes with the seasons and is now one of your theme choices. Pick it in Settings, under Look and feel.</p>
               </DialogDescription>
             </DialogHeader>
             <Button onClick={() => setSecretFound(false)} className="w-full bg-green-600 hover:bg-green-700 text-white">Cool! 🎨</Button>
