@@ -12,7 +12,10 @@ import MomentumCelebration from "../components/shared/MomentumCelebration";
 import TaskCompletionCelebration from "../components/tasks/TaskCompletionCelebration";
 import { isTodayTask, isCompletedToday } from "../components/utils/todayTasks";
 import { ensureBirthdayReminders } from "../components/utils/birthdayScheduler";
-import { listActiveTasks } from "../components/utils/widgetBridge";
+import { listActiveTasks, refreshAlarms } from "../components/utils/widgetBridge";
+import { snoozeTask, deleteTaskWithUndo } from "../components/utils/snoozeTask";
+import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
+import { trackFire } from "@/lib/appTrack";
 import BirthdayStrip from "../components/home/BirthdayStrip";
 import NotificationsOffBanner, { CalendarOffBanner, AlarmSetupBanner } from "../components/home/NotificationsOffBanner";
 import { countCompletionForGif } from "../components/utils/completionMilestone";
@@ -255,6 +258,58 @@ export default function Home() {
     setIsModalOpen(true);
   };
 
+  // Today's Focus shows the Tasks page's card now, so its controls need the
+  // same handlers the Tasks page has (mirrored from there, on Home's state).
+  const handleEditTitle = async (taskId, newTitle) => {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, title: newTitle } : t));
+    base44.entities.Task.update(taskId, { title: newTitle }).catch(error => {
+      console.error("Failed to update title:", error);
+      loadTasks();
+    });
+  };
+
+  const handleUncomplete = async (task, source = 'home') => {
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, status: 'active', completed_at: null } : t));
+    trackFire('task_uncompleted', { props: { task_id: task.id, source } });
+    (async () => {
+      try {
+        await base44.entities.Task.update(task.id, { status: 'active', completed_at: null });
+        // Checking a repeating task off made its next occurrence; taking the
+        // check back takes that copy back too (only while it's untouched).
+        const { removeNextRecurrence } = await import('../components/utils/taskRecurrence');
+        const removedId = await removeNextRecurrence(task);
+        if (removedId) setTasks(prev => prev.filter(t => t.id !== removedId));
+        refreshAlarms().catch(() => {});
+        await updateTodaysSummary();
+      } catch (error) {
+        console.error("Failed to uncomplete task:", error);
+        loadTasks();
+      }
+    })();
+  };
+
+  const handleSnooze = async (task, minutes) => {
+    // The task stays active and keeps its date: a snooze adds one extra
+    // reminder, it doesn't move or hide anything.
+    setTasks(prev => prev.map(t =>
+      t.id === task.id
+        ? { ...t, snooze_count: (t.snooze_count || 0) + 1, consecutive_snoozes: (t.consecutive_snoozes || 0) + 1 }
+        : t
+    ));
+    snoozeTask(task, minutes).catch(error => {
+      console.error("Failed to snooze task:", error);
+      loadTasks();
+    });
+  };
+
+  const handleDelete = async (task) => {
+    // Gone from the list at once; the real delete waits five seconds behind
+    // an Undo toast (undo reloads the list via 'tasks-changed').
+    const subtasks = tasks.filter(t => t.parent_task_id === task.id);
+    setTasks(prev => prev.filter(t => t.id !== task.id && t.parent_task_id !== task.id));
+    deleteTaskWithUndo(task, subtasks);
+  };
+
   const handleReviewDismiss = () => {
     const today = new Date().toISOString().split('T')[0];
     localStorage.setItem('last_eod_review', today);
@@ -313,6 +368,11 @@ export default function Home() {
                   onTaskAction={handleTaskComplete}
                   onViewDetails={handleViewDetails}
                   onUpdateTask={handleTaskUpdate}
+                  onRefreshTasks={loadTasks}
+                  onEditTitle={handleEditTitle}
+                  onUncomplete={handleUncomplete}
+                  onSnooze={handleSnooze}
+                  onDelete={handleDelete}
                   specialMode={specialMode}
                   loadFailed={tasksLoadFailed}
                   onRetry={loadTasks}
