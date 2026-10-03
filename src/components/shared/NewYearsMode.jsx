@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { DarkSeasonGlass } from './HalloweenMode';
 
 export default function NewYearsMode() {
   const [confetti, setConfetti] = useState([]);
@@ -23,41 +24,11 @@ export default function NewYearsMode() {
 
   return (
     <>
-      <style>{`
-        .newyears-card {
-          background: rgba(255, 255, 255, 0.95) !important;
-          border: 2px solid #FFD700 !important;
-          box-shadow: 0 4px 20px rgba(255, 215, 0, 0.3) !important;
-        }
-        
-        .newyears-card * {
-          color: #003366 !important;
-        }
-        
-        .newyears-card h1 {
-          color: #FFD700 !important;
-        }
-        
-        .newyears-card h2 {
-          color: #FF6347 !important;
-        }
-        
-        .newyears-card h3 {
-          color: #4169E1 !important;
-        }
-        
-        .newyears-card h4 {
-          color: #32CD32 !important;
-        }
-
-        .newyears-title {
-          color: #FFD700 !important;
-        }
-
-        .newyears-text {
-          color: #003366 !important;
-        }
-      `}</style>
+      {/* A night-time wallpaper: the same dark glass as Halloween, in this
+          season's colours, instead of the old white cards (Anna, Oct 3 2026:
+          "in all dark seasonal modes the cards should be darker than the
+          background, not lighter"). */}
+      <DarkSeasonGlass palette={{ mode: 'newyears', text: '#f5f3ff', muted: 'rgba(245, 243, 255, 0.72)', title: '#ffd700', base: '10, 10, 22' }} />
 
       <AnimatePresence>
         {confetti.map(item => (
