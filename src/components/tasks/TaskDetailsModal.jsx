@@ -107,6 +107,18 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
   const [localPatch, setLocalPatch] = useState({});
   useEffect(() => { setLocalPatch({}); }, [taskProp?.id]);
   const task = taskProp ? { ...taskProp, ...localPatch } : null;
+  // Finished somewhere else while this card is open — "I finished the task" on
+  // the timer, or Focus Mode — and the card closes on its own instead of
+  // sitting there showing a done task (Anna, Oct 3 2026).
+  useEffect(() => {
+    if (!isOpen || !taskProp?.id) return;
+    const onChanged = (e) => {
+      const d = e?.detail;
+      if (d?.taskId === taskProp.id && d?.patch?.status === 'completed') onClose();
+    };
+    window.addEventListener('tasks-changed', onChanged);
+    return () => window.removeEventListener('tasks-changed', onChanged);
+  }, [isOpen, taskProp?.id, onClose]);
   const onUpdate = (updated) => {
     if (updated && updated.id && updated.id === taskProp?.id) {
       setLocalPatch((prev) => ({ ...prev, ...updated }));
