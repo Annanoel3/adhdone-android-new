@@ -16,6 +16,11 @@ export default function TaskDecompositionModal({ task, isOpen, onClose, onUpdate
   const [isLoading, setIsLoading] = useState(false);
   const [suggestions, setSuggestions] = useState([]);
   const [selectedSuggestions, setSelectedSuggestions] = useState([]);
+  // The breakdown deliberately returns no steps for a one-sitting job ("take
+  // out the trash", "put the laundry away") — but the dialog then sat empty
+  // with a "Create 0 Sub-Tasks" button, which read as broken (Anna, Oct 3
+  // 2026). Now it says so.
+  const [noSteps, setNoSteps] = useState(false);
 
   React.useEffect(() => {
     if (isOpen && task) {
@@ -27,6 +32,7 @@ export default function TaskDecompositionModal({ task, isOpen, onClose, onUpdate
     setIsLoading(true);
     setSuggestions([]);
     setSelectedSuggestions([]);
+    setNoSteps(false);
 
     try {
       const prompt = `You are an ADHD productivity expert. A user has this task: "${task.title}"${task.description ? `\n\nContext: ${task.description}` : ''}
@@ -148,6 +154,8 @@ Return JSON with this structure:
       if (response.sub_tasks && response.sub_tasks.length > 0) {
         setSuggestions(response.sub_tasks);
         setSelectedSuggestions(response.sub_tasks.map((_, i) => i)); // Select all by default
+      } else {
+        setNoSteps(true);
       }
     } catch (error) {
       console.error("Error generating suggestions:", error);
@@ -261,14 +269,23 @@ Return JSON with this structure:
                 </div>
               ))}
             </div>
+          ) : noSteps ? (
+            <div className="text-center py-8">
+              <p className={`font-semibold ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
+                This one doesn't need steps.
+              </p>
+              <p className={`mt-1 text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                It's a single sitting — there's no point in between where you'd walk away and forget to come back. The first motion is the whole task, so just start it. You can still add your own steps from the task.
+              </p>
+            </div>
           ) : null}
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
-            Cancel
+            {noSteps ? 'Got it' : 'Cancel'}
           </Button>
-          <Button
+          {!noSteps && <Button
             onClick={handleCreateSubTasks}
             disabled={isLoading || selectedSuggestions.length === 0}
             className={theme === 'minimalist' 
@@ -289,7 +306,7 @@ Return JSON with this structure:
                 Create {selectedSuggestions.length} Sub-Tasks
               </>
             )}
-          </Button>
+          </Button>}
         </DialogFooter>
       </DialogContent>
     </Dialog>
