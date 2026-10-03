@@ -13,6 +13,9 @@ export default function Places() {
   const [user, setUser] = useState(null);
   const theme = localStorage.getItem('adhd_theme') || 'minimalist';
   const dark = theme === 'dark';
+  // Seasonal themes: the heading sits in the frosted card Focus Timer uses.
+  const specialMode = localStorage.getItem('special_mode') || 'normal';
+  const headCard = specialMode !== 'normal' ? `${specialMode}-card rounded-2xl border border-purple-400/30 bg-white/70 backdrop-blur-md shadow-lg p-5 mb-6` : '';
 
   const load = async () => {
     try { setUser(await base44.auth.me()); } catch (e) {}
@@ -22,7 +25,7 @@ export default function Places() {
 
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-6 pb-24">
-      <div>
+      <div className={headCard}>
         <h1 className={`text-2xl font-bold ${dark ? 'text-white' : 'text-gray-900'}`}>Places</h1>
         <p className={`text-sm mt-1 ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
           The addresses you go between, and when you need to be there. This is what lets me say
