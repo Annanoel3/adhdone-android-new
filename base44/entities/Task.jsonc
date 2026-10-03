@@ -222,6 +222,10 @@
       ],
       "default": "medium"
     },
+    "takes_time": {
+      "type": "boolean",
+      "description": "Whether doing this is a stretch of hands-on work worth timing (dishes, laundry, cleaning, cooking, studying) rather than a moment or a wait (a text, a call, a bill, a pill, an appointment). Set by the task parser at creation; the task card shows a Time it button only when true. Unset on older tasks \u2014 no button."
+    },
     "life_area": {
       "type": "string",
       "enum": [
