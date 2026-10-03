@@ -354,6 +354,52 @@ export default function Settings() {
           </CardContent>
         </Card>
 
+        <p className={`text-xs font-bold uppercase tracking-wider mt-2 mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Look and feel</p>
+        {/* Theme Section */}
+        <Card className={`mb-6 border-none shadow-lg ${
+          theme === 'dark' ? 'bg-gray-800' : 'bg-white'
+        }`}>
+          <CardHeader>
+            <CardTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-white' : ''}`}>
+              <Sparkles className="w-5 h-5" />
+              Theme
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-3">
+              {looks.map((l) => {
+                const on = chosenLook === l.key;
+                return (
+                  <button
+                    key={l.key}
+                    type="button"
+                    onClick={() => chooseTheme(l.key)}
+                    aria-pressed={on}
+                    className={`relative rounded-2xl border-2 p-4 text-left transition-all ${l.swatch} ${
+                      on ? 'ring-4 ring-purple-500 ring-offset-2 scale-[1.02]' : 'opacity-90 hover:opacity-100'
+                    } ${theme === 'dark' ? 'ring-offset-gray-800' : 'ring-offset-white'}`}
+                  >
+                    <div className={`flex items-center gap-2 font-semibold ${l.key === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                      {l.icon}
+                      <span>{l.label}</span>
+                    </div>
+                    {on && (
+                      <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-purple-600 text-white text-xs flex items-center justify-center">✓</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('adhd-theme-changed', { detail: { explainSpicy: true } }))}
+              className={`mt-3 text-xs underline ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}
+            >
+              Why the Spicy Brains colors?
+            </button>
+          </CardContent>
+        </Card>
+
         <AboutYouCard user={user} theme={theme} onSaved={loadUser} />
 
         <p className={`text-xs font-bold uppercase tracking-wider mt-8 mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Reminders</p>
@@ -432,52 +478,6 @@ export default function Settings() {
 
         <p className={`text-xs font-bold uppercase tracking-wider mt-8 mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Adding tasks</p>
         <QuickCaptureCard theme={theme} />
-
-        <p className={`text-xs font-bold uppercase tracking-wider mt-8 mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Look and feel</p>
-        {/* Theme Section */}
-        <Card className={`mb-6 border-none shadow-lg ${
-          theme === 'dark' ? 'bg-gray-800' : 'bg-white'
-        }`}>
-          <CardHeader>
-            <CardTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-white' : ''}`}>
-              <Sparkles className="w-5 h-5" />
-              Theme
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 gap-3">
-              {looks.map((l) => {
-                const on = chosenLook === l.key;
-                return (
-                  <button
-                    key={l.key}
-                    type="button"
-                    onClick={() => chooseTheme(l.key)}
-                    aria-pressed={on}
-                    className={`relative rounded-2xl border-2 p-4 text-left transition-all ${l.swatch} ${
-                      on ? 'ring-4 ring-purple-500 ring-offset-2 scale-[1.02]' : 'opacity-90 hover:opacity-100'
-                    } ${theme === 'dark' ? 'ring-offset-gray-800' : 'ring-offset-white'}`}
-                  >
-                    <div className={`flex items-center gap-2 font-semibold ${l.key === 'dark' ? 'text-white' : 'text-gray-900'}`}>
-                      {l.icon}
-                      <span>{l.label}</span>
-                    </div>
-                    {on && (
-                      <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-purple-600 text-white text-xs flex items-center justify-center">✓</span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('adhd-theme-changed', { detail: { explainSpicy: true } }))}
-              className={`mt-3 text-xs underline ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}
-            >
-              Why the Spicy Brains colors?
-            </button>
-          </CardContent>
-        </Card>
 
         <p className={`text-xs font-bold uppercase tracking-wider mt-8 mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Account</p>
         {/* Account Settings */}
