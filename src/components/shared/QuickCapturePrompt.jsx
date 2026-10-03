@@ -768,7 +768,7 @@ export function AlarmPermissionsDialog({ theme }) {
             <Button onClick={() => setOpen(false)} disabled={quietPending} className="w-full">Done</Button>
           ) : (
             <Button variant="outline" onClick={() => setOpen(false)} disabled={quietPending} className="w-full">
-              Later — it's in Settings → Alarms
+              Later — it's in Settings → Reminders
             </Button>
           )}
         </div>
