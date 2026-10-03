@@ -490,7 +490,10 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
           </div>
         </div>
       </CardHeader>
-      <CardContent className="p-6">
+      {/* Phone-width padding: the list card's 24px sides, on top of the page's
+          own, left the task cards narrower than on the Tasks page and their
+          titles clipped at two lines (Anna, Oct 3 2026). */}
+      <CardContent className="p-3 sm:p-6">
         <div className="space-y-3">
           <PendingTaskCards theme={theme} captures={pending} />
           {activeTasks.length === 0 && pending.length === 0 && loadFailed ? (
