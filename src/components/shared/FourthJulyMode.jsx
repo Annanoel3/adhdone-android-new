@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { DarkSeasonGlass } from './HalloweenMode';
 
 export default function FourthJulyMode() {
   const [fireworks, setFireworks] = useState([]);
@@ -22,24 +23,11 @@ export default function FourthJulyMode() {
 
   return (
     <>
-      <style>{`
-        .fourthjuly-card {
-          background: rgba(255, 255, 255, 0.95) !important;
-          border: 2px solid #B22234 !important;
-          box-shadow: 0 4px 20px rgba(178, 34, 52, 0.3) !important;
-        }
-        
-        .fourthjuly-card * {
-          color: #003366 !important;
-        }
-        
-        .fourthjuly-card h1,
-        .fourthjuly-card h2,
-        .fourthjuly-card h3,
-        .fourthjuly-card h4 {
-          color: #B22234 !important;
-        }
-      `}</style>
+      {/* A night-time wallpaper: the same dark glass as Halloween, in this
+          season's colours, instead of the old white cards (Anna, Oct 3 2026:
+          "in all dark seasonal modes the cards should be darker than the
+          background, not lighter"). */}
+      <DarkSeasonGlass palette={{ mode: 'fourthjuly', text: '#f4f6ff', muted: 'rgba(244, 246, 255, 0.72)', title: '#ffb3b3', base: '8, 12, 30' }} />
 
       <AnimatePresence>
         {fireworks.map(fw => (
