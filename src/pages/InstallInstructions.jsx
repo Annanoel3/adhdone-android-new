@@ -1268,7 +1268,7 @@ export default function NotesPage() {
       <div className="max-w-2xl mx-auto space-y-5">
         <div>
           <h1 className={`text-3xl font-bold ${heading}`}>Notes</h1>
-          <p className={soft}>Record a meeting, appointment or class. ADHDone turns it into short, clear notes.</p>
+          <p className={soft}>Record a meeting, appointment or class. ADHDone writes the notes for you, organized for an ADHD brain: to-dos first, the details you'll need to look up, the words that matter highlighted — short lines you can take in at a glance, nothing to wade through.</p>
         </div>
 
         <div className={`${card} space-y-3`}>
