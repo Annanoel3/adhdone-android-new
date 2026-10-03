@@ -13,7 +13,7 @@ import TaskCompletionCelebration from "../components/tasks/TaskCompletionCelebra
 import { isTodayTask, isCompletedToday } from "../components/utils/todayTasks";
 import { ensureBirthdayReminders } from "../components/utils/birthdayScheduler";
 import { listActiveTasks, refreshAlarms } from "../components/utils/widgetBridge";
-import { snoozeTask, deleteTaskWithUndo } from "../components/utils/snoozeTask";
+import { snoozeTask, deleteTaskWithUndo, offerCompletionUndo } from "../components/utils/snoozeTask";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { trackFire } from "@/lib/appTrack";
 import BirthdayStrip from "../components/home/BirthdayStrip";
@@ -207,6 +207,7 @@ export default function Home() {
       )
     );
 
+    const saving = (async () => {
     try {
       const { isAlreadyCompleted, createNextRecurrence } = await import('../components/utils/taskRecurrence');
       // The saved record, not the card: finished elsewhere already means its
@@ -237,6 +238,9 @@ export default function Home() {
       console.error("Failed to complete task:", error);
       loadTasks();
     }
+    })();
+    offerCompletionUndo(task, saving, handleUncomplete);
+    await saving;
   };
 
   const handleTaskUpdate = async (updatedTask) => {

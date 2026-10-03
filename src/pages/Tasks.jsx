@@ -16,7 +16,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import TaskEditModal from "../components/tasks/TaskEditModal";
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
-import { snoozeTask, deleteTaskWithUndo, cancelledStillListed } from "../components/utils/snoozeTask";
+import { snoozeTask, deleteTaskWithUndo, cancelledStillListed, offerCompletionUndo } from "../components/utils/snoozeTask";
 import { refreshAlarms } from "../components/utils/widgetBridge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
@@ -227,7 +227,7 @@ export default function Tasks() {
     }
 
     // Save + side effects in the background
-    (async () => {
+    const saving = (async () => {
       try {
         const { isAlreadyCompleted, createNextRecurrence } = await import('../components/utils/taskRecurrence');
         // The saved record, not the card: finished elsewhere (its
@@ -257,6 +257,7 @@ export default function Tasks() {
         loadTasks();
       }
     })();
+    offerCompletionUndo(task, saving, (t, source) => handleUncomplete(t, source));
   };
 
   // `source` says which control did it (the card, a step on the card, …).

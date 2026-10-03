@@ -143,6 +143,26 @@ export function deleteTaskWithUndo(task, subtasks = []) {
   });
 }
 
+// Five-second Undo after checking a task off. The completion saves as usual;
+// Undo waits for that save to land, then runs the caller's un-complete (the
+// same path as un-checking it, which also takes back a repeating task's copy).
+export function offerCompletionUndo(task, saving, onUndo) {
+  if (!task?.id || task.parent_task_id) return;
+  let used = false;
+  toast({
+    title: `Done: "${task.title || "task"}"`,
+    duration: UNDO_MS,
+    action: React.createElement(ToastAction, {
+      altText: "Undo complete",
+      onClick: () => {
+        if (used) return;
+        used = true;
+        Promise.resolve(saving).catch(() => {}).then(() => onUndo(task, "undo_toast"));
+      },
+    }, "Undo"),
+  });
+}
+
 // ── Events: cancelled, not done and not deleted ─────────────────────────────
 
 // Events only: "it isn't happening". Not a completion (it never counts as
