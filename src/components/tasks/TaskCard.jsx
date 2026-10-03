@@ -39,6 +39,8 @@ import { cancelEventWithUndo, restoreEvent } from "../utils/snoozeTask";
 import { appConfirm } from "@/components/ui/alert-dialog";
 import { TimeItButton } from "../launch/LaunchButtons";
 
+import SubtaskProgressBar from "@/components/tasks/SubtaskProgressBar";
+
 export default function TaskCard({
   task,
   theme,
@@ -1621,6 +1623,9 @@ export default function TaskCard({
               </div>
             )}
           </div>
+        )}
+        {subtaskCount > 0 && !isEvent && (
+          <SubtaskProgressBar done={completedSubtaskCount} total={subtaskCount} theme={theme} />
         )}
       </CardContent>
     </Card>
