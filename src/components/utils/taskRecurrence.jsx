@@ -350,6 +350,7 @@ async function makeNextCopy(task) {
     description: task.description || '',
     urgency: task.urgency || 'medium',
     energy_required: task.energy_required || 'medium',
+    takes_time: task.takes_time === true,
     reminder_interval: interval || 'once',
     // What makes this task itself, carried to every occurrence: where it
     // happens, what the user originally wrote, how they asked to be reminded,
@@ -475,6 +476,7 @@ async function createNextBirthday(task) {
     description: task.description || '',
     urgency: task.urgency || 'medium',
     energy_required: task.energy_required || 'medium',
+    takes_time: task.takes_time === true,
     reminder_interval: task.reminder_interval || 'once',
     original_input: task.original_input || null,
     location: task.location || null,
