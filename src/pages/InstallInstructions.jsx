@@ -734,6 +734,10 @@ export default function NotesPage() {
   // ── Rendering ──────────────────────────────────────────────────────────────
 
   const card = `rounded-2xl border p-4 ${dark ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200"}`;
+  // A seasonal theme paints a busy background, so the page heading sits in the
+  // same frosted card Focus Timer uses for its title (Anna, Oct 3 2026).
+  const specialMode = localStorage.getItem("special_mode") || "normal";
+  const headCard = specialMode !== 'normal' ? `${specialMode}-card rounded-2xl border border-purple-400/30 bg-white/70 backdrop-blur-md shadow-lg p-5 mb-6` : '';
   const heading = dark ? "text-white" : "text-gray-900";
   const soft = dark ? "text-gray-400" : "text-gray-600";
   const open = records.find((r) => r.id === openId) || null;
@@ -844,7 +848,7 @@ export default function NotesPage() {
           <button type="button" onClick={() => { setOpenId(null); setEditDraft(null); }} className={`flex items-center gap-1 text-sm ${soft}`}>
             <ChevronLeft className="w-4 h-4" /> All notes
           </button>
-          <div>
+          <div className={headCard}>
             <h1 className={`text-2xl font-bold ${heading}`}>{open.title || notes?.title || "Recording"}</h1>
             <p className={`text-sm ${soft}`}>{whenText(open.started_at)}{open.duration_ms ? ` · ${clock(open.duration_ms)}` : ""}</p>
           </div>
@@ -1204,7 +1208,7 @@ export default function NotesPage() {
           <button type="button" onClick={() => { setPrepTask(null); setDraft(""); }} className={`flex items-center gap-1 text-sm ${soft}`}>
             <ChevronLeft className="w-4 h-4" /> All notes
           </button>
-          <div>
+          <div className={headCard}>
             <h1 className={`text-2xl font-bold ${heading}`}>{prepTask.title}</h1>
             {s !== null && <p className={`text-sm ${soft}`}>{whenText(s)} · Not recorded yet</p>}
           </div>
@@ -1266,7 +1270,7 @@ export default function NotesPage() {
       {capDialog}
       {deleteDialog}
       <div className="max-w-2xl mx-auto space-y-5">
-        <div>
+        <div className={headCard}>
           <h1 className={`text-3xl font-bold ${heading}`}>Notes</h1>
           <p className={soft}>Record a meeting, appointment or class. ADHDone writes the notes for you, organized for an ADHD brain: to-dos first, the details you'll need to look up, the words that matter highlighted — short lines you can take in at a glance, nothing to wade through.</p>
         </div>
