@@ -317,29 +317,16 @@ export default function Settings() {
       onClick: () => navigate('/settings?section=reminders')
     },
     {
-      icon: Info,
-      label: 'About ADHDone',
-      onClick: () => navigate('/About')
-    },
-    {
-      icon: UserIcon,
-      label: 'My Profile',
-      onClick: () => navigate('/profile')
-    },
-    {
       icon: UserIcon,
       label: 'My Account',
       onClick: () => navigate('/myaccount')
     },
+    // My Profile, Privacy Policy and Terms live on My Account now (Anna, Oct 3
+    // 2026) — the list here stays short.
     {
-      icon: Shield,
-      label: 'Privacy Policy',
-      onClick: () => navigate('/privacypolicy')
-    },
-    {
-      icon: Shield,
-      label: 'Terms & Conditions',
-      onClick: () => navigate('/Terms')
+      icon: Info,
+      label: 'About ADHDone',
+      onClick: () => navigate('/About')
     }
   ];
 
