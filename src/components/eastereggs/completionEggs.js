@@ -18,6 +18,20 @@ function isCarriedTask(task) {
 export function checkCompletionEggs(task) {
   if (!task || task.parent_task_id) return;
 
+  // 0) Time traveler: finished 15+ days before it was due.
+  if (isCarriedTask(task) && task.due_date) {
+    const daysEarly = Math.floor((new Date(task.due_date).getTime() - Date.now()) / 86400000);
+    if (daysEarly >= 15) {
+      showEggBadge({
+        emoji: '⚡',
+        title: `${daysEarly} days early. Great Scott!`,
+        body: "Back from the future. Future you says thanks.",
+        gif: 'https://media.giphy.com/media/7TZvWKVkm0xXi/giphy.gif',
+      });
+      return;
+    }
+  }
+
   // 1) Archaeology — you carried this one for a month and then just did it.
   if (isCarriedTask(task) && task.created_date) {
     const days = Math.floor((Date.now() - new Date(task.created_date).getTime()) / 86400000);
