@@ -2,7 +2,8 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 // Shared files are bundled into this function when it is deployed, so a change
 // to the shared prompt (taskParsePrompt.ts) only reaches users after this
-// function is saved and redeployed again (last redeploy, Sept 27 2026: a clock
+// function is saved and redeployed again (last redeploy, Oct 3 2026: the
+// parser's takes_time flag for the card's Time it button; before that, Sept 27 2026: a clock
 // time with no day gets its day, "Grandma" stays in the title, and "next
 // Tuesday" means next week's Tuesday).
 import { adjustForQuietHours, localMinutesOfDay, resolveQuietHours, userTimeZone, placeRepeatingSlot } from '../../shared/quietHours.ts';
