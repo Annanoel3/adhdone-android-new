@@ -11,6 +11,9 @@ import { parseChoices, pickRandom } from "@/components/decision/parseChoices";
 export default function DecisionMaker() {
   const [input, setInput] = useState("");
   const [winner, setWinner] = useState(null);
+  // Seasonal themes: the heading sits in the frosted card Focus Timer uses.
+  const specialMode = localStorage.getItem("special_mode") || "normal";
+  const headCard = specialMode !== 'normal' ? `${specialMode}-card rounded-2xl border border-purple-400/30 bg-white/70 backdrop-blur-md shadow-lg p-5 mb-6` : '';
 
   const choices = useMemo(() => parseChoices(input), [input]);
 
@@ -25,7 +28,7 @@ export default function DecisionMaker() {
 
   return (
     <div className="p-4 md:p-8 max-w-2xl mx-auto space-y-6">
-      <div>
+      <div className={headCard}>
         <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Decision Maker</h1>
         <p className="text-gray-600 mt-1 text-sm">
           Too many options? Type or say them and let the app pick one for you.
