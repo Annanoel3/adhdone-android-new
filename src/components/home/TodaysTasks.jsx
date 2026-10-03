@@ -26,8 +26,9 @@ import TaskSortDropdown from "../tasks/TaskSortDropdown";
 import BreakIntoStepsButton from "../tasks/BreakIntoStepsButton";
 import LifeAreaPill, { TagPill } from "../tasks/LifeAreaPill";
 import PendingTaskCards, { usePendingCaptures } from "./PendingTaskCards";
+import TaskCard from "../tasks/TaskCard";
 
-export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails, onUpdateTask, loadFailed = false, onRetry }) {
+export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails, onUpdateTask, loadFailed = false, onRetry, onRefreshTasks, onEditTitle, onUncomplete, onSnooze, onDelete }) {
   const navigate = useNavigate();
   const { sortBy } = useTaskSort();
   const [reminderPopoverTaskId, setReminderPopoverTaskId] = useState(null);
@@ -523,363 +524,29 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                 Nothing due today yet, why don't we make a task?
               </p>
             </div>
-          ) : activeTasks.map((task) => {
-            const subtasks = getSubtasks(task.id);
-            const completedSubtasks = subtasks.filter(st => st.status === 'completed');
-            return (
-            <div key={task.id} className="relative">
-              <motion.div
-                initial={{ opacity: 1, scale: 1 }}
-                className={`p-4 rounded-xl border transition-all duration-200 hover:shadow-md ${
-                  isBirthdayTask(task)
-                    ? theme === 'dark'
-                      ? 'bg-pink-950/40 border-pink-800'
-                      : 'bg-gradient-to-r from-pink-50 to-amber-50 border-pink-300'
-                  : theme === 'minimalist' 
-                    ? 'bg-white border-gray-100 hover:border-gray-200' 
-                    : theme === 'dark'
-                      ? 'bg-gray-900/50 border-gray-700 hover:border-gray-600'
-                      : 'bg-gradient-to-r from-purple-50/50 to-orange-50/50 border-purple-100 hover:border-purple-200'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 cursor-pointer" onClick={() => onViewDetails(task)}>
-                    <div className="flex items-center gap-2 mb-2">
-                      <h4 className={`font-medium flex-1 ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
-                        {isBirthdayTask(task) && !/🎂/.test(task.title) && <span className="mr-1">🎂</span>}
-                        {task.life_area === 'work' && <span className="mr-1">💼</span>}
-                        {task.title}
-                      </h4>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onViewDetails(task);
-                        }}
-                        className={`h-6 w-6 flex-shrink-0 ${theme === 'dark' ? 'text-gray-400 hover:text-gray-200' : ''}`}
-                      >
-                        <Pencil className="w-3 h-3" />
-                      </Button>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <button 
-                            onClick={(e) => e.stopPropagation()}
-                            className={`${getUrgencyColor(task.urgency)} px-2 py-1 rounded text-xs cursor-pointer hover:opacity-80 transition-opacity`}
-                          >
-                            {task.urgency}
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-48 p-2" onClick={(e) => e.stopPropagation()}>
-                          <div className="space-y-1">
-                            <button onClick={() => handleUrgencyChange(task, 'low')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Low</button>
-                            <button onClick={() => handleUrgencyChange(task, 'medium')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Medium</button>
-                            <button onClick={() => handleUrgencyChange(task, 'high')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">High</button>
-                            <button onClick={() => handleUrgencyChange(task, 'urgent')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Urgent</button>
-                          </div>
-                        </PopoverContent>
-                      </Popover>
-
-                      {!isEvent(task) && !isBirthdayTask(task) && (
-                        <LifeAreaPill task={task} theme={theme} onUpdateTask={onUpdateTask} />
-                      )}
-
-                      {/* The custom tag, same pill and picker as the task list's card. */}
-                      <TagPill task={task} theme={theme} onUpdateTask={onUpdateTask} />
-
-                      {/* Energy deliberately does NOT appear on the closed card. It's
-                          rarely what you're scanning for, and it pushed the pills that
-                          are (priority, when, type) onto a second line. It's still
-                          editable in the task details. */}
-
-                      {/* Show interval badge for recurring reminders (not on a repeating
-                          task — its repeat pill below says when it happens) */}
-                      {task.reminder_interval && task.reminder_interval !== 'once' && !isRepeating(task) && (
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button 
-                              onClick={(e) => e.stopPropagation()}
-                              className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors ${theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600' : 'border-gray-300'}`}
-                            >
-                              <Clock className="w-3 h-3" />
-                              {formatReminderInterval(task.reminder_interval)}
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-56 p-2" onClick={(e) => e.stopPropagation()}>
-                            <div className="space-y-1">
-                              <button onClick={() => handleIntervalChange(task, '10min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 10 minutes</button>
-                              <button onClick={() => handleIntervalChange(task, '20min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 20 minutes</button>
-                              <button onClick={() => handleIntervalChange(task, '30min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 30 minutes</button>
-                              <button onClick={() => handleIntervalChange(task, '1hour')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every hour</button>
-                              <button onClick={() => handleIntervalChange(task, 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
-                              <button onClick={() => handleIntervalChange(task, 'every_other_day')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every other day</button>
-                              <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}></div>
-                              <button onClick={() => handleIntervalChange(task, 'once')} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium">📅 Set Specific Date Instead</button>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      )}
-
-                      {/* Due date option for recurring (interval) reminders. None on a
-                          repeating task's closed card — its day is in the details. */}
-                      {task.reminder_interval && task.reminder_interval !== 'once' && !isRepeating(task) && (
-                        task.due_date ? (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button 
-                                onClick={(e) => e.stopPropagation()}
-                                className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
-                                  new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
-                                    ? theme === 'dark'
-                                      ? 'bg-red-900 text-red-300 border-red-700 hover:bg-red-800'
-                                      : 'bg-red-50 text-red-700 border-red-300 hover:bg-red-100'
-                                    : theme === 'dark'
-                                      ? 'bg-amber-900 text-amber-300 border-amber-700 hover:bg-amber-800'
-                                      : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100'
-                                }`}
-                              >
-                                <CalendarClock className="w-3 h-3" />
-                                {new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
-                                  ? 'Overdue'
-                                  : `Due ${formatReminderDate(task.due_date)}`}
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`} onClick={(e) => e.stopPropagation()}>
-                              <div className="space-y-2 p-1">
-                                <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : ''}`}>Due Date:</label>
-                                <input
-                                  type="date"
-                                  defaultValue={task.due_date ? task.due_date.split('T')[0] : ''}
-                                  onChange={(e) => handleDueDateChange(task, e.target.value)}
-                                  className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : ''}`}
-                                />
-                                <button
-                                  onClick={() => handleDueDateChange(task, null)}
-                                  className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-gray-700 text-red-400' : 'hover:bg-red-50 text-red-600'}`}
-                                >
-                                  Remove due date
-                                </button>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        ) : null
-                      )}
-
-                      {/* Events: the pill IS the event date/time — never a "due date", never an empty "Add Due Date" prompt. */}
-                      {isEvent(task) && formatEventDateTime(task) && (
-                        <span className={`flex items-center gap-1 border px-2 py-1 rounded text-xs ${
-                          theme === 'dark'
-                            ? 'bg-purple-900 text-purple-300 border-purple-700'
-                            : 'border-purple-300 bg-purple-50 text-purple-700'
-                        }`}>
-                          <Calendar className="w-3 h-3" />
-                          {formatEventDateTime(task)}
-                        </span>
-                      )}
-
-                      {/* Due date pill for one-time and no-reminder TASKS — THE prominent date on the closed card.
-                          Events and birthdays have their own date treatment above/below. */}
-                      {!isEvent(task) && !isBirthdayTask(task) && !isRepeating(task) && (!task.reminder_interval || task.reminder_interval === 'once') && (
-                        task.due_date ? (
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button
-                                onClick={(e) => e.stopPropagation()}
-                                className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
-                                  new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
-                                    ? theme === 'dark'
-                                      ? 'bg-red-900 text-red-300 border-red-700 hover:bg-red-800'
-                                      : 'bg-red-50 text-red-700 border-red-300 hover:bg-red-100'
-                                    : theme === 'dark'
-                                      ? 'bg-purple-900 text-purple-300 border-purple-700 hover:bg-purple-800'
-                                      : 'border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100'
-                                }`}
-                              >
-                                <CalendarClock className="w-3 h-3" />
-                                {new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
-                                  ? 'Overdue'
-                                  : formatTimeRange(task)
-                                    ? `${formatReminderDate(task.due_date)}, ${formatTimeRange(task)}`
-                                    : `Due ${formatReminderDate(task.due_date)}`}
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`} onClick={(e) => e.stopPropagation()}>
-                              <div className="space-y-2 p-1">
-                                <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : ''}`}>Due Date:</label>
-                                <input
-                                  type="date"
-                                  defaultValue={task.due_date ? task.due_date.split('T')[0] : ''}
-                                  onChange={(e) => handleDueDateChange(task, e.target.value)}
-                                  className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : ''}`}
-                                />
-                                <button
-                                  onClick={() => handleDueDateChange(task, null)}
-                                  className={`w-full text-left px-3 py-2 text-sm rounded font-medium ${theme === 'dark' ? 'hover:bg-gray-700 text-red-400' : 'hover:bg-red-50 text-red-600'}`}
-                                >
-                                  Remove due date
-                                </button>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        ) : task.next_reminder ? (
-                          /* This pill is the task's WHEN: its reminder time. A task with no
-                             timing at all shows nothing here — no empty "Add Due Date". */
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button
-                                onClick={(e) => e.stopPropagation()}
-                                className={task.next_reminder
-                                  ? `flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
-                                      theme === 'dark'
-                                        ? 'bg-purple-900 text-purple-300 border-purple-700 hover:bg-purple-800'
-                                        : 'border-purple-300 bg-purple-50 text-purple-700 hover:bg-purple-100'
-                                    }`
-                                  : 'flex items-center gap-1 border border-dashed border-gray-300 px-2 py-1 rounded text-xs cursor-pointer hover:bg-gray-50 transition-colors text-gray-500'}
-                              >
-                                <CalendarClock className="w-3 h-3" />
-                                {formatReminderMoment(task.next_reminder)}
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className={`w-56 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700 text-gray-100' : ''}`} onClick={(e) => e.stopPropagation()}>
-                              <div className="space-y-2 p-1">
-                                {task.next_reminder && (
-                                  <p className={`text-xs ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
-                                    Reminds you {formatReminderMoment(task.next_reminder)}. Add a due date if it has to be done by a certain day.
-                                  </p>
-                                )}
-                                <label className={`text-sm font-medium block ${theme === 'dark' ? 'text-gray-200' : ''}`}>Due Date:</label>
-                                <input
-                                  type="date"
-                                  onChange={(e) => { if (e.target.value) handleDueDateChange(task, e.target.value); }}
-                                  className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : ''}`}
-                                />
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        ) : null
-                      )}
-
-                      {/* Recurrence badge */}
-                      {task.recurrence_pattern && task.recurrence_pattern !== 'none' && (
-                        <span className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
-                          theme === 'dark' ? 'bg-indigo-900 text-indigo-300' : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
-                        }`}>
-                          <RefreshCw className="w-3 h-3" />
-                          {task.recurrence_pattern === 'yearly' && task.birthday_person
-                            ? `🎂 ${task.birthday_person}'s birthday`
-                            : repeatScheduleLabel(task)}
-                        </span>
-                      )}
-
-                      {/* Smart Reminders badge — the task is handled by the LLM smart-nudge system.
-                          Events and birthdays have fixed reminder ladders, so the badge would be wrong for them. */}
-                      {isSmartReminderTask(task) && !isEvent(task) && !isBirthdayTask(task) && (
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button
-                              onClick={(e) => e.stopPropagation()}
-                              className={`flex items-center gap-1 px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
-                                theme === 'dark'
-                                  ? 'bg-purple-900/40 text-purple-300 border border-purple-700 hover:bg-purple-900/60'
-                                  : 'bg-purple-50 text-purple-600 border border-purple-200 hover:bg-purple-100'
-                              }`}
-                            >
-                              <Sparkles className="w-3 h-3" />
-                              Smart Reminders
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-56 p-2" onClick={(e) => e.stopPropagation()}>
-                            <div className="space-y-1">
-                              <div className="px-3 py-2 text-xs text-gray-500">
-                                This task is on Smart Reminders — the app's AI decides when to nudge you based on your schedule and how much time is left. Switch to a fixed interval below if you prefer.
-                              </div>
-                              <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}></div>
-                              <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">Switch to fixed</div>
-                              <button onClick={() => handleIntervalChange(task, '30min')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every 30 minutes</button>
-                              <button onClick={() => handleIntervalChange(task, '1hour')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Every hour</button>
-                              <button onClick={() => handleIntervalChange(task, 'daily')} className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded">Daily</button>
-                              <div className={`border-t my-1 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}></div>
-                              <button onClick={() => handleIntervalChange(task, 'once')} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50 rounded text-blue-600 font-medium">📅 Set Specific Date</button>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      )}
-                    </div>
-                  </div>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleComplete(task);
-                    }}
-                    disabled={celebratingTaskId === task.id}
-                    className={`flex-shrink-0 ${theme === 'dark' ? 'text-gray-300 hover:text-gray-100' : ''}`}
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                  </Button>
-                </div>
-                
-                {/* No steps yet — offer to break the task down, in the same
-                    spot the subtask dropdown lives once steps exist. */}
-                {subtasks.length === 0 && !isEvent(task) && !isBirthdayTask(task) && (
-                  <div className="mt-2 pl-2">
-                    <BreakIntoStepsButton task={task} theme={theme} />
-                  </div>
-                )}
-
-                {/* Subtasks Dropdown */}
-                {subtasks.length > 0 && (
-                  <div className="mt-2 pl-2">
-                    <button
-                      onClick={() => toggleTaskExpansion(task.id)}
-                      className={`flex items-center gap-2 text-sm w-full text-left p-2 rounded ${
-                        theme === 'dark' ? 'hover:bg-gray-800 text-gray-400' : 'hover:bg-gray-50 text-gray-600'
-                      }`}
-                    >
-                      <ListChecks className="w-4 h-4" />
-                      <span>{completedSubtasks.length}/{subtasks.length} subtasks</span>
-                      <span className="ml-auto">{expandedTasks[task.id] ? '▼' : '▶'}</span>
-                    </button>
-                    
-                    {expandedTasks[task.id] && (
-                      <div className="mt-1 space-y-1 pl-6">
-                        {subtasks.map(subtask => (
-                          <div
-                            key={subtask.id}
-                            className={`flex items-center gap-2 p-2 rounded text-sm ${
-                              theme === 'dark' ? 'hover:bg-gray-800' : 'hover:bg-gray-50'
-                            }`}
-                          >
-                            <button
-                              onClick={() => handleComplete(subtask)}
-                              className={`flex-shrink-0 ${
-                                subtask.status === 'completed'
-                                  ? theme === 'dark' ? 'text-green-400' : 'text-green-600'
-                                  : theme === 'dark' ? 'text-gray-600' : 'text-gray-400'
-                              }`}
-                            >
-                              <CheckCircle2 className="w-4 h-4" />
-                            </button>
-                            <span className={`flex-1 ${
-                              subtask.status === 'completed'
-                                ? 'line-through opacity-50'
-                                : theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
-                            }`}>
-                              {subtask.title}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-              </motion.div>
-            </div>
-          );
-          })}
+          ) : activeTasks.map((task) => (
+            // The same card as the Tasks page, so the two lists look and work
+            // alike — chips, expand, snooze, delete, title edit — and an edit
+            // on either shows on both (Anna, Oct 3 2026). The old Home-only
+            // card markup is gone.
+            <TaskCard
+              key={task.id}
+              task={task}
+              theme={theme}
+              onRefreshTasks={onRefreshTasks}
+              onUpdateTask={onUpdateTask}
+              onEditTitle={onEditTitle}
+              onEdit={onViewDetails}
+              onComplete={handleComplete}
+              onUncomplete={onUncomplete}
+              onSnooze={onSnooze}
+              onShowDetails={onViewDetails}
+              onDelete={onDelete}
+              subtaskCount={getSubtasks(task.id).length}
+              completedSubtaskCount={getSubtasks(task.id).filter((st) => st.status === 'completed').length}
+              subtasks={getSubtasks(task.id)}
+            />
+          ))}
         </div>
 
         {upcomingTasks.length > 0 && (
