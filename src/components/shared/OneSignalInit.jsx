@@ -74,6 +74,19 @@ function handleNotificationData(data, navigate) {
   }
 
   const screen = data.screen || '/TaskNotification';
+  // Alarms on: the full-screen alarm already asked "done / snooze", so a tap
+  // just opens the task on the Tasks page instead of the "Task Reminder"
+  // check-in screen. Read live at tap time so it follows the alarm switch.
+  if (screen === '/TaskNotification') {
+    base44.auth.me()
+      .then((u) => u?.alarm_mode === 'alarm')
+      .catch(() => false)
+      .then((alarmsOn) => {
+        const target = `${alarmsOn ? '/Tasks' : screen}?taskId=${taskId}`;
+        if (navigate) navigate(target); else window.location.href = target;
+      });
+    return;
+  }
   if (navigate) {
     navigate(`${screen}?taskId=${taskId}`);
   } else {
