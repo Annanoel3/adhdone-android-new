@@ -153,6 +153,8 @@ rules. Base44's docs say a custom domain's records must be "DNS only" if the DNS
 This section is a worklist, not permanent documentation. When you finish an item,
 remove the item from this file in the same change. When the list is empty, delete
 the whole section. Everything here was verified against live data on 2026-09-20.
+EXCEPTION: items 4 and 5 are permanent notes, not tasks. Never delete them, and never
+delete any note just because it was "read" — nothing carries over between conversations.
 
 ### 1. Achievements are dead code that still runs on every completion
 `checkAndAwardAchievements` is called from `src/components/home/TodaysTasks.jsx`
@@ -183,10 +185,10 @@ A smart nudge and a morning digest are reminders to the person holding the phone
 whatever the code calls them internally. Never write "no reminders were sent"
 because a task had no `reminder_interval` / `next_reminder` chain. Say the task
 had no scheduled reminder chain, and name the pushes that did go out. Anna's
-words: "Anytime a user receives a push, that is a reminder." Once you have read
-this and understood it, delete this item.
+words: "Anytime a user receives a push, that is a reminder." NEVER DELETE THIS ITEM —
+there is no memory between conversations, so "read and understood" does not last.
 
-### 5. Historical note — do not re-break, then delete this item
+### 5. Historical note — do not re-break. NEVER DELETE THIS ITEM (no memory between conversations)
 Tasks captured from outside the app before roughly 2026-09-18 17:20 UTC were saved
 with an EMPTY `notification_recipient_email`. `cronRefillReminders` requires that
 field ("never fall back to created_by") and `cronDailyDigest` skips tasks without
