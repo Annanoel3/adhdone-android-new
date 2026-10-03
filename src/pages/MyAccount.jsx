@@ -159,6 +159,19 @@ ${detailedFeedback}
                 Level {user.level || 1} • {user.total_points || 0} points
               </p>
             </div>
+            <Button
+              onClick={() => navigate(createPageUrl("Profile"))}
+              variant="outline"
+              className="w-full h-auto py-3 flex flex-col items-start gap-1"
+            >
+              <div className="flex items-center gap-2 w-full">
+                <UserIcon className="w-4 h-4" />
+                <span className="font-medium">My Profile</span>
+              </div>
+              <span className="text-xs text-left text-gray-500">
+                Your username, bio and photo
+              </span>
+            </Button>
           </CardContent>
         </Card>
 
