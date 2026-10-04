@@ -281,6 +281,8 @@ function ringsOutLoud(task, momentMs) {
 // minutes apart can't overlap. Only the ring moves; the task keeps the time it
 // was given. Never pushed into quiet hours (a clash beats ringing at night).
 const ALARM_GAP_MS = 2 * 60 * 1000;
+// The time each alarm was last handed to the phone, by alarm id.
+const ALARM_BOOKED_KEY = 'alarm_booked_at';
 function spaceOut(entries) {
   entries.sort((a, b) => a.alarm.at - b.alarm.at);
   for (let i = 1; i < entries.length; i++) {
@@ -368,6 +370,20 @@ export async function pushAlarms(tasks) {
   await drainAlarmActivity(tasks);
 
   const alarms = alarmSetFor(tasks);
+  // An alarm the spacing pushed later (9:00 → 9:04) must KEEP that later time.
+  // When the alarm ahead of it leaves the set (checked off at 9:00), re-spacing
+  // would move it back to 9:00 — already past — and the phone never rang it
+  // (Kirito's medicine, Oct 3 2026). So a booked time still to come wins.
+  const now = Date.now();
+  let booked = {};
+  try { booked = JSON.parse(localStorage.getItem(ALARM_BOOKED_KEY) || '{}'); } catch (e) { booked = {}; }
+  for (const a of alarms) {
+    const prev = booked[a.id];
+    if (prev && prev > a.at && prev > now) a.at = prev;
+  }
+  try {
+    localStorage.setItem(ALARM_BOOKED_KEY, JSON.stringify(Object.fromEntries(alarms.map((a) => [a.id, a.at]))));
+  } catch (e) { /* no storage */ }
   const json = JSON.stringify(alarms);
   if (json === lastAlarmsJson) return;
   lastAlarmsJson = json;
