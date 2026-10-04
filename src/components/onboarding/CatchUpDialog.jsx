@@ -4,6 +4,7 @@ import { ONBOARDING_STEPS, isStepDone, markStepDone, waitForStep } from './onboa
 import { enterOnboardingSurface, exitOnboardingSurface, waitForCalm } from './onboardingSurface';
 import WelcomeChat from './WelcomeChat';
 import { base44 } from '@/api/base44Client';
+import WELCOME_SCRIPT from './welcomeScript';
 import CATCH_UP_SCRIPT, { CATCH_UP_ABOUT_ONLY_SCRIPT, FIRST_DONE_SCRIPT, FIRST_DONE_ABOUT_ONLY_SCRIPT, NAME_ONLY_SCRIPT } from './catchUpScript';
 
 // The name alone, asked once more for someone who closed the welcome chat
@@ -12,6 +13,13 @@ import CATCH_UP_SCRIPT, { CATCH_UP_ABOUT_ONLY_SCRIPT, FIRST_DONE_SCRIPT, FIRST_D
 // has the field).
 const NAME_RETRY_STEP = 'onboarding_name_retry_done';
 const NAME_RETRY_HOLD = 'onboarding_name_retry_hold';
+
+// The full welcome again, for someone who skipped it entirely, with its first
+// line swapped for a "you missed this" one.
+const REWELCOME_SCRIPT = [
+  { text: () => "Hey, I think you missed this the first time! No worries, it takes about a minute and it's how ADHDone gets set up to actually remind you." },
+  ...WELCOME_SCRIPT.slice(1),
+];
 
 // The name + about-me questions, for anyone whose profile is missing them:
 // accounts that finished onboarding before those questions existed, and (since
@@ -77,11 +85,15 @@ export default function CatchUpDialog({ user }) {
     let cancelled = false;
     waitForStep(ONBOARDING_STEPS.homeTour)
       .then(waitForCalm)
-      .then(() => {
+      // No name AND not a single task: they skipped the whole welcome, so it
+      // comes back in full, opening with "you missed this". With tasks, only
+      // the name is asked.
+      .then(() => base44.entities.Task.list('-created_date', 1).catch(() => [1]))
+      .then((rows) => {
         if (cancelled || !mounted.current || openRef.current) return;
         if (isStepDone(NAME_RETRY_STEP) || isStepDone(ONBOARDING_STEPS.catchUp)) return;
         markStepDone(NAME_RETRY_STEP);
-        setKind('name');
+        setKind(rows?.length ? 'name' : 'rewelcome');
         setOpen(true);
       });
     return () => { cancelled = true; };
@@ -92,7 +104,9 @@ export default function CatchUpDialog({ user }) {
   // gets the "first one done" version; an older one gets the welcome-back.
   const NEW_FLOW_SINCE = Date.parse('2026-09-29T00:00:00Z');
   const newFlow = Date.parse(user?.created_date || '') >= NEW_FLOW_SINCE;
-  const script = kind === 'name'
+  const script = kind === 'rewelcome'
+    ? REWELCOME_SCRIPT
+    : kind === 'name'
     ? NAME_ONLY_SCRIPT
     : newFlow
       ? (knownName ? FIRST_DONE_ABOUT_ONLY_SCRIPT : FIRST_DONE_SCRIPT)
