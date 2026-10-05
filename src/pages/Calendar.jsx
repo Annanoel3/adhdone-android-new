@@ -472,6 +472,14 @@ export default function Calendar() {
           isOpen={modalOpen}
           onClose={() => setModalOpen(false)}
           onUpdate={handleModalUpdate}
+          // Deleted or moved to the Parking Lot from the details card: off the
+          // calendar at once (the record goes in the background).
+          onDelete={() => {
+            if (detailTask) {
+              setTasks(prev => prev.filter(t => t.id !== detailTask.id && t.parent_task_id !== detailTask.id));
+            }
+            setModalOpen(false);
+          }}
           theme={theme}
           itemClassification={detailItemClass}
         />
