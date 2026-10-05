@@ -136,21 +136,11 @@ async function saveIdeas(kind, inputText) {
         list_format: 'checkbox'
       });
     }
-    toast({
-      title: 'Added to Parking Lot! 📝',
-      description: `"${mainIdea.idea}" with ${kind.items.length} items`,
-      duration: 3000
-    });
   } else {
     await base44.entities.ParkingLotIdea.create({
       idea: inputText.trim(),
       converted_to_task: false,
       list_format: 'plain'
-    });
-    toast({
-      title: 'Added to Parking Lot! 📝',
-      description: inputText.trim().substring(0, 50) + (inputText.length > 50 ? '...' : ''),
-      duration: 3000
     });
   }
   window.dispatchEvent(new Event('parking-lot-changed'));

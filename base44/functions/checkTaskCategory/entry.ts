@@ -74,8 +74,11 @@ Decide what it is, the way a thoughtful assistant would if this note landed on t
 
 "task" — something they need to do, handle, attend, pay, buy, or be reminded about: chores,
 errands, calls, appointments, events, bills, deadlines, things to pick up. Asking to be reminded
-makes it a task. A bare thing to deal with ("dentist", "oil change") is a task. A question they
-need answered to get something done is a task, because finding out is the to-do. A list of things
+makes it a task. A bare thing to deal with ("dentist", "oil change") is a task. A question is a
+task only when they say they need to find out or ask ("ask the doctor if...", "find out whether...",
+"call and check..."). A question they're just wondering about out loud, with no action or date
+("when mom gets released, will she have outpatient appointments?", "will the store be open
+Monday?") is an "idea": file it, don't invent an "Ask" or "Find out" for them. A list of things
 they need to get or do (a grocery list, a packing list) is a task.
 
 "idea" — something they want to keep rather than something they're asking to get done: an idea,
