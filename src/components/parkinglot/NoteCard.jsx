@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import ReactQuill from "react-quill-new";
-import "react-quill-new/dist/quill.snow.css";
+import "react-quill-new/dist/quill.bubble.css";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Trash2 } from "lucide-react";
@@ -29,7 +29,7 @@ export default function NoteCard({ note, theme, onUpdate, onDelete }) {
     <div className={`rounded-lg border p-4 ${
       theme === 'dark' ? 'bg-gray-800/50 border-gray-700' : 'bg-white border-gray-200'
     }`}>
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-1">
         <Input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -49,13 +49,13 @@ export default function NoteCard({ note, theme, onUpdate, onDelete }) {
         </Button>
       </div>
       <ReactQuill
-        theme="snow"
+        theme="bubble"
         value={content}
         onChange={setContent}
         onBlur={() => onUpdate(note.id, "content", content)}
         modules={quillModules}
-        placeholder="Elaborate on your idea..."
-        className="rich-text-editor"
+        placeholder="Elaborate on your idea... (select text to format it)"
+        className={`rich-text-editor -mx-3 min-h-[80px] ${theme === 'dark' ? 'text-gray-100' : ''}`}
       />
     </div>
   );

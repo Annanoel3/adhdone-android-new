@@ -51,8 +51,16 @@ export default function IdeaNotesDialog({ idea, isOpen, onClose, theme }) {
 
   if (!idea) return null;
 
+  // Notes left blank (an extra tap on Add Note) are cleared away on close.
+  const isBlank = (n) => !(n.title || "").trim() && !(n.content || "").replace(/<[^>]*>/g, "").trim();
+  const handleClose = () => {
+    notes.filter(isBlank).forEach((n) => deleteNoteMutation.mutate(n.id));
+    onClose();
+  };
+  const adding = createNoteMutation.isPending;
+
   return (
-    <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(o) => !o && handleClose()}>
       <DialogContent className="max-w-4xl w-[calc(100vw-1rem)] max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -70,10 +78,10 @@ export default function IdeaNotesDialog({ idea, isOpen, onClose, theme }) {
           </span>
           <Button
             onClick={() => createNoteMutation.mutate()}
-            disabled={createNoteMutation.isLoading}
+            disabled={adding}
             size="sm"
           >
-            {createNoteMutation.isLoading ? (
+            {adding ? (
               <Loader2 className="w-4 h-4 mr-1 animate-spin" />
             ) : (
               <Plus className="w-4 h-4 mr-1" />
@@ -93,7 +101,7 @@ export default function IdeaNotesDialog({ idea, isOpen, onClose, theme }) {
               <p className="text-gray-500 mb-4">
                 No notes yet. Add one to start elaborating!
               </p>
-              <Button onClick={() => createNoteMutation.mutate()}>
+              <Button onClick={() => createNoteMutation.mutate()} disabled={adding}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Your First Note
               </Button>
