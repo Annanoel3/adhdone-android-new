@@ -83,6 +83,7 @@ import { applyOnboardingReplay } from "./components/onboarding/onboardingReplay"
 import { hydrateOnboardingFlags, clearOnboardingFlags, persistOnboardingFlag } from "./components/onboarding/onboardingSync";
 import { trackFire } from "@/lib/appTrack";
 import { seedTaskSortFromProfile } from "@/hooks/useTaskSort";
+import useNewBadges from "@/hooks/useNewBadges";
 import TaskCaptureProcessor from "./components/shared/TaskCaptureProcessor";
 import { AppDialogHost } from "@/components/ui/alert-dialog";
 import UsageTracker from "./components/shared/UsageTracker";
@@ -274,6 +275,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   // The recorder plugin (app build 36+) can announce itself a moment after
   // the first render; the menu waits for it rather than deciding once.
   const canRecordNotes = usePluginPresent('RecorderBridge');
+  const newDots = useNewBadges(currentPageName, !!(user?.email && authCheckComplete));
+  const notesDot = canRecordNotes && newDots.Notes;
+  const anyDot = newDots.ParkingLot || notesDot;
   const getDateBasedMode = () => {
     const now = new Date();
     const month = now.getMonth() + 1; // 1-12
@@ -676,11 +680,12 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           title: "Parking Lot",
           url: createPageUrl("ParkingLot"),
           icon: Lightbulb,
+          dot: newDots.ParkingLot,
         },
         // Recording notes needs the phone's recorder (app build 36+), so the
         // menu only offers it where it works.
         ...(canRecordNotes
-          ? [{ title: "Record Notes", url: createPageUrl("Notes"), icon: Mic }]
+          ? [{ title: "Record Notes", url: createPageUrl("Notes"), icon: Mic, dot: notesDot }]
           : []),
         {
           title: "Decision Maker",
@@ -1010,6 +1015,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                                   <div className="flex items-center gap-3 py-3 w-full">
                                     <item.icon className="w-5 h-5" />
                                     <span className="flex-1">{item.title}</span>
+                                    {item.subItems.some((s) => s.dot) && <span className="w-2.5 h-2.5 rounded-full bg-red-500" />}
                                     {isOpen ? (
                                       <ChevronDown className="w-4 h-4" />
                                     ) : (
@@ -1046,6 +1052,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                                     <Link to={subItem.url} onClick={handleNavClick} className="flex items-center gap-3 px-4 py-2 relative">
                                       <subItem.icon className="w-4 h-4" />
                                       <span className="text-sm flex-1">{subItem.title}</span>
+                                      {subItem.dot && <span className="w-2.5 h-2.5 rounded-full bg-red-500" />}
                                       {subItem.badge && subItem.badge > 0 && (
                                         <span className="bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
                                           {subItem.badge}
@@ -1204,7 +1211,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                           ? 'hover:bg-yellow-300 text-gray-900'
                           : 'hover:bg-gray-100'
                   }`}>
-                    <LayoutDashboard className="w-7 h-7" />
+                    <span className="relative">
+                      <LayoutDashboard className="w-7 h-7" />
+                      {anyDot && <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 border-2 border-white" />}
+                    </span>
                   </Button>
                 </SidebarTrigger>
                 <LongPressBrandTitle className={`text-xl font-bold ${

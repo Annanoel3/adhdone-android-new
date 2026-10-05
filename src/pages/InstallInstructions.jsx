@@ -285,7 +285,7 @@ export default function NotesPage() {
     }
   }, []);
 
-  // Meetings from three hours ago to 30 days ahead: the ones worth prepping for
+  // Meetings from three hours ago onward, all of them, soonest first: the ones worth prepping for
   // or recording. Read newest first and stops once past the window.
   const loadUpcoming = useCallback(async () => {
     try {
@@ -301,10 +301,9 @@ export default function NotesPage() {
         .filter((t) => !t.parent_task_id && !t.birthday_person && !t.day_only_task && isMeeting(t))
         .filter((t) => {
           const s = startOf(t);
-          return s !== null && s > now - 3 * HOUR && s < now + 30 * 24 * HOUR;
+          return s !== null && s > now - 3 * HOUR;
         })
-        .sort((a, b) => startOf(a) - startOf(b))
-        .slice(0, 6);
+        .sort((a, b) => startOf(a) - startOf(b));
       setUpcoming(soon);
     } catch (e) {
       console.error("[Notes] could not load upcoming events", e);
