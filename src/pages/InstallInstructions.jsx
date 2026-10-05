@@ -45,6 +45,7 @@ import {
 // Same number as NOTES_FREE_MINUTES in base44/functions/transcribeAudioNew,
 // which is the one that's enforced.
 const FREE_MINUTES = 60;
+import RemoveFromNotesButton from "@/components/notes/RemoveFromNotesButton";
 
 const recorder = () => (typeof window !== "undefined" && window.Capacitor?.Plugins?.RecorderBridge) || null;
 
@@ -1297,11 +1298,11 @@ export default function NotesPage() {
             {upcomingCards.map((t) => {
               const n = cleanQuestions(t.prep_questions).length;
               return (
+                <div key={t.id} className="flex items-center gap-2">
                 <button
-                  key={t.id}
                   type="button"
                   onClick={() => setPrepTask(t)}
-                  className={`w-full text-left rounded-2xl border-2 border-dashed p-4 flex items-center gap-3 ${dark ? "border-gray-600 bg-gray-800/40" : "border-gray-300 bg-white/60"}`}
+                  className={`flex-1 min-w-0 text-left rounded-2xl border-2 border-dashed p-4 flex items-center gap-3 ${dark ? "border-gray-600 bg-gray-800/40" : "border-gray-300 bg-white/60"}`}
                 >
                   <div className="flex-1 min-w-0">
                     <div className={`font-semibold truncate ${heading}`}>{t.title}</div>
@@ -1311,6 +1312,8 @@ export default function NotesPage() {
                   </div>
                   <span className={`text-sm flex items-center shrink-0 ${soft}`}>Details<ChevronRight className="w-4 h-4" /></span>
                 </button>
+                <RemoveFromNotesButton task={t} dark={dark} onRemoved={(id) => setUpcoming((u) => u.filter((x) => x.id !== id))} />
+                </div>
               );
             })}
           </div>
