@@ -1240,9 +1240,9 @@ export default function NotesPage() {
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="Type a question"
-                className={`flex-1 rounded-xl border px-3 py-2.5 text-[15px] outline-none ${dark ? "bg-gray-900 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900"}`}
+                className={`flex-1 min-w-0 h-12 rounded-xl border px-3 text-[15px] outline-none ${dark ? "bg-gray-900 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900"}`}
               />
-              <Button type="submit" disabled={!draft.trim()}>
+              <Button type="submit" disabled={!draft.trim()} className="h-12 px-4 rounded-xl shrink-0 bg-red-600 hover:bg-red-700 text-white">
                 <Plus className="w-4 h-4 mr-1" />Add
               </Button>
             </form>
