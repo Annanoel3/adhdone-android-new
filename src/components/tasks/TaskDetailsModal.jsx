@@ -1807,9 +1807,15 @@ Return JSON:
       onDelete();
     }
     onClose();
+    toast({ title: '💡 Moved to your Parking Lot', duration: 1500 });
 
     moveTaskToParkingLot(task, { notes: taskNotes, pictures: taskPictures, subTasks })
-      .catch((error) => console.error("Error converting to parking lot:", error));
+      .catch((error) => {
+        console.error("Error converting to parking lot:", error);
+        // It didn't go: say so and put the task back on the list.
+        toast({ title: "Couldn't move it to the Parking Lot", description: 'The task is still here.', variant: 'destructive' });
+        window.dispatchEvent(new CustomEvent('tasks-changed'));
+      });
   };
 
   return (
