@@ -153,7 +153,7 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
   const [v2NotesOpen, setV2NotesOpen] = useState(false);
   const [v2PicsOpen, setV2PicsOpen] = useState(false);
   const reminderDateRef = useRef('');
-  const reminderTimeRef = useRef('');
+  const reminderTimeRef = useRef(''); const dueDirty = useRef(false); const eventDirty = useRef(false); // autosave: popovers save on close
   const isInitializingRef = useRef(false);
 
   useEffect(() => {
@@ -1809,13 +1809,7 @@ Return JSON:
           placeholder="Add any additional notes..."
           className="min-h-[80px] pr-10"
         />
-        <button
-          onClick={handleNotesUpdate}
-          title="Save notes"
-          className="absolute bottom-2 right-2 w-7 h-7 flex items-center justify-center rounded-full bg-green-500 hover:bg-green-600 text-white transition-colors"
-        >
-          <Check className="w-4 h-4" />
-        </button>
+
       </div>
     </div>
   );
@@ -1834,7 +1828,7 @@ Return JSON:
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={onClose}>
+      <Dialog open={isOpen} onOpenChange={(o) => { if (!o) handleNotesUpdate(); onClose(); }}>
         {/* [&>*]:min-w-0 — the dialog is a grid, so one wide child (a long
             location pill, a reminder row) used to stretch the whole column
             past the screen and clip everything on the right. */}
@@ -1928,19 +1922,10 @@ Return JSON:
                     type="time"
                     value={birthdayTime}
                     onChange={(e) => setBirthdayTime(e.target.value)}
+                    onBlur={() => { if (birthdayTime && birthdayTime !== birthdayTimeSaved && !isSavingBirthdayTime) handleBirthdayTimeSave(); }}
                     className={`border rounded-lg px-2 py-1 text-sm ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
                   />
-                  {birthdayTime && birthdayTime !== birthdayTimeSaved && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={handleBirthdayTimeSave}
-                      disabled={isSavingBirthdayTime}
-                      className="h-8 bg-green-600 hover:bg-green-700 text-white"
-                    >
-                      {isSavingBirthdayTime ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save</>}
-                    </Button>
-                  )}
+                  {isSavingBirthdayTime && <span className="text-xs text-gray-500">Saving…</span>}
                 </div>
                 <ul className="space-y-1">
                   {birthdayReminderDays.map((r) => (
@@ -1994,7 +1979,7 @@ Return JSON:
                    stays editable here. */}
               {(currentType === 'once' || currentType === 'interval' || currentType === 'repeat') &&
                 (currentType === 'repeat' || !(task.reminder_schedule && task.reminder_schedule.length > 0)) && (
-                <Popover>
+                <Popover onOpenChange={(o) => { if (!o && dueDirty.current && reminderDate) { dueDirty.current = false; handleUpdateReminderTime(reminderTime, reminderDate); } }}>
                   <PopoverTrigger asChild>
                     <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
                       dueSource && new Date(dueSource).getTime() < Date.now() && task.status !== 'completed'
@@ -2022,7 +2007,7 @@ Return JSON:
                         <input
                           type="date"
                           value={reminderDate}
-                          onChange={(e) => { setReminderDate(e.target.value); reminderDateRef.current = e.target.value; }}
+                          onChange={(e) => { setReminderDate(e.target.value); reminderDateRef.current = e.target.value; dueDirty.current = true; }}
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                       </div>
@@ -2031,7 +2016,7 @@ Return JSON:
                         <input
                           type="time"
                           value={reminderTime}
-                          onChange={(e) => { setReminderTime(e.target.value); reminderTimeRef.current = e.target.value; }}
+                          onChange={(e) => { setReminderTime(e.target.value); reminderTimeRef.current = e.target.value; dueDirty.current = true; }}
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                         <p className="text-xs text-gray-500 mt-1">
@@ -2040,17 +2025,10 @@ Return JSON:
                             : 'No time? Then it just needs to be done that day — smart reminders nudge you the night before and that day.'}
                         </p>
                       </div>
-                      <Button
-                        type="button"
-                        onClick={() => handleUpdateReminderTime(reminderTime, reminderDate)}
-                        disabled={!reminderDate || isSavingReminder}
-                        className="w-full bg-green-600 hover:bg-green-700 text-white"
-                      >
-                        {isSavingReminder ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Due Date</>}
-                      </Button>
+                      <p className="text-xs text-gray-500">Saves automatically when you close this.</p>
                       {reminderTime && (
                         <button
-                          onClick={() => { setReminderTime(''); reminderTimeRef.current = ''; handleUpdateReminderTime('', reminderDate); }}
+                          onClick={() => { dueDirty.current = false; setReminderTime(''); reminderTimeRef.current = ''; handleUpdateReminderTime('', reminderDate); }}
                           className="w-full text-center px-3 py-2 text-sm hover:bg-gray-50 rounded text-gray-600 font-medium"
                         >
                           Clear time — just due that day
@@ -2192,7 +2170,7 @@ Return JSON:
               {/* Event date & time — editable for event tasks. Setting it
                    regenerates the lead-time reminder schedule automatically. */}
               {currentType === 'event' && (
-                <Popover>
+                <Popover onOpenChange={(o) => { if (!o && eventDirty.current && eventDate && eventTime) { eventDirty.current = false; handleUpdateEventTime(eventDate, eventTime); } }}>
                   <PopoverTrigger asChild>
                     <button className="cursor-pointer hover:opacity-80 transition-opacity bg-indigo-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
                       <CalendarClock className="w-3 h-3" />
@@ -2218,7 +2196,7 @@ Return JSON:
                         <input
                           type="date"
                           value={eventDate}
-                          onChange={(e) => setEventDate(e.target.value)}
+                          onChange={(e) => { setEventDate(e.target.value); eventDirty.current = true; }}
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                       </div>
@@ -2227,18 +2205,11 @@ Return JSON:
                         <input
                           type="time"
                           value={eventTime}
-                          onChange={(e) => setEventTime(e.target.value)}
+                          onChange={(e) => { setEventTime(e.target.value); eventDirty.current = true; }}
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                       </div>
-                      <Button
-                        type="button"
-                        onClick={() => handleUpdateEventTime(eventDate, eventTime)}
-                        disabled={!eventDate || !eventTime || isSavingEvent}
-                        className="w-full bg-indigo-600 hover:bg-indigo-700 text-white"
-                      >
-                        {isSavingEvent ? <span>Saving...</span> : <><Check className="w-4 h-4 mr-1" /> Save Event Time</>}
-                      </Button>
+                      <p className="text-xs text-gray-500">Saves automatically when you close this.</p>
                     </div>
                   </PopoverContent>
                 </Popover>
