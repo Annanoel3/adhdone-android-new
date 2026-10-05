@@ -234,6 +234,7 @@ export async function processAndCreateTask(inputText, opts = {}) {
 
     if (kind.category === 'parking_lot') {
       await saveIdeas(kind, inputText);
+      toast({ title: '💡 Saved to your Parking Lot', duration: 1500 });
       return { status: 'done', kind: 'idea' };
     }
 
