@@ -6,10 +6,10 @@ import { Label } from "@/components/ui/label";
 import { Heart } from "lucide-react";
 
 const QUICK_PICKS = [
-  "Mom", "Dad", "Sister", "Brother", "Grandma", "Grandpa",
+  "Friend", "Best friend", "Mom", "Dad", "Sister", "Brother", "Grandma", "Grandpa",
   "Husband", "Wife", "Partner", "Son", "Daughter",
   "Sister-in-law", "Brother-in-law", "Mother-in-law", "Father-in-law",
-  "Aunt", "Uncle", "Cousin", "Best friend", "Friend", "Coworker", "Boss", "Neighbor",
+  "Aunt", "Uncle", "Cousin", "Coworker", "Boss", "Neighbor",
 ];
 
 /**
@@ -32,7 +32,7 @@ export default function BirthdayRelationshipDialog({ isOpen, personName, onConfi
         </DialogHeader>
 
         <div className="space-y-4">
-          <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto">
+          <div className="flex flex-wrap gap-2 max-h-60 overflow-y-auto">
             {QUICK_PICKS.map((p) => (
               <button
                 key={p}
