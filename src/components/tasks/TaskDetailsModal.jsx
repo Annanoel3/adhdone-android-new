@@ -65,7 +65,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import LaunchButtons from "../launch/LaunchButtons";
+import LaunchButtons from "../launch/LaunchButtons"; import DetailsTopBlock from "./DetailsTopBlock";
 import LocationField from "./LocationField";
 import SmartDueDatePill from "./SmartDueDatePill";
 import { useToast } from "@/components/ui/use-toast";
@@ -1908,13 +1908,7 @@ Return JSON:
           </DialogHeader>
 
           <div className={v2 ? 'space-y-3 py-3' : 'space-y-6 py-4'}>
-            {task.description && (
-              <div>
-                <h4 className={`text-sm font-medium mb-2 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Description</h4>
-                <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}>{task.description}</p>
-              </div>
-            )}
-
+            <DetailsTopBlock task={task} theme={theme} />
             {/* v2: a paused task says so up top, where it can't be missed, and
                 offers the one thing you'd want to do about it. */}
             {v2 && task.silenced && !isEvent && (
