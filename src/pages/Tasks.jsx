@@ -545,7 +545,13 @@ export default function Tasks() {
           onUpdate={handleTaskUpdate}
           onComplete={handleComplete}
           onDelete={() => {
-            loadTasks();
+            // Gone from the list at once. The details card deletes (or moves to
+            // the Parking Lot) in the background AFTER calling this, so a
+            // reload here still fetched the task and it sat on the list looking
+            // untouched until the next visit (Anna, Oct 5 2026).
+            if (selectedTask) {
+              setAllTasks(prev => prev.filter(t => t.id !== selectedTask.id && t.parent_task_id !== selectedTask.id));
+            }
             setIsDetailsModalOpen(false);
             setSelectedTask(null);
           }}
