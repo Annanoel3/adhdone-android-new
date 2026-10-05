@@ -46,7 +46,7 @@ import ReminderTypeSelector, { getCurrentReminderType } from "./ReminderTypeSele
 import { supportsAlarms, alertStyleFor, refreshAlarms, requestAlarmPermissions } from "../utils/widgetBridge";
 import { AlertStyleInfo } from "../shared/QuickCapturePrompt";
 import VoiceTaskInput from "./VoiceTaskInput";
-import { scheduleReminder, cancelScheduledReminder } from "../utils/reminderScheduler";
+import { scheduleReminder, cancelScheduledReminder } from "../utils/reminderScheduler"; import { moveTaskToParkingLot } from "../utils/taskToParkingLot";
 import { deleteTaskWithUndo, cancelEventWithUndo, restoreEvent } from "../utils/snoozeTask";
 import { ToastAction } from "@/components/ui/toast";
 import { User } from "@/entities/User";
@@ -1291,8 +1291,8 @@ Return JSON:
   };
 
   const handleNotesUpdate = async () => {
-    // Instant confirmation; the write happens in the background.
-    toast({ title: 'Notes saved ✓' });
+    if ((taskNotes || '') === (task.notes || '')) return; // also runs on blur, so closing keeps the note
+    toast({ title: 'Notes saved ✓' }); onUpdate({ ...task, notes: taskNotes });
     Task.update(task.id, { notes: taskNotes }).catch(error => {
       console.error("Error updating task notes:", error);
     });
@@ -1805,7 +1805,7 @@ Return JSON:
       <div className="relative">
         <Textarea
           value={taskNotes}
-          onChange={(e) => setTaskNotes(e.target.value)}
+          onChange={(e) => setTaskNotes(e.target.value)} onBlur={handleNotesUpdate}
           placeholder="Add any additional notes..."
           className="min-h-[80px] pr-10"
         />
@@ -1828,22 +1828,8 @@ Return JSON:
     }
     onClose();
 
-    // Cancel reminders + create idea + delete task in the background
-    (async () => {
-      try {
-        if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
-          await cancelScheduledReminder(task.onesignal_notification_ids);
-        }
-        await base44.entities.ParkingLotIdea.create({
-          idea: task.title + (task.description ? `\n\n${task.description}` : ''),
-          converted_to_task: false
-        });
-        await base44.entities.Task.delete(task.id);
-        refreshAlarms().catch(() => {});
-      } catch (error) {
-        console.error("Error converting to parking lot:", error);
-      }
-    })();
+    moveTaskToParkingLot(task, { notes: taskNotes, pictures: taskPictures, subTasks })
+      .catch((error) => console.error("Error converting to parking lot:", error));
   };
 
   return (
