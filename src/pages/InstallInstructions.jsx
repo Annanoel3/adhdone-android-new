@@ -46,6 +46,7 @@ import {
 // which is the one that's enforced.
 const FREE_MINUTES = 60;
 import RemoveFromNotesButton from "@/components/notes/RemoveFromNotesButton";
+import PrepPointsList from "@/components/notes/PrepPointsList";
 
 const recorder = () => (typeof window !== "undefined" && window.Capacitor?.Plugins?.RecorderBridge) || null;
 
@@ -871,7 +872,7 @@ export default function NotesPage() {
 
               {(editDraft.asked || []).length > 0 && (
                 <div className={`${card} space-y-3`}>
-                  <h2 className={`text-lg font-bold ${heading}`}>Your questions</h2>
+                  <h2 className={`text-lg font-bold ${heading}`}>Things to bring up</h2>
                   {editDraft.asked.map((a, i) => (
                     <div key={`a${i}`} className="space-y-1">
                       <div className={`font-semibold ${heading}`}>{a.question}</div>
@@ -1017,7 +1018,7 @@ export default function NotesPage() {
 
               {notes.asked?.length > 0 && (
                 <div className={card}>
-                  <h2 className={`text-lg font-bold mb-2 ${heading}`}>Your questions</h2>
+                  <h2 className={`text-lg font-bold mb-2 ${heading}`}>Things to bring up</h2>
                   <ul className="space-y-3">
                     {notes.asked.map((a, i) => (
                       <li key={i}>
@@ -1165,7 +1166,7 @@ export default function NotesPage() {
           <ConsentNote soft={soft} center />
           {liveQuestions.length > 0 && (
             <div className={`${card} text-left`}>
-              <h2 className={`text-lg font-bold ${heading}`}>Your questions</h2>
+              <h2 className={`text-lg font-bold ${heading}`}>Things to bring up</h2>
               <p className={`text-xs mb-2 ${soft}`}>Tap one to check it off, if you like.</p>
               <ul className="space-y-1">
                 {liveQuestions.map((q, i) => {
@@ -1214,33 +1215,17 @@ export default function NotesPage() {
             {s !== null && <p className={`text-sm ${soft}`}>{whenText(s)} · Not recorded yet</p>}
           </div>
           <div className={`${card} space-y-3`}>
-            <h2 className={`text-lg font-bold ${heading}`}>Questions to ask</h2>
+            <h2 className={`text-lg font-bold ${heading}`}>Things to bring up</h2>
             <p className={`text-sm ${soft}`}>
-              Anything you want to ask or bring up. They'll be on screen while you record, and your notes will say
-              which ones got answered.
+              Questions, symptoms, updates, anything you don't want to forget to mention. Tap one to change it. They'll
+              be on screen while you record, and your notes will say which ones got covered.
             </p>
-            {qs.length > 0 && (
-              <ul className="space-y-2">
-                {qs.map((q, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <span className={`flex-1 ${heading}`}>• {q}</span>
-                    <button
-                      type="button"
-                      aria-label="Remove this question"
-                      onClick={() => saveQuestions(prepTask, qs.filter((_, j) => j !== i))}
-                      className={soft}
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <PrepPointsList points={qs} onChange={(next) => saveQuestions(prepTask, next)} dark={dark} soft={soft} />
             <form onSubmit={(e) => { e.preventDefault(); addQuestion(); }} className="flex gap-2">
               <input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder="Type a question"
+                placeholder="Like “ask about the side effects” or “knee hurts at night”"
                 className={`flex-1 min-w-0 h-12 rounded-xl border px-3 text-[15px] outline-none ${dark ? "bg-gray-900 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900"}`}
               />
               <Button type="submit" disabled={!draft.trim()} className="h-12 px-4 rounded-xl shrink-0 bg-red-600 hover:bg-red-700 text-white">
@@ -1308,7 +1293,7 @@ export default function NotesPage() {
                   <div className="flex-1 min-w-0">
                     <div className={`font-semibold truncate ${heading}`}>{t.title}</div>
                     <div className={`text-sm ${soft}`}>
-                      {whenText(startOf(t))} · Not recorded yet{n ? ` · ${n} question${n === 1 ? "" : "s"}` : ""}
+                      {whenText(startOf(t))} · Not recorded yet{n ? ` · ${n} thing${n === 1 ? "" : "s"} to bring up` : ""}
                     </div>
                   </div>
                   <span className={`text-sm flex items-center shrink-0 ${soft}`}>Details<ChevronRight className="w-4 h-4" /></span>
