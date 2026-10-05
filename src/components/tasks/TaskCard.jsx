@@ -38,6 +38,7 @@ import { firstDateMakesDeadline } from "../utils/todayTasks";
 import { cancelEventWithUndo, restoreEvent } from "../utils/snoozeTask";
 import { appConfirm } from "@/components/ui/alert-dialog";
 import { TimeItButton } from "../launch/LaunchButtons";
+import RecordNotesButton from "./RecordNotesButton";
 
 import SubtaskProgressBar from "@/components/tasks/SubtaskProgressBar";
 
@@ -1025,6 +1026,7 @@ export default function TaskCard({
           )}
 
           <TimeItButton task={task} theme={theme} />
+          <RecordNotesButton task={task} theme={theme} />
 
           {!task.silenced && !isCancelled && (
             <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${getUrgencyColor(task.urgency)}`}>
