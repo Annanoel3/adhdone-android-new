@@ -1215,10 +1215,10 @@ export default function NotesPage() {
             {s !== null && <p className={`text-sm ${soft}`}>{whenText(s)} · Not recorded yet</p>}
           </div>
           <div className={`${card} space-y-3`}>
-            <h2 className={`text-lg font-bold ${heading}`}>Things to bring up</h2>
+            <h2 className={`text-lg font-bold ${heading}`}>Agenda</h2>
             <p className={`text-sm ${soft}`}>
-              Questions, symptoms, updates, anything you don't want to forget to mention. Tap one to change it. They'll
-              be on screen while you record, and your notes will say which ones got covered.
+              Add anything you don't want to forget to mention. It will be on screen while you record, and your notes
+              will say which ones got covered.
             </p>
             <PrepPointsList points={qs} onChange={(next) => saveQuestions(prepTask, next)} dark={dark} soft={soft} />
             <form onSubmit={(e) => { e.preventDefault(); addQuestion(); }} className="flex gap-2">
