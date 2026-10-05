@@ -513,6 +513,11 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
                 </Button>
               )}
             </div>
+          ) : !tasksLoaded && activeTasks.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-10">
+              <div className="w-8 h-8 border-4 border-gray-300 border-t-purple-500 rounded-full animate-spin" />
+              <p className={theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}>Loading your tasks…</p>
+            </div>
           ) : activeTasks.length === 0 && pending.length === 0 ? (
             <div className="text-center py-10">
               <div className={`w-14 h-14 rounded-full mx-auto mb-3 flex items-center justify-center ${
