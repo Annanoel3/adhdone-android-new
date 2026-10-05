@@ -102,6 +102,12 @@ Their own life's tasks that happen to involve apps or phones are not this ("upda
 "mixed" — it clearly holds separate things of different kinds, like a birthday plus an errand, or
 an idea plus a to-do. Only when there really are two or more different kinds in it.
 
+A fragment — a word or two, no verb, no date — is sorted by what it names, not by its length. If
+it names something they deal with, attend or pay ("dentist", "oil change", "rent", "car
+inspection"), it's a task. If it names a subject, a thing to make, or something to think about or
+look into ("collage", "podcast", "Greece", "collage outpatient"), it's an idea: a couple of nouns
+jotted down is a thought being kept, not a chore being assigned.
+
 When it's truly unclear, choose "task": a to-do filed away as an idea can be missed, while a task
 they didn't need is easy to delete.
 
