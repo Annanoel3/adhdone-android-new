@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import showSaved from "@/components/utils/showSaved";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -143,7 +144,7 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(o) => { if (o) return; if (name.trim() && date && !saving) { handleSave().then(showSaved); } else onClose(); }}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -274,13 +275,7 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
           </div>
 
           <div className="flex gap-2 pt-2">
-            <Button
-              onClick={handleSave}
-              disabled={!name.trim() || !date || saving}
-              className="flex-1 bg-pink-600 hover:bg-pink-700 text-white"
-            >
-              {saving ? "Saving…" : "Save changes"}
-            </Button>
+            <p className="flex-1 self-center text-xs text-gray-500">{saving ? "Saving…" : "Changes save when you close this."}</p>
             <Button
               variant="outline"
               onClick={handleDeleteBirthday}

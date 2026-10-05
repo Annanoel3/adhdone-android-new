@@ -1292,7 +1292,7 @@ Return JSON:
 
   const handleNotesUpdate = async () => {
     if ((taskNotes || '') === (task.notes || '')) return; // also runs on blur, so closing keeps the note
-    toast({ title: 'Notes saved ✓' }); onUpdate({ ...task, notes: taskNotes });
+    toast({ title: 'Saved ✓', duration: 1500 }); onUpdate({ ...task, notes: taskNotes });
     Task.update(task.id, { notes: taskNotes }).catch(error => {
       console.error("Error updating task notes:", error);
     });
@@ -1922,7 +1922,7 @@ Return JSON:
                     type="time"
                     value={birthdayTime}
                     onChange={(e) => setBirthdayTime(e.target.value)}
-                    onBlur={() => { if (birthdayTime && birthdayTime !== birthdayTimeSaved && !isSavingBirthdayTime) handleBirthdayTimeSave(); }}
+                    onBlur={() => { if (birthdayTime && birthdayTime !== birthdayTimeSaved && !isSavingBirthdayTime) { handleBirthdayTimeSave(); toast({ title: 'Saved ✓', duration: 1500 }); } }}
                     className={`border rounded-lg px-2 py-1 text-sm ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
                   />
                   {isSavingBirthdayTime && <span className="text-xs text-gray-500">Saving…</span>}
@@ -2170,7 +2170,7 @@ Return JSON:
               {/* Event date & time — editable for event tasks. Setting it
                    regenerates the lead-time reminder schedule automatically. */}
               {currentType === 'event' && (
-                <Popover onOpenChange={(o) => { if (!o && eventDirty.current && eventDate && eventTime) { eventDirty.current = false; handleUpdateEventTime(eventDate, eventTime); } }}>
+                <Popover onOpenChange={(o) => { if (!o && eventDirty.current && eventDate && eventTime) { eventDirty.current = false; handleUpdateEventTime(eventDate, eventTime); toast({ title: 'Saved ✓', duration: 1500 }); } }}>
                   <PopoverTrigger asChild>
                     <button className="cursor-pointer hover:opacity-80 transition-opacity bg-indigo-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
                       <CalendarClock className="w-3 h-3" />

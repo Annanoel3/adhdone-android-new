@@ -4,6 +4,7 @@ import { Check } from 'lucide-react';
 import HomeAreaMap from './HomeAreaMap';
 import useApproxCenter from './useApproxCenter';
 import { base44 } from '@/api/base44Client';
+import showSaved from '@/components/utils/showSaved';
 
 // Shared home-base editor: a map with a soft ~5-mile circle the user drags
 // over their general area. The circle's CENTER is what gets saved, and it's the
@@ -32,6 +33,7 @@ export default function HomeBaseFields({ user, theme, onSaved, compact = false }
     try {
       await base44.auth.updateMe({ home_lat: c.lat, home_lng: c.lng });
       setEditing(false);
+      showSaved();
       onSaved?.();
     } catch (e) {
       console.error('Failed to save home base:', e);
@@ -80,7 +82,7 @@ export default function HomeBaseFields({ user, theme, onSaved, compact = false }
           disabled={saving || !start}
           className="flex-1 bg-green-600 hover:bg-green-700 text-white"
         >
-          {saving ? 'Saving...' : compact ? 'Save' : 'Save home area'}
+          {saving ? 'Saving...' : 'Done'}
         </Button>
       </div>
     </div>

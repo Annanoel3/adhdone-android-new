@@ -27,6 +27,7 @@ import { refreshAlarms } from '@/components/utils/widgetBridge';
 import AdDiagnosticsCard from '@/components/settings/AdDiagnosticsCard';
 import { Textarea } from '@/components/ui/textarea';
 import VersionTap from '@/components/settings/VersionTap';
+import showSaved from '@/components/utils/showSaved';
 
 
 // The two things the welcome chat asks for — a name and a sentence about the
@@ -58,7 +59,7 @@ function AboutYouCard({ user, theme, onSaved }) {
       // The name IS the username (display_name), the same field the welcome
       // chat sets. The handle (@name1234) is left alone — it is minted once.
       await base44.auth.updateMe({ preferred_name: n, display_name: n, about_me: a });
-      setNote('Saved.');
+      setNote(''); showSaved();
       if (onSaved) await onSaved();
     } catch (e) {
       setNote("Couldn't save that. Try again.");
@@ -82,6 +83,7 @@ function AboutYouCard({ user, theme, onSaved }) {
             id="about-you-name"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            onBlur={() => { if (dirty && !saving) save(); }}
             maxLength={40}
             className={dark ? 'bg-gray-700 border-gray-600 text-white' : ''}
           />
@@ -95,6 +97,7 @@ function AboutYouCard({ user, theme, onSaved }) {
             id="about-you-about"
             value={about}
             onChange={(e) => setAbout(e.target.value)}
+            onBlur={() => { if (dirty && !saving) save(); }}
             rows={3}
             maxLength={500}
             placeholder='Your work, your schedule, what you juggle — e.g. "I play violin at weddings" or "I&apos;m a nurse on night shifts."'
@@ -105,9 +108,7 @@ function AboutYouCard({ user, theme, onSaved }) {
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <Button onClick={save} disabled={saving || !dirty} className="bg-purple-600 hover:bg-purple-700 text-white">
-            {saving ? 'Saving…' : 'Save'}
-          </Button>
+          {saving && <span className="text-sm text-gray-500">Saving…</span>}
           {note && <span className={`text-sm ${dark ? 'text-gray-400' : 'text-gray-600'}`}>{note}</span>}
         </div>
       </CardContent>
@@ -303,6 +304,7 @@ export default function Settings() {
 
   const handleQuietHoursSave = async () => {
     await persistQuietHours(quietHoursEnabled, quietHoursStart, quietHoursEnd);
+    showSaved();
   };
 
   const settingsItems = [
@@ -462,6 +464,7 @@ export default function Settings() {
                       type="time"
                       value={quietHoursStart}
                       onChange={(e) => handleQuietHoursChange(e.target.value, quietHoursEnd)}
+                      onBlur={handleQuietHoursSave}
                       className={theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : ''}
                     />
                   </div>
@@ -472,17 +475,12 @@ export default function Settings() {
                       type="time"
                       value={quietHoursEnd}
                       onChange={(e) => handleQuietHoursChange(quietHoursStart, e.target.value)}
+                      onBlur={handleQuietHoursSave}
                       className={theme === 'dark' ? 'bg-gray-700 text-white border-gray-600' : ''}
                     />
                   </div>
                 </div>
-                <Button
-                  onClick={handleQuietHoursSave}
-                  disabled={quietHoursSaving}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white"
-                >
-                  {quietHoursSaving ? 'Saving...' : 'Save Quiet Hours'}
-                </Button>
+                {quietHoursSaving && <p className="text-xs text-gray-500">Saving…</p>}
               </>
             )}
           </CardContent>

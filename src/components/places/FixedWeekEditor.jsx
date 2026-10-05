@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import showSaved from '@/components/utils/showSaved';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -32,7 +33,7 @@ export default function FixedWeekEditor({ user, theme }) {
   const dark = theme === 'dark';
 
   const toggle = (i) => {
-    setSaved(false);
+    setSaved(false); touched.current = true;
     setDays((prev) => {
       const next = { ...prev };
       if (i in next) delete next[i]; else next[i] = { arrive_by: '09:00', ends_at: '17:00' };
@@ -41,7 +42,7 @@ export default function FixedWeekEditor({ user, theme }) {
   };
 
   const setField = (i, field, value) => {
-    setSaved(false);
+    setSaved(false); touched.current = true;
     setDays((p) => ({ ...p, [i]: { ...p[i], [field]: value } }));
   };
 
@@ -55,10 +56,19 @@ export default function FixedWeekEditor({ user, theme }) {
       }));
       await base44.auth.updateMe({ work_fixed_days: list });
       setSaved(true);
+      showSaved();
     } finally {
       setSaving(false);
     }
   };
+
+  // Autosave a moment after the last change (saved stays false until then).
+  const touched = useRef(false);
+  useEffect(() => {
+    if (saved || !touched.current) return undefined;
+    const t = setTimeout(save, 1200);
+    return () => clearTimeout(t);
+  }, [days]);
 
   const timeClass = `h-10 ${dark ? 'bg-gray-700 text-white border-gray-600' : 'bg-white'}`;
 
@@ -117,9 +127,9 @@ export default function FixedWeekEditor({ user, theme }) {
           </div>
         );
       })}
-      <Button onClick={save} disabled={saving} className="w-full bg-green-600 hover:bg-green-700 text-white mt-1">
-        {saving ? 'Saving...' : saved ? 'Saved ✓' : 'Save weekly schedule'}
-      </Button>
+      <p className={`text-xs mt-1 ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
+        {saving ? 'Saving…' : 'Changes save automatically.'}
+      </p>
     </div>
   );
 }
