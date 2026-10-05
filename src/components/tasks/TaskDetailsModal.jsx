@@ -66,7 +66,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import LaunchButtons from "../launch/LaunchButtons"; import DetailsTopBlock from "./DetailsTopBlock";
-import LocationField from "./LocationField";
+import LocationField from "./LocationField"; import TaskNotesField from "./TaskNotesField";
 import SmartDueDatePill from "./SmartDueDatePill";
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -1797,21 +1797,7 @@ Return JSON:
     </div>
   );
   const notesSection = (
-    <div className="space-y-2">
-      <label className={`text-sm font-medium flex items-center gap-2 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-        <FileText className="w-4 h-4" />
-        Notes
-      </label>
-      <div className="relative">
-        <Textarea
-          value={taskNotes}
-          onChange={(e) => setTaskNotes(e.target.value)} onBlur={handleNotesUpdate}
-          placeholder="Add any additional notes..."
-          className="min-h-[80px] pr-10"
-        />
-
-      </div>
-    </div>
+    <TaskNotesField key={`${task?.id}-${isOpen}`} startEditing={!(task?.notes || '').trim()} value={taskNotes} onChange={setTaskNotes} onSave={handleNotesUpdate} theme={theme} />
   );
   const handleToParkingLot = async () => {
     if (!(await appConfirm(`Convert "${task.title}" to a parking lot idea?`, { okText: 'Move it' }))) return;
