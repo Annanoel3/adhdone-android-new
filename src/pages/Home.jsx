@@ -29,6 +29,13 @@ export default function Home() {
   // The task list couldn't be fetched (no signal, the server not answering):
   // Today's Focus says so instead of looking like an empty day.
   const [tasksLoadFailed, setTasksLoadFailed] = useState(false);
+  // True once the list has been fetched at least once. Until then `tasks` is
+  // just the empty starting value, and Today's Focus must not hand THAT to the
+  // phone: the phone's alarm sync cancels every alarm missing from the list it
+  // is given, so every return to Home wiped the alarms (and the snooze state
+  // and the unread snooze/dismiss counts with them) for the second it took the
+  // real list to load, then booked them again from scratch.
+  const [tasksLoaded, setTasksLoaded] = useState(false);
   const [user, setUser] = useState(null);
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [showEndOfDayReview, setShowEndOfDayReview] = useState(false);
@@ -133,6 +140,7 @@ export default function Home() {
       const allTasks = [...activeTasks, ...(recentlyDone || []).filter(t => !seen.has(t.id))];
       if (seq !== loadSeq.current) return;
       setTasks(allTasks);
+      setTasksLoaded(true);
       setTasksLoadFailed(false);
       // Roll over passed birthdays to next year and ensure reminders exist
       const birthdayTasks = allTasks.filter(t => t.birthday_person && t.status === "active" && t.next_reminder);
@@ -379,6 +387,7 @@ export default function Home() {
                   onDelete={handleDelete}
                   specialMode={specialMode}
                   loadFailed={tasksLoadFailed}
+                  tasksLoaded={tasksLoaded}
                   onRetry={loadTasks}
                 />
               </div>
