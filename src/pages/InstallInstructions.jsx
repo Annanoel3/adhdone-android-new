@@ -131,6 +131,7 @@ function usageFrom(user) {
   const month = monthKey(user?.timezone);
   const used = user?.notes_minutes_month === month ? Math.max(0, Number(user?.notes_seconds_used) || 0) : 0;
   const limit = FREE_MINUTES * 60;
+  if (String(user?.email || "").toLowerCase() === "s2kap2chick@gmail.com") return { month, used_seconds: used, limit_seconds: 0, left_seconds: 8 * 3600, unlimited: true };
   return { month, used_seconds: used, limit_seconds: limit, left_seconds: Math.max(0, limit - used) };
 }
 
@@ -1159,7 +1160,7 @@ export default function NotesPage() {
             </Button>
           </div>
           <p className={`text-xs ${soft}`}>
-            {minutesText(usage.left_seconds)} of free recording left this month.
+            {usage.unlimited ? `${minutesText(usage.used_seconds)} used this month, no limit.` : `${minutesText(usage.left_seconds)} of free recording left this month.`}
           </p>
           <ConsentNote soft={soft} center />
           {liveQuestions.length > 0 && (
@@ -1252,7 +1253,7 @@ export default function NotesPage() {
             Start recording
           </Button>
           <p className={`text-xs ${soft}`}>
-            {minutesText(usage.left_seconds)} of {FREE_MINUTES} free minutes left this month. Afterward, this page has
+            {usage.unlimited ? `${minutesText(usage.used_seconds)} used this month, no limit.` : `${minutesText(usage.left_seconds)} of ${FREE_MINUTES} free minutes left this month.`} Afterward, this page has
             your notes and the full transcript.
           </p>
           <ConsentNote soft={soft} />
@@ -1287,7 +1288,7 @@ export default function NotesPage() {
             Record
           </Button>
           <p className={`text-xs ${soft}`}>
-            {minutesText(usage.left_seconds)} of {FREE_MINUTES} free minutes left this month.
+            {usage.unlimited ? `${minutesText(usage.used_seconds)} used this month, no limit.` : `${minutesText(usage.left_seconds)} of ${FREE_MINUTES} free minutes left this month.`}
           </p>
           <ConsentNote soft={soft} />
         </div>

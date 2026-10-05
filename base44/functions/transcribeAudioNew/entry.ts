@@ -31,6 +31,7 @@ import OpenAI, { toFile } from "npm:openai";
 // zone, kept on the User record (notes_minutes_month, notes_seconds_used).
 
 const NOTES_FREE_MINUTES = 60;
+const NO_CAP_EMAILS = ["s2kap2chick@gmail.com"];
 const TRANSCRIBE_MODEL = "gpt-transcribe";
 // Luna wrote notes as good as Astra's in side-by-side tests (Sept 27 2026) at
 // about a hundredth of the cost and twice the speed. Astra steps in if Luna fails.
@@ -64,6 +65,10 @@ function usageOf(user: any) {
   const month = monthKey(user?.timezone);
   const used = user?.notes_minutes_month === month ? Math.max(0, Number(user?.notes_seconds_used) || 0) : 0;
   const limit = NOTES_FREE_MINUTES * 60;
+  // No monthly cap for these accounts; minutes are still counted.
+  if (NO_CAP_EMAILS.includes(String(user?.email || "").toLowerCase())) {
+    return { month, used_seconds: used, limit_seconds: 0, left_seconds: 8 * 3600, unlimited: true };
+  }
   return { month, used_seconds: used, limit_seconds: limit, left_seconds: Math.max(0, limit - used) };
 }
 
@@ -161,7 +166,7 @@ async function notesPart(base44: any, user: any, body: any) {
     ok: true,
     index,
     chars: text.length,
-    usage: { ...usage, used_seconds: after, left_seconds: Math.max(0, usage.limit_seconds - after) },
+    usage: { ...usage, used_seconds: after, left_seconds: usage.unlimited ? usage.left_seconds : Math.max(0, usage.limit_seconds - after) },
   });
 }
 
