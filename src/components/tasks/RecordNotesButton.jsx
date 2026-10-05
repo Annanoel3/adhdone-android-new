@@ -12,9 +12,23 @@ export function isRecordable(task) {
 }
 
 // A clear "Record notes" pill on the card, straight to this event on the Notes page.
-export default function RecordNotesButton({ task, theme }) {
+export default function RecordNotesButton({ task, theme, compact }) {
   const canRecord = usePluginPresent("RecorderBridge");
   if (!canRecord || !isRecordable(task)) return null;
+  if (compact) {
+    // Closed card: just a little notes sheet with a red "recording" dot.
+    return (
+      <Link
+        to={`/Notes?task=${task.id}&prep=1`}
+        onClick={(e) => e.stopPropagation()}
+        aria-label="Record notes"
+        className="relative flex-shrink-0 text-lg leading-none px-0.5"
+      >
+        📝
+        <span className="absolute -top-0.5 -left-0.5 w-2 h-2 rounded-full bg-red-500" />
+      </Link>
+    );
+  }
   return (
     <Link
       to={`/Notes?task=${task.id}&prep=1`}
