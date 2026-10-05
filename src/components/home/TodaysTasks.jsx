@@ -28,7 +28,7 @@ import LifeAreaPill, { TagPill } from "../tasks/LifeAreaPill";
 import PendingTaskCards, { usePendingCaptures } from "./PendingTaskCards";
 import TaskCard from "../tasks/TaskCard";
 
-export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails, onUpdateTask, loadFailed = false, onRetry, onRefreshTasks, onEditTitle, onUncomplete, onSnooze, onDelete }) {
+export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails, onUpdateTask, loadFailed = false, onRetry, onRefreshTasks, onEditTitle, onUncomplete, onSnooze, onDelete, tasksLoaded = true }) {
   const navigate = useNavigate();
   const { sortBy } = useTaskSort();
   const [reminderPopoverTaskId, setReminderPopoverTaskId] = useState(null);
@@ -60,12 +60,15 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
   // Mirror today's list to the native home-screen widget. Runs on first render
   // (app open) and again whenever tasks change — completing, adding, or
   // re-dating a task updates the widget without the user reopening anything.
+  // Not before the list has actually loaded: the empty starting list is not
+  // "no tasks", and handing it to the phone cancelled every alarm (see Home).
   React.useEffect(() => {
+    if (!tasksLoaded) return;
     pushWidgetTasks(tasks);
     // Same trigger keeps the phone's alarms in step (no-op unless the user has
     // alarms turned on and the app build has the plugin).
     pushAlarms(tasks);
-  }, [tasks]);
+  }, [tasks, tasksLoaded]);
 
   const getUrgencyColor = (urgency) => {
     if (theme === 'minimalist') {
