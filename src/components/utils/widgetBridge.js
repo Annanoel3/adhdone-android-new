@@ -323,6 +323,48 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
   return spaceOut(out).slice(0, ALARM_MAX);
 }
 
+// A smart nudge that rings out loud is a push that asks to ring when it lands
+// (cronSmartTaskNudge → PushFilter). The PHONE makes that alarm itself, under
+// an id of its own ("push:<push id>"), and both the full alarm sync below and
+// the server's "this task is gone" message leave the phone's own alarms alone
+// — on purpose, so a snooze the person asked for isn't wiped by the next sync.
+// The cost: a nudge snoozed from its alarm screen still rang an hour after the
+// task had been moved to the Parking Lot (Mom's neurology appointment, Oct 5
+// 2026 — the task was long deleted, the snoozed nudge alarm rang anyway).
+// The app's send ledger has every nudge pushed in the last day and which task
+// it was about, so on every alarm sync, any nudge about a task that is no
+// longer active (finished, deleted, cancelled, parked as an idea, or on the
+// Back Burner) is taken off the phone here. A nudge for a task still on the
+// list keeps its snooze. A build without cancelOwn (before the timer alarms)
+// can't be told: nothing to do there.
+const PUSH_ALARM_KEEP_MS = 24 * 60 * 60 * 1000;
+const droppedPushAlarms = new Set();
+async function dropStalePushAlarms(tasks) {
+  const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
+  if (!AlarmBridge?.cancelOwn) return;
+  let rows = [];
+  try {
+    const since = new Date(Date.now() - PUSH_ALARM_KEEP_MS).toISOString();
+    rows = (await base44.entities.NotificationLedger.filter(
+      { kind: 'smart_nudge', created_date: { $gte: since } }, '-created_date', 100
+    )) || [];
+  } catch (err) {
+    return; // the next sync tries again
+  }
+  const live = new Set((tasks || []).filter((t) => t.status === 'active' && !t.silenced).map((t) => t.id));
+  for (const r of rows) {
+    const id = r?.notification_id ? `push:${r.notification_id}` : '';
+    if (!id || !r.task_id || live.has(r.task_id) || droppedPushAlarms.has(id)) continue;
+    try {
+      await AlarmBridge.cancelOwn({ id });
+      droppedPushAlarms.add(id);
+    } catch (err) {
+      // Not booked on this phone (it never rang here, or was answered): nothing to take off.
+      droppedPushAlarms.add(id);
+    }
+  }
+}
+
 // What happened to alarms since we last asked — snoozes, dismissals, rings
 // nobody answered, "Later" taps — added to the task's counters. Data only: no reminder is
 // changed, cancelled or moved because of any of it.
@@ -368,6 +410,9 @@ export async function pushAlarms(tasks) {
   if (alarmMode === null) return;
 
   await drainAlarmActivity(tasks);
+  // Before the unchanged-set check below: a task that only ever had nudges has
+  // no alarms of its own, so deleting it leaves the set exactly as it was.
+  dropStalePushAlarms(tasks).catch(() => {});
 
   const alarms = alarmSetFor(tasks);
   // An alarm the spacing pushed later (9:00 → 9:04) must KEEP that later time.
