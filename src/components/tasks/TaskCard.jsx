@@ -417,7 +417,8 @@ export default function TaskCard({
     if (!m) return days;
     const h = Number(m[1]);
     const time = `${h % 12 || 12}${m[2] === '00' ? '' : `:${m[2]}`} ${h < 12 ? 'AM' : 'PM'}`;
-    return `${days} at ${time}`;
+    // No "at": "Daily 9 PM" fits the chip; "Daily at 9…" got cut off (Anna, Oct 6 2026).
+    return `${days} ${time}`;
   })();
 
   const formatReminderDate = (dateString) => {
