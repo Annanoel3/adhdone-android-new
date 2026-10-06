@@ -250,6 +250,13 @@ Deno.serve(async (req) => {
           batchStart = wanted;
         }
       }
+      // They tapped Later on this task's alarm: the app cancelled the pings
+      // inside the break and moved next_reminder to its end. Whatever else is
+      // computed above, nothing is booked before the break ends.
+      const breakUntil = task.later_until ? new Date(task.later_until) : null;
+      if (breakUntil && !isNaN(breakUntil.getTime()) && breakUntil.getTime() > batchStart.getTime()) {
+        batchStart = breakUntil;
+      }
 
       const email = task.notification_recipient_email;
 
