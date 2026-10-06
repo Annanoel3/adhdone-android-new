@@ -10,6 +10,7 @@
 
 import { isTodayTask, isUpcomingTask, getLocalDateString } from './todayTasks';
 import { base44 } from '@/api/base44Client';
+import { cancelScheduledReminder } from './reminderScheduler';
 import { isInQuietHours } from './reminderScheduler';
 import { getReminderCopy } from './reminderCopy';
 import { isStepDone, markStepDone } from '@/components/onboarding/onboardingGate';
@@ -304,8 +305,11 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
     // A step never reminds on its own — its parent task does (RULES.md §5).
     if (t.parent_task_id) continue;
     if (alertStyleFor(t, userDefault) !== 'alarm') continue;
+    // A break they asked for (Later on the alarm): no alarm inside it.
+    const breakMs = t.later_until ? new Date(t.later_until).getTime() : NaN;
     for (const m of reminderMomentsFor(t)) {
       if (m.at <= cutoff) continue;
+      if (!isNaN(breakMs) && m.at < breakMs) continue;
       // A task the user asked to run through the night keeps its night alarms.
       if (!t.quiet_hours_exempt && isInQuietHours(new Date(m.at))) continue;
       // Heads-ups stay regular pushes; see ringsOutLoud.
@@ -365,9 +369,92 @@ async function dropStalePushAlarms(tasks) {
   }
 }
 
+// "Later" on an alarm is a break the person asked for, and until Oct 6 2026
+// it changed nothing: the ring stopped, a count went up, and the next nudge
+// or rhythm ping came an hour later as if nothing had been said (Anna, the
+// towels for Tom: Later twice, reminded again 39 minutes on). Now a Later
+// gives the task a break: the first one in a day, three hours; a second the
+// same day, until tomorrow morning. The break is kept on the task
+// (later_until) and honoured everywhere: the nudge planner, the reminder
+// refill, the server's alarm list and the phone's (alarmSetFor above). The
+// pushes already booked inside the break are cancelled here, found through
+// the app's send ledger (every booked push is in it with its time), and a
+// rhythm picks up again when the break ends.
+const LATER_BREAK_MS = 3 * 60 * 60 * 1000;
+const LATER_MORNING_HOUR = 8;
+function laterBreakUntil(t, now = new Date()) {
+  const prev = t.later_until ? new Date(t.later_until) : null;
+  const prevMs = prev && !isNaN(prev.getTime()) ? prev.getTime() : NaN;
+  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
+  // A break already given today (it ends today or later): this second Later
+  // runs until tomorrow morning.
+  const secondToday = !isNaN(prevMs) && prevMs >= startOfToday.getTime();
+  let until;
+  if (secondToday) {
+    until = new Date(now); until.setDate(until.getDate() + 1); until.setHours(LATER_MORNING_HOUR, 0, 0, 0);
+  } else {
+    until = new Date(now.getTime() + LATER_BREAK_MS);
+  }
+  // Never shorten a break that is already longer.
+  if (!isNaN(prevMs) && prevMs > until.getTime()) until = new Date(prevMs);
+  return until;
+}
+
+// Takes the task's booked pushes inside the break off, and moves a rhythm's
+// next ping to the break's end. Returns the extra fields to save on the task.
+async function applyLaterBreak(t, until) {
+  const now = Date.now();
+  const untilMs = until.getTime();
+  const isRhythm = !!t.reminder_interval && t.reminder_interval !== 'once';
+  let rows = [];
+  try {
+    rows = (await base44.entities.NotificationLedger.filter({ task_id: t.id }, '-send_at', 200)) || [];
+  } catch (e) {
+    rows = [];
+  }
+  const live = rows.filter((r) => {
+    const at = new Date(r.send_at || 0).getTime();
+    return r.notification_id && at > now && (isRhythm || at < untilMs);
+  });
+  const dropIds = new Set(live.map((r) => r.notification_id));
+  // Planned reminders whose push the ledger doesn't know (older bookings):
+  // their time is on the plan entry itself.
+  for (const e of (t.reminder_schedule || [])) {
+    const at = new Date(e?.send_at || 0).getTime();
+    if (e?.notification_id && !String(e.notification_id).startsWith('planned_') && at > now && at < untilMs) dropIds.add(e.notification_id);
+  }
+  if (dropIds.size) await cancelScheduledReminder(Array.from(dropIds)).catch(() => {});
+  const fields = {};
+  const ids = (t.onesignal_notification_ids || []).filter((id) => !dropIds.has(id));
+  if (ids.length !== (t.onesignal_notification_ids || []).length) fields.onesignal_notification_ids = ids;
+  const schedule = (t.reminder_schedule || []).filter((e) => !(e?.notification_id && dropIds.has(e.notification_id)));
+  if (schedule.length !== (t.reminder_schedule || []).length) fields.reminder_schedule = schedule;
+  if (isRhythm) {
+    // Every live ping of the run is cancelled above; the refill books a fresh
+    // run from the break's end (it starts at next_reminder when that is ahead).
+    fields.onesignal_notification_ids = [];
+    fields.last_scheduled_until = null;
+    fields.next_reminder = until.toISOString();
+  } else if (t.next_reminder) {
+    const nr = new Date(t.next_reminder).getTime();
+    if (nr > now && nr < untilMs) fields.next_reminder = until.toISOString();
+  }
+  return fields;
+}
+
+// The nudge planner reads the task again only when told the plan is out of
+// date (onTaskUpdate does this for edits; a break set here has to say so too).
+async function markNudgePlanStale() {
+  const nowIso = new Date().toISOString();
+  try {
+    await base44.auth.updateMe({ smart_nudge_schedule_dirty: true, smart_nudge_dirty_at: nowIso });
+  } catch (e) { /* the next hourly run still sees later_until on the task */ }
+}
+
 // What happened to alarms since we last asked — snoozes, dismissals, rings
-// nobody answered, "Later" taps — added to the task's counters. Data only: no reminder is
-// changed, cancelled or moved because of any of it.
+// nobody answered, "Later" taps — added to the task's counters. A Later also
+// starts the task's break (see laterBreakUntil); nothing else is rescheduled
+// because of any of it.
 async function drainAlarmActivity(tasks) {
   const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
   if (!AlarmBridge?.drainActivity) return;
@@ -388,13 +475,23 @@ async function drainAlarmActivity(tasks) {
     }
     if (row.dismissed) patch.dismissed_count = (t.dismissed_count || 0) + 1;
     if (row.ignored > 0) patch.ignored_count = (t.ignored_count || 0) + row.ignored;
-    // "Later" (builds from 1.3.13 on): stopped with no set time; the task stays in
-    // the smart-nudge pool, so nothing else changes here.
-    if (row.later > 0) patch.later_count = (t.later_count || 0) + row.later;
+    // "Later" (builds from 1.3.13 on): a break for the task, see laterBreakUntil.
+    let laterUntil = null;
+    if (row.later > 0) {
+      patch.later_count = (t.later_count || 0) + row.later;
+      laterUntil = laterBreakUntil(t);
+      patch.later_until = laterUntil.toISOString();
+      try {
+        Object.assign(patch, await applyLaterBreak(t, laterUntil));
+      } catch (err) {
+        console.error('Later break: pushes not cancelled:', err);
+      }
+    }
     if (Object.keys(patch).length === 0) continue;
     Object.assign(t, patch);
     try {
       await base44.entities.Task.update(t.id, patch);
+      if (laterUntil) markNudgePlanStale();
     } catch (err) {
       console.error('Alarm activity not recorded:', err);
     }
