@@ -268,7 +268,12 @@
     "later_count": {
       "type": "number",
       "default": 0,
-      "description": "How many times a full-screen alarm for this task was stopped with \"Later\" (put off without picking a snooze time; the task stays active, so smart nudges bring it back once its time has passed). Data only: nothing is rescheduled because of it."
+      "description": "How many times a full-screen alarm for this task was stopped with \"Later\" (put off without picking a snooze time; the task stays active, so smart nudges bring it back once its time has passed)."
+    },
+    "later_until": {
+      "type": "string",
+      "format": "date-time",
+      "description": "A break the person asked for by tapping Later on this task's alarm: nothing about the task (smart nudges, planned reminders, rhythm pings, phone alarms) until this time. The first Later in a day gives three hours; a second Later the same day runs until tomorrow morning. Set by the app when the phone reports the tap; read by the nudge planner, the reminder refill and the alarm sync."
     },
     "quiet_hours_exempt": {
       "type": "boolean",
