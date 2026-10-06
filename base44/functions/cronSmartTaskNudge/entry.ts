@@ -525,6 +525,16 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        // They tapped Later on this task's alarm after this nudge was planned:
+        // the break they asked for wins over the plan.
+        if (referencedIds.some((id: string) => { const b = utcMs(taskById.get(id)?.later_until); return Number.isFinite(b) && b > nowMs; })) {
+          entry.sent = true;
+          entry.sent_at = now.toISOString();
+          entry.skipped_reason = 'later';
+          newLog.push({ k: entryKey(entry), at: entry.sent_at, skip: 'later' });
+          continue;
+        }
+
         // Anything else that isn't an active task any more is not nudged either.
         if (referencedIds.some((id: string) => taskById.get(id)?.status !== 'active')) {
           entry.sent = true;
@@ -960,6 +970,11 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
   // before. The prompt said as much and the model still nudged a form that
   // wasn't due for two months — so this is enforced in code now.
   const nudgeable = tasks.filter((t) => {
+    // They tapped Later and the break runs past today: nothing to plan for it.
+    // A break that ends later today stays in, with the break stated on its
+    // line, so the planner can put a check-in after it (or nothing).
+    const breakMs = utcMs(t.later_until);
+    if (Number.isFinite(breakMs) && breakMs > nowMs && getLocalDateString(new Date(breakMs), timeZone) !== todayStr) return false;
     if (!t.due_date || !t.day_only_task) return true;
     if (t.deadline_style === 'by') return true; // deadlines get runway
     const days = daysUntil(t.due_date, now, timeZone);
@@ -1085,6 +1100,12 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     }
     // Always shown (see hasEnoughHistory): the planner has to know when a
     // task's reminders are being pushed away, whoever the person is.
+    // Later tapped on its alarm: a break they asked for. Hard rule for the
+    // planner, not a mood — nothing lands before it ends.
+    const breakMs = utcMs(t.later_until);
+    const laterInfo = Number.isFinite(breakMs) && breakMs > nowMs
+      ? `, ON A BREAK UNTIL ${clock(breakMs)} (they tapped Later on its alarm): NOTHING about it before then — after it ends, at most one check-in today, or none`
+      : '';
     let reactInfo = '';
     {
       const parts: string[] = [];
@@ -1096,7 +1117,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if (putOff >= 3) parts.push(`PUT OFF ${putOff} TIMES IN ALL — the reminders for this task are not working`);
       if (parts.length) reactInfo = `, HOW THEY'VE REACTED: ${parts.join(', ')}`;
     }
-    return `${i + 1}. "${t.title}"${descInfo}${saidInfo} (${dueInfo}${windowInfo}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${areaInfo}${billInfo}${repeatInfo}${oldRhythmInfo}${anchorInfo}${locInfo}${ageInfo}${pushInfo}${wishInfo}${tagInfo}${historyInfo}${reactInfo}${subInfo})`;
+    return `${i + 1}. "${t.title}"${descInfo}${saidInfo} (${dueInfo}${windowInfo}, priority: ${t.urgency || 'medium'}, energy: ${t.energy_required || 'medium'}${areaInfo}${billInfo}${repeatInfo}${oldRhythmInfo}${anchorInfo}${locInfo}${ageInfo}${pushInfo}${wishInfo}${tagInfo}${historyInfo}${laterInfo}${reactInfo}${subInfo})`;
   }).join('\n');
 
   const urgentCount = tasks.filter(t => t.urgency === 'urgent').length;
