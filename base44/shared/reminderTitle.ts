@@ -146,8 +146,12 @@ export function phoneAlarmsFor(task: any, owner: any, now: number = Date.now()):
   const timeZone = owner?.timezone || DEFAULT_TIME_ZONE;
   const quiet = resolveQuietHours(owner);
   const out: any[] = [];
+  // A break they asked for (Later on the alarm): no alarm inside it. Same
+  // rule as alarmSetFor in widgetBridge.js.
+  const breakMs = whenMs(task.later_until);
   for (const m of reminderMoments(task, timeZone)) {
     if (m.at <= now) continue;
+    if (Number.isFinite(breakMs) && m.at < breakMs) continue;
     if (quiet.enabled && task.quiet_hours_exempt !== true && isInQuietHours(new Date(m.at), quiet.startMin, quiet.endMin, timeZone)) continue;
     if (!ringsOutLoudOn(task, m.at, timeZone)) continue;
     const alarm: any = { id: `${task.id}:${m.at}`, at: m.at, title: task.title || 'Task', heading: m.heading, body: m.body };
