@@ -15,7 +15,7 @@ const quillModules = {
   ],
 };
 
-export default function NoteCard({ note, theme, onUpdate, onDelete }) {
+export default function NoteCard({ note, theme, onUpdate, onDelete, onDraft }) {
   const [title, setTitle] = useState(note.title || "");
   const [content, setContent] = useState(note.content || "");
 
@@ -32,7 +32,7 @@ export default function NoteCard({ note, theme, onUpdate, onDelete }) {
       <div className="flex items-center gap-2 mb-1">
         <Input
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => { setTitle(e.target.value); onDraft?.(note.id, "title", e.target.value); }}
           onBlur={() => onUpdate(note.id, "title", title)}
           placeholder="Note title (optional)"
           className={`border-none px-0 text-base font-semibold focus-visible:ring-0 bg-transparent ${
@@ -51,7 +51,7 @@ export default function NoteCard({ note, theme, onUpdate, onDelete }) {
       <ReactQuill
         theme="bubble"
         value={content}
-        onChange={setContent}
+        onChange={(v) => { setContent(v); onDraft?.(note.id, "content", v); }}
         onBlur={() => onUpdate(note.id, "content", content)}
         modules={quillModules}
         placeholder="Elaborate on your idea... (select text to format it)"
