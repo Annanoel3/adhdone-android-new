@@ -28,6 +28,7 @@ import AdDiagnosticsCard from '@/components/settings/AdDiagnosticsCard';
 import { Textarea } from '@/components/ui/textarea';
 import VersionTap from '@/components/settings/VersionTap';
 import showSaved from '@/components/utils/showSaved';
+import { toast } from '@/components/ui/use-toast';
 
 
 // The two things the welcome chat asks for — a name and a sentence about the
@@ -290,8 +291,11 @@ export default function Settings() {
       // Full-screen alarms follow the same window: rebuild the phone's alarm
       // set so nothing booked inside the new quiet hours can ring.
       refreshAlarms().catch(() => {});
+      return true;
     } catch (e) {
       console.error('Failed to save quiet hours:', e);
+      toast({ title: "Couldn't save quiet hours", description: 'Check your connection and try again.', variant: 'destructive' });
+      return false;
     } finally {
       setQuietHoursSaving(false);
     }
@@ -303,8 +307,8 @@ export default function Settings() {
   };
 
   const handleQuietHoursSave = async () => {
-    await persistQuietHours(quietHoursEnabled, quietHoursStart, quietHoursEnd);
-    showSaved();
+    // "Saved" only when it did save (the failure has its own message).
+    if (await persistQuietHours(quietHoursEnabled, quietHoursStart, quietHoursEnd)) showSaved();
   };
 
   const settingsItems = [
