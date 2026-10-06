@@ -526,12 +526,16 @@ export async function pushAlarms(tasks) {
   try {
     localStorage.setItem(ALARM_BOOKED_KEY, JSON.stringify(Object.fromEntries(alarms.map((a) => [a.id, a.at]))));
   } catch (e) { /* no storage */ }
-  const json = JSON.stringify(alarms);
+  // Every active task's id goes along (phone code from 1.3.14 on): a nudge
+  // alarm the phone made and snoozed for a task no longer on this list is
+  // dropped there. Older builds ignore the field.
+  const activeTaskIds = (tasks || []).filter((t) => t.status === 'active' && !t.silenced).map((t) => t.id);
+  const json = JSON.stringify({ alarms, activeTaskIds });
   if (json === lastAlarmsJson) return;
   lastAlarmsJson = json;
 
   try {
-    await AlarmBridge.sync({ alarms });
+    await AlarmBridge.sync({ alarms, activeTaskIds });
   } catch (err) {
     // Try again on the next change rather than believing the phone has this set.
     lastAlarmsJson = '';
