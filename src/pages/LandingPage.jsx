@@ -73,9 +73,6 @@ export default function LandingPage() {
               <span className="block text-lg font-semibold">Google Play</span>
             </span>
           </a>
-          <Button onClick={handleSignIn} size="lg" className={`${cta} px-10 py-4 text-lg h-auto`}>
-            Get started — it's free
-          </Button>
         </div>
         <div className="flex items-center gap-2 mt-4 text-sm text-[#7A6F6F]">
           <CheckCircle2 className="w-4 h-4 text-[#2E8B57]" /> No credit card required
