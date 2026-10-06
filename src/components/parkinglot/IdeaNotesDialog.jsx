@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -49,12 +49,31 @@ export default function IdeaNotesDialog({ idea, isOpen, onClose, theme }) {
     },
   });
 
+  // What each note says ON SCREEN right now (a card saves only when its field
+  // loses focus). The close-time cleanup below used to judge blankness by the
+  // last copy loaded from the server, so a note added, typed into and closed
+  // straight away still counted as blank and was deleted with the text in it.
+  const draftsRef = useRef({});
+  useEffect(() => { draftsRef.current = {}; }, [isOpen, idea?.id]);
+  const onDraft = (id, field, value) => {
+    draftsRef.current[id] = { ...(draftsRef.current[id] || {}), [field]: value };
+  };
+
   if (!idea) return null;
 
-  // Notes left blank (an extra tap on Add Note) are cleared away on close.
+  // Notes left blank (an extra tap on Add Note) are cleared away on close;
+  // anything typed but not yet saved (no blur happened) is saved instead.
   const isBlank = (n) => !(n.title || "").trim() && !(n.content || "").replace(/<[^>]*>/g, "").trim();
   const handleClose = () => {
-    notes.filter(isBlank).forEach((n) => deleteNoteMutation.mutate(n.id));
+    for (const n of notes) {
+      const d = draftsRef.current[n.id] || {};
+      const shown = { title: d.title ?? n.title, content: d.content ?? n.content };
+      if (isBlank(shown)) { deleteNoteMutation.mutate(n.id); continue; }
+      const patch = {};
+      if (d.title !== undefined && d.title !== (n.title || "")) patch.title = d.title;
+      if (d.content !== undefined && d.content !== (n.content || "")) patch.content = d.content;
+      if (Object.keys(patch).length) updateNoteMutation.mutate({ id: n.id, data: patch });
+    }
     onClose();
   };
   const adding = createNoteMutation.isPending;
@@ -115,6 +134,7 @@ export default function IdeaNotesDialog({ idea, isOpen, onClose, theme }) {
                 onUpdate={(id, field, value) =>
                   updateNoteMutation.mutate({ id, data: { [field]: value } })
                 }
+                onDraft={onDraft}
                 onDelete={(id) => deleteNoteMutation.mutate(id)}
               />
             ))
