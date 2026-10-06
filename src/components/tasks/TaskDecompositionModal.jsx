@@ -51,7 +51,17 @@ STEP 1 — DECIDE WHAT KIND OF TASK THIS IS. This determines everything:
     away, wait, or change location/context, and could forget to return.
     Everything between two handoff points is ONE step, no matter how many motions it contains.
 
-HOW TO TEST WHETHER SOMETHING IS ITS OWN STEP:
+(C) PROCEDURE — a hands-on job with a real sequence, where skipping a step or doing it out of order
+    wrecks the result ("change the oil", "change a tire", "put up the shelf", "set up the fish tank",
+    a recipe). The obstacle is keeping the sequence straight mid-job, hands dirty, phone on the
+    floor. So the steps are the REAL procedure, the way a competent person does it, in the true
+    order: every step that ruins the job if forgotten or misplaced (the drain plug goes back in
+    BEFORE the new oil goes in; the car comes down before it's driven) and the checks at the end
+    (run it, wait, check the level, look for leaks). Each step is one thing to do, worded so it can
+    be glanced at and done. No filler: no "safely", no "carefully", no "prepare". If parts or
+    supplies must be bought or fetched first, that is ONE step that names them.
+
+HOW TO TEST WHETHER SOMETHING IS ITS OWN STEP (type B):
 Ask: "Could I finish this and then genuinely walk away, forget, and need a reminder to continue?"
 - Yes → it's a step.
 - No (it happens in the same breath as the action next to it) → it is NOT a step; fold it in.
@@ -78,12 +88,17 @@ with fake steps is worse than not breaking it down at all.
 
 STEP 2 — write the steps, following these rules:
 1. Are SPECIFIC and CONCRETE (no vague advice like "research" or "plan")
-2. Never add prep, planning, gathering, or "get ready to..." steps the user didn't need
+2. Never add prep, planning, gathering, or "get ready to..." steps the user didn't need (a type C job
+   that needs parts or supplies gets ONE step naming them, nothing vaguer than that)
 3. Never restate the same action in different words as two steps
 4. For type A, start with the FIRST physical action (not planning)
 5. Use action verbs: "Open", "Write", "Call", "Send", "Create"
 6. Address ADHD challenges (decision paralysis, perfectionism, getting started)
 7. Order the steps SEQUENTIALLY in the exact order they must actually be performed — the FIRST item in the list is the first action you'd do, the LAST item is the final action. For example, for "do laundry": "wash and dry the laundry" comes BEFORE "put all the laundry away" — never list the put-away step first.
+8. ORDER CHECK, before you answer: walk the list as if doing the job. Anything opened, removed,
+   raised or taken apart has its matching step to close, put back, lower or reassemble, in the
+   right place — and nothing gets filled, started or driven before that. A list that adds the new
+   oil before the drain plug is back in is wrong, however good the rest of it looks.
 
 Also suggest:
 - **Best reminder interval** for each step (based on step complexity and ADHD patterns)
@@ -115,6 +130,21 @@ GOOD breakdown for "Write blog post":
 4. Read through and fix obvious typos/awkward parts
    - Interval: daily, Energy: medium
    - Why: Fresh eyes help, not urgent
+
+GOOD breakdown for "Change the oil" (type C — the real sequence, nothing that wrecks the job left out):
+1. Get the right oil, a new filter, a drain pan and the wrench together (buy what's missing)
+2. Run the engine two or three minutes to warm the oil, then shut it off
+3. Jack the car up and set it on stands
+4. Pan under the plug, take the drain plug out, let it drain
+5. Take the old filter off (pan under it)
+6. Wipe the mount, smear oil on the new filter's gasket, screw it on hand-tight
+7. Put the drain plug back in and tighten it
+8. Lower the car
+9. Pour in the new oil
+10. Start it for a minute, shut it off, wait five, check the dipstick and look under for drips
+11. Pour the old oil into the empty jug and drop it at the parts store
+(BAD for the same task: "Gather necessary tools and materials / Lift the vehicle safely / Drain the old
+oil / Replace the oil filter / Add new oil / Check for leaks" — vague, and the plug never goes back in.)
 
 BAD breakdown for "Plan vacation":
 1. Decide on destination
