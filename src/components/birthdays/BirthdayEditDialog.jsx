@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import showSaved from "@/components/utils/showSaved";
+import { toast } from "@/components/ui/use-toast";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -109,8 +110,12 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
 
       onSaved?.();
       onClose?.();
+      return true;
     } catch (e) {
       console.error("Failed to save birthday", e);
+      // The box stays open with the edits in it; say so instead of "Saved".
+      toast({ title: "Couldn't save that", description: 'Check your connection and close this again.', variant: 'destructive' });
+      return false;
     } finally {
       setSaving(false);
     }
@@ -144,7 +149,7 @@ export default function BirthdayEditDialog({ birthday, isOpen, onClose, onSaved 
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={(o) => { if (o) return; if (name.trim() && date && !saving) { handleSave().then(showSaved); } else onClose(); }}>
+    <Dialog open={isOpen} onOpenChange={(o) => { if (o) return; if (name.trim() && date && !saving) { handleSave().then((ok) => { if (ok) showSaved(); }); } else onClose(); }}>
       <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
