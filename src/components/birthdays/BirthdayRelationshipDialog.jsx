@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Heart } from "lucide-react";
 
 const QUICK_PICKS = [
-  "Friend", "Best friend", "Mom", "Dad", "Sister", "Brother", "Grandma", "Grandpa",
+  "Friend", "Mom", "Dad", "Sister", "Brother", "Grandma", "Grandpa",
   "Husband", "Wife", "Partner", "Son", "Daughter",
   "Sister-in-law", "Brother-in-law", "Mother-in-law", "Father-in-law",
   "Aunt", "Uncle", "Cousin", "Coworker", "Boss", "Neighbor",
