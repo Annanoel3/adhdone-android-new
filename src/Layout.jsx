@@ -324,7 +324,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   // moves overnight. Found once, it stops wandering: the seasonal theme AND
   // kawaii both join the theme rotation (light → dark → colorful → spicy →
   // seasonal → kawaii → light).
-  const SECRET_PAGES = ['Home', 'Tasks', 'Calendar', 'Progress', 'Diary', 'ParkingLot', 'Settings', 'Notes', 'FocusTimer'];
+  const SECRET_PAGES = ['Home', 'Tasks', 'Calendar', 'Progress', 'ParkingLot', 'Notes', 'FocusTimer'];
   const secretPageToday = (() => {
     const d = new Date();
     const dayIndex = Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 86400000);
