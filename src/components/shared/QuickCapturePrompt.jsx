@@ -1394,11 +1394,10 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
   );
 }
 
-// "There's a new version." ONE update popup, ever: it always describes the
-// newest build, so someone several versions behind gets this single card —
-// never one card per version they skipped. When a new build ships, bump
-// NEWEST_BUILD and change the words below (the features of the newest build);
-// don't add a second update popup.
+// "There's a new version." ONE update popup, ever, and it only says that —
+// no list of what's new (Anna, Oct 7 2026) — so someone several versions
+// behind gets this single card, never one per version they skipped. When a
+// new build ships, bump NEWEST_BUILD; don't add a second update popup.
 //
 // Shows on the phone app only, at most once a day, until the newest build is
 // installed, and only while NEWEST_BUILD_ON_PLAY is true. The Update button
@@ -1436,7 +1435,7 @@ const NOTES_BUILD_ON_PLAY = true;
 // stays quiet once its task is finished, deleted or parked. Accepted on Google
 // Play Oct 7, 2026. From here the card goes by the phone's own build number
 // (Capacitor's App.getInfo, the same number WidgetTaskSync files as app_build),
-// so the next build only needs NEWEST_BUILD bumped and the words below changed.
+// so the next build only needs NEWEST_BUILD bumped.
 // The plugin checks stay for builds that report no number.
 const LATER_BUILD_ON_PLAY = true;
 const NEWEST_BUILD = 37;
@@ -1480,8 +1479,6 @@ export function AppUpdatePrompt({ user, theme }) {
   // The 1.3.12 wording and the four-way vibrate question (see QUIET_CHOICE_ON_PLAY).
   const [choiceLive, setChoiceLive] = useState(false);
   const [quietWhen, setQuietWhen] = useState(null);
-  // This phone already has 1.3.9's "quiet for 1, 2 or 3 hours".
-  const [hasQuietHours, setHasQuietHours] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [showSteps, setShowSteps] = useState(false);
@@ -1516,7 +1513,6 @@ export function AppUpdatePrompt({ user, theme }) {
       if (!mounted.current) return;
       const live = QUIET_CHOICE_ON_PLAY;
       setChoiceLive(live);
-      setHasQuietHours(hasQuietHoursBuild());
       // Only a build that can open the Play Store from here (1.3.10+) gets an
       // Update button. An older one is shown the steps straight away, with
       // nothing to tap that can't do anything.
@@ -1605,60 +1601,9 @@ export function AppUpdatePrompt({ user, theme }) {
             There's an update!
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
-            {LATER_BUILD_ON_PLAY ? (
-              <>
-                In the new version of ADHDone, Later means later. Tap Later on an alarm or reminder and that
-                task leaves you alone for 3 hours; tap it again the same day and it waits until tomorrow
-                morning. Alarms are louder too, and a snoozed alarm stays quiet once you've finished, deleted
-                or parked the task.
-              </>
-            ) : NOTES_BUILD_ON_PLAY ? (
-              <>
-                The new version of ADHDone records notes. Tap Record on the Notes page during an appointment,
-                a lecture or a meeting, and you get the gist, your to-dos and the details worth keeping — in
-                plain words, with the parts that matter highlighted.
-              </>
-            ) : choiceLive && hasQuietHours ? (
-              <>The new version of ADHDone lets you pick when alarms only vibrate: on silent or vibrate mode, on Do Not Disturb, or both.</>
-            ) : (
-              <>
-                The new version of ADHDone lets you quiet your reminders and alarms for 1, 2 or 3 hours.
-                They still show up, just with no sound.
-              </>
-            )}
+            A new version of ADHDone is ready.
           </DialogDescription>
         </DialogHeader>
-
-        {LATER_BUILD_ON_PLAY && NOTES_BUILD_ON_PLAY && !hasRecorderBuild() && (
-          <p className={`text-sm ${sub}`}>
-            It also records notes: tap Record on the Notes page during an appointment, a lecture or a
-            meeting, and you get the gist, your to-dos and the details worth keeping.
-          </p>
-        )}
-
-        {NOTES_BUILD_ON_PLAY && choiceLive && hasQuietHours && !hasQuietChoiceBuild() && (
-          <p className={`text-sm ${sub}`}>
-            It also lets you pick when alarms only vibrate: on silent or vibrate mode, on Do Not Disturb, or both.
-          </p>
-        )}
-
-        {!hasQuietHours && (
-          <div className={`text-sm ${main}`}>
-            <p className="font-medium">
-              {NOTES_BUILD_ON_PLAY
-                ? 'It also lets you quiet reminders and alarms for 1, 2 or 3 hours — three ways:'
-                : 'Three ways to quiet them:'}
-            </p>
-            <ul className={`mt-2 space-y-1.5 ${sub}`}>
-              <li>🔕 Expand the pinned notification and pick 1, 2 or 3 hours.</li>
-              <li>📱 Tap "Silence 1 hr" on the home-screen widget.</li>
-              <li>☰ Tap "Quiet notifications" in the side menu.</li>
-            </ul>
-            {choiceLive && (
-              <p className={`mt-2 ${sub}`}>You can also pick when alarms only vibrate: on silent or vibrate mode, on Do Not Disturb, or both.</p>
-            )}
-          </div>
-        )}
 
         {askVibrate && choiceLive && (
           <div className={`rounded-xl border p-3 ${dark ? 'border-gray-700' : 'border-gray-200'}`}>
