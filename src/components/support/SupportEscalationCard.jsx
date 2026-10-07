@@ -92,6 +92,157 @@ export default function SupportEscalationCard({ message, transcript, theme, onDi
 // Tapping outside or pressing Escape does nothing, so a stray tap can never count
 // as an answer. Once answered it never shows again, and the ways-to-add popup is
 // marked seen so first-run education never lands on top of this.
+// ── "What can we do better?" ─────────────────────────────────────────────────
+//
+// A one-time ask for feedback, sent to chosen accounts by an admin through
+// broadcastAnnouncement (ask: 'feedback'). That stamps feedback_ask.asked_at on
+// each profile and sends a push that simply opens the app; this popup is what
+// they see — on that tap, or the next time they open the app on their own. It
+// is answered once (sent, "Not now", or closed with the X) and never shows
+// again. What they type goes to the developer through sendSupportRequest, the
+// same road as the popup below. Tapping outside or Escape does nothing, so a
+// stray tap can't spend the one ask.
+export function FeedbackAskPrompt({ user }) {
+  const ask = user?.feedback_ask;
+  const waiting = !!(ask?.asked_at && !ask?.answered_at);
+  const key = waiting ? String(ask.asked_at) : '';
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const [status, setStatus] = useState('idle');
+  const shownFor = useRef('');
+  const askRef = useRef(ask);
+  askRef.current = ask;
+
+  useEffect(() => {
+    if (!key || shownFor.current === key) return;
+    let cancelled = false;
+    waitForCalm().then(() => {
+      if (cancelled || shownFor.current === key) return;
+      shownFor.current = key;
+      setText('');
+      setStatus('idle');
+      setOpen(true);
+    });
+    return () => { cancelled = true; };
+  }, [key]);
+
+  useEffect(() => {
+    if (!open) return;
+    enterOnboardingSurface();
+    return exitOnboardingSurface;
+  }, [open]);
+
+  // Overwritten, never set to null (the schema types it as an object).
+  const record = async (fields) => {
+    try {
+      await base44.auth.updateMe({
+        feedback_ask: {
+          asked_at: askRef.current?.asked_at,
+          answered_at: new Date().toISOString(),
+          ...fields,
+        },
+      });
+    } catch (e) {
+      console.error('Could not record the feedback answer:', e);
+    }
+  };
+
+  const handleSend = async () => {
+    const message = text.trim();
+    if (!message) return;
+    setStatus('sending');
+    // Their words are saved first, so they are never lost if the email fails.
+    await record({ answer: 'yes', sent_text: message, email: 'sending' });
+    try {
+      await base44.functions.invoke('sendSupportRequest', {
+        message,
+        transcript: 'Sent from the "What can we do better?" popup (the one-time feedback ask).',
+      });
+      await record({ answer: 'yes', sent_text: message, email: 'sent' });
+    } catch (e) {
+      console.error('Feedback email failed:', e);
+      await record({
+        answer: 'yes',
+        sent_text: message,
+        email: 'failed',
+        email_error: String(e?.message || e).slice(0, 300),
+      });
+    }
+    setStatus('done');
+  };
+
+  const handleNo = (answer) => {
+    record({ answer });
+    setOpen(false);
+  };
+
+  const handleOpenChange = (o) => {
+    if (o) return;
+    if (status === 'sending') return;
+    if (status === 'done') { setOpen(false); return; }
+    handleNo('dismissed');
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto bg-card text-card-foreground border-border"
+      >
+        {status === 'done' ? (
+          <div className="space-y-4 pt-2">
+            <div className="flex items-center gap-2">
+              <Check className="w-5 h-5 text-green-600" />
+              <h2 className="text-xl font-bold text-foreground">Got it, thank you</h2>
+            </div>
+            <p className="text-[15px] leading-relaxed text-muted-foreground">
+              This goes straight to the developer. If there's a reply, it'll come to your email.
+            </p>
+            <Button onClick={() => setOpen(false)} className="w-full">
+              Close
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4 pt-2">
+            <h2 className="text-xl font-bold text-foreground">What can we do better?</h2>
+            <p className="text-[15px] leading-relaxed text-muted-foreground">
+              Tell us what's missing, confusing, or annoying. Most feedback becomes a real change
+              in the app within days.
+            </p>
+            <Textarea
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={4}
+              placeholder="Anything, big or small"
+              className="text-[15px]"
+            />
+            <div className="flex gap-2">
+              <Button
+                onClick={handleSend}
+                disabled={status === 'sending' || !text.trim()}
+                className="flex-1"
+              >
+                {status === 'sending'
+                  ? <><Loader2 className="w-4 h-4 mr-1 animate-spin" /> Sending…</>
+                  : 'Send'}
+              </Button>
+              <Button
+                onClick={() => handleNo('no')}
+                variant="outline"
+                disabled={status === 'sending'}
+                className="flex-1"
+              >
+                Not now
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function FeedbackPrompt({ user }) {
   // Queued during this visit, or waiting on the profile from before.
   const [queued, setQueued] = useState(null);
