@@ -161,7 +161,10 @@ export default function FocusTimer() {
 
   const getCardBaseClasses = (currentSpecialMode, currentTheme, currentMode, isMainTimerCard = false, isMusicCard = false, isTitleCard = false) => {
     let classes = "border-none shadow-lg";
-    if (!isMainTimerCard) classes += " mb-6";
+    // Phone spacing is tight on purpose: every card on this page fits on one
+    // screen with no scrolling (Anna, Oct 7 2026). md: keeps the roomier
+    // spacing on a desktop.
+    if (!isMainTimerCard) classes += " mb-3 md:mb-6";
     else classes += " overflow-hidden";
 
     if (currentSpecialMode !== 'normal') {
@@ -191,7 +194,7 @@ export default function FocusTimer() {
   };
 
   return (
-    <div className={`min-h-screen p-4 md:p-8 ${
+    <div className={`min-h-screen p-3 md:p-8 ${
       theme === 'spicybrains'
         ? 'bg-gradient-to-br from-blue-300 via-blue-400 to-blue-500'
         : theme === 'dark'
@@ -200,10 +203,10 @@ export default function FocusTimer() {
     }`}>
       {/* Title Card */}
       <Card className={getCardBaseClasses(specialMode, theme, mode, false, false, true)}>
-        <CardContent className="p-6">
+        <CardContent className="p-4 md:p-6">
           <div className="text-center">
-            <div className="flex items-center justify-center gap-3 mb-2">
-              <h1 className={`text-3xl font-bold ${
+            <div className="flex items-center justify-center gap-3 mb-1">
+              <h1 className={`text-2xl md:text-3xl font-bold ${
                 specialMode !== 'normal' ? `${specialMode}-title` :
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               }`}>Pomodoro Timer</h1>
@@ -234,7 +237,7 @@ export default function FocusTimer() {
             <p className={specialMode !== 'normal' ? `${specialMode}-text` : theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
               {viewMode === 'stopwatch' ? 'Stopwatch - Track your time!' : mode === 'work' ? 'Focus session - Time to work!' : 'Break time - Relax for a moment'}
             </p>
-            <div className="flex justify-center gap-2 mt-4">
+            <div className="flex justify-center gap-2 mt-3">
               <Button
                 size="sm"
                 variant={viewMode === 'pomodoro' ? 'default' : 'outline'}
@@ -260,10 +263,10 @@ export default function FocusTimer() {
       <>
       {/* Timer Duration Settings */}
       <Card className={getCardBaseClasses(specialMode, theme, mode)}>
-        <CardContent className="p-6">
+        <CardContent className="p-4 md:p-6">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className={`text-sm font-medium mb-2 block ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Work Duration</label>
+              <label className={`text-sm font-medium mb-1 block ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Work Duration</label>
               <Select value={workDuration.toString()} onValueChange={handleWorkDurationChange} disabled={isActive}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -277,7 +280,7 @@ export default function FocusTimer() {
               </Select>
             </div>
             <div>
-              <label className={`text-sm font-medium mb-2 block ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Break Duration</label>
+              <label className={`text-sm font-medium mb-1 block ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Break Duration</label>
               <Select value={breakDuration.toString()} onValueChange={handleBreakDurationChange} disabled={isActive}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -294,7 +297,7 @@ export default function FocusTimer() {
 
       {/* Completion Sound Selector */}
       <Card className={getCardBaseClasses(specialMode, theme, mode)}>
-        <CardContent className="p-6">
+        <CardContent className="p-3 md:p-6">
           <div className="flex items-center gap-4">
             <Bell className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`} />
             <Select value={completionSound} onValueChange={setCompletionSound}>
@@ -314,8 +317,9 @@ export default function FocusTimer() {
 
       {/* Music Selector */}
       <Card className={getCardBaseClasses(specialMode, theme, mode, false, true)}>
-        <CardContent className="p-6">
-          <div className="flex items-center gap-4 mb-4">
+        <CardContent className="p-3 md:p-6">
+          {/* The gap under the picker is only there when the player is showing. */}
+          <div className={`flex items-center gap-4 ${showMusicPlayer ? 'mb-4' : ''}`}>
             <Music className={`w-5 h-5 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`} />
             <Select value={selectedPlaylist} onValueChange={(value) => {
               setSelectedPlaylist(value);
@@ -344,7 +348,7 @@ export default function FocusTimer() {
 
       {/* Timer Card */}
       <Card className={getCardBaseClasses(specialMode, theme, mode, true)}>
-        <CardContent className="p-8 md:p-12">
+        <CardContent className="p-5 md:p-12">
           {/* A plain bar, not a giant ring: the time, which block this is, and
               how far through it you are. */}
           <div className="flex flex-col items-center">
@@ -366,7 +370,7 @@ export default function FocusTimer() {
             </motion.div>
 
             <div
-              className="w-full h-3 rounded-full overflow-hidden mt-6"
+              className="w-full h-3 rounded-full overflow-hidden mt-4 md:mt-6"
               style={{ backgroundColor: theme === 'minimalist' ? '#e5e7eb' : theme === 'dark' ? '#374151' : '#ffffff80' }}
             >
               <motion.div
@@ -385,7 +389,7 @@ export default function FocusTimer() {
             )}
           </div>
 
-          <div className="flex justify-center gap-4 mt-8">
+          <div className="flex justify-center gap-4 mt-5 md:mt-8">
             <Button size="lg" onClick={toggleTimer} className={`w-36 ${
               theme === 'minimalist' ? (mode === 'work' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700')
               : theme === 'dark' ? (mode === 'work' ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700')
@@ -404,7 +408,7 @@ export default function FocusTimer() {
       </>
       ) : (
       <Card className={getCardBaseClasses(specialMode, theme, mode, true)}>
-        <CardContent className="p-8 md:p-12">
+        <CardContent className="p-5 md:p-12">
           <div className="relative">
             <div className="absolute inset-0 flex items-center justify-center">
               <motion.div
@@ -419,7 +423,7 @@ export default function FocusTimer() {
               />
             </div>
 
-            <div className="relative z-10 flex flex-col items-center justify-center py-12">
+            <div className="relative z-10 flex flex-col items-center justify-center py-10 md:py-12">
               <div className={`text-6xl md:text-7xl font-bold mb-4 tabular-nums ${
                 theme === 'dark' || theme === 'spicybrains' ? 'text-white' : 'text-gray-900'
               }`}>
@@ -436,7 +440,7 @@ export default function FocusTimer() {
             </div>
           </div>
 
-          <div className="flex justify-center gap-4 mt-8">
+          <div className="flex justify-center gap-4 mt-5 md:mt-8">
             <Button size="lg" onClick={toggleStopwatch} className={`w-36 ${
               theme === 'minimalist' ? 'bg-green-600 hover:bg-green-700'
               : theme === 'dark' ? 'bg-green-600 hover:bg-green-700'
