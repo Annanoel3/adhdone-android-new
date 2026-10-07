@@ -288,7 +288,11 @@ user_asked_to_repeat_every — answer ONLY this narrow question: did the user
   noon") is NOT this field — it is the thing itself recurring on the calendar:
   use recurrence_pattern (and recurrence_days) for that and leave this null.
   Whenever this field is NOT null, reminder_wish must hold the words that asked
-  for it — a rhythm with no words behind it is discarded.
+  for it, and repeat_words must quote the exact words that NAME the pace
+  ("every hour", "every 20 minutes", "hourly", "twice a day"). "Keep
+  reminding me until I do it" names no pace, so repeat_words is null and this
+  field is null — the app discards any rhythm given without pace words
+  (Anna, Oct 7 2026: "only do the every single hour if asked for").
   Do NOT use this field to say WHEN to remind them or how far ahead. That is
   not what it means, and the app works that part out on its own from the date,
   the time and how the task looks; it has an LLM that reads the whole week and
@@ -390,6 +394,7 @@ Return JSON with exactly these keys:
   "end_date": "YYYY-MM-DD" | null,
   "due_date": "YYYY-MM-DD" | null,
   "user_asked_to_repeat_every": "10min" | "20min" | "30min" | "1hour" | "2hours" | "4hours" | "daily" | "every_other_day" | null,
+  "repeat_words": string | null,
   "recurrence_pattern": "none" | "daily" | "every_other_day" | "weekly" | "every_other_week" | "monthly" | "yearly",
   "recurrence_days": integer[] | null,
   "deadline_style": "on" | "by",
