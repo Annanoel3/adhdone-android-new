@@ -27,7 +27,13 @@ Deno.serve(async (req) => {
     // deliveryTimeOfDay (e.g. "9:00AM") hands OneSignal a local time of day and it
     // delivers at that hour in each person's own timezone, so a fix announced at
     // midnight Central does not wake anyone up. Left out = send right now.
-    const { title, body, dryRun = true, confirm = false, deliveryTimeOfDay = null } = await req.json();
+    // emails: send to just these accounts instead of everyone (every one must
+    // exist, or nothing goes out). ask: 'feedback' stamps feedback_ask.asked_at
+    // on each recipient's profile so the app shows them the one-time "What can
+    // we do better?" popup (FeedbackAskPrompt) — on the tap, or the next time
+    // they open the app on their own. The stamp goes on BEFORE the push, so a
+    // push that never lands still gets them the popup.
+    const { title, body, dryRun = true, confirm = false, deliveryTimeOfDay = null, emails: onlyEmails = null, ask = null } = await req.json();
     if (!title || !body) {
       return Response.json({ success: false, error: 'title and body are required' }, { status: 400 });
     }
@@ -50,18 +56,37 @@ Deno.serve(async (req) => {
     }
 
     const users = await base44.asServiceRole.entities.User.list('-created_date', 1000);
-    const emails = users.map((u: any) => u.email).filter(Boolean);
+    let recipients = users.filter((u: any) => u.email);
+    if (Array.isArray(onlyEmails)) {
+      const want = new Set(onlyEmails.map((e: any) => String(e || '').trim().toLowerCase()).filter(Boolean));
+      recipients = recipients.filter((u: any) => want.has(String(u.email).toLowerCase()));
+      const found = new Set(recipients.map((u: any) => String(u.email).toLowerCase()));
+      const missing = [...want].filter((e) => !found.has(e));
+      if (missing.length > 0 || want.size === 0) {
+        return Response.json({ success: false, error: want.size === 0 ? 'emails is empty' : `No account for: ${missing.join(', ')}` }, { status: 400 });
+      }
+    }
+    const emails = recipients.map((u: any) => u.email);
 
     if (dryRun || !confirm) {
       return Response.json({
         success: true,
         dryRun: true,
         recipientCount: emails.length,
+        recipients: emails,
+        ask,
         title,
         body,
         deliveryTimeOfDay,
         note: 'Nothing was sent. Re-run with dryRun:false and confirm:true to actually broadcast.',
       });
+    }
+
+    if (ask === 'feedback') {
+      const askedAt = new Date().toISOString();
+      for (const u of recipients) {
+        await base44.asServiceRole.entities.User.update(u.id, { feedback_ask: { asked_at: askedAt } });
+      }
     }
 
     const res = await fetch('https://onesignal.com/api/v1/notifications', {
@@ -76,7 +101,7 @@ Deno.serve(async (req) => {
         include_external_user_ids: emails,
         headings: { en: title },
         contents: { en: body },
-        data: { type: 'announcement' },
+        data: { type: ask === 'feedback' ? 'feedback_ask' : 'announcement' },
         ...(deliveryTimeOfDay
           ? { delayed_option: 'timezone', delivery_time_of_day: deliveryTimeOfDay }
           : {}),
