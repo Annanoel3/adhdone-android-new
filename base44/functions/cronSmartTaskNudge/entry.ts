@@ -423,7 +423,6 @@ Deno.serve(async (req) => {
           sentSinceSeen,
           seenCountIsFloor: Number.isFinite(seenMs) && seenMs < nowMs - 3 * DAY_MS,
           laterLook: todaysEntries.some((e: any) => e.sent && !e.skipped_reason),
-          alarmsOn: user.alarm_mode === 'alarm',
         });
 
         // null = the planner failed: change nothing, send what's already
@@ -566,30 +565,45 @@ Deno.serve(async (req) => {
 
         // Which nudges ring OUT LOUD on a phone set to full-screen reminders
         // (the push asks to ring on arrival, like the commute "leave now"):
-        // only the ones the planner marked ring: true — rare, for the nudge
-        // where the next hour decides something (its rule is in the prompt).
-        // Until Oct 7 2026 this was decided here from the task's shape (due
-        // today, no date, high priority, a deadline's run-up…), which rang for
-        // most of a day's nudges: six alarms on Oct 6, and on Oct 7 a
-        // "want to cancel…?" light mention about two play-it-by-ear tasks
-        // ringing the house at 11:39 AM (Anna: too many alarms). Hard guards
-        // stay here whatever the planner said: a combined mention of several
-        // tasks never rings (Done on the alarm could only finish one of them);
-        // nothing rings late at night or early morning; and a task already put
-        // off 3 times (snoozed, dismissed, Later) has shown ringing isn't
-        // working. An entry planned before the planner chose (no ring field)
-        // stays a regular notification.
+        // anything overdue (a missed clock time, a deadline gone by); a task
+        // due today or with a clock deadline today; every day of a working
+        // window (start → due); every nudge about a task with NO date at all
+        // (there is no "day it's about", so each nudge is a do-it-now — the
+        // priority decides how often it is nudged, not how loud); and any
+        // high-priority or urgent dated task that isn't pinned to a later day
+        // — a deadline's run-up. A heads-up about a task tied to a later day
+        // stays a regular notification. Same idea as the app's own alarm list
+        // (widgetBridge.ringsOutLoud).
         const nudgedTask = entry.task_id ? taskById.get(entry.task_id) : null;
         const alarmStyle = nudgedTask
           ? (nudgedTask.alert_style === 'alarm' || (nudgedTask.alert_style !== 'notification' && user.alarm_mode === 'alarm'))
           : false;
         let ringsOutLoud = false;
-        if (nudgedTask && alarmStyle && entry.ring === true) {
-          const combined = entryTaskIds(entry).length > 1;
+        if (nudgedTask && alarmStyle) {
+          const due = nudgedTask.due_date ? new Date(utcMs(nudgedTask.due_date)) : null;
+          const pin = pinnedMoment(nudgedTask);
+          const clockTask = isClockDeadline(nudgedTask) || isAtTime(nudgedTask);
+          const anchorMs = clockTask && Number.isFinite(pin) ? pin : (due ? due.getTime() : NaN);
+          const dueToday = Number.isFinite(anchorMs) && isSameLocalDay(new Date(anchorMs), now, timeZone);
+          const overdue = Number.isFinite(anchorMs) && anchorMs <= nowMs;
+          const start = nudgedTask.start_date ? new Date(utcMs(nudgedTask.start_date)) : null;
+          const inWindow = !!(start && due && start.getTime() <= nowMs && nowMs <= due.getTime());
+          const pressing = nudgedTask.urgency === 'high' || nudgedTask.urgency === 'urgent';
+          // "By Friday" is a deadline; "on Friday" / "at 3" is a moment.
+          const isDeadline = nudgedTask.deadline_style === 'by' || (!!due && !nudgedTask.event_time && nudgedTask.reminder_interval !== 'once');
+          // Tied to one later day ("on Friday"): nothing to do until then, so
+          // its earlier heads-ups stay pushes whatever the priority.
+          const pinnedLater = Number.isFinite(anchorMs) && !isDeadline && !dueToday && anchorMs > nowMs;
+          const noDate = !Number.isFinite(anchorMs);
+          // A chore with no date (laundry, clean the car) never rings as a full
+          // alarm late at night, or once it's been put off 3 times: ringing
+          // wasn't working, and an alarm about laundry at 2 AM is how people end
+          // up turning ADHDone's notifications off. It still comes, as a regular
+          // notification.
           const putOff = (nudgedTask.snooze_count || 0) + (nudgedTask.dismissed_count || 0) + (nudgedTask.later_count || 0);
           const localHour = Math.floor(localMinutesOfDay(now, timeZone) / 60);
-          const offHours = localHour >= 22 || localHour < 7;
-          ringsOutLoud = !combined && !offHours && putOff < 3;
+          const quietChore = noDate && (localHour >= 22 || localHour < 7 || putOff >= 3);
+          ringsOutLoud = !quietChore && (overdue || dueToday || inWindow || noDate || (pressing && !pinnedLater));
         }
         const sent = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id, ringsOutLoud);
         if (sent) {
@@ -907,8 +921,6 @@ interface PlanContext {
   // (a second look, an "are they landing?" look, a re-plan after an edit):
   // the planner is told so, and judges any addition against the whole day.
   laterLook: boolean;
-  // Full-screen alarms on: the planner says which nudges ring (entry.ring).
-  alarmsOn: boolean;
 }
 
 // What the last plan chose to leave alone, and why — read by the caller
@@ -931,7 +943,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
   const {
     localMin, timeZone, quietStartMin, quietEndMin, subtasksByParent, events,
     homeOrigin, aboutMe, avoidTolls, nudgeHistory, queued, recentSent, work, doneToday, showReactions,
-    dayPushes, lastSeenMs, sentSinceSeen, seenCountIsFloor, laterLook, alarmsOn,
+    dayPushes, lastSeenMs, sentSinceSeen, seenCountIsFloor, laterLook,
   } = ctx;
   const hour = Math.floor(localMin / 60);
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
@@ -1232,8 +1244,7 @@ YOUR APPROACH:
 - "DEADLINE in N days" vs "happens on [day]" — TREAT THESE COMPLETELY DIFFERENTLY:
   * DEADLINE tasks can be worked on ahead of time, so give them RUNWAY. The app already sends every deadline a fixed heads-up the evening before and one at 9 AM on the due day (a deadline with a clock time also gets one about an hour before it) — those are not yours to repeat; the run-up and the rest of the due day are. How much runway depends on how much work the task actually is — judge that from the task itself: a one-step thing (pay a bill, send an email, book something online) needs 1-2 days; an errand or anything involving another person, an office, or paperwork needs 3-5 days; a genuinely big multi-step job (taxes, a report, applications, packing, cleaning out a room) deserves nudges starting a week or two out, framed around ONE small first step. Never let a big deadline task get its first nudge the day before.
   * "happens on [day]" tasks are tied to that specific day and CANNOT be done sooner — do not nudge in the days leading up (at most a heads-up the night before). Nudging early just makes the user feel behind on something they can't act on yet.
-${alarmsOn ? `- THIS BOSS HAS FULL-SCREEN ALARMS ON. Every nudge you return carries "ring": true or false. true means their phone rings like an alarm clock and takes over the screen, and it is rare: only when the next hour or so decides something — a time they set that has passed or is about to, a deadline that ends today, something a person, a pet, their health or their money depends on today. A heads-up, a run-up to a later deadline, a check-in, a chore with no date, anything held loosely by a tag or wish, and any combined mention of several tasks are all false: they arrive as a normal notification. Most days that is zero or one ring, two at the very most — a day of rings is how people turn alarms off.
-` : ''}- A NUDGE NAMES THE NEXT MOVE. Even a light mention says what to do ("Cancel Dr. Patel today — the deadline is Friday"), never asks whether they feel like it ("Want to cancel…?"). A question is only for a check-in on something already nudged ("Done with X yet?").
+- A NUDGE NAMES THE NEXT MOVE. Even a light mention says what to do ("Cancel Dr. Patel today — the deadline is Friday"), never asks whether they feel like it ("Want to cancel…?"). A question is only for a check-in on something already nudged ("Done with X yet?").
 - PICK YOUR BATTLES. The boss's patience is ONE budget for the whole day, shared by every notification the app sends them — everything under THE BOSS'S DAY SO FAR, not just yours. Every nudge spends some of it, and once they start swiping without reading, even the important ones stop landing. Before adding a nudge, ask whether it's worth more than what's already landing today. Spend the budget on what matters most — what the boss marked high or urgent, deadlines, anything a person, a pet, their health or their money depends on, and overdue things at their own priority — and let the rest wait for a better day or ride along in one combined mention. A good assistant never lets the day turn into a pile of pings.
 - READ WHETHER THE BOSS IS AROUND. If they haven't looked at the app since several notifications went out, more notifications aren't reaching them: go quiet — at most one well-timed nudge today, for the single thing that matters most, and none if nothing is pressing ("today" counts what has already gone out, not just what you add now). If they haven't opened it in days, treat it like a boss who's away: only something with a real deadline or real consequences gets a nudge, once. When they're back in the app, pick things up again.
 - A CHECK-IN HAS TO EARN ITS PLACE: only when the first nudge had a fair chance to land (they've looked at the app since, or it went out a good while ago) and the task is worth asking about twice. On an everyday task, one check-in that goes unanswered is enough for the day — and a check-in that already went out today counts.
@@ -1277,7 +1288,6 @@ Return ONLY valid JSON:
       "delay_minutes": <minutes from now>,
       "title": "<2-6 words with emoji — the emoji must only reflect what the task literally says. Never guess what a name is: 'feed Tabitha' could be a cat, a baby, or a sourdough starter, so a proper name or ambiguous subject gets a neutral emoji (📌 ⏰ ✨ 🔔), never a species/gender/object guess>",
       "body": "<one supportive sentence>",
-      "ring": <true ONLY for the rare nudge that must ring like an alarm (see THIS BOSS HAS FULL-SCREEN ALARMS ON); otherwise false>,
       "rationale": "<one short phrase: why this nudge, why this time>"
     }
   ],
@@ -1351,7 +1361,6 @@ Return ONLY valid JSON:
         title: fixTitleTimeOfDay(n.title || 'Task nudge', sendAt, timeZone),
         body: n.body || '',
         type: n.type || 'initial',
-        ring: n.ring === true,
         rationale: n.rationale || '',
         sent: false,
         sent_at: null,
