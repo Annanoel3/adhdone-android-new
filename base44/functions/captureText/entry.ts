@@ -1,3 +1,4 @@
+// Re-saved Oct 6 2026 so the bundled shared/taskParsePrompt.ts ("ASAP" / "first thing" are the task's timing, never a reminder wish) is picked up.
 // The single endpoint the NATIVE share sheet / quick-capture calls.
 //
 // POST { text, timezone? }  →  { success, tasks: [{ id, title }] }
