@@ -75,7 +75,7 @@ import WidgetOpenReceiver from "./components/shared/WidgetOpenReceiver";
 import HomeZipPrompt from "./components/shared/HomeZipPrompt";
 import EventConflictWarning from "./components/shared/EventConflictWarning";
 import QuickCapturePrompt, { AlertStylePrompt, AlarmKeepPrompt, AlarmPermissionsDialog, QuietHoursReviewPrompt, QuietHoursNagPrompt, AppUpdatePrompt } from "./components/shared/QuickCapturePrompt";
-import { FeedbackPrompt } from "./components/support/SupportEscalationCard";
+import { FeedbackPrompt, FeedbackAskPrompt } from "./components/support/SupportEscalationCard";
 import PageIntroTour from "./components/onboarding/PageIntroTour";
 import WelcomeDialog from "./components/onboarding/WelcomeDialog";
 import CatchUpDialog from "./components/onboarding/CatchUpDialog";
@@ -1288,6 +1288,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             switched off until it is redesigned. The component still exists in
             QuickCapturePrompt.jsx; mount it here again when it's ready. */}
         <FeedbackPrompt user={user} />
+        {/* The one-time "What can we do better?" ask (see FeedbackAskPrompt). */}
+        <FeedbackAskPrompt user={user} />
         <AlertStylePrompt user={user} theme={theme} />
         <AlarmKeepPrompt user={user} theme={theme} />
         <AlarmPermissionsDialog theme={theme} />
