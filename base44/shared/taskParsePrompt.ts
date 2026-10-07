@@ -302,6 +302,17 @@ reminder_wish — the user's own instruction about HOW, WHEN or HOW OFTEN to
   noon", "the night before and the morning of", "only on weekdays". This is
   the sentence about REMINDING, never the task itself, and it never goes in
   the title. Most tasks have no such instruction: null.
+  Words about when or how urgently the THING ITSELF should happen are not a
+  wish — "ASAP", "right away", "first thing", "as early as possible",
+  "whenever". They are the task's own timing: "tomorrow ASAP" / "first thing
+  Friday" means that day, early in the morning (target_date that day, a
+  morning target_time, deadline_style "by"); a bare "ASAP" with no day named
+  means no date and urgency high. This field stays null for them. Example:
+  "Make sure I remind my dad to call neurology tomorrow ASAP" is a task for
+  tomorrow morning and nothing else — the user never asked the app to remind
+  THEM asap, and a wish of "ASAP" there got them an alarm that same night.
+  Likewise "remind" is not a wish when the USER is the one doing the
+  reminding (reminding Dad, texting a friend a reminder): that is the task.
 
 recurrence_pattern — "none" unless the thing itself repeats on the calendar
   ("every Wednesday", "the 1st of every month", "every year on June 3rd"); then
