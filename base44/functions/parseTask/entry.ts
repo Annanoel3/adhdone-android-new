@@ -2,8 +2,10 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import { runTaskParse } from "../../shared/runTaskParse.ts";
 // Shared files are bundled into this function when it is deployed, so a change
 // to the shared prompt (taskParsePrompt.ts) only reaches users after this
-// function is saved and redeployed again (last redeploy, Oct 6 2026: "ASAP" /
-// "first thing" are the task's timing, never a reminder wish; before that, Oct 3 2026: the
+// function is saved and redeployed again (last redeploy, Oct 7 2026: a rhythm
+// needs quoted pace words (repeat_words), so "keep reminding me" is a wish, not an
+// hourly ping; before that, Oct 6 2026: "ASAP" / "first thing" are the task's
+// timing, never a reminder wish; before that, Oct 3 2026: the
 // parser's takes_time flag for the card's Time it button; before that, Sept 27 2026: a clock
 // time with no day gets its day, "Grandma" stays in the title, "next Tuesday"
 // is next week's Tuesday; only signed-in people may use it, and an admin can
