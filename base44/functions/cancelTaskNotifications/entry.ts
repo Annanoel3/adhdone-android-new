@@ -251,11 +251,16 @@ Deno.serve(async (req) => {
       ...((task.reminder_schedule || []).map((e: any) => e?.notification_id)),
     ]);
 
-    // Clear the notification IDs, reminder_schedule, and last_scheduled_until from the task
+    // Clear the notification IDs, reminder_schedule, and last_scheduled_until from the task.
+    // mode "drop_rhythm" (admin only) also turns an every-X rhythm into a single
+    // reminder at the task's time; its wish is still there for the nudge planner
+    // to keep at them. Used Oct 7 2026 to take "Take Pills" off hourly pings.
+    const dropRhythm = body?.mode === 'drop_rhythm' && me?.role === 'admin';
     await base44.asServiceRole.entities.Task.update(taskId, {
       onesignal_notification_ids: [],
       reminder_schedule: [],
-      last_scheduled_until: null
+      last_scheduled_until: null,
+      ...(dropRhythm ? { reminder_interval: 'once' } : {}),
     });
 
     console.log(`[cancelTaskNotifications] Cleared notification IDs for task ${taskId}`);
