@@ -205,18 +205,6 @@ export default function TaskCard({
     onComplete(task);
   };
 
-  // The green check on a finished task flipped it back to active on one tap,
-  // with nothing said: four of Anna's finished tasks came back that way in
-  // nine days (Sep 29 – Oct 7 2026), one sitting on her list for a week
-  // before she noticed ("I swear I checked that off"). It asks first now.
-  // "Make Active" inside the open card is a deliberate tap and stays as is.
-  const handleUncompleteTask = async () => {
-    if (!onUncomplete) return;
-    if (await appConfirm(`Mark "${task.title}" as not done?\nIt goes back on your list.`, { okText: 'Not done' })) {
-      onUncomplete(task, 'task_card');
-    }
-  };
-
   // Events only: it isn't happening. The row stays, crossed out here and on
   // the calendar, with Undo for a few seconds — the same as the details card.
   const handleCancelEvent = async () => {
@@ -939,7 +927,7 @@ export default function TaskCard({
             </button>
           ) : task.status === 'completed' ? (
             <button
-              onClick={handleUncompleteTask}
+              onClick={() => onUncomplete && onUncomplete(task, 'task_card')}
               className={`flex-shrink-0 ${theme === 'dark' ? 'text-green-400 hover:text-green-300' : 'text-green-600 hover:text-green-700'}`}
               aria-label="Mark as active"
             >
