@@ -10,6 +10,10 @@ export const SORT_OPTIONS = {
   due_date: "By Due Date",
   energy: "By Energy",
 };
+// Only offered while the Tasks page shows Completed (Anna, Oct 7 2026): most
+// recently finished first. Anywhere else it reads as "Newest First".
+export const COMPLETED_SORT = "completed_at";
+export const COMPLETED_SORT_LABEL = "Recently Completed";
 
 // Pure helper so callers can sort without subscribing to state.
 export function sortTasks(tasks, sortBy) {
@@ -36,6 +40,12 @@ export function sortTasks(tasks, sortBy) {
       case "energy": {
         const energyOrder = { low: 0, medium: 1, high: 2 };
         return (energyOrder[a.energy_required] ?? 1) - (energyOrder[b.energy_required] ?? 1);
+      }
+      case COMPLETED_SORT: {
+        // Finished most recently first. Older completions recorded no
+        // completed_at; their last update is the closest thing.
+        const doneAt = (t) => new Date(t.completed_at || t.updated_date || t.created_date).getTime();
+        return doneAt(b) - doneAt(a);
       }
       case "created_date":
       default: {
