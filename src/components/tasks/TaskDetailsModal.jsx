@@ -155,6 +155,37 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
   const reminderDateRef = useRef('');
   const reminderTimeRef = useRef(''); const dueDirty = useRef(false); const eventDirty = useRef(false); // autosave: popovers save on close
   const isInitializingRef = useRef(false);
+  // The due-date and event popovers save when they close by a tap elsewhere.
+  // Leaving the card any other way while one is still open — the X, the back
+  // button, Mark as Complete — takes the popover down without that close, and
+  // the change was lost (Anna, Oct 7 2026). So whatever is still unsaved is
+  // flushed when the card closes or moves to another task; a card closing
+  // because the task is finished, deleted or parked drops it instead
+  // (dropDirtyDates): no fresh reminders for a task that is going away.
+  const eventDateRef = useRef('');
+  const eventTimeRef = useRef('');
+  eventDateRef.current = eventDate;
+  eventTimeRef.current = eventTime;
+  const flushDirtyDates = () => {
+    if (dueDirty.current && reminderDateRef.current) {
+      dueDirty.current = false;
+      handleUpdateReminderTime(reminderTimeRef.current, reminderDateRef.current);
+    }
+    if (eventDirty.current && eventDateRef.current && eventTimeRef.current) {
+      eventDirty.current = false;
+      handleUpdateEventTime(eventDateRef.current, eventTimeRef.current);
+      toast({ title: 'Saved ✓', duration: 1500 });
+    }
+  };
+  const dropDirtyDates = () => { dueDirty.current = false; eventDirty.current = false; };
+  // The newest version from a render that still had the task: the parent can
+  // let go of the task in the same render that closes the card.
+  const flushRef = useRef(() => {});
+  if (isOpen && task) flushRef.current = flushDirtyDates;
+  useEffect(() => {
+    if (!isOpen || !task?.id) return undefined;
+    return () => { flushRef.current(); };
+  }, [isOpen, task?.id]);
 
   useEffect(() => {
     if (task && isOpen) {
@@ -1078,6 +1109,7 @@ Return JSON:
     // When the parent page owns completion (Home/Tasks), hand off so its
     // confetti celebration fires and its save/recurrence logic runs once.
     if (onComplete) {
+      dropDirtyDates();
       onClose();
       onComplete(task);
       return;
@@ -1171,6 +1203,7 @@ Return JSON:
     if (!task || !(await appConfirm(`Delete "${task.title}" and all its sub-tasks?`, { okText: 'Delete', destructive: true }))) return;
 
     // Optimistic — close dialog and notify parent immediately
+    dropDirtyDates();
     if (onDelete) {
       onDelete();
     }
@@ -1803,6 +1836,7 @@ Return JSON:
     if (!(await appConfirm(`Convert "${task.title}" to a parking lot idea?`, { okText: 'Move it' }))) return;
 
     // Optimistic — close dialog and notify parent immediately
+    dropDirtyDates();
     if (onDelete) {
       onDelete();
     }
@@ -1820,7 +1854,7 @@ Return JSON:
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={(o) => { if (!o) handleNotesUpdate(); onClose(); }}>
+      <Dialog open={isOpen} onOpenChange={(o) => { if (!o) { flushDirtyDates(); handleNotesUpdate(); } onClose(); }}>
         {/* [&>*]:min-w-0 — the dialog is a grid, so one wide child (a long
             location pill, a reminder row) used to stretch the whole column
             past the screen and clip everything on the right. */}
