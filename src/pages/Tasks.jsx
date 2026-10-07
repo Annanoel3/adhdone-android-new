@@ -19,7 +19,7 @@ import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { snoozeTask, deleteTaskWithUndo, cancelledStillListed, offerCompletionUndo } from "../components/utils/snoozeTask";
 import { refreshAlarms } from "../components/utils/widgetBridge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useTaskSort, sortTasks } from "@/hooks/useTaskSort";
+import { useTaskSort, sortTasks, COMPLETED_SORT, COMPLETED_SORT_LABEL } from "@/hooks/useTaskSort";
 import TaskSortDropdown from "../components/tasks/TaskSortDropdown";
 import WeeklyStar from "../components/tasks/WeeklyStar";
 import TaskSections from "../components/tasks/TaskSections";
@@ -158,8 +158,10 @@ export default function Tasks() {
       }
     }
 
-    // Sort tasks using the shared sort preference
-    setFilteredTasks(sortTasks(filtered, sortBy));
+    // Sort tasks using the shared sort preference. "Recently Completed" only
+    // means something in the Completed list; elsewhere it falls back.
+    const effectiveSort = sortBy === COMPLETED_SORT && statusFilter !== 'completed' ? 'created_date' : sortBy;
+    setFilteredTasks(sortTasks(filtered, effectiveSort));
   }, [allTasks, statusFilter, urgencyFilter, typeFilter, sortBy]);
 
   useEffect(() => {
@@ -461,7 +463,7 @@ export default function Tasks() {
             </SelectContent>
           </Select>
 
-          <TaskSortDropdown />
+          <TaskSortDropdown extra={statusFilter === 'completed' ? { [COMPLETED_SORT]: COMPLETED_SORT_LABEL } : null} />
 
           <WeeklyStar slot={0} />
 
