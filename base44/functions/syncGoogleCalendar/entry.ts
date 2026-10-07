@@ -1,6 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 // The shared prompt is bundled at deploy time; this function was last redeployed
+// Oct 6 2026 ("ASAP" / "first thing" are the task's timing, never a reminder wish), before that
 // Oct 3 2026 for the parser's takes_time flag, and before that Sept 27 2026 for the parse fixes (a clock time with no day gets its day,
 // "Grandma" stays in the title, "next Tuesday" is next week's Tuesday).
 import { runTaskParse } from '../../shared/runTaskParse.ts';
