@@ -1396,8 +1396,8 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
 
 // "There's a new version." ONE update popup, ever: it always describes the
 // newest build, so someone several versions behind gets this single card —
-// never one card per version they skipped. When a new build ships, change
-// hasNewestBuild() and the words below (the features of the newest build);
+// never one card per version they skipped. When a new build ships, bump
+// NEWEST_BUILD and change the words below (the features of the newest build);
 // don't add a second update popup.
 //
 // Shows on the phone app only, at most once a day, until the newest build is
@@ -1430,6 +1430,16 @@ const QUIET_CHOICE_ON_PLAY = true;
 // Oct 1, 2026: on. A brand-new Play install (build 36, 1.3.13) reports
 // RecorderBridge, and Anna's phone does too.
 const NOTES_BUILD_ON_PLAY = true;
+// 1.3.14 (build 37) is the build where Later on an alarm or reminder gives the
+// task a real break (3 hours; a second Later the same day waits until tomorrow
+// morning), alarms and the read-aloud voice are louder, and a snoozed alarm
+// stays quiet once its task is finished, deleted or parked. Accepted on Google
+// Play Oct 7, 2026. From here the card goes by the phone's own build number
+// (Capacitor's App.getInfo, the same number WidgetTaskSync files as app_build),
+// so the next build only needs NEWEST_BUILD bumped and the words below changed.
+// The plugin checks stay for builds that report no number.
+const LATER_BUILD_ON_PLAY = true;
+const NEWEST_BUILD = 37;
 const hasQuietHoursBuild = () =>
   typeof window !== 'undefined' &&
   typeof window.Capacitor?.Plugins?.AlarmBridge?.quietFor === 'function';
@@ -1438,10 +1448,29 @@ const hasQuietChoiceBuild = () =>
   typeof window.Capacitor?.Plugins?.AlarmBridge?.setQuietWhen === 'function';
 const hasRecorderBuild = () =>
   typeof window !== 'undefined' && !!window.Capacitor?.Plugins?.RecorderBridge;
-const hasNewestBuild = () =>
+const hasNewestBuildByPlugins = () =>
   NOTES_BUILD_ON_PLAY
     ? hasRecorderBuild()
     : QUIET_CHOICE_ON_PLAY ? hasQuietChoiceBuild() : hasQuietHoursBuild();
+// This phone's build number (versionCode); 0 when it can't be read (yet).
+const phoneBuild = async () => {
+  try {
+    const info = await window.Capacitor?.Plugins?.App?.getInfo?.();
+    const n = Number(info?.build);
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  } catch (e) {
+    return 0;
+  }
+};
+// Up to date? By build number when the phone gives one. Without one, by its
+// plugins — but only once they've had their moment to land (settled): a 1.3.13
+// phone whose App plugin answers a beat after RecorderBridge would otherwise
+// be called up to date and never told about 1.3.14.
+const hasNewestBuild = async (settled) => {
+  const build = LATER_BUILD_ON_PLAY ? await phoneBuild() : 0;
+  if (build > 0) return build >= NEWEST_BUILD;
+  return settled || !LATER_BUILD_ON_PLAY ? hasNewestBuildByPlugins() : false;
+};
 
 export function AppUpdatePrompt({ user, theme }) {
   const dark = theme === 'dark';
@@ -1475,10 +1504,10 @@ export function AppUpdatePrompt({ user, theme }) {
       // side menu's quiet button waits for them too): give the newest build
       // time to announce itself before calling it old.
       for (let i = 0; i < 16; i++) {
-        if (!mounted.current || hasNewestBuild()) return;
+        if (!mounted.current || await hasNewestBuild(false)) return;
         await new Promise((r) => setTimeout(r, 500));
       }
-      if (!mounted.current || hasNewestBuild()) return;
+      if (!mounted.current || await hasNewestBuild(true)) return;
       const today = new Date().toDateString();
       try {
         if (localStorage.getItem(UPDATE_PROMPT_KEY) === today) return;
@@ -1576,7 +1605,14 @@ export function AppUpdatePrompt({ user, theme }) {
             There's an update!
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
-            {NOTES_BUILD_ON_PLAY ? (
+            {LATER_BUILD_ON_PLAY ? (
+              <>
+                In the new version of ADHDone, Later means later. Tap Later on an alarm or reminder and that
+                task leaves you alone for 3 hours; tap it again the same day and it waits until tomorrow
+                morning. Alarms are louder too, and a snoozed alarm stays quiet once you've finished, deleted
+                or parked the task.
+              </>
+            ) : NOTES_BUILD_ON_PLAY ? (
               <>
                 The new version of ADHDone records notes. Tap Record on the Notes page during an appointment,
                 a lecture or a meeting, and you get the gist, your to-dos and the details worth keeping — in
@@ -1592,6 +1628,13 @@ export function AppUpdatePrompt({ user, theme }) {
             )}
           </DialogDescription>
         </DialogHeader>
+
+        {LATER_BUILD_ON_PLAY && NOTES_BUILD_ON_PLAY && !hasRecorderBuild() && (
+          <p className={`text-sm ${sub}`}>
+            It also records notes: tap Record on the Notes page during an appointment, a lecture or a
+            meeting, and you get the gist, your to-dos and the details worth keeping.
+          </p>
+        )}
 
         {NOTES_BUILD_ON_PLAY && choiceLive && hasQuietHours && !hasQuietChoiceBuild() && (
           <p className={`text-sm ${sub}`}>
