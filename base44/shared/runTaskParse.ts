@@ -47,6 +47,7 @@ const TASK_PARSE_SCHEMA = {
     end_date: { type: ["string", "null"] },
     due_date: { type: ["string", "null"] },
     user_asked_to_repeat_every: { anyOf: [{ type: "string", enum: REPEAT_VALUES }, { type: "null" }] },
+    repeat_words: { type: ["string", "null"] },
     recurrence_pattern: { type: "string" },
     deadline_style: { type: "string", enum: ["on", "by"] },
     day_only_task: { type: "boolean" },
@@ -63,7 +64,7 @@ const TASK_PARSE_SCHEMA = {
   required: [
     "title", "location", "urgency", "energy_required", "classification",
     "target_date", "target_time", "end_date", "due_date",
-    "user_asked_to_repeat_every", "recurrence_pattern", "deadline_style",
+    "user_asked_to_repeat_every", "repeat_words", "recurrence_pattern", "deadline_style",
     "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
     "takes_time", "life_area", "follow_up_title", "follow_up_minutes", "reminder_wish",
     "recurrence_days",
@@ -133,7 +134,12 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   // trimmed, or nothing — it is shown to the reminder planners verbatim.
   const wish = String(parsed?.reminder_wish || '').trim().replace(/\s+/g, ' ');
   parsed.reminder_wish = wish ? wish.slice(0, 200) : null;
-  parsed.reminder_interval = REPEAT_VALUES.includes(parsed?.user_asked_to_repeat_every)
+  // A rhythm only stands when the model can quote the words that named its
+  // pace ("every hour"). "Keep reminding me until I do it" names none: the
+  // wish carries it and the nudge planner keeps at them every 2-3 hours
+  // instead (Anna, Oct 7 2026 — Take Pills had become a strict hourly ping).
+  const paceWords = String(parsed?.repeat_words || '').trim();
+  parsed.reminder_interval = REPEAT_VALUES.includes(parsed?.user_asked_to_repeat_every) && paceWords
     ? parsed.user_asked_to_repeat_every
     : null;
   // A day the user actually stated must never be lost to wording — "Saturday"
