@@ -111,10 +111,20 @@ Deno.serve(async (req) => {
         if (android_channel_id) {
             notificationPayload.android_channel_id = android_channel_id;
         }
-        // A push that asks to ring on arrival (data.alarm) must not be held by
-        // Doze until the phone wakes — same as the nudge cron's ringing pushes.
+        // Everything booked here is for a set time — a reminder at the task's
+        // time, an event, a snooze, a birthday, a scheduled text — so it goes at
+        // HIGH priority. At normal priority Android holds a push while the
+        // phone has been idle with the screen off and delivers it in a later
+        // batch (Google: "delivery may be delayed to conserve battery until the
+        // device exits doze"); "Go to Bed", handed to Google at 11:00:05 PM on
+        // Oct 7 2026, reached Anna's phone at 11:21. High priority wakes the
+        // phone. Google de-prioritizes an app whose high-priority pushes don't
+        // show a notification; every push here shows one. Until Oct 8 2026 only
+        // the ring-on-arrival pushes (data.alarm) were high priority (Anna:
+        // "make things that have to be at an exact time high priority").
+        notificationPayload.priority = 10;
         if (data && data.alarm === true) {
-            notificationPayload.priority = 10;
+            // A push that asks to ring on arrival also gets a short lifetime:
             // OneSignal's app re-delivers recent pushes every time the app starts
             // fresh ("restore"), and the phone's filter rang a ring-now push again
             // when it did, so one push could ring on every app open for its whole
