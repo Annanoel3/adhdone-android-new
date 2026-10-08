@@ -15,8 +15,10 @@ const NEW_LAUNCH_GAP_MS = 30 * 60 * 1000;
 // that was due an ad got it on a clock, about 15 seconds in, whatever the
 // person was doing. Now the open's ad is OWED, and it only shows at a pause
 // the person just made themselves:
-//   - they checked a task off — once the confetti (2.2 s) and the 5-second
-//     Undo are gone, and only if they haven't tapped anything since;
+//   - they checked a task off — 4 seconds on: the confetti (2.2 s) is over
+//     and they've had 4 seconds for Undo (Anna, Oct 8 2026: "four seconds is
+//     a long time to press undo"; the toast's last second sits under the ad),
+//     and only if they haven't tapped anything since;
 //   - they added a task — once the capture has settled.
 // If neither happens, the owed ad falls back to the next page switch, but
 // only once they've been in the app a while (so the task pauses get their
@@ -24,7 +26,7 @@ const NEW_LAUNCH_GAP_MS = 30 * 60 * 1000;
 // ends with no pause at all shows no ad — it is not carried to the next open.
 // Nothing here waits on a timer and retries: a pause that isn't quiet when
 // it comes is simply let go, and the next one is waited for.
-const AFTER_TASK_DONE_MS = 6500;
+const AFTER_TASK_DONE_MS = 4000;
 const AFTER_TASK_ADDED_MS = 3000;
 // Past the tap that switched the page, so it doesn't read as mid-something.
 const AFTER_PAGE_SWITCH_MS = 2500;
