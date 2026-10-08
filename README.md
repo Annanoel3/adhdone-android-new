@@ -23,7 +23,8 @@
   looked up in this session.** Query the entity, read the log, open the file. If it wasn't
   checked, say "I'm guessing — I'd have to look." Do not invent a reason she asked for a change.
 - **These accounts are ALL Anna — never count them as real users:** annanoelwenballew@gmail.com,
-  annanoelbusinessemail@gmail.com, s2kap2chick@gmail.com, mediocreatbestdev@outlook.com.
+  annanoelbusinessemail@gmail.com, s2kap2chick@gmail.com, mediocreatbestdev@outlook.com,
+  annanoelwenballew@outlook.com.
   Leave them out of any "how are real users doing" analysis.
 - **At the end of every change, list every file you touched — including files Anna did not ask
   about — with one line each on what changed and why.** Base44 keeps no memory between
