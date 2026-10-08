@@ -275,26 +275,45 @@ function ringsOutLoud(task, momentMs) {
 // inside them is never booked as a full-screen alarm — that moment keeps its
 // regular push, which the scheduler has already placed by the same rules —
 // so nothing rings out loud at 3 AM.
-// Two alarms at the same minute (two daily things at 9 PM) rang on top of each
-// other: the phone rings one alarm at a time, so the second took over and the
-// first was never answered or counted. The later one is pushed back so each
-// gets its own ring — a ring lasts a minute and then ends by itself, so two
-// minutes apart can't overlap. Only the ring moves; the task keeps the time it
-// was given. Never pushed into quiet hours (a clash beats ringing at night).
-const ALARM_GAP_MS = 2 * 60 * 1000;
+// Alarms that land close together ring ONCE. Until Oct 8 2026 two alarms at
+// the same minute were spaced two minutes apart so each got its own ring —
+// which meant three things due at the same time rang three times in a row,
+// three "dismiss" taps for one moment (Anna: "We can't have things showing
+// up in a row"). Now the first alarm of a cluster is the one that rings, and
+// its body names the others ("Also now: …" — read out loud with the rest);
+// the others don't ring on their own. Nothing is lost: every one of those
+// moments also has its regular push, which still arrives quietly. Done and
+// Snooze on the alarm act on its own task only, as they always have.
+const ALARM_FOLD_MS = 10 * 60 * 1000;
 // The time each alarm was last handed to the phone, by alarm id.
 const ALARM_BOOKED_KEY = 'alarm_booked_at';
-function spaceOut(entries) {
+function foldClusters(entries) {
   entries.sort((a, b) => a.alarm.at - b.alarm.at);
-  for (let i = 1; i < entries.length; i++) {
-    const prev = entries[i - 1].alarm;
-    const cur = entries[i];
-    if (cur.alarm.at - prev.at >= ALARM_GAP_MS) continue;
-    const shifted = prev.at + ALARM_GAP_MS;
-    if (!cur.quietExempt && isInQuietHours(new Date(shifted))) continue;
-    cur.alarm.at = shifted;
+  const out = [];
+  let lead = null;
+  let others = [];
+  const flush = () => {
+    if (lead) {
+      if (others.length > 0) {
+        const also = `Also now: ${others.join(', ')}.`;
+        lead.alarm.body = lead.alarm.body ? `${lead.alarm.body} ${also}` : also;
+      }
+      out.push(lead.alarm);
+    }
+    lead = null;
+    others = [];
+  };
+  for (const e of entries) {
+    if (lead && e.alarm.at - lead.alarm.at < ALARM_FOLD_MS) {
+      // A second moment of the same task inside the window just doesn't ring.
+      if (e.alarm.taskId !== lead.alarm.taskId && !others.includes(e.alarm.title)) others.push(e.alarm.title);
+      continue;
+    }
+    flush();
+    lead = e;
   }
-  return entries.map((e) => e.alarm);
+  flush();
+  return out;
 }
 
 export function alarmSetFor(tasks, userDefault = alarmMode) {
@@ -324,7 +343,7 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
       out.push({ alarm, quietExempt: !!t.quiet_hours_exempt });
     }
   }
-  return spaceOut(out).slice(0, ALARM_MAX);
+  return foldClusters(out).slice(0, ALARM_MAX);
 }
 
 // A smart nudge that rings out loud is a push that asks to ring when it lands
@@ -512,10 +531,10 @@ export async function pushAlarms(tasks) {
   dropStalePushAlarms(tasks).catch(() => {});
 
   const alarms = alarmSetFor(tasks);
-  // An alarm the spacing pushed later (9:00 → 9:04) must KEEP that later time.
-  // When the alarm ahead of it leaves the set (checked off at 9:00), re-spacing
-  // would move it back to 9:00 — already past — and the phone never rang it
-  // (Kirito's medicine, Oct 3 2026). So a booked time still to come wins.
+  // An alarm handed to the phone for a later time than it has now (the old
+  // two-minute spacing, before Oct 8 2026) must KEEP that later time until it
+  // passes: moving it back to a minute already gone means the phone never
+  // rings it (Kirito's medicine, Oct 3 2026). So a booked time still to come wins.
   const now = Date.now();
   let booked = {};
   try { booked = JSON.parse(localStorage.getItem(ALARM_BOOKED_KEY) || '{}'); } catch (e) { booked = {}; }
