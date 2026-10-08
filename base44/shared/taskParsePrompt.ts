@@ -310,8 +310,11 @@ reminder_wish — the user's own instruction about HOW, WHEN or HOW OFTEN to
   wish — "ASAP", "right away", "first thing", "as early as possible",
   "whenever". They are the task's own timing: "tomorrow ASAP" / "first thing
   Friday" means that day, early in the morning (target_date that day, a
-  morning target_time, deadline_style "by"); a bare "ASAP" with no day named
-  means no date and urgency high. This field stays null for them. Example:
+  morning target_time, deadline_style "by"); this field stays null for them.
+  The one exception: a bare "ASAP" / "right away" with NO day or deadline
+  named anywhere means as soon as possible, starting now (Anna, Oct 8 2026):
+  no date, urgency high, and reminder_wish "ASAP, no due date: start now".
+  Example:
   "Make sure I remind my dad to call neurology tomorrow ASAP" is a task for
   tomorrow morning and nothing else — the user never asked the app to remind
   THEM asap, and a wish of "ASAP" there got them an alarm that same night.

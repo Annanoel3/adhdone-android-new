@@ -1,4 +1,4 @@
-// Re-saved Oct 7 2026 so the bundled shared parse files are picked up (a rhythm needs quoted pace words — repeat_words;
+// Re-saved Oct 8 2026 (bare "ASAP" with no due date = start now). Re-saved Oct 7 2026 so the bundled shared parse files are picked up (a rhythm needs quoted pace words — repeat_words;
 // Oct 6: "ASAP" / "first thing" are the task's timing, never a reminder wish).
 // The single endpoint the NATIVE share sheet / quick-capture calls.
 //

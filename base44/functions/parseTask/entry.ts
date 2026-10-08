@@ -2,7 +2,8 @@ import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import { runTaskParse } from "../../shared/runTaskParse.ts";
 // Shared files are bundled into this function when it is deployed, so a change
 // to the shared prompt (taskParsePrompt.ts) only reaches users after this
-// function is saved and redeployed again (last redeploy, Oct 7 2026: a rhythm
+// function is saved and redeployed again (last redeploy, Oct 8 2026: a bare
+// "ASAP" with no due date means start now; before that, Oct 7 2026: a rhythm
 // needs quoted pace words (repeat_words), so "keep reminding me" is a wish, not an
 // hourly ping; before that, Oct 6 2026: "ASAP" / "first thing" are the task's
 // timing, never a reminder wish; before that, Oct 3 2026: the

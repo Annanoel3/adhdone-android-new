@@ -1,6 +1,7 @@
 // Re-saved Oct 6 2026 so the bundled shared files are picked up: reminderTitle.ts (Later break: no alarm inside later_until)
 // and taskParsePrompt.ts ("ASAP" / "first thing" are the task's timing, never a reminder wish).
 // Re-saved again Oct 7 2026: a rhythm needs quoted pace words (repeat_words).
+// Re-saved Oct 8 2026: a bare "ASAP" with no due date means start now.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 // Shared files are bundled into this function when it is deployed, so a change
