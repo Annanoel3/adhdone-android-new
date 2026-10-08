@@ -148,6 +148,10 @@ export function deleteTaskWithUndo(task, subtasks = []) {
 // same path as un-checking it, which also takes back a repeating task's copy).
 export function offerCompletionUndo(task, saving, onUndo) {
   if (!task?.id || task.parent_task_id) return;
+  // A task just checked off is a natural pause — the one place (with adding a
+  // task) where the open's ad is allowed to show, once this Undo has passed
+  // (AdManager). Fired here because every in-app check-off comes through here.
+  try { window.dispatchEvent(new CustomEvent('task-done', { detail: { task } })); } catch (e) {}
   let used = false;
   toast({
     title: `Done: "${task.title || "task"}"`,
