@@ -605,12 +605,39 @@ Deno.serve(async (req) => {
           const quietChore = noDate && (localHour >= 22 || localHour < 7 || putOff >= 3);
           ringsOutLoud = !quietChore && (overdue || dueToday || inWindow || noDate || (pressing && !pinnedLater));
         }
+        // ONE LIVE ALARM PER TASK. A nudge that rang as an alarm stays on the
+        // phone until they deal with it: snoozed, it comes back on its own (10
+        // min, 30 min, an hour — their pick), and the phone only tells the
+        // server what became of it the next time the app is opened. A second
+        // ringing nudge about the same task before then lands on top of the
+        // first, and from there every snooze brings back two (Take Pills, Oct 8
+        // 2026: rang at 11:39 AM, snoozed; a check-in at 2:09 PM rang into it —
+        // two alarms a minute apart, then again and again). So while an earlier
+        // ringing nudge about this task has gone out since they last opened the
+        // app, this one waits: the alarm already on their phone IS the
+        // reminder. Not marked sent — it goes out the first run after the app
+        // has been opened, if it's still due today. (The phone can't be told
+        // to replace its own pushed alarm before build 38.)
+        if (ringsOutLoud) {
+          const seenAt = utcMs(user.last_active_at);
+          const liveAlarm = sentLog.some((l: any) => {
+            if (!l?.rang || l.task_id !== entry.task_id) return false;
+            const at = utcMs(l.at);
+            return Number.isFinite(at) && at > nowMs - DAY_MS && (!Number.isFinite(seenAt) || at > seenAt);
+          });
+          if (liveAlarm) {
+            console.log(`[SMART NUDGE] Held "${entry.title}" for ${email}: an alarm about this task is still on their phone (no app open since it rang)`);
+            continue;
+          }
+        }
         const sent = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id, ringsOutLoud);
         if (sent) {
           await ledgerRecord(base44, { email, taskId: entry.task_id, kind: 'smart_nudge', source: 'cronSmartTaskNudge', notificationId: sent, title: entry.title });
           entry.sent = true;
           entry.sent_at = now.toISOString();
-          newLog.push({ k: entryKey(entry), at: entry.sent_at });
+          // rang + task_id: the next runs hold further ringing nudges about this
+          // task until the app has been opened (ONE LIVE ALARM PER TASK above).
+          newLog.push({ k: entryKey(entry), at: entry.sent_at, rang: ringsOutLoud, task_id: entry.task_id });
           lastSentTaskId = entry.task_id;
           nudgesSent++;
           results.push({ email, title: entry.title, type: entry.type });
