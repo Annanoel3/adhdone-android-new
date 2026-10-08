@@ -8,6 +8,33 @@ import { ArrowLeft, Bell, BellOff, Moon, Loader2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { Input } from "@/components/ui/input";
+import { readRingLog } from "@/components/utils/widgetBridge";
+
+// "What rang": the phone's own record of every alarm and sounding reminder
+// (widgetBridge.readRingLog, builds from 1.3.15 on). The server's ledger only
+// has the pushes it sent; the phone's alarms — a task's time, a snooze coming
+// back, a nudge ringing on arrival — and what was done with each were nowhere
+// to look up (Anna, Oct 7 2026: "Felt more like 15").
+function ringEnding(r) {
+  switch (r.ended) {
+    case 'snoozed': return r.snoozeMinutes >= 60 ? `snoozed ${Math.round(r.snoozeMinutes / 60)} h` : `snoozed ${r.snoozeMinutes || 10} min`;
+    case 'later': return 'Later';
+    case 'dismissed': return 'dismissed';
+    case 'done': return 'done';
+    case 'ignored': return 'rang out, no answer';
+    case 'folded': return 'rang with another for the same task';
+    default: return r.kind === 'alarm' ? 'still open' : '';
+  }
+}
+
+function ringDayLabel(ms, now) {
+  const d = new Date(ms); const n = new Date(now);
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(n) - day(d)) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  return d.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' });
+}
 
 export default function NotificationSettings() {
   const navigate = useNavigate();
@@ -28,6 +55,16 @@ export default function NotificationSettings() {
   });
 
   const specialMode = localStorage.getItem('special_mode') || 'normal';
+  // undefined = not asked yet, null = this build / the web can't say, [] = nothing rang.
+  const [ringLog, setRingLog] = useState(undefined);
+  const onPhone = typeof window !== 'undefined' && !!window.Capacitor?.isNativePlatform?.();
+
+  useEffect(() => {
+    if (!onPhone) { setRingLog(null); return; }
+    let alive = true;
+    readRingLog(2).then((rows) => { if (alive) setRingLog(rows); }).catch(() => { if (alive) setRingLog(null); });
+    return () => { alive = false; };
+  }, [onPhone]);
 
   useEffect(() => {
     loadSettings();
@@ -308,6 +345,90 @@ export default function NotificationSettings() {
             </div>
           </CardContent>
         </Card>
+
+        {/* What rang — phone only */}
+        {onPhone && (
+          <Card className={`${specialMode !== 'normal' ? `${specialMode}-card` : ''} border-none shadow-md ${
+            specialMode === 'normal' ? (
+              theme === 'minimalist'
+                ? 'bg-white/90 backdrop-blur-sm'
+                : theme === 'dark'
+                  ? 'bg-gray-800'
+                  : 'bg-white/90 backdrop-blur-sm'
+            ) : ''
+          }`}>
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Bell className="w-5 h-5 text-purple-500" />
+                <CardTitle className={theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}>
+                  What rang
+                </CardTitle>
+              </div>
+              <CardDescription className={theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}>
+                Every alarm and sounding reminder this phone made, newest first, and what happened to it. Today and yesterday.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {ringLog === undefined && (
+                <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Loading…</p>
+              )}
+              {ringLog === null && (
+                <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                  This needs ADHDone 1.3.15 or newer on the phone.
+                </p>
+              )}
+              {Array.isArray(ringLog) && ringLog.length === 0 && (
+                <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Nothing has rung since this version was installed.
+                </p>
+              )}
+              {Array.isArray(ringLog) && ringLog.length > 0 && (() => {
+                const now = Date.now();
+                const groups = [];
+                for (const r of ringLog) {
+                  const label = ringDayLabel(r.at, now);
+                  let g = groups[groups.length - 1];
+                  if (!g || g.label !== label) { g = { label, rows: [] }; groups.push(g); }
+                  g.rows.push(r);
+                }
+                return groups.map((g) => {
+                  const alarms = g.rows.filter((r) => r.kind === 'alarm').length;
+                  const pushes = g.rows.length - alarms;
+                  return (
+                    <div key={g.label} className="mb-4 last:mb-0">
+                      <p className={`text-sm font-semibold mb-2 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-800'}`}>
+                        {g.label} · {alarms} alarm{alarms === 1 ? '' : 's'}{pushes > 0 ? `, ${pushes} notification${pushes === 1 ? '' : 's'}` : ''}
+                      </p>
+                      <div className="space-y-2">
+                        {g.rows.map((r, i) => {
+                          const ending = ringEnding(r);
+                          return (
+                            <div key={`${r.id}-${r.at}-${i}`} className={`flex gap-3 text-sm rounded-lg px-3 py-2 ${theme === 'dark' ? 'bg-gray-700/60' : 'bg-gray-50'}`}>
+                              <span className={`w-16 flex-shrink-0 tabular-nums ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+                                {new Date(r.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <p className={`font-medium truncate ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
+                                  {r.kind === 'alarm' ? '🔔 ' : '💬 '}{r.heading || r.title || 'Reminder'}{r.fromSnooze ? ' (back from snooze)' : ''}
+                                </p>
+                                {r.body && (
+                                  <p className={`text-xs truncate ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{r.body}</p>
+                                )}
+                                {ending && (
+                                  <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{ending}</p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </CardContent>
+          </Card>
+        )}
 
         {saving && (
           <div className={`p-3 rounded-lg text-center ${
