@@ -423,6 +423,8 @@ Deno.serve(async (req) => {
           sentSinceSeen,
           seenCountIsFloor: Number.isFinite(seenMs) && seenMs < nowMs - 3 * DAY_MS,
           laterLook: todaysEntries.some((e: any) => e.sent && !e.skipped_reason),
+          // When the parked-list roundup last went out (the sent log keeps a week).
+          lastRoundupMs: (() => { const ms = sentLog.filter((l: any) => l?.type === 'roundup' && !l.skip).map((l: any) => utcMs(l.at)).filter((x: number) => Number.isFinite(x)); return ms.length ? Math.max(...ms) : NaN; })(),
         });
 
         // null = the planner failed: change nothing, send what's already
@@ -496,7 +498,19 @@ Deno.serve(async (req) => {
         // wording names — not just the one we deep-link to. If any of them is
         // already done or back-burnered, the message is stale and would tell
         // the user to do something they finished hours ago.
-        const referencedIds: string[] = entryTaskIds(entry);
+        // A roundup names several parked tasks; one of them finished since it
+        // was planned just drops out of the check (the message still stands for
+        // the rest), and only an empty list skips it.
+        const referencedIds: string[] = entry.type === 'roundup'
+          ? entryTaskIds(entry).filter((id: string) => taskById.get(id)?.status === 'active' && !completedTaskIds.has(id) && !silencedTaskIds.has(id))
+          : entryTaskIds(entry);
+        if (entry.type === 'roundup' && referencedIds.length === 0) {
+          entry.sent = true;
+          entry.sent_at = now.toISOString();
+          entry.skipped_reason = 'completed';
+          newLog.push({ k: entryKey(entry), at: entry.sent_at, skip: 'completed' });
+          continue;
+        }
 
         // A task that no longer exists: the nudge would be about something the
         // user deleted. Every task is read at the start of a scheduled run, so
@@ -636,14 +650,14 @@ Deno.serve(async (req) => {
             continue;
           }
         }
-        const sent = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id, ringsOutLoud);
+        const sent = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id, ringsOutLoud, entry.type === 'roundup' ? 'roundup' : 'smart_nudge');
         if (sent) {
           await ledgerRecord(base44, { email, taskId: entry.task_id, kind: 'smart_nudge', source: 'cronSmartTaskNudge', notificationId: sent, title: entry.title });
           entry.sent = true;
           entry.sent_at = now.toISOString();
           // rang + task_id: the next runs hold further ringing nudges about this
           // task until the app has been opened (ONE LIVE ALARM PER TASK above).
-          newLog.push({ k: entryKey(entry), at: entry.sent_at, rang: ringsOutLoud, task_id: entry.task_id });
+          newLog.push({ k: entryKey(entry), at: entry.sent_at, rang: ringsOutLoud, task_id: entry.task_id, type: entry.type });
           lastSentTaskId = entry.task_id;
           nudgesSent++;
           results.push({ email, title: entry.title, type: entry.type });
@@ -954,6 +968,7 @@ interface PlanContext {
   // (a second look, an "are they landing?" look, a re-plan after an edit):
   // the planner is told so, and judges any addition against the whole day.
   laterLook: boolean;
+  lastRoundupMs: number;
 }
 
 // What the last plan chose to leave alone, and why — read by the caller
@@ -976,7 +991,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
   const {
     localMin, timeZone, quietStartMin, quietEndMin, subtasksByParent, events,
     homeOrigin, aboutMe, avoidTolls, nudgeHistory, queued, recentSent, work, doneToday, showReactions,
-    dayPushes, lastSeenMs, sentSinceSeen, seenCountIsFloor, laterLook,
+    dayPushes, lastSeenMs, sentSinceSeen, seenCountIsFloor, laterLook, lastRoundupMs,
   } = ctx;
   const hour = Math.floor(localMin / 60);
   const timeOfDay = hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
@@ -1229,6 +1244,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       ? dayPushes.slice(0, 40).map((p) => `- ${clock(p.at)} ${p.title}${p.mine ? ' (your nudge)' : ''}${p.at > nowMs ? ' — booked, not sent yet' : ''}`).join('\n')
       : '- nothing yet'
   }\n(${pushesSent} sent so far today, ${pushesBooked} still booked for later)\n`;
+  const roundupLine = `- Last parked-list roundup (LEAVE IT ALONE tags): ${Number.isFinite(lastRoundupMs) ? daysAgoLabel(lastRoundupMs) : 'never'}\n`;
   const seenLine = Number.isFinite(lastSeenMs)
     ? `- Last looked at the app: ${whenLabel(lastSeenMs)} (${daysAgoLabel(lastSeenMs)})${sentSinceSeen > 0 ? ` — ${seenCountIsFloor ? 'at least ' : ''}${sentSinceSeen} notification${sentSinceSeen === 1 ? ' has' : 's have'} gone out since then` : ' — nothing has gone out since'}\n`
     : '';
@@ -1244,7 +1260,7 @@ CURRENT CONTEXT:
 - Today: ${todayLabel}
 - Current time: ${timeStr} (${timeOfDay})
 - Timezone: ${timeZone}
-${seenLine}${aboutMe.trim() ? `- ABOUT YOUR BOSS, in their own words: ${aboutMe.trim()}\n  Use this only to judge what a task really involves and how much it matters to THEM. Never quote it back at them in a notification.\n` : ''}- Quiet hours: ${noQuietHours ? 'NONE — this user has quiet hours turned off and is often up until around midnight, so late-evening nudges are welcome' : `${quietStartStr} - ${quietEndStr} (never schedule during these)`}
+${seenLine}${roundupLine}${aboutMe.trim() ? `- ABOUT YOUR BOSS, in their own words: ${aboutMe.trim()}\n  Use this only to judge what a task really involves and how much it matters to THEM. Never quote it back at them in a notification.\n` : ''}- Quiet hours: ${noQuietHours ? 'NONE — this user has quiet hours turned off and is often up until around midnight, so late-evening nudges are welcome' : `${quietStartStr} - ${quietEndStr} (never schedule during these)`}
 ${workBlock}
 FULL TASK LIST (you decide what's relevant today — you have the week ahead):
 ${taskList}
@@ -1259,7 +1275,7 @@ YOUR APPROACH:
 - USE EVERYTHING ON A TASK'S LINE, together: what they said when they added it ("in their words" — often says more than the title about what it involves, when, and why), the notes, the time they named, whether it's work or personal, whether it's a bill, whether it repeats, how long it has been sitting there, and when you last nudged it. Decide the way an assistant who knew all of that would.
 - A REMINDER WISH on a task is the boss's own instruction about how, when or how often to nudge THAT task ("keep reminding me until I finish", "just once", "don't bug me before noon", "only on weekdays"). Obey it over every rule below for that task (except a TAG they put on afterwards — next point): it sets the count, the spacing and the earliest hour — and today's date and weekday are at the top. Where the wish is silent, the rules below apply. A wish that is only an urgency word ("ASAP", "important", "urgent") says how much the task matters, not when to nudge: it never pulls a task set for tomorrow into tonight, and never earns a late-evening nudge — treat it as high priority and let the rules below pick the time. The one exception: "ASAP" on a task with NO date or deadline at all means as soon as possible, starting now: its first nudge lands within the next hour (never inside quiet hours), then the usual spacing.
 - A TAG on a task is a label the boss typed in their own words and put on that task, from its card, after adding it. Read it as a note from them about how to treat the task, and let it change what you do. Judge what the words mean; a tag that says nothing about reminding (a colour, a category) changes nothing. Two kinds matter most (the boss, Oct 8 2026):
-  LEAVE IT ALONE — the tag says the task is parked, not now, waiting on someone or something, or not worth chasing: "play it by ear", "not important", "waiting on X", "waiting to hear back", "on hold", "someday", "maybe", "if I feel like it". Treat the task exactly like one on the Back Burner: no nudge, no check-in, no first move, nothing at all — whatever its date, priority or REMINDER WISH says, even due today or overdue — until the tag changes. (The task's own set reminders still come; those aren't yours.) List it under "passed" with the tag as the reason.
+  LEAVE IT ALONE — the tag says the task is parked, not now, waiting on someone or something, or not worth chasing: "play it by ear", "not important", "waiting on X", "waiting to hear back", "on hold", "someday", "maybe", "if I feel like it". Treat the task exactly like one on the Back Burner: no nudge, no check-in, no first move, nothing at all — whatever its date, priority or REMINDER WISH says, even due today or overdue — until the tag changes. (The task's own set reminders still come; those aren't yours.) List it under "passed" with the tag as the reason. ONCE A WEEK, though, all the LEAVE IT ALONE tasks go out together in ONE plain notification — a roundup, not a nudge: it only says these are still on the list, parked, nothing to do today, so they don't fall out of memory ("Still on your list, parked for now: A, B, C."). Every one of them by name in one message, task_indexes listing all of them, "roundup": true. Only when the last roundup was 7 or more days ago (you're told when), on a calm stretch of a quiet day between 9 AM and 8 PM, and never when there are none. It never rings and doesn't count as nudging those tasks.
   RARE AND GENTLE — the tag says the task is real but not pressing, or they aren't sure about it yet: "no rush", "unsure about X", "not sure yet", "when I get to it", "eventually", "low key". A light mention now and then — at most once every few days, only on a quiet stretch with nothing important near it, never in the middle of a busy day — worded as an easy thought, never a push, and never combined with anything pressing. Mark that nudge "light": true: it arrives as a plain notification, never an alarm. A light mention left unanswered is not being put off: it never earns the pushed-task or first-move treatment, and never a second mention that day.
   Other tags say where things stand ("called", "sent it" — don't push them to do what's already done), how much it matters, that several tasks belong together (tasks sharing a tag can ride along in one mention instead of one each), or where or when it fits. Because a tag goes on after the task was added, it is the boss's later word: where it disagrees with the REMINDER WISH or the priority they set when adding it, the tag wins. Never quote the tag back at them.
 - "KEEP REMINDING ME UNTIL I DO IT" (a wish like that, with no pace named) means two different things depending on the task, and you decide which. A thing done in one sitting at home — the dishes, the litter box, a load of laundry, a call, the trash — is a TODAY thing: keep at it through today, every 2-3 hours, worded differently each time, until it's checked off, and if it's still open tomorrow it is overdue and you keep at it again. A thing that needs them to be somewhere or to fit a trip in — drop the package at FedEx, return the library books, pick up the prescription, the oil change — is a THIS WEEK thing: once or twice a day, at hours they could actually go, spread across the week, and a little more insistent each day it sits. Judge by what the task involves, never by its wording, and never turn either into an hourly drumbeat — that only happens when they named a pace themselves.
@@ -1326,6 +1342,7 @@ Return ONLY valid JSON:
       "title": "<2-6 words with emoji — the emoji must only reflect what the task literally says. Never guess what a name is: 'feed Tabitha' could be a cat, a baby, or a sourdough starter, so a proper name or ambiguous subject gets a neutral emoji (📌 ⏰ ✨ 🔔), never a species/gender/object guess>",
       "body": "<one supportive sentence>",
       "light": <true only when the task's TAG makes this a rare, gentle mention (RARE AND GENTLE under A TAG ON A TASK); otherwise false>,
+      "roundup": <true only for the once-a-week parked-list roundup (LEAVE IT ALONE under A TAG ON A TASK); otherwise false>,
       "rationale": "<one short phrase: why this nudge, why this time>"
     }
   ],
@@ -1398,10 +1415,12 @@ Return ONLY valid JSON:
         send_at: sendAt.toISOString(),
         title: fixTitleTimeOfDay(n.title || 'Task nudge', sendAt, timeZone),
         body: n.body || '',
-        type: n.type || 'initial',
+        // 'roundup': the once-a-week list of the tasks a tag parks (LEAVE IT
+        // ALONE in the prompt) — one plain notification, no buttons, never rung.
+        type: n.roundup === true ? 'roundup' : (n.type || 'initial'),
         // A rare, gentle mention about a task whose tag says "no rush" (the
         // prompt's A TAG ON A TASK): shown as a plain notification, never rung.
-        light: n.light === true,
+        light: n.light === true || n.roundup === true,
         rationale: n.rationale || '',
         sent: false,
         sent_at: null,
@@ -1448,7 +1467,8 @@ async function sendNudgeNotification(
   title: string,
   body: string,
   taskId: string,
-  ringAsAlarm: boolean = false
+  ringAsAlarm: boolean = false,
+  kind: string = 'smart_nudge'
 ): Promise<string | false> {
   const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
   const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
@@ -1458,7 +1478,11 @@ async function sendNudgeNotification(
     app_id: appId,
     headings: { en: title },
     contents: { en: body },
-    data: { screen: '/TaskNotification', taskId, type: 'smart_nudge' },
+    // A roundup is about several tasks at once: it opens the task list and
+    // has no Done / Later (the phone adds those by task id and type).
+    data: kind === 'roundup'
+      ? { screen: '/Tasks', taskId: '', type: 'roundup' }
+      : { screen: '/TaskNotification', taskId, type: 'smart_nudge' },
     include_external_user_ids: [email],
     channel_for_external_user_ids: 'push',
   };
