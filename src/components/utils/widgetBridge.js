@@ -594,6 +594,24 @@ export async function refreshAlarms() {
   }
 }
 
+// What rang on this phone (the phone's RingLog, builds from 38 / 1.3.15 on):
+// every full-screen alarm and every reminder that showed with sound, newest
+// first, each with how it ended (snoozed and for how long, Later, dismissed,
+// done, rang out, or merged into another ring for the same task). Shown under
+// Settings → Notifications as "What rang". null on the web or on an older
+// build, which can't say. Read-only.
+export async function readRingLog(days = 2) {
+  const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
+  if (typeof AlarmBridge?.ringLog !== 'function') return null;
+  try {
+    const res = await AlarmBridge.ringLog({ days });
+    return Array.isArray(res?.rows) ? res.rows : [];
+  } catch (e) {
+    console.warn('Ring log unavailable:', e?.message || e);
+    return null;
+  }
+}
+
 // What Android still withholds for alarms on this phone (each key true =
 // allowed), or null when the plugin is absent.
 export async function alarmPermissionStatus() {
