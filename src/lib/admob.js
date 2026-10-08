@@ -64,9 +64,10 @@ export function resetAdLaunchState() {
   shownThisLaunch = false;
 }
 
-// `source` says WHO asked for the ad ('auto' = the open-count schedule,
-// 'manual' = the diagnostics test button) so the two can be told apart in the
-// per-user numbers.
+// `source` says WHO asked for the ad — the pause it showed at ('task_done',
+// 'task_added', or the 'page_switch' fallback; see AdManager) or 'manual' for
+// the diagnostics test button — so they can be told apart in the per-user
+// numbers. Until Oct 8 2026 it was 'auto': a clock, ~15 s into the open.
 // Never while the phone is recording notes: an ad would interrupt, and its sound
 // would be recorded. The Notes page sets window.__notesRecording, but a recording
 // keeps going when the page isn't open, so the phone is asked directly too.
