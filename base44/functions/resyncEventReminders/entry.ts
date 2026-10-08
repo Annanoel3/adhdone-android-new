@@ -108,11 +108,14 @@ Deno.serve(async (req) => {
             title: reminder.notification_title,
             body: reminder.notification_body,
             sendAtISO: reminder.sendAtISO,
+            // These are all events: the phone gives an event's reminder only a
+            // Snooze button, and its night-before heads-up none (see TaskActions
+            // and multiReminderScheduler).
             data: {
               screen: '/TaskNotification',
               taskId: task.id,
               urgency: task.urgency || 'medium',
-              type: 'task_reminder',
+              type: /night before/i.test(reminder.label || '') ? 'event_heads_up' : 'event_reminder',
             },
             buttons: [
               { id: 'snooze_15', text: 'Snooze 15 min' },
