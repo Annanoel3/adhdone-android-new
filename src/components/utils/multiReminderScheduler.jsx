@@ -221,11 +221,20 @@ export async function scheduleMultiReminders({
           sendAtISO: reminder.sendAtISO,
           taskId,
           exact: reminder.exact,
+          // The type decides the buttons the phone puts on the push (TaskActions):
+          // a task reminder gets Done and Snooze; an event's reminder only Snooze
+          // (an event isn't something you finish early); and an event's night-
+          // before heads-up ("anything to ask? tap to write it down") gets none —
+          // the tap is the point. Events used to go out as task reminders, so a
+          // meeting's heads-up carried Done and Snooze (Anna, Oct 7 2026).
           data: {
             screen: '/TaskNotification',
             taskId,
             urgency: urgency || 'medium',
-            type: reminder.checkin ? 'task_checkin' : 'task_reminder',
+            type: reminder.checkin ? 'task_checkin'
+              : classification === 'event'
+                ? (/night before/i.test(reminder.label || '') ? 'event_heads_up' : 'event_reminder')
+                : 'task_reminder',
           },
         });
         if (id) scheduled.push({ reminder, id });
