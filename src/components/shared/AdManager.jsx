@@ -1,5 +1,7 @@
-import { useEffect, useRef } from 'react';
-import { initAdMob, showInterstitialAd, resetAdLaunchState, adWaitingForScreen } from '@/lib/admob';
+import { useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
+import { initAdMob, showInterstitialAd, resetAdLaunchState } from '@/lib/admob';
+import { anyPopupOpen } from '@/components/onboarding/onboardingSurface';
 
 const AD_OPEN_KEY = 'admgr_open_count';
 const LAST_LAUNCH_KEY = 'admgr_last_launch_at';
@@ -8,24 +10,64 @@ const LAST_LAUNCH_KEY = 'admgr_last_launch_at';
 // that qualifying launches almost never came around.
 const NEW_LAUNCH_GAP_MS = 30 * 60 * 1000;
 
+// WHEN the ad shows (Anna, Oct 8 2026: "the user could have been in the middle
+// of something important and it would have showed up"). Until now the open
+// that was due an ad got it on a clock, about 15 seconds in, whatever the
+// person was doing. Now the open's ad is OWED, and it only shows at a pause
+// the person just made themselves:
+//   - they checked a task off — once the confetti (2.2 s) and the 5-second
+//     Undo are gone, and only if they haven't tapped anything since;
+//   - they added a task — once the capture has settled.
+// If neither happens, the owed ad falls back to the next page switch, but
+// only once they've been in the app a while (so the task pauses get their
+// chance first), and only onto a page where an ad makes sense. An open that
+// ends with no pause at all shows no ad — it is not carried to the next open.
+// Nothing here waits on a timer and retries: a pause that isn't quiet when
+// it comes is simply let go, and the next one is waited for.
+const AFTER_TASK_DONE_MS = 6500;
+const AFTER_TASK_ADDED_MS = 3000;
+// Past the tap that switched the page, so it doesn't read as mid-something.
+const AFTER_PAGE_SWITCH_MS = 2500;
+// No ad inside the first moments of an open, whatever happened.
+const MIN_OPEN_AGE_MS = 10 * 1000;
+// A page switch only counts as the fallback after this long in the app.
+const PAGE_SWITCH_AFTER_MS = 45 * 1000;
+// A tap or key in the last moment means they're mid-something, not pausing.
+const RECENT_TAP_MS = 2000;
+// Never on these pages: the alarm screen (TaskNotification), the Focus Timer,
+// Record Notes, or the add-a-task page (they're about to type).
+const NO_AD_PAGE = /^\/(tasknotification|focustimer|notes|addtask)(\/|$)/i;
+
+// Module-level on purpose: Layout remounts this component on every route
+// change, and this is one open's state, not one page's.
+let launchCount = 0;
+let openStartedAt = 0;
+let owedThisOpen = false;
+let signedUpAt = null;     // null until the profile is here
+let lastTapAt = 0;
+let lastPathname = null;
+let pendingTimer = null;
+
 function isCapacitor() {
   return window.Capacitor?.isNativePlatform?.() ?? false;
 }
 
 function isUserBusy() {
   const el = document.activeElement;
-  if (!el) return false;
-  const tag = el.tagName.toLowerCase();
-  if (['input', 'textarea', 'select'].includes(tag)) return true;
-  if (el.isContentEditable || el.contentEditable === 'true') return true;
+  if (el) {
+    const tag = el.tagName.toLowerCase();
+    if (['input', 'textarea', 'select'].includes(tag)) return true;
+    if (el.isContentEditable || el.contentEditable === 'true') return true;
+  }
   if (window.__microphoneActive) return true;
   // Recording notes (Notes page): an ad would interrupt it, and its sound would
   // end up in the recording.
   if (window.__notesRecording) return true;
   if (document.querySelector('[data-mic-active="true"]')) return true;
-  return false;
+  return Date.now() - lastTapAt < RECENT_TAP_MS;
 }
 
+// Which opens get an ad: the 2nd, then every 3rd after that (5th, 8th, …).
 function shouldShowAd(count) {
   if (count === 2) return true;
   if (count > 2 && (count - 2) % 3 === 0) return true;
@@ -38,123 +80,126 @@ function shouldShowAd(count) {
 // signed up, right after a crash, and she never came back.
 const GRACE_DAYS = 3;
 const GRACE_OPENS = 5;
-function inGrace(signedUpAt, count) {
+function inGrace(signedUp, count) {
   if (count > GRACE_OPENS) return false;
   // Not known yet (the profile hasn't loaded): treat as new rather than risk
   // an ad on someone's first day.
-  if (signedUpAt === null) return true;
-  const t = Date.parse(signedUpAt || '');
+  if (signedUp === null) return true;
+  const t = Date.parse(signedUp || '');
   if (!Number.isFinite(t)) return false; // an old account with no sign-up date
   return Date.now() - t < GRACE_DAYS * 24 * 60 * 60 * 1000;
 }
 
+function cancelPending() {
+  if (pendingTimer) clearTimeout(pendingTimer);
+  pendingTimer = null;
+}
+
+// Counts a launch at most once per gap window, so route changes (which
+// remount this component) never inflate the count.
+// Returns true when this counted as a new launch.
+function registerLaunch() {
+  const lastRaw = localStorage.getItem(LAST_LAUNCH_KEY);
+  const lastMs = lastRaw ? parseInt(lastRaw, 10) : 0;
+  if (Date.now() - lastMs < NEW_LAUNCH_GAP_MS) return false;
+
+  localStorage.setItem(LAST_LAUNCH_KEY, String(Date.now()));
+  const count = parseInt(localStorage.getItem(AD_OPEN_KEY) || '0', 10) + 1;
+  localStorage.setItem(AD_OPEN_KEY, String(count));
+  launchCount = count;
+  openStartedAt = Date.now();
+  owedThisOpen = shouldShowAd(count);
+  lastPathname = window.location.pathname;
+  resetAdLaunchState();
+  cancelPending();
+  return true;
+}
+
+// The pause has arrived: show the owed ad if the screen really is quiet,
+// otherwise let this pause go and wait for the next one.
+async function attempt(source) {
+  pendingTimer = null;
+  if (!owedThisOpen) return;
+  if (document.visibilityState === 'hidden') return;
+  if (inGrace(signedUpAt, launchCount)) {
+    owedThisOpen = false;
+    return;
+  }
+  if (Date.now() - openStartedAt < MIN_OPEN_AGE_MS) return;
+  if (NO_AD_PAGE.test(window.location.pathname)) return;
+  if (anyPopupOpen() || isUserBusy()) return;
+  try {
+    if (await showInterstitialAd(source)) owedThisOpen = false;
+  } catch (e) {
+    /* nothing to show; the next pause gets its turn */
+  }
+}
+
+function atPause(source, delayMs) {
+  if (!owedThisOpen) return;
+  cancelPending();
+  pendingTimer = setTimeout(() => attempt(source), delayMs);
+}
+
 export default function AdManager({ user }) {
-  const delayRef = useRef(null);
-  const countRef = useRef(null);
-  // When this account signed up (null until the profile is here) and this
-  // launch's open count, read again at show time: the grace is judged then,
-  // because the profile usually arrives after the launch was counted.
-  const signedUpRef = useRef(null);
-  const launchCountRef = useRef(0);
+  const location = useLocation();
+
+  // When this account signed up (null until the profile is here), read again
+  // at show time: the grace is judged then, because the profile usually
+  // arrives after the launch was counted.
   useEffect(() => {
-    signedUpRef.current = user ? (user.signed_up_at || user.created_date || '') : null;
+    signedUpAt = user ? (user.signed_up_at || user.created_date || '') : null;
   }, [user?.signed_up_at, user?.created_date, !!user]);
-  // This launch is due an ad that hasn't shown yet. Switching to another app
-  // cancels the countdown (an ad must never pop up over another app); coming
-  // back picks it up again.
-  const pendingRef = useRef(false);
 
   useEffect(() => {
     if (!isCapacitor()) return;
     initAdMob().catch(() => {});
-
-    function clearTimers() {
-      if (delayRef.current) clearTimeout(delayRef.current);
-      if (countRef.current) clearInterval(countRef.current);
-      delayRef.current = null;
-      countRef.current = null;
-    }
-
-    function tryShowAd() {
-      delayRef.current = null;
-      if (document.visibilityState === 'hidden') return; // picked up again on return
-      if (inGrace(signedUpRef.current, launchCountRef.current)) {
-        pendingRef.current = false;
-        return;
-      }
-      if (isUserBusy()) {
-        delayRef.current = setTimeout(tryShowAd, 5000);
-        return;
-      }
-      // Five quiet seconds first: if they start typing or recording in that
-      // window, the ad waits. Nothing is shown during the wait — the old
-      // "Ad in 5…" badge counting down in the corner was its own annoyance.
-      let c = 5;
-      countRef.current = setInterval(() => {
-        // Cancel if the user became busy (e.g. started recording) mid-wait
-        if (isUserBusy()) {
-          clearInterval(countRef.current);
-          countRef.current = null;
-          delayRef.current = setTimeout(tryShowAd, 30000);
-          return;
-        }
-        c -= 1;
-        if (c <= 0) {
-          clearInterval(countRef.current);
-          countRef.current = null;
-          showInterstitialAd()
-            .then(() => { pendingRef.current = adWaitingForScreen(); })
-            .catch(() => { pendingRef.current = false; });
-        }
-      }, 1000);
-    }
-
-    // Counts a launch at most once per gap window, so route changes (which
-    // remount this component) never inflate the count.
-    // Returns true when this counted as a new launch.
-    function registerLaunch() {
-      const lastRaw = localStorage.getItem(LAST_LAUNCH_KEY);
-      const lastMs = lastRaw ? parseInt(lastRaw, 10) : 0;
-      if (Date.now() - lastMs < NEW_LAUNCH_GAP_MS) return false;
-
-      localStorage.setItem(LAST_LAUNCH_KEY, String(Date.now()));
-      const count = parseInt(localStorage.getItem(AD_OPEN_KEY) || '0', 10) + 1;
-      localStorage.setItem(AD_OPEN_KEY, String(count));
-      launchCountRef.current = count;
-
-      resetAdLaunchState();
-      clearTimers();
-      pendingRef.current = shouldShowAd(count);
-      if (pendingRef.current) delayRef.current = setTimeout(tryShowAd, 15000);
-      return true;
-    }
-
     registerLaunch();
+
+    const onTaskDone = () => atPause('task_done', AFTER_TASK_DONE_MS);
+    const onTaskAdded = () => atPause('task_added', AFTER_TASK_ADDED_MS);
+    const onTap = () => { lastTapAt = Date.now(); };
+    window.addEventListener('task-done', onTaskDone);
+    window.addEventListener('task-created', onTaskAdded);
+    window.addEventListener('pointerdown', onTap, true);
+    window.addEventListener('keydown', onTap, true);
 
     let handle = null;
     (async () => {
       try {
         const { App } = window.Capacitor.Plugins;
         handle = await App.addListener('appStateChange', ({ isActive }) => {
+          // Left the app: no ad may land on top of whatever they switched to.
           if (!isActive) {
-            // Left the app: no ad may land on top of whatever they switched to.
-            clearTimers();
+            cancelPending();
             return;
           }
-          if (!registerLaunch() && pendingRef.current) {
-            // Back within the same launch, still owed its ad: the same wait again.
-            clearTimers();
-            delayRef.current = setTimeout(tryShowAd, 15000);
-          }
+          registerLaunch();
         });
       } catch (e) {}
     })();
 
     return () => {
-      clearTimers();
+      window.removeEventListener('task-done', onTaskDone);
+      window.removeEventListener('task-created', onTaskAdded);
+      window.removeEventListener('pointerdown', onTap, true);
+      window.removeEventListener('keydown', onTap, true);
       handle?.remove?.();
     };
   }, []);
+
+  // The fallback: a page switch, once they've been in the app a while without
+  // a task pause, onto a page where an ad makes sense.
+  useEffect(() => {
+    if (!isCapacitor()) return;
+    const path = location.pathname;
+    const switched = lastPathname !== null && lastPathname !== path;
+    lastPathname = path;
+    if (!switched || !owedThisOpen) return;
+    if (Date.now() - openStartedAt < PAGE_SWITCH_AFTER_MS) return;
+    if (NO_AD_PAGE.test(path)) return;
+    atPause('page_switch', AFTER_PAGE_SWITCH_MS);
+  }, [location.pathname]);
 
   return null;
 }
