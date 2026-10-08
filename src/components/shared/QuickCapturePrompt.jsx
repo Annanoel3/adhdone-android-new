@@ -1504,6 +1504,12 @@ export function AppUpdatePrompt({ user, theme }) {
     if (!NEWEST_BUILD_ON_PLAY) return;
     checked.current = true;
     if (!window.Capacitor?.isNativePlatform?.()) return;
+    // One ask per app open. While the "What can we do better?" popup is still
+    // waiting on this account (FeedbackAskPrompt), it has this open to itself;
+    // this card takes the next open, after it's been answered (Anna, Oct 7
+    // 2026). Read once here, so answering it during this open doesn't bring
+    // the card up behind it.
+    if (user.feedback_ask?.asked_at && !user.feedback_ask?.answered_at) return;
     (async () => {
       // The phone's plugins can show up a moment after the page loads (the
       // side menu's quiet button waits for them too): give the newest build
