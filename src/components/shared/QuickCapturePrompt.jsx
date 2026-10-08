@@ -1489,6 +1489,14 @@ export function AppUpdatePrompt({ user, theme }) {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
+  // "Shown today" is stamped when the card is actually on screen, not when it
+  // decides to ask for a turn: with another popup ahead of it (the feedback ask,
+  // Oct 2026), a stamp taken early and an app closed before its turn came would
+  // have put the card off until tomorrow.
+  useEffect(() => {
+    if (!shown) return;
+    try { localStorage.setItem(UPDATE_PROMPT_KEY, new Date().toDateString()); } catch (e) { /* no storage */ }
+  }, [shown]);
 
   useEffect(() => {
     // Once per app open; not restarted when the account record refreshes.
@@ -1508,7 +1516,6 @@ export function AppUpdatePrompt({ user, theme }) {
       const today = new Date().toDateString();
       try {
         if (localStorage.getItem(UPDATE_PROMPT_KEY) === today) return;
-        localStorage.setItem(UPDATE_PROMPT_KEY, today);
       } catch (e) { /* no storage: still show it this once */ }
       if (!mounted.current) return;
       const live = QUIET_CHOICE_ON_PLAY;
