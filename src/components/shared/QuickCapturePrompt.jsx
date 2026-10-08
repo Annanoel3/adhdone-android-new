@@ -1429,16 +1429,20 @@ const QUIET_CHOICE_ON_PLAY = true;
 // Oct 1, 2026: on. A brand-new Play install (build 36, 1.3.13) reports
 // RecorderBridge, and Anna's phone does too.
 const NOTES_BUILD_ON_PLAY = true;
-// 1.3.14 (build 37) is the build where Later on an alarm or reminder gives the
+// 1.3.15 (build 38) is the build where Later on an alarm or reminder gives the
 // task a real break (3 hours; a second Later the same day waits until tomorrow
-// morning), alarms and the read-aloud voice are louder, and a snoozed alarm
-// stays quiet once its task is finished, deleted or parked. Accepted on Google
-// Play Oct 7, 2026. From here the card goes by the phone's own build number
-// (Capacitor's App.getInfo, the same number WidgetTaskSync files as app_build),
-// so the next build only needs NEWEST_BUILD bumped.
-// The plugin checks stay for builds that report no number.
+// morning), alarms and the read-aloud voice are louder, a snoozed alarm stays
+// quiet once its task is finished, deleted or parked, a new nudge replaces an
+// older alarm waiting for the same task, the phone keeps a log of what rang
+// (Settings → Notifications → What rang), and an appointment's night-before
+// heads-up has a "Write questions" button. (1.3.14, build 37, was meant to
+// carry the first three but shipped without its phone code — a version bump
+// only; it was accepted on Play Oct 7, 2026, and 1.3.15 on Oct 8.) The card
+// goes by the phone's own build number (Capacitor's App.getInfo, the same
+// number WidgetTaskSync files as app_build), so the next build only needs
+// NEWEST_BUILD bumped. The plugin checks stay for builds that report no number.
 const LATER_BUILD_ON_PLAY = true;
-const NEWEST_BUILD = 37;
+const NEWEST_BUILD = 38;
 const hasQuietHoursBuild = () =>
   typeof window !== 'undefined' &&
   typeof window.Capacitor?.Plugins?.AlarmBridge?.quietFor === 'function';
