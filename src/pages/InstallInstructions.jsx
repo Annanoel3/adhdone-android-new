@@ -237,6 +237,41 @@ const STATUS_TEXT = {
   ready: "",
 };
 
+// ── Search (Anna, Oct 8 2026: "search all notes for keywords") ──
+// Every word typed has to turn up somewhere in the recording: its title, the
+// notes (gist, to-dos, details, topics, decisions, open questions) or the full
+// transcript. The first place the first word turns up becomes the snippet
+// under the card, so you can see WHY it matched without opening it.
+function searchLines(r) {
+  const n = r?.notes || {};
+  const out = [];
+  const add = (where, text) => { const s = String(text || "").trim(); if (s) out.push({ where, text: s }); };
+  add("title", r?.title || n.title);
+  (n.gist || []).forEach((g) => add("gist", g));
+  (n.todos || []).forEach((t) => add("to-do", t?.text));
+  (n.details || []).forEach((d) => add("details", typeof d === "string" ? d : [d?.label, d?.text].filter(Boolean).join(": ")));
+  (n.sections || []).forEach((s) => { add("topic", s?.heading); (s?.points || []).forEach((p) => add(s?.heading || "topic", p)); });
+  (n.decisions || []).forEach((d) => add("decided", d?.text));
+  (n.questions || []).forEach((q) => add("open question", q?.text));
+  (r?.transcript_parts || []).slice().sort((a, b) => (a?.index || 0) - (b?.index || 0)).forEach((p) => add("transcript", p?.text));
+  return out;
+}
+
+function searchMatch(r, query) {
+  const words = String(query || "").toLowerCase().split(/\s+/).filter((w) => w.length >= 2);
+  if (words.length === 0) return { ok: true, snippet: null };
+  const lines = searchLines(r);
+  const all = lines.map((l) => l.text.toLowerCase()).join("\n");
+  if (!words.every((w) => all.includes(w))) return { ok: false, snippet: null };
+  const first = lines.find((l) => l.text.toLowerCase().includes(words[0]));
+  if (!first) return { ok: true, snippet: null };
+  const t = first.text;
+  const i = t.toLowerCase().indexOf(words[0]);
+  const from = Math.max(0, i - 50);
+  const to = Math.min(t.length, i + words[0].length + 70);
+  return { ok: true, snippet: { where: first.where, text: `${from > 0 ? "…" : ""}${t.slice(from, to)}${to < t.length ? "…" : ""}` } };
+}
+
 export default function NotesPage() {
   const [theme, setTheme] = useState(() => localStorage.getItem("adhd_theme") || "minimalist");
   const dark = theme === "dark";
@@ -253,6 +288,12 @@ export default function NotesPage() {
   const [capOpen, setCapOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [upcoming, setUpcoming] = useState([]);
+  // Every event from the last two months on, any status: for "link this
+  // recording to an event" and for naming a recording's event on its card.
+  const [events, setEvents] = useState([]);
+  const [search, setSearch] = useState("");
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linking, setLinking] = useState(false);
   const [prepTask, setPrepTask] = useState(null);
   const [draft, setDraft] = useState("");
   const [liveQuestions, setLiveQuestions] = useState([]);
@@ -295,13 +336,16 @@ export default function NotesPage() {
       const now = Date.now();
       const rows = [];
       for (let skip = 0; skip < 1000; skip += 200) {
-        const page = (await base44.entities.Task.filter({ status: "active", classification: "event" }, "-event_time", 200, skip)) || [];
+        // Any status, two months back: a recording can be linked to an event
+        // that is already over (the link dialog below).
+        const page = (await base44.entities.Task.filter({ classification: "event" }, "-event_time", 200, skip)) || [];
         rows.push(...page);
         const last = page.length ? startOf(page[page.length - 1]) : null;
-        if (page.length < 200 || (last !== null && last < now - 3 * HOUR)) break;
+        if (page.length < 200 || (last !== null && last < now - 60 * 24 * HOUR)) break;
       }
+      setEvents(rows.filter((t) => !t.parent_task_id && !t.birthday_person && startOf(t) !== null));
       const soon = rows
-        .filter((t) => !t.parent_task_id && !t.birthday_person && !t.day_only_task && isMeeting(t))
+        .filter((t) => t.status === "active" && !t.parent_task_id && !t.birthday_person && !t.day_only_task && isMeeting(t))
         .filter((t) => {
           const s = startOf(t);
           return s !== null && s > now - 3 * HOUR;
@@ -759,6 +803,62 @@ export default function NotesPage() {
     </Dialog>
   );
 
+  // "Link to an event" (Anna, Oct 8 2026): a recording made without picking
+  // its event, or with the wrong one, is attached to one here. The event's
+  // questions come along so the notes can say which got answered, and the
+  // event's dashed "Coming up" card becomes this recording's. Events from the
+  // last two months on, the ones closest to the recording's time first.
+  const linkTo = async (task) => {
+    if (!open) return;
+    setLinking(true);
+    try {
+      const fields = task
+        ? { task_id: task.id, questions: cleanQuestions(task.prep_questions), ...(open.title ? {} : { title: task.title }) }
+        : { task_id: "", questions: [] };
+      await base44.entities.EnergyLog.update(open.id, fields);
+      await loadRecords();
+      setLinkOpen(false);
+      toast({ title: task ? `Linked to "${task.title}"` : "Unlinked from its event" });
+    } catch (e) {
+      toast({ title: "Couldn't link it", description: "Check your connection and try again." });
+    } finally {
+      setLinking(false);
+    }
+  };
+  const linkDialog = (
+    <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
+      <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto bg-card text-card-foreground border-border">
+        <div className="space-y-3 pt-2">
+          <h2 className="text-xl font-bold text-foreground">Which event is this recording for?</h2>
+          {(() => {
+            const at = new Date(open?.started_at || 0).getTime() || Date.now();
+            const list = events
+              .slice()
+              .sort((a, b) => Math.abs(startOf(a) - at) - Math.abs(startOf(b) - at))
+              .slice(0, 40);
+            if (list.length === 0) return <p className="text-sm text-muted-foreground">No events found from the last two months on.</p>;
+            return list.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                disabled={linking}
+                onClick={() => linkTo(t)}
+                className={`w-full text-left rounded-xl border px-3 py-2.5 ${open?.task_id === t.id ? "border-purple-500" : "border-border"}`}
+              >
+                <div className="font-semibold text-foreground truncate">{t.title}</div>
+                <div className="text-sm text-muted-foreground">{whenText(new Date(startOf(t)).toISOString())}{open?.task_id === t.id ? " · linked now" : ""}</div>
+              </button>
+            ));
+          })()}
+          {open?.task_id && (
+            <Button variant="outline" className="w-full" disabled={linking} onClick={() => linkTo(null)}>Unlink from its event</Button>
+          )}
+          <Button variant="ghost" className="w-full" onClick={() => setLinkOpen(false)}>Cancel</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
   const deleteDialog = (
     <Dialog open={!!confirmDelete} onOpenChange={(v) => !v && setConfirmDelete(null)}>
       <DialogContent className="max-w-md w-[calc(100vw-2rem)] bg-card text-card-foreground border-border">
@@ -846,6 +946,7 @@ export default function NotesPage() {
       <div className="p-4 md:p-8 w-full" style={pagePad}>
         {capDialog}
         {deleteDialog}
+        {linkDialog}
         <div className="max-w-2xl mx-auto space-y-4">
           <button type="button" onClick={() => { setOpenId(null); setEditDraft(null); }} className={`flex items-center gap-1 text-sm ${soft}`}>
             <ChevronLeft className="w-4 h-4" /> All notes
@@ -853,6 +954,19 @@ export default function NotesPage() {
           <div className={headCard}>
             <h1 className={`text-2xl font-bold ${heading}`}>{open.title || notes?.title || "Recording"}</h1>
             <p className={`text-sm ${soft}`}>{whenText(open.started_at)}{open.duration_ms ? ` · ${clock(open.duration_ms)}` : ""}</p>
+            {(() => {
+              const ev = open.task_id ? events.find((t) => t.id === open.task_id) : null;
+              return (
+                <div className="mt-2 flex items-center gap-3 flex-wrap">
+                  <span className={`text-sm ${soft}`}>
+                    {ev ? `For: ${ev.title} · ${whenText(new Date(startOf(ev)).toISOString())}` : open.task_id ? "Linked to an event" : "Not linked to an event"}
+                  </span>
+                  <button type="button" onClick={() => setLinkOpen(true)} className={`text-sm font-semibold ${dark ? "text-purple-300" : "text-purple-700"}`}>
+                    {open.task_id ? "Change event" : "Link to an event"}
+                  </button>
+                </div>
+              );
+            })()}
           </div>
 
           {editDraft && (
@@ -1317,7 +1431,21 @@ export default function NotesPage() {
         {loaded && records.length > 0 && (
           <div className="space-y-2">
             <h2 className={`text-lg font-bold ${heading}`}>Your recordings</h2>
-            {records.map((r) => (
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search your notes and transcripts"
+              className={`w-full rounded-xl border px-3 py-2.5 text-[15px] outline-none ${dark ? "bg-gray-900 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900"}`}
+            />
+            {(() => {
+              const hits = records.map((r) => ({ r, m: searchMatch(r, search) })).filter((h) => h.m.ok);
+              if (search.trim().length >= 2 && hits.length === 0) {
+                return <p className={`text-sm ${soft}`}>Nothing in your notes or transcripts has "{search.trim()}".</p>;
+              }
+              return hits.map(({ r, m }) => {
+                const ev = r.task_id ? events.find((t) => t.id === r.task_id) : null;
+                const evLabel = ev && ev.title !== (r.title || r.notes?.title) ? ` · ${ev.title}` : "";
+                return (
               <button
                 key={r.id}
                 type="button"
@@ -1327,13 +1455,18 @@ export default function NotesPage() {
                 <div className="flex-1 min-w-0">
                   <div className={`font-semibold truncate ${heading}`}>{r.title || r.notes?.title || "Recording"}</div>
                   <div className={`text-sm ${soft}`}>
-                    {whenText(r.started_at)}{r.duration_ms ? ` · ${clock(r.duration_ms)}` : ""}
+                    {whenText(r.started_at)}{r.duration_ms ? ` · ${clock(r.duration_ms)}` : ""}{evLabel}
                     {STATUS_TEXT[r.status] ? ` · ${progress?.recordId === r.id ? "Working on it…" : STATUS_TEXT[r.status]}` : ""}
                   </div>
+                  {m.snippet && (
+                    <div className={`text-xs mt-1 ${soft}`}><span className="font-semibold">{m.snippet.where}:</span> {m.snippet.text}</div>
+                  )}
                 </div>
                 <span className={`text-sm flex items-center shrink-0 ${soft}`}>Details<ChevronRight className="w-4 h-4" /></span>
               </button>
-            ))}
+                );
+              });
+            })()}
           </div>
         )}
       </div>
