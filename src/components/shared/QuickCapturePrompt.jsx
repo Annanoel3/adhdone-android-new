@@ -1399,10 +1399,12 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
 // behind gets this single card, never one per version they skipped. When a
 // new build ships, bump NEWEST_BUILD; don't add a second update popup.
 //
-// Shows on the phone app only, until the newest build is installed, and only
-// while NEWEST_BUILD_ON_PLAY is true. Once ANSWERED (Not now, or Update
-// tapped) it stays away for the rest of that day; a card that came up and was
-// never answered — the app closed under it — asks again on the next open. The Update button
+// Shows on the phone app only, on EVERY app open until the newest build is
+// installed (Anna, Oct 8 2026: "every app open until updated" — it used to
+// be once a day), and only while NEWEST_BUILD_ON_PLAY is true. Once per
+// open, not once per page: this Layout remounts on every navigation, so the
+// "asked this open" mark lives outside the component. Not again within ten
+// minutes of tapping Update, since Play may be downloading it. The Update button
 // opens the Play Store on builds that can (NotifyBridge.openPlayStore, added
 // to the phone code after the first 1.3.9 AAB was built, so it ships in the
 // next build made); older builds can't open another app from here (the app
@@ -1412,12 +1414,17 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
 // saved to the account now and reaches the phone after the update
 // (WidgetTaskSync hands it over on every app open), so first-time alarm
 // set-up won't ask it again.
-// The day it was last answered. It used to be the day it was last SHOWN,
-// stamped the moment the card was on screen: on Oct 8 2026 the card got its
-// turn as Anna was closing the app (up for about a second), and for the rest
-// of the day it stayed away. New key on purpose, so the old day-stamp on
-// phones is ignored.
-const UPDATE_PROMPT_KEY = 'app_update_prompt_last_answered';
+// Asked (actually on screen) during this open. Reset when the app comes back
+// to the front after a while away; a quick switch to a text and back is the
+// same open.
+let updateAskedThisOpen = false;
+let updateHiddenAt = 0;
+let updateOpenWatcher = false;
+const UPDATE_NEW_OPEN_AFTER_MS = 5 * 60 * 1000;
+// When Update was last tapped: Play may be downloading the build, so no card
+// for a while, even across opens.
+const UPDATE_TAPPED_KEY = 'app_update_prompt_update_tapped_at';
+const UPDATE_TAPPED_QUIET_MS = 10 * 60 * 1000;
 // Switch to true only once the newest build is out on Google Play to everyone
 // (not partway through a staged rollout). Before that there is nothing to
 // update to, so the popup must stay hidden.
@@ -1490,19 +1497,41 @@ export function AppUpdatePrompt({ user, theme }) {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
-  // Stamped when the person answers the card (Not now, or Update tapped) —
-  // never when it merely came up, so a card nobody got to answer is asked
-  // again on the next open.
-  const stampAnswered = () => {
-    try { localStorage.setItem(UPDATE_PROMPT_KEY, new Date().toDateString()); } catch (e) { /* no storage */ }
+  // This open has had its ask once the card is really on screen — not when
+  // it decides to ask, so a page switch before its turn came doesn't lose it.
+  useEffect(() => {
+    if (shown) updateAskedThisOpen = true;
+  }, [shown]);
+  const updateTappedRecently = () => {
+    try {
+      const t = Number(localStorage.getItem(UPDATE_TAPPED_KEY) || 0);
+      return Number.isFinite(t) && Date.now() - t < UPDATE_TAPPED_QUIET_MS;
+    } catch (e) { return false; }
+  };
+  const noteUpdateTapped = () => {
+    try { localStorage.setItem(UPDATE_TAPPED_KEY, String(Date.now())); } catch (e) { /* no storage */ }
   };
 
   useEffect(() => {
-    // Once per app open; not restarted when the account record refreshes.
+    // Once per mount; not restarted when the account record refreshes.
     if (!user || checked.current) return;
     if (!NEWEST_BUILD_ON_PLAY) return;
     checked.current = true;
     if (!window.Capacitor?.isNativePlatform?.()) return;
+    // A return to the app after a while away is a new open.
+    if (!updateOpenWatcher) {
+      updateOpenWatcher = true;
+      try {
+        window.Capacitor.Plugins.App.addListener('appStateChange', ({ isActive }) => {
+          if (!isActive) {
+            updateHiddenAt = Date.now();
+            return;
+          }
+          if (updateHiddenAt && Date.now() - updateHiddenAt >= UPDATE_NEW_OPEN_AFTER_MS) updateAskedThisOpen = false;
+        });
+      } catch (e) { /* no App plugin: once per page load */ }
+    }
+    if (updateAskedThisOpen) return;
     // One ask per app open. While the "What can we do better?" popup is still
     // waiting on this account (FeedbackAskPrompt), it has this open to itself;
     // this card takes the next open, after it's been answered (Anna, Oct 7
@@ -1525,10 +1554,7 @@ export function AppUpdatePrompt({ user, theme }) {
       }
       if (!mounted.current) return;
       if (build > 0 ? build >= NEWEST_BUILD : hasNewestBuildByPlugins()) return;
-      const today = new Date().toDateString();
-      try {
-        if (localStorage.getItem(UPDATE_PROMPT_KEY) === today) return;
-      } catch (e) { /* no storage: still show it this once */ }
+      if (updateTappedRecently() || updateAskedThisOpen) return;
       if (!mounted.current) return;
       const live = QUIET_CHOICE_ON_PLAY;
       setChoiceLive(live);
@@ -1585,7 +1611,7 @@ export function AppUpdatePrompt({ user, theme }) {
       try {
         const r = await NotifyBridge.startAppUpdate();
         if (r?.result === 'started') {
-          stampAnswered();
+          noteUpdateTapped();
           setWanted(false);
           return;
         }
@@ -1596,7 +1622,7 @@ export function AppUpdatePrompt({ user, theme }) {
     if (typeof NotifyBridge?.openPlayStore === 'function') {
       try {
         await NotifyBridge.openPlayStore();
-        stampAnswered();
+        noteUpdateTapped();
         setWanted(false);
         return;
       } catch (e) { /* show the steps instead */ }
@@ -1607,7 +1633,6 @@ export function AppUpdatePrompt({ user, theme }) {
 
   const notNow = () => {
     trackFire('update_prompt', { props: { action: 'not_now' } });
-    stampAnswered();
     setWanted(false);
   };
 
