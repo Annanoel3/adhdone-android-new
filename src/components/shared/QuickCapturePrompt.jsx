@@ -1399,8 +1399,10 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
 // behind gets this single card, never one per version they skipped. When a
 // new build ships, bump NEWEST_BUILD; don't add a second update popup.
 //
-// Shows on the phone app only, at most once a day, until the newest build is
-// installed, and only while NEWEST_BUILD_ON_PLAY is true. The Update button
+// Shows on the phone app only, until the newest build is installed, and only
+// while NEWEST_BUILD_ON_PLAY is true. Once ANSWERED (Not now, or Update
+// tapped) it stays away for the rest of that day; a card that came up and was
+// never answered — the app closed under it — asks again on the next open. The Update button
 // opens the Play Store on builds that can (NotifyBridge.openPlayStore, added
 // to the phone code after the first 1.3.9 AAB was built, so it ships in the
 // next build made); older builds can't open another app from here (the app
@@ -1410,7 +1412,12 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
 // saved to the account now and reaches the phone after the update
 // (WidgetTaskSync hands it over on every app open), so first-time alarm
 // set-up won't ask it again.
-const UPDATE_PROMPT_KEY = 'app_update_prompt_last_shown';
+// The day it was last answered. It used to be the day it was last SHOWN,
+// stamped the moment the card was on screen: on Oct 8 2026 the card got its
+// turn as Anna was closing the app (up for about a second), and for the rest
+// of the day it stayed away. New key on purpose, so the old day-stamp on
+// phones is ignored.
+const UPDATE_PROMPT_KEY = 'app_update_prompt_last_answered';
 // Switch to true only once the newest build is out on Google Play to everyone
 // (not partway through a staged rollout). Before that there is nothing to
 // update to, so the popup must stay hidden.
@@ -1483,14 +1490,12 @@ export function AppUpdatePrompt({ user, theme }) {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
-  // "Shown today" is stamped when the card is actually on screen, not when it
-  // decides to ask for a turn: with another popup ahead of it (the feedback ask,
-  // Oct 2026), a stamp taken early and an app closed before its turn came would
-  // have put the card off until tomorrow.
-  useEffect(() => {
-    if (!shown) return;
+  // Stamped when the person answers the card (Not now, or Update tapped) —
+  // never when it merely came up, so a card nobody got to answer is asked
+  // again on the next open.
+  const stampAnswered = () => {
     try { localStorage.setItem(UPDATE_PROMPT_KEY, new Date().toDateString()); } catch (e) { /* no storage */ }
-  }, [shown]);
+  };
 
   useEffect(() => {
     // Once per app open; not restarted when the account record refreshes.
@@ -1580,6 +1585,7 @@ export function AppUpdatePrompt({ user, theme }) {
       try {
         const r = await NotifyBridge.startAppUpdate();
         if (r?.result === 'started') {
+          stampAnswered();
           setWanted(false);
           return;
         }
@@ -1590,6 +1596,7 @@ export function AppUpdatePrompt({ user, theme }) {
     if (typeof NotifyBridge?.openPlayStore === 'function') {
       try {
         await NotifyBridge.openPlayStore();
+        stampAnswered();
         setWanted(false);
         return;
       } catch (e) { /* show the steps instead */ }
@@ -1600,6 +1607,7 @@ export function AppUpdatePrompt({ user, theme }) {
 
   const notNow = () => {
     trackFire('update_prompt', { props: { action: 'not_now' } });
+    stampAnswered();
     setWanted(false);
   };
 
