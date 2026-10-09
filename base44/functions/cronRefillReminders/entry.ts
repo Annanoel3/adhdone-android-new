@@ -1126,6 +1126,13 @@ Deno.serve(async (req) => {
     console.error('[REFILL] Scheduled text pass failed:', e);
   }
 
+  // The owner health check (see ownerHealthCheck below). Never fails the run.
+  try {
+    await ownerHealthCheck(base44, { allUsers, allTasks, now });
+  } catch (e) {
+    console.error("[HEALTH] check failed:", e);
+  }
+
   const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, eventScheduled, scheduledTextReminders, at: now.toISOString() };
     console.log('✅ [REFILL] Complete:', result);
     return Response.json(result);
@@ -1134,3 +1141,217 @@ Deno.serve(async (req) => {
     return Response.json({ success: false, error: String(err) }, { status: 500 });
   }
 });
+
+// ── Owner health check ──────────────────────────────────────────────────────
+// Runs at the end of every refill (hourly): a few cheap questions about
+// whether the app is working for real people, and a push to the owner's phone
+// when the answer is no. Anna, Oct 9 2026, after an OpenAI billing lapse took
+// every AI call down for five hours with nobody told, and two first-time
+// users' captures went wrong with nothing flagging it: "we can't just let bugs
+// get created like this." Each alert repeats at most every ALERT_COOLDOWN_MS
+// while the problem lasts. A daily note goes out in the owner's 8 o'clock
+// hour, and only when something was off in the last 24 hours. Her own
+// accounts (README) are never "real users" here.
+const OWNER_ALERT_EMAIL = 's2kap2chick@gmail.com'; // the owner's phone account
+const OWNER_TZ = 'America/Chicago';
+const OWNER_ACCOUNTS = new Set([
+  'annanoelwenballew@gmail.com', 'annanoelbusinessemail@gmail.com', 's2kap2chick@gmail.com',
+  'mediocreatbestdev@outlook.com', 'annanoelwenballew@outlook.com',
+]);
+const ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+const H_HOUR = 60 * 60 * 1000;
+const H_DAY = 24 * H_HOUR;
+
+function localHourIn(tz: string, d: Date): number {
+  try {
+    return Number(new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: '2-digit', hourCycle: 'h23' }).format(d));
+  } catch (_) {
+    return d.getUTCHours();
+  }
+}
+
+// Captures that were typed but never became a task: a 'captureClaimed' with no
+// 'mainCreate' / 'captureAlreadyCreated' after it within 15 minutes, and not
+// claimed again since (a resume shows up as a later claim of the same text).
+async function stalledCaptures(base44: any, sinceMs: number, nowMs: number): Promise<{ email: string; text: string; atMs: number }[]> {
+  const rows = await filterAll(base44.asServiceRole.entities.CaptureTrace, { created_date: { $gte: new Date(sinceMs).toISOString() } });
+  const sorted = rows.slice().sort((a: any, b: any) => String(a.created_date).localeCompare(String(b.created_date)));
+  const out: { email: string; text: string; atMs: number }[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    const r = sorted[i];
+    if (r.step !== 'captureClaimed') continue;
+    let detail: any = {};
+    try { detail = JSON.parse(r.detail || '{}'); } catch (_) { /* plain text */ }
+    const text = String(detail.text || '');
+    const atMs = Date.parse(String(r.created_date).endsWith('Z') ? r.created_date : `${r.created_date}Z`) || 0;
+    if (!atMs || nowMs - atMs < 15 * 60 * 1000) continue; // still in progress
+    const later = sorted.slice(i + 1).filter((x: any) => x.user_email === r.user_email);
+    const finished = later.some((x: any) => {
+      const t = Date.parse(String(x.created_date).endsWith('Z') ? x.created_date : `${x.created_date}Z`) || 0;
+      return t - atMs < 15 * 60 * 1000 && (x.step === 'mainCreate' || x.step === 'captureAlreadyCreated');
+    });
+    const claimedAgain = later.some((x: any) => x.step === 'captureClaimed' && String(x.detail || '').includes(text.slice(0, 40)));
+    if (!finished && !claimedAgain) out.push({ email: r.user_email, text, atMs });
+  }
+  return out;
+}
+
+async function sentToOwner(base44: any, kind: string, title: string | null, sinceMs: number): Promise<boolean> {
+  const rows = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
+    user_email: OWNER_ALERT_EMAIL, kind, send_at: { $gte: new Date(sinceMs).toISOString() },
+  });
+  return rows.some((r: any) => title === null || r.title === title);
+}
+
+async function pushOwner(base44: any, kind: string, title: string, body: string): Promise<void> {
+  const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+  const key = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+  if (!appId || !key) return;
+  const res = await fetch('https://onesignal.com/api/v1/notifications', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json; charset=utf-8', Authorization: `Basic ${key}` },
+    body: JSON.stringify({
+      app_id: appId,
+      include_external_user_ids: [OWNER_ALERT_EMAIL],
+      channel_for_external_user_ids: 'push',
+      headings: { en: title },
+      contents: { en: body },
+      priority: 10,
+      data: { screen: '/Home', type: kind },
+    }),
+  });
+  const j: any = await res.json().catch(() => ({}));
+  if (res.ok && !j.errors) {
+    await ledgerRecord(base44, { email: OWNER_ALERT_EMAIL, kind, source: 'cronRefillReminders', notificationId: j.id, title });
+  } else {
+    console.error('[HEALTH] owner push failed:', JSON.stringify(j).slice(0, 200));
+  }
+}
+
+async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: any[]; now: Date }) {
+  const { allUsers, allTasks, now } = ctx;
+  const nowMs = now.getTime();
+  const problems: { title: string; body: string }[] = [];
+  const realUser = (email: string) => !!email && !OWNER_ACCOUNTS.has(email);
+  const activeLately = (u: any) => nowMs - (Date.parse(u?.last_active_at || '') || 0) < 7 * H_DAY;
+  const userByEmail: Record<string, any> = {};
+  for (const u of allUsers) if (u?.email) userByEmail[u.email] = u;
+
+  // 1. Can the app reach OpenAI? One tiny completion. A 429 here is the "no
+  //    credits" that silently broke every AI feature on Oct 8 2026.
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Deno.env.get('OPENAI_API_KEY')}` },
+      body: JSON.stringify({ model: 'gpt-4o', max_tokens: 1, messages: [{ role: 'user', content: 'ok' }] }),
+    });
+    if (!res.ok) {
+      const err: any = await res.json().catch(() => ({}));
+      const msg = String(err?.error?.message || res.statusText || '').slice(0, 140);
+      problems.push({ title: '🚨 ADHDone: AI calls are failing', body: `OpenAI answered ${res.status}. ${msg} Smart Reminders, task parsing and steps are down until this is fixed.` });
+    }
+  } catch (e) {
+    problems.push({ title: '🚨 ADHDone: AI calls are failing', body: `OpenAI could not be reached: ${String((e as any)?.message || e).slice(0, 120)}` });
+  }
+
+  // 2. Smart Reminders plans marked out of date for over 90 minutes in the
+  //    person's daytime: the planner is failing on them run after run, and
+  //    nothing else notices (Anna's own plan sat like this for five hours).
+  const stuckPlans: string[] = [];
+  for (const u of allUsers) {
+    if (!u?.email || !activeLately(u)) continue;
+    const h = localHourIn(u.timezone || OWNER_TZ, now);
+    if (h < 9 || h >= 22) continue;
+    const dirtyAt = Date.parse(u.smart_nudge_dirty_at || '') || 0;
+    if (u.smart_nudge_schedule_dirty === true && dirtyAt && nowMs - dirtyAt > 90 * 60 * 1000) stuckPlans.push(u.email);
+  }
+  if (stuckPlans.length) {
+    problems.push({ title: '⚠️ ADHDone: Smart Reminders not re-planning', body: `${stuckPlans.length} plan(s) have been out of date for over 90 minutes: ${stuckPlans.slice(0, 3).join(', ')}. The planner is failing on them every run.` });
+  }
+
+  // 3. Bookings the app never got to and the rescue pass above couldn't make
+  //    either: the task still carries its booking marker, has no push, and
+  //    its time is still ahead.
+  const stuckBookings = allTasks.filter((t: any) =>
+    t.status === 'active' && !t.parent_task_id && t.reminder_scheduling_since &&
+    nowMs - (Date.parse(t.reminder_scheduling_since) || nowMs) > 20 * 60 * 1000 &&
+    !(t.onesignal_notification_ids || []).length &&
+    t.next_reminder && Date.parse(t.next_reminder) > nowMs &&
+    realUser(t.notification_recipient_email || t.created_by));
+  if (stuckBookings.length) {
+    const names = stuckBookings.slice(0, 3).map((t: any) => `"${String(t.title || '').slice(0, 30)}" (${t.notification_recipient_email || t.created_by})`).join(', ');
+    problems.push({ title: '⚠️ ADHDone: reminders never booked', body: `${stuckBookings.length} task(s) have a time coming up and no reminder booked: ${names}.` });
+  }
+
+  // 4. Pushes in the last hour that OneSignal couldn't deliver, to people who
+  //    were in the app this week (an uninstalled phone fails forever and is
+  //    not news). Up to 12 looked up.
+  const undelivered: string[] = [];
+  try {
+    const rows = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
+      send_at: { $gte: new Date(nowMs - H_HOUR).toISOString(), $lte: now.toISOString() },
+    });
+    const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+    const key = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+    const candidates = rows.filter((r: any) => r.notification_id && realUser(r.user_email) && activeLately(userByEmail[r.user_email]) && !String(r.kind || '').startsWith('owner_')).slice(0, 12);
+    for (const r of candidates) {
+      const res = await fetch(`https://onesignal.com/api/v1/notifications/${r.notification_id}?app_id=${appId}`, { headers: { Authorization: `Basic ${key}` } });
+      const n: any = await res.json().catch(() => ({}));
+      if (!res.ok || n.canceled) continue;
+      if ((n.failed || 0) > 0 || (n.errored || 0) > 0) undelivered.push(`${r.user_email}: ${String(r.title || r.kind).slice(0, 36)}`);
+    }
+  } catch (e) {
+    console.error('[HEALTH] delivery check failed:', e);
+  }
+  if (undelivered.length) {
+    problems.push({ title: '⚠️ ADHDone: pushes not reaching phones', body: `${undelivered.length} push(es) in the last hour failed to deliver: ${undelivered.slice(0, 3).join('; ')}.` });
+  }
+
+  // 5. Captures typed in the last 2 hours that never became a task (the app
+  //    closed before the capture finished). It resumes on their next open,
+  //    but the person typed something and nothing happened.
+  let stalled: { email: string; text: string; atMs: number }[] = [];
+  try {
+    stalled = (await stalledCaptures(base44, nowMs - 2 * H_HOUR, nowMs)).filter((s) => realUser(s.email));
+  } catch (e) {
+    console.error('[HEALTH] capture check failed:', e);
+  }
+  if (stalled.length) {
+    problems.push({ title: '⚠️ ADHDone: a capture never finished', body: `${stalled.length} task(s) typed in the last 2 hours never got made: ${stalled.slice(0, 2).map((s) => `${s.email} "${s.text.slice(0, 40)}"`).join('; ')}.` });
+  }
+
+  // Send what's new. Each title repeats at most every ALERT_COOLDOWN_MS.
+  for (const p of problems) {
+    try {
+      if (await sentToOwner(base44, 'owner_alert', p.title, nowMs - ALERT_COOLDOWN_MS)) continue;
+      await pushOwner(base44, 'owner_alert', p.title, p.body);
+      console.log(`[HEALTH] alerted the owner: ${p.title}`);
+    } catch (e) {
+      console.error('[HEALTH] alert failed:', e);
+    }
+  }
+  if (!problems.length) console.log('[HEALTH] all clear');
+
+  // The daily note: in the owner's 8 o'clock hour, once, only when the last
+  // 24 hours had anything to say.
+  if (localHourIn(OWNER_TZ, now) === 8 && !(await sentToOwner(base44, 'owner_daily', null, nowMs - 20 * H_HOUR))) {
+    try {
+      const alerts = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
+        user_email: OWNER_ALERT_EMAIL, kind: 'owner_alert', send_at: { $gte: new Date(nowMs - H_DAY).toISOString() },
+      });
+      const byTitle: Record<string, number> = {};
+      for (const a of alerts) byTitle[String(a.title || '').replace(/^[^A-Za-z]*ADHDone: /, '')] = (byTitle[String(a.title || '').replace(/^[^A-Za-z]*ADHDone: /, '')] || 0) + 1;
+      const dayStalled = (await stalledCaptures(base44, nowMs - H_DAY, nowMs)).filter((s) => realUser(s.email));
+      const newPeople = allUsers.filter((u: any) => realUser(u?.email) && nowMs - (Date.parse(u.created_date || '') || 0) < H_DAY).map((u: any) => u.email);
+      if (alerts.length || dayStalled.length) {
+        const parts: string[] = [];
+        for (const [k, n] of Object.entries(byTitle)) parts.push(`${k} (${n}x)`);
+        if (dayStalled.length) parts.push(`${dayStalled.length} capture(s) never finished: ${dayStalled.slice(0, 2).map((s) => s.email).join(', ')}`);
+        if (newPeople.length) parts.push(`new: ${newPeople.join(', ')}`);
+        await pushOwner(base44, 'owner_daily', '🩺 ADHDone yesterday: something was off', parts.join(' · ').slice(0, 480));
+      }
+    } catch (e) {
+      console.error('[HEALTH] daily note failed:', e);
+    }
+  }
+}
