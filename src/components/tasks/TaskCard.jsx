@@ -60,7 +60,10 @@ export default function TaskCard({
 }) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState(task.title);
-  const [subtasksExpanded, setSubtasksExpanded] = useState(false);
+  // Steps show the moment the card is opened; the "n/m Subtasks" chip hides
+  // them (Anna, Oct 8 2026: "I don't want to have to press a tiny expand
+  // thing to make the subtasks show").
+  const [subtasksExpanded, setSubtasksExpanded] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const dateInputRef = useRef(null);
   const timeInputRef = useRef(null);
