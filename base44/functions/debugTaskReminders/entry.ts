@@ -52,6 +52,27 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Owner-only repair: { set: { entity, id, fields } } writes the given
+    // fields on one record and returns what they were and what they are now.
+    // For putting a record back the way the person asked for it (Oct 8 2026:
+    // two first-time users' "remind me tomorrow at 9am" tasks, moved a day
+    // later by a re-read). Admin only (checked at the top); one record per call.
+    if (body?.set && typeof body.set === 'object') {
+      const { entity, id, fields } = body.set;
+      if (!entity || !id || !fields || typeof fields !== 'object' || !svc[entity]) {
+        return Response.json({ ok: false, error: 'set needs entity, id and fields' }, { status: 400 });
+      }
+      const before = await svc[entity].get(id).catch(() => null);
+      if (!before) return Response.json({ ok: false, error: 'no such record' }, { status: 404 });
+      const was: Record<string, any> = {};
+      for (const k of Object.keys(fields)) was[k] = before[k] ?? null;
+      await svc[entity].update(id, fields);
+      const after = await svc[entity].get(id).catch(() => null);
+      const is: Record<string, any> = {};
+      for (const k of Object.keys(fields)) is[k] = after?.[k] ?? null;
+      console.log(`[debugTaskReminders] ${me.email} set ${entity} ${id}: ${JSON.stringify(fields)}`);
+      return Response.json({ ok: true, entity, id, was, is });
+    }
     // Raw look-up (read only): { q: { entity, where, limit, fields } } returns
     // matching rows, newest first, trimmed to the fields asked for.
     if (body?.q && typeof body.q === 'object') {
