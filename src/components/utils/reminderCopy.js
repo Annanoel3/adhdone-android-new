@@ -42,12 +42,33 @@ export function getReminderCopy(task, sendAt = new Date()) {
   const due = task?.due_date ? new Date(task.due_date) : null;
   // A rhythm the person asked for ("keep reminding me until I do it").
   const askedRhythm = !!task?.reminder_interval && task.reminder_interval !== 'once';
+  // A task set for a clock time ("litter box every day at 9 PM", "call them
+  // at 3") is not a loose, undated task: it has a moment, and when that
+  // moment comes it is time to do it. The soft words below ("no need to
+  // tackle it tonight", "no pressure") are for a task with no time at all.
+  // Anna, Oct 8 2026, on the 9 PM litter box alarm saying no need to tackle
+  // it tonight: "it can't just say I don't need to do something that's
+  // daily". A "by 5 PM" deadline's next_reminder is the deadline itself, not
+  // a moment to start, so it keeps the deadline words.
+  const pinned = !task?.day_only_task && task?.deadline_style !== 'by'
+    && (!!task?.anchor_time || !!task?.event_time
+      || (!!task?.recurrence_pattern && task.recurrence_pattern !== 'none'));
+  const nextMs = task?.next_reminder ? new Date(task.next_reminder).getTime() : NaN;
+  const atItsMoment = pinned && Number.isFinite(nextMs) && Math.abs(nextMs - send.getTime()) < 60 * 1000;
+
+  // At the time the task is set for: the words every at-the-time reminder
+  // uses (taskRecurrence's atTimeReminderFor, onTaskUpdate's un-check).
+  if (atItsMoment) {
+    const t = title.length > 40 ? `${title.slice(0, 37)}...` : title;
+    return { title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` };
+  }
 
   if (!due || Number.isNaN(due.getTime())) {
     return {
       title: `📌 ${title}`,
-      // They asked to be reminded, so no "no pressure" and no "not tonight".
-      body: askedRhythm
+      // They asked to be reminded, or set a time, so no "no pressure" and no
+      // "not tonight".
+      body: askedRhythm || pinned
         ? `Reminder: ${sentence(title)}`
         : evening
           ? `Just keeping ${quoted} on your radar — no need to tackle it tonight.`
