@@ -168,9 +168,32 @@ export default function Tasks() {
     applyFilters();
   }, [applyFilters]);
 
+  // Changes made on this screen that may not have reached the server yet (a
+  // step's checkbox tapped a moment ago). A reload already in flight — a
+  // capture finishing in the background fires one — used to land with the
+  // old state and un-check the box until the save caught up (Anna, Oct 8
+  // 2026: "I checked off CBR and it unchecked itself"). Reloads now re-apply
+  // these on top of what they fetch, and each is kept a while after its save
+  // so a slow reload can't revert it either. The token keeps a release from
+  // dropping a newer change to the same task (checked, then unchecked).
+  const localChangesRef = React.useRef(new Map());
+  const LOCAL_CHANGE_KEEP_MS = 15000;
+  const rememberLocal = (id, patch) => {
+    const token = Symbol('local change');
+    localChangesRef.current.set(id, { patch, token });
+    return token;
+  };
+  const releaseLocal = (id, token) => {
+    setTimeout(() => {
+      if (localChangesRef.current.get(id)?.token === token) localChangesRef.current.delete(id);
+    }, LOCAL_CHANGE_KEEP_MS);
+  };
+  const withLocalChanges = (tasks) => (localChangesRef.current.size === 0 ? tasks
+    : tasks.map((t) => (localChangesRef.current.has(t.id) ? { ...t, ...localChangesRef.current.get(t.id).patch } : t)));
+
   const loadTasks = async () => {
     const fetchedTasks = await Task.list('-created_date', 500);
-    setAllTasks(fetchedTasks);
+    setAllTasks(withLocalChanges(fetchedTasks));
   };
 
   // Opened with ?taskId= (e.g. tapping a task on the home-screen widget) —
@@ -217,6 +240,7 @@ export default function Tasks() {
           ? { ...t, status: 'completed', completed_at: localISOString }
           : t
     ));
+    const localToken = rememberLocal(task.id, { status: 'completed', completed_at: localISOString });
 
     // Its booked reminders are cancelled from here straight away, as Home and
     // the details card do. The server cancels them too, but only once the save
@@ -257,6 +281,8 @@ export default function Tasks() {
       } catch (error) {
         console.error("Failed to complete task:", error);
         loadTasks();
+      } finally {
+        releaseLocal(task.id, localToken);
       }
     })();
     offerCompletionUndo(task, saving, (t, source) => handleUncomplete(t, source));
@@ -268,6 +294,7 @@ export default function Tasks() {
     setAllTasks(prev => prev.map(t =>
       t.id === task.id ? { ...t, status: 'active', completed_at: null } : t
     ));
+    const localToken = rememberLocal(task.id, { status: 'active', completed_at: null });
     // Counted, so we can see how often a finished task is taken back (and
     // from where).
     trackFire('task_uncompleted', { props: { task_id: task.id, source } });
@@ -286,6 +313,8 @@ export default function Tasks() {
       } catch (error) {
         console.error("Failed to uncomplete task:", error);
         loadTasks();
+      } finally {
+        releaseLocal(task.id, localToken);
       }
     })();
   };
