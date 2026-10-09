@@ -27,7 +27,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
 import { localMinutesOfDay, isInQuietHours, adjustForQuietHours, resolveQuietHours, userTimeZone } from '../../shared/quietHours.ts';
-import { getProximity, formatProximityNotes } from '../../shared/mapsDistance.ts';
+import { getProximity, formatProximityNotes, lookupBusinessHours, businessHoursLine, BUSINESS_HOURS_MAX_AGE_MS } from '../../shared/mapsDistance.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
@@ -432,6 +432,25 @@ Deno.serve(async (req) => {
             getLocalDateString(new Date(at), timeZone) === todayStr &&
             ids.length > 0 && ids.every((id: string) => openTaskIds.has(id));
         });
+
+        // The brief planner is told when a business named in a task is open
+        // (mapsDistance.ts, Business hours). Looked up once per task, near
+        // home, and saved on it; a few per run so a big list can't stall it.
+        if (useBrief) {
+          let looked = 0;
+          for (const t of [...pool, ...(fixedByUser[email] || [])]) {
+            if (looked >= 3) break;
+            if (!t.business_name) continue;
+            const age = nowMs - (utcMs(t.business_hours?.checked_at) || 0);
+            if (t.business_hours && age < BUSINESS_HOURS_MAX_AGE_MS) continue;
+            looked++;
+            const hours = await lookupBusinessHours(t.business_name, getHomeOrigin(user));
+            if (!hours) continue;
+            t.business_hours = hours;
+            try { await base44.asServiceRole.entities.Task.update(t.id, { business_hours: hours }); }
+            catch (e) { console.error(`[BUSINESS HOURS] could not save hours for ${t.id}:`, e); }
+          }
+        }
 
         const newEntries = await generateDailySchedule(pool, {
           localMin,
@@ -1350,6 +1369,9 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if (recurrenceLabel(t)) parts.push(`repeats ${recurrenceLabel(t)} (this is the current one)`);
       const loc = (t.location || '').trim();
       if (loc) parts.push(`location they typed: ${loc}`);
+      const biz = businessHoursLine(t.business_hours, nowMs);
+      if (biz) parts.push(biz);
+      else if (t.business_name) parts.push(`names a business: ${t.business_name} (hours not looked up yet)`);
       parts.push(t.life_area === 'work' ? 'work' : 'personal');
       if (t.classification === 'payment') parts.push('a bill/payment');
       const created = utcMs(t.created_date);
@@ -1377,7 +1399,8 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       const what = rhythm
         ? `its own reminder every ${INTERVAL_WORDS[t.reminder_interval] || t.reminder_interval}${t.reminder_wish ? ` (they asked: "${String(t.reminder_wish).slice(0, 120)}")` : ''}`
         : (Number.isFinite(pin) ? `its own reminder at ${whenLabel(pin)}` : 'its own reminders');
-      return `- "${t.title}" — ${what}; priority ${t.urgency || 'medium'}`;
+      const biz = businessHoursLine(t.business_hours, nowMs);
+      return `- "${t.title}" — ${what}; priority ${t.urgency || 'medium'}${biz ? `; ${biz}` : ''}`;
     });
 
     const seenAfter = (at: number) => Number.isFinite(lastSeenMs) && lastSeenMs > at;
