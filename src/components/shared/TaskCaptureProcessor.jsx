@@ -166,6 +166,8 @@ export default function TaskCaptureProcessor({ userEmail }) {
                 presetDueDateISO: capture.presetDueDateISO,
                 skipIdeaCheck: !!capture.fromIdea,
                 kind: partKind,
+                // Date words count from when this was typed, however late it runs.
+                saidAt: capture.createdAt || null,
               });
 
               if (result.status === 'done') {
