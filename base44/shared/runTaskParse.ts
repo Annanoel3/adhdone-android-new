@@ -39,6 +39,7 @@ const TASK_PARSE_SCHEMA = {
   properties: {
     title: { type: "string" },
     location: { type: ["string", "null"] },
+    business_name: { type: ["string", "null"] },
     urgency: { type: "string", enum: ["low", "medium", "high", "urgent"] },
     energy_required: { type: "string", enum: ["low", "medium", "high"] },
     classification: { type: "string", enum: ["task", "event", "birthday", "payment"] },
@@ -62,7 +63,7 @@ const TASK_PARSE_SCHEMA = {
     recurrence_days: { type: ["array", "null"], items: { type: "integer" } },
   },
   required: [
-    "title", "location", "urgency", "energy_required", "classification",
+    "title", "location", "business_name", "urgency", "energy_required", "classification",
     "target_date", "target_time", "end_date", "due_date",
     "user_asked_to_repeat_every", "repeat_words", "recurrence_pattern", "deadline_style",
     "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
