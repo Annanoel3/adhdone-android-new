@@ -156,3 +156,88 @@ export function formatProximityNotes(p: ProximityResult): string {
   if (lines.length === 0) return '';
   return `REAL DRIVING DISTANCES (measured, not guessed — you may state these):\n${lines.join('\n')}`;
 }
+
+// ── Business hours ───────────────────────────────────────────────────────────
+// A task that names a business ("call Brodie Animal Hospital before noon
+// tomorrow") can only be done while that business is open. The planner used
+// to guess: at 6:09 PM on a Friday it told Anna to call a vet that had closed
+// at 5 (Oct 9 2026). Now a named business is looked up once per task through
+// Google Places, near the person's home, saved on the task as
+// `business_hours`, and the planner is told whether it's open right now and
+// what today's and tomorrow's hours are. It decides from there.
+
+export interface BusinessHours {
+  name: string;
+  address?: string | null;
+  place_id?: string | null;
+  periods?: any[] | null;         // Google's opening_hours.periods (day 0 = Sunday)
+  weekday_text?: string[] | null; // "Monday: 7:00 AM – 6:00 PM", Monday first
+  utc_offset?: number | null;     // minutes from UTC at the business
+  not_found?: boolean;
+  checked_at: string;
+}
+
+export async function lookupBusinessHours(name: string, homeOrigin = ''): Promise<BusinessHours | null> {
+  const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY')?.trim();
+  const query = String(name || '').trim();
+  if (!apiKey || !query) return null;
+  const checked_at = new Date().toISOString();
+  try {
+    const search = new URLSearchParams({ query, key: apiKey });
+    if (homeOrigin) { search.set('location', homeOrigin); search.set('radius', '40000'); }
+    const sr = await fetch(`https://maps.googleapis.com/maps/api/place/textsearch/json?${search.toString()}`);
+    const sj: any = await sr.json().catch(() => ({}));
+    const first = sj?.results?.[0];
+    if (!first?.place_id) return { name: query, not_found: true, checked_at };
+    const details = new URLSearchParams({ place_id: first.place_id, fields: 'name,formatted_address,opening_hours,utc_offset', key: apiKey });
+    const dr = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?${details.toString()}`);
+    const dj: any = await dr.json().catch(() => ({}));
+    const res = dj?.result || {};
+    return {
+      name: res.name || first.name || query,
+      address: res.formatted_address || first.formatted_address || null,
+      place_id: first.place_id,
+      periods: Array.isArray(res.opening_hours?.periods) ? res.opening_hours.periods : null,
+      weekday_text: Array.isArray(res.opening_hours?.weekday_text) ? res.opening_hours.weekday_text : null,
+      utc_offset: Number.isFinite(res.utc_offset) ? res.utc_offset : null,
+      checked_at,
+    };
+  } catch (e) {
+    console.error('[BUSINESS HOURS] lookup failed for', query, e);
+    return null;
+  }
+}
+
+// Hours older than this are looked up again (businesses change them).
+export const BUSINESS_HOURS_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+// One line for the planner: open or closed right now, today's hours, tomorrow's.
+export function businessHoursLine(h: BusinessHours | null | undefined, nowMs: number): string {
+  if (!h || !h.name) return '';
+  if (h.not_found || (!h.periods && !h.weekday_text)) return `${h.name}: a business; its hours could not be found`;
+  const offset = Number.isFinite(h.utc_offset as number) ? (h.utc_offset as number) : 0;
+  const local = new Date(nowMs + offset * 60 * 1000);
+  const day = local.getUTCDay();
+  const hhmm = local.getUTCHours() * 100 + local.getUTCMinutes();
+  let openNow = false;
+  for (const p of h.periods || []) {
+    const o = p?.open, c = p?.close;
+    if (!o) continue;
+    if (!c) { openNow = true; break; } // open around the clock
+    const oT = parseInt(o.time, 10), cT = parseInt(c.time, 10);
+    if (!Number.isFinite(oT) || !Number.isFinite(cT)) continue;
+    if (o.day === c.day) {
+      if (day === o.day && hhmm >= oT && hhmm < cT) { openNow = true; break; }
+    } else if ((day === o.day && hhmm >= oT) || (day === c.day && hhmm < cT)) {
+      openNow = true; break; // runs past midnight
+    }
+  }
+  const text = h.weekday_text || [];
+  const idx = (d: number) => (d + 6) % 7; // weekday_text starts on Monday
+  const today = text[idx(day)] || '';
+  const tomorrow = text[idx((day + 1) % 7)] || '';
+  const bits = [`${h.name}: ${openNow ? 'OPEN right now' : 'CLOSED right now'}`];
+  if (today) bits.push(`today ${today}`);
+  if (tomorrow) bits.push(`tomorrow ${tomorrow}`);
+  return bits.join('; ');
+}
