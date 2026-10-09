@@ -189,7 +189,13 @@ export async function processAndCreateTask(inputText, opts = {}) {
   // the user chose to turn into one), so it can only become a task — or a
   // birthday, if that's what it is. Filing it as an idea would just put it
   // straight back into the Parking Lot.
-  const { presetDate = null, presetDueDateISO = null, skipIdeaCheck = false, kind: knownKind = null } = opts;
+  // saidAt: when the words were typed or spoken (ms). A capture that finishes
+  // later than it started (the app was closed mid-way and resumed on the next
+  // open) reads "tomorrow" from THEN, not from now — Tabitha's Monday-night
+  // "remind me tomorrow at 9am" resumed at 3:45 AM Tuesday and landed on
+  // Wednesday (Oct 6-7 2026).
+  const { presetDate = null, presetDueDateISO = null, skipIdeaCheck = false, kind: knownKind = null, saidAt = null } = opts;
+  const asOf = Number.isFinite(saidAt) && saidAt > 0 ? saidAt : undefined;
 
   if (!inputText.trim()) return { status: 'error', message: 'Empty input' };
 
@@ -244,8 +250,8 @@ export async function processAndCreateTask(inputText, opts = {}) {
       const now = new Date();
       // Parse the FULL input (not just the short title) so the parent keeps the
       // date, time and location the user actually gave.
-      const mainTaskPrompt = buildTaskParsePrompt(inputText);
-      const mainTaskParsed = (await base44.functions.invoke('parseTask', { prompt: mainTaskPrompt }))?.data?.response;
+      const mainTaskPrompt = buildTaskParsePrompt(inputText, undefined, asOf);
+      const mainTaskParsed = (await base44.functions.invoke('parseTask', { prompt: mainTaskPrompt, asOf }))?.data?.response;
       trace('parsed', { title: mainTaskParsed?.title, classification: mainTaskParsed?.classification, target_date: mainTaskParsed?.target_date, due_date: mainTaskParsed?.due_date, deadline_style: mainTaskParsed?.deadline_style });
       stripGuessedRecurrence(mainTaskParsed, inputText);
 
@@ -341,9 +347,9 @@ export async function processAndCreateTask(inputText, opts = {}) {
     }
 
     const now = new Date();
-    const prompt = buildTaskParsePrompt(inputText);
+    const prompt = buildTaskParsePrompt(inputText, undefined, asOf);
 
-    const parsed = (await base44.functions.invoke('parseTask', { prompt }))?.data?.response;
+    const parsed = (await base44.functions.invoke('parseTask', { prompt, asOf }))?.data?.response;
     trace('parsed', { title: parsed?.title, classification: parsed?.classification, target_date: parsed?.target_date });
 
     stripGuessedRecurrence(parsed, inputText);
