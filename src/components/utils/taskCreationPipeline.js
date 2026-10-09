@@ -491,6 +491,19 @@ export async function processAndCreateTask(inputText, opts = {}) {
       if (!isNaN(dy) && !isNaN(dm) && !isNaN(dd)) {
         dueDateISO = new Date(dy, dm - 1, dd, 23, 59, 0, 0).toISOString();
       }
+    } else if (parsed.target_date && parsed.target_time && actualReminderInterval === 'once'
+      && !(parsed.recurrence_pattern && parsed.recurrence_pattern !== 'none')) {
+      // A one-off task with a date and a time is due at that moment, so the
+      // date on its card IS its due date (Anna, Oct 9 2026: "if it says a
+      // date, that better be a due date"). The card's date picker already
+      // saves it this way; captures left it empty, so "call the vet before
+      // noon tomorrow" got a reminder for tomorrow and no due date. Same rule
+      // as deriveSchedule in taskSchedule.js. A repeat keeps its own cycle.
+      const [dy, dm, dd] = parsed.target_date.split('-').map(n => parseInt(n, 10));
+      const [th, tm] = parsed.target_time.split(':').map(n => parseInt(n, 10));
+      if (![dy, dm, dd, th, tm].some(isNaN)) {
+        dueDateISO = new Date(dy, dm - 1, dd, th, tm, 0, 0).toISOString();
+      }
     }
 
     trace('mainCreate', { title: parsed.title || inputText.trim(), interval: actualReminderInterval });
