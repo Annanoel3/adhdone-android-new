@@ -75,7 +75,10 @@ const TASK_PARSE_SCHEMA = {
 // longer needs the client. `aboutMe` is the user's own one-liner about their
 // life from onboarding — it's what lets the model tell a work task from a
 // personal one for THIS person rather than for a generic office worker.
-export async function runTaskParse(_base44: any, prompt: string, tz?: string, aboutMe?: string) {
+// `asOfMs`: when the words were said (see nowInTimezone) — every date word
+// is read against that moment, both in the prompt's calendar and in the
+// resolver below.
+export async function runTaskParse(_base44: any, prompt: string, tz?: string, aboutMe?: string, asOfMs?: number) {
   // Callers are supposed to pass a prompt already built by
   // buildTaskParsePrompt, which carries the one thing the model cannot work out
   // for itself: today's real calendar. If raw text arrives instead, build it
@@ -83,7 +86,7 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   // without the calendar it answers "Saturday" (or nothing) instead of a date.
   const fullPrompt = prompt?.includes('THE CALENDAR')
     ? prompt
-    : buildTaskParsePrompt(prompt || '', tz);
+    : buildTaskParsePrompt(prompt || '', tz, asOfMs);
 
   const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
   const completion = await openai.chat.completions.create({
@@ -144,6 +147,6 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
     : null;
   // A day the user actually stated must never be lost to wording — "Saturday"
   // becomes a real date here rather than dying in the scheduler.
-  resolveParsedDates(parsed, nowInTimezone(tz));
+  resolveParsedDates(parsed, nowInTimezone(tz, asOfMs));
   return fixParsedTaskTitles(parsed);
 }
