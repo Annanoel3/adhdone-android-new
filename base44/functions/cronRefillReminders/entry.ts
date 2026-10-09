@@ -884,15 +884,16 @@ Deno.serve(async (req) => {
   // 6 PM reminder was never booked and a smart nudge covered it 39 minutes
   // late). So a task still carrying the marker past the grace window, with
   // nothing booked and its time still ahead, gets the one reminder at its
-  // time here. A "by" deadline is left to the smart nudges, as everywhere
-  // else. A plan the person cleared themselves never looks like this:
-  // clearing goes through commitNotificationIds, which drops the marker.
+  // time here — a repeating task too (one reminder at its time is exactly
+  // what each copy of a repeat gets; the next copy books its own when this
+  // one is checked off). A "by" deadline is left to the smart nudges, as
+  // everywhere else. A plan the person cleared themselves never looks like
+  // this: clearing goes through commitNotificationIds, which drops the marker.
   let rescued = 0;
   for (const task of datedTasks) {
     if (rescued >= MAX_PLANS_BUILT_PER_RUN) break;
     if (!task.reminder_scheduling_since) continue;
     if (isBeingScheduledElsewhere(task, now.getTime()) || isInRetryBackoff(task, now.getTime())) continue;
-    if (task.recurrence_pattern && task.recurrence_pattern !== 'none') continue;
     if (task.deadline_style === 'by') continue;
     const hasPlan = Array.isArray(task.reminder_schedule) && task.reminder_schedule.length > 0;
     const hasIds = Array.isArray(task.onesignal_notification_ids) && task.onesignal_notification_ids.length > 0;
