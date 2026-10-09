@@ -161,6 +161,11 @@ Then be honest about what you do and don't know:
   • If the user did NOT name a place, location is null. Never guess one. But an
     address sitting on its own line in pasted text IS a stated place — a human
     reading that thread would obviously catch it, and so should you.
+  • A location is somewhere the person will physically GO for this task. A
+    business they will call, text, email, or order from is part of the task,
+    not a place: "call Brodie Animal Hospital" has no location (the app would
+    otherwise plan a drive there for a phone call — Oct 9 2026). "Drop the
+    cat at Brodie Animal Hospital" does.
   • Reminder frequency is not yours to invent. See reminder_interval below.
 
 ────────────────────────────────────────────────────────────────────────
@@ -194,8 +199,8 @@ title — the short action or plan, capitalized. Keep every person, business,
   date/time words. Never a single word ("Go"), never a placeholder, never a
   whole pasted message.
 
-location — a real address, business, or place taken verbatim from the text.
-  Otherwise null.
+location — a real address, business, or place taken verbatim from the text,
+  and only when the person will physically go there (see above). Otherwise null.
 
 classification — what KIND of thing this is:
   "event"   something that happens at a set time whether or not the user shows
