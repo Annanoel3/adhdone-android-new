@@ -57,7 +57,13 @@ Deno.serve(async (req) => {
     // The user's about-me line lets the parser judge work vs personal for this
     // specific person. Missing (skipped onboarding) is fine — the model falls
     // back to plain common sense.
-    const response = await runTaskParse(base44, body?.prompt, user?.timezone, user?.about_me);
+    // `asOf`: when the words were said (ms). A capture finished later than it
+    // was typed, or a re-read of an old task, reads "tomorrow" from then. Only
+    // a sane past moment is honoured (up to 60 days back, not the future).
+    const asOfRaw = Number(body?.asOf);
+    const asOf = Number.isFinite(asOfRaw) && asOfRaw > Date.now() - 60 * 24 * 60 * 60 * 1000 && asOfRaw <= Date.now() + 60 * 1000
+      ? asOfRaw : undefined;
+    const response = await runTaskParse(base44, body?.prompt, user?.timezone, user?.about_me, asOf);
     return Response.json({ response });
   } catch (error) {
     console.error("[parseTask] error:", error);
