@@ -133,6 +133,14 @@ export function deriveSchedule(parsed, now = new Date()) {
     const iso = isNaN(hh) || isNaN(mm) ? null : localISO(parsed.target_date, hh, mm);
     const at = iso ? new Date(iso) : null;
     out.nextReminder = at && at > new Date(now.getTime() + 2 * 60 * 1000) ? at : null;
+    // A one-off task with a date and a time is due at that moment, so the date
+    // on its card IS its due date (Anna, Oct 9 2026: "if it says a date, that
+    // better be a due date"). The card's own date picker already saves it this
+    // way; captures left it empty, so "call the vet before noon tomorrow" got
+    // a reminder for tomorrow and no due date. A repeat keeps its own cycle.
+    if (iso && out.interval === 'once' && !(parsed.recurrence_pattern && parsed.recurrence_pattern !== 'none')) {
+      out.dueDateISO = iso;
+    }
     // The rhythm starts at the named time; if that time has already gone by
     // today, the first ping is one interval from now.
     if (!out.nextReminder && INTERVAL_MS[out.interval]) {
