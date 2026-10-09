@@ -14,6 +14,10 @@
 // looks at the week ahead, and decides what to surface TODAY, when, and what
 // to say. No caps, no rigid formulas.
 //
+// Accounts in BRIEF_ACCOUNTS are planned from Anna's brief instead
+// (base44/shared/reminderBrief.ts): the brief is the system message, and the
+// planner is shown facts only — no rules, scores or "must nudge" labels.
+//
 // Re-planning: once a day, and again whenever something the planner reads has
 // changed since the last plan — a task added or edited (onTaskUpdate marks
 // that and asks for a re-plan right away: a request naming one person, which
@@ -27,6 +31,7 @@ import { getProximity, formatProximityNotes } from '../../shared/mapsDistance.ts
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
+import { REMINDER_BRIEF, REMINDER_BRIEF_VERSION } from '../../shared/reminderBrief.ts';
 
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 
@@ -44,6 +49,13 @@ function utcMs(v: any): number {
   const s = String(v);
   return Date.parse(/[zZ]$|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`);
 }
+
+// Accounts planned with the new brief (base44/shared/reminderBrief.ts) instead
+// of the old rulebook prompt. Anna asked for it on her phone account first
+// (Oct 9 2026). To give it to everyone: delete this set, the useBrief checks,
+// and buildOldPrompt — don't keep two planners side by side for long.
+const BRIEF_ACCOUNTS = new Set(['s2kap2chick@gmail.com']);
+const usesBrief = (email: string) => BRIEF_ACCOUNTS.has(String(email || '').trim().toLowerCase());
 
 const RECURRING_INTERVALS = new Set(['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day']);
 
@@ -99,9 +111,15 @@ Deno.serve(async (req) => {
     // date. It never sends — sending stays with the scheduled runs (which
     // send no body), so two runs can never send the same nudge.
     let onlyEmail = '';
+    // preview: true (with an email) = build that person's plan right now and
+    // hand it back — what the planner was shown and what it chose — without
+    // saving or sending anything. For checking the planner from the
+    // dashboard's Test Function.
+    let previewOnly = false;
     try {
       const body = await req.json();
       if (body && typeof body.email === 'string') onlyEmail = body.email.trim();
+      previewOnly = !!onlyEmail && body?.preview === true;
     } catch { /* scheduled run: no body */ }
 
     // 1. Users
@@ -122,6 +140,10 @@ Deno.serve(async (req) => {
     // Fixed appointments per user — never nudged here (they have their own
     // reminders), but the planner sees today's and the coming week's.
     const eventsByUser: Record<string, any[]> = {};
+    // Open tasks that already have their own reminders (an "at" time still
+    // ahead, a rhythm they asked for): never nudged here, but the brief planner
+    // sees them so it can plan around them.
+    const fixedByUser: Record<string, any[]> = {};
     const completedTaskIds = new Set<string>();
     const silencedTaskIds = new Set<string>();
     // Finished top-level tasks per user: when (for her rule that a person's
@@ -205,6 +227,11 @@ Deno.serve(async (req) => {
       if (isSmartNudgeTask(task)) {
         if (!tasksByUser[email]) tasksByUser[email] = [];
         tasksByUser[email].push(task);
+      } else if (
+        task.status === 'active' && !task.silenced && !task.parent_task_id &&
+        task.classification !== 'birthday' && task.classification !== 'event' && !task.birthday_person
+      ) {
+        (fixedByUser[email] ||= []).push(task);
       }
     }
 
@@ -271,6 +298,18 @@ Deno.serve(async (req) => {
       const sentLog = pruneSentLog(user.smart_nudge_sent_log || [], nowMs);
       let schedule: any[] = applySentLog(pruneHistory(user.smart_nudge_schedule || [], nowMs), sentLog);
 
+      // The brief: a plan made under anything else (the old rulebook prompt, or
+      // an older copy of the brief) is thrown out — every nudge it still had
+      // waiting is dropped and a new plan is made this run. Only what already
+      // went out stays, as history.
+      const useBrief = usesBrief(email);
+      const briefChanged = useBrief && user.smart_nudge_brief_version !== REMINDER_BRIEF_VERSION;
+      if (briefChanged) {
+        const dropped = schedule.filter((e: any) => !e.sent).length;
+        schedule = schedule.filter((e: any) => e.sent);
+        console.log(`[SMART NUDGE] ${email}: plan was not made with the current brief — dropped ${dropped} waiting nudge(s), re-planning`);
+      }
+
       // Is the plan out of date? Something the planner reads changed after it
       // was made: onTaskUpdate marked it (the flag, or a newer mark time), a
       // task was added after it, or an "at" task's time went by without it
@@ -297,11 +336,11 @@ Deno.serve(async (req) => {
       const changedSincePlan = !!storedPrints && Object.entries(prints).some(([id, fp]) => storedPrints[id] !== fp);
       const stale = !!user.smart_nudge_schedule_dirty ||
         (Number.isFinite(dirtyAtMs) && dirtyAtMs > plannedAtMs) ||
-        joinedSincePlan || changedSincePlan;
+        joinedSincePlan || changedSincePlan || briefChanged;
       const hasValidSchedule = user.smart_nudge_schedule_date === todayStr && !stale && schedule.length > 0;
 
       // A one-person request only re-plans an out-of-date plan.
-      if (onlyEmail && hasValidSchedule) continue;
+      if (onlyEmail && hasValidSchedule && !previewOnly) continue;
 
       // A second look. The day's plan is made once, so when every nudge in it
       // has gone out and a task it nudged is still open, nothing else came for
@@ -352,7 +391,7 @@ Deno.serve(async (req) => {
         console.log(`[SMART NUDGE] ${email}: ${unseenSentMs.length} of today's nudges went out since they last looked — re-planning before sending more`);
       }
 
-      if (!hasValidSchedule || secondLook || notLanding) {
+      if (!hasValidSchedule || secondLook || notLanding || previewOnly) {
         // Everything the app sends them today, from every sender (the send
         // ledger keeps three days), and how much has gone out since they last
         // looked at the app: the planner budgets their attention for the whole
@@ -385,7 +424,7 @@ Deno.serve(async (req) => {
         // task they name is still open and still ours. Anything left over from
         // an earlier day is dropped, as before. Not when they aren't being
         // seen: then nothing goes out unless this new plan says so.
-        const queued = notLanding ? [] : schedule.filter((e: any) => {
+        const queued = (notLanding || briefChanged) ? [] : schedule.filter((e: any) => {
           if (e.sent) return false;
           const at = utcMs(e.send_at);
           const ids = entryTaskIds(e);
@@ -424,8 +463,22 @@ Deno.serve(async (req) => {
           seenCountIsFloor: Number.isFinite(seenMs) && seenMs < nowMs - 3 * DAY_MS,
           laterLook: todaysEntries.some((e: any) => e.sent && !e.skipped_reason),
           // When the parked-list roundup last went out (the sent log keeps a week).
+          useBrief,
+          fixed: fixedByUser[email] || [],
           lastRoundupMs: (() => { const ms = sentLog.filter((l: any) => l?.type === 'roundup' && !l.skip).map((l: any) => utcMs(l.at)).filter((x: number) => Number.isFinite(x)); return ms.length ? Math.max(...ms) : NaN; })(),
         });
+
+        if (previewOnly) {
+          results.push({
+            email,
+            planner: useBrief ? REMINDER_BRIEF_VERSION : 'old prompt',
+            shown: lastPrompt,
+            nudges: newEntries,
+            passed: lastPassed,
+            note: 'Preview only: nothing was saved or sent.',
+          });
+          continue;
+        }
 
         // null = the planner failed: change nothing, send what's already
         // planned, and try again next run (the plan is still out of date).
@@ -451,7 +504,7 @@ Deno.serve(async (req) => {
             } catch (e) {
               console.error(`[SMART NUDGE] Failed to note second look for ${email}:`, e);
             }
-          } else if (newEntries.length === 0 && firstPlanToday) {
+          } else if (newEntries.length === 0 && firstPlanToday && !briefChanged) {
             // Nothing planned for a new day: as before, ask again next run.
           } else {
             // A re-plan that adds nothing still replaces the old plan (what's
@@ -470,6 +523,7 @@ Deno.serve(async (req) => {
                 smart_nudge_schedule_dirty: stillDirty,
                 smart_nudge_planned_at: runStartIso,
                 smart_nudge_plan_prints: prints,
+                smart_nudge_brief_version: useBrief ? REMINDER_BRIEF_VERSION : null,
                 smart_nudge_passed: mergePassed(fresh?.smart_nudge_passed ?? user.smart_nudge_passed, lastPassed, nowMs),
               });
               schedulesGenerated++;
@@ -969,6 +1023,8 @@ interface PlanContext {
   // the planner is told so, and judges any addition against the whole day.
   laterLook: boolean;
   lastRoundupMs: number;
+  useBrief: boolean;
+  fixed: any[];
 }
 
 // What the last plan chose to leave alone, and why — read by the caller
@@ -976,6 +1032,8 @@ interface PlanContext {
 // on the person's record as smart_nudge_passed for reviewing the planner's
 // judgment ("why didn't it nudge X?"). Never sent to anyone.
 let lastPassed: any[] = [];
+// The prompt the last plan was made from (returned by a preview request).
+let lastPrompt = '';
 const PASSED_KEEP_MS = 3 * 24 * 60 * 60 * 1000;
 const PASSED_MAX = 60;
 function mergePassed(prev: any, add: any[], nowMs: number): any[] {
@@ -988,6 +1046,7 @@ function mergePassed(prev: any, add: any[], nowMs: number): any[] {
 
 async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<any[] | null> {
   lastPassed = [];
+  lastPrompt = '';
   const {
     localMin, timeZone, quietStartMin, quietEndMin, subtasksByParent, events,
     homeOrigin, aboutMe, avoidTolls, nudgeHistory, queued, recentSent, work, doneToday, showReactions,
@@ -1029,6 +1088,8 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     return !(Number.isFinite(days) && days > 1);
   });
   if (nudgeable.length === 0) return [];
+  // Kept out of the plan, but the brief planner still sees them as context.
+  const notYet = tasks.filter((t) => !nudgeable.includes(t));
   tasks = nudgeable;
 
   const clock = (ms: number) =>
@@ -1252,7 +1313,119 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     ? `\nALREADY QUEUED — going out in the next few minutes no matter what (don't plan these again; space anything else around them):\n${queued.map((e) => `- "${e.title}" at ${clock(utcMs(e.send_at))}`).join('\n')}\n`
     : '';
 
-  const prompt = `You are the personal assistant to a brilliant but disorganized ADHD boss. Your job: look at their full task list and decide what reminders they need TODAY — what to surface, when, and what to say.
+
+  // ── What the brief planner is shown ──────────────────────────────────────
+  // Facts only. The brief (base44/shared/reminderBrief.ts) is the whole of the
+  // instructions; nothing in here tells the planner what to do with a fact
+  // (no "must be nudged", no "these reminders aren't working", no scores).
+  const briefData = (): string => {
+    const line = (t: any, i: number) => {
+      const parts: string[] = [];
+      const said = String(t.original_input || '').trim().replace(/\s+/g, ' ');
+      if (said && said.toLowerCase() !== String(t.title || '').trim().toLowerCase()) parts.push(`their words when they added it: "${said.slice(0, 400)}"`);
+      const notesText = [t.description, t.notes].map((x) => String(x || '').trim()).filter(Boolean).join(' / ').replace(/\s+/g, ' ');
+      if (notesText) parts.push(`notes: ${notesText.slice(0, 400)}`);
+      const pin = pinnedMoment(t);
+      if (isClockDeadline(t) && Number.isFinite(pin)) {
+        parts.push(pin <= nowMs ? `due by ${whenLabel(pin)} — that time has passed and it isn't done` : `due by ${whenLabel(pin)}`);
+      } else if (isAtTime(t) && Number.isFinite(pin)) {
+        parts.push(`set for ${whenLabel(pin)} — that time has passed and it isn't done`);
+      } else if (t.due_date) {
+        const days = daysUntil(t.due_date, now, timeZone);
+        const d = formatDateShort(t.due_date, timeZone);
+        const rel = days === 0 ? 'today' : days === 1 ? 'tomorrow' : days < 0 ? `${-days} day${days === -1 ? '' : 's'} ago` : `in ${days} days`;
+        if (t.day_only_task && t.deadline_style !== 'by') parts.push(`happens on ${d} (${rel}) — tied to that day`);
+        else parts.push(`due by ${d} (${rel})${days < 0 ? ', not done' : ''}`);
+      } else {
+        parts.push('no date');
+      }
+      if (t.start_date) parts.push(`start date ${formatDateShort(t.start_date, timeZone)}`);
+      if (!Number.isFinite(pin) && hhmmLabel(t.anchor_time)) parts.push(`time they named: ${hhmmLabel(t.anchor_time)}`);
+      parts.push(`priority: ${t.urgency || 'medium'}`);
+      parts.push(`energy: ${t.energy_required || 'medium'}`);
+      const tag = String(t.tag || '').trim().replace(/\s+/g, ' ').slice(0, 60);
+      if (tag) parts.push(`tag: "${tag}"`);
+      const wish = String(t.reminder_wish || '').trim().replace(/\s+/g, ' ').slice(0, 200);
+      if (wish) parts.push(`reminder wish: "${wish}"`);
+      if (recurrenceLabel(t)) parts.push(`repeats ${recurrenceLabel(t)} (this is the current one)`);
+      const loc = (t.location || '').trim();
+      if (loc) parts.push(`location they typed: ${loc}`);
+      parts.push(t.life_area === 'work' ? 'work' : 'personal');
+      if (t.classification === 'payment') parts.push('a bill/payment');
+      const created = utcMs(t.created_date);
+      if (Number.isFinite(created)) parts.push(`added ${daysAgoLabel(created)}`);
+      if ((t.due_date_pushes || 0) > 0) parts.push(`they moved its date later ${t.due_date_pushes}x`);
+      const subs = (subtasksByParent[t.id] || []).sort((a: any, b: any) => (a.subtask_order || 0) - (b.subtask_order || 0));
+      if (subs.length) parts.push(`steps: ${subs.map((x: any) => `${x.status === 'completed' ? '[x]' : '[ ]'} ${x.title}`).join(', ')}`);
+      const h = nudgeHistory.get(t.id);
+      if (h && h.today.length) parts.push(`you brought it up today at ${[...h.today].sort((a, b) => a - b).map(clock).join(', ')}`);
+      else if (h && Number.isFinite(h.lastBefore)) parts.push(`you last brought it up ${daysAgoLabel(h.lastBefore)}`);
+      const react: string[] = [];
+      if ((t.snooze_count || 0) > 0) react.push(`snoozed ${t.snooze_count}x`);
+      if ((t.dismissed_count || 0) > 0) react.push(`swiped away or closed ${t.dismissed_count}x`);
+      if ((t.ignored_count || 0) > 0) react.push(`rang out with no answer ${t.ignored_count}x`);
+      if ((t.later_count || 0) > 0) react.push(`answered "Later" ${t.later_count}x`);
+      if (react.length) parts.push(`what they did with its reminders so far: ${react.join(', ')}`);
+      const breakMs = utcMs(t.later_until);
+      if (Number.isFinite(breakMs) && breakMs > nowMs) parts.push(`they tapped Later on it; that break runs until ${clock(breakMs)}`);
+      return `${i + 1}. "${t.title}" — ${parts.join('; ')}`;
+    };
+
+    const fixedLines = (ctx.fixed || []).map((t: any) => {
+      const pin = pinnedMoment(t);
+      const rhythm = RECURRING_INTERVALS.has(t.reminder_interval);
+      const what = rhythm
+        ? `its own reminder every ${INTERVAL_WORDS[t.reminder_interval] || t.reminder_interval}${t.reminder_wish ? ` (they asked: "${String(t.reminder_wish).slice(0, 120)}")` : ''}`
+        : (Number.isFinite(pin) ? `its own reminder at ${whenLabel(pin)}` : 'its own reminders');
+      return `- "${t.title}" — ${what}; priority ${t.urgency || 'medium'}`;
+    });
+
+    const seenAfter = (at: number) => Number.isFinite(lastSeenMs) && lastSeenMs > at;
+    const pushLines = dayPushes.slice(0, 40).map((p) => {
+      if (p.at > nowMs) return `- ${clock(p.at)} ${p.title} — booked, not sent yet`;
+      return `- ${clock(p.at)} ${p.title}${p.mine ? ' (from you)' : ''} — sent; ${seenAfter(p.at) ? 'they have opened the app since' : 'they have not opened the app since'}`;
+    });
+
+    const out: string[] = [];
+    out.push(`Right now: ${todayLabel}, ${timeStr} (${timeZone}).`);
+    out.push(`Quiet hours: ${noQuietHours ? 'none (turned off)' : `${quietStartStr} to ${quietEndStr}`}. Time left before ${noQuietHours ? 'midnight' : 'quiet hours'}: ${hoursLeftStr}.`);
+    if (Number.isFinite(lastSeenMs)) out.push(`Last opened the app: ${whenLabel(lastSeenMs)} (${daysAgoLabel(lastSeenMs)}).`);
+    if (aboutMe.trim()) out.push(`What they told you about themselves, in their own words: ${aboutMe.trim()}`);
+    if (work.lines.length) out.push(`Work schedule (${work.remote ? 'works from home' : 'goes in to work'}${work.quietAtWork ? '; they turned on "don\'t notify me at work", so nothing goes out during those hours' : ''}):\n${work.lines.map((l) => `- ${l}`).join('\n')}`);
+    out.push(`OPEN TASKS — yours to plan (numbered; use these numbers in your answer):\n${tasks.map(line).join('\n')}`);
+    if (notYet.length) out.push(`OPEN TASKS NOT YOURS TODAY (tied to a later day, or on a Later break that runs past today):\n${notYet.map((t: any) => `- "${t.title}"${t.due_date ? ` — ${formatDateShort(t.due_date, timeZone)}` : ''}`).join('\n')}`);
+    if (fixedLines.length) out.push(`OPEN TASKS THAT ALREADY HAVE THEIR OWN REMINDERS (the app sends those; never yours to nudge, plan around them):\n${fixedLines.join('\n')}`);
+    if (eventList) out.push(`TODAY'S APPOINTMENTS (they have their own reminders):\n${eventList}`);
+    if (upcomingList) out.push(`THE WEEK AHEAD:\n${upcomingList}`);
+    if (proximityNotes) out.push(proximityNotes);
+    out.push(`EVERYTHING THE APP HAS SENT OR BOOKED FOR THEM TODAY (every part of the app):\n${pushLines.length ? pushLines.join('\n') : '- nothing yet'}`);
+    out.push(`FINISHED TODAY:\n${doneToday.length ? doneToday.slice(0, 20).map((d) => `- "${d}"`).join('\n') : '- nothing yet'}`);
+    if (queued.length) out.push(`ALREADY GOING OUT IN THE NEXT FEW MINUTES (from your earlier plan today — don't repeat them):\n${queued.map((e) => `- "${e.title}": ${e.body} (${clock(utcMs(e.send_at))})`).join('\n')}`);
+    if (laterLook) out.push('Part of your plan for today has already gone out (see above). You are looking at the same day again.');
+    out.push(`Last time the parked-tasks roundup went out: ${Number.isFinite(lastRoundupMs) ? daysAgoLabel(lastRoundupMs) : 'never'}.`);
+    out.push(`HOW TO ANSWER — valid JSON only:
+{
+  "nudges": [
+    {
+      "task_index": <the number of the task, or 0 when it is about several>,
+      "task_indexes": [<the number of EVERY task the message is about>],
+      "delay_minutes": <minutes from now to send it; nothing lands in quiet hours>,
+      "title": "<2-6 words, may include one emoji that fits what the task literally says>",
+      "body": "<the message itself: one or two complete sentences>",
+      "light": <true when this should arrive as a plain notification and never ring, e.g. a gentle mention of a task they tagged "no rush"; otherwise false>,
+      "roundup": <true only for the once-a-week single notification listing the tasks they parked with a tag like "play it by ear" or "waiting on X", so those aren't forgotten; otherwise false>,
+      "rationale": "<a short phrase: why this, why now>"
+    }
+  ],
+  "passed": [
+    { "task_index": <a task you thought about and chose not to bring up now>, "why": "<a short phrase>" }
+  ]
+}
+"passed" is never shown to them; it's for reviewing your judgment. An empty "nudges" list is a complete answer.`);
+    return out.join('\n\n');
+  };
+
+  const prompt = ctx.useBrief ? briefData() : `You are the personal assistant to a brilliant but disorganized ADHD boss. Your job: look at their full task list and decide what reminders they need TODAY — what to surface, when, and what to say.
 
 You're not annoying. You don't flood them. You make sure everything gets done and all deadlines are met. You intelligently figure out what to bring in front of them and when — like a great assistant who knows when to push and when to back off.
 
@@ -1357,6 +1530,7 @@ Return ONLY valid JSON:
 
 "passed" is for the boss's own review of your judgment and is never sent to them. List the tasks that had a real claim on today and that you set aside on purpose: anything with a TAG or a REMINDER WISH, anything high or urgent, anything due within a few days or overdue, anything nudged before. Leave out tasks that were never in contention (far off and low priority). A phrase each.`;
 
+  lastPrompt = prompt;
   try {
     const response = await openai.chat.completions.create({
       // Deciding WHAT to surface today, WHEN, and how often is the heaviest
@@ -1365,10 +1539,15 @@ Return ONLY valid JSON:
       // reasoning tokens count against the completion budget, so that budget
       // has to be far larger than the visible output.
       model: 'gpt-6-astra',
-      messages: [
-        { role: 'system', content: 'You are an ADHD productivity companion — a personal assistant to a disorganized but brilliant boss. Always respond with valid JSON only.' },
-        { role: 'user', content: prompt },
-      ],
+      messages: ctx.useBrief
+        ? [
+          { role: 'system', content: REMINDER_BRIEF },
+          { role: 'user', content: prompt },
+        ]
+        : [
+          { role: 'system', content: 'You are an ADHD productivity companion — a personal assistant to a disorganized but brilliant boss. Always respond with valid JSON only.' },
+          { role: 'user', content: prompt },
+        ],
       response_format: { type: 'json_object' },
       reasoning_effort: 'medium',
       max_completion_tokens: 6000,
@@ -1436,7 +1615,10 @@ Return ONLY valid JSON:
     // other, a nudge already queued to go out, or one that just went out. The LLM sometimes gives
     // several nudges the same delay_minutes, which arrives as a stack of
     // notifications — overwhelming instead of helpful.
-    const MIN_GAP_MS = 45 * 60 * 1000;
+    // Not for the brief planner: it sees everything going out today and decides
+    // the spacing itself (the brief: "never say the same thing twice within a
+    // few minutes"); the send loop still sends one nudge per person per run.
+    const MIN_GAP_MS = ctx.useBrief ? 0 : 45 * 60 * 1000;
     entries.sort((a: any, b: any) => new Date(a.send_at).getTime() - new Date(b.send_at).getTime());
     const placed: number[] = [
       ...(queued || []).map((e: any) => utcMs(e.send_at)),

@@ -309,6 +309,10 @@
       "type": "object",
       "description": "Task id \u2192 a short fingerprint of what the smart-nudge planner read on that task (and its steps) when it last made this person's plan. A task that no longer matches has changed since, however it was changed, so the plan is redone."
     },
+    "smart_nudge_brief_version": {
+      "type": "string",
+      "description": "Which copy of the Smart Reminders brief (base44/shared/reminderBrief.ts) this person's current plan was made with. Empty = made by the old prompt. When it doesn't match the current brief, the waiting nudges are dropped and a new plan is made."
+    },
     "smart_nudge_dirty_at": {
       "type": "string",
       "format": "date-time",
