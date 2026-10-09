@@ -1431,15 +1431,16 @@ Return JSON:
 
   // Switch a task to "Smart Reminders" — the LLM smart-nudge system takes over.
   // Cancels every scheduled notification (recurring + one-time/event schedule)
-  // and clears all reminder fields so the task flows to the LLM.
+  // and drops the fixed rhythm, so the planner decides when to nudge. What the
+  // person said about the task itself stays: its day and time, and its repeat.
+  // It used to wipe those too, so Tabitha's "date night every Thursday at
+  // 22:00" became a one-off with no time the moment she tapped this (Oct 8
+  // 2026). The planner reads the time as the task's own moment; a repeat still
+  // makes its next copy when this one is checked off.
   const handleSetSmartReminders = async () => {
     if (!task) return;
     const updates = {
       reminder_interval: null,
-      recurrence_pattern: 'none',
-      next_reminder: null,
-      event_time: null,
-      day_only_task: false,
       onesignal_notification_ids: [],
       reminder_schedule: [],
       classification: 'task',
