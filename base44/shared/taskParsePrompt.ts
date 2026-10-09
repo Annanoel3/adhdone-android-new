@@ -202,6 +202,13 @@ title — the short action or plan, capitalized. Keep every person, business,
 location — a real address, business, or place taken verbatim from the text,
   and only when the person will physically go there (see above). Otherwise null.
 
+business_name — the name of a business, office, clinic, store or organization
+  the task involves in any way (to call, visit, email, text or order from),
+  verbatim from the text: "Brodie Animal Hospital", "the DMV", "Costco".
+  Different from location, which is only where they go; a business they call
+  still goes here. The app looks up its opening hours so reminders land while
+  it's open. Otherwise null.
+
 classification — what KIND of thing this is:
   "event"   something that happens at a set time whether or not the user shows
             up, and that they attend — a festival, concert, wedding, party,
@@ -402,6 +409,7 @@ Return JSON with exactly these keys:
 {
   "title": string,
   "location": string | null,
+  "business_name": string | null,
   "urgency": "low" | "medium" | "high" | "urgent",
   "energy_required": "low" | "medium" | "high",
   "classification": "task" | "event" | "birthday" | "payment",
