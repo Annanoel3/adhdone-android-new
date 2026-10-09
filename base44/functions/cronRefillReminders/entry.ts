@@ -1257,9 +1257,18 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   // 2. Smart Reminders plans marked out of date for over 90 minutes in the
   //    person's daytime: the planner is failing on them run after run, and
   //    nothing else notices (Anna's own plan sat like this for five hours).
+  // Only people the planner actually visits: a real user with open tasks.
+  // The owner's editor account has sat "out of date" since September with no
+  // tasks to plan — the first run alerted on it (Oct 9 2026, 12:21 PM).
+  const openTasksOf: Record<string, number> = {};
+  for (const t of allTasks) {
+    if (t.status !== 'active' || t.parent_task_id || t.silenced) continue;
+    const e = t.notification_recipient_email || t.created_by;
+    if (e) openTasksOf[e] = (openTasksOf[e] || 0) + 1;
+  }
   const stuckPlans: string[] = [];
   for (const u of allUsers) {
-    if (!u?.email || !activeLately(u)) continue;
+    if (!u?.email || !realUser(u.email) || !openTasksOf[u.email] || !activeLately(u)) continue;
     const h = localHourIn(u.timezone || OWNER_TZ, now);
     if (h < 9 || h >= 22) continue;
     const dirtyAt = Date.parse(u.smart_nudge_dirty_at || '') || 0;
