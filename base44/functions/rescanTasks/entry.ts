@@ -4,6 +4,7 @@
 // Re-saved Oct 8 2026: a bare "ASAP" with no due date means start now.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
+import { runTaskParse } from '../../shared/runTaskParse.ts';
 // Shared files are bundled into this function when it is deployed, so a change
 // to the shared prompt (taskParsePrompt.ts) only reaches users after this
 // function is saved and redeployed again (last redeploy, Oct 3 2026: the
@@ -86,9 +87,13 @@ export default async function(req: Request): Promise<Response> {
             ? null
             : task.reminder_interval;
         } else {
-          const prompt = buildTaskParsePrompt(task.title);
-          const parseResp = await base44.functions.invoke('parseTask', { prompt });
-          const parsed = (parseResp.data || parseResp).response;
+          // The owner's own words, read on the OWNER's calendar as of the day
+          // they said them — never the admin's timezone or today's date, which
+          // moved "remind me tomorrow at 9am" a day later on every re-read
+          // (Oct 8 2026, two new users' first tasks).
+          const saidAt = Date.parse(task.created_date || '') || undefined;
+          const prompt = buildTaskParsePrompt(task.original_input || task.title, timeZone, saidAt);
+          const parsed = await runTaskParse(base44, prompt, timeZone, owner?.about_me, saidAt);
 
           newUrgency = parsed.urgency || task.urgency || 'medium';
           newEnergy = parsed.energy_required || task.energy_required || 'medium';
