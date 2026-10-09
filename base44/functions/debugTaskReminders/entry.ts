@@ -73,6 +73,18 @@ Deno.serve(async (req) => {
       console.log(`[debugTaskReminders] ${me.email} set ${entity} ${id}: ${JSON.stringify(fields)}`);
       return Response.json({ ok: true, entity, id, was, is });
     }
+    // Owner-only repair: { make: { entity, fields } } creates one record (for
+    // the copy a repeat should have made but couldn't, because the repeat had
+    // been lost — Tabitha's Date Night, Oct 8 2026). Returns the new record.
+    if (body?.make && typeof body.make === 'object') {
+      const { entity, fields } = body.make;
+      if (!entity || !fields || typeof fields !== 'object' || !svc[entity]) {
+        return Response.json({ ok: false, error: 'make needs entity and fields' }, { status: 400 });
+      }
+      const made = await svc[entity].create(fields);
+      console.log(`[debugTaskReminders] ${me.email} made ${entity} ${made?.id}: ${JSON.stringify(fields).slice(0, 300)}`);
+      return Response.json({ ok: true, entity, id: made?.id, record: made });
+    }
     // Raw look-up (read only): { q: { entity, where, limit, fields } } returns
     // matching rows, newest first, trimmed to the fields asked for.
     if (body?.q && typeof body.q === 'object') {
