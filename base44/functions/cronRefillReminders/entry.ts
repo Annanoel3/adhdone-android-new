@@ -874,6 +874,76 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── Abandoned bookings: the app closed before it could book ──────────────
+  // The app books a new task's reminders in the background right after saving
+  // it, marking the task with reminder_scheduling_since while it does. Closed
+  // a few seconds after adding a task, the booking never happens: the marker
+  // stays, and the task has no plan and no push. Nothing noticed — the
+  // far-out pass above only covers dates beyond the booking window (Tabitha,
+  // Oct 7 2026: "Feed obi pan kenobi after work tonight", added 11:28 AM; its
+  // 6 PM reminder was never booked and a smart nudge covered it 39 minutes
+  // late). So a task still carrying the marker past the grace window, with
+  // nothing booked and its time still ahead, gets the one reminder at its
+  // time here. A "by" deadline is left to the smart nudges, as everywhere
+  // else. A plan the person cleared themselves never looks like this:
+  // clearing goes through commitNotificationIds, which drops the marker.
+  let rescued = 0;
+  for (const task of datedTasks) {
+    if (rescued >= MAX_PLANS_BUILT_PER_RUN) break;
+    if (!task.reminder_scheduling_since) continue;
+    if (isBeingScheduledElsewhere(task, now.getTime()) || isInRetryBackoff(task, now.getTime())) continue;
+    if (task.recurrence_pattern && task.recurrence_pattern !== 'none') continue;
+    if (task.deadline_style === 'by') continue;
+    const hasPlan = Array.isArray(task.reminder_schedule) && task.reminder_schedule.length > 0;
+    const hasIds = Array.isArray(task.onesignal_notification_ids) && task.onesignal_notification_ids.length > 0;
+    if (hasPlan || hasIds) continue;
+    const atMs = task.next_reminder ? new Date(task.next_reminder).getTime() : NaN;
+    if (!Number.isFinite(atMs) || atMs <= now.getTime() + 2 * 60 * 1000) continue;
+    if (atMs - now.getTime() > BOOKABLE_WINDOW_MS) continue;
+    rescued++;
+    const owner = userMap[task.notification_recipient_email];
+    const timeZone = userTimeZone(owner);
+    const full = (task.title || '').trim() || 'your task';
+    const short = full.length > 40 ? `${full.slice(0, 37)}...` : full;
+    const words = task.day_only_task
+      ? getReminderContent(task.title, task.due_date, task.next_reminder, timeZone)
+      : { title: `🔔 ${short}`, body: `It's time — "${short}". You've got this! 💪` };
+    try {
+      const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+        internalKey: CRON_SECRET,
+        toUserExternalId: task.notification_recipient_email,
+        title: words.title,
+        body: words.body,
+        sendAtISO: task.next_reminder,
+        data: { screen: '/TaskNotification', taskId: task.id, urgency: task.urgency || 'medium', type: 'task_reminder' },
+        buttons: [
+          { id: 'snooze_15', text: 'Snooze 15 min' },
+          { id: 'snooze_60', text: 'Snooze 1 hour' },
+          { id: 'complete', text: '✅ Done' },
+        ],
+      });
+      const result = res?.data || res;
+      if (result?.notificationId) {
+        const entry = { notification_id: result.notificationId, send_at: task.next_reminder, label: 'at the time', notification_title: words.title, notification_body: words.body };
+        await base44.asServiceRole.entities.Task.update(task.id, {
+          onesignal_notification_ids: [result.notificationId],
+          reminder_schedule: [entry],
+          reminder_plan_built_at: now.toISOString(),
+          reminder_scheduling_since: null,
+        });
+        await pushPhoneAlarms({ ...task, onesignal_notification_ids: [result.notificationId], reminder_schedule: [entry] }, owner,
+          { before: task, changedAt: Date.now(), source: 'cronRefillReminders' });
+        console.log(`🩹 [REFILL] Booked the reminder the app never got to for "${task.title}" at ${task.next_reminder}`);
+      } else {
+        await base44.asServiceRole.entities.Task.update(task.id, {
+          reminder_retry_after: new Date(now.getTime() + RETRY_AFTER_MS).toISOString(),
+        }).catch(() => {});
+      }
+    } catch (e) {
+      console.error(`[REFILL] Could not book the abandoned reminder for ${task.id}:`, e);
+    }
+  }
+
   const eventTasks = datedTasks.filter(t =>
     Array.isArray(t.reminder_schedule) && t.reminder_schedule.length > 0
   );
