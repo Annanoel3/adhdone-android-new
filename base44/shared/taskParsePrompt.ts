@@ -28,19 +28,27 @@ export const TASK_PARSE_SYSTEM_PROMPT =
 // Friday in Central America it's already Saturday in UTC — so without this,
 // "this Saturday" resolved to a week out. Returns a Date whose local getters
 // (getDay/getDate/getHours) read the wall-clock in the given zone.
-export function nowInTimezone(tz?: string): Date {
-  if (!tz) return new Date();
+//
+// `asOfMs`: WHEN THE WORDS WERE SAID. "Tomorrow" means the day after the
+// person typed it, not the day after the parser happened to run. A capture
+// that finished later (the app closed mid-way and picked it up on the next
+// open) and a re-read of an old task's words both used to count from the
+// moment they ran: Tabitha's "remind me tomorrow at 9am", typed Monday
+// night, landed on Wednesday, then on Thursday (Oct 6-8 2026). Left out, now.
+export function nowInTimezone(tz?: string, asOfMs?: number): Date {
+  const base = Number.isFinite(asOfMs) && (asOfMs as number) > 0 ? new Date(asOfMs as number) : new Date();
+  if (!tz) return base;
   const parts = new Intl.DateTimeFormat('en-US', {
     timeZone: tz, hourCycle: 'h23',
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
-  }).formatToParts(new Date());
+  }).formatToParts(base);
   const get = (t: string) => Number(parts.find((p) => p.type === t)?.value);
   return new Date(get('year'), get('month') - 1, get('day'), get('hour'), get('minute'), get('second'));
 }
 
-export function buildTaskParsePrompt(inputText: string, tz?: string): string {
-  const now = nowInTimezone(tz);
+export function buildTaskParsePrompt(inputText: string, tz?: string, asOfMs?: number): string {
+  const now = nowInTimezone(tz, asOfMs);
   const fmt = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
