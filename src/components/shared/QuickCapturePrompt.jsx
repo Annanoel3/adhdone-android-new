@@ -1465,16 +1465,6 @@ const phoneBuild = async () => {
     return 0;
   }
 };
-// Up to date? By build number when the phone gives one. Without one, by its
-// plugins — but only once they've had their moment to land (settled): a 1.3.13
-// phone whose App plugin answers a beat after RecorderBridge would otherwise
-// be called up to date and never told about 1.3.14.
-const hasNewestBuild = async (settled) => {
-  const build = LATER_BUILD_ON_PLAY ? await phoneBuild() : 0;
-  if (build > 0) return build >= NEWEST_BUILD;
-  return settled || !LATER_BUILD_ON_PLAY ? hasNewestBuildByPlugins() : false;
-};
-
 export function AppUpdatePrompt({ user, theme }) {
   const dark = theme === 'dark';
   const [wanted, setWanted] = useState(false);
@@ -1515,14 +1505,21 @@ export function AppUpdatePrompt({ user, theme }) {
     // the card up behind it.
     if (user.feedback_ask?.asked_at && !user.feedback_ask?.answered_at) return;
     (async () => {
-      // The phone's plugins can show up a moment after the page loads (the
-      // side menu's quiet button waits for them too): give the newest build
-      // time to announce itself before calling it old.
-      for (let i = 0; i < 16; i++) {
-        if (!mounted.current || await hasNewestBuild(false)) return;
+      // The phone's own build number decides at once. Only a phone that
+      // doesn't report one (older builds) is judged by its plugins, and those
+      // can show up a moment after the page loads (the side menu's quiet
+      // button waits for them too), so that case gets up to 8 seconds. It
+      // used to wait the full 8 seconds even with the number in hand: on Oct 8
+      // 2026 the card was ready 8 seconds after Anna opened the app and she
+      // had closed it 3 seconds later, so it never got its turn.
+      let build = 0;
+      for (let i = 0; i < 16 && mounted.current; i++) {
+        build = LATER_BUILD_ON_PLAY ? await phoneBuild() : 0;
+        if (build > 0) break;
         await new Promise((r) => setTimeout(r, 500));
       }
-      if (!mounted.current || await hasNewestBuild(true)) return;
+      if (!mounted.current) return;
+      if (build > 0 ? build >= NEWEST_BUILD : hasNewestBuildByPlugins()) return;
       const today = new Date().toDateString();
       try {
         if (localStorage.getItem(UPDATE_PROMPT_KEY) === today) return;
