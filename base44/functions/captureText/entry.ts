@@ -93,7 +93,12 @@ function duplicateResponse(winner: { tasks: any[]; ideas: any[] }) {
 Deno.serve(async (req) => {
   try {
     const base44 = await createClientFromRequest(req);
-    const { text, timezone, capture_id } = await req.json();
+    const { text, timezone, capture_id, said_at } = await req.json();
+    // When the words were said (ms), for a capture the phone held on to and
+    // delivered later (no signal, app killed): "tomorrow" counts from then.
+    const saidRaw = Number(said_at);
+    const saidAt = Number.isFinite(saidRaw) && saidRaw > Date.now() - 60 * 24 * 60 * 60 * 1000 && saidRaw <= Date.now() + 60 * 1000
+      ? saidRaw : undefined;
     // The platform occasionally rejects a perfectly good call outright
     // ("Admin permissions required") and then accepts the identical one a
     // moment later. That turned into a 500 the phone had to back off from
@@ -264,7 +269,7 @@ Deno.serve(async (req) => {
 
       // about_me goes in here too, exactly like the in-app add path — otherwise
       // a task shared from the phone gets classified for a generic person.
-      const parsed = await runTaskParse(base44, buildTaskParsePrompt(piece, tz), tz, user.about_me);
+      const parsed = await runTaskParse(base44, buildTaskParsePrompt(piece, tz, saidAt), tz, user.about_me, saidAt);
       if (!parsed?.title) continue;
 
       // original_input keeps the user's verbatim words (the whole shared text
