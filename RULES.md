@@ -201,3 +201,45 @@ on this path.
 - Retrying an SDK call that got Cloudflare's "Just a moment" page (`withChallengeRetry`) —
   the challenge is not transient; every call through adhdone.space gets it. Fix the host,
   not the retry (hard rule 9)
+
+## 8. REAL PEOPLE'S DATA — BULK CHANGES
+
+Added Oct 9 2026, after a "re-book everyone's reminders" pass re-read two first-time users'
+typed words with that day's calendar and moved "remind me tomorrow at 9am" a day later for
+both. Nobody looked afterwards. A bulk change is anything that writes to more than one
+person's records, or to any record the owner did not personally ask about.
+
+1. **Dry run first, with a field-level diff.** For every record that would change, print the
+   field, what it is now, and what it would become. "19 reminders re-booked" is not a diff.
+2. **Owner's accounts first** (README lists them), then everyone else, never the other way.
+3. **Never re-read old words with today's calendar.** A task's `original_input` is parsed as of
+   its `created_date`, on its owner's timezone — `buildTaskParsePrompt(text, tz, saidAt)` and
+   `runTaskParse(..., saidAt)` take the moment the words were said for exactly this reason.
+4. **Read it back.** After the change, query the same records and compare against the diff
+   you promised. Report what differs, not "done".
+5. **Server-made records belong to the server.** `asServiceRole.entities.X.create()` saves a row
+   owned by the service account; a person's app never shows it, and the crons still act on
+   it. Create as the user (`base44.entities.Task.create` with their auth) or don't create.
+
+## 9. BEFORE ANY CHANGE ON THE CAPTURE-AND-REMIND PATH — FIVE QUESTIONS
+
+Every bug on Oct 6–8 2026 was code that was right for the moment it was written and wrong
+for a moment nobody asked about. Before calling a change done anywhere between "the person
+typed something" and "their phone rang", answer these in writing:
+
+1. **What if the app closes halfway?** Captures resume later (`pendingCaptures`); booking runs
+   in the background after the task is saved; a popup can be on screen for one second. The
+   refill's rescue pass exists because a task was saved and its reminder never booked.
+2. **What if this runs later than the words were typed?** "Tomorrow", "tonight", "Thursday"
+   mean the day after/the night of/the next Thursday from WHEN IT WAS SAID. Pass `saidAt`.
+3. **What if the time has already passed?** A pinned moment that went by is overdue, not
+   undated and not "no need to tackle it tonight". Nothing should quietly drop the date.
+4. **What if it lands in quiet hours, or on a phone that holds pushes?** A time the person
+   named ("every Thursday at 22:00") is theirs; a reminder the app invented is not.
+5. **What if the phone is on an older build, or the reminder style is notification, not
+   alarm?** Check the fields the old build reads, and the path a push takes when nothing
+   rings (`PushFilter`).
+
+Then run the parser self-test (`parseTask` → Test Function → `{"selfTest": true}`) if the
+prompt, the date resolver or the pipeline changed, and say what failed. Three hands change
+this codebase fast and nothing else will notice.
