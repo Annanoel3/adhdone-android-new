@@ -1481,6 +1481,8 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       const biz = businessHoursLine(t.business_hours, nowMs);
       if (biz) parts.push(biz);
       else if (t.business_name) parts.push(`names a business: ${t.business_name} (hours not looked up yet)`);
+      const snoozeMs = utcMs(t.snoozed_until);
+      if (Number.isFinite(snoozeMs) && snoozeMs > nowMs) parts.push(`snoozed on their phone; that alarm rings again on its own at ${whenLabel(snoozeMs)}`);
       if (t.task_family) {
         const hb = (ctx.habits || {})[t.task_family] || {};
         const mins = Number(t.typical_minutes || hb.minutes);
