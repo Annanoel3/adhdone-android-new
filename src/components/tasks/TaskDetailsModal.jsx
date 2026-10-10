@@ -751,7 +751,62 @@ Return JSON:
     }
   };
 
-  const handleUpdateReminderTime = async (selectedTime, selectedDate) => {
+  // "You usually finish this around 7:40 PM — remind you at 7:30?" (Anna, Oct
+  // 10 2026; the offer comes from logTaskCompletion). Yes moves this task's
+  // time through the same path as picking a new time here, except it doesn't
+  // count as putting the task off. When that time today has already gone by, a
+  // repeating task changes from its next one on (anchor_time, which the next
+  // occurrence copies). A task with no time of its own just records the yes;
+  // the Smart Reminders planner aims for that time.
+  const habitTime12 = (hhmm) => {
+    const [h, m] = String(hhmm || '').split(':').map((n) => parseInt(n, 10));
+    if (!Number.isFinite(h) || !Number.isFinite(m)) return hhmm;
+    return new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  };
+  const answerHabitSuggestion = async (answer) => {
+    const s = task?.habit_suggestion;
+    if (!s?.time || s.answer) return;
+    const answered = { ...s, answer, answered_at: new Date().toISOString() };
+    task.habit_suggestion = answered;
+    onUpdate({ ...task, habit_suggestion: answered });
+    try {
+      await Task.update(task.id, { habit_suggestion: answered });
+    } catch (err) {
+      console.error('Could not save the answer:', err);
+    }
+    if (answer !== 'yes') {
+      toast({ title: 'Okay — the reminder stays where it is', duration: 2000 });
+      return;
+    }
+    const label = habitTime12(s.time);
+    const hasTime = !task.day_only_task && /^\d{2}:\d{2}$/.test(task.anchor_time || '');
+    if (!hasTime) {
+      toast({ title: `Got it — I'll aim for around ${label}`, duration: 2200 });
+      return;
+    }
+    const day = getCurrentReminderDate(task);
+    const [y, mo, d] = String(day || '').split('-').map((n) => parseInt(n, 10));
+    const [hh, mm] = s.time.split(':').map((n) => parseInt(n, 10));
+    const at = Number.isFinite(y) && Number.isFinite(mo) && Number.isFinite(d) ? new Date(y, mo - 1, d, hh, mm, 0, 0) : null;
+    if (at && at.getTime() > Date.now() + 3 * 60 * 1000) {
+      await handleUpdateReminderTime(s.time, day, { notAPush: true });
+      return;
+    }
+    if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
+      task.anchor_time = s.time;
+      onUpdate({ ...task, anchor_time: s.time });
+      try {
+        await Task.update(task.id, { anchor_time: s.time });
+      } catch (err) {
+        console.error('Could not save the new time:', err);
+      }
+      toast({ title: `Done — from the next one on, it's ${label}`, duration: 2200 });
+      return;
+    }
+    toast({ title: `Got it — ${label}`, duration: 2000 });
+  };
+
+  const handleUpdateReminderTime = async (selectedTime, selectedDate, opts = {}) => {
     if (!task) return;
 
     try {
@@ -803,7 +858,8 @@ Return JSON:
       // pill never counted them; only the quick view and the smart-reminder
       // pill did. Same rule as everywhere else: an earlier date, a first
       // date, or a cleared date is not a push.
-      if (!task.reminder_interval || task.reminder_interval === 'once') {
+      // Taking a "you usually do this around…" suggestion isn't putting it off.
+      if (!opts.notAPush && (!task.reminder_interval || task.reminder_interval === 'once')) {
         const oldISO = task.due_date || task.next_reminder;
         if (oldISO && nextReminder.getTime() > new Date(oldISO).getTime()) {
           const pushes = (task.due_date_pushes || 0) + 1;
@@ -1939,6 +1995,24 @@ Return JSON:
               <span className={`text-xs font-bold uppercase tracking-wide ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Type</span>
               <ReminderTypeSelector task={task} theme={theme} onChangeType={handleChangeReminderType} />
             </div>
+
+            {/* "You usually finish this around…" waiting for a yes or no. */}
+            {task.habit_suggestion?.time && !task.habit_suggestion?.answer && (
+              <div className={`rounded-lg border p-3 text-sm space-y-2 ${
+                theme === 'dark' ? 'border-purple-700 bg-purple-900/30 text-gray-100' : 'border-purple-200 bg-purple-50 text-gray-800'
+              }`}>
+                <p>💡 {task.habit_suggestion.why || `You usually finish this around ${habitTime12(task.habit_suggestion.time)}.`}</p>
+                <p className="font-medium">
+                  {!task.day_only_task && task.anchor_time
+                    ? `Move this reminder to ${habitTime12(task.habit_suggestion.time)}?`
+                    : `Remind you around ${habitTime12(task.habit_suggestion.time)} from now on?`}
+                </p>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => answerHabitSuggestion('yes')}>Yes</Button>
+                  <Button size="sm" variant="outline" onClick={() => answerHabitSuggestion('no')}>No</Button>
+                </div>
+              </div>
+            )}
 
             {/* Birthdays: when the reminders go out, and a time that can be changed. */}
             {currentType === 'birthday' && task.next_reminder && (
