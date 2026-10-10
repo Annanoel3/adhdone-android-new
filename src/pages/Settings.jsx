@@ -495,6 +495,31 @@ export default function Settings() {
             AlarmBridge plugin (older installs, the browser), so it is safe for
             everyone. The one-time popups tell people it lives here. */}
         <AlarmCard user={user} theme={theme} />
+
+        {/* "What rang": the phone's own list of every alarm and reminder that
+            sounded in the last 2 days (NotificationSettings). That page has
+            no other way in from the app (Anna looked for it under Reminders,
+            Oct 9 2026), so the link lives here, on phones only. */}
+        {typeof window !== 'undefined' && !!window.Capacitor?.isNativePlatform?.() && (
+          <Card className={`mb-6 border-none shadow-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+            <CardContent className="p-4">
+              <button
+                type="button"
+                onClick={() => navigate('/NotificationSettings')}
+                className={`w-full flex items-center justify-between text-left ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}
+              >
+                <span className="flex items-center gap-2">
+                  <Bell className="w-5 h-5 text-purple-500" />
+                  <span>
+                    <span className="block font-medium">What rang</span>
+                    <span className={`block text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Every alarm and reminder that sounded on this phone in the last 2 days, and what you did with it.</span>
+                  </span>
+                </span>
+                <span className="text-purple-500 text-lg">›</span>
+              </button>
+            </CardContent>
+          </Card>
+        )}
         </>)}
 
         {!page && (<>
