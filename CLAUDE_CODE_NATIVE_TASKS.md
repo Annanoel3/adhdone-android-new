@@ -225,16 +225,18 @@ Read `AlarmService.java` (the `waiting` queue, `snooze()`, the hand-off after an
    ringing, it goes into `waiting` and starts ringing the instant the first is answered
    (Oct 10: a pills snooze came back at 12:09 and the planner's "Mom's watch" nudge landed
    in the same minute; both rang, one straight after the other). Fix: when the answered
-   alarm hands off to the next one for a DIFFERENT task, delay that ring by 3 minutes
-   (reschedule its entry, `at = now + 3 min`) instead of starting it immediately. Same-task
-   folding stays as it is. An entry whose heading starts with the bell (an "at the time"
+   alarm hands off to the next one for a DIFFERENT task, delay that ring by 10 minutes
+   (reschedule its entry, `at = now + 10 min`) instead of starting it immediately — the
+   same spacing the server already keeps between pushes (`base44/shared/sendLedger.ts`:
+   9 minutes same task, 20 minutes before a nudge stacks on anything). Do not invent a
+   different number here. Same-task folding stays as it is. An entry whose heading starts with the bell (an "at the time"
    reminder the user set themselves) is the exception: it rings at its minute, and the
    OTHER one is what waits.
 2. **Alarms booked for the same minute.** `AlarmScheduler.schedule()` books every entry at
    its exact `at`; two server alarms for different tasks at the same minute (two "at 10:00"
    tasks, or a fixed reminder and a nudge) produce the collision in item 1. In `sync()` and
    `replaceTask()`, when a NEW entry for a different task lands within 2 minutes of one
-   already booked, push the new one to 3 minutes after it. Log it.
+   already booked, push the new one to 10 minutes after it (same spacing as above). Log it.
 3. **The server can't see a snooze.** A snooze is local: the server only learns a count
    when the app next opens (`drainActivity`), never WHEN it comes back, so the Smart
    Reminders planner can't plan around it. In the activity drain, report for each task
@@ -268,6 +270,6 @@ Read `AlarmService.java` (the `waiting` queue, `snooze()`, the hand-off after an
    next time something rings twice the log says why without reading logcat.
 
 Build / verify for 39: force-stop, book two alarms 1 minute apart for different tasks and
-confirm the second rings 3 minutes after the first is answered; snooze one for 1 minute
+confirm the second rings 10 minutes after the first is answered; snooze one for 1 minute
 and confirm the server task shows `snoozed_until`; cancel a booked push from the owner
 tool and confirm the phone does not ring it; check the tray during a ring shows one row.
