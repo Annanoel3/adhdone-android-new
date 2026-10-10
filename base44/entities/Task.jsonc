@@ -46,7 +46,12 @@
     },
     "habit_suggestion": {
       "type": "object",
-      "description": "An offer to move this task's reminder to when the person usually does this kind of task: { time 'HH:MM', why (one sentence shown to them), made_at }, made by logTaskCompletion with the model. The person answers on the task (TaskDetailsModal): answer 'yes' | 'no', answered_at. Nothing moves without a yes."
+      "description": "An offer to move this task's reminder to when the person usually does this kind of task: { time 'HH:MM', why (one sentence shown to them), made_at }, made by logTaskCompletion with the model. The person answers on the task (TaskDetailsModal): answer 'yes' | 'no', answered_at. A yes never sets a time on the task: the Smart Reminders planner reads it as their preferred time for that family. Offered only on tasks the planner reminds them about (no time of their own, no repeating reminder)."
+    },
+    "snoozed_until": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When a snooze on the phone's alarm brings this task back (native build 39+, reported through AlarmBridge.drainActivity as snoozedUntil and written by widgetBridge). The Smart Reminders planner sees it so its nudges don't land on top of the snooze."
     },
     "original_input": {
       "type": "string",
