@@ -503,6 +503,22 @@ Deno.serve(async (req) => {
                 famById[t.id] = t.task_family;
                 famByTitle[String(t.title || '').trim().toLowerCase()] = t.task_family;
               }
+              // Sessions on tasks finished before families existed ("Do laundry"
+              // in August) get their family from the model too, so old timed
+              // sessions count. At most 25 different titles a run.
+              const loose = [...new Set((logs || [])
+                .filter((l: any) => Number(l.duration_seconds) >= 60 && !famById[l.task_id]
+                  && !famByTitle[String(l.task_title || '').trim().toLowerCase()])
+                .map((l: any) => String(l.task_title || '').trim()).filter(Boolean))].slice(0, 25) as string[];
+              if (loose.length) {
+                const known = [...new Set([
+                  ...Object.keys(habitsNow).filter((k) => !k.startsWith('_')),
+                  ...Object.values(famByTitle),
+                ])].slice(0, 80) as string[];
+                const got = await assignTaskFamilies(loose.map((title, i) => ({ id: `s${i}`, title })), known)
+                  .catch(() => ({} as Record<string, string>));
+                loose.forEach((title, i) => { if (got[`s${i}`]) famByTitle[title.toLowerCase()] = got[`s${i}`]; });
+              }
               const secsByFam: Record<string, number[]> = {};
               for (const l of logs || []) {
                 const fam = famById[l.task_id] || famByTitle[String(l.task_title || '').trim().toLowerCase()];
