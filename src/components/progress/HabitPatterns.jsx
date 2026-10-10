@@ -74,10 +74,24 @@ export default function HabitPatterns({ theme }) {
     const completed = await base44.entities.Task.filter({ status: 'completed' }, '-completed_at', 2000);
     const logs = await base44.entities.FocusSessionLog.list('-completed_at', 1000);
 
+    // One habit per family (the same chore however it's worded or whose it is,
+    // set by the server in logTaskCompletion), so "Put away my laundry" and
+    // "Put away Antonio's laundry" are one laundry habit with one time
+    // estimate. Tasks finished before families existed join a family through a
+    // task with the same cleaned-up title; anything else keeps its title.
+    const famById = {};
+    const famByTitle = {};
+    completed.forEach(t => {
+      if (!t.task_family) return;
+      famById[t.id] = t.task_family;
+      famByTitle[norm(t.title)] = t.task_family;
+    });
+    const keyOf = (t) => t.task_family || famByTitle[norm(t.title)] || norm(t.title);
+
     const groups = {};
     completed.forEach(t => {
       if (!t.completed_at || t.parent_task_id || t.birthday_person) return;
-      const key = norm(t.title);
+      const key = keyOf(t);
       if (!key) return;
       const g = groups[key] || (groups[key] = { title: t.title, days: new Set() });
       // Label the habit with its plainest wording ("Put away laundry" over
@@ -91,7 +105,7 @@ export default function HabitPatterns({ theme }) {
 
     const durations = {};
     logs.forEach(l => {
-      const key = norm(l.task_title);
+      const key = famById[l.task_id] || famByTitle[norm(l.task_title)] || norm(l.task_title);
       if (!key || !l.duration_seconds) return;
       (durations[key] = durations[key] || []).push(l.duration_seconds);
     });
