@@ -1356,8 +1356,10 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
         const parts: string[] = [];
         for (const [k, n] of Object.entries(byTitle)) parts.push(`${k} (${n}x)`);
         if (dayStalled.length) parts.push(`${dayStalled.length} capture(s) never finished: ${dayStalled.slice(0, 2).map((s) => s.email).join(', ')}`);
-        if (newPeople.length) parts.push(`new: ${newPeople.join(', ')}`);
-        await pushOwner(base44, 'owner_daily', '🩺 ADHDone yesterday: something was off', parts.join(' · ').slice(0, 480));
+        // New signups are not a problem: their own labelled line, after the problems.
+        let body = `Problems: ${parts.join(' · ')}`;
+        if (newPeople.length) body += `\nNew signups (not a problem): ${newPeople.join(', ')}`;
+        await pushOwner(base44, 'owner_daily', '🩺 ADHDone yesterday: something was off', body.slice(0, 480));
       }
     } catch (e) {
       console.error('[HEALTH] daily note failed:', e);
