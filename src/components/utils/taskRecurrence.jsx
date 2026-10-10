@@ -363,6 +363,10 @@ async function makeNextCopy(task) {
     anchor_time: task.anchor_time || null,
     follow_up_title: task.follow_up_title || null,
     follow_up_minutes: task.follow_up_minutes || null,
+    // The kind of task it is and how long it takes (logTaskCompletion), so the
+    // next one doesn't wait to be sorted again.
+    task_family: task.task_family || null,
+    typical_minutes: task.typical_minutes || null,
     // Also part of what the task is: whether it is all-day, whether its date
     // is an "on" or a "by", how it arrives on the phone (alarm or push), and
     // its attachments. The copy used to drop these, so an all-day chore came
