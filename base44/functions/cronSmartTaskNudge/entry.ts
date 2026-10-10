@@ -33,6 +33,7 @@ import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
 import { REMINDER_BRIEF, REMINDER_BRIEF_VERSION } from '../../shared/reminderBrief.ts';
+import { assignTaskFamilies } from '../../shared/runTaskParse.ts';
 
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 
@@ -456,6 +457,83 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Families and time estimates (Anna, Oct 10 2026; see
+        // logTaskCompletion.recordCompletionHabit). Every open task gets its
+        // family, the same chore however it's worded or whose it is, so "Put
+        // away my laundry" and "Put away Antonio's laundry" share one time
+        // estimate and one habit. Only tasks without one yet, at most 25 a
+        // run. Then, when a timed session (Sprints / Launchpad) has ended
+        // since the last look, the middle session per family becomes the time
+        // estimate on that family's open tasks (the card shows it; the planner
+        // reads it).
+        if (useBrief) {
+          const mine: any[] = [...pool, ...(fixedByUser[email] || [])];
+          const habitsNow: Record<string, any> = user.task_habits || {};
+          const unlabeled = mine.filter((t: any) => !t.task_family && !t.parent_task_id && String(t.title || '').trim());
+          if (unlabeled.length) {
+            try {
+              const existing = [...new Set([
+                ...Object.keys(habitsNow).filter((k) => !k.startsWith('_')),
+                ...mine.map((t: any) => t.task_family).filter(Boolean),
+              ])].slice(0, 80) as string[];
+              const got = await assignTaskFamilies(unlabeled.map((t: any) => ({ id: t.id, title: t.title, said: t.original_input })), existing);
+              for (const t of unlabeled) {
+                const fam = got[t.id];
+                if (!fam) continue;
+                const mins = Number(habitsNow[fam]?.minutes) || 0;
+                t.task_family = fam;
+                if (mins) t.typical_minutes = mins;
+                await base44.asServiceRole.entities.Task.update(t.id, mins ? { task_family: fam, typical_minutes: mins } : { task_family: fam }).catch(() => {});
+              }
+            } catch (e) {
+              console.error(`[FAMILIES] could not sort ${email}'s tasks:`, e);
+            }
+          }
+          try {
+            const latest = await base44.asServiceRole.entities.FocusSessionLog.filter({ user_email: email }, '-completed_at', 1);
+            const latestMs = utcMs(latest?.[0]?.completed_at);
+            const seenMs = utcMs(habitsNow._minutes_at);
+            if (Number.isFinite(latestMs) && !(Number.isFinite(seenMs) && seenMs >= latestMs)) {
+              const logs = await base44.asServiceRole.entities.FocusSessionLog.filter({ user_email: email }, '-completed_at', 300);
+              const done = await base44.asServiceRole.entities.Task.filter({ created_by: email, status: 'completed' }, '-updated_date', 300);
+              const famById: Record<string, string> = {};
+              const famByTitle: Record<string, string> = {};
+              for (const t of [...(done || []), ...mine]) {
+                if (!t?.task_family) continue;
+                famById[t.id] = t.task_family;
+                famByTitle[String(t.title || '').trim().toLowerCase()] = t.task_family;
+              }
+              const secsByFam: Record<string, number[]> = {};
+              for (const l of logs || []) {
+                const fam = famById[l.task_id] || famByTitle[String(l.task_title || '').trim().toLowerCase()];
+                // Under a minute is a session started by mistake, not the task.
+                if (!fam || !(Number(l.duration_seconds) >= 60)) continue;
+                (secsByFam[fam] ||= []).push(Number(l.duration_seconds));
+              }
+              const fresh = (await base44.asServiceRole.entities.User.filter({ email }, '-created_date', 1))?.[0] || user;
+              const habits: Record<string, any> = { ...(fresh.task_habits || {}) };
+              for (const [fam, secs] of Object.entries(secsByFam)) {
+                const s = [...secs].sort((a, b) => a - b);
+                const mid = Math.floor(s.length / 2);
+                const middle = s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+                habits[fam] = { ...(habits[fam] || {}), minutes: Math.max(1, Math.round(middle / 60)) };
+              }
+              habits._minutes_at = new Date(latestMs).toISOString();
+              await base44.asServiceRole.entities.User.update(user.id, { task_habits: habits });
+              user.task_habits = habits;
+              for (const t of mine) {
+                const mins = Number(habits[t.task_family]?.minutes) || 0;
+                if (mins && Number(t.typical_minutes) !== mins) {
+                  t.typical_minutes = mins;
+                  await base44.asServiceRole.entities.Task.update(t.id, { typical_minutes: mins }).catch(() => {});
+                }
+              }
+            }
+          } catch (e) {
+            console.error(`[FAMILIES] could not update ${email}'s time estimates:`, e);
+          }
+        }
+
         const newEntries = await generateDailySchedule(pool, {
           localMin,
           timeZone,
@@ -488,6 +566,7 @@ Deno.serve(async (req) => {
           // When the parked-list roundup last went out (the sent log keeps a week).
           useBrief,
           fixed: fixedByUser[email] || [],
+          habits: user.task_habits || {},
           lastRoundupMs: (() => { const ms = sentLog.filter((l: any) => l?.type === 'roundup' && !l.skip).map((l: any) => utcMs(l.at)).filter((x: number) => Number.isFinite(x)); return ms.length ? Math.max(...ms) : NaN; })(),
         });
 
@@ -648,7 +727,9 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const gate = await ledgerCheck(base44, { email, taskId: entry.task_id, kind: 'smart_nudge' });
+        // An urgent task keeps 5 minutes from other pushes, not 20 (sendLedger).
+        const gateUrgent = !!entry.task_id && taskById.get(entry.task_id)?.urgency === 'urgent';
+        const gate = await ledgerCheck(base44, { email, taskId: entry.task_id, kind: 'smart_nudge', urgent: gateUrgent });
         if (!gate.allowed) {
           console.log(`[SMART NUDGE] Held nudge for ${email} (${gate.reason}) — will retry next run`);
           break;
@@ -1048,6 +1129,7 @@ interface PlanContext {
   lastRoundupMs: number;
   useBrief: boolean;
   fixed: any[];
+  habits?: Record<string, any>;
 }
 
 // What the last plan chose to leave alone, and why — read by the caller
@@ -1342,6 +1424,13 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
   // instructions; nothing in here tells the planner what to do with a fact
   // (no "must be nudged", no "these reminders aren't working", no scores).
   const briefData = (): string => {
+    // A yes to "you usually do this around…" (logTaskCompletion) on any open
+    // task of the family.
+    const famYes: Record<string, string> = {};
+    for (const x of [...tasks, ...(ctx.fixed || [])]) {
+      const s = x?.habit_suggestion;
+      if (x?.task_family && s?.answer === 'yes' && /^\d{2}:\d{2}$/.test(s.time || '')) famYes[x.task_family] = s.time;
+    }
     const line = (t: any, i: number) => {
       const parts: string[] = [];
       const said = String(t.original_input || '').trim().replace(/\s+/g, ' ');
@@ -1376,6 +1465,13 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       const biz = businessHoursLine(t.business_hours, nowMs);
       if (biz) parts.push(biz);
       else if (t.business_name) parts.push(`names a business: ${t.business_name} (hours not looked up yet)`);
+      if (t.task_family) {
+        const hb = (ctx.habits || {})[t.task_family] || {};
+        const mins = Number(t.typical_minutes || hb.minutes);
+        if (mins > 0) parts.push(`usually takes them about ${Math.round(mins)} min`);
+        const pref = famYes[t.task_family] || (/^\d{2}:\d{2}$/.test(hb.preferred_time || '') ? hb.preferred_time : null);
+        if (pref && !(t.anchor_time && !t.day_only_task)) parts.push(`they asked to be reminded about this around ${hhmmLabel(pref)}, when they usually do it`);
+      }
       parts.push(t.life_area === 'work' ? 'work' : 'personal');
       if (t.classification === 'payment') parts.push('a bill/payment');
       const created = utcMs(t.created_date);
