@@ -1129,6 +1129,27 @@ export default function TaskCard({
                 </Popover>
               )}
 
+              {/* How long this kind of task usually takes them: the middle timed
+                  session on its family, so "Put away my laundry" and "Put away
+                  Antonio's laundry" count together. Set by the server. */}
+              {Number(task.typical_minutes) > 0 && (
+                <span className={`flex items-center gap-1 border px-2 py-1 rounded text-xs ${
+                  theme === 'dark' ? 'bg-gray-700 text-gray-300 border-gray-600' : 'border-gray-300 text-gray-700'
+                }`}>
+                  ⏱ ~{Math.round(Number(task.typical_minutes))} min
+                </span>
+              )}
+
+              {/* A "you usually do this around…" offer waiting for a yes or no;
+                  it's answered in the task's details. */}
+              {task.habit_suggestion?.time && !task.habit_suggestion?.answer && (
+                <span className={`flex items-center gap-1 border px-2 py-1 rounded text-xs ${
+                  theme === 'dark' ? 'bg-purple-900/40 text-purple-200 border-purple-700' : 'bg-purple-50 text-purple-700 border-purple-200'
+                }`}>
+                  💡 New reminder time?
+                </span>
+              )}
+
               {/* A repeating task: one pill saying when it repeats. */}
               {showRepeatPill && (
                 <span className={`flex items-center gap-1 px-2 py-1 rounded text-xs ${
