@@ -29,6 +29,10 @@ import { pushPhoneAlarms } from './reminderTitle.ts';
 
 const SAME_TASK_GAP_MS = 9 * 60 * 1000;
 const STACK_GAP_MS = 20 * 60 * 1000;
+// An urgent task's nudge (priority "urgent") keeps only 5 minutes from other
+// pushes instead of 20 (Anna, Oct 10 2026: an urgent call to a vet that closed
+// at noon waited behind a 10 AM medicine alarm and went out at 10:39).
+const URGENT_STACK_GAP_MS = 5 * 60 * 1000;
 const PROACTIVE_KINDS = new Set(['smart_nudge', 'daily_digest', 'motivation', 'general', 'task_checkin']);
 
 function ledger(base44: any) {
@@ -114,7 +118,7 @@ async function atWork(base44: any, email: string, at: Date): Promise<boolean> {
 
 export async function ledgerCheck(
   base44: any,
-  opts: { email: string; taskId?: string | null; kind?: string; sendAt?: string | Date }
+  opts: { email: string; taskId?: string | null; kind?: string; sendAt?: string | Date; urgent?: boolean }
 ): Promise<{ allowed: boolean; reason?: string }> {
   const email = opts.email;
   if (!email) return { allowed: true };
@@ -151,7 +155,7 @@ export async function ledgerCheck(
     const diff = Math.abs(new Date(entry.send_at).getTime() - sendAtMs);
     const sameTask = !!taskId && entry.task_id === taskId;
     const duplicate = sameTask && diff < SAME_TASK_GAP_MS;
-    const stacked = proactive && diff < STACK_GAP_MS;
+    const stacked = proactive && diff < (opts.urgent ? URGENT_STACK_GAP_MS : STACK_GAP_MS);
     // A time-critical push wins its slot: a pending proactive push already
     // booked there is cancelled rather than letting the two land together.
     const entryPending = new Date(entry.send_at).getTime() > Date.now() && !!entry.notification_id;
