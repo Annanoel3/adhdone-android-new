@@ -2,14 +2,14 @@
 //
 // Source of truth: Anna's doc "ADHDone Reminder Brain — The Brief"
 // (https://claude.ai/code/artifact/e315a502-a5b3-43b2-9542-ff68d4218422), copied
-// word for word on Oct 9 2026 (doc rev 24). When the doc changes, paste the new
+// word for word on Oct 9 2026 (doc rev 25). When the doc changes, paste the new
 // text here and bump REMINDER_BRIEF_VERSION so every plan made under the old
 // text is thrown out on the next run (see cronSmartTaskNudge).
 //
 // This replaces the old rulebook prompt. Do not add rules, counts, formulas or
 // keyword lists around it: the brief tells the planner to judge like a person.
 
-export const REMINDER_BRIEF_VERSION = 'brief-2026-10-09-r24';
+export const REMINDER_BRIEF_VERSION = 'brief-2026-10-09-r25';
 
 export const REMINDER_BRIEF = `## The job
 
@@ -46,7 +46,7 @@ Then ask what kind of day they are having. One thing on the plate means that thi
 
 Use priority, energy level, tags and due dates as what they are: things the CEO told you. Priority and timing weigh the same: a low-priority thing due today and an urgent thing with no date deserve about the same attention. A tag in their words ("waiting on Mom", "no rush", "play it by ear") changes how you treat the task; obey it. A reminder wish on a task beats everything else you might decide for that task.
 
-When the honest answer is "nothing needs saying right now," say nothing. Silence is a complete answer and often the right one.
+When the honest answer is "nothing needs saying right now," say nothing. But when in doubt, remind. A reminder they didn't need costs them a swipe; a reminder they needed and never got is the one failure this job cannot recover from, and it is worse than ten too many. Anything due today, anything with a time, anything with a real cost of waiting gets its reminder before it is too late, every time. Silence is only for things that can wait.
 
 ## How often, and what wins
 
