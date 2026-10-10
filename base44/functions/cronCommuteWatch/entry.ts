@@ -169,15 +169,20 @@ export default async function (req: Request): Promise<Response> {
         console.log(`[COMMUTE] Could not measure home → ${commute.place} for ${email}`);
         continue;
       }
-      const firstDepart = new Date(commute.arriveUtc.getTime() - (drive.minutes + CUSHION_MINUTES) * 60000);
+      // The departure math uses the same rounded-up drive the message says
+      // ("about 30 min"), never the raw measurement: a 26-minute measurement
+      // sent "about 30 min" 36 minutes before arrival, so the 10-minute
+      // cushion read as 6 (Anna, Oct 10 2026). Rounding up only ever adds.
+      const firstDepart = new Date(commute.arriveUtc.getTime() - (aboutMinutes(drive.minutes) + CUSHION_MINUTES) * 60000);
       if (firstDepart.getTime() > now.getTime() + 2 * 60000) {
         const secondPass = await getProximity([commute.place], home, firstDepart, routeOpts);
         const refined = secondPass.fromHome[commute.place];
         if (refined?.minutes) drive = refined;
       }
 
-      const leaveInMinutes = minutesUntilArrival - drive.minutes - CUSHION_MINUTES;
-      const departUtc = new Date(commute.arriveUtc.getTime() - (drive.minutes + CUSHION_MINUTES) * 60000);
+      const planMinutes = aboutMinutes(drive.minutes);
+      const leaveInMinutes = minutesUntilArrival - planMinutes - CUSHION_MINUTES;
+      const departUtc = new Date(commute.arriveUtc.getTime() - (planMinutes + CUSHION_MINUTES) * 60000);
 
       // ── 1. LEAVE NOW ────────────────────────────────────────────────────────
       if (leaveInMinutes <= LEAVE_WINDOW_MINUTES) {
