@@ -168,11 +168,16 @@ export default async function (req: Request): Promise<Response> {
 // if there is, one open task in that family carries a suggestion the person
 // answers Yes or No on (TaskDetailsModal). Nothing moves on its own. Looked at
 // most every 3 days per family, never again for 30 days after a No, never
-// while an earlier suggestion is unanswered. A Yes on an undated task
-// (laundry) becomes the family's preferred time, which the Smart Reminders
-// planner reads. The person's own data only; the analytics row above still
+// while an earlier suggestion is unanswered. A Yes is only something the
+// Smart Reminders planner now knows: "they asked to be reminded about this
+// around X" (the family's preferred time). It never sets a time on the task
+// or turns its reminders into fixed ones (Anna, Oct 10 2026), so it's only
+// offered on tasks the planner reminds them about: no time of their own and
+// no repeating reminder. A task with a time the person picked keeps it. The person's own data only; the analytics row above still
 // stores no titles.
 const HABIT_DAY_MS = 24 * 60 * 60 * 1000;
+// Repeating reminders (cronSmartTaskNudge RECURRING_INTERVALS) ring on their own.
+const HABIT_RHYTHMS = new Set(['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day']);
 const serverMs = (v: any): number => {
   const s = String(v || '');
   if (!s) return NaN;
@@ -237,19 +242,17 @@ async function recordCompletionHabit(base44: any, task: any) {
     && nowMs - serverMs(t.habit_suggestion.answered_at) < 30 * HABIT_DAY_MS);
   const lookedLately = nowMs - serverMs(h.checked_at) < 3 * HABIT_DAY_MS;
 
-  if (days.size >= 4 && open.length && !pending && !declined && !lookedLately) {
+  const planned = open.filter((t: any) => !(!t.day_only_task && /^\d{2}:\d{2}$/.test(t.anchor_time || ''))
+    && !HABIT_RHYTHMS.has(t.reminder_interval));
+  if (days.size >= 4 && planned.length && !pending && !declined && !lookedLately) {
     h.checked_at = finishedAt;
     changed = true;
-    const target = open.find((t: any) => !t.day_only_task && /^\d{2}:\d{2}$/.test(t.anchor_time || '')) || open[0];
-    const timed = !target.day_only_task && /^\d{2}:\d{2}$/.test(target.anchor_time || '');
-    const repeats = target.recurrence_pattern && target.recurrence_pattern !== 'none'
-      ? ` (repeats ${String(target.recurrence_pattern).replace(/_/g, ' ')})` : '';
-    const current = timed ? target.anchor_time : (h.preferred_time || null);
-    const reminder = timed ? `at ${clock12(target.anchor_time)}${repeats}`
-      : current ? `around ${clock12(current)} (they chose that)` : 'no set time; the app picks the moment';
+    const target = planned[0];
+    const current = h.preferred_time || null;
+    const reminder = current ? `around ${clock12(current)} (they chose that)` : 'no set time; the app picks the moment';
     const fmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
     const verdict = await judgeCompletionHabit({
-      titles: [...new Set(open.map((t: any) => String(t.title || '')))].slice(0, 3) as string[],
+      titles: [...new Set(planned.map((t: any) => String(t.title || '')))].slice(0, 3) as string[],
       reminder,
       finished: finished.slice(-20).map((ms) => fmt.format(new Date(ms))),
       minutes: Number(target.typical_minutes || h.minutes) || null,
