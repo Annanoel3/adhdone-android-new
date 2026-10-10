@@ -500,7 +500,7 @@ export default function Settings() {
             sounded in the last 2 days (NotificationSettings). That page has
             no other way in from the app (Anna looked for it under Reminders,
             Oct 9 2026), so the link lives here, on phones only. */}
-        {typeof window !== 'undefined' && !!window.Capacitor?.isNativePlatform?.() && (
+        {typeof window !== 'undefined' && !!window.Capacitor?.isNativePlatform?.() && String(user?.email || '').toLowerCase() === 's2kap2chick@gmail.com' && (
           <Card className={`mb-6 border-none shadow-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
             <CardContent className="p-4">
               <button
