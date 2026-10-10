@@ -31,6 +31,23 @@
       "type": "object",
       "description": "Opening hours of business_name, looked up once through Google Places near the user's home (name, address, place_id, periods, weekday_text, utc_offset, checked_at; not_found when Places had nothing). The Smart Reminders planner reads it so it never nudges a call to a closed office. Looked up again after 30 days."
     },
+    "task_family": {
+      "type": "string",
+      "description": "The one repeated thing this task is, in 1-3 lowercase words, the same however it's worded or whose it is ('Put away my laundry' and 'Put away Antonio's laundry' are both 'laundry'). Set by the server with the model (cronSmartTaskNudge for open tasks, logTaskCompletion on completion) and copied to a repeating task's next occurrence. Time estimates and completion habits are kept per family."
+    },
+    "finished_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the task was finished, by the server's clock (logTaskCompletion). completed_at is written by the phone in more than one format; completion habits are read from this."
+    },
+    "typical_minutes": {
+      "type": "number",
+      "description": "How long this kind of task usually takes this person: the middle (median) timed session (Sprints / Launchpad) on its task_family. Stamped by cronSmartTaskNudge; shown on the task card and read by the Smart Reminders planner."
+    },
+    "habit_suggestion": {
+      "type": "object",
+      "description": "An offer to move this task's reminder to when the person usually does this kind of task: { time 'HH:MM', why (one sentence shown to them), made_at }, made by logTaskCompletion with the model. The person answers on the task (TaskDetailsModal): answer 'yes' | 'no', answered_at. Nothing moves without a yes."
+    },
     "original_input": {
       "type": "string",
       "description": "The user's VERBATIM input (typed or transcribed) that created this task, stored exactly as spoken/typed with no cleanup. Used to audit AI parsing errors \u2014 e.g. when a date, subject, or misheard word ends up wrong, the raw phrasing can be compared against what the parser produced."
