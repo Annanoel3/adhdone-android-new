@@ -151,3 +151,120 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   resolveParsedDates(parsed, nowInTimezone(tz, asOfMs));
   return fixParsedTaskTitles(parsed);
 }
+
+// ── Task families and completion habits ─────────────────────────────────────
+// A family is ONE repeated thing a person does, the same however it's worded
+// or whose it is: "Put away my laundry" and "Put away Antonio's laundry" are
+// both "laundry" (Anna, Oct 10 2026: "both of those tasks' data should go
+// towards laundry"). Time estimates and the "you usually do this around…"
+// suggestions are kept per family. The model decides, handed the person's
+// existing families so it reuses one when it fits; never a word list.
+const FAMILY_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    families: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: { id: { type: "string" }, family: { type: "string" } },
+        required: ["id", "family"],
+      },
+    },
+  },
+  required: ["families"],
+};
+
+export async function assignTaskFamilies(
+  tasks: { id: string; title: string; said?: string | null }[],
+  existing: string[],
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const list = (tasks || []).filter((t) => t?.id && String(t.title || "").trim()).slice(0, 25);
+  if (!list.length) return out;
+  const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
+  const completion = await openai.chat.completions.create({
+    model: MODEL,
+    reasoning_effort: "low",
+    messages: [
+      {
+        role: "system",
+        content: `You sort one person's to-do items into families, so the app can learn how long each kind of thing takes them and what time of day they usually do it.
+
+A family is ONE repeated thing they do, named in 1 to 3 lowercase words. It stays the same however the task is worded and whoever it's for: "Put away my laundry", "Put away Antonio's laundry" and "Fold the laundry" are all "laundry"; "Clean the litter box" and "Scoop the litter" are both "litter box". It is not a category: different things stay apart even when they're related, because they take different amounts of time and happen at different times. "Take Miralax" and "Take your pills" are two families; "Clean the bathroom" and "Clean the kitchen" are two families. A one-off gets a family of its own.
+
+If an item is the same thing as one of their existing families, use that family's name exactly. Answer every id you're given.`,
+      },
+      {
+        role: "user",
+        content: `Their existing families: ${existing.length ? existing.join(", ") : "none yet"}
+
+Items:
+${list.map((t) => `- id ${t.id}: "${String(t.title).slice(0, 120)}"${t.said && String(t.said).trim().toLowerCase() !== String(t.title).trim().toLowerCase() ? ` (they said: "${String(t.said).slice(0, 160)}")` : ""}`).join("\n")}`,
+      },
+    ],
+    response_format: { type: "json_schema", json_schema: { name: "task_families", strict: true, schema: FAMILY_SCHEMA } },
+  });
+  const parsed = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
+  const ids = new Set(list.map((t) => t.id));
+  for (const f of parsed?.families || []) {
+    const fam = String(f?.family || "").trim().toLowerCase().replace(/\s+/g, " ").slice(0, 40);
+    if (ids.has(f?.id) && fam && !fam.startsWith("_")) out[f.id] = fam;
+  }
+  return out;
+}
+
+const HABIT_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    habit: { type: "boolean" },
+    time: { type: ["string", "null"] },
+    why: { type: ["string", "null"] },
+  },
+  required: ["habit", "time", "why"],
+};
+
+// Whether the times someone actually finished a repeated thing show a habit
+// worth moving its reminder for, and to when. The person says yes or no to the
+// suggestion; nothing moves on its own.
+export async function judgeCompletionHabit(input: {
+  titles: string[];
+  reminder: string;
+  finished: string[];
+  minutes: number | null;
+}): Promise<{ habit: boolean; time: string | null; why: string | null }> {
+  const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
+  const completion = await openai.chat.completions.create({
+    model: MODEL,
+    reasoning_effort: "low",
+    messages: [
+      {
+        role: "system",
+        content: `You look at when one person actually finished a task they do over and over, and decide whether there's a real habit worth moving their reminder for.
+
+It's a habit when they reliably finish it around the same time of day: on most of the days listed, within about an hour of one time (if weekdays and weekends differ, go with the pattern that covers most days). Scattered times are not a habit. Several check-offs a few minutes apart late at night look like catching up on the list, not doing the thing; don't count those.
+
+If there is a habit, pick the reminder time so it lands just before they'd usually start: their usual finishing time, minus how long it takes them (when you're told), minus about 5 minutes; without a duration, about 15 minutes before their usual finishing time. Round to 5 minutes, 24-hour HH:MM. If their current reminder is already within 30 minutes of that, or there's no habit, answer habit false with time null.
+
+"why" is one short, friendly sentence shown to them, in plain words, only what the times show, like "You usually finish the litter box around 9:40 PM." Never invent anything.`,
+      },
+      {
+        role: "user",
+        content: `Task: ${input.titles.map((t) => `"${t}"`).join(" / ")}
+Their reminder for it now: ${input.reminder}
+${input.minutes ? `It usually takes them about ${Math.round(input.minutes)} minutes.\n` : ""}When they finished it (their local time, oldest first):
+${input.finished.join("\n")}`,
+      },
+    ],
+    response_format: { type: "json_schema", json_schema: { name: "completion_habit", strict: true, schema: HABIT_SCHEMA } },
+  });
+  const parsed = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
+  const time = typeof parsed?.time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(parsed.time) ? parsed.time : null;
+  return {
+    habit: parsed?.habit === true && !!time,
+    time,
+    why: typeof parsed?.why === "string" ? parsed.why.slice(0, 160) : null,
+  };
+}
