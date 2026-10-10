@@ -751,13 +751,11 @@ Return JSON:
     }
   };
 
-  // "You usually finish this around 7:40 PM — remind you at 7:30?" (Anna, Oct
-  // 10 2026; the offer comes from logTaskCompletion). Yes moves this task's
-  // time through the same path as picking a new time here, except it doesn't
-  // count as putting the task off. When that time today has already gone by, a
-  // repeating task changes from its next one on (anchor_time, which the next
-  // occurrence copies). A task with no time of its own just records the yes;
-  // the Smart Reminders planner aims for that time.
+  // "You usually finish this around 7:40 PM — remind you around 7:30?" (Anna,
+  // Oct 10 2026; the offer comes from logTaskCompletion). Yes only records the
+  // answer: the Smart Reminders planner sees they asked for reminders about
+  // this kind of task around then and plans with it. It never sets a time on
+  // the task or makes its reminders fixed.
   const habitTime12 = (hhmm) => {
     const [h, m] = String(hhmm || '').split(':').map((n) => parseInt(n, 10));
     if (!Number.isFinite(h) || !Number.isFinite(m)) return hhmm;
@@ -778,32 +776,7 @@ Return JSON:
       toast({ title: 'Okay — the reminder stays where it is', duration: 2000 });
       return;
     }
-    const label = habitTime12(s.time);
-    const hasTime = !task.day_only_task && /^\d{2}:\d{2}$/.test(task.anchor_time || '');
-    if (!hasTime) {
-      toast({ title: `Got it — I'll aim for around ${label}`, duration: 2200 });
-      return;
-    }
-    const day = getCurrentReminderDate(task);
-    const [y, mo, d] = String(day || '').split('-').map((n) => parseInt(n, 10));
-    const [hh, mm] = s.time.split(':').map((n) => parseInt(n, 10));
-    const at = Number.isFinite(y) && Number.isFinite(mo) && Number.isFinite(d) ? new Date(y, mo - 1, d, hh, mm, 0, 0) : null;
-    if (at && at.getTime() > Date.now() + 3 * 60 * 1000) {
-      await handleUpdateReminderTime(s.time, day, { notAPush: true });
-      return;
-    }
-    if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
-      task.anchor_time = s.time;
-      onUpdate({ ...task, anchor_time: s.time });
-      try {
-        await Task.update(task.id, { anchor_time: s.time });
-      } catch (err) {
-        console.error('Could not save the new time:', err);
-      }
-      toast({ title: `Done — from the next one on, it's ${label}`, duration: 2200 });
-      return;
-    }
-    toast({ title: `Got it — ${label}`, duration: 2000 });
+    toast({ title: `Got it — Smart Reminders will aim for around ${habitTime12(s.time)}`, duration: 2200 });
   };
 
   const handleUpdateReminderTime = async (selectedTime, selectedDate, opts = {}) => {
@@ -2003,9 +1976,7 @@ Return JSON:
               }`}>
                 <p>💡 {task.habit_suggestion.why || `You usually finish this around ${habitTime12(task.habit_suggestion.time)}.`}</p>
                 <p className="font-medium">
-                  {!task.day_only_task && task.anchor_time
-                    ? `Move this reminder to ${habitTime12(task.habit_suggestion.time)}?`
-                    : `Remind you around ${habitTime12(task.habit_suggestion.time)} from now on?`}
+                  {`Remind you around ${habitTime12(task.habit_suggestion.time)} from now on?`}
                 </p>
                 <div className="flex gap-2">
                   <Button size="sm" onClick={() => answerHabitSuggestion('yes')}>Yes</Button>
