@@ -197,8 +197,9 @@ Steps:
 ## Build / verify checklist
 
 - `cd android && ./gradlew assembleDebug` succeeds with no new lint errors.
-- Bump `versionCode` and `versionName` in `android/app/build.gradle` (currently 4 /
-  1.2.1 → 5 / 1.3.0).
+- Bump `versionCode` and `versionName` in `android/app/build.gradle` to one above the
+  last upload in the Play Console (the phone is on build 38, so 39 next). Never trust the
+  number in this file or in this repo's copy of `android/`; it has been stale before.
 - Test on a physical device on Android 13+ (the notification permission and
   RemoteInput mutability rules only bite there).
 - Cold-start test for each feature: force-stop the app first.
@@ -273,3 +274,21 @@ Build / verify for 39: force-stop, book two alarms 1 minute apart for different 
 confirm the second rings 10 minutes after the first is answered; snooze one for 1 minute
 and confirm the server task shows `snoozed_until`; cancel a booked push from the owner
 tool and confirm the phone does not ring it; check the tray during a ring shows one row.
+
+8. **Shares delivered late.** Quick-capture already sends `said_at` (ms, when the words
+   were captured) to `captureText` so "tomorrow" counts from then. A share the phone holds
+   and delivers later must send `said_at` the same way.
+
+### Before building ANY AAB (Anna, Oct 10 2026: "let's not let another AAB go out missing a bunch of crap")
+
+Walk this list and say in the reply which ones were checked. An item that isn't done is
+listed as NOT DONE, never left out.
+- Every numbered item in the build's section is done, or listed as not done with why.
+- Each item's other half exists in the web/server code before the build goes out, so
+  nothing ships half-wired. For 39 these are already live: `snoozed_until` on Task, written
+  by `widgetBridge.js` from each `drainActivity` row's `snoozedUntil` (epoch ms) and shown
+  to the planner; `quiet` rows in "What rang" (🔕); the server sends `set_alarms_task`
+  with `[]` after a cancel. If native names a field differently, change native to match.
+- Version bumped as above; release build, not debug, for the Play upload.
+- The verify steps for the build were run on a real phone, force-stopped first.
+- Nothing in "Things NOT to do" was touched.
