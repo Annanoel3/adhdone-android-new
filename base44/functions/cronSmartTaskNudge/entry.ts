@@ -14,9 +14,10 @@
 // looks at the week ahead, and decides what to surface TODAY, when, and what
 // to say. No caps, no rigid formulas.
 //
-// Accounts in BRIEF_ACCOUNTS are planned from Anna's brief instead
-// (base44/shared/reminderBrief.ts): the brief is the system message, and the
-// planner is shown facts only — no rules, scores or "must nudge" labels.
+// Everyone is planned from Anna's brief (base44/shared/reminderBrief.ts): the
+// brief is the system message, and the planner is shown facts only — no
+// rules, scores or "must nudge" labels. (OLD_PROMPT_ACCOUNTS below is the
+// one-person fallback to the old prompt.)
 //
 // Re-planning: once a day, and again whenever something the planner reads has
 // changed since the last plan — a task added or edited (onTaskUpdate marks
@@ -50,12 +51,15 @@ function utcMs(v: any): number {
   return Date.parse(/[zZ]$|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`);
 }
 
-// Accounts planned with the new brief (base44/shared/reminderBrief.ts) instead
-// of the old rulebook prompt. Anna asked for it on her phone account first
-// (Oct 9 2026). To give it to everyone: delete this set, the useBrief checks,
-// and buildOldPrompt — don't keep two planners side by side for long.
-const BRIEF_ACCOUNTS = new Set(['s2kap2chick@gmail.com']);
-const usesBrief = (email: string) => BRIEF_ACCOUNTS.has(String(email || '').trim().toLowerCase());
+// Everyone is planned with the brief (base44/shared/reminderBrief.ts) instead
+// of the old rulebook prompt. Anna tried it on her phone account first (Oct 9
+// 2026) and switched everyone over the next day ("some of the reminders on the
+// old system are just worded so badly"). The old prompt and the useBrief
+// checks are still here only as a fallback switch: put an email in
+// OLD_PROMPT_ACCOUNTS to send one person back to it. Delete both once nobody
+// has needed that for a while — don't keep two planners side by side for long.
+const OLD_PROMPT_ACCOUNTS = new Set<string>([]);
+const usesBrief = (email: string) => !OLD_PROMPT_ACCOUNTS.has(String(email || '').trim().toLowerCase());
 
 const RECURRING_INTERVALS = new Set(['10min', '20min', '30min', '1hour', '2hours', '4hours', 'daily', 'every_other_day']);
 
