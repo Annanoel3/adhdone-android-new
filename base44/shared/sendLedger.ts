@@ -25,6 +25,7 @@
 // stale entry is dropped and the send goes through.
 
 import { isWithinWorkHours } from './workHours.ts';
+import { pushPhoneAlarms } from './reminderTitle.ts';
 
 const SAME_TASK_GAP_MS = 9 * 60 * 1000;
 const STACK_GAP_MS = 20 * 60 * 1000;
@@ -53,10 +54,21 @@ async function evict(base44: any, entry: any): Promise<void> {
     try {
       const task = await base44.asServiceRole.entities.Task.get(entry.task_id);
       if (task) {
-        await base44.asServiceRole.entities.Task.update(task.id, {
+        const fields = {
           onesignal_notification_ids: (task.onesignal_notification_ids || []).filter((id: string) => id !== entry.notification_id),
           reminder_schedule: (task.reminder_schedule || []).filter((r: any) => r.notification_id !== entry.notification_id),
-        });
+        };
+        await base44.asServiceRole.entities.Task.update(task.id, fields);
+        // The phone holds its own copy of this task's alarms and rings them
+        // on its own clock; a server-side cancel it never hears about still
+        // rings (Anna, Oct 10 2026: a cancelled "one hour left" push rang at
+        // 11 anyway). Hand it the new list.
+        try {
+          const owners = await base44.asServiceRole.entities.User.filter({ email: task.created_by }, '-created_date', 1);
+          if (owners?.[0]) await pushPhoneAlarms({ ...task, ...fields }, owners[0], { before: task, changedAt: Date.now(), source: 'sendLedger' });
+        } catch (e) {
+          console.error('[sendLedger] evict: could not update the phone:', e);
+        }
       }
     } catch (e) {
       console.error('[sendLedger] evict: could not trim task schedule:', e);
