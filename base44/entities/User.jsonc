@@ -369,6 +369,10 @@
       "type": "string",
       "description": "The phone app's version name (1.3.12, ...) as last opened, alongside app_build."
     },
+    "task_habits": {
+      "type": "object",
+      "description": "Per task_family (see Task): { minutes (typical time from timed sessions), preferred_time 'HH:MM' (they said yes to reminders around then), checked_at (last time the model looked for a completion habit) }, plus _minutes_at (newest timed session already counted). Written by the server only (logTaskCompletion, cronSmartTaskNudge)."
+    },
     "phone_plugins": {
       "type": "array",
       "items": {
