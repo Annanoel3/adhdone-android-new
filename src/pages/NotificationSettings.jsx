@@ -408,11 +408,13 @@ export default function NotificationSettings() {
                                 {new Date(r.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                               </span>
                               <div className="min-w-0 flex-1">
-                                <p className={`font-medium truncate ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
+                                {/* Whole title and whole body, wrapped — a reminder's words are
+                                    the point of this list (Anna, Oct 10 2026). */}
+                                <p className={`font-medium break-words ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
                                   {r.kind === 'alarm' ? '🔔 ' : '💬 '}{r.heading || r.title || 'Reminder'}{r.fromSnooze ? ' (back from snooze)' : ''}
                                 </p>
                                 {r.body && (
-                                  <p className={`text-xs truncate ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{r.body}</p>
+                                  <p className={`text-xs break-words whitespace-pre-wrap ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{r.body}</p>
                                 )}
                                 {ending && (
                                   <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{ending}</p>
