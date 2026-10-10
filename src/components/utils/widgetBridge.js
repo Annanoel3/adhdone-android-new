@@ -492,6 +492,10 @@ async function drainAlarmActivity(tasks) {
       patch.snooze_count = (t.snooze_count || 0) + row.snoozes;
       patch.consecutive_snoozes = (t.consecutive_snoozes || 0) + row.snoozes;
     }
+    // When a snooze brings it back (build 39 on, snoozedUntil in ms): the
+    // Smart Reminders planner sees it and keeps its nudges off that moment.
+    const snoozedMs = Number(row.snoozedUntil);
+    if (Number.isFinite(snoozedMs) && snoozedMs > Date.now()) patch.snoozed_until = new Date(snoozedMs).toISOString();
     if (row.dismissed) patch.dismissed_count = (t.dismissed_count || 0) + 1;
     if (row.ignored > 0) patch.ignored_count = (t.ignored_count || 0) + row.ignored;
     // "Later" (builds from 1.3.13 on): a break for the task, see laterBreakUntil.
