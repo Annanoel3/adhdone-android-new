@@ -212,3 +212,62 @@ Steps:
 - Do not add network calls from native code; the WebView owns auth and data.
 - Do not touch `src/`, `base44/`, or anything outside `android/` except the version bump
   note above.
+
+## Build 39 — alarm reliability (found Oct 10 2026, from the alarm code + one day of real use)
+
+Every item below was seen on Anna's phone on build 38 or is a direct consequence of how
+`AlarmService` / `AlarmScheduler` / `PushFilter` work today. Fix all of them in one build.
+Read `AlarmService.java` (the `waiting` queue, `snooze()`, the hand-off after an answer),
+`AlarmScheduler.java` (`schedule()`, `sync()`), `PushFilter.java` (`ringOnArrival`) and
+`RingLog.java` first. Keep the rule above: no network calls from native code.
+
+1. **Two different tasks ringing back to back.** When an alarm comes due while another is
+   ringing, it goes into `waiting` and starts ringing the instant the first is answered
+   (Oct 10: a pills snooze came back at 12:09 and the planner's "Mom's watch" nudge landed
+   in the same minute; both rang, one straight after the other). Fix: when the answered
+   alarm hands off to the next one for a DIFFERENT task, delay that ring by 3 minutes
+   (reschedule its entry, `at = now + 3 min`) instead of starting it immediately. Same-task
+   folding stays as it is. An entry whose heading starts with the bell (an "at the time"
+   reminder the user set themselves) is the exception: it rings at its minute, and the
+   OTHER one is what waits.
+2. **Alarms booked for the same minute.** `AlarmScheduler.schedule()` books every entry at
+   its exact `at`; two server alarms for different tasks at the same minute (two "at 10:00"
+   tasks, or a fixed reminder and a nudge) produce the collision in item 1. In `sync()` and
+   `replaceTask()`, when a NEW entry for a different task lands within 2 minutes of one
+   already booked, push the new one to 3 minutes after it. Log it.
+3. **The server can't see a snooze.** A snooze is local: the server only learns a count
+   when the app next opens (`drainActivity`), never WHEN it comes back, so the Smart
+   Reminders planner can't plan around it. In the activity drain, report for each task
+   the `snoozed_until` moment (the entry's `at` after `snooze()`), and the web side
+   (`widgetBridge.js`, `syncAlarmActivity`) writes it to the task as `snoozed_until`. (Server
+   side, separately: the planner's task line will show "snoozed on the phone until X"
+   and the planner is told not to land within 5 minutes of it.)
+4. **Duplicate tray entries while an alarm is up.** `PushFilter.ringOnArrival` keeps the
+   push itself in the tray as a silent record AND the alarm posts its own notification
+   with the same words (Oct 10, 10:39 AM: two "Call Brodie Animal Hospital" rows, one with
+   Snooze/Done/Stop, one with Done/Later). Fix: while the alarm's notification is up,
+   cancel the silent tray copy, and re-post it (silently) only if the alarm rings out
+   with no answer, so the reminder is still findable in the tray afterwards. Dismissing or
+   finishing from the alarm clears both, as now.
+5. **A server-side cancel the phone never hears about.** The phone rings from its own copy
+   of a task's alarms; when the server cancels a booked push (a plan change, an eviction,
+   the owner's cancel tool), the phone still rings it unless a silent `set_alarms_task`
+   push arrives first (Oct 10: the cancelled 11:00 "One hour left" rang anyway). The server
+   paths now send that push (sendLedger evict, debugNotifications cancel). Native side:
+   handle `set_alarms_task` with an EMPTY list as "this task has no alarms now" (today an
+   unreadable/empty list is ignored to be safe — distinguish `[]` from unreadable), and
+   when a `drop_alarms_task` / `set_alarms_task` arrives for the alarm that is ringing
+   right now, stop the ring.
+6. **"What rang" should show what the server sent too.** `RingLog` only records alarms and
+   sounding reminders; a push shown silently (a quiet notification, a tray copy) is
+   invisible there, which is why the owner thought pushes were missing. Record silent
+   showings as their own kind (`quiet`) with the same title/body, and the web list shows
+   them with a muted icon.
+7. **Collisions and snoozes in the log.** Add to each `RingLog` row: `queuedBehind` (the id
+   it waited for, when it came out of `waiting`) and `fromSnooze` with the minutes, so the
+   next time something rings twice the log says why without reading logcat.
+
+Build / verify for 39: force-stop, book two alarms 1 minute apart for different tasks and
+confirm the second rings 3 minutes after the first is answered; snooze one for 1 minute
+and confirm the server task shows `snoozed_until`; cancel a booked push from the owner
+tool and confirm the phone does not ring it; check the tray during a ring shows one row.
