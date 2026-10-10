@@ -5,6 +5,7 @@ import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
+import { businessHoursLine } from '../../shared/mapsDistance.ts';
 import { buildEventReminderPlan, isBookableNow, isBookedId, BOOKABLE_WINDOW_MS } from '../../shared/eventReminderPlan.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
@@ -1327,6 +1328,75 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   }
   if (stalled.length) {
     problems.push({ title: '⚠️ ADHDone: a capture never finished', body: `${stalled.length} task(s) typed in the last 2 hours never got made: ${stalled.slice(0, 2).map((s) => `${s.email} "${s.text.slice(0, 40)}"`).join('; ')}.` });
+  }
+
+  // 6. Two pushes to one person inside the same minute (Anna, Oct 10 2026:
+  //    a snooze return and a planned nudge rang together at 12:09). A
+  //    phone-side snooze is invisible here, so this only catches the
+  //    server's own collisions — still worth knowing about.
+  // 7. A Smart Reminders nudge about a business that was closed when it went
+  //    out (the hours are on the task; the planner should have read them).
+  const sameMinute: string[] = [];
+  const closedNudges: string[] = [];
+  try {
+    const hourRows = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
+      send_at: { $gte: new Date(nowMs - H_HOUR).toISOString(), $lte: now.toISOString() },
+    });
+    const byMinute: Record<string, any[]> = {};
+    const taskById: Record<string, any> = {};
+    for (const t of allTasks) taskById[t.id] = t;
+    for (const r of hourRows) {
+      if (!realUser(r.user_email) || String(r.kind || '').startsWith('owner_')) continue;
+      const ms = Date.parse(r.send_at || '');
+      if (!Number.isFinite(ms)) continue;
+      const k = `${r.user_email}|${Math.floor(ms / 60000)}`;
+      (byMinute[k] ||= []).push(r);
+      const task = r.task_id ? taskById[r.task_id] : null;
+      if (r.kind === 'smart_nudge' && task?.business_hours) {
+        const line = businessHoursLine(task.business_hours, ms);
+        if (/CLOSED right now/.test(line)) closedNudges.push(`${r.user_email}: "${String(r.title || '').slice(0, 30)}" — ${line.slice(0, 70)}`);
+      }
+    }
+    for (const [k, list] of Object.entries(byMinute)) {
+      if (list.length < 2) continue;
+      sameMinute.push(`${k.split('|')[0]}: ${list.map((r: any) => String(r.title || r.kind).slice(0, 24)).join(' + ')}`);
+    }
+  } catch (e) {
+    console.error('[HEALTH] collision / closed-business check failed:', e);
+  }
+  if (sameMinute.length) {
+    problems.push({ title: '⚠️ ADHDone: two pushes in the same minute', body: `${sameMinute.length} collision(s) in the last hour: ${sameMinute.slice(0, 3).join('; ')}.` });
+  }
+  if (closedNudges.length) {
+    problems.push({ title: '⚠️ ADHDone: nudged a closed business', body: `${closedNudges.length} nudge(s) in the last hour went out while the place was closed: ${closedNudges.slice(0, 2).join('; ')}.` });
+  }
+
+  // 8. In each person's 7 PM hour: a task due today that nothing — planner,
+  //    fixed reminder, rhythm — mentioned all day (Anna, Oct 10 2026: "skipped
+  //    tasks are worse than too many reminders"). Looks back 19 hours, which
+  //    is local midnight at 7 PM.
+  const unreminded: string[] = [];
+  try {
+    for (const u of allUsers) {
+      if (!u?.email || !realUser(u.email) || !activeLately(u)) continue;
+      const tz = userTimeZone(u);
+      if (localHourIn(tz, now) !== 19) continue;
+      const today = localDateKey(now, tz);
+      const dueToday = allTasks.filter((t: any) => t.status === 'active' && !t.silenced && !t.parent_task_id
+        && (t.notification_recipient_email || t.created_by) === u.email
+        && t.due_date && localDateKey(new Date(t.due_date), tz) === today);
+      if (!dueToday.length) continue;
+      const rows = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
+        user_email: u.email, send_at: { $gte: new Date(nowMs - 19 * H_HOUR).toISOString(), $lte: now.toISOString() },
+      });
+      const mentioned = new Set(rows.map((r: any) => r.task_id).filter(Boolean));
+      for (const t of dueToday) if (!mentioned.has(t.id)) unreminded.push(`${u.email}: "${String(t.title || '').slice(0, 30)}"`);
+    }
+  } catch (e) {
+    console.error('[HEALTH] due-today check failed:', e);
+  }
+  if (unreminded.length) {
+    problems.push({ title: '⚠️ ADHDone: due today, never reminded', body: `${unreminded.length} task(s) due today got no reminder from anything by 7 PM: ${unreminded.slice(0, 3).join('; ')}.` });
   }
 
   // Send what's new. Each title repeats at most every ALERT_COOLDOWN_MS.
