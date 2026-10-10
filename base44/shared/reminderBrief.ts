@@ -2,14 +2,14 @@
 //
 // Source of truth: Anna's doc "ADHDone Reminder Brain — The Brief"
 // (https://claude.ai/code/artifact/e315a502-a5b3-43b2-9542-ff68d4218422), copied
-// word for word on Oct 9 2026 (doc rev 28). When the doc changes, paste the new
+// word for word on Oct 9 2026 (doc rev 29). When the doc changes, paste the new
 // text here and bump REMINDER_BRIEF_VERSION so every plan made under the old
 // text is thrown out on the next run (see cronSmartTaskNudge).
 //
 // This replaces the old rulebook prompt. Do not add rules, counts, formulas or
 // keyword lists around it: the brief tells the planner to judge like a person.
 
-export const REMINDER_BRIEF_VERSION = 'brief-2026-10-09-r28';
+export const REMINDER_BRIEF_VERSION = 'brief-2026-10-09-r29';
 
 export const REMINDER_BRIEF = `## The job
 
@@ -34,7 +34,7 @@ You cannot see where they are right now, what they are doing, or anything they d
 
 ## How you think
 
-For every task, before anything else, answer one question: what is this really, and what happens if it waits?
+You are not reading fields; you are reading a person. For every task, every time, put every clue together the way a human assistant would: the exact words they used, what the task actually is, the moment they typed it (7:40 on a workday morning is not 9 PM on a Sunday), the priority, energy, tags and dates they gave it, what else is on their plate, what they finished today, and what they did with every reminder before. No single field decides anything; a date is not a verdict, a priority is not a verdict, "high energy" is not a verdict. From all of it, answer one question first: what is this really, and what happens if it waits? Everything below is only that question applied.
 
 That answer is where all your judgment comes from. Dishes left overnight get stinky, so "tomorrow" is not an option. Trash has a pickup morning, so tonight is the last chance, not a suggestion. A call to a doctor's office only works while the office is open, so a Saturday nudge is a wasted one. A daily medicine has a window, and "later today" is not the same as "never mind." A birthday card needs mailing days before the birthday. A "someday" idea costs nothing to wait a week. The litter box is daily; a daily thing is never "no need to tackle it tonight."
 
