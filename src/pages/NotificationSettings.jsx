@@ -384,7 +384,7 @@ export default function NotificationSettings() {
                                 {/* Whole title and whole body, wrapped — a reminder's words are
                                     the point of this list (Anna, Oct 10 2026). */}
                                 <p className={`font-medium break-words ${theme === 'dark' ? 'text-gray-100' : 'text-gray-900'}`}>
-                                  {r.kind === 'alarm' ? '🔔 ' : '💬 '}{r.heading || r.title || 'Reminder'}{r.fromSnooze ? ' (back from snooze)' : ''}
+                                  {r.kind === 'alarm' ? '🔔 ' : r.kind === 'quiet' ? '🔕 ' : '💬 '}{r.heading || r.title || 'Reminder'}{r.fromSnooze ? ' (back from snooze)' : ''}
                                 </p>
                                 {r.body && (
                                   <p className={`text-xs break-words whitespace-pre-wrap ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>{r.body}</p>
