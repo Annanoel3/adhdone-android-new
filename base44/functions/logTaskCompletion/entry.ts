@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
-import { resolveQuietHours, adjustForQuietHours, userTimeZone } from '../../shared/quietHours.ts';
+import { resolveQuietHours, adjustForQuietHours, userTimeZone, localDateKey } from '../../shared/quietHours.ts';
+import { assignTaskFamilies, judgeCompletionHabit } from '../../shared/runTaskParse.ts';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
 
 // Records ONE analytics row when a task is completed, with the reminder history
@@ -143,8 +144,128 @@ export default async function (req: Request): Promise<Response> {
       },
     });
 
+    // Family, finishing time and completion habit (recordCompletionHabit).
+    try {
+      await recordCompletionHabit(base44, task);
+    } catch (e) {
+      console.error('[logTaskCompletion] habit tracking failed:', e?.message || e);
+    }
+
     return Response.json({ logged: true, reminders: reminders.length });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
+  }
+}
+
+// ── Families, finishing times and completion habits (Anna, Oct 10 2026) ─────
+// "Track what time users finish tasks that are recurring or created
+// repeatedly… suggest the reminders be closer to the time they usually finish
+// … the user can say yes or no." Every finished task gets its family (the same
+// chore however it's worded or whose it is: runTaskParse.assignTaskFamilies)
+// and the server's own clock time it was finished (the phone's completed_at
+// isn't reliable). Once a family has been finished on 4 or more different
+// days, the model decides whether there's a real habit (judgeCompletionHabit);
+// if there is, one open task in that family carries a suggestion the person
+// answers Yes or No on (TaskDetailsModal). Nothing moves on its own. Looked at
+// most every 3 days per family, never again for 30 days after a No, never
+// while an earlier suggestion is unanswered. A Yes on an undated task
+// (laundry) becomes the family's preferred time, which the Smart Reminders
+// planner reads. The person's own data only; the analytics row above still
+// stores no titles.
+const HABIT_DAY_MS = 24 * 60 * 60 * 1000;
+const serverMs = (v: any): number => {
+  const s = String(v || '');
+  if (!s) return NaN;
+  return Date.parse(/[zZ]$|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`);
+};
+const minutesOfDay = (hhmm: string): number => {
+  const [h, m] = String(hhmm || '').split(':').map((n) => parseInt(n, 10));
+  return Number.isFinite(h) && Number.isFinite(m) ? h * 60 + m : NaN;
+};
+const clock12 = (hhmm: string): string => {
+  const mins = minutesOfDay(hhmm);
+  if (!Number.isFinite(mins)) return hhmm;
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return `${((h + 11) % 12) + 1}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+};
+
+async function recordCompletionHabit(base44: any, task: any) {
+  if (!task || task.parent_task_id || task.birthday_person
+    || task.classification === 'birthday' || task.classification === 'event') return;
+  const email = task.created_by;
+  if (!email) return;
+  const svc = base44.asServiceRole.entities;
+  const owner = (await svc.User.filter({ email }, '-created_date', 1))?.[0];
+  if (!owner) return;
+  const tz = userTimeZone(owner);
+  const nowMs = Date.now();
+  const finishedAt = new Date(nowMs).toISOString();
+  const lc = (s: any) => String(s || '').trim().toLowerCase();
+  const recent: any[] = (await svc.Task.filter({ created_by: email }, '-updated_date', 300)) || [];
+
+  let family = lc(task.task_family);
+  if (!family) {
+    const existing = [...new Set(recent.map((t: any) => lc(t.task_family)).filter(Boolean))].slice(0, 80) as string[];
+    const got = await assignTaskFamilies([{ id: task.id, title: task.title, said: task.original_input }], existing);
+    family = lc(got[task.id]);
+  }
+  await svc.Task.update(task.id, family ? { task_family: family, finished_at: finishedAt } : { finished_at: finishedAt });
+  if (!family) return;
+
+  const habits: Record<string, any> = { ...(owner.task_habits || {}) };
+  const h: any = { ...(habits[family] || {}) };
+  let changed = false;
+  const said = task.habit_suggestion;
+  if (said?.answer === 'yes' && /^\d{2}:\d{2}$/.test(said.time || '') && h.preferred_time !== said.time) {
+    h.preferred_time = said.time;
+    changed = true;
+  }
+
+  const kin = recent.filter((t: any) => t.id !== task.id && !t.parent_task_id
+    && (lc(t.task_family) === family || (!t.task_family && lc(t.title) === lc(task.title))));
+  const finished: number[] = kin.filter((t: any) => t.status === 'completed')
+    .map((t: any) => serverMs(t.finished_at || t.updated_date))
+    .filter((ms: number) => Number.isFinite(ms));
+  finished.push(nowMs);
+  finished.sort((a, b) => a - b);
+  const days = new Set(finished.map((ms) => localDateKey(new Date(ms), tz)));
+  const open = kin.filter((t: any) => t.status === 'active');
+  const pending = kin.some((t: any) => t.habit_suggestion?.time && !t.habit_suggestion?.answer
+    && nowMs - serverMs(t.habit_suggestion.made_at) < 14 * HABIT_DAY_MS);
+  const declined = [task, ...kin].some((t: any) => t.habit_suggestion?.answer === 'no'
+    && nowMs - serverMs(t.habit_suggestion.answered_at) < 30 * HABIT_DAY_MS);
+  const lookedLately = nowMs - serverMs(h.checked_at) < 3 * HABIT_DAY_MS;
+
+  if (days.size >= 4 && open.length && !pending && !declined && !lookedLately) {
+    h.checked_at = finishedAt;
+    changed = true;
+    const target = open.find((t: any) => !t.day_only_task && /^\d{2}:\d{2}$/.test(t.anchor_time || '')) || open[0];
+    const timed = !target.day_only_task && /^\d{2}:\d{2}$/.test(target.anchor_time || '');
+    const repeats = target.recurrence_pattern && target.recurrence_pattern !== 'none'
+      ? ` (repeats ${String(target.recurrence_pattern).replace(/_/g, ' ')})` : '';
+    const current = timed ? target.anchor_time : (h.preferred_time || null);
+    const reminder = timed ? `at ${clock12(target.anchor_time)}${repeats}`
+      : current ? `around ${clock12(current)} (they chose that)` : 'no set time; the app picks the moment';
+    const fmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const verdict = await judgeCompletionHabit({
+      titles: [...new Set(open.map((t: any) => String(t.title || '')))].slice(0, 3) as string[],
+      reminder,
+      finished: finished.slice(-20).map((ms) => fmt.format(new Date(ms))),
+      minutes: Number(target.typical_minutes || h.minutes) || null,
+    });
+    let gap = NaN;
+    if (verdict.time && current) {
+      const d = Math.abs(minutesOfDay(verdict.time) - minutesOfDay(current));
+      gap = Math.min(d, 1440 - d);
+    }
+    if (verdict.habit && verdict.time && !(gap < 30)) {
+      await svc.Task.update(target.id, { habit_suggestion: { time: verdict.time, why: verdict.why || null, made_at: finishedAt } });
+      console.log(`[logTaskCompletion] habit for "${family}": suggesting ${verdict.time} on task ${target.id}`);
+    }
+  }
+  if (changed) {
+    habits[family] = h;
+    await svc.User.update(owner.id, { task_habits: habits });
   }
 }
