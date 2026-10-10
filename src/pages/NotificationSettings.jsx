@@ -312,42 +312,15 @@ export default function NotificationSettings() {
               />
             </div>
 
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className={theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}>
-                  Achievements
-                </Label>
-                <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Get notified when you unlock achievements
-                </p>
-              </div>
-              <Switch
-                checked={settings.achievements}
-                onCheckedChange={() => handleToggle('achievements')}
-                disabled={saving}
-              />
-            </div>
-
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
-                <Label className={theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}>
-                  Accountability Partners
-                </Label>
-                <p className={`text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Notifications from your accountability partners
-                </p>
-              </div>
-              <Switch
-                checked={settings.accountability}
-                onCheckedChange={() => handleToggle('accountability')}
-                disabled={saving}
-              />
-            </div>
+            {/* Achievements and Accountability Partners toggles removed: neither
+                feature exists in the app right now (Anna, Oct 10 2026). The
+                saved settings keys stay so nothing else has to change. */}
           </CardContent>
         </Card>
 
-        {/* What rang — phone only */}
-        {onPhone && (
+        {/* What rang — phone only, and only on Anna's own phone account for
+            now: it's her debugging view, not a feature (Oct 10 2026). */}
+        {onPhone && String(user?.email || '').toLowerCase() === 's2kap2chick@gmail.com' && (
           <Card className={`${specialMode !== 'normal' ? `${specialMode}-card` : ''} border-none shadow-md ${
             specialMode === 'normal' ? (
               theme === 'minimalist'
