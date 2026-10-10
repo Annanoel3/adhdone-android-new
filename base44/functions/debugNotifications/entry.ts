@@ -1,6 +1,6 @@
 // Re-saved Oct 6 2026 so the bundled shared/reminderTitle.ts (Later break: no alarm inside later_until) is picked up.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
-import { getReminderContent } from '../../shared/reminderTitle.ts';
+import { getReminderContent, pushPhoneAlarms } from '../../shared/reminderTitle.ts';
 import { userTimeZone } from '../../shared/quietHours.ts';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
 
@@ -117,8 +117,21 @@ Deno.serve(async (req) => {
                     if (taskId) {
                         const t = await base44.asServiceRole.entities.Task.get(taskId).catch(() => null);
                         if (t && Array.isArray(t.onesignal_notification_ids) && t.onesignal_notification_ids.includes(id)) {
-                            await base44.asServiceRole.entities.Task.update(t.id, { onesignal_notification_ids: t.onesignal_notification_ids.filter((x: string) => x !== id) });
+                            const fields = {
+                                onesignal_notification_ids: t.onesignal_notification_ids.filter((x: string) => x !== id),
+                                reminder_schedule: (Array.isArray(t.reminder_schedule) ? t.reminder_schedule : []).filter((r: any) => r?.notification_id !== id),
+                            };
+                            await base44.asServiceRole.entities.Task.update(t.id, fields);
                             dropped = true;
+                            // The phone keeps its own copy of the alarm and rings it
+                            // on its own clock; tell it the list changed (Oct 10 2026:
+                            // a push cancelled here still rang at 11 from the phone).
+                            try {
+                                const owners = await base44.asServiceRole.entities.User.filter({ email: t.created_by }, '-created_date', 1);
+                                if (owners?.[0]) await pushPhoneAlarms({ ...t, ...fields }, owners[0], { before: t, changedAt: Date.now(), source: 'debugNotifications' });
+                            } catch (e) {
+                                console.error('[debugNotifications] could not update the phone:', e);
+                            }
                         }
                     }
                     results.push({ id, cancelled: del.ok, title: n?.headings?.en, droppedFromTask: dropped });
