@@ -227,73 +227,31 @@ export default async function(req) {
     }
 
     // ── Deadlines ("do X by [day]") ────────────────────────────────────────
-    // The run-up is the smart nudge cron's job: it sees every deadline with
-    // its priority and weighs it against the rest of the week — the same way
-    // it weighs a task with no date at all. Booking a second, LLM-built
-    // ladder here on top of that gave a dated task two reminder streams while
-    // an urgent task with no date got one. What stays here is the safety net
-    // that fires even if the cron doesn't: the evening before and the morning
-    // of the due day (for a deadline that is already today, one reminder about
-    // an hour out instead).
+    // Nothing is pre-booked for a deadline. "By Friday" and "today" are the
+    // Smart Reminders planner's alone: it reads the deadline, the hours, the
+    // urgency and the rest of the day every run, and decides when and how
+    // often to bring it up. The fixed "day before / deadline day" safety net
+    // that used to be booked here made the planner stand down ("the app
+    // already has one booked") — Saturday Oct 10 2026, a 9 AM "Deadline day"
+    // push for cat food was the morning's only word while an urgent call to
+    // a vet that closed at noon got nothing until its hour-before push. The
+    // rule (Anna): a time the person named ("at 5") is pre-booked; a deadline
+    // ("by 5", "by Friday", "today") is not. A reminder wish still falls
+    // through to the ladder below, as before.
     if (isDeadline && !wish) {
-      const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
-      const reminders = [];
-      if (!isSameDay) {
-        reminders.push({
-          days_before: 1, hour: 18, minute: 0, relative_minutes_before: null,
-          label: 'day before deadline',
-          notification_title: `Due tomorrow ⏳ ${t}`,
-          notification_body: `Heads up — "${t}" needs to be done by tomorrow. Even a small start counts. ✨`,
-        });
-      }
-      const dueDayHour = isSameDay && nowLocal.hour >= 9 ? Math.min(nowLocal.hour + 1, 21) : 9;
-      reminders.push({
-        days_before: 0, hour: dueDayHour, minute: 0, relative_minutes_before: null,
-        label: 'deadline day',
-        notification_title: `Deadline day 🔔 ${t}`,
-        notification_body: `Today's the deadline for "${t}". You've got this! 💪`,
-      });
-      console.log(`[generateReminderSchedule] Deadline safety net for "${title}" (${priority}) — ${reminders.length} reminder(s); run-up handled by smart cron (no LLM call)`);
-      return Response.json({ reminders });
+      console.log(`[generateReminderSchedule] Deadline "${title}" (${priority}): nothing pre-booked — the Smart Reminders planner owns it`);
+      return Response.json({ reminders: [] });
     }
 
     // ── Deadlines with a clock time ("have it in by 5 PM") ────────────────
-    // Same split as a "by [day]" deadline: the run-up is the smart nudge
-    // cron's — it sees the deadline and the time left and weighs it against
-    // everything else. What stays here is the safety net that goes out even
-    // if the cron doesn't: the evening before and the morning of when the
-    // deadline is on a later day, and about an hour before the deadline
-    // itself. Never a reminder AT the deadline — by then it's too late to
-    // start; from that moment the cron treats it as overdue.
+    // Same as a "by [day]" deadline: nothing pre-booked, the planner owns it.
+    // "By 5" names when it must be done, not when to be reminded; the planner
+    // sees the time left and picks the moment. (The "one hour before" push
+    // that used to live here is gone for the same reason as above.)
     const isClockDeadline = !dayOnly && deadlineStyle === 'by' && classification !== 'event';
     if (isClockDeadline && !wish) {
-      const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
-      const byTime = scheduled.toLocaleTimeString('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' });
-      const reminders = [];
-      if (!isSameDay) {
-        reminders.push({
-          days_before: 1, hour: 18, minute: 0, relative_minutes_before: null,
-          label: 'day before deadline',
-          notification_title: `Due tomorrow ⏳ ${t}`,
-          notification_body: `Heads up — "${t}" is due by ${byTime} tomorrow. Even a small start counts. ✨`,
-        });
-        if (scheduledLocal.hour >= 11) {
-          reminders.push({
-            days_before: 0, hour: 9, minute: 0, relative_minutes_before: null,
-            label: 'deadline day',
-            notification_title: `Deadline day 🔔 ${t}`,
-            notification_body: `"${t}" is due by ${byTime} today. You've got this! 💪`,
-          });
-        }
-      }
-      reminders.push({
-        days_before: null, hour: null, minute: null, relative_minutes_before: 60,
-        label: '1 hour before deadline',
-        notification_title: `One hour left ⏳ ${t}`,
-        notification_body: `"${t}" is due by ${byTime} — about an hour to go. You've got this! 💪`,
-      });
-      console.log(`[generateReminderSchedule] Clock-deadline safety net for "${title}" (${priority}) — ${reminders.length} reminder(s); run-up handled by smart cron (no LLM call)`);
-      return Response.json({ reminders });
+      console.log(`[generateReminderSchedule] Clock deadline "${title}" (${priority}): nothing pre-booked — the Smart Reminders planner owns it`);
+      return Response.json({ reminders: [] });
     }
 
     const humanTime = (d) => d.toLocaleString('en-US', {
