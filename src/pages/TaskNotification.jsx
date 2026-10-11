@@ -122,39 +122,12 @@ export default function TaskNotification() {
       // task right away, the same way this page's own Done button does.
       if (urlParams.get('done') === '1' && !autoDoneRef.current) {
         autoDoneRef.current = true;
-        // "Done with all" on an alarm that named several tasks (build 39 on):
-        // the others are finished the same way, in the background.
-        const also = (urlParams.get('also') || '').split(',').map((s) => s.trim()).filter((s) => s && s !== taskId);
-        if (also.length) completeAlso(also);
         handleComplete(tasks[0]);
       }
     } catch (error) {
       console.error("Error loading task:", error);
       navigate(createPageUrl("Home"));
     }
-  };
-
-  const completeAlso = (ids) => {
-    (async () => {
-      for (const id of ids.slice(0, 5)) {
-        try {
-          const found = await base44.entities.Task.filter({ id });
-          const t = found?.[0];
-          if (!t || t.status !== 'active') continue;
-          await base44.entities.Task.update(t.id, { status: 'completed', completed_at: new Date().toISOString() });
-          if (t.recurrence_pattern && t.recurrence_pattern !== 'none') {
-            const { createNextRecurrence } = await import('../components/utils/taskRecurrence');
-            await createNextRecurrence(t);
-          }
-          if (t.onesignal_notification_ids?.length > 0) {
-            await cancelScheduledReminder(t.onesignal_notification_ids).catch(() => {});
-          }
-        } catch (e) {
-          console.error('Could not finish the other task from the alarm:', id, e);
-        }
-      }
-      window.dispatchEvent(new CustomEvent('tasks-changed'));
-    })();
   };
 
   const handleComplete = async (given) => {
