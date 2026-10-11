@@ -210,7 +210,9 @@ Steps:
 - Do not change `capacitor.config.ts` `server.url` or `allowNavigation`.
 - Do not modify `NotifyBridge.java` beyond what's needed to compile.
 - Do not add a home-screen widget (tabled).
-- Do not add network calls from native code; the WebView owns auth and data.
+- Do not add network calls from native code; the WebView owns auth and data. (Superseded
+  Oct 10 2026 for the phone's reports: Anna wants nothing to wait for the app to be opened,
+  so alarm choices, captures and wake-ups go straight to the server through `Base44Api`.)
 - Do not touch `src/`, `base44/`, or anything outside `android/` except the version bump
   note above.
 
@@ -318,9 +320,16 @@ project's real libraries; it has not been run on a phone yet. What changed from 
   Settings → Reminders under Quiet Hours.
 - New: a second Later lasts until the person's quiet hours end (the app sends it on every
   sync), not a fixed 8 AM.
+- Oct 11: a Later on a task due today gets no break at all (the server's rule, Anna: "things
+  with hard due dates that are that day do not count for the later rules"). The phone can't
+  see due dates, so it starts its usual break and the server's answer ends it; any of the
+  task's alarms the break had turned off come back on (`AlarmStore.Entry.breakOff`,
+  `AlarmScheduler.reviveTask`, also on every sync).
 
 Phone test before the upload (force-stop first): two alarms a minute apart for unrelated
 tasks (the second rings 10 minutes after the first is answered); two for related tasks (one
 alarm naming both, with a Done for each that finishes only that one); snooze one with the app closed and check
 the task's `snoozed_until` on the server; turn on "Notice when I wake up" (the Usage access
-screen opens, and the switch stays on after granting).
+screen opens, and the switch stays on after granting); tap Later on an alarm for a task due
+today that has another alarm later today (that one stays booked and rings). Publish Base44
+BEFORE installing 39: on the old server the phone's new reports are refused and dropped.
