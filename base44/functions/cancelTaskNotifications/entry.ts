@@ -30,12 +30,17 @@ function zoneDateKey(ms: number, timeZone: string): string {
   return `${z.y}-${String(z.m).padStart(2, '0')}-${String(z.d).padStart(2, '0')}`;
 }
 // The instant of a wall-clock time in a zone (good to the minute across DST).
+// Each pass moves the guess by how far its wall clock is from the one wanted.
+// (Until Oct 10 2026 the second pass measured against the guess instead of the
+// wanted time and added the zone offset twice: a second Later in Austin ran
+// to 1 PM the next day instead of 8 AM.)
 function atZoneTime(y: number, m: number, d: number, hour: number, timeZone: string): number {
-  let guess = Date.UTC(y, m - 1, d, hour, 0, 0);
+  const want = Date.UTC(y, m - 1, d, hour, 0, 0);
+  let guess = want;
   for (let i = 0; i < 2; i++) {
     const z = zoneParts(guess, timeZone);
     const asUtc = Date.UTC(z.y, z.m - 1, z.d, z.h, z.min, z.s);
-    guess -= (asUtc - guess);
+    guess += (want - asUtc);
   }
   return guess;
 }
