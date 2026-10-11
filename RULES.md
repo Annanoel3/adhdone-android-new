@@ -57,7 +57,7 @@ Do not describe, revive, or reference removed crons. The live senders are:
 | Sender | Trigger | Role |
 |---|---|---|
 | `cronRefillReminders` | hourly | Books recurring-task pushes, writes the reminder plan for one-time tasks dated more than ~30 days out, promotes planned event/birthday reminders into OneSignal's ~30-day window, yearly birthday rollover, hourly day-of text follow-ups |
-| `cronSmartTaskNudge` | every 30 min | One LLM-planned nudge per user per run, for day-only / no-time tasks |
+| `cronSmartTaskNudge` | every 10 min | Smart Reminders, which covers nearly every task. The AI picks only each person's NEXT nudge, the run sends it when due, then the AI looks again. Never a day booked ahead: see §10 before touching it |
 | `cronDailyDigest` | every 30 min | One morning summary per user after quiet hours end |
 | `cronCommuteWatch` | every 15 min | "Time to leave" + traffic heads-up |
 | `onTaskUpdate` | Task entity events | Cancels / re-books on complete, delete, back-burner, un-complete, reminder-field edits. Leaves a snoozed task and a task in Focus Mode alone |
@@ -146,7 +146,7 @@ Before proposing ANY mechanism below, assume it exists and go read it.
 | Server-side task parsing | `base44/shared/runTaskParse.ts` + `taskParsePrompt.ts` | One parser. Never add a second one (native-side parsing was tried and rejected) |
 | On-screen messages (toasts) | `toast` from `src/components/ui/use-toast` + the `<Toaster />` in `src/App.jsx` | The ONLY toast system that is on screen. Every toast closes itself after 4 s and always has an X, and the container sits below the phone's status bar. `import { toast } from "sonner"` shows NOTHING — sonner is not mounted; never use it |
 | Notifications-off notice | `src/components/home/NotificationsOffBanner.jsx` + `myPushStatus` function | One row on Home, phone app only, shown when OneSignal reports no switched-on Android subscription for the signed-in user. Not dismissable on purpose; "Turn on" calls `NotifyBridge.requestPermission()`. Newer app builds answer from the phone via `NotifyBridge.getPermissionState()` |
-| Smart Reminders brief | `base44/shared/reminderBrief.ts` (copy of Anna's "Reminder Brain — The Brief" doc) + `BRIEF_ACCOUNTS` in `cronSmartTaskNudge` | The planner's whole instructions for accounts on the brief (s2kap2chick@gmail.com first, Oct 9 2026). The planner is shown facts only, no rules. A plan made under any other copy is dropped and redone. `{"email": "…", "preview": true}` to `cronSmartTaskNudge` shows what it was given and what it chose, saving and sending nothing |
+| Smart Reminders brief | `base44/shared/reminderBrief.ts` (word-for-word copy of Anna's "Reminder Brain — The Brief" doc) | The AI's whole instructions for Smart Reminders, every account since Oct 10 2026. It is shown facts only, no rules. A plan made under any other copy is dropped and redone. `{"email": "…", "preview": true}` to `cronSmartTaskNudge` shows what it was given and what it chose, saving and sending nothing. Changes only together with Anna's doc (§10) |
 | Who may book a push | caller check inside `schedulePush` | Backend callers prove themselves with `internalKey` (the CRON_SECRET secret); a signed-in user may book only for their own email. Watch-only (logs, blocks nothing) until `ENFORCE_CALLER_CHECK` is flipped to true |
 
 ### Correct states that are NOT bugs
@@ -202,6 +202,8 @@ on this path.
 - Retrying an SDK call that got Cloudflare's "Just a moment" page (`withChallengeRetry`) —
   the challenge is not transient; every call through adhdone.space gets it. Fix the host,
   not the retry (hard rule 9)
+- A daily or batch schedule for Smart Reminders (one AI call a day booking 3–5 nudges
+  ahead). Done by Base44's AI on Aug 21 2026 without being asked, undone Oct 11 2026 (§10)
 
 ## 8. REAL PEOPLE'S DATA — BULK CHANGES
 
@@ -244,3 +246,31 @@ typed something" and "their phone rang", answer these in writing:
 Then run the parser self-test (`parseTask` → Test Function → `{"selfTest": true}`) if the
 prompt, the date resolver or the pipeline changed, and say what failed. Three hands change
 this codebase fast and nothing else will notice.
+
+## 10. SMART REMINDERS IS ANNA'S DESIGN — DO NOT CHANGE IT UNLESS SHE ASKS
+
+Added Oct 11 2026. On Aug 21 2026, the day after Smart Reminders was built, Base44's AI
+rewrote it ("Switch to daily smart nudge scheduling", commit 2f1a6ad) to save AI calls: one
+plan a day booking 3–5 nudges ahead, with the regular checks only sending what was booked.
+Anna never asked for that and didn't find out for seven weeks. All that time her reminders
+were booked hours ahead instead of decided when the moment came.
+
+How it works, and how it must keep working:
+
+1. **One nudge at a time.** Each time it looks, the AI picks only the NEXT nudge (or none
+   yet, and when to look again) from everything known right then. It looks again after
+   that nudge goes out or is skipped, at the time it asked for, and whenever anything
+   changes. Never a daily schedule, never a batch booked ahead.
+2. **The AI decides, not code.** What to send, when, how often and in what words comes
+   from Anna's brief (`base44/shared/reminderBrief.ts`, a word-for-word copy of her
+   "Reminder Brain — The Brief" doc). No rule tables, counts, caps, templates or keyword
+   lists around it.
+3. **Never trade its judgment for credits.** Don't make it look less often, reuse an old
+   answer for the rest of the day, switch it to a cheaper model, or move it to InvokeLLM to
+   save calls or credits. If cost is a worry, tell Anna and let her decide.
+
+**Do not change `base44/functions/cronSmartTaskNudge`, `base44/shared/reminderBrief.ts`, the
+"Smart Task Nudge" workflow, or the `smart_nudge_*` fields on User unless Anna explicitly
+asks for that change in her own words.** A request about something else (another feature's
+bug, a cleanup, "make it faster", "save credits") is not permission. If a fix somewhere else
+seems to need a change here, stop and ask her first.
