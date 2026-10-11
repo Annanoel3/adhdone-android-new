@@ -684,7 +684,9 @@ Deno.serve(async (req) => {
       for (const entry of schedule) {
         if (holdForWake) break;
         if (entry.sent) continue;
-        if (utcMs(entry.send_at) > nowMs) continue; // not due yet
+        // Not due yet. A minute's grace: a nudge this run's own look picked for
+        // "right now" is stamped a moment after the run started, and goes now.
+        if (utcMs(entry.send_at) > nowMs + 60 * 1000) continue;
         // Never a leftover from an earlier day ("tonight…" said the next morning).
         if (getLocalDateString(new Date(utcMs(entry.send_at)), timeZone) !== todayStr) continue;
 
