@@ -576,6 +576,7 @@ Deno.serve(async (req) => {
           showReactions: hasEnoughHistory(email),
           dayPushes,
           lastSeenMs: seenMs,
+          dayStart: dayStartLine(user, now, timeZone, todayStr, seenMs, quiet.endMin),
           sentSinceSeen,
           seenCountIsFloor: Number.isFinite(seenMs) && seenMs < nowMs - 3 * DAY_MS,
           laterLook: todaysEntries.some((e: any) => e.sent && !e.skipped_reason),
@@ -659,7 +660,10 @@ Deno.serve(async (req) => {
       // Send due nudges in real-time (no LLM call — just OneSignal)
       const newLog: any[] = [];
       let lastSentTaskId: string | null = null;
+      const holdForWake = waitingForWake(user, now, timeZone, todayStr, quiet.endMin);
+      if (holdForWake) console.log(`[SMART NUDGE] ${email}: phone not unlocked yet this morning, holding nudges`);
       for (const entry of schedule) {
+        if (holdForWake) break;
         if (entry.sent) continue;
         if (utcMs(entry.send_at) > nowMs) continue; // not due yet
         // Never a leftover from an earlier day ("tonight…" said the next morning).
@@ -718,6 +722,17 @@ Deno.serve(async (req) => {
           entry.sent_at = now.toISOString();
           entry.skipped_reason = 'later';
           newLog.push({ k: entryKey(entry), at: entry.sent_at, skip: 'later' });
+          continue;
+        }
+
+        // A snooze they chose on its alarm is still to come back: that is its
+        // reminder, so a nudge about it now would only repeat it (Anna, Oct 10
+        // 2026: "so smart reminders isn't redundant").
+        if (referencedIds.some((id: string) => { const s = utcMs(taskById.get(id)?.snoozed_until); return Number.isFinite(s) && s > nowMs && s < nowMs + 24 * 60 * 60 * 1000; })) {
+          entry.sent = true;
+          entry.sent_at = now.toISOString();
+          entry.skipped_reason = 'snoozed';
+          newLog.push({ k: entryKey(entry), at: entry.sent_at, skip: 'snoozed' });
           continue;
         }
 
@@ -870,6 +885,42 @@ Deno.serve(async (req) => {
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+// How their day has started, for the planner (Anna, Oct 10 2026: people wake
+// up at different times through the week). With "Notice when I wake up" on,
+// the phone reports its first unlock each morning; otherwise only a positive
+// sign is mentioned (the first reminder they answered today, or that they
+// opened the app) — never "no sign", which on an older build or for someone
+// who doesn't open the app would only mislead.
+function dayStartLine(user: any, now: Date, timeZone: string, todayStr: string, seenMs: number, quietEndMin: number): string {
+  const isToday = (ms: number) => Number.isFinite(ms) && getLocalDateString(new Date(ms), timeZone) === todayStr;
+  const at = (ms: number) => new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit' }).format(new Date(ms));
+  if (user?.wake_watch === true) {
+    const woke = utcMs(user.woke_at);
+    if (isToday(woke)) {
+      return `They got up today around ${at(woke)} (their phone's first unlock; their wake-up time varies, and they asked the app to start their day from when they're actually up).`;
+    }
+    if (waitingForWake(user, now, timeZone, todayStr, quietEndMin)) {
+      return `Their phone hasn't been unlocked yet this morning: they're most likely still asleep (their wake-up time varies, and they asked the app to start their day from when they're actually up).`;
+    }
+  }
+  const first = utcMs(user?.day_first_sign_at);
+  if (isToday(first)) return `First sign they're up today: ${at(first)} (they answered a reminder).`;
+  if (isToday(seenMs)) return `They've opened the app today.`;
+  return '';
+}
+
+// "Notice when I wake up" is on and their phone hasn't been unlocked yet this
+// morning: no Smart Reminders go out yet (reminders they set for a time still
+// ring). Never past 4 hours after their quiet hours end, in case the phone
+// can't report (no signal, an old build).
+function waitingForWake(user: any, now: Date, timeZone: string, todayStr: string, quietEndMin: number): boolean {
+  if (user?.wake_watch !== true) return false;
+  const isToday = (ms: number) => Number.isFinite(ms) && getLocalDateString(new Date(ms), timeZone) === todayStr;
+  if (isToday(utcMs(user.woke_at)) || isToday(utcMs(user.day_first_sign_at)) || isToday(utcMs(user.last_active_at))) return false;
+  const nowMin = localMinutesOfDay(now, timeZone);
+  return nowMin >= quietEndMin && nowMin < quietEndMin + 4 * 60;
+}
 
 function getLocalDateString(d: Date, timeZone: string): string {
   const fmt = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
@@ -1135,6 +1186,8 @@ interface PlanContext {
   // Every notification the app sends them today (all senders), and whether
   // they're looking at the app at all.
   dayPushes: { at: number; title: string; mine: boolean }[];
+  // How their day has started (dayStartLine).
+  dayStart?: string;
   lastSeenMs: number;
   sentSinceSeen: number;
   seenCountIsFloor: boolean;
@@ -1508,6 +1561,17 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if (react.length) parts.push(`what they did with its reminders so far: ${react.join(', ')}`);
       const breakMs = utcMs(t.later_until);
       if (Number.isFinite(breakMs) && breakMs > nowMs) parts.push(`they tapped Later on it; that break runs until ${clock(breakMs)}`);
+      // The last thing they did with its alarm or reminder (the phone reports
+      // each choice as it's made, build 39 on).
+      const lc = t.last_alarm_choice;
+      const lcMs = utcMs(lc?.at);
+      if (lc?.choice && Number.isFinite(lcMs) && nowMs - lcMs < 24 * 60 * 60 * 1000) {
+        const what = lc.choice === 'snooze' ? `snoozed it${lc.minutes ? ` ${lc.minutes} min` : ''}`
+          : lc.choice === 'dismiss' ? 'stopped its alarm'
+          : lc.choice === 'ignored' ? 'let its alarm ring out with no answer'
+          : lc.choice === 'later' ? 'tapped Later' : String(lc.choice);
+        parts.push(`last thing they did with its reminder: ${what}, ${clock(lcMs)}`);
+      }
       return `${i + 1}. "${t.title}" — ${parts.join('; ')}`;
     };
 
@@ -1531,6 +1595,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     out.push(`Right now: ${todayLabel}, ${timeStr} (${timeZone}).`);
     out.push(`Quiet hours: ${noQuietHours ? 'none (turned off)' : `${quietStartStr} to ${quietEndStr}`}. Time left before ${noQuietHours ? 'midnight' : 'quiet hours'}: ${hoursLeftStr}.`);
     if (Number.isFinite(lastSeenMs)) out.push(`Last opened the app: ${whenLabel(lastSeenMs)} (${daysAgoLabel(lastSeenMs)}).`);
+    if (ctx.dayStart) out.push(ctx.dayStart);
     if (aboutMe.trim()) out.push(`What they told you about themselves, in their own words: ${aboutMe.trim()}`);
     if (work.lines.length) out.push(`Work schedule (${work.remote ? 'works from home' : 'goes in to work'}${work.quietAtWork ? '; they turned on "don\'t notify me at work", so nothing goes out during those hours' : ''}):\n${work.lines.map((l) => `- ${l}`).join('\n')}`);
     out.push(`OPEN TASKS — yours to plan (numbered; use these numbers in your answer):\n${tasks.map(line).join('\n')}`);
