@@ -268,3 +268,69 @@ ${input.finished.join("\n")}`,
     why: typeof parsed?.why === "string" ? parsed.why.slice(0, 160) : null,
   };
 }
+
+// ── Two alarms at about the same time: one alarm or two? ────────────────────
+// Anna, Oct 10 2026: "If two tasks would go well together and are closely
+// scheduled, then yeah, combine. If two tasks are super different from each
+// other, then no, don't combine." The model judges each pair; the phone carries
+// it out (one alarm naming both, or the second waits 10 minutes).
+const PAIR_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    pairs: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: { id: { type: "string" }, together: { type: "boolean" }, why: { type: "string" } },
+        required: ["id", "together", "why"],
+      },
+    },
+  },
+  required: ["pairs"],
+};
+
+type PairTask = { title: string; said?: string | null; urgency?: string | null; location?: string | null; kind?: string | null };
+
+export async function judgeAlarmPairs(
+  pairs: { id: string; a: PairTask; b: PairTask }[],
+): Promise<Record<string, { together: boolean; why: string }>> {
+  const out: Record<string, { together: boolean; why: string }> = {};
+  const list = (pairs || []).filter((p) => p?.id && p.a?.title && p.b?.title).slice(0, 20);
+  if (!list.length) return out;
+  const show = (t: PairTask) => {
+    const bits = [`"${String(t.title).slice(0, 120)}"`];
+    if (t.said && String(t.said).trim().toLowerCase() !== String(t.title).trim().toLowerCase()) bits.push(`they said: "${String(t.said).slice(0, 160)}"`);
+    if (t.urgency) bits.push(`priority ${t.urgency}`);
+    if (t.location) bits.push(`at ${String(t.location).slice(0, 80)}`);
+    if (t.kind) bits.push(String(t.kind));
+    return bits.join(", ");
+  };
+  const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
+  const completion = await openai.chat.completions.create({
+    model: MODEL,
+    reasoning_effort: "low",
+    messages: [
+      {
+        role: "system",
+        content: `You help a reminder app for people with ADHD. Two of one person's reminders are about to go off within a couple of minutes of each other. For each pair, decide: one alarm that names both, or keep them apart (the second one waits 10 minutes and rings on its own).
+
+Put them together when one moment naturally takes care of both, so seeing them side by side helps: the same trip or errand, the same room or object, the same routine, or one leads straight into the other. Keep them apart when they're different kinds of things that would muddle each other or when one would get lost inside the other: a call or appointment next to a chore, unrelated things in different places, or anything urgent next to something minor (the urgent one should ring alone). Think like a good assistant deciding whether to mention two things in one breath. When it's a close call, keep them apart.
+
+"why" is one short plain sentence a person would understand.`,
+      },
+      {
+        role: "user",
+        content: list.map((p) => `Pair ${p.id}:\n- ${show(p.a)}\n- ${show(p.b)}`).join("\n\n"),
+      },
+    ],
+    response_format: { type: "json_schema", json_schema: { name: "alarm_pairs", strict: true, schema: PAIR_SCHEMA } },
+  });
+  const parsed = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
+  const ids = new Set(list.map((p) => p.id));
+  for (const r of parsed?.pairs || []) {
+    if (ids.has(r?.id) && typeof r.together === "boolean") out[r.id] = { together: r.together, why: String(r.why || "").slice(0, 160) };
+  }
+  return out;
+}
