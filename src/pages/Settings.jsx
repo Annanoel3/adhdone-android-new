@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { 
@@ -141,6 +141,83 @@ export default function Settings() {
   const [quietHoursStart, setQuietHoursStart] = useState(() => localStorage.getItem('quiet_hours_start') || '22:00');
   const [quietHoursEnd, setQuietHoursEnd] = useState(() => localStorage.getItem('quiet_hours_end') || '08:00');
   const [quietHoursEnabled, setQuietHoursEnabled] = useState(false);
+
+  // "Notice when I wake up" (Anna, Oct 10 2026): the phone reports its first
+  // unlock each morning and Smart Reminders starts the day from then. Needs
+  // Android's Usage access (used only for that) and a build with the
+  // AlarmBridge.wakeWatchStatus method (39 on); hidden everywhere else.
+  const [wakeWatch, setWakeWatch] = useState({ available: false, hasAccess: false, enabled: false });
+  const [wakeInfoOpen, setWakeInfoOpen] = useState(false);
+  const [wakeBusy, setWakeBusy] = useState(false);
+  const wakePendingRef = useRef(false);
+  const alarmBridge = () => window.Capacitor?.Plugins?.AlarmBridge;
+
+  const turnWakeWatchOn = async () => {
+    const AB = alarmBridge();
+    const r = await AB.setWakeWatch({ enabled: true, quietEnd: quietHoursEnd || '08:00' });
+    if (r?.enabled) {
+      await base44.auth.updateMe({ wake_watch: true });
+      setWakeWatch({ available: true, hasAccess: true, enabled: true });
+      showSaved();
+    } else {
+      setWakeWatch((s) => ({ ...s, enabled: false }));
+      toast({ title: 'Usage access is still off', description: 'Switch it on for ADHDone, then try again.', duration: 3500 });
+    }
+  };
+
+  useEffect(() => {
+    const AB = alarmBridge();
+    if (!AB?.wakeWatchStatus) return undefined;
+    const check = async () => {
+      try {
+        const st = await AB.wakeWatchStatus();
+        setWakeWatch({ available: true, hasAccess: !!st?.hasAccess, enabled: !!st?.enabled });
+        // Back from Android's Usage access screen after asking to turn it on.
+        if (wakePendingRef.current && document.visibilityState === 'visible') {
+          wakePendingRef.current = false;
+          if (st?.hasAccess) {
+            await turnWakeWatchOn();
+          } else {
+            toast({ title: 'Usage access is still off', description: 'The wake-up setting stays off until it\'s on for ADHDone.', duration: 3500 });
+          }
+        }
+      } catch (e) {
+        console.error('Wake-up setting check failed:', e);
+      }
+    };
+    check();
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleWakeWatchToggle = async (on) => {
+    const AB = alarmBridge();
+    if (!AB?.wakeWatchStatus) return;
+    setWakeBusy(true);
+    try {
+      if (on) {
+        const st = await AB.wakeWatchStatus();
+        if (!st?.hasAccess) {
+          // Android's own screen; finished when they come back (above).
+          wakePendingRef.current = true;
+          await AB.openUsageAccessSettings();
+          return;
+        }
+        await turnWakeWatchOn();
+      } else {
+        await AB.setWakeWatch({ enabled: false });
+        await base44.auth.updateMe({ wake_watch: false });
+        setWakeWatch((s) => ({ ...s, enabled: false }));
+        showSaved();
+      }
+    } catch (e) {
+      console.error('Wake-up setting failed:', e);
+    } finally {
+      setWakeBusy(false);
+    }
+  };
 
   useEffect(() => {
     loadUser();
@@ -486,6 +563,38 @@ export default function Settings() {
                 </div>
                 {quietHoursSaving && <p className="text-xs text-gray-500">Saving…</p>}
               </>
+            )}
+            {wakeWatch.available && (
+              <div className={`mt-4 pt-4 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+                <div className="flex items-center justify-between">
+                  <div className="pr-3">
+                    <p className={`text-sm font-medium flex items-center gap-1.5 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
+                      Notice when I wake up
+                      <button
+                        type="button"
+                        aria-label="About this setting"
+                        onClick={() => setWakeInfoOpen((v) => !v)}
+                        className={theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}
+                      >
+                        <Info className="w-3.5 h-3.5" />
+                      </button>
+                    </p>
+                    <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                      Start your day's reminders when you're actually up
+                    </p>
+                  </div>
+                  <Switch
+                    checked={wakeWatch.enabled}
+                    onCheckedChange={handleWakeWatchToggle}
+                    disabled={wakeBusy}
+                  />
+                </div>
+                {wakeInfoOpen && (
+                  <p className={`text-xs mt-2 rounded-md p-2 ${theme === 'dark' ? 'bg-gray-700 text-gray-200' : 'bg-gray-50 text-gray-700'}`}>
+                    A good option if you wake up at different times through the week. ADHDone notices the first time you unlock your phone each morning and starts your reminders from then, instead of at a set time. Reminders you set for a specific time still go off at that time. This needs Android's "Usage access" permission, which ADHDone uses only for this: to see when your phone was first unlocked each day, and nothing else.
+                  </p>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>
