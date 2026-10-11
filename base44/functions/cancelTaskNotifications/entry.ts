@@ -1,12 +1,13 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
-import { userTimeZone } from '../../shared/quietHours.ts';
+import { userTimeZone, resolveQuietHours } from '../../shared/quietHours.ts';
 import { pushPhoneAlarms } from '../../shared/reminderTitle.ts';
 
 // ── Mode "later": a break the person asked for ───────────────────────────────
 // Later on an alarm (or a reminder's notification) used to change nothing but a
 // count. From Oct 6 2026 it gives the task a break: the first Later in a day,
-// three hours; a second the same day, until tomorrow morning (never shorter
+// three hours; a second the same day, until their next morning, when their
+// quiet hours end (never shorter
 // than a break already running). Same rule as widgetBridge.js laterBreakUntil,
 // which applies it when the app syncs; the phone (1.3.14+, LaterBreak) calls
 // this the moment Later is tapped so it takes effect with the app closed.
@@ -15,7 +16,9 @@ import { pushPhoneAlarms } from '../../shared/reminderTitle.ts';
 // moves to the break's end, the nudge planner is told its plan is out of date,
 // and the phone gets the task's alarm list without the break's alarms.
 const LATER_BREAK_MS = 3 * 60 * 60 * 1000;
-const LATER_MORNING_HOUR = 8;
+// A second Later's break ends at their morning: when their quiet hours end
+// (08:00 unless they changed it), next one coming, never less than the
+// three hours a first Later gives.
 
 function zoneParts(ms: number, timeZone: string) {
   const p = new Intl.DateTimeFormat('en-US', {
@@ -34,8 +37,8 @@ function zoneDateKey(ms: number, timeZone: string): string {
 // (Until Oct 10 2026 the second pass measured against the guess instead of the
 // wanted time and added the zone offset twice: a second Later in Austin ran
 // to 1 PM the next day instead of 8 AM.)
-function atZoneTime(y: number, m: number, d: number, hour: number, timeZone: string): number {
-  const want = Date.UTC(y, m - 1, d, hour, 0, 0);
+function atZoneTime(y: number, m: number, d: number, hour: number, timeZone: string, minute = 0): number {
+  const want = Date.UTC(y, m - 1, d, hour, minute, 0);
   let guess = want;
   for (let i = 0; i < 2; i++) {
     const z = zoneParts(guess, timeZone);
@@ -45,7 +48,7 @@ function atZoneTime(y: number, m: number, d: number, hour: number, timeZone: str
   return guess;
 }
 
-function laterBreakUntil(task: any, timeZone: string, nowMs: number): number {
+function laterBreakUntil(task: any, timeZone: string, nowMs: number, owner: any): number {
   const prevMs = task?.later_until ? new Date(task.later_until).getTime() : NaN;
   const today = zoneDateKey(nowMs, timeZone);
   // A break already given today (it ends today or later): this one runs
@@ -53,8 +56,21 @@ function laterBreakUntil(task: any, timeZone: string, nowMs: number): number {
   const secondToday = Number.isFinite(prevMs) && zoneDateKey(prevMs, timeZone) >= today;
   let until: number;
   if (secondToday) {
-    const z = zoneParts(nowMs + 24 * 60 * 60 * 1000, timeZone);
-    until = atZoneTime(z.y, z.m, z.d, LATER_MORNING_HOUR, timeZone);
+    // Their next morning (Anna, Oct 10 2026: not everyone's quiet hours end at
+    // 8): a Later at 2 PM comes back tomorrow morning, one at 1 AM this
+    // morning; one so close to their morning that it's under three hours away
+    // gets the three hours instead (never a whole day). It comes back as an ordinary
+    // task: Smart Reminders weighs it against everything else by priority, so
+    // it doesn't jump ahead of more urgent things (a repeating ping it already
+    // had resumes then, at its own pace).
+    const endMin = resolveQuietHours(owner).endMin;
+    until = NaN;
+    for (const dayOffset of [0, 1, 2]) {
+      const z = zoneParts(nowMs + dayOffset * 24 * 60 * 60 * 1000, timeZone);
+      const at = atZoneTime(z.y, z.m, z.d, Math.floor(endMin / 60), timeZone, endMin % 60);
+      if (at > nowMs) { until = Math.max(at, nowMs + LATER_BREAK_MS); break; }
+    }
+    if (!Number.isFinite(until)) until = nowMs + LATER_BREAK_MS;
   } else {
     until = nowMs + LATER_BREAK_MS;
   }
@@ -67,7 +83,7 @@ async function applyLaterBreak(base44: any, task: any, body: any, appId: string,
   const owners = await base44.asServiceRole.entities.User.filter({ email: task.created_by }).catch(() => []);
   const owner = owners?.[0] || null;
   const timeZone = (typeof body?.timezone === 'string' && body.timezone.trim()) || userTimeZone(owner);
-  const untilMs = laterBreakUntil(task, timeZone, nowMs);
+  const untilMs = laterBreakUntil(task, timeZone, nowMs, owner);
   const isRhythm = !!task.reminder_interval && task.reminder_interval !== 'once';
 
   // Which booked pushes fall inside the break (a rhythm: every live ping — the
