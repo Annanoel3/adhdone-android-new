@@ -2,6 +2,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
 import { userTimeZone, resolveQuietHours } from '../../shared/quietHours.ts';
 import { pushPhoneAlarms } from '../../shared/reminderTitle.ts';
+import { judgeAlarmPairs } from '../../shared/runTaskParse.ts';
 
 // ── Mode "later": a break the person asked for ───────────────────────────────
 // Later on an alarm (or a reminder's notification) used to change nothing but a
@@ -78,12 +79,27 @@ function laterBreakUntil(task: any, timeZone: string, nowMs: number, owner: any)
   return until;
 }
 
+// When the phone says the tap happened (build 39 sends it, since a tap made
+// with no signal arrives later): trusted within the last 3 days, never ahead.
+function tapTime(body: any, nowMs: number): number {
+  const at = Number(body?.at);
+  return Number.isFinite(at) && at > nowMs - 3 * 24 * 60 * 60 * 1000 && at <= nowMs + 60 * 1000 ? Math.min(at, nowMs) : nowMs;
+}
+
 async function applyLaterBreak(base44: any, task: any, body: any, appId: string, restKey: string) {
   const nowMs = Date.now();
+  // The phone's report queue retries until it hears back: a Later already
+  // applied is answered again, never applied twice (a second Later the same
+  // day means "until tomorrow morning").
+  const reportId = typeof body?.report_id === 'string' ? body.report_id.slice(0, 64) : '';
+  const seenIds: string[] = Array.isArray(task.alarm_report_ids) ? task.alarm_report_ids : [];
+  if (reportId && seenIds.includes(reportId)) {
+    return { success: true, taskId: task.id, later_until: task.later_until || null, duplicate: true };
+  }
   const owners = await base44.asServiceRole.entities.User.filter({ email: task.created_by }).catch(() => []);
   const owner = owners?.[0] || null;
   const timeZone = (typeof body?.timezone === 'string' && body.timezone.trim()) || userTimeZone(owner);
-  const untilMs = laterBreakUntil(task, timeZone, nowMs, owner);
+  const untilMs = laterBreakUntil(task, timeZone, tapTime(body, nowMs), owner);
   const isRhythm = !!task.reminder_interval && task.reminder_interval !== 'once';
 
   // Which booked pushes fall inside the break (a rhythm: every live ping — the
@@ -115,7 +131,9 @@ async function applyLaterBreak(base44: any, task: any, body: any, appId: string,
   const fields: any = {
     later_count: (task.later_count || 0) + 1,
     later_until: new Date(untilMs).toISOString(),
+    last_alarm_choice: { choice: 'later', at: new Date(tapTime(body, nowMs)).toISOString(), until: new Date(untilMs).toISOString() },
   };
+  if (reportId) fields.alarm_report_ids = [...seenIds, reportId].slice(-20);
   const ids = (task.onesignal_notification_ids || []).filter((id: string) => !dropIds.has(String(id)));
   if (ids.length !== (task.onesignal_notification_ids || []).length) fields.onesignal_notification_ids = ids;
   const schedule = (Array.isArray(task.reminder_schedule) ? task.reminder_schedule : []).filter((e: any) => !(e?.notification_id && dropIds.has(String(e.notification_id))));
@@ -143,9 +161,153 @@ async function applyLaterBreak(base44: any, task: any, body: any, appId: string,
   return { success: true, taskId: task.id, later_until: fields.later_until, canceledCount: cancelled };
 }
 
+// ── The phone's other reports (build 39 on, Base44Api.phoneReport) ─────────
+// Anna, Oct 10 2026: "make sure nothing requires the user to open the app for
+// something to update", and Smart Reminders sees "any choice made on an alarm
+// (10 min, 30 min, 1 hour etc)". The phone sends each choice the moment it's
+// made (retrying in the background without a connection):
+//  - "alarm_choice": a snooze (and when it brings the reminder back), Stop, or
+//    ringing out unanswered, on an alarm or a reminder's notification. Counted
+//    once per report_id. The planner looks again on its next run.
+//  - "pair": two alarms for different tasks at the same moment: one alarm
+//    naming both, or the second waits 10 minutes? The model judges
+//    (runTaskParse.judgeAlarmPairs); answers are kept on the person.
+//  - "woke": "Notice when I wake up" is on and the phone was first unlocked
+//    this morning at woke_at (WakeWatch on the phone).
+// Only the signed-in person's own tasks and profile are touched.
+const PAIR_KEEP_MS = 30 * 24 * 60 * 60 * 1000;
+
+function localDay(ms: number, timeZone: string): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
+  } catch {
+    return new Date(ms).toISOString().slice(0, 10);
+  }
+}
+
+async function phoneReport(req: Request, body: any): Promise<Response> {
+  const base44 = createClientFromRequest(req);
+  let me: any = null;
+  try { me = await base44.auth.me(); } catch { me = null; }
+  if (!me?.email) return Response.json({ success: false, error: 'Sign in required' }, { status: 401 });
+  const svc = base44.asServiceRole.entities;
+  const email = String(me.email).toLowerCase();
+  const owns = (t: any) => !!t && (String(t.created_by || '').toLowerCase() === email
+    || String(t.notification_recipient_email || '').toLowerCase() === email);
+  const owner = (await svc.User.filter({ email: me.email }, '-created_date', 1).catch(() => []))?.[0] || null;
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  const timeZone = (typeof body?.timezone === 'string' && body.timezone.trim()) || userTimeZone(owner);
+
+  if (body.mode === 'woke') {
+    const ms = Date.parse(String(body?.woke_at || ''));
+    if (!Number.isFinite(ms) || ms > nowMs + 60 * 1000 || ms < nowMs - 24 * 60 * 60 * 1000) {
+      return Response.json({ success: false, error: 'woke_at out of range' }, { status: 400 });
+    }
+    if (owner?.id) {
+      await svc.User.update(owner.id, { woke_at: new Date(ms).toISOString(), smart_nudge_schedule_dirty: true, smart_nudge_dirty_at: nowIso });
+    }
+    console.log(`[phoneReport] ${email} up at ${new Date(ms).toISOString()}`);
+    return Response.json({ success: true });
+  }
+
+  if (body.mode === 'pair') {
+    const asked = (Array.isArray(body?.pairs) ? body.pairs : []).slice(0, 20)
+      .map((p: any) => ({ id: String(p?.id || ''), a: String(p?.a || ''), b: String(p?.b || '') }))
+      .filter((p: any) => p.id && p.a && p.b && p.a !== p.b);
+    const ids = [...new Set(asked.flatMap((p: any) => [p.a, p.b]))] as string[];
+    const tasks: Record<string, any> = {};
+    await Promise.all(ids.map(async (id) => {
+      const t = await svc.Task.get(id).catch(() => null);
+      if (owns(t)) tasks[id] = t;
+    }));
+    const cache: Record<string, any> = { ...(owner?.alarm_pairs || {}) };
+    const answers: Record<string, { together: boolean }> = {};
+    const toJudge: any[] = [];
+    for (const p of asked) {
+      if (!tasks[p.a] || !tasks[p.b]) continue;
+      const hit = cache[p.id];
+      if (hit && typeof hit.together === 'boolean' && nowMs - Date.parse(hit.at || '') < PAIR_KEEP_MS) {
+        answers[p.id] = { together: hit.together };
+        continue;
+      }
+      const show = (t: any) => ({ title: t.title, said: t.original_input || null, urgency: t.urgency || null, location: t.location || null });
+      toJudge.push({ id: p.id, a: show(tasks[p.a]), b: show(tasks[p.b]) });
+    }
+    if (toJudge.length) {
+      const got = await judgeAlarmPairs(toJudge).catch((e) => { console.error('[phoneReport] pair judgment failed:', e?.message || e); return {} as any; });
+      for (const [id, v] of Object.entries(got as Record<string, any>)) {
+        answers[id] = { together: v.together };
+        cache[id] = { together: v.together, why: v.why || null, at: nowIso };
+      }
+      if (owner?.id && Object.keys(got).length) {
+        const kept = Object.entries(cache)
+          .filter(([, v]: any) => nowMs - Date.parse(v?.at || '') < PAIR_KEEP_MS)
+          .sort((x: any, y: any) => Date.parse(y[1]?.at || '') - Date.parse(x[1]?.at || ''))
+          .slice(0, 200);
+        await svc.User.update(owner.id, { alarm_pairs: Object.fromEntries(kept) }).catch(() => {});
+      }
+    }
+    return Response.json({ success: true, answers });
+  }
+
+  // "alarm_choice"
+  const task = await svc.Task.get(String(body?.task_id || '')).catch(() => null);
+  if (!task) return Response.json({ success: false, error: 'Task not found' }, { status: 404 });
+  if (!owns(task)) return Response.json({ success: false, error: 'Not allowed' }, { status: 403 });
+  const reportId = typeof body?.report_id === 'string' ? body.report_id.slice(0, 64) : '';
+  const seenIds: string[] = Array.isArray(task.alarm_report_ids) ? task.alarm_report_ids : [];
+  if (reportId && seenIds.includes(reportId)) return Response.json({ success: true, duplicate: true });
+  const choice = String(body?.choice || '');
+  if (!['snooze', 'dismiss', 'ignored'].includes(choice)) {
+    return Response.json({ success: false, error: 'unknown choice' }, { status: 400 });
+  }
+  const atMs = tapTime(body, nowMs);
+  const minutes = Math.max(0, Math.min(24 * 60, Math.round(Number(body?.minutes) || 0)));
+  const untilMs = Number(body?.until);
+  const fields: any = {
+    last_alarm_choice: {
+      choice,
+      at: new Date(atMs).toISOString(),
+      minutes: choice === 'snooze' ? minutes : null,
+      until: choice === 'snooze' && Number.isFinite(untilMs) && untilMs > 0 ? new Date(untilMs).toISOString() : null,
+    },
+  };
+  if (reportId) fields.alarm_report_ids = [...seenIds, reportId].slice(-20);
+  if (choice === 'snooze') {
+    fields.snooze_count = (task.snooze_count || 0) + 1;
+    fields.consecutive_snoozes = (task.consecutive_snoozes || 0) + 1;
+    if (Number.isFinite(untilMs) && untilMs > nowMs && untilMs < nowMs + 24 * 60 * 60 * 1000) {
+      fields.snoozed_until = new Date(untilMs).toISOString();
+    }
+  } else {
+    if (choice === 'dismiss') fields.dismissed_count = (task.dismissed_count || 0) + 1;
+    if (choice === 'ignored') fields.ignored_count = (task.ignored_count || 0) + 1;
+    // The ring that just ended was the snooze coming back: that snooze is over.
+    const snoozeMs = Date.parse(task.snoozed_until || '');
+    if (Number.isFinite(snoozeMs) && snoozeMs <= nowMs + 2 * 60 * 1000) fields.snoozed_until = null;
+  }
+  await svc.Task.update(task.id, fields);
+  if (owner?.id) {
+    const userFields: any = { smart_nudge_schedule_dirty: true, smart_nudge_dirty_at: nowIso };
+    // The first time today they did something with a reminder: a sign they're
+    // up (an alarm ringing out unanswered is not).
+    const firstMs = Date.parse(owner.day_first_sign_at || '');
+    if (choice !== 'ignored' && !(Number.isFinite(firstMs) && localDay(firstMs, timeZone) === localDay(atMs, timeZone))) {
+      userFields.day_first_sign_at = new Date(atMs).toISOString();
+    }
+    await svc.User.update(owner.id, userFields).catch(() => {});
+  }
+  console.log(`[phoneReport] ${choice}${choice === 'snooze' ? ` ${minutes} min` : ''} on task ${task.id}`);
+  return Response.json({ success: true });
+}
+
 Deno.serve(async (req) => {
   try {
     const body = await req.json();
+    if (body?.mode === 'alarm_choice' || body?.mode === 'pair' || body?.mode === 'woke') {
+      return await phoneReport(req, body);
+    }
     const { taskId } = body || {};
 
     if (!taskId) {
