@@ -1,6 +1,6 @@
 {
   "name": "Smart Task Nudge",
-  "description": "Every 10 minutes: sends the Smart Reminders nudges that are due (so each lands within minutes of the moment the AI picked, not on the next half hour) and has the AI look at the day again when anything changed (cronSmartTaskNudge).",
+  "description": "Every 10 minutes: sends the Smart Reminders nudge that is due (so it lands within minutes of the moment the AI picked) and has the AI pick the next one after each nudge goes out, when it asked to look again, or when anything changed. One nudge at a time, never a day booked ahead (cronSmartTaskNudge, RULES.md \u00a710).",
   "trigger": {
     "condition": null,
     "config": {
