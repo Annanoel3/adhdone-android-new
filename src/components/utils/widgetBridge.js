@@ -400,7 +400,19 @@ async function dropStalePushAlarms(tasks) {
 // the app's send ledger (every booked push is in it with its time), and a
 // rhythm picks up again when the break ends.
 const LATER_BREAK_MS = 3 * 60 * 60 * 1000;
-const LATER_MORNING_HOUR = 8;
+// A second Later's break ends at their morning: when their quiet hours end
+// (08:00 unless they changed it), next one coming, never less than the three
+// hours a first Later gives. Same rule as cancelTaskNotifications.
+function laterMorningAfter(now) {
+  const [h, m] = String(localStorage.getItem('quiet_hours_end') || '08:00').split(':').map(Number);
+  for (let d = 0; d < 3; d++) {
+    const at = new Date(now);
+    at.setDate(at.getDate() + d);
+    at.setHours(Number.isFinite(h) ? h : 8, Number.isFinite(m) ? m : 0, 0, 0);
+    if (at.getTime() > now.getTime()) return new Date(Math.max(at.getTime(), now.getTime() + LATER_BREAK_MS));
+  }
+  return new Date(now.getTime() + LATER_BREAK_MS);
+}
 function laterBreakUntil(t, now = new Date()) {
   const prev = t.later_until ? new Date(t.later_until) : null;
   const prevMs = prev && !isNaN(prev.getTime()) ? prev.getTime() : NaN;
@@ -410,7 +422,7 @@ function laterBreakUntil(t, now = new Date()) {
   const secondToday = !isNaN(prevMs) && prevMs >= startOfToday.getTime();
   let until;
   if (secondToday) {
-    until = new Date(now); until.setDate(until.getDate() + 1); until.setHours(LATER_MORNING_HOUR, 0, 0, 0);
+    until = laterMorningAfter(now);
   } else {
     until = new Date(now.getTime() + LATER_BREAK_MS);
   }
