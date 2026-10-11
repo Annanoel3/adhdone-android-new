@@ -334,6 +334,9 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
       // Heads-ups stay regular pushes; see ringsOutLoud.
       if (!ringsOutLoud(t, m.at)) continue;
       const alarm = { id: `${t.id}:${m.at}`, taskId: t.id, title: t.title || 'Task', at: m.at, heading: m.heading, body: m.body };
+      // Which repeated thing it is: the phone (build 39 on) rings two alarms of
+      // one family at the same moment as one.
+      if (t.task_family) alarm.family = String(t.task_family).slice(0, 40);
       // Someone else's birthday: the alarm's big button says what to do next.
       // It opens the task's page either way, which has the Send / Draft text
       // button. Builds before 1.3.9 ignore this and keep "Got it".
@@ -342,6 +345,14 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
       }
       out.push({ alarm, quietExempt: !!t.quiet_hours_exempt });
     }
+  }
+  // From build 39 the phone decides which close alarms ring as one (only
+  // tasks that go together; anything else waits 10 minutes after the first,
+  // Anna, Oct 10 2026), so the list goes over unfolded. Older builds keep the
+  // fold below, so they never ring alarms back to back.
+  if (window.Capacitor?.Plugins?.AlarmBridge?.wakeWatchStatus) {
+    out.sort((a, b) => a.alarm.at - b.alarm.at);
+    return out.map((e) => e.alarm).slice(0, ALARM_MAX);
   }
   return foldClusters(out).slice(0, ALARM_MAX);
 }
@@ -570,7 +581,8 @@ export async function pushAlarms(tasks) {
   lastAlarmsJson = json;
 
   try {
-    await AlarmBridge.sync({ alarms, activeTaskIds });
+    // quietEnd: their morning, for a second Later's break (build 39 on).
+    await AlarmBridge.sync({ alarms, activeTaskIds, quietEnd: localStorage.getItem('quiet_hours_end') || '08:00' });
   } catch (err) {
     // Try again on the next change rather than believing the phone has this set.
     lastAlarmsJson = '';
