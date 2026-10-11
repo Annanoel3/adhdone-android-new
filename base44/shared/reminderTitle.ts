@@ -155,6 +155,9 @@ export function phoneAlarmsFor(task: any, owner: any, now: number = Date.now()):
     if (quiet.enabled && task.quiet_hours_exempt !== true && isInQuietHours(new Date(m.at), quiet.startMin, quiet.endMin, timeZone)) continue;
     if (!ringsOutLoudOn(task, m.at, timeZone)) continue;
     const alarm: any = { id: `${task.id}:${m.at}`, at: m.at, title: task.title || 'Task', heading: m.heading, body: m.body };
+    // Which repeated thing it is: two alarms of one family at the same moment
+    // ring as one (the phone's PairDecisions, build 39 on).
+    if (task.task_family) alarm.family = String(task.task_family).slice(0, 40);
     if (task.birthday_person && !task.is_own_birthday) {
       alarm.openLabel = task.birthday_text_message ? 'Send a text' : 'Write a text';
     }
@@ -216,9 +219,16 @@ export async function pushPhoneAlarms(
     if (!taskRingsAsAlarm(task, owner) && !(before && taskRingsAsAlarm(before, owner))) return 'skipped';
     const now = Date.now();
     const after = phoneAlarmsFor(task, owner, now);
+    // An alarm due within two hours is coming off the phone (a cancel, a
+    // Later, a plan change): this push goes at high priority so a sleeping
+    // phone gets it before that alarm would ring, with no app open (Anna, Oct
+    // 10 2026). Everything else stays at normal priority (see below).
+    let removesSoon = false;
     if (before) {
       const was = phoneAlarmsFor({ ...before, id: task.id }, owner, now);
       if (JSON.stringify(was) === JSON.stringify(after)) return 'unchanged';
+      const kept = new Set(after.map((a: any) => a.id));
+      removesSoon = was.some((a: any) => !kept.has(a.id) && a.at - now < 2 * 60 * 60 * 1000);
     }
     const changedAt = opts.changedAt && isFinite(opts.changedAt) ? opts.changedAt : now;
     const res = await fetch('https://onesignal.com/api/v1/notifications', {
@@ -238,7 +248,7 @@ export async function pushPhoneAlarms(
         // nothing — real reminders then arrive late (see onTaskUpdate's drop
         // push). A sleeping phone may get a changed alarm time a little late;
         // the app also re-syncs alarms on every open.
-        priority: 5,
+        priority: removesSoon ? 10 : 5,
         // Six hours. A late copy is harmless: the phone keeps the newest list.
         ttl: 6 * 60 * 60,
         data: { set_alarms_task: task.id, alarms: alarmListJson(after), changed_at: changedAt },
