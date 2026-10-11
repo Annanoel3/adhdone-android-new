@@ -850,10 +850,16 @@ Deno.serve(async (req) => {
         // to replace its own pushed alarm before build 38.)
         if (ringsOutLoud) {
           const seenAt = utcMs(user.last_active_at);
+          // A choice made on that alarm since it rang (Later, a snooze, Stop:
+          // the phone reports it, app closed or not) means it's off the
+          // phone: it no longer holds this one (Oct 11 2026: a Later on the
+          // 3:19 PM PetSmart alarm held every PetSmart nudge after it).
+          const choiceAt = utcMs(nudgedTask?.last_alarm_choice?.at);
           const liveAlarm = sentLog.some((l: any) => {
             if (!l?.rang || l.task_id !== entry.task_id) return false;
             const at = utcMs(l.at);
-            return Number.isFinite(at) && at > nowMs - DAY_MS && (!Number.isFinite(seenAt) || at > seenAt);
+            return Number.isFinite(at) && at > nowMs - DAY_MS && (!Number.isFinite(seenAt) || at > seenAt) &&
+              !(Number.isFinite(choiceAt) && choiceAt >= at);
           });
           if (liveAlarm) {
             console.log(`[SMART NUDGE] Held "${entry.title}" for ${email}: an alarm about this task is still on their phone (no app open since it rang)`);
