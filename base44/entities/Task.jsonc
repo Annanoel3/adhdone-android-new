@@ -51,7 +51,18 @@
     "snoozed_until": {
       "type": "string",
       "format": "date-time",
-      "description": "When a snooze on the phone's alarm brings this task back (native build 39+, reported through AlarmBridge.drainActivity as snoozedUntil and written by widgetBridge). The Smart Reminders planner sees it so its nudges don't land on top of the snooze."
+      "description": "When a snooze on the phone's alarm (or a reminder's Snooze button) brings this task back. The phone reports it the moment the snooze is tapped (build 39+, cancelTaskNotifications mode alarm_choice). Smart Reminders sees it and sends no nudge of its own about the task while the snooze is pending."
+    },
+    "last_alarm_choice": {
+      "type": "object",
+      "description": "The last choice made on this task's alarm or reminder notification: { choice 'snooze' | 'dismiss' | 'ignored' | 'later', at, minutes (a snooze's length), until (when the snooze or Later break ends) }. Reported by the phone the moment it's made (build 39+); shown to Smart Reminders."
+    },
+    "alarm_report_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "The last 20 alarm-choice report ids the phone sent for this task, so a retried report is never counted twice."
     },
     "original_input": {
       "type": "string",
