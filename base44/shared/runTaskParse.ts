@@ -291,6 +291,9 @@ const PAIR_SCHEMA = {
   required: ["pairs"],
 };
 
+// The model's last raw answer, for debugTaskReminders' { pairs } check only.
+export let lastPairRaw = "";
+
 type PairTask = { title: string; said?: string | null; urgency?: string | null; location?: string | null; kind?: string | null };
 
 export async function judgeAlarmPairs(
@@ -322,15 +325,18 @@ Put them together when one moment naturally takes care of both, so seeing them s
       },
       {
         role: "user",
-        content: list.map((p) => `Pair ${p.id}:\n- ${show(p.a)}\n- ${show(p.b)}`).join("\n\n"),
+        content: `Answer every pair, using its id exactly as written.\n\n${list.map((p) => `id ${p.id}:\n- ${show(p.a)}\n- ${show(p.b)}`).join("\n\n")}`,
       },
     ],
     response_format: { type: "json_schema", json_schema: { name: "alarm_pairs", strict: true, schema: PAIR_SCHEMA } },
   });
+  lastPairRaw = String(completion.choices?.[0]?.message?.content || completion.choices?.[0]?.message?.refusal || "").slice(0, 2000);
   const parsed = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
   const ids = new Set(list.map((p) => p.id));
   for (const r of parsed?.pairs || []) {
-    if (ids.has(r?.id) && typeof r.together === "boolean") out[r.id] = { together: r.together, why: String(r.why || "").slice(0, 160) };
+    const id = String(r?.id || "").replace(/^(pair|id)\s*/i, "").trim();
+    if (ids.has(id) && typeof r.together === "boolean") out[id] = { together: r.together, why: String(r.why || "").slice(0, 160) };
   }
+  if (!Object.keys(out).length) console.error("[judgeAlarmPairs] no usable answers:", JSON.stringify(parsed).slice(0, 400));
   return out;
 }
