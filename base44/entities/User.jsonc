@@ -263,7 +263,7 @@
         }
       },
       "default": [],
-      "description": "LLM-generated daily schedule of 3-5 smart nudges. Regenerated once per day or when a task is marked urgent (dirty flag)."
+      "description": "Smart Reminders: the next nudge the AI picked (one at a time, never a day booked ahead: ONE NUDGE AT A TIME in cronSmartTaskNudge) plus the nudges sent or skipped today, as history."
     },
     "smart_nudge_schedule_date": {
       "type": "string",
@@ -273,7 +273,12 @@
     "smart_nudge_planned_at": {
       "type": "string",
       "format": "date-time",
-      "description": "When the smart-nudge planner last looked at this person's list (the day's plan, a re-plan after a change, or a later second look when that plan ran out while a nudged task was still open) \u2014 the moment its information was read. Keeps second looks to at most one every 90 minutes."
+      "description": "When Smart Reminders last looked at this person's list to pick their next nudge \u2014 the moment its information was read."
+    },
+    "smart_nudge_look_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When Smart Reminders looks at this person's list again to pick the next nudge (ONE NUDGE AT A TIME in cronSmartTaskNudge): the time the AI asked for, or now once its nudge went out or was skipped. Empty = it looks again after its waiting nudge goes out. Any change to their tasks makes it look sooner."
     },
     "smart_nudge_sent_log": {
       "type": "array",
