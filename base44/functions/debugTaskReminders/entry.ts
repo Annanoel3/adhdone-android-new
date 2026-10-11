@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.46';
 import { listAll, filterAll } from '../../shared/listAll.ts';
+import { judgeAlarmPairs } from '../../shared/runTaskParse.ts';
 
 // Admin-only audit of how the app is doing for real people: one JSON report
 // (nothing is written). Per person: how often they come back, what they made,
@@ -84,6 +85,11 @@ Deno.serve(async (req) => {
       const made = await svc[entity].create(fields);
       console.log(`[debugTaskReminders] ${me.email} made ${entity} ${made?.id}: ${JSON.stringify(fields).slice(0, 300)}`);
       return Response.json({ ok: true, entity, id: made?.id, record: made });
+    }
+    // Try the "one alarm or two?" judgment (read only): { pairs: [{ id, a: { title,
+    // said?, urgency?, location? }, b: {...} }] } returns the model's answer per pair.
+    if (Array.isArray(body?.pairs)) {
+      return Response.json({ ok: true, answers: await judgeAlarmPairs(body.pairs) });
     }
     // Raw look-up (read only): { q: { entity, where, limit, fields } } returns
     // matching rows, newest first, trimmed to the fields asked for.
