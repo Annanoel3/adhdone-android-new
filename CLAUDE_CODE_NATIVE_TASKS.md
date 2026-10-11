@@ -300,9 +300,10 @@ All 8 items above are now in the project, version 39 / 1.3.16. The code compiles
 project's real libraries; it has not been run on a phone yet. What changed from the plan:
 - Items 1–2 (two alarms close together): the AI decides (cancelTaskNotifications mode
   "pair", answers kept on the phone in `PairDecisions.java`). Tasks that go together ring as
-  one alarm naming them all ("Also: …"), with a separate Done for each task, so finishing
-  one leaves the others open (Anna, Oct 10 2026: being reminded together doesn't mean
-  finishing together). Anything else waits 10 minutes after the first one
+  one alarm naming them all ("Also: …"). With two tasks the Done spot splits into two
+  half-width buttons, one per task, so finishing one leaves the other open (Anna, Oct 10
+  2026: being reminded together doesn't mean finishing together); with three or more,
+  Done is hidden and "Open the app" goes to the task list. Anything else waits 10 minutes after the first one
   ends. A reminder at a time the person set (🔔) is never moved or pulled early. The web app
   stops folding alarms for builds that have `AlarmBridge.wakeWatchStatus`.
 - Item 3: every choice on an alarm or reminder notification (snooze 10/30/60 and when it
