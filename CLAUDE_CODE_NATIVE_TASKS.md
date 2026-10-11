@@ -293,3 +293,32 @@ listed as NOT DONE, never left out.
 - Version bumped as above; release build, not debug, for the Play upload.
 - The verify steps for the build were run on a real phone, force-stopped first.
 - Nothing in "Things NOT to do" was touched.
+
+### Build 39 — written into adhdone-android-new (Oct 10, 2026)
+
+All 8 items above are now in the project, version 39 / 1.3.16. The code compiles against the
+project's real libraries; it has not been run on a phone yet. What changed from the plan:
+- Items 1–2 (two alarms close together): the AI decides (cancelTaskNotifications mode
+  "pair", answers kept on the phone in `PairDecisions.java`). Tasks that go together ring as
+  one alarm naming them all ("Also: …"; Done becomes "Done with all" and the app finishes
+  each, `also=` on TaskNotification). Anything else waits 10 minutes after the first one
+  ends. A reminder at a time the person set (🔔) is never moved or pulled early. The web app
+  stops folding alarms for builds that have `AlarmBridge.wakeWatchStatus`.
+- Item 3: every choice on an alarm or reminder notification (snooze 10/30/60 and when it
+  comes back, Stop, rang out, Later) goes to the server the moment it's made, through a
+  retrying queue (`ChoiceReports` + `ChoiceSyncWorker`), app open or not. `drainActivity` only
+  reports what was never queued, once (it used to resend running totals, double-counting).
+- Item 5: an empty `set_alarms_task` list already cleared the task's alarms
+  (`AlarmScheduler.replaceTask`). A `drop_alarms_task` now also stops a ring in progress, and
+  the server sends cancels for alarms due within 2 hours at high priority.
+- Item 8: every capture sends `said_at` (`CaptureSyncWorker`).
+- New: "Notice when I wake up" (`WakeWatch`, `WakeWatchWorker`, `PACKAGE_USAGE_STATS`), in
+  Settings → Reminders under Quiet Hours.
+- New: a second Later lasts until the person's quiet hours end (the app sends it on every
+  sync), not a fixed 8 AM.
+
+Phone test before the upload (force-stop first): two alarms a minute apart for unrelated
+tasks (the second rings 10 minutes after the first is answered); two for related tasks (one
+alarm naming both; "Done with all" finishes both); snooze one with the app closed and check
+the task's `snoozed_until` on the server; turn on "Notice when I wake up" (the Usage access
+screen opens, and the switch stays on after granting).
