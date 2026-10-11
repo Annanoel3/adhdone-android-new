@@ -1,6 +1,6 @@
 {
   "name": "Smart Task Nudge",
-  "description": "Every hour, looks at all day-only tasks due today for each user and uses the LLM to send ONE context-aware nudge (morning = easy win, urgent = persistent reminder) instead of per-task hourly notifications that flood the tray.",
+  "description": "Every 10 minutes: sends the Smart Reminders nudges that are due (so each lands within minutes of the moment the AI picked, not on the next half hour) and has the AI look at the day again when anything changed (cronSmartTaskNudge).",
   "trigger": {
     "condition": null,
     "config": {
@@ -10,7 +10,7 @@
       "cron_expression": null,
       "one_time_date": null,
       "timezone": "UTC",
-      "interval_value": 30,
+      "interval_value": 10,
       "interval_unit": "minutes",
       "interval_anchor": "2026-08-20T13:39:19.743000",
       "ends_type": "never",
