@@ -275,9 +275,10 @@ confirm the second rings 10 minutes after the first is answered; snooze one for 
 and confirm the server task shows `snoozed_until`; cancel a booked push from the owner
 tool and confirm the phone does not ring it; check the tray during a ring shows one row.
 
-8. **Shares delivered late.** Quick-capture already sends `said_at` (ms, when the words
-   were captured) to `captureText` so "tomorrow" counts from then. A share the phone holds
-   and delivers later must send `said_at` the same way.
+8. **Captures delivered late.** `captureText` accepts `said_at` (ms, when the words were
+   captured) so "tomorrow" counts from then, but nothing on the phone sends it yet
+   (checked Oct 11 in `Base44Api.java`). Send it with every `captureText` call the phone
+   makes, set at the moment of capture, not when the call finally goes through.
 
 ### Before building ANY AAB (Anna, Oct 10 2026: "let's not let another AAB go out missing a bunch of crap")
 
