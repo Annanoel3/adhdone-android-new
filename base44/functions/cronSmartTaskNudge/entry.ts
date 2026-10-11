@@ -19,11 +19,23 @@
 // rules, scores or "must nudge" labels. (OLD_PROMPT_ACCOUNTS below is the
 // one-person fallback to the old prompt.)
 //
-// Re-planning: once a day, and again whenever something the planner reads has
-// changed since the last plan — a task added or edited (onTaskUpdate marks
-// that and asks for a re-plan right away: a request naming one person, which
-// only plans), or an "at" task's time going by. Only the scheduled runs SEND,
-// one nudge per person per run, checked against completion at send time.
+// ONE NUDGE AT A TIME (Anna's design from the start; restored Oct 11 2026).
+// Smart Reminders never books a day of nudges ahead. Each time it looks, the
+// AI decides only the NEXT nudge (or none yet, and when to look again), from
+// everything known at that moment. It looks again right after that nudge goes
+// out (or is skipped), when the time it asked to look again comes, and
+// whenever something it reads changes: a task added or edited (onTaskUpdate
+// marks that and asks for a look right away: a request naming one person,
+// which only plans), a choice made on an alarm, or an "at" task's time going
+// by. Only the scheduled runs SEND (every 10 minutes), one nudge per person
+// per run, checked against completion at send time.
+//
+// DO NOT turn this into a daily schedule, a batch of nudges booked ahead, or
+// fewer looks to save credits. On Aug 21 2026 Base44's AI did exactly that
+// ("Switch to daily smart nudge scheduling"), without Anna asking, the day
+// after she built it; for seven weeks the day's nudges were booked hours ahead
+// instead of decided when the time came. Any change to how or when Smart
+// Reminders decides needs Anna's explicit request first (RULES.md §10).
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
@@ -342,7 +354,13 @@ Deno.serve(async (req) => {
       const stale = !!user.smart_nudge_schedule_dirty ||
         (Number.isFinite(dirtyAtMs) && dirtyAtMs > plannedAtMs) ||
         joinedSincePlan || changedSincePlan || briefChanged;
-      const hasValidSchedule = user.smart_nudge_schedule_date === todayStr && !stale && schedule.length > 0;
+      // When it asked to look again (ONE NUDGE AT A TIME, top of file): set by
+      // each look, and set to "now" whenever its nudge goes out or is skipped.
+      const lookAtMs = utcMs(user.smart_nudge_look_at);
+      const lookSet = Number.isFinite(lookAtMs) && user.smart_nudge_schedule_date === todayStr;
+      const lookDue = lookSet && lookAtMs <= nowMs;
+      const hasValidSchedule = user.smart_nudge_schedule_date === todayStr && !stale && !lookDue &&
+        (schedule.length > 0 || lookSet);
 
       // A one-person request only re-plans an out-of-date plan.
       if (onlyEmail && hasValidSchedule && !previewOnly) continue;
@@ -372,7 +390,7 @@ Deno.serve(async (req) => {
       const minsBeforeQuiet = (startMin !== endMin && startMin > nowLocalMin)
         ? startMin - nowLocalMin
         : 24 * 60 - nowLocalMin;
-      const secondLook = !onlyEmail && hasValidSchedule && planRanOut && nudgedStillOpen &&
+      const secondLook = !onlyEmail && !lookSet && hasValidSchedule && planRanOut && nudgedStillOpen &&
         nowMs - lastSentMs >= SINCE_LAST_NUDGE &&
         nowMs - plannedAtMs >= SINCE_LAST_LOOK &&
         minsBeforeQuiet >= 60;
@@ -613,7 +631,7 @@ Deno.serve(async (req) => {
           if (Number.isFinite(freshPlannedMs) && freshPlannedMs > utcMs(runStartIso)) {
             console.log(`[SMART NUDGE] ${email}: a newer plan was written meanwhile — keeping it`);
             schedule = freshSchedule;
-          } else if (newEntries.length === 0 && secondLook) {
+          } else if (!useBrief && newEntries.length === 0 && secondLook) {
             // Nothing more today: note the look so it isn't asked again every run.
             try {
               await base44.asServiceRole.entities.User.update(user.id, {
@@ -623,7 +641,7 @@ Deno.serve(async (req) => {
             } catch (e) {
               console.error(`[SMART NUDGE] Failed to note second look for ${email}:`, e);
             }
-          } else if (newEntries.length === 0 && firstPlanToday && !briefChanged) {
+          } else if (!useBrief && newEntries.length === 0 && firstPlanToday && !briefChanged) {
             // Nothing planned for a new day: as before, ask again next run.
           } else {
             // A re-plan that adds nothing still replaces the old plan (what's
@@ -642,6 +660,7 @@ Deno.serve(async (req) => {
                 smart_nudge_schedule_dirty: stillDirty,
                 smart_nudge_planned_at: runStartIso,
                 smart_nudge_plan_prints: prints,
+                smart_nudge_look_at: useBrief ? nextLookIso(lastLookAgain, newEntries.length + stillQueued.length, nowMs) : null,
                 smart_nudge_brief_version: useBrief ? REMINDER_BRIEF_VERSION : null,
                 smart_nudge_passed: mergePassed(fresh?.smart_nudge_passed ?? user.smart_nudge_passed, lastPassed, nowMs),
               });
@@ -869,6 +888,9 @@ Deno.serve(async (req) => {
           updateData.last_smart_nudge_task_id = lastSentTaskId;
           updateData.last_smart_nudge_at = now.toISOString();
         }
+        // ONE NUDGE AT A TIME: its nudge went out (or was skipped), so the
+        // next run looks again before anything else goes out.
+        if (useBrief) updateData.smart_nudge_look_at = now.toISOString();
         try {
           await base44.asServiceRole.entities.User.update(user.id, updateData);
         } catch (e) {
@@ -1208,6 +1230,17 @@ interface PlanContext {
 let lastPassed: any[] = [];
 // The prompt the last plan was made from (returned by a preview request).
 let lastPrompt = '';
+// When the last look asked to look again if nothing changes first, in minutes
+// (ONE NUDGE AT A TIME, top of file); null when it didn't say.
+let lastLookAgain: number | null = null;
+
+// When to look again after a look: the time it asked for (no sooner than the
+// next check or two, no later than a day), or, when it said nothing, after
+// its nudge goes out (no time needed) — and in an hour when it picked nothing.
+function nextLookIso(minutes: number | null, picked: number, nowMs: number): string | null {
+  if (minutes !== null) return new Date(nowMs + Math.min(Math.max(minutes, 15), 24 * 60) * 60 * 1000).toISOString();
+  return picked > 0 ? null : new Date(nowMs + 60 * 60 * 1000).toISOString();
+}
 const PASSED_KEEP_MS = 3 * 24 * 60 * 60 * 1000;
 const PASSED_MAX = 60;
 function mergePassed(prev: any, add: any[], nowMs: number): any[] {
@@ -1221,6 +1254,7 @@ function mergePassed(prev: any, add: any[], nowMs: number): any[] {
 async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<any[] | null> {
   lastPassed = [];
   lastPrompt = '';
+  lastLookAgain = null;
   const {
     localMin, timeZone, quietStartMin, quietEndMin, subtasksByParent, events,
     homeOrigin, aboutMe, avoidTolls, nudgeHistory, queued, recentSent, work, doneToday, showReactions,
@@ -1606,16 +1640,17 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     if (proximityNotes) out.push(proximityNotes);
     out.push(`EVERYTHING THE APP HAS SENT OR BOOKED FOR THEM TODAY (every part of the app):\n${pushLines.length ? pushLines.join('\n') : '- nothing yet'}`);
     out.push(`FINISHED TODAY:\n${doneToday.length ? doneToday.slice(0, 20).map((d) => `- "${d}"`).join('\n') : '- nothing yet'}`);
-    if (queued.length) out.push(`ALREADY GOING OUT IN THE NEXT FEW MINUTES (from your earlier plan today — don't repeat them):\n${queued.map((e) => `- "${e.title}": ${e.body} (${clock(utcMs(e.send_at))})`).join('\n')}`);
-    if (laterLook) out.push('Part of your plan for today has already gone out (see above). You are looking at the same day again.');
+    if (queued.length) out.push(`ALREADY GOING OUT IN THE NEXT FEW MINUTES (you picked it at an earlier look; it stays — don't repeat it, and anything you pick now comes after it):\n${queued.map((e) => `- "${e.title}": ${e.body} (${clock(utcMs(e.send_at))})`).join('\n')}`);
+    if (laterLook) out.push('Some of what you picked today has already gone out (see above). You are looking at the same day again.');
     out.push(`Last time the parked-tasks roundup went out: ${Number.isFinite(lastRoundupMs) ? daysAgoLabel(lastRoundupMs) : 'never'}.`);
+    out.push(`YOU ONLY PICK THE NEXT ONE. Decide the single next thing that should reach them, and when: right now, or a later minute today. Don't book anything after it. Once it goes out, or the moment anything changes (a task added, finished or edited, a snooze, a Later), you look again with whatever has happened by then and pick the next one. If nothing should go out yet, leave "nudges" empty and say when you want to look again.`);
     out.push(`HOW TO ANSWER — valid JSON only:
 {
   "nudges": [
     {
       "task_index": <the number of the task, or 0 when it is about several>,
       "task_indexes": [<the number of EVERY task the message is about>],
-      "delay_minutes": <minutes from now to send it; nothing lands in quiet hours>,
+      "delay_minutes": <minutes from now to send it, 0 for right now; nothing lands in quiet hours>,
       "title": "<2-6 words, may include one emoji that fits what the task literally says>",
       "body": "<the message itself: one or two complete sentences>",
       "light": <true when this should arrive as a plain notification and never ring, e.g. a gentle mention of a task they tagged "no rush"; otherwise false>,
@@ -1623,11 +1658,12 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       "rationale": "<a short phrase: why this, why now>"
     }
   ],
+  "look_again_minutes": <minutes from now to look again if nothing changes before then; needed when "nudges" is empty, optional otherwise (you look again anyway once your nudge goes out)>,
   "passed": [
     { "task_index": <a task you thought about and chose not to bring up now>, "why": "<a short phrase>" }
   ]
 }
-"passed" is never shown to them; it's for reviewing your judgment. An empty "nudges" list is a complete answer.`);
+"nudges" holds one nudge at most. "passed" is never shown to them; it's for reviewing your judgment. An empty "nudges" list is a complete answer.`);
     return out.join('\n\n');
   };
 
@@ -1761,6 +1797,8 @@ Return ONLY valid JSON:
 
     const parsed = JSON.parse(response.choices[0].message.content);
     const nudges = parsed.nudges || [];
+    const lookAgain = Number(parsed.look_again_minutes);
+    lastLookAgain = Number.isFinite(lookAgain) && lookAgain > 0 ? lookAgain : null;
     // The tasks it looked at and left alone, with its reason (see lastPassed).
     lastPassed = (Array.isArray(parsed.passed) ? parsed.passed : [])
       .map((p: any) => {
@@ -1789,7 +1827,9 @@ Return ONLY valid JSON:
           .filter(Boolean)
       ));
       if (taskIds.length === 0 && taskId) taskIds.push(taskId);
-      const delayMs = Math.max(1, (n.delay_minutes || 30)) * 60 * 1000;
+      // 0 = right now: a scheduled run sends it straight after this look.
+      const delayMin = n.delay_minutes === null || n.delay_minutes === undefined || n.delay_minutes === '' ? NaN : Number(n.delay_minutes);
+      const delayMs = (Number.isFinite(delayMin) ? Math.max(0, delayMin) : 30) * 60 * 1000;
       let sendAt = new Date(nowMs + delayMs);
 
       // Adjust for quiet hours (don't send during quiet hours)
@@ -1815,7 +1855,7 @@ Return ONLY valid JSON:
       // A nudge that isn't tied to any real task is filler ("quick check on
       // your tasks — nothing urgent!") — drop it rather than send noise.
       .filter((e: any) => e.task_ids.length > 0)
-      .filter((e: any) => new Date(e.send_at).getTime() > nowMs); // drop any that landed in the past
+      .filter((e: any) => new Date(e.send_at).getTime() >= nowMs); // drop any that landed in the past
 
     // Space nudges out so two never land at (or near) the same time — each
     // other, a nudge already queued to go out, or one that just went out. The LLM sometimes gives
@@ -1844,7 +1884,10 @@ Return ONLY valid JSON:
       placed.push(at);
     }
 
-    return entries;
+    // ONE NUDGE AT A TIME (top of file): only the next one is kept, never a
+    // day booked ahead. If it gave several anyway, the earliest stands and
+    // what follows is decided at the next look.
+    return ctx.useBrief ? entries.slice(0, 1) : entries;
   } catch (e) {
     console.error('[SMART NUDGE] LLM error:', e);
     return null;
