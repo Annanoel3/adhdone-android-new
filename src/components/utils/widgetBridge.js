@@ -425,6 +425,13 @@ function laterMorningAfter(now) {
   return new Date(now.getTime() + LATER_BREAK_MS);
 }
 function laterBreakUntil(t, now = new Date()) {
+  // A task due today doesn't count for the Later rules (Anna, Oct 11 2026): no
+  // break. Later only says "not this minute"; Smart Reminders decides when it
+  // comes back today. Same as cancelTaskNotifications.
+  const rawDue = t.due_date ? String(t.due_date) : '';
+  const due = rawDue.length > 10 ? new Date(rawDue) : null;
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  if ((rawDue.length === 10 && rawDue === todayKey) || (due && !isNaN(due.getTime()) && due.toDateString() === now.toDateString())) return new Date(now);
   const prev = t.later_until ? new Date(t.later_until) : null;
   const prevMs = prev && !isNaN(prev.getTime()) ? prev.getTime() : NaN;
   const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
@@ -447,6 +454,8 @@ function laterBreakUntil(t, now = new Date()) {
 async function applyLaterBreak(t, until) {
   const now = Date.now();
   const untilMs = until.getTime();
+  // No break (a task due today): nothing to cancel or move.
+  if (untilMs <= now) return {};
   const isRhythm = !!t.reminder_interval && t.reminder_interval !== 'once';
   let rows = [];
   try {
