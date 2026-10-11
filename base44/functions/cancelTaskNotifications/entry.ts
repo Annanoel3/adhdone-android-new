@@ -49,7 +49,22 @@ function atZoneTime(y: number, m: number, d: number, hour: number, timeZone: str
   return guess;
 }
 
+// Due today: its due date falls on today in their time zone ("by end of today",
+// "by 5", "today").
+function dueToday(task: any, timeZone: string, nowMs: number): boolean {
+  const raw = task?.due_date ? String(task.due_date) : '';
+  if (!raw) return false;
+  if (raw.length <= 10) return raw === zoneDateKey(nowMs, timeZone);
+  const ms = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(raw) ? raw : raw + 'Z');
+  return Number.isFinite(ms) && zoneDateKey(ms, timeZone) === zoneDateKey(nowMs, timeZone);
+}
+
 function laterBreakUntil(task: any, timeZone: string, nowMs: number, owner: any): number {
+  // A task due today doesn't count for the Later rules (Anna, Oct 11 2026,
+  // after a second Later at 3:19 PM sent "Go to PetSmart", due by the end of
+  // the day, to the next morning): no break. Later only says "not this
+  // minute"; Smart Reminders decides when it comes back today.
+  if (dueToday(task, timeZone, nowMs)) return nowMs;
   const prevMs = task?.later_until ? new Date(task.later_until).getTime() : NaN;
   const today = zoneDateKey(nowMs, timeZone);
   // A break already given today (it ends today or later): this one runs
@@ -100,7 +115,9 @@ async function applyLaterBreak(base44: any, task: any, body: any, appId: string,
   const owner = owners?.[0] || null;
   const timeZone = (typeof body?.timezone === 'string' && body.timezone.trim()) || userTimeZone(owner);
   const untilMs = laterBreakUntil(task, timeZone, tapTime(body, nowMs), owner);
-  const isRhythm = !!task.reminder_interval && task.reminder_interval !== 'once';
+  // No break (a task due today): nothing is cancelled or moved.
+  const noBreak = untilMs <= nowMs;
+  const isRhythm = !noBreak && !!task.reminder_interval && task.reminder_interval !== 'once';
 
   // Which booked pushes fall inside the break (a rhythm: every live ping — the
   // refill books a fresh run from the break's end).
@@ -111,7 +128,7 @@ async function applyLaterBreak(base44: any, task: any, body: any, appId: string,
   const dropIds = new Set<string>();
   for (const r of rows) {
     const at = new Date(r?.send_at || 0).getTime();
-    if (r?.notification_id && at > nowMs && (isRhythm || at < untilMs)) dropIds.add(String(r.notification_id));
+    if (!noBreak && r?.notification_id && at > nowMs && (isRhythm || at < untilMs)) dropIds.add(String(r.notification_id));
   }
   for (const e of (Array.isArray(task.reminder_schedule) ? task.reminder_schedule : [])) {
     const at = new Date(e?.send_at || 0).getTime();
