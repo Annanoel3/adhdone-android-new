@@ -369,6 +369,24 @@
       "type": "string",
       "description": "The phone app's version name (1.3.12, ...) as last opened, alongside app_build."
     },
+    "wake_watch": {
+      "type": "boolean",
+      "description": "\"Notice when I wake up\" (Settings, next to quiet hours): the phone reports its first unlock each morning (Usage access, used only for that) and Smart Reminders starts their day from then. Turned on only once Android's Usage access is granted."
+    },
+    "woke_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "With wake_watch on: when the phone was first unlocked this morning (the latest report; only today's counts). Sent by the phone (cancelTaskNotifications mode woke)."
+    },
+    "day_first_sign_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "The first time today they did something with a reminder (snoozed, stopped, tapped Later): a sign they're up. Shown to Smart Reminders."
+    },
+    "alarm_pairs": {
+      "type": "object",
+      "description": "The model's answers to 'two alarms for different tasks at the same moment: one alarm naming both, or the second waits 10 minutes?', keyed 'taskA|taskB': { together, why, at }. Kept 30 days, at most 200."
+    },
     "task_habits": {
       "type": "object",
       "description": "Per task_family (see Task): { minutes (typical time from timed sessions), preferred_time 'HH:MM' (they said yes to reminders around then), checked_at (last time the model looked for a completion habit) }, plus _minutes_at (newest timed session already counted). Written by the server only (logTaskCompletion, cronSmartTaskNudge)."
