@@ -325,6 +325,11 @@ project's real libraries; it has not been run on a phone yet. What changed from 
   see due dates, so it starts its usual break and the server's answer ends it; any of the
   task's alarms the break had turned off come back on (`AlarmStore.Entry.breakOff`,
   `AlarmScheduler.reviveTask`, also on every sync).
+- Oct 11: "What rang" listed every alarm twice (its muted tray copy as a 🔕 row). A push's quiet
+  copy is no longer logged when an alarm is the ring for it (`PushFilter.quietWithButtons(..., false)`);
+  quiet rows remain for a Later break and for ADHDone silenced.
+- Two reminders at times the person set (🔔), a minute apart, both ring on their own minute
+  (Oct 11 test): neither may move. Only reminders the app picked wait 10 minutes.
 
 Phone test before the upload (force-stop first): two alarms a minute apart for unrelated
 tasks (the second rings 10 minutes after the first is answered); two for related tasks (one
