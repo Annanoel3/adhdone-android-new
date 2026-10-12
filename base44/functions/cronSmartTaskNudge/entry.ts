@@ -1305,7 +1305,17 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
   const noQuietHours = quietStartMin === quietEndMin;
   const quietStartStr = formatTime(quietStartMin);
   const quietEndStr = formatTime(quietEndMin);
-  const cutoffLabel = noQuietHours ? 'midnight' : `quiet hours (${quietStartStr})`;
+  // Their bedtime is when their quiet hours start, whatever the clock says.
+  const cutoffLabel = noQuietHours ? 'midnight' : `bedtime (their quiet hours start at ${quietStartStr})`;
+  // The clock's word for the time can be wrong for them: 4 PM is morning to
+  // someone who sleeps days (Anna, Oct 12 2026). Say so next to it.
+  const sinceWakeMin = noQuietHours ? 9999 : (localMin - quietEndMin + 24 * 60) % (24 * 60);
+  const toBedMin = noQuietHours ? 9999 : (quietStartMin - localMin + 24 * 60) % (24 * 60);
+  const theirPartOfDay = sinceWakeMin < 180 && timeOfDay !== 'morning'
+    ? '; the start of THEIR day: they keep different hours'
+    : toBedMin <= 180 && timeOfDay !== 'evening'
+      ? '; the end of THEIR day: they keep different hours'
+      : '';
   const now = new Date();
   const nowMs = now.getTime();
   const todayStr = getLocalDateString(now, timeZone);
@@ -1674,7 +1684,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
 
     const out: string[] = [];
     out.push(`Right now: ${todayLabel}, ${timeStr} (${timeZone}).`);
-    out.push(`Quiet hours: ${noQuietHours ? 'none (turned off)' : `${quietStartStr} to ${quietEndStr}`}. Time left before ${noQuietHours ? 'midnight' : 'quiet hours'}: ${hoursLeftStr}.`);
+    out.push(`Quiet hours: ${noQuietHours ? 'none (turned off)' : `${quietStartStr} to ${quietEndStr}`}. Time left before ${noQuietHours ? 'midnight' : 'bedtime (when their quiet hours start)'}: ${hoursLeftStr}.`);
     if (Number.isFinite(lastSeenMs)) out.push(`Last opened the app: ${whenLabel(lastSeenMs)} (${daysAgoLabel(lastSeenMs)}).`);
     if (ctx.dayStart) out.push(ctx.dayStart);
     if (aboutMe.trim()) out.push(`What they told you about themselves, in their own words: ${aboutMe.trim()}`);
@@ -1720,7 +1730,7 @@ You're not annoying. You don't flood them. You make sure everything gets done an
 
 CURRENT CONTEXT:
 - Today: ${todayLabel}
-- Current time: ${timeStr} (${timeOfDay})
+- Current time: ${timeStr} (${timeOfDay}${theirPartOfDay})
 - Timezone: ${timeZone}
 ${seenLine}${roundupLine}${aboutMe.trim() ? `- ABOUT YOUR BOSS, in their own words: ${aboutMe.trim()}\n  Use this only to judge what a task really involves and how much it matters to THEM. Never quote it back at them in a notification.\n` : ''}- Quiet hours: ${noQuietHours ? 'NONE — this user has quiet hours turned off and is often up until around midnight, so late-evening nudges are welcome' : `${quietStartStr} - ${quietEndStr} (never schedule during these)`}
 ${workBlock}
