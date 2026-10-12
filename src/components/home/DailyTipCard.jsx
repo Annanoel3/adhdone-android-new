@@ -4,8 +4,11 @@ import { Lightbulb, Sparkles, Loader2, RefreshCw } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { generateSmartTipForUser, CURRENT_PROMPT_VERSION } from "../utils/dailyTipGenerator";
+import { isTheirTipEvening, tipEveningLabel } from "../utils/reminderCopy";
 
-const isEvening = () => new Date().getHours() >= 17;
+// Their evening, from their quiet hours, not 5 PM on the clock: 5 PM is the
+// start of the day for someone who sleeps days (Oct 12 2026).
+const isEvening = () => isTheirTipEvening(new Date());
 
 // Shown when a tip could not be generated (backend down, network gone). It is
 // never saved: a saved fallback would sit there as "today's tip" until tomorrow
@@ -167,7 +170,7 @@ export default function DailyTipCard({ theme }) {
                 theme === 'minimalist' ? 'text-amber-600' : theme === 'dark' ? 'text-amber-400' : 'text-yellow-700'
               }`} />
             </div>
-            <span>{isEvening() ? "Tonight's Tip" : "Today's Tip"}</span>
+            <span>{isEvening() ? tipEveningLabel(new Date()) : "Today's Tip"}</span>
           </div>
           <Button
             variant="ghost"
