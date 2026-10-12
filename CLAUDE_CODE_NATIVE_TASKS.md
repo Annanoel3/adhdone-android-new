@@ -331,16 +331,24 @@ project's real libraries; it has not been run on a phone yet. What changed from 
 - Two reminders at times the person set (🔔), a minute apart, both ring on their own minute
   (Oct 11 test): neither may move. Only reminders the app picked wait 10 minutes.
 
-### Build 40 (1.3.17) — replaces 39 before it was approved (Oct 11, 2026)
+### Build 40 (1.3.17) — replaces 39 before it was approved (Oct 11–12, 2026)
 
 Everything in 39, plus: a stray Back or Home during an alarm left it ringing with nothing on
-screen to stop it. Now Back does nothing while the alarm rings (once nothing rings, Back
-closes the screen), and Home / recent apps / any other way the screen closes without one of
-its buttons brings it back after a second (and again ~5 s later if Android held the first
-try). It relies on "Display over other apps" (the same grant that lets the alarm open its
-screen over other apps); without it the ringing notification's Snooze / Done / Stop stay
-the way out (`AlarmActivity.bringBackSoon`, `answered`, `onUserLeaveHint`). Test: during an
-alarm press Home (the screen returns), press Back (nothing happens), then tap Stop.
+screen to stop it. Now Home, Back, or the alarm screen closing any other way while it rings
+(none of its buttons used) STOPS the alarm (Anna, Oct 12 2026: "those actions would just put
+it back in smart reminder rotation. And tracking when those happen would be good"). The phone
+reports choice `closed` with `how` = home / back / closed; the server counts it
+(`Task.closed_count`, `last_alarm_choice.how`) and Smart Reminders takes a fresh look. It is
+not a Later (no break). The reminder goes back in the tray quietly, and What rang shows
+"Home pressed, no answer". The one exception: an alarm that rings inside quiet hours only
+because it is at a time the person set themselves (`throughQuiet` on the alarm, from the
+server's phoneAlarmsFor / the web's alarmSetFor) — Home or Back on that one rings it again in
+10 minutes (reported as a snooze with `how`), so one sleepy press can't silence a 5 AM flight
+(Anna: "you can make it ring again in 10. But only in that situation").
+(`AlarmActivity.leaveRinging` / `onUserLeaveHint` / `backStopsRing`, `AlarmService.leftRinging`,
+`ChoiceReports.CLOSED`, `RingLog.END_CLOSED`, `AlarmStore.Entry.throughQuiet`.) Test: during an
+alarm press Home (it stops; What rang says "Home pressed, no answer"), then on the next one
+press Back (same, "Back pressed").
 
 Phone test before the upload (force-stop first): two alarms a minute apart for unrelated
 tasks (the second rings 10 minutes after the first is answered); two for related tasks (one
