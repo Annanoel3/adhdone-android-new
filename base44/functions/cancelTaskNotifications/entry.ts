@@ -50,9 +50,10 @@ function atZoneTime(y: number, m: number, d: number, hour: number, timeZone: str
 }
 
 // Due today: its due date falls on today in their time zone ("by end of today",
-// "by 5", "today").
+// "by 5", "today"), or, with no due date, the time they set for it does ("walk
+// the dog at 8:20").
 function dueToday(task: any, timeZone: string, nowMs: number): boolean {
-  const raw = task?.due_date ? String(task.due_date) : '';
+  const raw = task?.due_date ? String(task.due_date) : (task?.event_time ? String(task.event_time) : '');
   if (!raw) return false;
   if (raw.length <= 10) return raw === zoneDateKey(nowMs, timeZone);
   const ms = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(raw) ? raw : raw + 'Z');
