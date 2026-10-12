@@ -538,7 +538,13 @@ async function handleTaskEvent(req: Request): Promise<Response> {
       if (followUpId) await cancelOneSignalNotification(followUpId);
 
       const t = data.title.length > 40 ? data.title.slice(0, 37) + '...' : data.title;
-      const candidates = rhythmMs ? [] : isEvent && eventMs > now ? [
+      // An event with a day but no clock time hangs on a 9 AM anchor: the day
+      // before and the morning of, never "It's time" at 9 AM (Oct 12 2026).
+      const eventNoClock = isEvent && (dayOnly || !data.event_time);
+      const candidates = rhythmMs ? [] : eventNoClock && eventMs + 14 * 60 * 60 * 1000 > now ? [
+        { at: eventMs - 13 * 60 * 60 * 1000, label: 'night before', title: `Heads up 🌙 ${t}`, body: `Just a heads up: "${t}" is tomorrow.` },
+        { at: eventMs, label: 'morning of', title: `📅 ${t}`, body: `Just a reminder: "${t}" is today.` },
+      ] : isEvent && eventMs > now ? [
         { at: eventMs - 24 * 60 * 60 * 1000, label: 'night before', title: `🎉 ${t}`, body: `Heads up! Your "${t}" is tomorrow. Don't forget to prep! ✨` },
         { at: eventMs - 60 * 60 * 1000, label: '1 hour before', title: `⏰ ${t}`, body: `Almost time! Your "${t}" is in about an hour. Time to head out! 🚗` },
         { at: eventMs, label: 'at the time', title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` },
@@ -557,7 +563,7 @@ async function handleTaskEvent(req: Request): Promise<Response> {
       const backTask = { ...old_data, ...data };
       for (const c of candidates.filter((x) => x.at > now)) {
         if (!nagsThroughNight(backTask) && !isTimeTheySet(backTask, c.at, backTz)) {
-          const placed = placeAppReminder(c.at, isEvent ? eventMs : clockMs, backQuiet, backTz);
+          const placed = placeAppReminder(c.at, eventNoClock ? null : isEvent ? eventMs : clockMs, backQuiet, backTz);
           if (placed == null || placed <= now) continue;
           if (placed !== c.at && newSchedule.some((x) => Math.abs(Date.parse(x.send_at) - placed) < 5 * 60 * 1000)) continue;
           c.at = placed;
