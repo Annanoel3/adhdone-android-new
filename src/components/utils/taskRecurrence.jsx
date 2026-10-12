@@ -361,6 +361,8 @@ async function makeNextCopy(task) {
     life_area: task.life_area || 'personal',
     reminder_wish: task.reminder_wish || null,
     anchor_time: task.anchor_time || null,
+    // Whether they set that time themselves (RULES.md §9 Q4) carries over too.
+    time_stated: task.time_stated === true,
     follow_up_title: task.follow_up_title || null,
     follow_up_minutes: task.follow_up_minutes || null,
     // The kind of task it is and how long it takes (logTaskCompletion), so the
@@ -488,6 +490,8 @@ async function createNextBirthday(task) {
     life_area: task.life_area || 'personal',
     reminder_wish: task.reminder_wish || null,
     anchor_time: task.anchor_time || null,
+    // Whether they set that time themselves (RULES.md §9 Q4) carries over too.
+    time_stated: task.time_stated === true,
     follow_up_title: task.follow_up_title || null,
     follow_up_minutes: task.follow_up_minutes || null,
     status: 'active',
