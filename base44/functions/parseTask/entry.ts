@@ -1,9 +1,12 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import { runTaskParse } from "../../shared/runTaskParse.ts";
 import { buildTaskParsePrompt } from "../../shared/taskParsePrompt.ts";
+import { resolveQuietHours } from "../../shared/quietHours.ts";
 // Shared files are bundled into this function when it is deployed, so a change
 // to the shared prompt (taskParsePrompt.ts) only reaches users after this
-// function is saved and redeployed again (last redeploy, Oct 8 2026: a bare
+// function is saved and redeployed again (last redeploy, Oct 12 2026:
+// time_stated, and a time picked from "before bed" goes outside the user's
+// quiet hours; before that, Oct 8 2026: a bare
 // "ASAP" with no due date means start now; before that, Oct 7 2026: a rhythm
 // needs quoted pace words (repeat_words), so "keep reminding me" is a wish, not an
 // hourly ping; before that, Oct 6 2026: "ASAP" / "first thing" are the task's
@@ -71,7 +74,10 @@ Deno.serve(async (req) => {
     const asOfRaw = Number(body?.asOf);
     const asOf = Number.isFinite(asOfRaw) && asOfRaw > Date.now() - 60 * 24 * 60 * 60 * 1000 && asOfRaw <= Date.now() + 60 * 1000
       ? asOfRaw : undefined;
-    const response = await runTaskParse(base44, body?.prompt, user?.timezone, user?.about_me, asOf);
+    // Their quiet hours, so a time picked from "before bed" lands outside them
+    // (RULES.md §9 Q4). An internal call has no user: no quiet-hours line.
+    const response = await runTaskParse(base44, body?.prompt, user?.timezone, user?.about_me, asOf,
+      user ? resolveQuietHours(user) : undefined);
     return Response.json({ response });
   } catch (error) {
     console.error("[parseTask] error:", error);
@@ -93,9 +99,9 @@ const aTime = (v: any) => typeof v === "string" && /^\d{2}:\d{2}$/.test(v);
 const PARSER_CHECKS: { text: string; saidAt: number; expect: Record<string, any> }[] = [
   { text: "Schedule Tamra Appointment. Remind me tomorrow at 9am.", saidAt: said("2026-10-05T21:25:00-05:00"), expect: { target_date: "2026-10-06", target_time: "09:00", recurrence_pattern: "none" } },
   { text: "make cardiologist appt. Remind me tomorrow at 9am.", saidAt: said("2026-10-07T19:12:00-05:00"), expect: { target_date: "2026-10-08", target_time: "09:00" } },
-  { text: "Remind me tomorrow at 8am to take the car in", saidAt: said("2026-10-05T23:50:00-05:00"), expect: { target_date: "2026-10-06", target_time: "08:00" } },
-  { text: "Call Shy back tomorrow morning.", saidAt: said("2026-10-08T16:37:00-05:00"), expect: { target_date: "2026-10-09", target_time: aTime } },
-  { text: "Mix up cinnamon roll dough before bed.", saidAt: said("2026-10-08T14:40:00-05:00"), expect: { target_date: "2026-10-08", deadline_style: "by", target_time: aTime } },
+  { text: "Remind me tomorrow at 8am to take the car in", saidAt: said("2026-10-05T23:50:00-05:00"), expect: { target_date: "2026-10-06", target_time: "08:00", time_stated: true } },
+  { text: "Call Shy back tomorrow morning.", saidAt: said("2026-10-08T16:37:00-05:00"), expect: { target_date: "2026-10-09", target_time: aTime, time_stated: false } },
+  { text: "Mix up cinnamon roll dough before bed.", saidAt: said("2026-10-08T14:40:00-05:00"), expect: { target_date: "2026-10-08", deadline_style: "by", target_time: aTime, time_stated: false } },
   { text: "Feed obi pan kenobi after work tonight", saidAt: said("2026-10-07T11:28:00-05:00"), expect: { target_date: "2026-10-07", target_time: (v: any) => aTime(v) && v >= "16:00" } },
   { text: "Take trash to the curb every Wednesday and Sunday night.", saidAt: said("2026-10-07T14:20:00-05:00"), expect: { recurrence_pattern: "weekly", recurrence_days: [0, 3], target_time: aTime } },
   { text: "schedule date night for every thursday at 22:00", saidAt: said("2026-10-08T14:56:00-05:00"), expect: { recurrence_pattern: "weekly", recurrence_days: [4], target_time: "22:00" } },
@@ -110,7 +116,7 @@ const PARSER_CHECKS: { text: string; saidAt: number; expect: Record<string, any>
   { text: "Pick up prescription next Tuesday", saidAt: said("2026-10-05T10:00:00-05:00"), expect: { target_date: "2026-10-13" } },
   { text: "Call the vet at 3", saidAt: said("2026-10-05T10:00:00-05:00"), expect: { target_date: "2026-10-05", target_time: "15:00" } },
   { text: "Call the vet at 3", saidAt: said("2026-10-05T16:00:00-05:00"), expect: { target_date: "2026-10-06", target_time: "15:00" } },
-  { text: "Gym every weekday at 6am", saidAt: said("2026-10-05T10:00:00-05:00"), expect: { recurrence_pattern: "weekly", recurrence_days: [1, 2, 3, 4, 5], target_time: "06:00" } },
+  { text: "Gym every weekday at 6am", saidAt: said("2026-10-05T10:00:00-05:00"), expect: { recurrence_pattern: "weekly", recurrence_days: [1, 2, 3, 4, 5], target_time: "06:00", time_stated: true } },
   { text: "Water the plants every other day", saidAt: said("2026-10-05T10:00:00-05:00"), expect: { recurrence_pattern: "every_other_day" } },
   { text: "take out the trash tonight", saidAt: said("2026-10-09T15:00:00-05:00"), expect: { target_date: "2026-10-09", target_time: aTime } },
   { text: "Text mom", saidAt: said("2026-10-05T10:00:00-05:00"), expect: { target_date: null, target_time: null, recurrence_pattern: "none" } },
