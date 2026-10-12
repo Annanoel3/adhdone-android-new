@@ -24,7 +24,7 @@ import OpenAI from "npm:openai";
 // bundle keeps working right after a deploy.
 //
 // Answer: { response: { category, is_list, main_idea, items, birthday_person,
-// birthday_month, birthday_day, birthday_is_own, parts, why } }. category is "task", "parking_lot",
+// birthday_month, birthday_day, birthday_is_own, birthday_animal, parts, why } }. category is "task", "parking_lot",
 // "birthday", "app_feedback" or "mixed". Anything a caller doesn't know how to
 // handle it treats as a task, so a capture is never lost.
 //
@@ -121,7 +121,10 @@ none or it's their own birthday. birthday_is_own is true only when it's their ow
 birthday_month (1-12) and birthday_day (1-31) are the birthday's date: read "tomorrow" or "this
 Wednesday" off the dates above, and a day number on its own ("the 12th") is the next time that
 date comes around, this month if it's still ahead and otherwise next month. Both null only if they
-gave no day at all. For every other category birthday_person, birthday_month and birthday_day are
+gave no day at all. birthday_animal is set only when their words say the birthday is a pet's or
+another animal's ("my dog Kaiju's birthday", "our cat Luna turns 3"): what kind of animal, in
+lowercase ("dog", "cat"); birthday_person is still its name. Otherwise birthday_animal is null.
+For every other category birthday_person, birthday_month, birthday_day and birthday_animal are
 null and birthday_is_own is false.
 
 For "mixed": parts are the separate pieces, each written so it makes sense on its own, in their
@@ -145,6 +148,7 @@ Return JSON:
   "birthday_month": integer | null,
   "birthday_day": integer | null,
   "birthday_is_own": boolean,
+  "birthday_animal": string | null,
   "parts": string[],
   "why": string
 }`;
@@ -173,6 +177,9 @@ function clean(raw: any) {
     birthday_month: hasDay ? month : null,
     birthday_day: hasDay ? day : null,
     birthday_is_own: category === "birthday" && r.birthday_is_own === true,
+    birthday_animal: category === "birthday" && r.birthday_is_own !== true
+      ? (String(r.birthday_animal || "").trim().toLowerCase().slice(0, 40) || null)
+      : null,
     parts: category === "mixed" && Array.isArray(r.parts)
       ? r.parts.map((s: any) => String(s || "").trim()).filter(Boolean).slice(0, 8)
       : [],
