@@ -8,9 +8,35 @@
 // next_reminder, the next_reminder date acts as the effective date so a task
 // scheduled for Nov 1 doesn't appear in "Today" on Jul 29.
 
+import { quietWindow } from './reminderCopy';
+
 export const getLocalDateString = (d = new Date()) => {
   const dt = d instanceof Date ? d : new Date(d);
   return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+};
+
+// Their day, not the calendar's (Anna, Oct 12 2026: someone on a night shift
+// is still on Monday at 2 AM). It turns over in the middle of their quiet
+// hours and is named for the date they wake up on: for 10 PM to 8 AM that's
+// 3 AM, for 8 AM to 4 PM it's noon. With no quiet hours set, midnight.
+export const theirDayKey = (d = new Date()) => {
+  const { start, end } = quietWindow();
+  if (start === end) return getLocalDateString(d);
+  const half = Math.round(((end - start + 24 * 60) % (24 * 60)) / 2);
+  const shifted = new Date(d.getTime() + half * 60000);
+  const mins = shifted.getHours() * 60 + shifted.getMinutes();
+  return getLocalDateString(new Date(shifted.getFullYear(), shifted.getMonth(), shifted.getDate() - (mins < end ? 1 : 0)));
+};
+
+// Late or not. A deadline with no clock time (saved as 11:59 PM that day) is
+// late once their day is over, not at midnight; one with a time is late at
+// that time.
+export const isPastDue = (dueIso, now = new Date()) => {
+  if (!dueIso) return false;
+  const due = new Date(dueIso);
+  if (isNaN(due.getTime())) return false;
+  if (due.getHours() === 23 && due.getMinutes() === 59) return getLocalDateString(due) < theirDayKey(now);
+  return due.getTime() < now.getTime();
 };
 
 export const getTaskDueLocalDate = (task) => {
