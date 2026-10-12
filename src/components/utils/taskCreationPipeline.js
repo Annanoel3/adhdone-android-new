@@ -272,6 +272,9 @@ export async function processAndCreateTask(inputText, opts = {}) {
         follow_up_minutes: mainTaskParsed.follow_up_minutes || null,
         reminder_wish: mainTaskParsed.reminder_wish || null,
         anchor_time: mainTaskParsed.target_time || null,
+        // They said this clock time themselves (not one picked from "before
+        // bed"): the one kind that goes through quiet hours (RULES.md §9 Q4).
+        time_stated: !!mainTaskParsed.target_time && mainTaskParsed.time_stated === true,
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
         due_date: sched.dueDateISO || presetDueDateISO,
         end_date: sched.endDateISO,
@@ -320,6 +323,7 @@ export async function processAndCreateTask(inputText, opts = {}) {
           deadlineStyle: mainTaskParsed.deadline_style === 'by' ? 'by' : 'on',
           classification: parentTask.classification,
           reminderWish: mainTaskParsed.reminder_wish || null,
+          timeStated: parentTask.time_stated === true,
         }).then(multiIds => {
           return commitNotificationIds(parentTask.id, multiIds || []);
         }).catch(error => console.error("Failed to schedule reminders:", error));
@@ -332,6 +336,7 @@ export async function processAndCreateTask(inputText, opts = {}) {
           intervalMs: INTERVAL_MS[sched.interval],
           count: 10,
           taskId: parentTask.id,
+          task: parentTask,
           data: { screen: "/TaskNotification", taskId: parentTask.id, urgency: parentTask.urgency, type: 'task_reminder' },
           buttons: [
             { id: "snooze_15", text: "Snooze 15 min" },
@@ -528,6 +533,9 @@ export async function processAndCreateTask(inputText, opts = {}) {
       // named (each new occurrence of a recurring task starts there).
       reminder_wish: parsed.reminder_wish || null,
       anchor_time: parsed.target_time || null,
+      // They said this clock time themselves (not one picked from "before
+      // bed"): the one kind that goes through quiet hours (RULES.md §9 Q4).
+      time_stated: !!parsed.target_time && parsed.time_stated === true,
       reminder_count: 0,
       next_reminder: nextReminder ? nextReminder.toISOString() : null,
       due_date: dueDateISO,
@@ -582,6 +590,7 @@ export async function processAndCreateTask(inputText, opts = {}) {
             deadlineStyle: parsed.deadline_style === 'by' ? 'by' : 'on',
             classification: createdTask.classification,
             reminderWish: parsed.reminder_wish || null,
+            timeStated: createdTask.time_stated === true,
           }))
           .then(multiIds => {
             if (multiIds) {
@@ -597,6 +606,8 @@ export async function processAndCreateTask(inputText, opts = {}) {
               ...getReminderCopy(createdTask, nextReminder),
               sendAtISO: nextReminder.toISOString(),
               taskId: createdTask.id,
+              // A time they said themselves goes out then, quiet hours or not.
+              exact: createdTask.time_stated === true,
               data: { screen: "/TaskNotification", taskId: createdTask.id, urgency: createdTask.urgency, type: 'task_reminder' },
               buttons: [
                 { id: "snooze_15", text: "Snooze 15 min" },
@@ -617,6 +628,7 @@ export async function processAndCreateTask(inputText, opts = {}) {
           intervalMs: INTERVAL_MS[actualReminderInterval],
           count: 10,
           taskId: createdTask.id,
+          task: createdTask,
           data: { screen: "/TaskNotification", taskId: createdTask.id, urgency: createdTask.urgency, type: 'task_reminder' },
           buttons: [
             { id: "snooze_15", text: "Snooze 15 min" },
@@ -748,6 +760,8 @@ export async function createTaskWithDate(data, date, time) {
     original_input: data.original_input || null,
     reminder_wish: data.reminder_wish || null,
     anchor_time: time || null,
+    // Picked in the app's date and time picker: a time they set themselves.
+    time_stated: !!time,
     location: data.location || null,
     description: '',
     classification: data.classification || 'task',
@@ -775,6 +789,7 @@ export async function createTaskWithDate(data, date, time) {
     taskId: createdTask.id,
     urgency: data.urgency,
     classification: data.classification || 'task',
+    timeStated: true,
   });
 
   if (multiIds) {
@@ -785,6 +800,8 @@ export async function createTaskWithDate(data, date, time) {
       ...getReminderCopy(createdTask, nextReminder),
       sendAtISO: nextReminder.toISOString(),
       taskId: createdTask.id,
+      // The time they picked goes out then, quiet hours or not (RULES.md §9 Q4).
+      exact: true,
       data: { screen: "/TaskNotification", taskId: createdTask.id, urgency: data.urgency, type: 'task_reminder' },
       buttons: [
         { id: "snooze_15", text: "Snooze 15 min" },
