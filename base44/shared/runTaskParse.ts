@@ -169,7 +169,51 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   // A day the user actually stated must never be lost to wording — "Saturday"
   // becomes a real date here rather than dying in the scheduler.
   resolveParsedDates(parsed, nowInTimezone(tz, asOfMs));
+  keepPickedTimeOutOfQuietHours(parsed, quiet);
   return fixParsedTaskTitles(parsed);
+}
+
+// A clock time the model picked itself never sits inside quiet hours (RULES.md
+// §9 Q4). The prompt says so, but the model doesn't always follow it (Oct 12
+// 2026: "take trash to the curb every Wednesday and Sunday night" got 10:30 PM
+// for someone whose quiet hours start at 10). Inside them, the reminder is
+// moved to the next morning or dropped, so "night" would never ring at night.
+// It goes to the nearer edge instead: 30 minutes before they start, or the
+// moment they end. Across midnight, the day (and a weekly repeat's weekdays)
+// moves with it. A time the user stated is never touched.
+export function keepPickedTimeOutOfQuietHours(parsed: any,
+  quiet?: { enabled: boolean; startMin: number; endMin: number }) {
+  if (!parsed || parsed.time_stated === true) return parsed;
+  if (!quiet || !quiet.enabled || quiet.startMin === quiet.endMin) return parsed;
+  const hm = /^(\d{1,2}):(\d{2})$/.exec(String(parsed.target_time || '').trim());
+  if (!hm) return parsed;
+  const DAY = 1440;
+  const t = Number(hm[1]) * 60 + Number(hm[2]);
+  const s = quiet.startMin;
+  const e = quiet.endMin;
+  const inside = s < e ? (t >= s && t < e) : (t >= s || t < e);
+  if (!inside) return parsed;
+  const toStart = (t - s + DAY) % DAY <= (e - t + DAY) % DAY;
+  const moved = toStart ? (s - 30 + DAY) % DAY : e;
+  const dayShift = toStart ? (moved > t ? -1 : 0) : (moved < t ? 1 : 0);
+  const was = parsed.target_time;
+  parsed.target_time = `${String(Math.floor(moved / 60)).padStart(2, '0')}:${String(moved % 60).padStart(2, '0')}`;
+  if (dayShift) {
+    const shift = (v: any) => {
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v || ''));
+      if (!m) return v;
+      return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + dayShift)).toISOString().slice(0, 10);
+    };
+    const oldDate = parsed.target_date;
+    parsed.target_date = shift(parsed.target_date);
+    // due_date mirrors the day it happens; a separate deadline stays put.
+    if (parsed.due_date && parsed.due_date === oldDate) parsed.due_date = parsed.target_date;
+    if (Array.isArray(parsed.recurrence_days)) {
+      parsed.recurrence_days = [...new Set(parsed.recurrence_days.map((d: number) => (d + dayShift + 7) % 7))].sort((a: any, b: any) => a - b);
+    }
+  }
+  console.log(`[runTaskParse] picked time ${was} was inside quiet hours → ${parsed.target_time}${dayShift ? ` (day ${dayShift > 0 ? '+1' : '-1'})` : ''}`);
+  return parsed;
 }
 
 // ── Task families and completion habits ─────────────────────────────────────
