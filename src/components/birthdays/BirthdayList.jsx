@@ -68,7 +68,7 @@ export default function BirthdayList({ birthdays, theme, onRefresh }) {
             </div>
           </button>
 
-          {b.birthday_text_message ? (
+          {b.birthday_animal ? null : b.birthday_text_message ? (
             <Button size="sm" onClick={() => handleSendText(b)} className="bg-pink-600 hover:bg-pink-700 text-white flex-shrink-0">
               <Send className="w-4 h-4 sm:mr-1" />
               <span className="hidden sm:inline">Send</span>
