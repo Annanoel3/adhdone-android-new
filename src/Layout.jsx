@@ -74,7 +74,7 @@ import { pushAlarmTheme } from "./components/utils/widgetBridge";
 import WidgetOpenReceiver from "./components/shared/WidgetOpenReceiver";
 import HomeZipPrompt from "./components/shared/HomeZipPrompt";
 import EventConflictWarning from "./components/shared/EventConflictWarning";
-import QuickCapturePrompt, { AlertStylePrompt, AlarmKeepPrompt, AlarmPermissionsDialog, QuietHoursReviewPrompt, QuietHoursNagPrompt, AppUpdatePrompt } from "./components/shared/QuickCapturePrompt";
+import QuickCapturePrompt, { AlertStylePrompt, AlarmKeepPrompt, AlarmPermissionsDialog, QuietHoursReviewPrompt, QuietHoursNagPrompt, AppUpdatePrompt, WakeOfferPrompt } from "./components/shared/QuickCapturePrompt";
 import { FeedbackPrompt, FeedbackAskPrompt } from "./components/support/SupportEscalationCard";
 import PageIntroTour from "./components/onboarding/PageIntroTour";
 import WelcomeDialog from "./components/onboarding/WelcomeDialog";
@@ -1297,6 +1297,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <QuietHoursNagPrompt user={user} theme={theme} />
         {/* The one "there's an update" popup (see AppUpdatePrompt). */}
         <AppUpdatePrompt user={user} theme={theme} />
+        {/* "Notice when I wake up", offered once (see WakeOfferPrompt). */}
+        <WakeOfferPrompt user={user} theme={theme} />
         <TaskCaptureProcessor userEmail={user?.email} />
         <AppDialogHost />
         <UsageTracker user={user} />
