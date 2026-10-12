@@ -13,7 +13,7 @@ import { CheckCircle2, Clock, Zap, Timer, Loader2, Bell } from "lucide-react";
 import { cancelScheduledReminder } from "@/components/utils/reminderScheduler";
 import { snoozeTaskUntil, recordReminderDismissed } from "@/components/utils/snoozeTask";
 import { updateTodaysSummary } from "@/components/utils/dailySummaryHelper";
-import { getReminderCopy, smartSnoozeTime } from "@/components/utils/reminderCopy";
+import { getReminderCopy, smartSnoozeTime, nextMorning } from "@/components/utils/reminderCopy";
 import { useLaunch } from "@/context/LaunchContext";
 import { waitForTourEnd } from "@/components/onboarding/tourActive";
 import { usePopupTurn } from "@/components/onboarding/onboardingSurface";
@@ -217,10 +217,9 @@ export default function NotificationFollowupModal({ user, theme }) {
     try {
       let snoozeUntil;
       if (option.label === "Tomorrow") {
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(9, 0, 0, 0);
-        snoozeUntil = tomorrow;
+        // Their next morning, after their next sleep (9 AM for most people;
+        // 5 PM for someone who sleeps 8 AM to 4 PM, not 9 AM in the middle of it).
+        snoozeUntil = nextMorning(new Date());
       } else {
         snoozeUntil = smartSnoozeTime(currentTask, new Date(Date.now() + option.minutes * 60 * 1000));
       }
