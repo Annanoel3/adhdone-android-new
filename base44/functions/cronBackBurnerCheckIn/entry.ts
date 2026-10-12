@@ -11,15 +11,18 @@
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
-import { isInQuietHours, resolveQuietHours, userTimeZone } from '../../shared/quietHours.ts';
+import { isInQuietHours, resolveQuietHours, userTimeZone, localMinutesOfDay } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { listAll } from '../../shared/listAll.ts';
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 // Sent during the afternoon/early evening — a "want to pick this back up?"
-// question needs a moment when the day isn't already underway.
-const SEND_FROM_HOUR = 14;
-const SEND_TO_HOUR = 20;
+// question needs a moment when the day isn't already underway. Their own
+// afternoon: 6 to 12 hours after their quiet hours end (2 PM to 8 PM for the
+// usual 8 AM). It was a fixed 2 PM to 8 PM, which is bedtime for someone who
+// sleeps days, and never came at all for someone asleep through it (Oct 12 2026).
+const SEND_FROM_MIN_AFTER_WAKE = 6 * 60;
+const SEND_TO_MIN_AFTER_WAKE = 12 * 60;
 
 Deno.serve(async (req) => {
   try {
@@ -63,11 +66,12 @@ Deno.serve(async (req) => {
       // The shared fallback when no timezone is saved (UTC put a US user's
       // "afternoon" send window in their morning).
       const timeZone = userTimeZone(user);
-      const localHour = localHourIn(now, timeZone);
-      if (localHour < SEND_FROM_HOUR || localHour >= SEND_TO_HOUR) continue;
-
       // Quiet hours default to ON; only an explicit "off" in Settings skips them.
+      // Their times still say when the person's day starts, either way.
       const quiet = resolveQuietHours(user);
+      const sinceWake = (localMinutesOfDay(now, timeZone) - quiet.endMin + 24 * 60) % (24 * 60);
+      if (sinceWake < SEND_FROM_MIN_AFTER_WAKE || sinceWake >= SEND_TO_MIN_AFTER_WAKE) continue;
+
       if (quiet.enabled && isInQuietHours(now, quiet.startMin, quiet.endMin, timeZone)) continue;
 
       // Don't repeat last week's pick unless it's the only thing back there.
