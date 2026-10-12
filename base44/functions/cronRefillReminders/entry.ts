@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent, pushPhoneAlarms } from '../../shared/reminderTitle.ts';
-import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, isInQuietHours, placeAppReminder } from '../../shared/quietHours.ts';
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
@@ -625,9 +625,21 @@ Deno.serve(async (req) => {
       // planned entries carry a `planned_…` placeholder, booked ones carry the
       // real OneSignal id, so that's the reliable signal.
       if (entry.notification_id && !String(entry.notification_id).startsWith('planned_')) continue;
-      const sendAtMs = new Date(entry.send_at).getTime();
+      let sendAtMs = new Date(entry.send_at).getTime();
       if (sendAtMs <= now.getTime()) continue;
       if (sendAtMs - now.getTime() > BIRTHDAY_WINDOW_MS) continue;
+      // Planned at 9 AM, which is the middle of the night for someone who
+      // sleeps days: inside the owner's quiet hours it waits until they end
+      // (Oct 12 2026; schedulePush applies no quiet hours of its own).
+      {
+        const bOwner = userMap[task.notification_recipient_email];
+        const placed = placeAppReminder(sendAtMs, null, resolveQuietHours(bOwner), userTimeZone(bOwner));
+        if (placed != null && placed !== sendAtMs) {
+          sendAtMs = placed;
+          entry.send_at = new Date(placed).toISOString();
+          dirty = true;
+        }
+      }
 
       // If the user still hasn't drafted a birthday text, repurpose the
       // day-before and day-of reminders into a "write your text" nudge instead
@@ -724,7 +736,9 @@ Deno.serve(async (req) => {
       const inQuiet = quietEnabled && (qStart < qEnd
         ? (localMin >= qStart && localMin < qEnd)
         : (localMin >= qStart || localMin < qEnd));
-      const inDefaultSleep = localMin < 8 * 60 || localMin >= 21 * 60;
+      // Their own night (the quiet-hours times, even with the switch off), not
+      // a fixed 9 PM to 8 AM, which is daytime for someone who works nights.
+      const inDefaultSleep = isInQuietHours(now, qStart, qEnd, timeZone);
       const lastRemindedMs = task.birthday_text_last_reminded_at
         ? new Date(task.birthday_text_last_reminded_at).getTime() : 0;
       const dedupMs = 50 * 60 * 1000;
@@ -1092,7 +1106,9 @@ Deno.serve(async (req) => {
       const inQuiet = quietEnabled && (qStart < qEnd
         ? (localMin >= qStart && localMin < qEnd)
         : (localMin >= qStart || localMin < qEnd));
-      const inDefaultSleep = localMin < 8 * 60 || localMin >= 21 * 60;
+      // Their own night (the quiet-hours times, even with the switch off), not
+      // a fixed 9 PM to 8 AM, which is daytime for someone who works nights.
+      const inDefaultSleep = isInQuietHours(now, qStart, qEnd, timeZone);
       if (inQuiet || inDefaultSleep) continue;
 
       const lastRemindedMs = text.last_reminded_at ? new Date(text.last_reminded_at).getTime() : 0;
