@@ -1,5 +1,5 @@
 import { base44 } from "@/api/base44Client";
-import { scheduleReminder } from "./reminderScheduler";
+import { scheduleReminder, cancelScheduledReminder } from "./reminderScheduler";
 
 const REMINDER_HOUR = 9;
 const REMINDER_MINUTE = 0;
@@ -29,8 +29,22 @@ function formatBirthdayDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { month: "long", day: "numeric" });
 }
 
-function reminderContent(person, kind, birthdayIso) {
+function reminderContent(person, kind, birthdayIso, animal) {
   const dateStr = formatBirthdayDate(birthdayIso);
+  // A pet's birthday: the same three reminders, never a word about a text
+  // (Anna, Oct 12 2026). Same words as cronRefillReminders.
+  if (animal) {
+    switch (kind) {
+      case "week_before":
+        return { title: `🎂 ${person}'s birthday is in 1 week`, body: `${person}'s birthday is coming up on ${dateStr}.`, offsetDays: -7 };
+      case "day_before":
+        return { title: `🎂 ${person}'s birthday is tomorrow`, body: `Heads up: ${person}'s birthday is tomorrow (${dateStr}).`, offsetDays: -1 };
+      case "day_of":
+        return { title: `🎂 It's ${person}'s birthday today!`, body: `Don't forget to celebrate ${person}'s birthday today!`, offsetDays: 0 };
+      default:
+        return null;
+    }
+  }
   switch (kind) {
     case "week_before":
       return {
@@ -88,7 +102,7 @@ export async function scheduleBirthdayReminders(task) {
 
   for (const { key, kind, label } of kinds) {
     if (!toggles[key]) continue;
-    const content = reminderContent(person, kind, birthdayIso);
+    const content = reminderContent(person, kind, birthdayIso, task.birthday_animal);
     const sendAt = new Date(birthdayDate);
     sendAt.setDate(sendAt.getDate() + content.offsetDays);
     if (sendAt <= now) continue; // skip reminders that would fire in the past
@@ -147,6 +161,29 @@ export async function scheduleBirthdayReminders(task) {
   }
 
   return scheduledIds;
+}
+
+/**
+ * Marks a birthday as a pet's (animal = "dog", "cat", "hamster"…) or back to a
+ * person's (animal = null), and books its reminders again in the right words:
+ * the ones already booked were worded for a person ("time to sort a gift or
+ * message", "don't forget to reach out"). Returns the updated task.
+ */
+export async function setBirthdayAnimal(task, animal) {
+  const clean = animal ? String(animal).trim().toLowerCase().slice(0, 40) : null;
+  const booked = (Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : [])
+    .filter((id) => id && !String(id).startsWith("planned_"));
+  if (booked.length) await cancelScheduledReminder(booked).catch(() => {});
+  const updated = { ...task, birthday_animal: clean, onesignal_notification_ids: [], reminder_schedule: [] };
+  await base44.entities.Task.update(task.id, {
+    birthday_animal: clean,
+    onesignal_notification_ids: [],
+    reminder_schedule: [],
+  });
+  await scheduleBirthdayReminders(updated);
+  // As saved, with the new reminder ids and schedule.
+  const fresh = await base44.entities.Task.get(task.id).catch(() => null);
+  return fresh || updated;
 }
 
 /**
@@ -257,6 +294,8 @@ export async function createBirthdayFromKind(kind, inputText, email) {
     classification: "birthday",
     is_own_birthday: own,
     birthday_person: person,
+    // "My dog Kaiju's birthday is the 19th": a pet's, said up front.
+    birthday_animal: !own && kind?.birthday_animal ? String(kind.birthday_animal).trim().toLowerCase().slice(0, 40) : null,
     birthday_remind_week_before: !own,
     birthday_remind_day_before: !own,
     birthday_remind_day_of: true,
