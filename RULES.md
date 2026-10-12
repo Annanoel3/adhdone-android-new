@@ -239,6 +239,18 @@ typed something" and "their phone rang", answer these in writing:
    undated and not "no need to tackle it tonight". Nothing should quietly drop the date.
 4. **What if it lands in quiet hours, or on a phone that holds pushes?** A time the person
    named ("every Thursday at 22:00") is theirs; a reminder the app invented is not.
+   Anna, Oct 12 2026: "If a user schedules a task or event outside of their quiet hours, that
+   is the one time we will ignore their quiet hours. For example, if I had a flight at 5 a.m.,
+   id want that alarm. Just make sure the only way that would ever happen is if a user
+   explicitly says a time outside of their hours." So a time they SET (`Task.time_stated`:
+   said or typed a clock time, picked one in the app, or their own calendar's event start;
+   a reminder they added at a picked time has `their_time`) goes out at that time, alarm and
+   all — `isTimeTheySet` (base44/shared/quietHours.ts, and the same in reminderScheduler.jsx)
+   is the one test. Everything else stays out of quiet hours: a time the parser picked from
+   "before bed" (the parser is told their quiet hours and to pick outside them), every
+   heads-up, nudge and repeat ping. An app reminder that lands inside them moves to when they
+   end, or is dropped if that's too late (`placeAppReminder`) — never booked as it came.
+   Home or Back on one of these night alarms rings it again in 10 minutes (`throughQuiet`).
 5. **What if the phone is on an older build, or the reminder style is notification, not
    alarm?** Check the fields the old build reads, and the path a push takes when nothing
    rings (`PushFilter`).
