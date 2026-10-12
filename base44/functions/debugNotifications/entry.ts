@@ -1,3 +1,4 @@
+// Re-saved Oct 12 2026 (pets) so the bundled shared/reminderTitle.ts is picked up: a pet's birthday alarm has no "Write a text" button.
 // Re-saved Oct 6 2026 so the bundled shared/reminderTitle.ts (Later break: no alarm inside later_until) is picked up.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
 import { getReminderContent, pushPhoneAlarms } from '../../shared/reminderTitle.ts';
