@@ -535,7 +535,7 @@ export default function Settings() {
             {quietHoursEnabled && (
               <>
                 <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                  No reminders will be sent between these times. For example, 10 PM to 8 AM.
+                  No reminders go off between these times (for example, 10 PM to 8 AM), except at a time you set yourself, like a 5 AM flight.
                 </p>
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
