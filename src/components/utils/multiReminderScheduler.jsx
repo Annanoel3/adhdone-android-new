@@ -384,3 +384,133 @@ export async function moveRemindersToDate(task, whenISO, updates = {}) {
   await commitNotificationIds(task.id, ids);
   return ids;
 }
+
+// ── Renaming a task ──────────────────────────────────────────────────────────
+// Saves a task's new name and re-books every push still ahead under it, so a
+// reminder never goes out with the old name (Oct 12 2026: two misheard voice
+// tasks were renamed, "Call me like your company" to "Call the electric
+// Company", and the next morning's pushes were still booked as "Call the
+// Company"). The details sheet only did this for a task with a reminder plan,
+// and renaming on the card did it for nothing. The title is saved first, so
+// nothing below can lose it. A rhythm task ("every hour") is re-booked by
+// onTaskUpdate when its title changes. `taskIn` is the task as it was before
+// the rename (its old name is what gets swapped out of the reminders' words).
+export async function saveTaskTitle(taskIn, newTitle) {
+  const title = String(newTitle || '').trim();
+  if (!taskIn?.id || !title) return;
+  await base44.entities.Task.update(taskIn.id, { title });
+  if (taskIn.reminder_interval && taskIn.reminder_interval !== 'once') return;
+  // As saved: a card's copy can be older than what was booked since.
+  const task = (await base44.entities.Task.get(taskIn.id).catch(() => null)) || taskIn;
+  if (task.reminder_interval && task.reminder_interval !== 'once') return;
+  const oldTitle = String(taskIn.title || '').trim();
+  if (!oldTitle || oldTitle === title) return;
+  const soon = Date.now() + 2 * 60 * 1000;
+  let email = null;
+  try { email = (await base44.auth.me())?.email || null; } catch (e) { email = null; }
+  const data = { screen: '/TaskNotification', taskId: task.id, urgency: task.urgency, type: 'task_reminder' };
+  const buttons = [
+    { id: 'snooze_15', text: 'Snooze 15 min' },
+    { id: 'snooze_60', text: 'Snooze 1 hour' },
+    { id: 'complete', text: '✅ Done' },
+  ];
+  const isBooked = (id) => id && !String(id).startsWith('planned_');
+
+  if (Array.isArray(task.reminder_schedule) && task.reminder_schedule.length > 0) {
+    // Every reminder in the plan still ahead is re-booked at the same moment,
+    // each in its own words with the task's name swapped inside them. Ones
+    // already sent stay as they were: re-booking a past time is refused, and
+    // that one refusal used to abort the whole loop.
+    const short = (t) => (t.length > 40 ? `${t.slice(0, 37)}...` : t);
+    const renameIn = (text, isBody) => {
+      const src = String(text || '');
+      if (oldTitle.length >= 3 && src.includes(oldTitle)) return src.split(oldTitle).join(title);
+      const oldShort = short(oldTitle);
+      if (oldShort !== oldTitle && src.includes(oldShort)) return src.split(oldShort).join(short(title));
+      // Words that never named the task: keep them, and still say what the
+      // reminder is for.
+      if (isBody) return src ? `${title}: ${src}` : title;
+      const lead = ((src.match(/^[^\p{L}\p{N}]+/u) || [''])[0]).trim();
+      return `${lead || '📌'} ${title}`;
+    };
+    const newSchedule = [];
+    const replacedIds = [];
+    const addedIds = [];
+    for (const entry of task.reminder_schedule) {
+      const sendMs = entry?.send_at ? new Date(entry.send_at).getTime() : NaN;
+      if (!Number.isFinite(sendMs) || sendMs <= soon) {
+        newSchedule.push(entry);
+        continue;
+      }
+      const t = renameIn(entry.notification_title, false);
+      const b = renameIn(entry.notification_body, true);
+      const oldId = entry.notification_id || null;
+      // Not booked yet (planned far out) or parked on the Back Burner: only
+      // its words change — whoever books it later books these.
+      if (!isBooked(oldId) || task.silenced) {
+        newSchedule.push({ ...entry, notification_title: t, notification_body: b });
+        continue;
+      }
+      let newId = null;
+      try {
+        // The old push goes first: the send ledger turns away a second push
+        // for the same task at the same minute.
+        await cancelScheduledReminder([oldId]);
+        replacedIds.push(oldId);
+        newId = await scheduleReminder({
+          email,
+          title: t,
+          body: b,
+          sendAtISO: entry.send_at,
+          taskId: task.id,
+          // send_at is already the real send time (moved for quiet hours when
+          // it was first booked) — keep it exactly.
+          exact: true,
+          data,
+          buttons,
+        });
+      } catch (error) {
+        console.error('Could not re-book one reminder with the new title:', error);
+      }
+      if (newId) addedIds.push(newId);
+      // Saved even when the booking failed, with no id: the hourly refill
+      // books any schedule entry that has none.
+      newSchedule.push({ ...entry, notification_id: newId || null, notification_title: t, notification_body: b });
+    }
+    // Anything booked outside the plan (a snooze) is kept.
+    const ids = [
+      ...(task.onesignal_notification_ids || []).filter((id) => !replacedIds.includes(id)),
+      ...addedIds,
+    ];
+    await base44.entities.Task.update(task.id, {
+      reminder_schedule: newSchedule,
+      onesignal_notification_ids: Array.from(new Set(ids)),
+    });
+  } else {
+    // No plan, one push booked: the reminder at the task's own time (a
+    // day-only task's "📅" on its day, or "🔔" at its time). Re-booked the way
+    // it was first booked, in the words for the new name. More than one id
+    // means pushes this can't tell apart, so they're left as they are.
+    const booked = (task.onesignal_notification_ids || []).filter(isBooked);
+    const at = task.next_reminder ? new Date(task.next_reminder) : null;
+    if (task.silenced || booked.length !== 1 || !at || !Number.isFinite(at.getTime()) || at.getTime() <= soon) return;
+    await cancelScheduledReminder(booked).catch(() => {});
+    let newId = null;
+    try {
+      newId = await scheduleReminder({
+        email,
+        ...getReminderCopy(task, at),
+        sendAtISO: at.toISOString(),
+        taskId: task.id,
+        // A time they said themselves goes out then, quiet hours or not.
+        exact: task.time_stated === true,
+        data,
+        buttons,
+      });
+    } catch (error) {
+      console.error('Could not re-book the reminder with the new title:', error);
+    }
+    await commitNotificationIds(task.id, newId ? [newId] : []);
+  }
+  import('./widgetBridge').then((m) => m.refreshAlarms()).catch(() => {});
+}
