@@ -542,8 +542,10 @@ export default function TaskCard({
       const firstDate = styleFix.deadline_style ? { ...styleFix, due_date: nextReminder.toISOString() } : {};
       const namedTime = {
         ...firstDate,
+        // A time picked here is one they set themselves: it may go off inside
+        // their quiet hours (time_stated, RULES.md §9 Q4).
         ...(newTime
-          ? { anchor_time: newTime, day_only_task: false, ...(task.day_only_task ? { due_date: nextReminder.toISOString() } : {}) }
+          ? { anchor_time: newTime, time_stated: true, day_only_task: false, ...(task.day_only_task ? { due_date: nextReminder.toISOString() } : {}) }
           : allDayMove
             ? { due_date: new Date(nextReminder.getFullYear(), nextReminder.getMonth(), nextReminder.getDate(), 23, 59, 0, 0).toISOString() }
             : {}),
@@ -601,6 +603,7 @@ export default function TaskCard({
                 intervalMs: ms,
                 count: 10,
                 taskId: task.id,
+                task: { ...task, next_reminder: startAt.toISOString(), ...namedTime },
                 data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency, type: 'task_reminder' },
                 buttons: [{ id: "snooze_15", text: "Snooze 15 min" }, { id: "snooze_60", text: "Snooze 1 hour" }, { id: "complete", text: "✅ Done" }]
               });
@@ -643,6 +646,7 @@ export default function TaskCard({
               taskId: task.id,
               urgency: task.urgency,
               dayOnly: !newTime && !!task.day_only_task,
+              timeStated: !!newTime || task.time_stated === true,
             });
 
             let notificationIds = [];
@@ -661,6 +665,7 @@ export default function TaskCard({
                   ...getReminderCopy(task, nextReminder),
                   sendAtISO: nextReminder.toISOString(),
                   taskId: task.id,
+                  exact: !!newTime || task.time_stated === true,
                   data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency, type: 'task_reminder' },
                   buttons: [{ id: "snooze_15", text: "Snooze 15 min" }, { id: "snooze_60", text: "Snooze 1 hour" }, { id: "complete", text: "✅ Done" }]
                 });
@@ -746,6 +751,9 @@ export default function TaskCard({
       const updates = {
         event_time: iso,
         next_reminder: iso,
+        // A time picked here is one they set (RULES.md §9 Q4); a date-only
+        // move keeps whatever the old time was.
+        ...(newTime ? { time_stated: true } : {}),
         ...(task.due_date ? { due_date: iso } : {}),
         onesignal_notification_ids: [],
         reminder_schedule: [],
@@ -770,6 +778,7 @@ export default function TaskCard({
         taskId: task.id,
         urgency: task.urgency,
         classification: 'event',
+        timeStated: !!newTime || task.time_stated === true,
       });
       if (multiIds && multiIds.length > 0) {
         await Task.update(task.id, { onesignal_notification_ids: multiIds });
