@@ -275,11 +275,15 @@ export default function Home() {
   // Today's Focus shows the Tasks page's card now, so its controls need the
   // same handlers the Tasks page has (mirrored from there, on Home's state).
   const handleEditTitle = async (taskId, newTitle) => {
+    const before = tasks.find(t => t.id === taskId) || { id: taskId };
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, title: newTitle } : t));
-    base44.entities.Task.update(taskId, { title: newTitle }).catch(error => {
-      console.error("Failed to update title:", error);
-      loadTasks();
-    });
+    // Booked pushes go out under the new name too (saveTaskTitle).
+    import("../components/utils/multiReminderScheduler")
+      .then(({ saveTaskTitle }) => saveTaskTitle(before, newTitle))
+      .catch(error => {
+        console.error("Failed to update title:", error);
+        loadTasks();
+      });
   };
 
   const handleUncomplete = async (task, source = 'home') => {
