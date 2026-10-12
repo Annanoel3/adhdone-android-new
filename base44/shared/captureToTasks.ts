@@ -232,6 +232,9 @@ export async function scheduleTaskReminders(
     scheduledDateISO: task.next_reminder,
     urgency: task.urgency,
     dayOnly: task.day_only_task,
+    // No clock time (only the 9 AM anchor): an event gets the day before and
+    // the morning of, never "It's time" at 9 AM (Oct 12 2026).
+    noClockTime: !task.event_time,
     classification: task.classification,
     deadlineStyle: task.deadline_style,
     location: task.location || '',
@@ -258,7 +261,11 @@ export async function scheduleTaskReminders(
     return parts; // YYYY-MM-DD
   };
 
+  // With no clock time, "before the time" means nothing: the 9 AM anchor is not
+  // when it happens.
+  const noClock = !task.event_time;
   for (const r of plan?.reminders || []) {
+    if (noClock && r.relative_minutes_before != null) continue;
     const sendAtISO = r.relative_minutes_before != null
       ? new Date(scheduled - r.relative_minutes_before * 60000).toISOString()
       : localToUTC(
@@ -278,7 +285,7 @@ export async function scheduleTaskReminders(
     if (quiet.enabled && task.quiet_hours_exempt !== true
         && isInQuietHours(sendAt, quiet.startMin, quiet.endMin, tz)
         && !isTimeTheySet(task, sendAt.getTime(), tz)) {
-      const placed = placeAppReminder(sendAt.getTime(), task.day_only_task ? null : scheduled, quiet, tz);
+      const placed = placeAppReminder(sendAt.getTime(), task.day_only_task || noClock ? null : scheduled, quiet, tz);
       if (placed == null) continue;
       sendAt = new Date(placed);
       moved = true;
