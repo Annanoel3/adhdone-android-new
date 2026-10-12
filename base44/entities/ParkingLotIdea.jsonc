@@ -57,6 +57,58 @@
       "type": "string",
       "description": "Additional notes for this idea"
     },
+    "tracker": {
+      "type": "boolean",
+      "description": "Something they log to over time, whatever they want it to be (Anna, Oct 12 2026). 'idea' is its name; the entries are in tracker_entries. Made when what they typed means it (the AI judges, ParkingLot.jsx)."
+    },
+    "tracker_checked": {
+      "type": "boolean",
+      "description": "This entry has had its one look: is it something to keep track of, or an entry for a tracker they already have? Only entries made after trackers shipped get one."
+    },
+    "tracker_entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "default": [],
+      "description": "What they logged, oldest first: { at, text }. Numbers in the text are charted."
+    },
+    "tracker_remind": {
+      "type": "string",
+      "enum": [
+        "none",
+        "daily",
+        "weekly",
+        "monthly"
+      ],
+      "description": "Remind them to log: never, every day, once a week, once a month."
+    },
+    "tracker_remind_time": {
+      "type": "string",
+      "description": "HH:MM on their own clock."
+    },
+    "tracker_remind_day": {
+      "type": "number",
+      "description": "Weekly: 0 (Sunday) to 6. Monthly: 1 to 31 (a short month uses its last day)."
+    },
+    "tracker_next_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the next reminder is due."
+    },
+    "tracker_notification_id": {
+      "type": "string",
+      "description": "The booked push for tracker_next_at. Booked by the app when it's within a day, else by cronRefillReminders; cancelled when the reminder changes or the tracker is deleted."
+    },
     "capture_id": {
       "type": "string",
       "description": "Idempotency key for ideas captured from OUTSIDE the app (share sheet, pinned notification, widget). Native retries after a lost response reuse the same id, and captureText returns the ideas the first attempt already made instead of creating a second copy. Empty for ideas made inside the app."
