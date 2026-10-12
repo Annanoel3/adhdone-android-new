@@ -4,8 +4,17 @@ import { scheduleReminder, cancelScheduledReminder } from './reminderScheduler';
 import { commitNotificationIds } from './notificationOwnership';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-// Until this hour a finish still counts toward the day before (see nextOccurrence).
-const LATE_NIGHT_ENDS_HOUR = 4;
+// Until this time a finish still counts toward the day before (see
+// nextOccurrence): 4 AM, or later for someone whose sleep starts in the
+// morning (quiet hours from 8 AM: their night runs until 8 AM, so last night's
+// task done at 5:30 before bed is just late, Oct 12 2026).
+function lateNightEndsMin() {
+  let s = '22:00';
+  try { s = localStorage.getItem('quiet_hours_start') || s; } catch (e) { /* no storage */ }
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(s));
+  const start = m ? Number(m[1]) * 60 + Number(m[2]) : 22 * 60;
+  return start > 4 * 60 && start <= 12 * 60 ? start : 4 * 60;
+}
 
 // Advance a date by one cycle of the pattern. 'weekdays' steps forward a day
 // and then skips Saturday/Sunday, so a business-days habit never lands on the
@@ -168,7 +177,7 @@ export function nextOccurrence(task, now = new Date()) {
   // belong to the night before: last night's litter box done at 12:30 AM is
   // just late, and tonight's copy stays.
   const finishDay = new Date(now);
-  if (finishDay.getHours() < LATE_NIGHT_ENDS_HOUR) finishDay.setDate(finishDay.getDate() - 1);
+  if (finishDay.getHours() * 60 + finishDay.getMinutes() < lateNightEndsMin()) finishDay.setDate(finishDay.getDate() - 1);
   if (dayDelta(base, finishDay) > 0) {
     let lateGuard = 0;
     while (sameLocalDay(at(next), finishDay) && lateGuard++ < 400) {
