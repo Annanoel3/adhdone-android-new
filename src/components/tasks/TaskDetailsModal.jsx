@@ -851,7 +851,10 @@ Return JSON:
       // First date on a dateless task: a deadline ("by"), see todayTasks.
       const styleFix = firstDateMakesDeadline(task, nextReminder.toISOString());
       const becomesDeadline = styleFix.deadline_style === 'by';
-      onUpdate({ ...task, next_reminder: nextReminder.toISOString(), due_date: nextReminder.toISOString(), day_only_task: dayOnly, anchor_time: namedTime, ...styleFix });
+      // A time picked here is one they set themselves: it may go off inside
+      // their quiet hours (RULES.md §9 Q4).
+      const timeStated = !dayOnly;
+      onUpdate({ ...task, next_reminder: nextReminder.toISOString(), due_date: nextReminder.toISOString(), day_only_task: dayOnly, anchor_time: namedTime, time_stated: timeStated, ...styleFix });
       const savedRdNow = `${nextReminder.getFullYear()}-${String(nextReminder.getMonth()+1).padStart(2,'0')}-${String(nextReminder.getDate()).padStart(2,'0')}`;
       const savedRtNow = `${String(nextReminder.getHours()).padStart(2,'0')}:${String(nextReminder.getMinutes()).padStart(2,'0')}`;
       setReminderDate(savedRdNow);
@@ -914,6 +917,7 @@ Return JSON:
             intervalMs: intervalMs[interval],
             count: 10,
             taskId: task.id,
+            task: { ...task, next_reminder: nextReminder.toISOString(), due_date: nextReminder.toISOString(), anchor_time: namedTime, time_stated: timeStated },
             data: {
               screen: "/TaskNotification",
               taskId: task.id,
@@ -933,6 +937,7 @@ Return JSON:
             due_date: nextReminder.toISOString(),
             day_only_task: dayOnly,
             anchor_time: namedTime,
+            time_stated: timeStated,
             ...styleFix,
             onesignal_notification_ids: newNotificationIds,
             reminder_schedule: null,
@@ -948,6 +953,7 @@ Return JSON:
             taskId: task.id,
             urgency: task.urgency,
             dayOnly,
+            timeStated,
           });
 
           if (multiIds) {
@@ -960,6 +966,7 @@ Return JSON:
               ...getReminderCopy(task, nextReminder),
               sendAtISO: nextReminder.toISOString(),
               taskId: task.id,
+              exact: timeStated,
               data: {
                 screen: "/TaskNotification",
                 taskId: task.id,
@@ -980,6 +987,7 @@ Return JSON:
             due_date: nextReminder.toISOString(),
             day_only_task: dayOnly,
             anchor_time: namedTime,
+            time_stated: timeStated,
             ...styleFix,
             onesignal_notification_ids: newNotificationIds,
             // A plan that was booked has just been saved by the scheduler
@@ -1086,7 +1094,8 @@ Return JSON:
 
     // OPTIMISTIC: show the new event time + confirmation immediately, then
     // cancel/reschedule in the background instead of blocking on the network.
-    onUpdate({ ...task, event_time: eventTime.toISOString(), next_reminder: eventTime.toISOString() });
+    // A time they picked: it may go off inside their quiet hours (RULES.md §9 Q4).
+    onUpdate({ ...task, event_time: eventTime.toISOString(), next_reminder: eventTime.toISOString(), time_stated: true });
     toast({ title: 'Event time saved ✓' });
 
     (async () => {
@@ -1102,6 +1111,7 @@ Return JSON:
       await Task.update(task.id, {
         event_time: eventTime.toISOString(),
         next_reminder: eventTime.toISOString(),
+        time_stated: true,
         onesignal_notification_ids: [],
         reminder_schedule: [],
       });
@@ -1115,6 +1125,7 @@ Return JSON:
         taskId: task.id,
         urgency: task.urgency,
         classification: 'event',
+        timeStated: true,
       });
       if (multiIds && multiIds.length > 0) {
         await Task.update(task.id, { onesignal_notification_ids: multiIds });
@@ -1124,7 +1135,7 @@ Return JSON:
       if (refreshed[0]) {
         onUpdate(refreshed[0]);
       } else {
-        onUpdate({ ...task, event_time: eventTime.toISOString(), next_reminder: eventTime.toISOString() });
+        onUpdate({ ...task, event_time: eventTime.toISOString(), next_reminder: eventTime.toISOString(), time_stated: true });
       }
       } catch (e) {
         console.error('Error updating event time:', e);
