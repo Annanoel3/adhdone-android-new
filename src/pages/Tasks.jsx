@@ -536,11 +536,15 @@ export default function Tasks() {
             theme={theme}
             onRefreshTasks={loadTasks}
             onEditTitle={async (taskId, newTitle) => {
+              const before = allTasks.find(t => t.id === taskId) || { id: taskId };
               setAllTasks(prev => prev.map(t => t.id === taskId ? { ...t, title: newTitle } : t));
-              Task.update(taskId, { title: newTitle }).catch(error => {
-                console.error("Failed to update title:", error);
-                loadTasks();
-              });
+              // Booked pushes go out under the new name too (saveTaskTitle).
+              import("../components/utils/multiReminderScheduler")
+                .then(({ saveTaskTitle }) => saveTaskTitle(before, newTitle))
+                .catch(error => {
+                  console.error("Failed to update title:", error);
+                  loadTasks();
+                });
             }}
             onUpdateTask={handleTaskUpdate}
             onEdit={(taskToEdit) => {
