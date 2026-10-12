@@ -279,18 +279,24 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
   const seenIds: string[] = Array.isArray(task.alarm_report_ids) ? task.alarm_report_ids : [];
   if (reportId && seenIds.includes(reportId)) return Response.json({ success: true, duplicate: true });
   const choice = String(body?.choice || '');
-  if (!['snooze', 'dismiss', 'ignored'].includes(choice)) {
+  if (!['snooze', 'dismiss', 'ignored', 'closed'].includes(choice)) {
     return Response.json({ success: false, error: 'unknown choice' }, { status: 400 });
   }
   const atMs = tapTime(body, nowMs);
   const minutes = Math.max(0, Math.min(24 * 60, Math.round(Number(body?.minutes) || 0)));
   const untilMs = Number(body?.until);
+  // Home or Back on the alarm screen while it rang (build 40 on): 'closed'
+  // with how = 'home' | 'back' | 'closed' (the screen went away some other
+  // way), or a 'snooze' with how set when Home or Back rang it again in 10
+  // minutes (a time they set inside quiet hours). Anna, Oct 12 2026.
+  const how = ['home', 'back', 'closed'].includes(String(body?.how || '')) ? String(body.how) : null;
   const fields: any = {
     last_alarm_choice: {
       choice,
       at: new Date(atMs).toISOString(),
       minutes: choice === 'snooze' ? minutes : null,
       until: choice === 'snooze' && Number.isFinite(untilMs) && untilMs > 0 ? new Date(untilMs).toISOString() : null,
+      ...(how ? { how } : {}),
     },
   };
   if (reportId) fields.alarm_report_ids = [...seenIds, reportId].slice(-20);
@@ -303,6 +309,7 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
   } else {
     if (choice === 'dismiss') fields.dismissed_count = (task.dismissed_count || 0) + 1;
     if (choice === 'ignored') fields.ignored_count = (task.ignored_count || 0) + 1;
+    if (choice === 'closed') fields.closed_count = (task.closed_count || 0) + 1;
     // The ring that just ended was the snooze coming back: that snooze is over.
     const snoozeMs = Date.parse(task.snoozed_until || '');
     if (Number.isFinite(snoozeMs) && snoozeMs <= nowMs + 2 * 60 * 1000) fields.snoozed_until = null;
