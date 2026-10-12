@@ -148,6 +148,12 @@ export default function TaskDetailsModal({ task: taskProp, isOpen, onClose, onUp
   const [isSavingBirthdayTime, setIsSavingBirthdayTime] = useState(false);
   const [eventDate, setEventDate] = useState('');
   const [eventTime, setEventTime] = useState('');
+  // The event's date & time box: it closes and saves the moment a new date is
+  // picked, and a new time saves on its own a moment later, so the reminders
+  // move right away (Anna, Oct 12 2026: it stayed open over a list still
+  // showing the old day).
+  const [eventPickerOpen, setEventPickerOpen] = useState(false);
+  const eventTimeSaveTimer = useRef(null);
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
   // v2 card layout only: notes / pictures start folded into "+ Add a …" links.
   const [v2NotesOpen, setV2NotesOpen] = useState(false);
@@ -1095,7 +1101,17 @@ Return JSON:
     // OPTIMISTIC: show the new event time + confirmation immediately, then
     // cancel/reschedule in the background instead of blocking on the network.
     // A time they picked: it may go off inside their quiet hours (RULES.md §9 Q4).
-    onUpdate({ ...task, event_time: eventTime.toISOString(), next_reminder: eventTime.toISOString(), time_stated: true });
+    // The reminders listed move with it at once (by the same amount), until
+    // the fresh plan comes back a few seconds later.
+    const oldStartMs = Date.parse(task.event_time || task.next_reminder || '');
+    const shiftMs = Number.isFinite(oldStartMs) ? eventTime.getTime() - oldStartMs : 0;
+    const movedSchedule = shiftMs && Array.isArray(task.reminder_schedule)
+      ? task.reminder_schedule.map((r) => {
+          const at = Date.parse(r?.send_at || '');
+          return Number.isFinite(at) ? { ...r, send_at: new Date(at + shiftMs).toISOString() } : r;
+        })
+      : task.reminder_schedule;
+    onUpdate({ ...task, event_time: eventTime.toISOString(), next_reminder: eventTime.toISOString(), time_stated: true, reminder_schedule: movedSchedule });
     toast({ title: 'Event time saved ✓' });
 
     (async () => {
@@ -2253,7 +2269,13 @@ Return JSON:
               {/* Event date & time — editable for event tasks. Setting it
                    regenerates the lead-time reminder schedule automatically. */}
               {currentType === 'event' && (
-                <Popover onOpenChange={(o) => { if (!o && eventDirty.current && eventDate && eventTime) { eventDirty.current = false; handleUpdateEventTime(eventDate, eventTime); toast({ title: 'Saved ✓', duration: 1500 }); } }}>
+                <Popover open={eventPickerOpen} onOpenChange={(o) => {
+                  setEventPickerOpen(o);
+                  if (!o) {
+                    clearTimeout(eventTimeSaveTimer.current);
+                    if (eventDirty.current && eventDate && eventTime) { eventDirty.current = false; handleUpdateEventTime(eventDate, eventTime); }
+                  }
+                }}>
                   <PopoverTrigger asChild>
                     <button className="cursor-pointer hover:opacity-80 transition-opacity bg-indigo-500 text-white px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1">
                       <CalendarClock className="w-3 h-3" />
@@ -2279,7 +2301,18 @@ Return JSON:
                         <input
                           type="date"
                           value={eventDate}
-                          onChange={(e) => { setEventDate(e.target.value); eventDirty.current = true; }}
+                          onChange={(e) => {
+                            const d = e.target.value;
+                            setEventDate(d);
+                            eventDirty.current = true;
+                            // A new day picked: save it and get out of the way.
+                            if (d && eventTime) {
+                              clearTimeout(eventTimeSaveTimer.current);
+                              eventDirty.current = false;
+                              handleUpdateEventTime(d, eventTime);
+                              setEventPickerOpen(false);
+                            }
+                          }}
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                       </div>
@@ -2288,11 +2321,25 @@ Return JSON:
                         <input
                           type="time"
                           value={eventTime}
-                          onChange={(e) => { setEventTime(e.target.value); eventDirty.current = true; }}
+                          onChange={(e) => {
+                            const t = e.target.value;
+                            setEventTime(t);
+                            eventDirty.current = true;
+                            // Saved a moment after the last change (typing a
+                            // time on a keyboard changes it several times).
+                            clearTimeout(eventTimeSaveTimer.current);
+                            if (eventDate && t) {
+                              eventTimeSaveTimer.current = setTimeout(() => {
+                                if (!eventDirty.current) return;
+                                eventDirty.current = false;
+                                handleUpdateEventTime(eventDate, t);
+                              }, 800);
+                            }
+                          }}
                           className={`w-full border rounded px-3 py-2 ${theme === 'dark' ? 'bg-gray-900 border-gray-600 text-gray-100' : 'bg-white border-gray-300 text-gray-900'}`}
                         />
                       </div>
-                      <p className="text-xs text-gray-500">Saves automatically when you close this.</p>
+                      <p className="text-xs text-gray-500">Changes save right away.</p>
                     </div>
                   </PopoverContent>
                 </Popover>
