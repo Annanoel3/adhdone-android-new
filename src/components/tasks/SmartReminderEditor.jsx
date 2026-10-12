@@ -97,6 +97,10 @@ export default function SmartReminderEditor({ task, theme, onUpdate, isEvent = f
         body: `You've got this! ${task.title}`,
         sendAtISO: sendAt.toISOString(),
         taskId: task.id,
+        // A time they picked goes out at that time, quiet hours or not (RULES.md
+        // §9 Q4). It used to be moved to when quiet hours end while the list
+        // below still showed the time they picked.
+        exact: true,
         data: {
           screen: '/TaskNotification',
           taskId: task.id,
@@ -117,6 +121,8 @@ export default function SmartReminderEditor({ task, theme, onUpdate, isEvent = f
           label: 'Custom',
           notification_title: `📌 ${task.title}`,
           notification_body: `You've got this! ${task.title}`,
+          // A time they picked: it may ring inside quiet hours (phoneAlarmsFor).
+          their_time: true,
         };
         const newSchedule = [...schedule, newEntry].sort((a, b) =>
           new Date(a.send_at) - new Date(b.send_at)
