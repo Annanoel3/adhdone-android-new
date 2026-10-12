@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { base44 } from '@/api/base44Client';
 import { keywordEmojiForTitle, resolveEmojiWithAI, getCachedAiEmoji } from '@/components/utils/calendarEmojiResolver';
 import WeekAgenda from '@/components/calendar/WeekAgenda';
+import { isPastDue } from '@/components/utils/todayTasks';
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -195,7 +196,9 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
         const now = new Date();
         const dueDay = new Date(dueD.getFullYear(), dueD.getMonth(), dueD.getDate());
         const todayDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        if (dueDay.getTime() < todayDay.getTime()) {
+        // ...and only once it is really late: a deadline with no time runs
+        // to the end of their day, not midnight (todayTasks.isPastDue).
+        if (dueDay.getTime() < todayDay.getTime() && isPastDue(raw, now)) {
           const late = { kind, silenced: !!t.silenced, at: t.event_time || null, title: t.title, id: t.id, taskId: t.id, task: t, overdue: true };
           push(dueDay, late);
           push(todayDay, { ...late });
