@@ -138,11 +138,12 @@ export default async function (req: Request): Promise<Response> {
     for (const user of commuters) {
       const email = user.email;
       const timeZone = user.timezone || 'America/Chicago';
-      const today = localDateKey(now, timeZone);
-
       const mine = shifts.filter((s: any) => s.created_by === email);
       const commute = getTodaysCommute(user, mine, now);
       if (!commute) continue;
+      // Claims are keyed by the shift's own day, so a 12:30 AM shift warned
+      // about at 11:40 PM isn't warned about again once the date changes.
+      const today = commute.dateKey;
 
       const minutesUntilArrival = Math.round((commute.arriveUtc.getTime() - now.getTime()) / 60000);
       // Past arrival time, or too far out to measure traffic usefully.
