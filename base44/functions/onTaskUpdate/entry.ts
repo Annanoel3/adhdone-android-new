@@ -2,7 +2,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 // Reminder wording: every body names the task (the spoken alarm reads it).
 import { getReminderContent, pushPhoneAlarms, platformTimeMs } from '../../shared/reminderTitle.ts';
-import { adjustForQuietHours, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, rhythmNamedMin, notBeforeNamedTime } from '../../shared/quietHours.ts';
+import { adjustForQuietHours, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, placeAppReminder } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID');
@@ -174,6 +174,8 @@ async function dropPhoneAlarms(base44, task, taskId) {
 // A repeating task's rhythm also never starts before the time they named
 // (see rhythmNamedMin in quietHours).
 function nextRhythmStart(at: Date, rhythmMs: number, quietEnabled: boolean, startMin: number, endMin: number, timeZone: string, task?: any): Date {
+  // The time they set themselves stays put, quiet hours or not (RULES.md §9 Q4).
+  if (task && isTimeTheySet(task, at.getTime(), timeZone)) return at;
   if (rhythmMs >= 24 * 60 * 60 * 1000) return anchorToDaytime(at, startMin, endMin, timeZone);
   const next = quietEnabled && !nagsThroughNight(task) ? adjustForQuietHours(at, startMin, endMin, timeZone) : at;
   const namedMin = rhythmNamedMin(task, rhythmMs);
@@ -544,7 +546,20 @@ async function handleTaskEvent(req: Request): Promise<Response> {
 
       const newIds = [];
       const newSchedule = [];
+      // Quiet hours (RULES.md §9 Q4): the time they set themselves goes out then
+      // (a 5 AM flight); a heads-up the app adds that lands inside them moves to
+      // when they end, or is dropped when that's too late. These used to be
+      // booked as they came — a 5 AM event's "1 hour before" at 4 AM.
+      const backQuiet = resolveQuietHours(user);
+      const backTz = userTimeZone(user);
+      const backTask = { ...old_data, ...data };
       for (const c of candidates.filter((x) => x.at > now)) {
+        if (!nagsThroughNight(backTask) && !isTimeTheySet(backTask, c.at, backTz)) {
+          const placed = placeAppReminder(c.at, isEvent ? eventMs : clockMs, backQuiet, backTz);
+          if (placed == null || placed <= now) continue;
+          if (placed !== c.at && newSchedule.some((x) => Math.abs(Date.parse(x.send_at) - placed) < 5 * 60 * 1000)) continue;
+          c.at = placed;
+        }
         const sendAtISO = new Date(c.at).toISOString();
         const notificationId = await scheduleOneSignalNotification(email, c.title, c.body, sendAtISO, event.entity_id);
         newSchedule.push({
@@ -793,7 +808,9 @@ async function handleTaskEvent(req: Request): Promise<Response> {
 
         for (let i = 0; i < 10; i++) {
           let sendAt = new Date(scheduleTime);
-          if (useQuiet) {
+          // The slot at the time they set themselves goes out then, quiet
+          // hours or not (RULES.md §9 Q4, same as the refill job).
+          if (useQuiet && !isTimeTheySet(currentTask, sendAt.getTime(), timeZone)) {
             // Same rule as the refill job (placeRepeatingSlot): a night-time
             // ping of a short rhythm is dropped for the morning digest, a daily
             // one moves to a daytime slot. Dropping every slot on the minute
