@@ -143,9 +143,11 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
     tasks.forEach((t) => {
       const kind = kindFromClassification(t.classification) ||
         (t.birthday_person ? 'birthday' : 'task');
-      // A finished task stays on its day, greyed and ticked, so a passed day
-      // still says what it held. Its day is the one it was due or set for;
-      // with no date, the day it was finished.
+      // A finished task stays on its day so a passed day still says what it
+      // held: in the day's list below the grid (tap the day) and the week view,
+      // not in the month grid's cells (Anna, Oct 12 2026: they crowded out
+      // what's still to do). Its day is the one it was due or set for; with no
+      // date, the day it was finished.
       if (t.status === 'completed') {
         const raw = t.due_date || t.next_reminder || t.completed_at;
         if (!raw) return;
@@ -308,7 +310,9 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
   }, [weekDays]);
 
   const today = new Date();
-  const selectedItems = itemsByDate.get(dateKey(selected)) || [];
+  // The tapped day in full, finished things included, but nothing on the back
+  // burner (Anna, Oct 12 2026), the same as the week view.
+  const selectedItems = (itemsByDate.get(dateKey(selected)) || []).filter((it) => !it.silenced);
 
   const cellBase = isDark ? 'bg-gray-800/60 border-gray-700' : 'bg-white border-gray-100';
   const cellMuted = isDark ? 'bg-gray-900/40' : 'bg-gray-50/60';
@@ -424,7 +428,8 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           // Back-burner (silenced) tasks collapse to small red dots so they
           // don't eat the cell space that active items need.
           const backBurnerItems = dayItems.filter((it) => it.silenced);
-          const liveItems = dayItems.filter((it) => !it.silenced);
+          // Finished tasks only in the day's list below (tap the day).
+          const liveItems = dayItems.filter((it) => !it.silenced && !it.done);
           // Separate multi-day span bars from regular items for cleaner rendering.
           const spanItems = liveItems.filter((it) => it.spanPos);
           const regularItems = liveItems.filter((it) => !it.spanPos);
@@ -454,7 +459,7 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                   {cell.getDate()}
                 </span>
               </div>
-              {dayItems.length > 0 && (
+              {(liveItems.length > 0 || backBurnerItems.length > 0) && (
                 <div className="mt-0.5 leading-none space-y-0.5">
                   {/* Multi-day span bars: start = pill with label, middle = thin stripe, end = pill */}
                   {spanItems.length > 0 && (
