@@ -74,30 +74,6 @@ function isMeeting(task) {
     || (task?.prep_questions || []).length > 0;
 }
 
-// Notes after a hand edit: trimmed, empty lines dropped, an answer counts as
-// answered once it has words in it.
-function cleanEditedNotes(n) {
-  const s = (v) => String(v ?? "").trim();
-  const texts = (list) => (list || []).map((x) => ({ ...x, text: s(x.text) })).filter((x) => x.text);
-  return {
-    ...n,
-    title: s(n.title),
-    gist: (n.gist || []).map(s).filter(Boolean),
-    todos: (n.todos || []).map((t) => ({ ...t, text: s(t.text), who: s(t.who) || "you" })).filter((t) => t.text),
-    details: (n.details || []).map((d) => ({ ...d, label: s(d.label), value: s(d.value) })).filter((d) => d.label || d.value),
-    sections: (n.sections || [])
-      .map((x) => ({ ...x, heading: s(x.heading), points: (x.points || []).map(s).filter(Boolean) }))
-      .filter((x) => x.heading || x.points.length),
-    decisions: texts(n.decisions),
-    questions: texts(n.questions),
-    asked: (n.asked || []).map((a) => {
-      const answer = s(a.answer);
-      return { ...a, answer, answered: !!answer };
-    }),
-    edited: true,
-  };
-}
-
 function cleanQuestions(list) {
   return (Array.isArray(list) ? list : []).map((q) => String(q || "").trim()).filter(Boolean).slice(0, 20);
 }
@@ -298,8 +274,15 @@ export default function NotesPage() {
   const [draft, setDraft] = useState("");
   const [liveQuestions, setLiveQuestions] = useState([]);
   const [checked, setChecked] = useState([]);
-  const [editDraft, setEditDraft] = useState(null); // the notes being edited by hand
-  const [savingEdits, setSavingEdits] = useState(false);
+  // One box for changes to a recording's notes ("add that the copay is $40"),
+  // made by the notes writer in the right part of them (Anna, Oct 12 2026:
+  // it replaced editing every line by hand).
+  const [changeText, setChangeText] = useState("");
+  const [changing, setChanging] = useState(false);
+  const [changeSaid, setChangeSaid] = useState("");
+  // A question asked in the search box ("when did my boss say the report was
+  // due?"), answered from their recordings: { question, loading, answer, sources }.
+  const [asked, setAsked] = useState(null);
   const [, setTick] = useState(0);
   const recordsRef = useRef([]);
   recordsRef.current = records;
@@ -730,19 +713,38 @@ export default function NotesPage() {
     }
   };
 
-  const saveEdits = async (record) => {
-    if (!editDraft || savingEdits) return;
-    const notes = cleanEditedNotes(editDraft);
-    const fields = { notes, ...(notes.title ? { title: notes.title } : {}) };
-    setSavingEdits(true);
+  const submitChange = async (record) => {
+    const request = changeText.trim();
+    if (!request || changing || !record) return;
+    setChanging(true);
+    setChangeSaid("");
     try {
-      await base44.entities.EnergyLog.update(record.id, fields);
-      setRecords((rows) => rows.map((r) => (r.id === record.id ? { ...r, ...fields } : r)));
-      setEditDraft(null);
+      const res = await base44.functions.invoke("transcribeAudioNew", { mode: "notes_change", record_id: record.id, request });
+      const data = res?.data || res || {};
+      if (!data.ok) throw new Error(data.error || "change_failed");
+      if (data.changed) {
+        setRecords((rows) => rows.map((r) => (r.id === record.id ? { ...r, notes: data.notes, ...(data.title ? { title: data.title } : {}) } : r)));
+        setChangeText("");
+      }
+      setChangeSaid(data.said || (data.changed ? "Updated." : "Nothing changed."));
     } catch (e) {
-      toast({ title: "Your changes didn't save", description: "Check your connection and try again." });
+      toast({ title: "That change didn't go through", description: "Check your connection and try again." });
     } finally {
-      setSavingEdits(false);
+      setChanging(false);
+    }
+  };
+
+  const askNotes = async () => {
+    const question = search.trim();
+    if (question.length < 3 || asked?.loading) return;
+    setAsked({ question, loading: true, answer: "", sources: [] });
+    try {
+      const res = await base44.functions.invoke("transcribeAudioNew", { mode: "notes_ask", question });
+      const data = res?.data || res || {};
+      if (!data.ok) throw new Error(data.error || "ask_failed");
+      setAsked({ question, loading: false, answer: data.answer || "", sources: Array.isArray(data.sources) ? data.sources : [] });
+    } catch (e) {
+      setAsked({ question, loading: false, answer: "Couldn't get an answer just now. Try again in a moment.", sources: [] });
     }
   };
 
@@ -918,29 +920,7 @@ export default function NotesPage() {
     const mine = (notes?.todos || []).map((t, i) => ({ ...t, i })).filter((t) => (t.who || "you").toLowerCase() === "you");
     const theirs = (notes?.todos || []).filter((t) => (t.who || "you").toLowerCase() !== "you");
     const working = progress?.recordId === open.id;
-    // Hand edits: called as plain functions (not components) so a text box keeps
-    // its focus while typing.
     const inputCls = `w-full rounded-lg border px-2.5 py-2 text-[15px] outline-none ${dark ? "bg-gray-900 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900"}`;
-    const edit = (fn) => setEditDraft((cur) => {
-      const next = JSON.parse(JSON.stringify(cur || {}));
-      fn(next);
-      return next;
-    });
-    const line = (key, value, onChange, onRemove, placeholder = "") => (
-      <div key={key} className="flex items-start gap-2">
-        <textarea rows={2} value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} className={`${inputCls} resize-y`} />
-        {onRemove && (
-          <button type="button" aria-label="Remove this line" onClick={onRemove} className={`mt-2 shrink-0 ${soft}`}>
-            <X className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-    );
-    const addBtn = (label, onClick) => (
-      <button type="button" onClick={onClick} className={`text-sm font-semibold flex items-center gap-1 ${dark ? "text-purple-300" : "text-purple-700"}`}>
-        <Plus className="w-4 h-4" />{label}
-      </button>
-    );
 
     return (
       <div className="p-4 md:p-8 w-full" style={pagePad}>
@@ -948,7 +928,7 @@ export default function NotesPage() {
         {deleteDialog}
         {linkDialog}
         <div className="max-w-2xl mx-auto space-y-4">
-          <button type="button" onClick={() => { setOpenId(null); setEditDraft(null); }} className={`flex items-center gap-1 text-sm ${soft}`}>
+          <button type="button" onClick={() => { setOpenId(null); setChangeText(""); setChangeSaid(""); }} className={`flex items-center gap-1 text-sm ${soft}`}>
             <ChevronLeft className="w-4 h-4" /> All notes
           </button>
           <div className={headCard}>
@@ -969,107 +949,7 @@ export default function NotesPage() {
             })()}
           </div>
 
-          {editDraft && (
-            <div className="space-y-4">
-              <p className={`text-sm ${soft}`}>Fix anything that came out wrong. Empty lines are dropped when you save.</p>
-
-              <div className={`${card} space-y-2`}>
-                <h2 className={`text-lg font-bold ${heading}`}>Title</h2>
-                <input value={editDraft.title || ""} onChange={(e) => edit((n) => { n.title = e.target.value; })} className={inputCls} />
-              </div>
-
-              <div className={`${card} space-y-2`}>
-                <h2 className={`text-lg font-bold ${heading}`}>The gist</h2>
-                {(editDraft.gist || []).map((g, i) => line(`g${i}`, g, (v) => edit((n) => { n.gist[i] = v; }), () => edit((n) => { n.gist.splice(i, 1); })))}
-                {addBtn("Add a line", () => edit((n) => { n.gist = [...(n.gist || []), ""]; }))}
-              </div>
-
-              {(editDraft.asked || []).length > 0 && (
-                <div className={`${card} space-y-3`}>
-                  <h2 className={`text-lg font-bold ${heading}`}>Things to bring up</h2>
-                  {editDraft.asked.map((a, i) => (
-                    <div key={`a${i}`} className="space-y-1">
-                      <div className={`font-semibold ${heading}`}>{a.question}</div>
-                      {line(`aa${i}`, a.answer || "", (v) => edit((n) => { n.asked[i].answer = v; }), null, "The answer (leave empty if it didn't come up)")}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className={`${card} space-y-3`}>
-                <h2 className={`text-lg font-bold ${heading}`}>To-dos</h2>
-                {(editDraft.todos || []).map((t, i) => (
-                  <div key={`t${i}`} className="space-y-1">
-                    {line(`tt${i}`, t.text || "", (v) => edit((n) => { n.todos[i].text = v; }), () => edit((n) => { n.todos.splice(i, 1); }))}
-                    <input
-                      value={t.who || ""}
-                      onChange={(e) => edit((n) => { n.todos[i].who = e.target.value; })}
-                      placeholder="Whose (you, or a name)"
-                      className={`${inputCls} text-sm`}
-                    />
-                  </div>
-                ))}
-                {addBtn("Add a to-do", () => edit((n) => { n.todos = [...(n.todos || []), { text: "", who: "you", at: "" }]; }))}
-              </div>
-
-              <div className={`${card} space-y-3`}>
-                <h2 className={`text-lg font-bold ${heading}`}>Details to keep</h2>
-                {(editDraft.details || []).map((d, i) => (
-                  <div key={`d${i}`} className="space-y-1">
-                    <input
-                      value={d.label || ""}
-                      onChange={(e) => edit((n) => { n.details[i].label = e.target.value; })}
-                      placeholder="What it is (like Dose)"
-                      className={`${inputCls} text-sm`}
-                    />
-                    {line(`dv${i}`, d.value || "", (v) => edit((n) => { n.details[i].value = v; }), () => edit((n) => { n.details.splice(i, 1); }))}
-                  </div>
-                ))}
-                {addBtn("Add a detail", () => edit((n) => { n.details = [...(n.details || []), { label: "", value: "", at: "" }]; }))}
-              </div>
-
-              {(editDraft.sections || []).map((s, i) => (
-                <div key={`s${i}`} className={`${card} space-y-2`}>
-                  <div className="flex items-start gap-2">
-                    <input
-                      value={s.heading || ""}
-                      onChange={(e) => edit((n) => { n.sections[i].heading = e.target.value; })}
-                      placeholder="Topic"
-                      className={`${inputCls} font-semibold`}
-                    />
-                    <button type="button" aria-label="Remove this topic" onClick={() => edit((n) => { n.sections.splice(i, 1); })} className={`mt-2 shrink-0 ${soft}`}>
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                  {(s.points || []).map((p, j) => line(`s${i}p${j}`, p, (v) => edit((n) => { n.sections[i].points[j] = v; }), () => edit((n) => { n.sections[i].points.splice(j, 1); })))}
-                  {addBtn("Add a point", () => edit((n) => { n.sections[i].points = [...(n.sections[i].points || []), ""]; }))}
-                </div>
-              ))}
-              {addBtn("Add a topic", () => edit((n) => { n.sections = [...(n.sections || []), { heading: "", points: [""], at: "" }]; }))}
-
-              <div className={`${card} space-y-2`}>
-                <h2 className={`text-lg font-bold ${heading}`}>Decided</h2>
-                {(editDraft.decisions || []).map((x, i) => line(`dc${i}`, x.text || "", (v) => edit((n) => { n.decisions[i].text = v; }), () => edit((n) => { n.decisions.splice(i, 1); })))}
-                {addBtn("Add a line", () => edit((n) => { n.decisions = [...(n.decisions || []), { text: "", at: "" }]; }))}
-              </div>
-
-              <div className={`${card} space-y-2`}>
-                <h2 className={`text-lg font-bold ${heading}`}>Still open</h2>
-                {(editDraft.questions || []).map((x, i) => line(`q${i}`, x.text || "", (v) => edit((n) => { n.questions[i].text = v; }), () => edit((n) => { n.questions.splice(i, 1); })))}
-                {addBtn("Add a line", () => edit((n) => { n.questions = [...(n.questions || []), { text: "", at: "" }]; }))}
-              </div>
-
-              <div className="flex gap-2">
-                <Button variant="outline" className="flex-1" onClick={() => setEditDraft(null)} disabled={savingEdits}>Cancel</Button>
-                <Button className="flex-1" onClick={() => saveEdits(open)} disabled={savingEdits}>
-                  {savingEdits ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Check className="w-4 h-4 mr-2" />}
-                  Save
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {!editDraft && (<>
+          <>
           <div className={`flex rounded-xl p-1 ${dark ? "bg-gray-800" : "bg-gray-100"}`}>
             {["notes", "transcript"].map((t) => (
               <button
@@ -1112,14 +992,21 @@ export default function NotesPage() {
 
           {tab === "notes" && notes && (
             <div className="space-y-4">
-              <div className="flex justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setEditDraft(JSON.parse(JSON.stringify({ ...notes, title: open.title || notes.title || "" })))}
-                >
-                  <Pencil className="w-4 h-4 mr-1.5" />Edit notes
-                </Button>
+              <div className={`${card} space-y-2`}>
+                <div className="flex gap-2">
+                  <input
+                    value={changeText}
+                    onChange={(e) => setChangeText(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") submitChange(open); }}
+                    placeholder='Change your notes, like "add that the copay is $40"'
+                    disabled={changing}
+                    className={inputCls}
+                  />
+                  <Button onClick={() => submitChange(open)} disabled={changing || !changeText.trim()} className="shrink-0">
+                    {changing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Update"}
+                  </Button>
+                </div>
+                {changeSaid && <p className={`text-sm ${soft}`}>{changeSaid}</p>}
               </div>
               {notes.gist?.length > 0 && (
                 <div className={card}>
@@ -1246,7 +1133,7 @@ export default function NotesPage() {
           <Button variant="outline" onClick={() => setConfirmDelete(open)} className="w-full text-red-600 border-red-300">
             <Trash2 className="w-4 h-4 mr-2" /> Delete recording
           </Button>
-          </>)}
+          </>
         </div>
       </div>
     );
@@ -1431,16 +1318,51 @@ export default function NotesPage() {
         {loaded && records.length > 0 && (
           <div className="space-y-2">
             <h2 className={`text-lg font-bold ${heading}`}>Your recordings</h2>
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search your notes and transcripts"
-              className={`w-full rounded-xl border px-3 py-2.5 text-[15px] outline-none ${dark ? "bg-gray-900 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900"}`}
-            />
+            <div className="flex gap-2">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") askNotes(); }}
+                placeholder="Search, or ask a question about your notes"
+                className={`w-full rounded-xl border px-3 py-2.5 text-[15px] outline-none ${dark ? "bg-gray-900 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900"}`}
+              />
+              {search.trim().length >= 3 && (
+                <Button onClick={askNotes} disabled={!!asked?.loading} className="shrink-0 h-auto rounded-xl">
+                  {asked?.loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Ask"}
+                </Button>
+              )}
+            </div>
+            {asked && asked.question === search.trim() && (
+              <div className={`${card} space-y-2`}>
+                {asked.loading ? (
+                  <div className={`flex items-center gap-2 ${soft}`}><Loader2 className="w-4 h-4 animate-spin" />Looking through your recordings…</div>
+                ) : (
+                  <>
+                    <p className={`${heading} whitespace-pre-wrap`}>{asked.answer}</p>
+                    {asked.sources.length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {asked.sources.map((src) => (
+                          <button
+                            key={src.id}
+                            type="button"
+                            onClick={() => { setOpenId(src.id); setTab("notes"); setChangeText(""); setChangeSaid(""); }}
+                            className={`text-sm font-semibold ${dark ? "text-purple-300" : "text-purple-700"}`}
+                          >
+                            From: {src.title} · {whenText(src.started_at)} ›
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
             {(() => {
               const hits = records.map((r) => ({ r, m: searchMatch(r, search) })).filter((h) => h.m.ok);
+              // A question asked: the answer above is the result, not "nothing has these words".
               if (search.trim().length >= 2 && hits.length === 0) {
-                return <p className={`text-sm ${soft}`}>Nothing in your notes or transcripts has "{search.trim()}".</p>;
+                if (asked && asked.question === search.trim()) return null;
+                return <p className={`text-sm ${soft}`}>Nothing in your notes or transcripts has "{search.trim()}". Tap Ask to ask it as a question.</p>;
               }
               return hits.map(({ r, m }) => {
                 const ev = r.task_id ? events.find((t) => t.id === r.task_id) : null;
@@ -1449,7 +1371,7 @@ export default function NotesPage() {
               <button
                 key={r.id}
                 type="button"
-                onClick={() => { setOpenId(r.id); setTab("notes"); setEditDraft(null); }}
+                onClick={() => { setOpenId(r.id); setTab("notes"); setChangeText(""); setChangeSaid(""); }}
                 className={`${card} w-full text-left flex items-center gap-3`}
               >
                 <div className="flex-1 min-w-0">
