@@ -13,6 +13,7 @@
 import { runTaskParse } from "./runTaskParse.ts";
 import { decideReminderInterval, isRecurringInterval } from "./reminderIntervalDecision.ts";
 import { getHomeOrigin } from "./homeOrigin.ts";
+import { resolveQuietHours, isInQuietHours, isTimeTheySet, placeAppReminder } from "./quietHours.ts";
 
 // ── Calling sibling functions ──────────────────────────────────────────────
 // generateReminderSchedule and schedulePush are HTTP entrypoints, not
@@ -134,6 +135,10 @@ export function buildTaskRecord(
     // so each new occurrence of a recurring task starts at the same time.
     reminder_wish: parsed.reminder_wish || null,
     anchor_time: parsed.target_time || null,
+    // They said this clock time themselves ("5 AM", "in 20 minutes"), rather
+    // than the parser picking it from "before bed": the one kind of time that
+    // rings through quiet hours (RULES.md §9 Q4).
+    time_stated: !!parsed.target_time && parsed.time_stated === true,
     // Shared with calendar sync + the in-app pipeline — see
     // reminderIntervalDecision.ts for why this must not be re-implemented.
     reminder_interval: decideReminderInterval(parsed),
@@ -174,8 +179,23 @@ export async function scheduleTaskReminders(
   // time ("at 10, keep reminding me until I finish"): book only that first
   // ping here. The refill cron owns the rhythm from there — it continues from
   // last_scheduled_until at the task's interval until the task is done.
+  // The owner, for their quiet hours (and below, home and the recorder).
+  let owner: any = null;
+  try {
+    const users = await base44.asServiceRole.entities.User.filter({ email });
+    owner = users?.[0] || null;
+  } catch (e) {
+    console.error("[captureToTasks] owner lookup failed:", e);
+  }
+  const quiet = resolveQuietHours(owner);
+
   if (isRecurringInterval(task.reminder_interval)) {
-    const firstAt = new Date(task.next_reminder);
+    let firstAt = new Date(task.next_reminder);
+    // Inside quiet hours only a time they said themselves goes out as is
+    // (RULES.md §9 Q4); a time the app picked waits for quiet hours to end.
+    if (quiet.enabled && task.quiet_hours_exempt !== true && !isTimeTheySet(task, firstAt.getTime(), tz)) {
+      firstAt = new Date(placeAppReminder(firstAt.getTime(), null, quiet, tz) as number);
+    }
     const ids: string[] = [];
     if (firstAt.getTime() > Date.now()) {
       const t = String(task.title || "").length > 40 ? `${String(task.title).slice(0, 37)}...` : String(task.title || "");
@@ -201,15 +221,10 @@ export async function scheduleTaskReminders(
   let homeOrigin = "";
   let avoidTolls = false;
   let canRecord = false;
-  if (task.location || task.classification === "event") {
-    try {
-      const users = await base44.asServiceRole.entities.User.filter({ email });
-      homeOrigin = getHomeOrigin(users?.[0]);
-      avoidTolls = users?.[0]?.commute_avoid_tolls === true;
-      canRecord = users?.[0]?.notes_can_record === true;
-    } catch (e) {
-      console.error("[captureToTasks] home origin lookup failed:", e);
-    }
+  if (owner && (task.location || task.classification === "event")) {
+    homeOrigin = getHomeOrigin(owner);
+    avoidTolls = owner.commute_avoid_tolls === true;
+    canRecord = owner.notes_can_record === true;
   }
 
   const plan = await callFunction(base44, "generateReminderSchedule", {
@@ -253,8 +268,24 @@ export async function scheduleTaskReminders(
         );
 
     if (!sendAtISO) continue;
-    const sendAt = new Date(sendAtISO);
+    let sendAt = new Date(sendAtISO);
+    let moved = false;
+    // Quiet hours (RULES.md §9 Q4): the time they said themselves goes out at
+    // that time, alarm and all (a 5 AM flight). Anything the app picked that
+    // lands inside them (the hour-before heads-up for that flight) moves to
+    // when they end, or is dropped when that's too late to be any use. This
+    // path used to book the plan as it came, quiet hours or not.
+    if (quiet.enabled && task.quiet_hours_exempt !== true
+        && isInQuietHours(sendAt, quiet.startMin, quiet.endMin, tz)
+        && !isTimeTheySet(task, sendAt.getTime(), tz)) {
+      const placed = placeAppReminder(sendAt.getTime(), task.day_only_task ? null : scheduled, quiet, tz);
+      if (placed == null) continue;
+      sendAt = new Date(placed);
+      moved = true;
+    }
     if (sendAt.getTime() <= Date.now()) continue;
+    // A reminder moved onto another one's minute is the same reminder.
+    if (moved && entries.some((x) => Math.abs(new Date(x.send_at).getTime() - sendAt.getTime()) < 5 * 60 * 1000)) continue;
 
     // Same payload shape as every other booking path: schedulePush reads
     // data.taskId / data.type for the collision ledger, and the tap-through
