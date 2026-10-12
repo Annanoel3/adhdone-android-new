@@ -1,11 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import { enqueueCapture } from "@/lib/pendingCaptures";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Lightbulb, ArrowRight, Trash2, ChevronsDown, ChevronsUp, Search, Sparkles, Loader2, Filter, Mic, MoreVertical, CheckCircle2, Pencil, Image as ImageIcon, FileText, X } from "lucide-react";
+import { Plus, Lightbulb, ArrowRight, Trash2, ChevronsDown, ChevronsUp, Search, Sparkles, Loader2, Filter, Mic, MoreVertical, CheckCircle2, Pencil, Image as ImageIcon, FileText, X, TrendingUp, Bell } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, Tooltip as ChartTooltip, ResponsiveContainer } from "recharts";
+import { toast } from "@/components/ui/use-toast";
+import { usePopupTurn } from "@/components/onboarding/onboardingSurface";
 import { Badge } from "@/components/ui/badge";
 import {
   Select,
@@ -184,6 +188,78 @@ function IdeaCard({ idea, onUpdate, theme, allIdeas, specialMode }) {
   );
 }
 
+// ── Trackers (Anna, Oct 12 2026) ─────────────────────────────────────────────
+// A Parking Lot entry can be something they log to over time, whatever they
+// want it to be: their weight, money spent, how the day went. Nothing points
+// people to it; it happens when what they type means it ("track my weight",
+// "log how my day went"), which the AI judges, not a keyword list. "weight
+// 181" when they already track their weight is logged to it. A tracker can
+// remind them to log (every day, once a week, once a month), and that
+// reminder opens straight to the log.
+// Only entries made from here on are looked at, once each (tracker_checked).
+const TRACKER_SINCE = Date.parse('2026-10-12T16:30:00Z');
+// The app books a reminder itself when it's within a day; the hourly reminder
+// job (cronRefillReminders) books each one after that.
+const TRACKER_BOOK_AHEAD_MS = 26 * 60 * 60 * 1000;
+const TRACKER_PUSH_BODY = 'Tap to add an entry.';
+const trackerPushTitle = (name) => `📝 Time to log: ${String(name || '').slice(0, 80)}`;
+const WEEKDAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+// A stored time ("2026-10-12T16:10:17.576000", UTC with no zone letter, or ISO).
+const rowMs = (v) => {
+  if (!v) return NaN;
+  const s = String(v);
+  return Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`);
+};
+
+// The next reminder after `afterMs`, on this phone's clock. Weekly: `day` is
+// 0 (Sunday) to 6. Monthly: 1 to 31; a short month uses its last day.
+function nextTrackerAt(remind, hhmm, day, afterMs = Date.now()) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
+  if (!m || !['daily', 'weekly', 'monthly'].includes(remind)) return null;
+  const start = new Date(afterMs);
+  for (let i = 0; i < 400; i++) {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+    if (remind === 'weekly' && d.getDay() !== (Number(day) || 0)) continue;
+    if (remind === 'monthly') {
+      const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      if (d.getDate() !== Math.min(Math.max(1, Number(day) || 1), last)) continue;
+    }
+    const at = new Date(d.getFullYear(), d.getMonth(), d.getDate(), Number(m[1]), Number(m[2])).getTime();
+    if (at > afterMs) return at;
+  }
+  return null;
+}
+
+function clockLabel(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
+  if (!m) return '';
+  const h = Number(m[1]);
+  return `${h % 12 || 12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`;
+}
+
+const ordinal = (n) => {
+  const v = n % 100;
+  return `${n}${v >= 11 && v <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][n % 10] || 'th'}`;
+};
+
+function remindLabel(t) {
+  const at = clockLabel(t?.tracker_remind_time);
+  if (t?.tracker_remind === 'daily') return `Every day at ${at}`;
+  if (t?.tracker_remind === 'weekly') return `Every ${WEEKDAY_NAMES[Number(t.tracker_remind_day) || 0]} at ${at}`;
+  if (t?.tracker_remind === 'monthly') return `Every month on the ${ordinal(Number(t.tracker_remind_day) || 1)} at ${at}`;
+  return 'No reminder';
+}
+
+const formatLogTime = (at) => {
+  const ms = rowMs(at);
+  if (!Number.isFinite(ms)) return '';
+  return new Date(ms).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+};
+
+// The numbers in an entry, for the chart ("120/80" is two).
+const trackerNumbers = (text) => (String(text || '').match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+
 export default function ParkingLot() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [searchQuery, setSearchQuery] = useState("");
@@ -233,6 +309,207 @@ export default function ParkingLot() {
     queryFn: () => base44.entities.ParkingLotIdea.filter({ converted_to_task: false }, '-created_date'),
     initialData: [],
   });
+
+  // ── Trackers (see the note above nextTrackerAt) ──
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [logFor, setLogFor] = useState(null);
+  const [logText, setLogText] = useState("");
+  const [historyFor, setHistoryFor] = useState(null);
+  const [remindFor, setRemindFor] = useState(null);
+  const [remindChoice, setRemindChoice] = useState("none");
+  const [remindTime, setRemindTime] = useState("09:00");
+  const [trackerBusy, setTrackerBusy] = useState(false);
+  const judging = useRef(new Set());
+  // The "remind you to log?" question opens on its own after a tracker is
+  // made, so it waits until nothing else is on screen.
+  const remindShown = usePopupTurn(!!remindFor, { reactive: true });
+
+  const refreshIdeas = () => queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+
+  const addTrackerEntry = async (tracker, text) => {
+    const fresh = await base44.entities.ParkingLotIdea.get(tracker.id).catch(() => null);
+    const entries = [...((fresh || tracker).tracker_entries || []), { at: new Date().toISOString(), text }];
+    await base44.entities.ParkingLotIdea.update(tracker.id, { tracker_entries: entries });
+  };
+
+  // The day a reminder repeats on: the one it already had, else today's.
+  const remindDayFor = (tracker, choice) => {
+    if (tracker?.tracker_remind === choice && tracker?.tracker_remind_day != null) return Number(tracker.tracker_remind_day);
+    const now = new Date();
+    return choice === 'weekly' ? now.getDay() : choice === 'monthly' ? now.getDate() : null;
+  };
+
+  const openRemind = (tracker, suggest = null) => {
+    const now = new Date();
+    const choice = suggest?.remind || tracker.tracker_remind || 'none';
+    setRemindChoice(['daily', 'weekly', 'monthly'].includes(choice) ? choice : 'none');
+    setRemindTime(suggest?.time || tracker.tracker_remind_time
+      || `${String(now.getHours()).padStart(2, '0')}:${String(Math.floor(now.getMinutes() / 5) * 5).padStart(2, '0')}`);
+    setRemindFor(tracker);
+  };
+
+  const saveReminder = async (tracker, choice, time) => {
+    if (!tracker) return;
+    setTrackerBusy(true);
+    try {
+      if (tracker.tracker_notification_id) {
+        base44.functions.invoke('cancelScheduled', { notificationId: tracker.tracker_notification_id }).catch(() => {});
+      }
+      const on = ['daily', 'weekly', 'monthly'].includes(choice) && /^\d{1,2}:\d{2}$/.test(time || '');
+      const fields = {
+        tracker_remind: on ? choice : 'none',
+        tracker_remind_time: on ? time : null,
+        tracker_remind_day: on ? remindDayFor(tracker, choice) : null,
+        tracker_next_at: null,
+        tracker_notification_id: null,
+      };
+      const next = on ? nextTrackerAt(choice, time, fields.tracker_remind_day) : null;
+      if (next) {
+        fields.tracker_next_at = new Date(next).toISOString();
+        if (next - Date.now() <= TRACKER_BOOK_AHEAD_MS) {
+          try {
+            const me = await base44.auth.me();
+            const res = await base44.functions.invoke('schedulePush', {
+              toUserExternalId: me.email,
+              title: trackerPushTitle(tracker.idea),
+              body: TRACKER_PUSH_BODY,
+              sendAtISO: fields.tracker_next_at,
+              data: { type: 'tracker_reminder', idea_id: tracker.id, screen: '/ParkingLot' },
+            });
+            fields.tracker_notification_id = res?.data?.notificationId || null;
+          } catch (e) {
+            console.warn('Tracker reminder not booked here; the hourly job books it:', e?.message || e);
+          }
+        }
+      }
+      await base44.entities.ParkingLotIdea.update(tracker.id, fields);
+      setRemindFor(null);
+      refreshIdeas();
+      toast({ title: on ? `Reminder: ${remindLabel(fields)}` : 'No reminder' });
+    } catch (e) {
+      toast({ title: "Couldn't save the reminder", description: 'Try again in a moment.' });
+    } finally {
+      setTrackerBusy(false);
+    }
+  };
+
+  const saveLog = async () => {
+    const text = logText.trim();
+    if (!logFor || !text) return;
+    setTrackerBusy(true);
+    try {
+      await addTrackerEntry(logFor, text);
+      toast({ title: `Logged to ${logFor.idea}` });
+      setLogFor(null);
+      setLogText("");
+      refreshIdeas();
+    } catch (e) {
+      toast({ title: "Couldn't save that", description: 'Try again in a moment.' });
+    } finally {
+      setTrackerBusy(false);
+    }
+  };
+
+  const removeTrackerEntry = async (tracker, entry) => {
+    try {
+      const fresh = await base44.entities.ParkingLotIdea.get(tracker.id).catch(() => null);
+      const list = [...((fresh || tracker).tracker_entries || [])];
+      const at = list.findIndex((e) => e.at === entry.at && e.text === entry.text);
+      if (at < 0) return;
+      list.splice(at, 1);
+      await base44.entities.ParkingLotIdea.update(tracker.id, { tracker_entries: list });
+      setHistoryFor({ ...(fresh || tracker), tracker_entries: list });
+      refreshIdeas();
+    } catch (e) {
+      toast({ title: "Couldn't remove that", description: 'Try again in a moment.' });
+    }
+  };
+
+  // One look at each new entry: is it something to keep track of, or an
+  // entry for a tracker they already have?
+  const judgeIdea = async (idea, all) => {
+    if (judging.current.has(idea.id)) return;
+    judging.current.add(idea.id);
+    const trackers = all.filter((i) => i.tracker && !i.parent_idea_id && i.id !== idea.id).map((i) => ({ id: i.id, name: i.idea }));
+    const prompt = `Someone typed this into the Parking Lot of an app for people with ADHD (a place to dump thoughts so they don't lose them):
+"${String(idea.idea || '').slice(0, 500)}"
+
+Things they already keep track of here (they log entries to these over time): ${trackers.length ? JSON.stringify(trackers) : 'none yet'}
+
+Which is it?
+1. An entry for one of those (a reading, a number, a note for it), like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<the entry as they said it, without its name>"}
+2. They want to keep track of something over time, logging it again and again. It can be anything they choose: a measurement, money spent, a mood, how their day went. {"track": "<a short name for it, in their words>", "entry": "<an entry if they already gave one, else null>", "remind": "<daily, weekly or monthly if they said how often, else null>", "time": "<HH:MM, 24-hour, if they said a time, else null>"}
+3. Anything else: an idea, a to-do, a list, a note, a one-time thing. {"none": true}
+
+Judge by what they mean. Only 1 or 2 when they clearly mean logging something over time; a to-do that mentions a number is 3. Answer with the JSON only.`;
+    let out = null;
+    let answered = false;
+    try {
+      const res = await base44.functions.invoke('categorizeIdea', { prompt });
+      const raw = String(res?.data?.message || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+      answered = raw.length > 0;
+      out = JSON.parse(raw);
+    } catch (e) {
+      out = null;
+    }
+    if (!out || typeof out !== 'object') {
+      // An answer that isn't what was asked for counts as "not a tracker", so
+      // it isn't asked again on every visit; no answer at all (offline) is
+      // asked again the next time this page opens.
+      if (answered) {
+        await base44.entities.ParkingLotIdea.update(idea.id, { tracker_checked: true }).catch(() => {});
+      }
+      return;
+    }
+    try {
+      const target = out.log_to ? all.find((i) => i.id === out.log_to && i.tracker) : null;
+      const entry = typeof out.entry === 'string' ? out.entry.trim() : '';
+      if (target && entry) {
+        await addTrackerEntry(target, entry);
+        await base44.entities.ParkingLotIdea.delete(idea.id);
+        toast({ title: `Logged to ${target.idea}`, description: entry });
+      } else if (typeof out.track === 'string' && out.track.trim()) {
+        const name = out.track.trim().slice(0, 120);
+        await base44.entities.ParkingLotIdea.update(idea.id, {
+          tracker: true,
+          tracker_checked: true,
+          idea: name,
+          tracker_entries: entry ? [{ at: new Date().toISOString(), text: entry }] : [],
+        });
+        const said = /^(\d{1,2}):(\d{2})$/.exec(String(out.time || ''));
+        const time = said && Number(said[1]) < 24 ? `${said[1].padStart(2, '0')}:${said[2]}` : null;
+        openRemind({ ...idea, idea: name, tracker: true }, { remind: out.remind, time });
+      } else {
+        await base44.entities.ParkingLotIdea.update(idea.id, { tracker_checked: true });
+      }
+    } catch (e) {
+      console.warn('Tracker check failed:', e?.message || e);
+    } finally {
+      refreshIdeas();
+    }
+  };
+
+  useEffect(() => {
+    for (const i of ideas) {
+      if (i.parent_idea_id || i.tracker || i.tracker_checked || i.converted_to_task) continue;
+      if (!(rowMs(i.created_date) >= TRACKER_SINCE)) continue;
+      judgeIdea(i, ideas);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ideas]);
+
+  // A reminder's tap opens straight to its log (/ParkingLot?log=<id>).
+  useEffect(() => {
+    const id = new URLSearchParams(location.search).get('log');
+    if (!id) return;
+    const t = ideas.find((i) => i.id === id);
+    if (!t) return;
+    setLogText("");
+    setLogFor(t);
+    navigate(location.pathname, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search, ideas]);
 
   // An idea turned into a task goes through the same parser as anything typed
   // into Add Task, so it gets its real date, time, priority and place, and
@@ -316,6 +593,11 @@ export default function ParkingLot() {
   });
 
   const handleDelete = (id) => {
+    // A tracker's booked reminder goes with it.
+    const doomed = ideas.find((i) => i.id === id);
+    if (doomed?.tracker_notification_id) {
+      base44.functions.invoke('cancelScheduled', { notificationId: doomed.tracker_notification_id }).catch(() => {});
+    }
     deleteIdeaMutation.mutate(id);
   };
 
@@ -596,8 +878,10 @@ Return ONLY the category name, nothing else.`;
                     const [_, itemToAdd, listName] = addToListMatch;
                     
                     // Find matching parent idea
+                    // Not a tracker: "add 181 to my weight" is an entry for
+                    // it, which the tracker check below logs.
                     const matchingIdea = topLevelIdeas.find(idea => 
-                      idea.idea.toLowerCase().includes(listName.toLowerCase().trim())
+                      !idea.tracker && idea.idea.toLowerCase().includes(listName.toLowerCase().trim())
                     );
                     
                     if (matchingIdea) {
