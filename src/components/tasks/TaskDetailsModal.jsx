@@ -72,7 +72,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Cake } from "lucide-react";
 import { trackFire } from "@/lib/appTrack";
-import { firstDateMakesDeadline } from "../utils/todayTasks";
+import { firstDateMakesDeadline, isPastDue } from "../utils/todayTasks";
 import { appConfirm } from "@/components/ui/alert-dialog";
 
 // A task nagging at a rhythm ("at 10 am, keep reminding me until I do it")
@@ -2081,13 +2081,13 @@ Return JSON:
                 <Popover onOpenChange={(o) => { if (!o && dueDirty.current && reminderDate) { dueDirty.current = false; handleUpdateReminderTime(reminderTime, reminderDate); } }}>
                   <PopoverTrigger asChild>
                     <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
-                      dueSource && new Date(dueSource).getTime() < Date.now() && task.status !== 'completed'
+                      dueSource && isPastDue(dueSource) && task.status !== 'completed'
                         ? theme === 'dark' ? 'bg-red-900 text-red-300' : 'bg-red-100 text-red-700'
                         : 'bg-purple-500 text-white'
                     }`}>
                       <Clock className="w-3 h-3" />
                       {dueSource ? (
-                        new Date(dueSource).getTime() < Date.now() && task.status !== 'completed'
+                        isPastDue(dueSource) && task.status !== 'completed'
                           ? `Overdue • ${formatReminderDate(dueSource)}${task.day_only_task ? '' : ` • ${formatReminderTime(dueSource)}`}`
                           : task.day_only_task
                             ? `Due ${formatReminderDate(dueSource)}`
@@ -2148,12 +2148,12 @@ Return JSON:
                   <Popover open={dueDatePopoverOpen} onOpenChange={setDueDatePopoverOpen}>
                     <PopoverTrigger asChild>
                       <button className={`cursor-pointer hover:opacity-80 transition-opacity px-3 py-1 rounded-full text-sm font-medium flex items-center gap-1 ${
-                        new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
+                        isPastDue(task.due_date) && task.status !== 'completed'
                           ? theme === 'dark' ? 'bg-red-900 text-red-300' : 'bg-red-100 text-red-700'
                           : theme === 'dark' ? 'bg-amber-900 text-amber-300' : 'bg-amber-100 text-amber-700'
                       }`}>
                         <CalendarClock className="w-3 h-3" />
-                        {new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
+                        {isPastDue(task.due_date) && task.status !== 'completed'
                           ? (isEvent ? 'Past event' : 'Overdue')
                           : `${isEvent ? 'Event' : 'Due'} ${formatReminderDate(task.due_date)}`}
                       </button>
