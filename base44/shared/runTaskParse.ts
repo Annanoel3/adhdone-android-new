@@ -45,6 +45,7 @@ const TASK_PARSE_SCHEMA = {
     classification: { type: "string", enum: ["task", "event", "birthday", "payment"] },
     target_date: { type: ["string", "null"] },
     target_time: { type: ["string", "null"] },
+    time_stated: { type: "boolean" },
     end_date: { type: ["string", "null"] },
     due_date: { type: ["string", "null"] },
     user_asked_to_repeat_every: { anyOf: [{ type: "string", enum: REPEAT_VALUES }, { type: "null" }] },
@@ -64,13 +65,24 @@ const TASK_PARSE_SCHEMA = {
   },
   required: [
     "title", "location", "business_name", "urgency", "energy_required", "classification",
-    "target_date", "target_time", "end_date", "due_date",
+    "target_date", "target_time", "time_stated", "end_date", "due_date",
     "user_asked_to_repeat_every", "repeat_words", "recurrence_pattern", "deadline_style",
     "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
     "takes_time", "life_area", "follow_up_title", "follow_up_minutes", "reminder_wish",
     "recurrence_days",
   ],
 };
+
+// The quiet-hours line for the system prompt ("" when they're off or unknown).
+function quietHoursNote(quiet?: { enabled: boolean; startMin: number; endMin: number }): string {
+  if (!quiet || !quiet.enabled || quiet.startMin === quiet.endMin) return '';
+  const hhmm = (m: number) => `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  return `\n\nTHEIR QUIET HOURS: ${hhmm(quiet.startMin)} to ${hhmm(quiet.endMin)} (the app stays silent then). `
+    + 'When you pick the clock time yourself from a part of the day ("before bed", "tonight", "first thing in the morning"), '
+    + 'pick one outside these hours: "before bed" is shortly before they start, "first thing in the morning" shortly after they end. '
+    + 'If nothing outside them is left on the day they meant, pick what a reasonable person would mean anyway. '
+    + 'A clock time the user stated stays exactly as they said it, even inside these hours.';
+}
 
 // `_base44` is kept so every caller's signature stays the same; the parser no
 // longer needs the client. `aboutMe` is the user's own one-liner about their
@@ -79,7 +91,13 @@ const TASK_PARSE_SCHEMA = {
 // `asOfMs`: when the words were said (see nowInTimezone) — every date word
 // is read against that moment, both in the prompt's calendar and in the
 // resolver below.
-export async function runTaskParse(_base44: any, prompt: string, tz?: string, aboutMe?: string, asOfMs?: number) {
+// `quiet`: the user's quiet hours (resolveQuietHours). A clock time the model
+// picks itself from "before bed" or "first thing in the morning" goes outside
+// them, so the only time that can land inside them is one the user stated
+// (RULES.md §9 Q4, Anna Oct 12 2026: "the only way that would ever happen is
+// if a user explicitly says a time outside of their hours").
+export async function runTaskParse(_base44: any, prompt: string, tz?: string, aboutMe?: string, asOfMs?: number,
+  quiet?: { enabled: boolean; startMin: number; endMin: number }) {
   // Callers are supposed to pass a prompt already built by
   // buildTaskParsePrompt, which carries the one thing the model cannot work out
   // for itself: today's real calendar. If raw text arrives instead, build it
@@ -100,9 +118,9 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
     messages: [
       {
         role: "system",
-        content: aboutMe?.trim()
-          ? `${TASK_PARSE_SYSTEM_PROMPT}\n\nABOUT THE USER (in their own words): ${aboutMe.trim()}`
-          : TASK_PARSE_SYSTEM_PROMPT,
+        content: TASK_PARSE_SYSTEM_PROMPT
+          + (aboutMe?.trim() ? `\n\nABOUT THE USER (in their own words): ${aboutMe.trim()}` : '')
+          + quietHoursNote(quiet),
       },
       { role: "user", content: fullPrompt },
     ],
@@ -113,6 +131,8 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   });
 
   const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}");
+  // A time can only be "stated" when there is one.
+  parsed.time_stated = parsed?.time_stated === true && !!parsed?.target_time;
   // recurrence_pattern feeds a strict entity enum, so a free-text answer like
   // "every 20 minutes" has to fall back to "none" rather than fail the save.
   const PATTERNS = ['none', 'daily', 'every_other_day', 'weekly', 'every_other_week', 'monthly', 'yearly'];
