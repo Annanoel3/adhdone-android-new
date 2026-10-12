@@ -378,6 +378,11 @@
       "type": "boolean",
       "description": "\"Notice when I wake up\" (Settings, next to quiet hours): the phone reports its first unlock each morning (Usage access, used only for that) and Smart Reminders starts their day from then. Turned on only once Android's Usage access is granted."
     },
+    "wake_offer_seen_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the one-time \"Notice when I wake up\" popup was shown (WakeOfferPrompt). Set once; the popup never comes back."
+    },
     "woke_at": {
       "type": "string",
       "format": "date-time",
