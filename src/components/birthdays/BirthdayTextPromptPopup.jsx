@@ -47,6 +47,7 @@ export default function BirthdayTextPromptPopup({ user, theme }) {
       const candidate = (tasks || [])
         .filter((t) => {
           if (t.is_own_birthday) return false;
+          if (t.birthday_animal) return false; // a pet's birthday has no text
           if (!t.birthday_person || !t.next_reminder) return false;
           if (t.birthday_text_message) return false;
           if (t.silenced) return false;
