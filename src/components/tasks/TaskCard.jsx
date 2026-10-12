@@ -34,7 +34,7 @@ import { formatTimeRange } from "../utils/timeRangeLabel";
 import SubtaskQuickAdd from "./SubtaskQuickAdd";
 import LifeAreaPill, { TagPill } from "./LifeAreaPill";
 import { checkDuePushEgg } from "../eastereggs/duePushEgg";
-import { firstDateMakesDeadline } from "../utils/todayTasks";
+import { firstDateMakesDeadline, isPastDue } from "../utils/todayTasks";
 import { cancelEventWithUndo, restoreEvent } from "../utils/snoozeTask";
 import { appConfirm } from "@/components/ui/alert-dialog";
 import { TimeItButton } from "../launch/LaunchButtons";
@@ -485,7 +485,8 @@ export default function TaskCard({
     }
     if (task.due_date) {
       const dd = new Date(task.due_date);
-      const overdue = dd.getTime() < Date.now() && task.status !== 'completed';
+      // Late once their day is over, not at midnight (todayTasks.isPastDue).
+      const overdue = isPastDue(task.due_date) && task.status !== 'completed';
       const dueToday = dd.toDateString() === today.toDateString();
       // A due date that lands on today reads "Today" (matching the next_reminder
       // path) so the badge is consistent across all tasks owed today.
@@ -1208,7 +1209,7 @@ export default function TaskCard({
                       <button
                         onClick={(e) => e.stopPropagation()}
                         className={`flex items-center gap-1 border px-2 py-1 rounded text-xs cursor-pointer transition-colors ${
-                          new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
+                          isPastDue(task.due_date) && task.status !== 'completed'
                             ? theme === 'dark'
                               ? 'border-red-700 bg-red-900/30 text-red-300 hover:bg-red-900/50'
                               : 'border-red-300 bg-red-50 text-red-700 hover:bg-red-100'
@@ -1218,7 +1219,7 @@ export default function TaskCard({
                         }`}
                       >
                         <CalendarClock className="w-3 h-3" />
-                        {new Date(task.due_date).getTime() < Date.now() && task.status !== 'completed'
+                        {isPastDue(task.due_date) && task.status !== 'completed'
                           ? 'Overdue'
                           : `Due ${formatReminderDate(task.due_date)}`}
                       </button>
