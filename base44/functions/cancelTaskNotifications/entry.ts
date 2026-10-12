@@ -63,8 +63,10 @@ function laterBreakUntil(task: any, timeZone: string, nowMs: number, owner: any)
   // A task due today doesn't count for the Later rules (Anna, Oct 11 2026,
   // after a second Later at 3:19 PM sent "Go to PetSmart", due by the end of
   // the day, to the next morning): no break. Later only says "not this
-  // minute"; Smart Reminders decides when it comes back today.
-  if (dueToday(task, timeZone, nowMs)) return nowMs;
+  // minute"; Smart Reminders decides when it comes back today. The same for
+  // an urgent task, whatever its date (Anna, Oct 11 2026: "urgent tasks should
+  // maybe not get long breaks after pressing later").
+  if (task?.urgency === 'urgent' || dueToday(task, timeZone, nowMs)) return nowMs;
   const prevMs = task?.later_until ? new Date(task.later_until).getTime() : NaN;
   const today = zoneDateKey(nowMs, timeZone);
   // A break already given today (it ends today or later): this one runs
