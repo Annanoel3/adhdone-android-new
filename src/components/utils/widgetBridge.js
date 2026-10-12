@@ -11,7 +11,7 @@
 import { isTodayTask, isUpcomingTask, getLocalDateString } from './todayTasks';
 import { base44 } from '@/api/base44Client';
 import { cancelScheduledReminder } from './reminderScheduler';
-import { isInQuietHours } from './reminderScheduler';
+import { isInQuietHours, isTimeTheySet } from './reminderScheduler';
 import { getReminderCopy } from './reminderCopy';
 import { isStepDone, markStepDone } from '@/components/onboarding/onboardingGate';
 
@@ -211,7 +211,9 @@ function reminderMomentsFor(task) {
   for (const r of schedule) {
     const t = new Date(r.send_at).getTime();
     if (isNaN(t) || out.has(t)) continue;
-    out.set(t, { at: t, heading: r.notification_title || '', body: r.notification_body || '' });
+    // their_time: a reminder they added at a time they picked (the reminder
+    // editor's "Add"), which may ring inside quiet hours like the task's own.
+    out.set(t, { at: t, heading: r.notification_title || '', body: r.notification_body || '', theirs: r.their_time === true });
   }
   if (schedule.length === 0 && task.next_reminder && !task.day_only_task && task.deadline_style !== 'by') {
     const t = new Date(task.next_reminder).getTime();
@@ -271,10 +273,11 @@ function ringsOutLoud(task, momentMs) {
 }
 
 // Quiet hours apply to alarms exactly as they do to pushes (default ON,
-// 22:00–07:00, the user's own window from Settings). A reminder that falls
+// 22:00–08:00, the user's own window from Settings). A reminder that falls
 // inside them is never booked as a full-screen alarm — that moment keeps its
 // regular push, which the scheduler has already placed by the same rules —
-// so nothing rings out loud at 3 AM.
+// so nothing rings out loud at 3 AM. The one exception is a time the person
+// set themselves (isTimeTheySet): a 5 AM flight rings at 5.
 // Alarms that land close together ring ONCE. Until Oct 8 2026 two alarms at
 // the same minute were spaced two minutes apart so each got its own ring —
 // which meant three things due at the same time rang three times in a row,
@@ -329,11 +332,17 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
     for (const m of reminderMomentsFor(t)) {
       if (m.at <= cutoff) continue;
       if (!isNaN(breakMs) && m.at < breakMs) continue;
-      // A task the user asked to run through the night keeps its night alarms.
-      if (!t.quiet_hours_exempt && isInQuietHours(new Date(m.at))) continue;
+      // Inside quiet hours only a time they set themselves rings (a 5 AM
+      // flight, RULES.md §9 Q4), or a task they asked to run through the night.
+      const inQuiet = isInQuietHours(new Date(m.at));
+      const theirTime = inQuiet && (m.theirs || isTimeTheySet(t, m.at));
+      if (inQuiet && !t.quiet_hours_exempt && !theirTime) continue;
       // Heads-ups stay regular pushes; see ringsOutLoud.
       if (!ringsOutLoud(t, m.at)) continue;
       const alarm = { id: `${t.id}:${m.at}`, taskId: t.id, title: t.title || 'Task', at: m.at, heading: m.heading, body: m.body };
+      // Home or Back on this one rings it again in 10 minutes instead of
+      // closing it (build 40 on): one sleepy press mustn't silence it.
+      if (theirTime) alarm.throughQuiet = true;
       // Which repeated thing it is: the phone (build 39 on) rings two alarms of
       // one family at the same moment as one.
       if (t.task_family) alarm.family = String(t.task_family).slice(0, 40);
