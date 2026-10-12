@@ -33,6 +33,42 @@ function isTheirEvening(d) {
   return inWindow(minOfDay(d), (start - 180 + 24 * 60) % (24 * 60), end);
 }
 
+// Their evening, for the daily tip's wind-down: the clock shifted so their
+// quiet hours start where the usual 10 PM is. For 10 PM to 8 AM that's 5 PM to
+// midnight, as it always was; for someone who sleeps 8 AM to 4 PM, 3 AM to
+// 10 AM. With no quiet hours set, 5 PM on the clock.
+export function isTheirTipEvening(now = new Date()) {
+  const { start, end } = quietWindow();
+  if (start === end) return now.getHours() >= 17;
+  const shifted = (minOfDay(now) - start + 22 * 60 + 24 * 60) % (24 * 60);
+  return shifted >= 17 * 60;
+}
+
+// What the tip card calls its evening tip: "Tonight's" only when it is night
+// on the clock too; at 6 AM after a night shift it's a wind-down, not tonight.
+export function tipEveningLabel(now = new Date()) {
+  const h = now.getHours();
+  return h >= 17 || h < 4 ? "Tonight's Tip" : "Wind-down Tip";
+}
+
+// A hello that fits both the clock and their day (Anna, Oct 12 2026). The
+// first three hours after their quiet hours end are their morning, but "Good
+// morning" at 4 PM to someone who sleeps days is odd: there it's "Rise and
+// shine". Otherwise the clock decides, and after midnight it's a plain hello
+// rather than "Good morning" to someone halfway through a night shift.
+export function timeGreeting(now = new Date()) {
+  const { start, end } = quietWindow();
+  const m = minOfDay(now);
+  const h = now.getHours();
+  if (start !== end && inWindow(m, end, (end + 180) % (24 * 60))) {
+    return h >= 4 && h < 12 ? 'Good morning' : 'Rise and shine';
+  }
+  if (h < 4) return 'Hey there';
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 // Their next morning after `from`: once their next quiet hours are over, at
 // 9 AM or an hour after quiet hours end, whichever is later (the same slot
 // the server uses for a day's first reminder, quietHours.ts anchorToDaytime).
