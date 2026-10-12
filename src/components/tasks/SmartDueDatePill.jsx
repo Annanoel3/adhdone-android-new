@@ -5,7 +5,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
-import { getLocalDateString } from '../utils/todayTasks';
+import { getLocalDateString, isPastDue } from '../utils/todayTasks';
 
 // Due date for a Smart Reminders task. Smart tasks have no fixed reminder time
 // — the AI decides when to nudge — but they can still be due by a day, and the
@@ -15,7 +15,8 @@ export default function SmartDueDatePill({ task, theme, onSave }) {
   const [open, setOpen] = useState(false);
   const isDark = theme === 'dark';
   const due = task.due_date;
-  const overdue = due && new Date(due).getTime() < Date.now() && task.status !== 'completed';
+  // Late once their day is over, not at midnight.
+  const overdue = due && isPastDue(due) && task.status !== 'completed';
 
   const save = (value) => {
     if (!value) return onSave(null);
