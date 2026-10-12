@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
 import FocusModeButton from "./FocusModeButton";
 import QuickToolButtons from "./QuickToolButtons";
+import { timeGreeting } from "../utils/reminderCopy";
 
 // What flies out of the sparkle button when it's tapped. Stars for the Light,
 // Colorful and Spicy Brains themes; black and purple stars for Dark; and each
@@ -80,12 +81,9 @@ export default function WelcomeCard({ userName, theme, user }) {
     setTimeout(() => setBursts((prev) => prev.filter((b) => b.id !== id)), 1500);
   };
 
-  const getTimeGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return "Good morning";
-    if (hour < 18) return "Good afternoon";
-    return "Good evening";
-  };
+  // Their own hours, not just the clock: "Rise and shine" at 4 PM for someone
+  // who sleeps days (reminderCopy.timeGreeting).
+  const getTimeGreeting = () => timeGreeting(new Date());
 
   return (
     <Card className={`${specialMode !== 'normal' ? `${specialMode}-card bg-transparent` : ''} border-none shadow-lg overflow-hidden ${
