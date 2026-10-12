@@ -526,6 +526,23 @@ Return ONLY the category name, nothing else.`;
       {/* Once the lot is properly full, something comes to rummage through it. */}
       <RaccoonPeek count={topLevelIdeas.length} />
 
+      {/* Adding an idea once the lot has some (Anna, Oct 12 2026: "There used
+          to be an add idea spot on this page"). Only the empty lot had a
+          button, and the floating "Park an idea" one is hidden on this page. */}
+      {topLevelIdeas.length > 0 && (
+        <Button
+          onClick={() => setShowQuickAdd(true)}
+          className={`w-full mb-6 h-12 rounded-2xl text-base text-white ${
+            theme === 'minimalist' || theme === 'dark'
+              ? 'bg-purple-600 hover:bg-purple-700'
+              : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700'
+          }`}
+        >
+          <Plus className="w-5 h-5 mr-2" />
+          Add an idea
+        </Button>
+      )}
+
       {/* Quick Add Modal */}
       <Dialog open={showQuickAdd} onOpenChange={setShowQuickAdd}>
         <DialogContent className="max-w-md w-[calc(100vw-2rem)]">
