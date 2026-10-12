@@ -169,10 +169,19 @@ export async function scheduleBirthdayReminders(task) {
  * the ones already booked were worded for a person ("time to sort a gift or
  * message", "don't forget to reach out"). Returns the updated task.
  */
-export async function setBirthdayAnimal(task, animal) {
+export async function setBirthdayAnimal(taskIn, animal) {
   const clean = animal ? String(animal).trim().toLowerCase().slice(0, 40) : null;
-  const booked = (Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : [])
-    .filter((id) => id && !String(id).startsWith("planned_"));
+  // The birthday as saved now. The copy handed in can be the one made before
+  // its reminders were booked (the "want to text them?" dialog that opens
+  // right after a birthday is added): with no ids on it nothing was cancelled,
+  // the person-worded reminders stayed live, and the pet-worded ones were
+  // turned away as duplicates (Oct 12 2026, Kaiju). Every booked id, from the
+  // id list and the plan, is cancelled.
+  const task = (await base44.entities.Task.get(taskIn.id).catch(() => null)) || taskIn;
+  const booked = Array.from(new Set([
+    ...(Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : []),
+    ...(Array.isArray(task.reminder_schedule) ? task.reminder_schedule.map((r) => r?.notification_id) : []),
+  ])).filter((id) => id && !String(id).startsWith("planned_"));
   if (booked.length) await cancelScheduledReminder(booked).catch(() => {});
   const updated = { ...task, birthday_animal: clean, onesignal_notification_ids: [], reminder_schedule: [] };
   await base44.entities.Task.update(task.id, {
