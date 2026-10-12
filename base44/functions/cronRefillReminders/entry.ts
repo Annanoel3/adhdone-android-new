@@ -852,6 +852,8 @@ Deno.serve(async (req) => {
         scheduledDateISO: task.next_reminder,
         urgency: task.urgency,
         dayOnly: !!task.day_only_task,
+        // No clock time: the day before and the morning of (Oct 12 2026).
+        noClockTime: !task.event_time,
         classification: task.classification || 'event',
         deadlineStyle: task.deadline_style,
         timezone: timeZone || undefined,
