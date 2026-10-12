@@ -193,15 +193,20 @@ export async function scheduleMultiReminders({
     // the same way when the caller doesn't say. A caller that has just saved
     // a time the person picked passes timeStated: true, so a save still on
     // its way can't make it read as false.
+    // Whether it's an event is read the same way: the date and reminder pills
+    // don't say, and an event planned as a plain task got an AI plan around a
+    // start time nobody set (Anna, Oct 12 2026: Bike Night, no time, got
+    // "check your bike" at 1 PM, "time to go" at 5:30 and "it's time" at 6).
     let taskLocation = location;
     let style = deadlineStyle;
     let stated = timeStated;
-    if ((taskLocation === undefined || style === undefined || stated === undefined) && taskId) {
+    if ((taskLocation === undefined || style === undefined || stated === undefined || classification === undefined) && taskId) {
       try {
         const task = await base44.entities.Task.get(taskId);
         if (taskLocation === undefined) taskLocation = task?.location || '';
         if (style === undefined) style = task?.deadline_style;
         if (stated === undefined) stated = task?.time_stated === true;
+        if (classification === undefined) classification = task?.classification;
       } catch {
         if (taskLocation === undefined) taskLocation = '';
       }
