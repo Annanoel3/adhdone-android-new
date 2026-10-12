@@ -1169,6 +1169,55 @@ Deno.serve(async (req) => {
     console.error('[REFILL] Scheduled text pass failed:', e);
   }
 
+  // Tracker reminders: Parking Lot entries they log to, with "remind me to
+  // log" every day, once a week or once a month (Anna, Oct 12 2026). The app
+  // books the next one when it's set; this books each one after that once it
+  // is within a day, so they keep coming with the app closed. A tap opens the
+  // log (OneSignalInit, type tracker_reminder).
+  let trackerBooked = 0;
+  try {
+    const trackers = await filterAll(base44.asServiceRole.entities.ParkingLotIdea, { tracker: true });
+    const ownerOf: Record<string, any> = {};
+    for (const u of allUsers) if (u?.email) ownerOf[String(u.email).toLowerCase()] = u;
+    const nowMs = now.getTime();
+    for (const t of trackers) {
+      if (!['daily', 'weekly', 'monthly'].includes(t.tracker_remind) || t.converted_to_task) continue;
+      const owner = ownerOf[String(t.created_by || '').toLowerCase()];
+      if (!owner?.email) continue;
+      const bookedMs = trackerMs(t.tracker_next_at);
+      if (t.tracker_notification_id && Number.isFinite(bookedMs) && bookedMs > nowMs) continue;
+      const next = trackerNextAt(t.tracker_remind, t.tracker_remind_time, t.tracker_remind_day, nowMs, userTimeZone(owner));
+      if (next == null) continue;
+      const nextIso = new Date(next).toISOString();
+      if (next - nowMs > TRACKER_BOOK_AHEAD_MS) {
+        if (t.tracker_notification_id || trackerMs(t.tracker_next_at) !== next) {
+          await base44.asServiceRole.entities.ParkingLotIdea.update(t.id, { tracker_next_at: nextIso, tracker_notification_id: null }).catch(() => {});
+        }
+        continue;
+      }
+      try {
+        const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+          internalKey: CRON_SECRET,
+          toUserExternalId: owner.email,
+          title: `📝 Time to log: ${String(t.idea || '').slice(0, 80)}`,
+          body: 'Tap to add an entry.',
+          sendAtISO: nextIso,
+          data: { type: 'tracker_reminder', idea_id: t.id, screen: '/ParkingLot' },
+        });
+        const id = (res?.data || res)?.notificationId;
+        if (id) {
+          await base44.asServiceRole.entities.ParkingLotIdea.update(t.id, { tracker_next_at: nextIso, tracker_notification_id: id });
+          trackerBooked++;
+        }
+      } catch (e) {
+        console.error(`[REFILL] Tracker reminder not booked for ${t.id}:`, e);
+      }
+    }
+    if (trackerBooked) console.log(`📝 [REFILL] Booked ${trackerBooked} tracker reminder(s)`);
+  } catch (e) {
+    console.error('[REFILL] Tracker reminder pass failed:', e);
+  }
+
   // The owner health check (see ownerHealthCheck below). Never fails the run.
   try {
     await ownerHealthCheck(base44, { allUsers, allTasks, now });
@@ -1204,6 +1253,49 @@ const OWNER_ACCOUNTS = new Set([
 const ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 const H_HOUR = 60 * 60 * 1000;
 const H_DAY = 24 * H_HOUR;
+
+// ── Tracker reminders (Parking Lot entries they log to) ─────────────────────
+const TRACKER_BOOK_AHEAD_MS = 26 * 60 * 60 * 1000;
+
+function trackerMs(v: any): number {
+  if (!v) return NaN;
+  const s = String(v);
+  return Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`);
+}
+
+// Their timezone's offset from UTC, in minutes, at an instant.
+function trackerOffsetMin(ms: number, timeZone: string): number {
+  const [y, mo, d] = localDateKey(new Date(ms), timeZone).split('-').map(Number);
+  const local = Date.UTC(y, mo - 1, d) + localMinutesOfDay(new Date(ms), timeZone) * 60000;
+  return Math.round((local - Math.floor(ms / 60000) * 60000) / 60000);
+}
+
+// The next reminder after `afterMs`, on their own clock. Weekly: `day` is 0
+// (Sunday) to 6. Monthly: 1 to 31; a short month uses its last day. Same rule
+// as nextTrackerAt in ParkingLot.jsx.
+function trackerNextAt(remind: string, hhmm: string, day: any, afterMs: number, timeZone: string): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
+  if (!m || !['daily', 'weekly', 'monthly'].includes(remind)) return null;
+  const minutes = Number(m[1]) * 60 + Number(m[2]);
+  const [y0, mo0, d0] = localDateKey(new Date(afterMs), timeZone).split('-').map(Number);
+  for (let i = 0; i < 400; i++) {
+    const date = new Date(Date.UTC(y0, mo0 - 1, d0 + i));
+    const y = date.getUTCFullYear();
+    const mo = date.getUTCMonth();
+    const d = date.getUTCDate();
+    if (remind === 'weekly' && date.getUTCDay() !== (Number(day) || 0)) continue;
+    if (remind === 'monthly') {
+      const last = new Date(Date.UTC(y, mo + 1, 0)).getUTCDate();
+      if (d !== Math.min(Math.max(1, Number(day) || 1), last)) continue;
+    }
+    // That wall-clock time in their timezone, as an instant.
+    const asUtc = Date.UTC(y, mo, d, 0, minutes);
+    let at = asUtc - trackerOffsetMin(asUtc, timeZone) * 60000;
+    at = asUtc - trackerOffsetMin(at, timeZone) * 60000;
+    if (at > afterMs) return at;
+  }
+  return null;
+}
 
 function localHourIn(tz: string, d: Date): number {
   try {
