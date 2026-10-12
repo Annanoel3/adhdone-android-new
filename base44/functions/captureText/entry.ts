@@ -10,7 +10,8 @@
 // save is silent and instant. Ideas go to the Parking Lot, birthdays become
 // yearly birthday records, and anything meant for ADHDone itself is kept in the
 // Parking Lot with an offer to send it to the developer (see captureToTasks).
-// (Last redeployed Oct 3 2026 for the parser's takes_time flag — the card's Time
+// (Last redeployed Oct 12 2026 for the parser's time_stated flag and the
+// user's quiet hours in its prompt, and before that Oct 3 2026 for the parser's takes_time flag — the card's Time
 // it button — and before that Sept 27 2026 for the parse fixes in the shared files bundled
 // below: a clock time with no day gets its day, "Grandma" stays in the title,
 // "next Tuesday" is next week's Tuesday, a failed kind check says why in this
@@ -21,6 +22,7 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import { runTaskParse } from "../../shared/runTaskParse.ts";
 import { buildTaskParsePrompt } from "../../shared/taskParsePrompt.ts";
+import { resolveQuietHours } from "../../shared/quietHours.ts";
 // Shared files are bundled into this function when it is deployed, so a change
 // to the shared prompt (taskParsePrompt.ts) only reaches users after this
 // function is saved and redeployed again.
@@ -269,7 +271,8 @@ Deno.serve(async (req) => {
 
       // about_me goes in here too, exactly like the in-app add path — otherwise
       // a task shared from the phone gets classified for a generic person.
-      const parsed = await runTaskParse(base44, buildTaskParsePrompt(piece, tz, saidAt), tz, user.about_me, saidAt);
+      const parsed = await runTaskParse(base44, buildTaskParsePrompt(piece, tz, saidAt), tz, user.about_me, saidAt,
+        resolveQuietHours(user));
       if (!parsed?.title) continue;
 
       // original_input keeps the user's verbatim words (the whole shared text
