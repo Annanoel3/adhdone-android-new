@@ -387,9 +387,12 @@ Deno.serve(async (req) => {
         .filter((e: any) => e.sent_at && !e.skipped_reason)
         .map((e: any) => utcMs(e.sent_at) || 0));
       const nowLocalMin = localMinutesOfDay(now, timeZone);
-      const minsBeforeQuiet = (startMin !== endMin && startMin > nowLocalMin)
-        ? startMin - nowLocalMin
-        : 24 * 60 - nowLocalMin;
+      // Minutes until quiet hours start, even when they start after midnight
+      // (1 AM, or 8 AM for someone who sleeps days). Counting only to midnight
+      // read 11 PM as "an hour left" for someone up until 8 AM (Oct 12 2026).
+      const minsBeforeQuiet = startMin === endMin
+        ? 24 * 60 - nowLocalMin
+        : isInQuietHours(now, startMin, endMin, timeZone) ? 0 : (startMin - nowLocalMin + 24 * 60) % (24 * 60);
       const secondLook = !onlyEmail && !lookSet && hasValidSchedule && planRanOut && nudgedStillOpen &&
         nowMs - lastSentMs >= SINCE_LAST_NUDGE &&
         nowMs - plannedAtMs >= SINCE_LAST_LOOK &&
@@ -826,7 +829,10 @@ Deno.serve(async (req) => {
           // notification.
           const putOff = (nudgedTask.snooze_count || 0) + (nudgedTask.dismissed_count || 0) + (nudgedTask.later_count || 0) + (nudgedTask.closed_count || 0);
           const localHour = Math.floor(localMinutesOfDay(now, timeZone) / 60);
-          const quietChore = noDate && (localHour >= 22 || localHour < 7 || putOff >= 3);
+          // "Late at night" is their own night: the quiet-hours window (its
+          // times count even with the switch off), not a fixed 10 PM to 7 AM,
+          // which is the middle of the day for someone who sleeps days.
+          const quietChore = noDate && (isInQuietHours(now, quiet.startMin, quiet.endMin, timeZone) || putOff >= 3);
           ringsOutLoud = !quietChore && (overdue || dueToday || inWindow || noDate || (pressing && !pinnedLater));
           // A rare, gentle mention about a task the boss tagged "no rush" (or
           // the like) is a plain notification whatever the task's date or
@@ -1154,6 +1160,29 @@ function workContext(user: any, shifts: any[], now: Date, timeZone: string) {
   const [y, mo, d] = getLocalDateString(now, timeZone).split('-').map(Number);
   const varies = (user?.work_schedule_mode || 'fixed') === 'varies';
   const lines: string[] = [];
+  const shiftFor = (day: Date) => {
+    const key = day.toISOString().slice(0, 10);
+    if (varies) {
+      const s = (shifts || []).find((x: any) => x.shift_date === key);
+      return { start: s?.arrive_by || '', end: s?.ends_at || '' };
+    }
+    const f = (user?.work_fixed_days || []).find((x: any) => Number(x.day) === day.getUTCDay());
+    return { start: f?.arrive_by || '', end: f?.ends_at || '' };
+  };
+  const mins = (hhmm: string) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm || '');
+    return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+  };
+  // Last night's shift, still going after midnight (Oct 12 2026: the list
+  // started at today, so at 3 AM mid-shift the planner thought they were free).
+  {
+    const last = shiftFor(new Date(Date.UTC(y, mo - 1, d - 1, 12)));
+    const s0 = mins(last.start);
+    const e0 = mins(last.end);
+    if (s0 != null && e0 != null && e0 < s0 && localMinutesOfDay(now, timeZone) < e0) {
+      lines.push(`Right now: still on last night's shift, until ${hhmmLabel(last.end)}`);
+    }
+  }
   for (let i = 0; i < 7; i++) {
     const day = new Date(Date.UTC(y, mo - 1, d + i, 12));
     const key = day.toISOString().slice(0, 10);
@@ -1171,7 +1200,8 @@ function workContext(user: any, shifts: any[], now: Date, timeZone: string) {
     if (!hhmmLabel(start)) continue;
     const label = i === 0 ? 'Today' : i === 1 ? 'Tomorrow'
       : day.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', timeZone: 'UTC' });
-    lines.push(`${label}: ${hhmmLabel(start)}${hhmmLabel(end) ? ` – ${hhmmLabel(end)}` : ' (end time not saved)'}`);
+    const overnight = mins(end) != null && mins(start) != null && (mins(end) as number) < (mins(start) as number);
+    lines.push(`${label}: ${hhmmLabel(start)}${hhmmLabel(end) ? ` – ${hhmmLabel(end)}${overnight ? ' (ends the next morning)' : ''}` : ' (end time not saved)'}`);
   }
   return {
     lines,
@@ -1284,8 +1314,12 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
   }).format(now);
 
   // How much of today is left before quiet hours — a due-today task at 8 PM
-  // with quiet hours at 9 PM has ONE hour, not "the rest of the day".
-  const minsLeftToday = Math.max(0, (quietStartMin > localMin ? quietStartMin : 24 * 60) - localMin);
+  // with quiet hours at 9 PM has ONE hour, not "the rest of the day". Quiet
+  // hours that start after midnight (1 AM, or 8 AM for someone who sleeps
+  // days) are counted to their real start, not cut off at midnight.
+  const minsLeftToday = noQuietHours
+    ? 24 * 60 - localMin
+    : isInQuietHours(new Date(nowMs), quietStartMin, quietEndMin, timeZone) ? 0 : (quietStartMin - localMin + 24 * 60) % (24 * 60);
   const hoursLeftStr = minsLeftToday < 60 ? `${minsLeftToday} minutes` : `${Math.round(minsLeftToday / 60 * 10) / 10} hours`;
 
   // Hard filter, not a prompt instruction: a day-tied task ("do X on Nov 1")
