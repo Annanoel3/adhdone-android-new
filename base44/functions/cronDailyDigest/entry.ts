@@ -9,7 +9,7 @@
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
-import { localMinutesOfDay, parseHHMM, resolveQuietHours, userTimeZone, DEFAULT_QUIET_END } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, localDateKey, parseHHMM, resolveQuietHours, userTimeZone, DEFAULT_QUIET_END } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
 
@@ -25,7 +25,6 @@ Deno.serve(async (req) => {
 
     const base44 = createClientFromRequest(req);
     const now = new Date();
-    const todayStr = now.toISOString().slice(0, 10);
 
     // 1. Get all users (for timezone + quiet hours + de-dup tracking)
     const allUsers = await listAll(base44.asServiceRole.entities.User);
@@ -66,9 +65,6 @@ Deno.serve(async (req) => {
       const user = userMap[email];
       if (!user) continue;
 
-      // De-dup: only one digest per day per user
-      if (user.last_digest_date === todayStr) continue;
-
       const timeZone = userTimeZone(user);
       // The morning is when the user's quiet hours end. Quiet hours default to
       // ON, so a profile that saved an end time but never flipped the switch
@@ -78,9 +74,17 @@ Deno.serve(async (req) => {
       const endMin = quiet.enabled ? quiet.endMin : parseHHMM(DEFAULT_QUIET_END);
 
       // Morning window: [endMin, endMin + 60) in the user's local time.
-      // 60-min window with a 30-min cron ensures we never miss the slot.
-      const localMin = localMinutesOfDay(now, timeZone);
-      if (localMin < endMin || localMin >= endMin + 60) continue;
+      // 60-min window with a 30-min cron ensures we never miss the slot. It
+      // can cross midnight (quiet hours ending at 11:30 PM for someone who
+      // works nights), so it's measured from its own start.
+      const sinceEnd = (localMinutesOfDay(now, timeZone) - endMin + 24 * 60) % (24 * 60);
+      if (sinceEnd >= 60) continue;
+
+      // De-dup: one digest per morning, keyed by the user's own date for the
+      // morning the window opened on. It used to be the UTC date, so a window
+      // that straddled UTC midnight (an evening wake-up in the US) sent twice.
+      const todayStr = localDateKey(new Date(now.getTime() - sinceEnd * 60000), timeZone);
+      if (user.last_digest_date === todayStr) continue;
 
       // Get today's tasks
       const userTasks = activeTasksByUser[email] || [];
