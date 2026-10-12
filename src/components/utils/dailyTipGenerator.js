@@ -1,7 +1,9 @@
 import { base44 } from "@/api/base44Client";
 import { isTodayTask, isUpcomingTask } from "./todayTasks";
+import { isTheirTipEvening } from "./reminderCopy";
 
-const isEvening = () => new Date().getHours() >= 17;
+// Their evening, from their quiet hours (reminderCopy.isTheirTipEvening).
+const isEvening = () => isTheirTipEvening(new Date());
 
 const getLocalDateString = () => {
   const d = new Date();
@@ -69,7 +71,7 @@ export async function generateSmartTipForUser(today) {
     const moodLabel = { not_great: 'not great', feeling_ok: 'okay', good: 'good', lets_go: 'energized' }[todayMood] || 'unknown';
     const moodSummary = todayMood ? `They said they were feeling ${moodLabel} about the day.` : 'No mood check-in today.';
     contextualGuidance = `
-CONTEXT: It's evening. This is "Tonight's Tip" — a warm, celebratory wind-down. NOT a productivity push.
+CONTEXT: It's the end of their day. This is their wind-down tip — warm and celebratory. NOT a productivity push.${(() => { const h = new Date().getHours(); return h >= 17 || h < 4 ? '' : ' They keep different hours: it is not evening on the clock, so never say evening, tonight or dinner.'; })()}
 MOOD CHECK-IN: ${moodSummary}
 DAY SUMMARY: They created ${createdToday.length} task(s) today and completed ${effectiveCompleted.length} of them.
 ${effectiveCompleted.length > 0 ? `COMPLETED TASK TITLES: ${completedTitles}` : ''}
