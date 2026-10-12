@@ -75,7 +75,10 @@ export default function UpcomingBirthdayCard({ tasks, user, theme, specialMode, 
               <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">Next birthday</p>
               {next ? (
                 <>
-                  <p className="font-bold text-gray-900 text-lg truncate">{next.birthday_person || (next.title || "").replace(/^🎂\s*/, "") || "Birthday"}</p>
+                  <p className="font-bold text-gray-900 text-lg flex items-center gap-1 min-w-0">
+                    <span className="truncate">{next.birthday_person || (next.title || "").replace(/^🎂\s*/, "") || "Birthday"}</span>
+                    {next.birthday_animal && <span className="flex-shrink-0" title="Pet">🐾</span>}
+                  </p>
                   <p className="text-sm text-gray-600">
                     {new Date(next.next_reminder).toLocaleDateString(undefined, {
                       month: "long",
