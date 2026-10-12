@@ -15,7 +15,7 @@ function dayLabel(due, daysAway) {
 // Their own evening and morning, from their quiet hours (Settings, kept on
 // this device), not the clock: for someone who sleeps 8 AM to 4 PM, 6 AM is
 // bedtime and 5 PM is morning (Oct 12 2026). Defaults 10 PM to 8 AM.
-function quietWindow() {
+export function quietWindow() {
   const read = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
   const toMin = (s, d) => {
     const m = /^(\d{1,2}):(\d{2})$/.exec(String(s || ''));
