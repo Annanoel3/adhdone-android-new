@@ -254,3 +254,54 @@ function platformMs(v: any): number {
   const s = String(v);
   return new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`).getTime();
 }
+
+// Their day, not the calendar's (Anna, Oct 12 2026: someone on a night shift
+// is still on Monday at 2 AM, and their Monday task isn't late yet). It turns
+// over in the middle of their quiet hours and is named for the date they wake
+// up on: for 10 PM to 8 AM that's 3 AM, for 8 AM to 4 PM it's noon. No quiet
+// hours (0/0): midnight. Same rule as the web's todayTasks.theirDayKey.
+export function theirDayKey(d: Date, timeZone: string, quietStartMin: number, quietEndMin: number): string {
+  if (quietStartMin === quietEndMin) return localDateKey(d, timeZone);
+  const half = Math.round(((quietEndMin - quietStartMin + 24 * 60) % (24 * 60)) / 2);
+  const shifted = new Date(d.getTime() + half * 60000);
+  const key = localDateKey(shifted, timeZone);
+  if (localMinutesOfDay(shifted, timeZone) >= quietEndMin) return key;
+  const [y, m, dd] = key.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, dd - 1)).toISOString().slice(0, 10);
+}
+
+// Their day key as Smart Reminders and the morning summary use it: quiet
+// hours off is a midnight day.
+export function theirDayKeyFor(user: any, d: Date, timeZone: string): string {
+  const q = resolveQuietHours(user);
+  return q.enabled ? theirDayKey(d, timeZone, q.startMin, q.endMin) : localDateKey(d, timeZone);
+}
+
+// When they woke up today. The hour after it goes to the morning summary
+// first (Anna, Oct 12 2026: "the summary can get first claim on the hour after
+// I wake up"). It's when their quiet hours ended (8 AM with quiet hours off),
+// or with "Notice when I wake up" on, when the phone was first unlocked (never
+// before quiet hours end). Until the phone reports, null: they're most likely
+// still asleep, for up to 4 hours after quiet hours end (as Smart Reminders
+// waits), then that cap. Any other sign they're up today (they answered a
+// reminder, opened the app) counts from then. Also null inside quiet hours.
+export function wakeStartMs(user: any, now: Date, timeZone: string): number | null {
+  const q = resolveQuietHours(user);
+  if (q.enabled && isInQuietHours(now, q.startMin, q.endMin, timeZone)) return null;
+  const endMin = q.enabled ? q.endMin : parseHHMM(DEFAULT_QUIET_END);
+  const nowMs = now.getTime();
+  const sinceEnd = (localMinutesOfDay(now, timeZone) - endMin + 24 * 60) % (24 * 60);
+  const quietEnded = Math.floor(nowMs / 60000) * 60000 - sinceEnd * 60000;
+  if (user?.wake_watch !== true) return quietEnded;
+  const today = theirDayKeyFor(user, now, timeZone);
+  const todays = (v: any) => {
+    const ms = platformMs(v);
+    return Number.isFinite(ms) && ms <= nowMs && theirDayKeyFor(user, new Date(ms), timeZone) === today ? ms : NaN;
+  };
+  for (const v of [user.woke_at, user.day_first_sign_at, user.last_active_at]) {
+    const ms = todays(v);
+    if (Number.isFinite(ms)) return Math.max(ms, quietEnded);
+  }
+  if (sinceEnd < 4 * 60) return null;
+  return quietEnded + 4 * 60 * 60 * 1000;
+}
