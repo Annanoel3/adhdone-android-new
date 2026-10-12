@@ -54,7 +54,7 @@ export function anchorToDaytime(date, interval) {
   if (!SAME_TIME_EVERY_DAY.includes(interval)) return at;
 
   let startMin = 22 * 60;
-  let endMin = 7 * 60;
+  let endMin = 8 * 60; // the app's default quiet hours end at 8 AM (RULES.md hard rule 4)
   try {
     startMin = hhmmToMin(localStorage.getItem('quiet_hours_start'), startMin);
     endMin = hhmmToMin(localStorage.getItem('quiet_hours_end'), endMin);
