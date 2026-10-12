@@ -1,3 +1,5 @@
+// Re-saved Oct 12 2026 so the bundled shared/reminderTitle.ts is picked up: a time
+// they set inside quiet hours rings as an alarm (throughQuiet), RULES.md §9 Q4.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
 import { userTimeZone, resolveQuietHours } from '../../shared/quietHours.ts';
