@@ -875,6 +875,9 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
             scheduledDateISO: createdTask.next_reminder,
             urgency: createdTask.urgency,
             classification: createdTask.classification || 'event',
+            // An all-day event: the day before and the morning of, not "It's
+            // time" at its 9 AM anchor (Oct 12 2026).
+            noClockTime: !(createdTask as any).event_time,
             // Lets the "leave now" reminder be based on real drive time from home
             // instead of a blanket hour before.
             location: (createdTask as any).location || (taskRecord as any).location || '',
