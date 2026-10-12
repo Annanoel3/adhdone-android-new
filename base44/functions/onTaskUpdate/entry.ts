@@ -1,3 +1,5 @@
+// Re-saved Oct 12 2026 so the bundled shared/workHours.ts (via sendLedger) is picked up:
+// an overnight shift belongs to the day it starts and runs past midnight.
 // Re-saved Oct 6 2026 so the bundled shared/reminderTitle.ts (Later break: no alarm inside later_until) is picked up.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 // Reminder wording: every body names the task (the spoken alarm reads it).
