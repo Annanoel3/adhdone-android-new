@@ -58,8 +58,10 @@ export default function BirthdayList({ birthdays, theme, onRefresh }) {
               <Cake className="w-5 h-5 text-pink-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="font-semibold truncate">
-                {b.birthday_person || (b.title || "").replace(/^🎂\s*/, "") || "Birthday"}
+              {/* A pet's birthday keeps a paw next to the name (Anna, Oct 12 2026). */}
+              <p className="font-semibold flex items-center gap-1 min-w-0">
+                <span className="truncate">{b.birthday_person || (b.title || "").replace(/^🎂\s*/, "") || "Birthday"}</span>
+                {b.birthday_animal && <span className="flex-shrink-0" title="Pet">🐾</span>}
               </p>
               <p className="text-xs text-gray-500">
                 {new Date(b.next_reminder).toLocaleDateString(undefined, { month: "long", day: "numeric" })} ·{" "}
