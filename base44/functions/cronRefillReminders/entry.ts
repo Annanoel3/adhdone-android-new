@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent, pushPhoneAlarms } from '../../shared/reminderTitle.ts';
-import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet } from '../../shared/quietHours.ts';
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
@@ -284,7 +284,9 @@ Deno.serve(async (req) => {
       // forever. Pin that first slot to a daytime hour. Only for reminders that
       // repeat at the same time of day, and never for a task that already has a
       // running schedule — that one keeps the time it has.
-      if (interval >= 24 * 60 * 60 * 1000 && scheduledUntil <= now) {
+      // A time they set themselves stays where they put it, quiet hours or not
+      // (RULES.md §9 Q4: "every day at 6 AM" rings at 6).
+      if (interval >= 24 * 60 * 60 * 1000 && scheduledUntil <= now && !isTimeTheySet(task, batchStart.getTime(), timeZone)) {
         batchStart = anchorToDaytime(batchStart, startMin, endMin, timeZone);
       }
 
@@ -316,7 +318,9 @@ Deno.serve(async (req) => {
 
       for (let i = 0; i < BATCH_SIZE; i++) {
         let sendAt = new Date(batchStart.getTime() + interval * i);
-        if (useQuiet) {
+        // The slot at the time they set themselves goes out at that time, quiet
+        // hours or not (RULES.md §9 Q4); every other slot follows quiet hours.
+        if (useQuiet && !isTimeTheySet(task, sendAt.getTime(), timeZone)) {
           // A night-time ping of a short rhythm is dropped (the morning digest
           // replaces it); a daily one moves to a daytime slot instead of being
           // dropped. See placeRepeatingSlot — dropping every slot that landed
@@ -855,6 +859,10 @@ Deno.serve(async (req) => {
         isAllDay: !!task.day_only_task || (!task.event_time && task.classification === 'event'),
         isEvent: task.classification === 'event',
         timeZone,
+        // Nothing the app picked lands in their quiet hours; the start itself,
+        // when it's a time they set, may (RULES.md §9 Q4).
+        quiet: task.quiet_hours_exempt === true ? undefined : resolveQuietHours(owner),
+        startIsTheirs: isTimeTheySet(task, new Date(task.next_reminder).getTime(), userTimeZone(owner)),
       });
       if (plan.length > 0) {
         await base44.asServiceRole.entities.Task.update(task.id, {
