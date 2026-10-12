@@ -1,3 +1,4 @@
+// Re-saved Oct 12 2026 (pets) so the bundled shared/reminderTitle.ts is picked up: a pet's birthday alarm has no "Write a text" button.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent, pushPhoneAlarms } from '../../shared/reminderTitle.ts';
 import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, isInQuietHours, placeAppReminder } from '../../shared/quietHours.ts';
@@ -476,8 +477,22 @@ Deno.serve(async (req) => {
   const BIRTHDAY_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
   const DAY_MS = 24 * 60 * 60 * 1000;
 
-  function birthdayReminderContent(person: string, kind: string, birthdayIso: string) {
+  function birthdayReminderContent(person: string, kind: string, birthdayIso: string, animal?: string | null) {
     const dateStr = new Date(birthdayIso).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    // A pet's birthday (birthday_animal): the same three reminders, never a
+    // word about a text (Anna, Oct 12 2026). Same words as birthdayScheduler.jsx.
+    if (animal) {
+      switch (kind) {
+        case 'week_before':
+          return { title: `🎂 ${person}'s birthday is in 1 week`, body: `${person}'s birthday is coming up on ${dateStr}.`, offsetDays: -7 };
+        case 'day_before':
+          return { title: `🎂 ${person}'s birthday is tomorrow`, body: `Heads up: ${person}'s birthday is tomorrow (${dateStr}).`, offsetDays: -1 };
+        case 'day_of':
+          return { title: `🎂 It's ${person}'s birthday today!`, body: `Don't forget to celebrate ${person}'s birthday today!`, offsetDays: 0 };
+        default:
+          return null;
+      }
+    }
     switch (kind) {
       case 'week_before':
         return { title: `🎂 ${person}'s birthday is in 1 week`, body: `Don't lose it — ${person}'s birthday is coming up on ${dateStr}. Time to sort a gift or message.`, offsetDays: -7 };
@@ -531,7 +546,7 @@ Deno.serve(async (req) => {
     const entries: any[] = [];
     for (const { key, kind, label } of kinds) {
       if (!toggles[key]) continue;
-      const content = birthdayReminderContent(person, kind, birthdayIso);
+      const content = birthdayReminderContent(person, kind, birthdayIso, task.birthday_animal);
       if (!content) continue;
       const sendAt = new Date(birthdayDate.getTime() + content.offsetDays * DAY_MS);
       if (sendAt.getTime() <= now.getTime()) continue;
@@ -648,7 +663,7 @@ Deno.serve(async (req) => {
       // message, so this is the only nudge they get when nothing is written.
       let pushTitle = entry.notification_title;
       let pushBody = entry.notification_body;
-      if (!isOwn && !task.birthday_text_message && (entry.kind === 'week_before' || entry.kind === 'day_before' || entry.kind === 'day_of')) {
+      if (!isOwn && !task.birthday_animal && !task.birthday_text_message && (entry.kind === 'week_before' || entry.kind === 'day_before' || entry.kind === 'day_of')) {
         const person = task.birthday_person || 'Someone';
         const dateStr = new Date(nextReminderIso).toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
         pushTitle = `🎂 Write a text for ${person}`;
@@ -730,7 +745,8 @@ Deno.serve(async (req) => {
     const owner = userMap[task.notification_recipient_email];
     const timeZone = userTimeZone(owner);
     const isDayOf = localDateKey(bdayDate, timeZone) === localDateKey(now, timeZone);
-    if (isDayOf && !isOwn && task.birthday_text_sent !== true) {
+    // Never for a pet's birthday: there is no text (Oct 12 2026).
+    if (isDayOf && !isOwn && !task.birthday_animal && task.birthday_text_sent !== true) {
       const localMin = localMinutesOfDay(now, timeZone);
       const { enabled: quietEnabled, startMin: qStart, endMin: qEnd } = resolveQuietHours(owner);
       const inQuiet = quietEnabled && (qStart < qEnd
