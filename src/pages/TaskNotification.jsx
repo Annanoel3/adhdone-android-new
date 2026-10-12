@@ -304,7 +304,7 @@ export default function TaskNotification() {
           </div>
 
           {/* Birthday text button — shown when the task is a birthday with a saved message */}
-          {task.birthday_person && task.birthday_text_message && (
+          {task.birthday_person && !task.birthday_animal && task.birthday_text_message && (
             <Button
               onClick={async () => {
                 const body = encodeURIComponent(task.birthday_text_message);
@@ -329,7 +329,7 @@ export default function TaskNotification() {
           )}
 
           {/* Draft birthday text button — shown when the task is a birthday with no saved message */}
-          {task.birthday_person && !task.birthday_text_message && (
+          {task.birthday_person && !task.birthday_animal && !task.birthday_text_message && (
             <Button
               onClick={() => setShowBirthdayDraft(true)}
               disabled={isProcessing}
