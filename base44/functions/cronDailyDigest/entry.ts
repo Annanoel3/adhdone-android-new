@@ -1,9 +1,11 @@
 // Daily morning digest notification.
 // Replaces the "9 AM collision" (N individual task notifications all firing at
 // quiet-hours-end) with ONE friendly summary of the user's day. Runs every
-// 30 minutes via a scheduled automation; for each user whose local time is
-// within their morning window (quiet_hours_end ± 30 min, or 8 AM default),
-// it sends a single OneSignal push summarizing today's tasks. Nothing on the
+// 30 minutes via a scheduled automation; for each user in the first hour after
+// they woke up (when their quiet hours ended, or with "Notice when I wake up"
+// on, when their phone was first unlocked; 8 AM with quiet hours off), it
+// sends a single OneSignal push summarizing today's tasks. That hour is the
+// summary's first claim (Anna, Oct 12 2026): Smart Reminders wait for it. Nothing on the
 // list today means no digest at all (it used to send "your day is clear!",
 // every morning, to people who had never made a task).
 
@@ -11,7 +13,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
 // localDateKey is this file's own (below). Importing it too, as on Oct 12 2026 at
 // 05:28 UTC, is a duplicate declaration and the function failed to start.
-import { localMinutesOfDay, parseHHMM, resolveQuietHours, userTimeZone, DEFAULT_QUIET_END } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, userTimeZone, theirDayKeyFor, wakeStartMs } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
 
@@ -68,24 +70,22 @@ Deno.serve(async (req) => {
       if (!user) continue;
 
       const timeZone = userTimeZone(user);
-      // The morning is when the user's quiet hours end. Quiet hours default to
-      // ON, so a profile that saved an end time but never flipped the switch
-      // is read as ON (it used to be read as off and fall back to 8 AM).
-      // Explicitly off: the 8 AM default.
-      const quiet = resolveQuietHours(user);
-      const endMin = quiet.enabled ? quiet.endMin : parseHHMM(DEFAULT_QUIET_END);
 
-      // Morning window: [endMin, endMin + 60) in the user's local time.
-      // 60-min window with a 30-min cron ensures we never miss the slot. It
-      // can cross midnight (quiet hours ending at 11:30 PM for someone who
-      // works nights), so it's measured from its own start.
-      const sinceEnd = (localMinutesOfDay(now, timeZone) - endMin + 24 * 60) % (24 * 60);
-      if (sinceEnd >= 60) continue;
+      // The first hour after they woke up (shared/quietHours.wakeStartMs):
+      // from when their quiet hours ended (quiet hours default to ON; turned
+      // off, 8 AM), or with "Notice when I wake up" on, from when their phone
+      // was first unlocked. Until it reports, nothing yet (at most 4 hours past
+      // quiet hours end). Never inside quiet hours. 60 minutes with a 30-minute
+      // cron: two tries.
+      const wokeAt = wakeStartMs(user, now, timeZone);
+      if (wokeAt == null) continue;
+      const sinceWake = now.getTime() - wokeAt;
+      if (sinceWake < 0 || sinceWake >= 60 * 60 * 1000) continue;
 
-      // De-dup: one digest per morning, keyed by the user's own date for the
-      // morning the window opened on. It used to be the UTC date, so a window
-      // that straddled UTC midnight (an evening wake-up in the US) sent twice.
-      const todayStr = localDateKey(new Date(now.getTime() - sinceEnd * 60000), timeZone);
+      // De-dup: one digest per day, keyed by their own day (it turns over in
+      // the middle of their quiet hours and is named for the date they wake
+      // up on), the same key Smart Reminders checks before it waits for this.
+      const todayStr = theirDayKeyFor(user, now, timeZone);
       if (user.last_digest_date === todayStr) continue;
 
       // Get today's tasks
@@ -95,7 +95,13 @@ Deno.serve(async (req) => {
       // Nothing on the list today: no digest. "Your day is clear — what else
       // can we tackle?" went out every single morning to people who had never
       // made a task, which reads as spam from an app they opened once.
-      if (todaysTasks.length === 0) continue;
+      // Its turn is still over for today, so Smart Reminders stop waiting.
+      if (todaysTasks.length === 0) {
+        if (userTasks.length > 0) {
+          try { await base44.asServiceRole.entities.User.update(user.id, { last_digest_date: todayStr }); } catch {}
+        }
+        continue;
+      }
 
       // Claim today BEFORE sending. If this write fails (or the run is cut off
       // after the push goes out), the next 30-min run would otherwise re-send
@@ -107,9 +113,10 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Send ledger: don't stack the digest on top of another push landing in
-      // the same window — release the claim so a later run this morning retries.
-      const gate = await ledgerCheck(base44, { email, kind: 'daily_digest' });
+      // Send ledger: first claim (Anna, Oct 12 2026). Softer pushes don't hold
+      // it back; only a reminder tied to a real moment within 5 minutes does,
+      // and then the claim is released so the next run this hour retries.
+      const gate = await ledgerCheck(base44, { email, kind: 'daily_digest', firstClaim: true });
       if (!gate.allowed) {
         try {
           await base44.asServiceRole.entities.User.update(user.id, { last_digest_date: user.last_digest_date || null });
@@ -187,7 +194,7 @@ function isSameLocalDay(d1: Date, d2: Date, timeZone: string): boolean {
 }
 
 // ── Helper: LLM-generated friendly digest message (with template fallback) ───
-// It goes out when their quiet hours end: their morning, which for someone who
+// It goes out when they wake up: their morning, which for someone who
 // sleeps days is 4 PM. "Good morning" at 4 PM is odd, so outside clock morning
 // it's "Rise and shine" (Anna, Oct 12 2026).
 async function generateDigestMessage(tasks: any[], firstName: string, localHour: number): Promise<{ title: string; body: string }> {
