@@ -1796,12 +1796,27 @@ export function WakeOfferPrompt({ user, theme }) {
     if (!user || wanted || Date.now() - wakeOfferCheckedAt < 60 * 60 * 1000) return;
     if (!window.Capacitor?.isNativePlatform?.() || typeof AB()?.wakeWatchStatus !== 'function') return;
     wakeOfferCheckedAt = Date.now();
-    if (user.wake_offer_seen_at || user.wake_watch === true || user.wake_watch === false) return;
-    try { if (localStorage.getItem(WAKE_OFFER_KEY)) return; } catch (e) { /* no storage */ }
     (async () => {
       try {
         const st = await AB().wakeWatchStatus();
-        if (st?.enabled) return;
+        // The phone's own switch is what counts (Anna, Oct 12 2026: after
+        // reinstalling, her phone had it off while her account still said on,
+        // so Smart Reminders would have waited every morning for a wake-up the
+        // phone wasn't watching for). On the phone: on for the account too.
+        // Off on the phone but on for the account: back to "never set", which
+        // also lets this offer ask once.
+        const phoneOn = !!st?.enabled && st?.hasAccess !== false;
+        let watch = user.wake_watch;
+        if (phoneOn) {
+          if (watch !== true) await base44.auth.updateMe({ wake_watch: true }).catch(() => {});
+          return;
+        }
+        if (watch === true) {
+          await base44.auth.updateMe({ wake_watch: null }).catch(() => {});
+          watch = null;
+        }
+        if (user.wake_offer_seen_at || watch === false) return;
+        try { if (localStorage.getItem(WAKE_OFFER_KEY)) return; } catch (e) { /* no storage */ }
         const made = platformMs(user.created_date);
         if (Number.isFinite(made) && made < WAKE_OFFER_SINCE) {
           setWanted(true);
