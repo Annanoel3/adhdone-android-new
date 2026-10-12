@@ -427,7 +427,9 @@ function laterMorningAfter(now) {
 function laterBreakUntil(t, now = new Date()) {
   // A task due today doesn't count for the Later rules (Anna, Oct 11 2026): no
   // break. Later only says "not this minute"; Smart Reminders decides when it
-  // comes back today. Same as cancelTaskNotifications.
+  // comes back today. Same as cancelTaskNotifications. An urgent task, whatever
+  // its date, gets no break either.
+  if (t.urgency === 'urgent') return new Date(now);
   const rawDue = t.due_date ? String(t.due_date) : '';
   const due = rawDue.length > 10 ? new Date(rawDue) : null;
   const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
