@@ -256,6 +256,14 @@ target_date / target_time — WHEN the thing happens (YYYY-MM-DD / 24h "HH:MM").
   ("pick up my sister at 3") is the next time that clock time comes around:
   today if it's still ahead of CURRENT TIME, otherwise tomorrow.
 
+time_stated — true only when the user gave the clock time itself: a number
+  ("5am", "at 3", "17:30", "quarter to 7"), "noon" or "midnight", or an exact
+  amount of time from now ("in 20 minutes", "in an hour"). False when YOU chose
+  the clock time from a part of the day or a loose phrase ("tonight", "before
+  bed", "this evening", "first thing in the morning", "after work"), and false
+  when target_time is null. Only a time the user stated may ring during their
+  quiet hours (a 5 AM flight), so when unsure, false.
+
 end_date — for a stated multi-day range, the LAST day. Otherwise null.
 
 due_date — when the thing must be DONE by. Set it for deadlines ("by Friday",
@@ -415,6 +423,7 @@ Return JSON with exactly these keys:
   "classification": "task" | "event" | "birthday" | "payment",
   "target_date": "YYYY-MM-DD" | null,
   "target_time": "HH:MM" | null,
+  "time_stated": boolean,
   "end_date": "YYYY-MM-DD" | null,
   "due_date": "YYYY-MM-DD" | null,
   "user_asked_to_repeat_every": "10min" | "20min" | "30min" | "1hour" | "2hours" | "4hours" | "daily" | "every_other_day" | null,
