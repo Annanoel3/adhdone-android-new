@@ -8,7 +8,7 @@
 // dates, and a task captured as "due Friday" is saved as Friday 11:59 PM local,
 // which is already Saturday in UTC — so a Friday-evening reminder said "due
 // tomorrow" and named the wrong weekday for US users.
-import { DEFAULT_TIME_ZONE, localDateKey, resolveQuietHours, isInQuietHours } from './quietHours.ts';
+import { DEFAULT_TIME_ZONE, localDateKey, resolveQuietHours, isInQuietHours, isTimeTheySet } from './quietHours.ts';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -119,13 +119,15 @@ function ringsOutLoudOn(task: any, momentMs: number, timeZone: string): boolean 
 
 // Every moment a push is booked for this task, with that push's words
 // (see reminderMomentsFor in widgetBridge.js).
-function reminderMoments(task: any, timeZone: string): { at: number; heading: string; body: string }[] {
-  const out = new Map<number, { at: number; heading: string; body: string }>();
+function reminderMoments(task: any, timeZone: string): { at: number; heading: string; body: string; theirs?: boolean }[] {
+  const out = new Map<number, { at: number; heading: string; body: string; theirs?: boolean }>();
   const schedule = (Array.isArray(task.reminder_schedule) ? task.reminder_schedule : []).filter((r: any) => r && r.send_at);
   for (const r of schedule) {
     const t = whenMs(r.send_at);
     if (isNaN(t) || out.has(t)) continue;
-    out.set(t, { at: t, heading: r.notification_title || '', body: r.notification_body || '' });
+    // their_time: a reminder they added at a time they picked (see
+    // SmartReminderEditor), which may ring inside quiet hours.
+    out.set(t, { at: t, heading: r.notification_title || '', body: r.notification_body || '', theirs: r.their_time === true });
   }
   if (schedule.length === 0 && task.next_reminder && !task.day_only_task && task.deadline_style !== 'by') {
     const t = whenMs(task.next_reminder);
@@ -152,9 +154,17 @@ export function phoneAlarmsFor(task: any, owner: any, now: number = Date.now()):
   for (const m of reminderMoments(task, timeZone)) {
     if (m.at <= now) continue;
     if (Number.isFinite(breakMs) && m.at < breakMs) continue;
-    if (quiet.enabled && task.quiet_hours_exempt !== true && isInQuietHours(new Date(m.at), quiet.startMin, quiet.endMin, timeZone)) continue;
+    // Inside quiet hours only a time they set themselves rings (RULES.md §9
+    // Q4: a 5 AM flight), or a task they asked to run through the night.
+    const inQuiet = quiet.enabled && isInQuietHours(new Date(m.at), quiet.startMin, quiet.endMin, timeZone);
+    const theirTime = inQuiet && (m.theirs === true || isTimeTheySet(task, m.at, timeZone));
+    if (inQuiet && task.quiet_hours_exempt !== true && !theirTime) continue;
     if (!ringsOutLoudOn(task, m.at, timeZone)) continue;
     const alarm: any = { id: `${task.id}:${m.at}`, at: m.at, title: task.title || 'Task', heading: m.heading, body: m.body };
+    // Home or Back on this one rings it again in 10 minutes instead of closing
+    // it (build 40 on; AlarmService.leftRinging): one sleepy press mustn't
+    // silence the only alarm they asked for in the night.
+    if (theirTime) alarm.throughQuiet = true;
     // Which repeated thing it is: two alarms of one family at the same moment
     // ring as one (the phone's PairDecisions, build 39 on).
     if (task.task_family) alarm.family = String(task.task_family).slice(0, 40);
