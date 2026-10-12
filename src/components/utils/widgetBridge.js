@@ -430,7 +430,7 @@ function laterBreakUntil(t, now = new Date()) {
   // comes back today. Same as cancelTaskNotifications. An urgent task, whatever
   // its date, gets no break either.
   if (t.urgency === 'urgent') return new Date(now);
-  const rawDue = t.due_date ? String(t.due_date) : '';
+  const rawDue = t.due_date ? String(t.due_date) : (t.event_time ? String(t.event_time) : '');
   const due = rawDue.length > 10 ? new Date(rawDue) : null;
   const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   if ((rawDue.length === 10 && rawDue === todayKey) || (due && !isNaN(due.getTime()) && due.toDateString() === now.toDateString())) return new Date(now);
