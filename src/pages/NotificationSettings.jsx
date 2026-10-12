@@ -15,9 +15,16 @@ import { readRingLog } from "@/components/utils/widgetBridge";
 // has the pushes it sent; the phone's alarms — a task's time, a snooze coming
 // back, a nudge ringing on arrival — and what was done with each were nowhere
 // to look up (Anna, Oct 7 2026: "Felt more like 15").
+// endedBy: Home or Back closed it while it rang (build 40 on).
+const leftWith = (by) => (by === 'home' ? 'Home pressed' : by === 'back' ? 'Back pressed' : 'screen closed');
+
 function ringEnding(r) {
   switch (r.ended) {
-    case 'snoozed': return r.snoozeMinutes >= 60 ? `snoozed ${Math.round(r.snoozeMinutes / 60)} h` : `snoozed ${r.snoozeMinutes || 10} min`;
+    case 'snoozed': {
+      const len = r.snoozeMinutes >= 60 ? `${Math.round(r.snoozeMinutes / 60)} h` : `${r.snoozeMinutes || 10} min`;
+      return r.endedBy ? `${leftWith(r.endedBy)}, rings again in ${len}` : `snoozed ${len}`;
+    }
+    case 'closed': return `${leftWith(r.endedBy)}, no answer`;
     case 'later': return 'Later';
     case 'dismissed': return 'dismissed';
     case 'done': return 'done';
