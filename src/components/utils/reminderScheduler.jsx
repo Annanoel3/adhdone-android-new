@@ -35,6 +35,32 @@ export function isInQuietHours(dateTime) {
   }
 }
 
+// RULES.md §9 Q4 (Anna, Oct 12 2026): a time the person set themselves inside
+// their quiet hours (a 5 AM flight) is the one thing that goes through them,
+// alarm and all. True when the task says they set its clock time (time_stated:
+// they said or typed one, or picked one in the app) and `ms` is that time: the
+// event's start, or the named clock time on its day. Never a time the app
+// picked. Same rule as isTimeTheySet in base44/shared/quietHours.ts.
+export function isTimeTheySet(task, ms) {
+  if (!task || task.time_stated !== true || !Number.isFinite(ms)) return false;
+  const when = (v) => (v ? new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(String(v)) ? v : `${v}Z`).getTime() : NaN);
+  const ev = when(task.event_time);
+  if (Number.isFinite(ev) && Math.abs(ev - ms) < 60 * 1000) return true;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(task.anchor_time || ''));
+  if (!m) return false;
+  const d = new Date(ms);
+  if (d.getHours() !== Number(m[1]) || d.getMinutes() !== Number(m[2])) return false;
+  // On the task's own day for a one-time task, on one of its days for a
+  // repeating one.
+  if (!task.recurrence_pattern || task.recurrence_pattern === 'none') {
+    return [task.due_date, task.next_reminder, task.event_time]
+      .map(when).filter(Number.isFinite)
+      .some((t) => new Date(t).toDateString() === d.toDateString());
+  }
+  if (Array.isArray(task.recurrence_days) && task.recurrence_days.length) return task.recurrence_days.includes(d.getDay());
+  return true;
+}
+
 /**
  * Adjusts send time to avoid quiet hours
  */
@@ -267,7 +293,11 @@ export async function scheduleRecurringReminders({
   // a Back Burner return re-booking the rhythm): read off the task, so a task
   // that said yes keeps running through the night after any of those too.
   throughQuietHours,
-  alarm
+  alarm,
+  // The task itself, when the caller has it: a slot at the time they set
+  // themselves (isTimeTheySet) goes out then, quiet hours or not (RULES.md
+  // §9 Q4: "every day at 6 AM" pings at 6, not 8).
+  task
 }) {
   console.log('[scheduleRecurringReminders] Scheduling', count, 'notifications starting at', startTime);
 
@@ -303,8 +333,9 @@ export async function scheduleRecurringReminders({
     let sendAt = new Date(new Date(startTime).getTime() + (intervalMs * i));
 
     // Adjust for quiet hours — unless this task was asked, and said yes, to
-    // keep going through them.
-    if (!throughQuietHours && isInQuietHours(sendAt)) {
+    // keep going through them, or this slot is at the time they set.
+    const theirTime = !!task && isTimeTheySet(task, sendAt.getTime());
+    if (!throughQuietHours && !theirTime && isInQuietHours(sendAt)) {
       sendAt = adjustForQuietHours(sendAt);
     }
 
@@ -326,7 +357,7 @@ export async function scheduleRecurringReminders({
         android_channel_id,
         buttons,
         // Keeps the slot where it is (no second quiet-hours move below).
-        exact: throughQuietHours
+        exact: throughQuietHours || theirTime
       });
       if (notificationId) {
         console.log(`[scheduleRecurringReminders] Scheduled #${i + 1} for ${sendAt.toISOString()}: ${notificationId}`);
