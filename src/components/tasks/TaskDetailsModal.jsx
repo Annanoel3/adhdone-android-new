@@ -1111,7 +1111,11 @@ Return JSON:
           return Number.isFinite(at) ? { ...r, send_at: new Date(at + shiftMs).toISOString() } : r;
         })
       : task.reminder_schedule;
-    onUpdate({ ...task, event_time: eventTime.toISOString(), next_reminder: eventTime.toISOString(), time_stated: true, reminder_schedule: movedSchedule });
+    // An event with a time isn't all-day any more, and the day it sits under
+    // (due_date) moves with it (Anna, Oct 12 2026: Bike Night stayed all-day
+    // at 9 AM after she gave it 6 PM).
+    const dayFields = { day_only_task: false, ...(task.due_date ? { due_date: eventTime.toISOString() } : {}) };
+    onUpdate({ ...task, event_time: eventTime.toISOString(), next_reminder: eventTime.toISOString(), time_stated: true, ...dayFields, reminder_schedule: movedSchedule });
     toast({ title: 'Event time saved ✓' });
 
     (async () => {
@@ -1128,6 +1132,7 @@ Return JSON:
         event_time: eventTime.toISOString(),
         next_reminder: eventTime.toISOString(),
         time_stated: true,
+        ...dayFields,
         onesignal_notification_ids: [],
         reminder_schedule: [],
       });
