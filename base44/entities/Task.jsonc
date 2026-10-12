@@ -449,6 +449,10 @@
       "default": false,
       "description": "Send a birthday reminder on the day of the birthday. Only set on actual birthday tasks."
     },
+    "birthday_animal": {
+      "type": "string",
+      "description": "Set when the birthday is a pet's or another animal's: what kind, lowercase ('dog', 'cat', 'hamster'). Same reminders as anyone's birthday, but nothing about a text: no drafted message, no send-a-text nudges, not in the scheduled texts list. The day-of reminder says to celebrate them (Anna, Oct 12 2026). Empty = a person."
+    },
     "birthday_text_message": {
       "type": "string",
       "description": "AI-drafted birthday text message the user can send via their messaging app on the day of the birthday"
