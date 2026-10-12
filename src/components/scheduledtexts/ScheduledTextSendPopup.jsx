@@ -77,7 +77,7 @@ export default function ScheduledTextSendPopup({ user, theme }) {
       const dueBirthdays = (tasks || [])
         .filter((t) => {
           if (t.is_own_birthday) return false;
-          if (!t.birthday_person || !t.birthday_text_message || t.birthday_text_sent) return false;
+          if (!t.birthday_person || t.birthday_animal || !t.birthday_text_message || t.birthday_text_sent) return false;
           if (!t.next_reminder) return false;
           const bd = new Date(t.next_reminder);
           // same local day as today, or already passed today
