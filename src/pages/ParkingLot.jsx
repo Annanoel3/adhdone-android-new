@@ -1061,12 +1061,16 @@ Return ONLY the category name, nothing else.`;
                 <div className="flex items-start justify-between gap-4 mb-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start gap-2 mb-2">
+                      {group.parent.tracker ? (
+                        <TrendingUp className={`w-5 h-5 flex-shrink-0 ${theme === 'dark' ? 'text-purple-400' : 'text-purple-600'}`} />
+                      ) : (
                       <Lightbulb className={`w-5 h-5 ${
                         specialMode !== 'normal' ? '' :
                         theme === 'minimalist' ? 'text-purple-600' :
                         theme === 'dark' ? 'text-purple-400' :
                         'text-purple-600'
                       }`} />
+                      )}
                       <h3 className={`font-semibold text-lg whitespace-pre-wrap break-words min-w-0 flex-1 ${
                         specialMode !== 'normal' ? `${specialMode}-title` :
                         theme === 'dark' ? 'text-gray-100' : 'text-gray-900'
@@ -1089,6 +1093,15 @@ Return ONLY the category name, nothing else.`;
                       </PopoverTrigger>
                       <PopoverContent className="w-48 p-2">
                         <div className="space-y-1">
+                          {group.parent.tracker ? (
+                          <button
+                            onClick={() => openRemind(group.parent)}
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-2"
+                          >
+                            <Bell className="w-4 h-4" />
+                            Reminder
+                          </button>
+                          ) : (
                           <button
                             onClick={() => handleConvertToTask(group.parent)}
                             className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 rounded flex items-center gap-2"
@@ -1096,6 +1109,7 @@ Return ONLY the category name, nothing else.`;
                             <CheckCircle2 className="w-4 h-4" />
                             Convert to Task
                           </button>
+                          )}
                           <button
                             onClick={() => {
                               setEditingIdea(group.parent);
@@ -1108,6 +1122,7 @@ Return ONLY the category name, nothing else.`;
                             <Pencil className="w-4 h-4" />
                             Edit
                           </button>
+                          {!group.parent.tracker && (<>
                           <div className="border-t my-1" />
                           <div className="px-3 py-1 text-xs font-semibold text-gray-500">Format</div>
                           <button
@@ -1137,6 +1152,7 @@ Return ONLY the category name, nothing else.`;
                           >
                             🔢 Numbered List
                           </button>
+                          </>)}
                           <div className="border-t my-1" />
                           <button
                             onClick={() => handleDelete(group.parent.id)}
@@ -1150,6 +1166,41 @@ Return ONLY the category name, nothing else.`;
                     </Popover>
                   </div>
                 </div>
+
+                {/* A tracker: its last entry, and Log / History / Reminder. */}
+                {group.parent.tracker && (() => {
+                  const t = group.parent;
+                  const entries = t.tracker_entries || [];
+                  const last = entries[entries.length - 1];
+                  return (
+                    <div className={`mt-2 p-3 rounded-lg ${theme === 'dark' ? 'bg-gray-900/50' : 'bg-white/70'}`}>
+                      {last ? (
+                        <p className={`text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                          <span className="font-semibold">{last.text}</span>
+                          <span className="text-gray-500"> · {formatLogTime(last.at)}</span>
+                        </p>
+                      ) : (
+                        <p className="text-sm text-gray-500">Nothing logged yet.</p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">
+                        {entries.length} {entries.length === 1 ? 'entry' : 'entries'} · {t.tracker_remind && t.tracker_remind !== 'none' ? `🔔 ${remindLabel(t)}` : 'No reminder'}
+                      </p>
+                      <div className="flex flex-wrap gap-2 mt-3">
+                        <Button size="sm" onClick={() => { setLogText(""); setLogFor(t); }} className="bg-purple-600 hover:bg-purple-700 text-white">
+                          <Plus className="w-4 h-4 mr-1" />
+                          Log
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => setHistoryFor(t)}>
+                          History
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => openRemind(t)}>
+                          <Bell className="w-4 h-4 mr-1" />
+                          Reminder
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {group.subIdeas.length > 0 && (
                   <div className="ml-6 space-y-2 mt-4">
@@ -1441,6 +1492,132 @@ Return ONLY the category name, nothing else.`;
               Save Changes
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Trackers: "remind you to log?", the log, and the history. */}
+      <Dialog open={remindShown} onOpenChange={(o) => { if (!o) setRemindFor(null); }}>
+        <DialogContent className="max-w-sm w-[calc(100vw-2rem)]">
+          <DialogHeader>
+            <DialogTitle>Want a reminder to log {remindFor?.idea}?</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-2">
+            {[['none', 'No'], ['daily', 'Every day'], ['weekly', 'Once a week'], ['monthly', 'Once a month']].map(([value, label]) => (
+              <Button
+                key={value}
+                type="button"
+                variant={remindChoice === value ? 'default' : 'outline'}
+                disabled={trackerBusy}
+                onClick={() => (value === 'none' ? saveReminder(remindFor, 'none', null) : setRemindChoice(value))}
+                className={remindChoice === value && value !== 'none' ? 'bg-purple-600 hover:bg-purple-700 text-white' : ''}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+          {remindChoice !== 'none' && (
+            <div className="space-y-2">
+              <label className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>What time?</label>
+              <Input type="time" value={remindTime} onChange={(e) => setRemindTime(e.target.value)} />
+              <p className="text-xs text-gray-500">
+                {remindLabel({ tracker_remind: remindChoice, tracker_remind_time: remindTime, tracker_remind_day: remindDayFor(remindFor, remindChoice) })}
+              </p>
+              <Button
+                onClick={() => saveReminder(remindFor, remindChoice, remindTime)}
+                disabled={trackerBusy || !remindTime}
+                className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                {trackerBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                Save
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!logFor} onOpenChange={(o) => { if (!o) { setLogFor(null); setLogText(""); } }}>
+        <DialogContent className="max-w-sm w-[calc(100vw-2rem)]">
+          <DialogHeader>
+            <DialogTitle>Log: {logFor?.idea}</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            value={logText}
+            onChange={(e) => setLogText(e.target.value)}
+            placeholder="What do you want to log?"
+            className={`min-h-[90px] ${theme === 'dark' ? 'bg-gray-800 text-gray-100 border-gray-700' : ''}`}
+            autoFocus
+          />
+          {(() => {
+            const last = (logFor?.tracker_entries || []).slice(-1)[0];
+            return last ? <p className="text-xs text-gray-500">Last time: {last.text} · {formatLogTime(last.at)}</p> : null;
+          })()}
+          <Button onClick={saveLog} disabled={trackerBusy || !logText.trim()} className="w-full bg-purple-600 hover:bg-purple-700 text-white">
+            {trackerBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+            Save
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!historyFor} onOpenChange={(o) => { if (!o) setHistoryFor(null); }}>
+        <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{historyFor?.idea}</DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const entries = historyFor?.tracker_entries || [];
+            const points = entries
+              .map((e) => {
+                const n = trackerNumbers(e.text);
+                const ms = rowMs(e.at);
+                return { label: Number.isFinite(ms) ? new Date(ms).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }) : '', a: n[0], b: n[1] };
+              })
+              .filter((p) => p.a != null);
+            const both = points.length > 0 && points.every((p) => p.b != null);
+            return (
+              <>
+                {points.length >= 2 && (
+                  <div className="h-44 w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} domain={['auto', 'auto']} />
+                        <ChartTooltip />
+                        <Line type="monotone" dataKey="a" name={historyFor?.idea} stroke="#9333ea" strokeWidth={2} dot={{ r: 3 }} />
+                        {both && <Line type="monotone" dataKey="b" name="2nd number" stroke="#ec4899" strokeWidth={2} dot={{ r: 3 }} />}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+                {entries.length === 0 ? (
+                  <p className="text-sm text-gray-500">Nothing logged yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {[...entries].reverse().map((e, i) => (
+                      <div key={`${e.at}-${i}`} className={`flex items-start justify-between gap-2 p-2 rounded-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}>
+                        <div className="min-w-0">
+                          <p className="text-sm whitespace-pre-wrap break-words">{e.text}</p>
+                          <p className="text-xs text-gray-500">{formatLogTime(e.at)}</p>
+                        </div>
+                        <button onClick={() => removeTrackerEntry(historyFor, e)} className="text-gray-400 hover:text-red-600 p-1 flex-shrink-0" aria-label="Remove this entry">
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            );
+          })()}
+          <div className="flex flex-wrap gap-2 pt-2">
+            <Button variant="outline" onClick={() => { const t = historyFor; setHistoryFor(null); openRemind(t); }}>
+              <Bell className="w-4 h-4 mr-1" />
+              {historyFor?.tracker_remind && historyFor.tracker_remind !== 'none' ? remindLabel(historyFor) : 'Reminder'}
+            </Button>
+            <Button onClick={() => { const t = historyFor; setHistoryFor(null); setLogText(""); setLogFor(t); }} className="bg-purple-600 hover:bg-purple-700 text-white">
+              <Plus className="w-4 h-4 mr-1" />
+              Log
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
