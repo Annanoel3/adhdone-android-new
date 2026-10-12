@@ -349,7 +349,8 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
       // Someone else's birthday: the alarm's big button says what to do next.
       // It opens the task's page either way, which has the Send / Draft text
       // button. Builds before 1.3.9 ignore this and keep "Got it".
-      if (t.birthday_person && !t.is_own_birthday) {
+      // A pet's birthday has no text: plain "Got it".
+      if (t.birthday_person && !t.is_own_birthday && !t.birthday_animal) {
         alarm.openLabel = t.birthday_text_message ? 'Send a text' : 'Write a text';
       }
       out.push({ alarm, quietExempt: !!t.quiet_hours_exempt });
