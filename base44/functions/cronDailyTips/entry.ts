@@ -1,23 +1,28 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
+import { resolveQuietHours } from '../../shared/quietHours.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 
 // ── Day-2 nudge ─────────────────────────────────────────────────────────────
 // Someone who signed up a day or two ago and never put a single task in has
-// not seen the app do anything yet. One friendly push, once, at 10 in their
-// own morning; never again after that, whatever they do with it.
+// not seen the app do anything yet. One friendly push, once, two hours after
+// their quiet hours end (10 AM for the usual 8 AM; a fixed 10 AM was the middle
+// of the night for someone who sleeps days, Oct 12 2026); never again after
+// that, whatever they do with it.
 const HOUR_MS = 60 * 60 * 1000;
 const NUDGE_MIN_AGE_MS = 20 * HOUR_MS;
 const NUDGE_MAX_AGE_MS = 96 * HOUR_MS;
 
-// The next 10:00 in the user's own zone, as a UTC instant.
-function nextTenAmLocal(tz: string): string {
+// The next HH:MM (minutes after midnight) in the user's own zone, as a UTC instant.
+function nextLocalTime(tz: string, minOfDay: number): string {
+  const hh = String(Math.floor(minOfDay / 60)).padStart(2, '0');
+  const mm = String(minOfDay % 60).padStart(2, '0');
   const now = new Date();
   for (let d = 0; d < 3; d++) {
     const day = new Date(now.getTime() + d * 24 * HOUR_MS);
     let ymd = '';
     try { ymd = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(day); } catch { ymd = day.toISOString().slice(0, 10); }
-    const naive = new Date(`${ymd}T10:00:00Z`);
+    const naive = new Date(`${ymd}T${hh}:${mm}:00Z`);
     let offsetMs = 0;
     try {
       const inTz = new Date(naive.toLocaleString('en-US', { timeZone: tz }));
@@ -46,7 +51,7 @@ async function sendDayTwoNudges(base44: any) {
         toUserExternalId: u.email,
         title: 'Ready when you are 👋',
         body: "Add one thing you need to do today — a call, an errand, anything — and ADHDone will remind you at the right time.",
-        sendAtISO: nextTenAmLocal(u.timezone || 'America/Chicago'),
+        sendAtISO: nextLocalTime(u.timezone || 'America/Chicago', (resolveQuietHours(u).endMin + 120) % (24 * 60)),
         data: { type: 'first_task_nudge' },
       });
       await base44.asServiceRole.entities.User.update(u.id, { first_task_nudge_sent_at: new Date().toISOString() });
