@@ -1,7 +1,7 @@
 // Re-saved Oct 12 2026 (pets) so the bundled shared/reminderTitle.ts is picked up: a pet's birthday alarm has no "Write a text" button.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent, pushPhoneAlarms } from '../../shared/reminderTitle.ts';
-import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, isInQuietHours, placeAppReminder } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, isInQuietHours, placeAppReminder, wakeStartMs } from '../../shared/quietHours.ts';
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
@@ -1453,9 +1453,16 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   }
   if (!problems.length) console.log('[HEALTH] all clear');
 
-  // The daily note: in the owner's 8 o'clock hour, once, only when the last
-  // 24 hours had anything to say.
-  if (localHourIn(OWNER_TZ, now) === 8 && !(await sentToOwner(base44, 'owner_daily', null, nowMs - 20 * H_HOUR))) {
+  // The daily note: once a day, only when the last 24 hours had anything to
+  // say, after her first hour awake, which belongs to her morning summary
+  // (Anna, Oct 12 2026: in her 8 o'clock hour it held the summary back), and
+  // between 8 AM and 8 PM.
+  const owner = userByEmail[OWNER_ALERT_EMAIL];
+  const ownerTz = userTimeZone(owner) || OWNER_TZ;
+  const ownerUp = owner ? wakeStartMs(owner, now, ownerTz) : null;
+  const ownerHour = localHourIn(ownerTz, now);
+  if (ownerUp != null && nowMs >= ownerUp + H_HOUR && ownerHour >= 8 && ownerHour < 20
+    && !(await sentToOwner(base44, 'owner_daily', null, nowMs - 20 * H_HOUR))) {
     try {
       const alerts = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
         user_email: OWNER_ALERT_EMAIL, kind: 'owner_alert', send_at: { $gte: new Date(nowMs - H_DAY).toISOString() },
