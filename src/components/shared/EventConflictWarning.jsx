@@ -69,6 +69,8 @@ export default function EventConflictWarning({ theme }) {
       await base44.entities.Task.update(task.id, {
         next_reminder: when.toISOString(),
         event_time: when.toISOString(),
+        // The time they just picked: it may go off inside quiet hours (RULES.md §9 Q4).
+        time_stated: true,
         onesignal_notification_ids: [],
         reminder_schedule: [],
       });
@@ -82,6 +84,7 @@ export default function EventConflictWarning({ theme }) {
         taskId: task.id,
         urgency: task.urgency,
         classification: 'event',
+        timeStated: true,
       });
       if (ids) await base44.entities.Task.update(task.id, { onesignal_notification_ids: ids });
       // 'tasks-changed' is the event the pages listen for (Home reloads, and
