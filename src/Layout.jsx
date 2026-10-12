@@ -990,7 +990,11 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                   <SidebarMenu className="space-y-1">
                     {navigationItems.map((item) => {
                       if (item.isCollapsible) {
-                        const isOpen = !!openSections[item.title] || item.subItems.some((s) => location.pathname === s.url);
+                        // Open by itself while you're on one of its pages, but the arrow
+                        // still closes it (Anna, Oct 12 2026: it couldn't be closed from
+                        // inside, e.g. Tools while on Parking Lot). A tap always wins.
+                        const tapped = openSections[item.title];
+                        const isOpen = tapped !== undefined ? !!tapped : item.subItems.some((s) => location.pathname === s.url);
                         const onOpenChange = (open) => setOpenSections((prev) => ({ ...prev, [item.title]: open }));
 
                         return (
