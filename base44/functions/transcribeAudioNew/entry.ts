@@ -18,6 +18,13 @@ import OpenAI, { toFile } from "npm:openai";
 //        When the recording has questions (written down before an appointment
 //        on the Notes page), the notes say which got answered and what the
 //        answer was.
+//    { mode: "notes_change", record_id, request }
+//        one typed change to a recording's notes ("add that the copay is $40",
+//        "take out the line about parking"): made in the right part of the
+//        notes, everything else left as it was, and saved.
+//    { mode: "notes_ask", question }
+//        a question about their recordings ("when did my boss say the report
+//        was due?"), answered from their own notes and transcripts. Nothing saved.
 //    Admin only, nothing saved: { mode: "notes_try", transcript, started_at?, model? }
 //        shows the notes a transcript would get.
 //
@@ -376,6 +383,188 @@ async function notesMake(base44: any, user: any, body: any) {
   return Response.json({ ok: true, notes, title });
 }
 
+// The whole transcript of a recording, with [time] marks, cut at `max`.
+function transcriptOf(rec: any, max = 60000): string {
+  const parts: any[] = (Array.isArray(rec?.transcript_parts) ? rec.transcript_parts : [])
+    .slice().sort((a, b) => a.index - b.index);
+  const text = parts
+    .filter((p) => String(p?.text || "").trim())
+    .map((p) => `[${clock(p.start_ms)}] ${String(p.text).trim()}`)
+    .join("\n\n");
+  return text.length > max ? `${text.slice(0, max)}\n[…the rest is cut off]` : text;
+}
+
+// One model call answered in JSON, Luna first and Astra if Luna fails.
+async function askJson(openai: OpenAI, system: string, prompt: string, maxTokens = 16000) {
+  let lastError: any = null;
+  for (const model of [NOTES_MODEL, NOTES_BACKUP_MODEL]) {
+    try {
+      const completion = await openai.chat.completions.create({
+        model,
+        messages: [{ role: "system", content: system }, { role: "user", content: prompt }],
+        response_format: { type: "json_object" },
+        reasoning_effort: NOTES_EFFORT as any,
+        max_completion_tokens: maxTokens,
+      } as any);
+      return JSON.parse(completion.choices[0]?.message?.content || "{}");
+    } catch (e) {
+      lastError = e;
+      console.error(`[notes] ${model} failed:`, (e as any)?.message || e);
+    }
+  }
+  throw lastError;
+}
+
+// ── A typed change to the notes ────────────────────────────────────────────
+// The Notes page's one box instead of editing every line by hand (Anna, Oct 12
+// 2026: "the user could just type 'add ___' and it would just be added to the
+// right part of the notes automatically").
+async function notesChange(base44: any, user: any, body: any) {
+  const recordId = String(body?.record_id || "");
+  const request = String(body?.request || "").replace(/\s+/g, " ").trim().slice(0, 1000);
+  if (!request) return Response.json({ ok: false, error: "Nothing to change" }, { status: 400 });
+  const rec = await getRecording(base44, recordId);
+  if (!rec || !rec.notes) return Response.json({ ok: false, error: "No such notes" }, { status: 404 });
+  const asked = questionsOf(rec);
+  const before: any = { ...rec.notes, title: String(rec.title || rec.notes.title || "").trim() };
+  delete before.edited;
+  const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
+  let out: any;
+  try {
+    out = await askJson(openai, NOTES_SYSTEM, `These are the notes from a recording they made (${whenRecorded(rec.started_at, user?.timezone)}), as JSON:
+${JSON.stringify(before)}
+
+They typed this about their notes:
+"${request}"
+
+Make that change, and only that change, and return the whole notes.
+- Everything they didn't ask to change stays exactly as it is, word for word, with its ==highlights== and its "at".
+- Something to add goes in the part of the notes where it belongs: a thing someone has to do in todos (written as one line that works on its own as a task; "who" is "you" unless they say whose it is), an exact detail to look up later (a number, dose, price, date, time, name, phone number, address) in details, something decided in decisions, something still unanswered in questions, anything else as a point under the section it fits, or a new short section when none fits. Into the gist only when they ask for it there.
+- Write anything you add like the rest of the notes: short and plain, one idea per line, key words marked with ==double equals==. Turn relative days into real dates using the date it was recorded.
+- Add only what they told you. When they point at something in the recording ("add what she said about the dose"), take it from the transcript below, copying exact details as said; if it isn't there, change nothing and say so.
+- To remove or fix something, remove or fix just that.
+- The title changes only when they ask for a new one.${asked.length ? `
+- "asked" (the questions they wrote down beforehand) keeps every question as written; change an answer only when they ask.` : ""}
+- If what they typed isn't a change to these notes (a question, say), change nothing.
+
+The transcript, for anything they point at:
+"""
+${transcriptOf(rec, 40000) || "(no transcript)"}
+"""
+
+Return JSON:
+{ "changed": true or false, "said": "one short plain line saying what you changed (or why nothing changed)", "notes": { the whole notes, same shape as above } }`);
+  } catch (_) {
+    return Response.json({ ok: false, error: "change_failed" }, { status: 502 });
+  }
+  const said = String(out?.said || "").replace(/\s+/g, " ").trim().slice(0, 300);
+  if (out?.changed !== true || !out?.notes || typeof out.notes !== "object") {
+    return Response.json({ ok: true, changed: false, said: said || "Nothing changed.", notes: rec.notes, title: rec.title });
+  }
+  const cleaned: any = cleanNotes(out.notes, asked);
+  // Kept from before: which to-dos were already put on their list.
+  const oldTodos: any[] = Array.isArray(rec.notes.todos) ? rec.notes.todos : [];
+  cleaned.todos = cleaned.todos.map((t: any) => {
+    const was = oldTodos.find((o) => String(o?.text || "").trim() === t.text);
+    return was?.added ? { ...t, added: true } : t;
+  });
+  cleaned.edited = true;
+  const newTitle = cleaned.title && cleaned.title !== before.title ? cleaned.title : "";
+  await base44.entities.EnergyLog.update(recordId, { notes: cleaned, ...(newTitle ? { title: newTitle } : {}) });
+  return Response.json({ ok: true, changed: true, said: said || "Updated.", notes: cleaned, title: newTitle || rec.title });
+}
+
+// ── A question about their recordings ──────────────────────────────────────
+// "When did my boss say the report was due?" (Anna, Oct 12 2026). First the
+// recordings that could hold the answer are picked from their notes, then the
+// answer comes from those recordings in full, transcripts included.
+async function notesAsk(base44: any, user: any, body: any) {
+  const question = String(body?.question || "").replace(/\s+/g, " ").trim().slice(0, 500);
+  if (!question) return Response.json({ ok: false, error: "No question" }, { status: 400 });
+  const rows: any[] = (await base44.entities.EnergyLog.filter({ kind: "note_recording" }, "-started_at", 100)) || [];
+  const recs = rows.filter((r) => r?.notes || (Array.isArray(r?.transcript_parts) && r.transcript_parts.length));
+  if (!recs.length) return Response.json({ ok: true, answer: "You don't have any recordings with notes yet.", sources: [] });
+  const tz = user?.timezone || undefined;
+  const today = whenRecorded(new Date().toISOString(), tz);
+  const brief = (r: any) => {
+    const n = r.notes || {};
+    return {
+      title: String(r.title || n.title || "Recording"),
+      recorded: whenRecorded(r.started_at, tz),
+      gist: n.gist || [],
+      todos: (n.todos || []).map((t: any) => `${t.who && t.who !== "you" ? `${t.who}: ` : ""}${t.text}`),
+      details: (n.details || []).map((d: any) => [d.label, d.value].filter(Boolean).join(": ")),
+      topics: (n.sections || []).map((x: any) => ({ heading: x.heading, points: x.points })),
+      decided: (n.decisions || []).map((x: any) => x.text),
+      open: (n.questions || []).map((x: any) => x.text),
+    };
+  };
+  const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
+  const SYSTEM = "You help someone with ADHD find things in recordings they made of meetings, appointments, classes and conversations. Answer with JSON only.";
+
+  // 1. Which recordings could answer it.
+  let index = recs.map((r, i) => JSON.stringify({ n: i + 1, ...brief(r) })).join("\n");
+  if (index.length > 120000) index = index.slice(0, 120000);
+  let picks: number[] = [];
+  try {
+    const got = await askJson(openai, SYSTEM, `Today is ${today}. They asked: "${question}"
+
+Their recordings, newest first, each with its notes:
+${index}
+
+Which recordings could hold the answer? Think about what the question is really about, not just its words: "my boss" may be a manager named in the notes, "the report" may be called something else there. Pick up to 3, most likely first; none if no recording could.
+
+Return JSON: { "picks": [recording n, ...] }`, 2000);
+    picks = (Array.isArray(got?.picks) ? got.picks : []).map((x: any) => Number(x)).filter((x: number) => x >= 1 && x <= recs.length);
+  } catch (_) {
+    return Response.json({ ok: false, error: "ask_failed" }, { status: 502 });
+  }
+  const picked = [...new Set(picks)].slice(0, 3).map((n) => recs[n - 1]);
+  if (!picked.length) {
+    return Response.json({ ok: true, answer: "I couldn't find that in your recordings.", sources: [] });
+  }
+
+  // Their tasks, so the answer can name the one it's about as it appears in their list.
+  let taskLines = "";
+  try {
+    const tasks: any[] = (await base44.entities.Task.filter({ status: "active" }, "-created_date", 200)) || [];
+    taskLines = tasks
+      .filter((t) => t?.title && !t.parent_task_id)
+      .slice(0, 150)
+      .map((t) => `- ${t.title}${t.due_date ? ` (due ${whenRecorded(t.due_date, tz).replace(/ at .*$/, "")})` : ""}`)
+      .join("\n");
+  } catch (_) { /* answer without them */ }
+
+  // 2. The answer, from those recordings in full.
+  const material = picked.map((r, i) => `RECORDING ${i + 1}: "${String(r.title || r.notes?.title || "Recording")}", recorded ${whenRecorded(r.started_at, tz)}
+Notes: ${JSON.stringify(brief(r))}
+Transcript:
+"""
+${transcriptOf(r, 50000) || "(no transcript)"}
+"""`).join("\n\n");
+  let out: any;
+  try {
+    out = await askJson(openai, SYSTEM, `Today is ${today}. They asked: "${question}"
+
+${material}
+${taskLines ? `\nTheir task list right now:\n${taskLines}\n` : ""}
+Answer from these recordings only.
+- The answer first, in one to three short plain sentences, with the exact details as said (dates, times, numbers, names). Turn relative days into real dates using the day the recording was made ("by Friday" said on Wednesday, October 7 is Friday, October 9).
+- Then who said it and in which recording, briefly ("Your boss said it in the budget meeting on October 7").
+- If one of their tasks is the same thing, name it as it appears in their list.
+- If these recordings don't answer it, say so plainly. Never guess and never fill in from general knowledge.
+- Talk to them as "you". No jargon.
+
+Return JSON: { "answer": "...", "sources": [the RECORDING numbers the answer came from] }`, 4000);
+  } catch (_) {
+    return Response.json({ ok: false, error: "ask_failed" }, { status: 502 });
+  }
+  const answer = String(out?.answer || "").trim().slice(0, 1200) || "I couldn't find that in your recordings.";
+  const used = (Array.isArray(out?.sources) ? out.sources : []).map((x: any) => Number(x)).filter((x: number) => x >= 1 && x <= picked.length);
+  const sources = [...new Set(used)].map((n) => picked[n - 1]).map((r) => ({ id: r.id, title: String(r.title || r.notes?.title || "Recording"), started_at: r.started_at }));
+  return Response.json({ ok: true, answer, sources });
+}
+
 async function notesTry(user: any, body: any) {
   if (user?.role !== "admin") return Response.json({ error: "Forbidden" }, { status: 403 });
   const transcript = String(body?.transcript || "");
@@ -398,6 +587,8 @@ Deno.serve(async (req) => {
 
     if (body?.mode === "notes_part") return await notesPart(base44, user, body);
     if (body?.mode === "notes_make") return await notesMake(base44, user, body);
+    if (body?.mode === "notes_change") return await notesChange(base44, user, body);
+    if (body?.mode === "notes_ask") return await notesAsk(base44, user, body);
     if (body?.mode === "notes_try") return await notesTry(user, body);
 
     // Voice typing (Parking Lot), as before.
