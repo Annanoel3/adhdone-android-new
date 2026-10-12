@@ -193,3 +193,64 @@ export function placeRepeatingSlot(
   if (intervalMs >= 24 * 60 * 60 * 1000) return anchorToDaytime(slot, startMin, endMin, timeZone);
   return isInQuietHours(slot, startMin, endMin, timeZone) ? null : slot;
 }
+// RULES.md §9 Q4 — the one time quiet hours give way (Anna, Oct 12 2026: "If a
+// user schedules a task or event outside of their quiet hours, that is the one
+// time we will ignore their quiet hours. For example, if I had a flight at
+// 5 a.m., id want that alarm. Just make sure the only way that would ever
+// happen is if a user explicitly says a time outside of their hours.")
+//
+// True when `ms` is the clock time the person set for this task themselves:
+// the task says they did (time_stated — they said or typed a clock time, "5 AM",
+// "at 3", "in 20 minutes", or picked one in the app), and this moment IS that
+// time: the event's start, or the task's named clock time on its day (on each
+// of its days, for a repeating task). Never true for a time the app picked: a part of the day the
+// parser turned into a clock time ("tonight", "before bed"), a heads-up before
+// the time, a nudge, a snooze, a repeat ping.
+export function isTimeTheySet(task: any, ms: number, timeZone: string): boolean {
+  if (!task || task.time_stated !== true || !Number.isFinite(ms)) return false;
+  const ev = platformMs(task.event_time);
+  if (Number.isFinite(ev) && Math.abs(ev - ms) < 60 * 1000) return true;
+  // Otherwise: the clock time they named (anchor_time)...
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(task.anchor_time || ''));
+  if (!m) return false;
+  const at = new Date(ms);
+  if (localMinutesOfDay(at, timeZone) !== Number(m[1]) * 60 + Number(m[2])) return false;
+  const day = localDateKey(at, timeZone);
+  // ...on the task's own day, for a one-time task (an app heads-up "a day
+  // before" sits at the same clock time on the wrong day)...
+  if (!task.recurrence_pattern || task.recurrence_pattern === 'none') {
+    return [task.due_date, task.next_reminder, task.event_time]
+      .map(platformMs).filter(Number.isFinite)
+      .some((t) => localDateKey(new Date(t), timeZone) === day);
+  }
+  // ...or on one of its days, for a repeating one.
+  if (Array.isArray(task.recurrence_days) && task.recurrence_days.length) {
+    const [y, mo, d] = day.split('-').map(Number);
+    return task.recurrence_days.includes(new Date(Date.UTC(y, mo - 1, d)).getUTCDay());
+  }
+  return true;
+}
+
+// Where a reminder the APP picked goes when it lands inside quiet hours (a
+// heads-up an hour before a 5 AM flight, a "night before" after quiet hours
+// start): to the end of quiet hours, or nowhere when that's not at least 5
+// minutes before the thing itself (`beforeMs`; null for an item with no clock
+// time). Returns the time unchanged outside quiet hours or with them off.
+export function placeAppReminder(
+  atMs: number,
+  beforeMs: number | null,
+  quiet: { enabled: boolean; startMin: number; endMin: number },
+  timeZone: string,
+): number | null {
+  if (!quiet.enabled || !isInQuietHours(new Date(atMs), quiet.startMin, quiet.endMin, timeZone)) return atMs;
+  const moved = adjustForQuietHours(new Date(atMs), quiet.startMin, quiet.endMin, timeZone).getTime();
+  if (beforeMs != null && Number.isFinite(beforeMs) && moved > beforeMs - 5 * 60 * 1000) return null;
+  return moved;
+}
+
+// A stored time ("2026-09-25T04:30:00.000000", UTC with no zone letter, or ISO).
+function platformMs(v: any): number {
+  if (!v) return NaN;
+  const s = String(v);
+  return new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`).getTime();
+}
