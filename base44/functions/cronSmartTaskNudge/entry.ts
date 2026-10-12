@@ -39,11 +39,12 @@
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
-import { localMinutesOfDay, isInQuietHours, adjustForQuietHours, resolveQuietHours, userTimeZone } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, isInQuietHours, adjustForQuietHours, resolveQuietHours, userTimeZone, theirDayKey, wakeStartMs } from '../../shared/quietHours.ts';
 import { getProximity, formatProximityNotes, lookupBusinessHours, businessHoursLine, BUSINESS_HOURS_MAX_AGE_MS } from '../../shared/mapsDistance.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
+// Bundles reminderBrief.ts r36 (Oct 12 2026: their day runs on their own clock).
 import { REMINDER_BRIEF, REMINDER_BRIEF_VERSION } from '../../shared/reminderBrief.ts';
 import { assignTaskFamilies } from '../../shared/runTaskParse.ts';
 
@@ -303,7 +304,11 @@ Deno.serve(async (req) => {
       // opens, so this picks up again as soon as they turn them back on.
       if (user.alarm_permissions?.notifications === false) continue;
 
-      const todayStr = getLocalDateString(now, timeZone);
+      // Their day, not the calendar's: it turns over in the middle of their
+      // quiet hours (Oct 12 2026), so a night-shift worker is still on Monday
+      // at 2 AM. Plans, "today", and what was already sent today all go by it.
+      const dayOf = (ms: number) => theirDayKey(new Date(ms), timeZone, startMin, endMin);
+      const todayStr = dayOf(now.getTime());
       const pool = tasksByUser[email];
       const openTaskIds = new Set(pool.map((t: any) => t.id));
 
@@ -379,7 +384,7 @@ Deno.serve(async (req) => {
       const SINCE_LAST_NUDGE = 60 * 60 * 1000;
       const SINCE_LAST_LOOK = 90 * 60 * 1000;
       const todaysEntries = schedule.filter((e: any) =>
-        e.send_at && getLocalDateString(new Date(utcMs(e.send_at)), timeZone) === todayStr);
+        e.send_at && dayOf(utcMs(e.send_at)) === todayStr);
       const planRanOut = todaysEntries.length > 0 && todaysEntries.every((e: any) => e.sent);
       const nudgedStillOpen = todaysEntries.some((e: any) =>
         e.sent && !e.skipped_reason && entryTaskIds(e).some((id: string) => openTaskIds.has(id)));
@@ -455,7 +460,7 @@ Deno.serve(async (req) => {
           const at = utcMs(e.send_at);
           const ids = entryTaskIds(e);
           return Number.isFinite(at) && at <= nowMs + QUEUED_KEEP_MS &&
-            getLocalDateString(new Date(at), timeZone) === todayStr &&
+            dayOf(at) === todayStr &&
             ids.length > 0 && ids.every((id: string) => openTaskIds.has(id));
         });
 
@@ -581,7 +586,7 @@ Deno.serve(async (req) => {
           homeOrigin: getHomeOrigin(user),
           aboutMe: user.about_me || '',
           avoidTolls: user.commute_avoid_tolls === true,
-          nudgeHistory: nudgeHistoryFor(schedule, todayStr, timeZone),
+          nudgeHistory: nudgeHistoryFor(schedule, todayStr, dayOf),
           queued,
           // Nudges that went out in the last 45 minutes: new ones keep their distance.
           recentSent: schedule
@@ -590,14 +595,14 @@ Deno.serve(async (req) => {
             .filter((ms: number) => Number.isFinite(ms) && nowMs - ms < 45 * 60 * 1000),
           work: workContext(user, shiftsByUser[email] || [], now, timeZone),
           doneToday: (completionsByUser[email] || [])
-            .filter((c) => getLocalDateString(new Date(c.at), timeZone) === todayStr)
+            .filter((c) => dayOf(c.at) === todayStr)
             .sort((a, b) => a.at - b.at)
             .map((c) => c.title)
             .filter(Boolean),
           showReactions: hasEnoughHistory(email),
           dayPushes,
           lastSeenMs: seenMs,
-          dayStart: dayStartLine(user, now, timeZone, todayStr, seenMs, quiet.endMin),
+          dayStart: dayStartLine(user, now, timeZone, todayStr, seenMs, quiet.endMin, dayOf),
           sentSinceSeen,
           seenCountIsFloor: Number.isFinite(seenMs) && seenMs < nowMs - 3 * DAY_MS,
           laterLook: todaysEntries.some((e: any) => e.sent && !e.skipped_reason),
@@ -682,8 +687,15 @@ Deno.serve(async (req) => {
       // Send due nudges in real-time (no LLM call — just OneSignal)
       const newLog: any[] = [];
       let lastSentTaskId: string | null = null;
-      const holdForWake = waitingForWake(user, now, timeZone, todayStr, quiet.endMin);
+      const holdForWake = waitingForWake(user, now, timeZone, todayStr, quiet.endMin, dayOf);
       if (holdForWake) console.log(`[SMART NUDGE] ${email}: phone not unlocked yet this morning, holding nudges`);
+      // The hour after they wake up goes to the morning summary first (Anna,
+      // Oct 12 2026: "the summary can get first claim on the hour after I wake
+      // up"). In that hour Smart Reminders wait until it has gone out or had
+      // nothing to say (cronDailyDigest marks last_digest_date with their day
+      // either way). An urgent task's nudge doesn't wait.
+      const wokeAt = wakeStartMs(user, now, timeZone);
+      const holdForDigest = wokeAt != null && nowMs >= wokeAt && nowMs < wokeAt + 60 * 60 * 1000 && user.last_digest_date !== todayStr;
       for (const entry of schedule) {
         if (holdForWake) break;
         if (entry.sent) continue;
@@ -691,7 +703,7 @@ Deno.serve(async (req) => {
         // "right now" is stamped a moment after the run started, and goes now.
         if (utcMs(entry.send_at) > nowMs + 60 * 1000) continue;
         // Never a leftover from an earlier day ("tonight…" said the next morning).
-        if (getLocalDateString(new Date(utcMs(entry.send_at)), timeZone) !== todayStr) continue;
+        if (dayOf(utcMs(entry.send_at)) !== todayStr) continue;
 
         // Ghost-notification guard. A nudge can reference SEVERAL tasks (a
         // combined "recycling and dishes" message), so validate every task the
@@ -784,6 +796,10 @@ Deno.serve(async (req) => {
 
         // An urgent task keeps 5 minutes from other pushes, not 20 (sendLedger).
         const gateUrgent = !!entry.task_id && taskById.get(entry.task_id)?.urgency === 'urgent';
+        if (holdForDigest && !gateUrgent) {
+          console.log(`[SMART NUDGE] Held nudge for ${email}: the morning summary goes first this hour`);
+          continue;
+        }
         const gate = await ledgerCheck(base44, { email, taskId: entry.task_id, kind: 'smart_nudge', urgent: gateUrgent });
         if (!gate.allowed) {
           console.log(`[SMART NUDGE] Held nudge for ${email} (${gate.reason}) — will retry next run`);
@@ -928,15 +944,15 @@ Deno.serve(async (req) => {
 // sign is mentioned (the first reminder they answered today, or that they
 // opened the app) — never "no sign", which on an older build or for someone
 // who doesn't open the app would only mislead.
-function dayStartLine(user: any, now: Date, timeZone: string, todayStr: string, seenMs: number, quietEndMin: number): string {
-  const isToday = (ms: number) => Number.isFinite(ms) && getLocalDateString(new Date(ms), timeZone) === todayStr;
+function dayStartLine(user: any, now: Date, timeZone: string, todayStr: string, seenMs: number, quietEndMin: number, dayOf: (ms: number) => string): string {
+  const isToday = (ms: number) => Number.isFinite(ms) && dayOf(ms) === todayStr;
   const at = (ms: number) => new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit' }).format(new Date(ms));
   if (user?.wake_watch === true) {
     const woke = utcMs(user.woke_at);
     if (isToday(woke)) {
       return `They got up today around ${at(woke)} (their phone's first unlock; their wake-up time varies, and they asked the app to start their day from when they're actually up).`;
     }
-    if (waitingForWake(user, now, timeZone, todayStr, quietEndMin)) {
+    if (waitingForWake(user, now, timeZone, todayStr, quietEndMin, dayOf)) {
       return `Their phone hasn't been unlocked yet this morning: they're most likely still asleep (their wake-up time varies, and they asked the app to start their day from when they're actually up).`;
     }
   }
@@ -950,9 +966,9 @@ function dayStartLine(user: any, now: Date, timeZone: string, todayStr: string, 
 // morning: no Smart Reminders go out yet (reminders they set for a time still
 // ring). Never past 4 hours after their quiet hours end, in case the phone
 // can't report (no signal, an old build).
-function waitingForWake(user: any, now: Date, timeZone: string, todayStr: string, quietEndMin: number): boolean {
+function waitingForWake(user: any, now: Date, timeZone: string, todayStr: string, quietEndMin: number, dayOf: (ms: number) => string): boolean {
   if (user?.wake_watch !== true) return false;
-  const isToday = (ms: number) => Number.isFinite(ms) && getLocalDateString(new Date(ms), timeZone) === todayStr;
+  const isToday = (ms: number) => Number.isFinite(ms) && dayOf(ms) === todayStr;
   if (isToday(utcMs(user.woke_at)) || isToday(utcMs(user.day_first_sign_at)) || isToday(utcMs(user.last_active_at))) return false;
   const nowMin = localMinutesOfDay(now, timeZone);
   return nowMin >= quietEndMin && nowMin < quietEndMin + 4 * 60;
@@ -1127,13 +1143,13 @@ async function alreadyInLedger(base44: any, email: string, entry: any): Promise<
 }
 
 // Per task: when it was nudged today, and the last time before today.
-function nudgeHistoryFor(schedule: any[], todayStr: string, timeZone: string) {
+function nudgeHistoryFor(schedule: any[], todayStr: string, dayOf: (ms: number) => string) {
   const out = new Map<string, { today: number[]; lastBefore: number }>();
   for (const e of schedule || []) {
     if (!e?.sent || e.skipped_reason) continue;
     const at = utcMs(e.sent_at || e.send_at);
     if (!Number.isFinite(at)) continue;
-    const isToday = getLocalDateString(new Date(at), timeZone) === todayStr;
+    const isToday = dayOf(at) === todayStr;
     for (const id of entryTaskIds(e)) {
       const h = out.get(id) || { today: [], lastBefore: NaN };
       if (isToday) h.today.push(at);
@@ -1318,7 +1334,15 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       : '';
   const now = new Date();
   const nowMs = now.getTime();
-  const todayStr = getLocalDateString(now, timeZone);
+  // Their day (theirDayKey): "today", "tomorrow" and "late" go by it, so a
+  // task due Monday is still due today at 2 AM on a night shift.
+  const dayOf = (ms: number) => theirDayKey(new Date(ms), timeZone, quietStartMin, quietEndMin);
+  const todayStr = dayOf(now.getTime());
+  const daysTo = (iso: string) => {
+    const ms = utcMs(iso);
+    if (!Number.isFinite(ms)) return NaN;
+    return Math.round((Date.parse(dayOf(ms) + 'T00:00:00Z') - Date.parse(todayStr + 'T00:00:00Z')) / (24 * 60 * 60 * 1000));
+  };
   const todayLabel = new Intl.DateTimeFormat('en-US', {
     timeZone, weekday: 'long', month: 'long', day: 'numeric', year: 'numeric',
   }).format(now);
@@ -1341,10 +1365,10 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     // A break that ends later today stays in, with the break stated on its
     // line, so the planner can put a check-in after it (or nothing).
     const breakMs = utcMs(t.later_until);
-    if (Number.isFinite(breakMs) && breakMs > nowMs && getLocalDateString(new Date(breakMs), timeZone) !== todayStr) return false;
+    if (Number.isFinite(breakMs) && breakMs > nowMs && dayOf(breakMs) !== todayStr) return false;
     if (!t.due_date || !t.day_only_task) return true;
     if (t.deadline_style === 'by') return true; // deadlines get runway
-    const days = daysUntil(t.due_date, now, timeZone);
+    const days = daysTo(t.due_date);
     return !(Number.isFinite(days) && days > 1);
   });
   if (nudgeable.length === 0) return [];
@@ -1356,7 +1380,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     new Intl.DateTimeFormat('en-US', { timeZone, hour: 'numeric', minute: '2-digit', hour12: true }).format(new Date(ms));
   const dayWord = (ms: number) =>
     new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(ms));
-  const daysFromToday = (ms: number) => daysUntil(new Date(ms).toISOString(), now, timeZone);
+  const daysFromToday = (ms: number) => daysTo(new Date(ms).toISOString());
   const whenLabel = (ms: number) => {
     const d = daysFromToday(ms);
     if (d === 0) return `${clock(ms)} today`;
@@ -1397,7 +1421,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       // An "at" task is only in this list once its time has gone by undone.
       dueInfo = `⚠️ OVERDUE — MISSED ITS TIME: it was set for ${whenLabel(pin)} (${span(nowMs - pin)} ago) and hasn't been done`;
     } else if (t.due_date) {
-      const days = daysUntil(t.due_date, now, timeZone);
+      const days = daysTo(t.due_date);
       if (days === 0) {
         dueInfo = `⚠️ DUE TODAY — only ${hoursLeftStr} left before ${cutoffLabel}. Must be nudged in this window.`;
       } else
@@ -1500,7 +1524,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
   const eventMs = (e: any) => utcMs(e.event_time || e.next_reminder);
   const todaysEvents = (events || []).filter((e) => {
     const m = eventMs(e);
-    return Number.isFinite(m) && getLocalDateString(new Date(m), timeZone) === todayStr;
+    return Number.isFinite(m) && dayOf(m) === todayStr;
   });
   const upcomingEvents = (events || [])
     .filter((e) => {
@@ -1599,7 +1623,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       } else if (isAtTime(t) && Number.isFinite(pin)) {
         parts.push(`set for ${whenLabel(pin)} — that time has passed and it isn't done`);
       } else if (t.due_date) {
-        const days = daysUntil(t.due_date, now, timeZone);
+        const days = daysTo(t.due_date);
         const d = formatDateShort(t.due_date, timeZone);
         const rel = days === 0 ? 'today' : days === 1 ? 'tomorrow' : days < 0 ? `${-days} day${days === -1 ? '' : 's'} ago` : `in ${days} days`;
         if (t.day_only_task && t.deadline_style !== 'by') parts.push(`happens on ${d} (${rel}) — tied to that day`);
