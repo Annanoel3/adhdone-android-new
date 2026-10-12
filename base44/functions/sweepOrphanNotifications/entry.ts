@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
+import { filterAll } from '../../shared/listAll.ts';
 
 // Audits OneSignal's scheduled-notification list against what the app actually
 // tracks, and cancels anything live that no task references.
@@ -42,6 +43,10 @@ export default async function (req: Request): Promise<Response> {
         for (const e of t.reminder_schedule || []) if (e?.notification_id) tracked.add(String(e.notification_id));
       }
       if (page.length < 500) break;
+    }
+    // A Parking Lot tracker's "time to log" reminder (Oct 12 2026).
+    for (const t of await filterAll(base44.asServiceRole.entities.ParkingLotIdea, { tracker: true })) {
+      if (t.tracker_notification_id) tracked.add(String(t.tracker_notification_id));
     }
     for (let skip = 0; skip < 2000; skip += 500) {
       const page = await base44.asServiceRole.entities.ScheduledText.list('-created_date', 500, skip);
