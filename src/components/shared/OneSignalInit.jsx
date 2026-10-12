@@ -51,6 +51,13 @@ function traceOpen(source, data) {
 // lands somewhere unmistakable instead of just opening the app on Home.
 function handleNotificationData(data, navigate) {
   if (!data) return;
+  // A tracker's "time to log" reminder opens straight to its log.
+  const trackerId = data.type === 'tracker_reminder' ? (data.idea_id || data.ideaId) : null;
+  if (trackerId) {
+    const target = `/ParkingLot?log=${encodeURIComponent(trackerId)}`;
+    if (navigate) navigate(target); else window.location.href = target;
+    return;
+  }
   const taskId = data.taskId || data.task_id;
   if (!taskId) return;
 
