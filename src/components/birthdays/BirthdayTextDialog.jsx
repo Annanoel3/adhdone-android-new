@@ -60,8 +60,11 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
     setAskRelationship(true);
   }, [isOpen, birthdayTask]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // A pet: same reminders, worded to celebrate them, and no text at all.
+  // A pet: same reminders, worded to celebrate them, and no text at all. The
+  // text box closes at once; the reminders are re-worded behind it (Oct 12
+  // 2026: it sat on screen, empty, while that saved).
   const makePet = async (animal) => {
+    onClose?.();
     try {
       await setBirthdayAnimal(birthdayTask, animal);
       toast({
@@ -72,8 +75,8 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
       onSaved?.();
     } catch (e) {
       console.error('[BirthdayTextDialog] Saving the pet failed:', e);
+      toast({ title: "That didn't save", description: 'Check your connection and try again.' });
     }
-    onClose?.();
   };
 
   const fetchDraft = async (rel, typed = false) => {
@@ -158,7 +161,7 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
       <BirthdayRelationshipDialog
         isOpen={askRelationship}
         personName={personName}
-        onClose={() => setAskRelationship(false)}
+        onClose={() => { setAskRelationship(false); onClose?.(); }}
         onConfirm={(rel, animal, typed) => {
           setRelationship(rel);
           setAskRelationship(false);
@@ -170,7 +173,8 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
         }}
       />
 
-      <Dialog open={isOpen} onOpenChange={(o) => !o && onClose()}>
+      {/* Not shown while "Who is ___ to you?" is up: for a pet it never shows at all. */}
+      <Dialog open={isOpen && !askRelationship} onOpenChange={(o) => !o && onClose()}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
