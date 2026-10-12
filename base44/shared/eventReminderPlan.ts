@@ -15,6 +15,7 @@
 // window. Nothing is ever booked early.
 
 import { localReminderUtc } from './timezoneReminders.ts';
+import { DEFAULT_TIME_ZONE, placeAppReminder } from './quietHours.ts';
 
 export const MAX_REMINDERS_PER_EVENT = 2;
 
@@ -47,6 +48,13 @@ export function isBookableNow(sendAtISO: string, nowMs: number = Date.now()): bo
  *
  * rawReminders entries are either ABSOLUTE (days_before + local hour/minute) or
  * RELATIVE (relative_minutes_before the start).
+ *
+ * `quiet` (the owner's quiet hours, resolveQuietHours): a reminder the app
+ * picked that lands inside them moves to when they end, or is dropped when
+ * that's too late (RULES.md §9 Q4). Only the start itself, when
+ * `startIsTheirs` (a time they set: isTimeTheySet), stays inside them — a
+ * 5 AM flight's reminder at 5 AM. This runs BEFORE the two-reminder cap, so
+ * that one is no longer crowded out by an hour-before heads-up at 4 AM.
  */
 export function buildEventReminderPlan(opts: {
   taskId: string;
@@ -57,12 +65,20 @@ export function buildEventReminderPlan(opts: {
   isEvent: boolean;
   timeZone: string | null;
   nowMs?: number;
+  quiet?: { enabled: boolean; startMin: number; endMin: number };
+  startIsTheirs?: boolean;
 }): PlanEntry[] {
   const { taskId, rawReminders, eventStartISO, title, isAllDay, isEvent, timeZone } = opts;
   const nowMs = opts.nowMs ?? Date.now();
   const start = new Date(eventStartISO);
   const startMs = start.getTime();
   const earliest = nowMs + 2 * 60 * 1000;
+  // Where a moment goes under quiet hours (null = dropped). See above.
+  const place = (atMs: number): number | null => {
+    if (!opts.quiet) return atMs;
+    if (opts.startIsTheirs && Math.abs(atMs - startMs) < 60 * 1000) return atMs;
+    return placeAppReminder(atMs, isAllDay ? null : startMs, opts.quiet, timeZone || DEFAULT_TIME_ZONE);
+  };
 
   const entries = (rawReminders || [])
     .map((r: any) => {
@@ -72,7 +88,7 @@ export function buildEventReminderPlan(opts: {
         // A local wall-clock time ("night before at 8 PM") in the USER's zone.
         : localReminderUtc(start, r.days_before || 0, r.hour || 0, r.minute || 0, timeZone);
       return {
-        atMs: at.getTime(),
+        atMs: place(at.getTime()),
         isRelative,
         label: r.label,
         notification_title: r.notification_title || '📅 Upcoming',
@@ -82,6 +98,7 @@ export function buildEventReminderPlan(opts: {
     // All-day items have no real clock time — only a 9 AM anchor — so a
     // "1 hour before" nudge is meaningless and just fires before dawn.
     .filter((r) => !(isAllDay && r.isRelative))
+    .filter((r): r is typeof r & { atMs: number } => r.atMs != null)
     .filter((r) => r.atMs > earliest)
     // Events: nothing after the start, and nothing more than a day ahead.
     .filter((r) => !isEvent || (r.atMs <= startMs && startMs - r.atMs <= DAY_MS))
@@ -92,9 +109,10 @@ export function buildEventReminderPlan(opts: {
 
   // Never leave a dated item with no plan at all: fall back to one reminder at
   // the start itself.
-  if (entries.length === 0 && startMs > earliest) {
+  const fallbackMs = place(startMs);
+  if (entries.length === 0 && fallbackMs != null && fallbackMs > earliest) {
     entries.push({
-      atMs: startMs,
+      atMs: fallbackMs,
       isRelative: true,
       label: 'at the time',
       notification_title: `📅 ${title}`,
