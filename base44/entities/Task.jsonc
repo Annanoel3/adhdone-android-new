@@ -55,7 +55,7 @@
     },
     "last_alarm_choice": {
       "type": "object",
-      "description": "The last choice made on this task's alarm or reminder notification: { choice 'snooze' | 'dismiss' | 'ignored' | 'later', at, minutes (a snooze's length), until (when the snooze or Later break ends) }. Reported by the phone the moment it's made (build 39+); shown to Smart Reminders."
+      "description": "The last choice made on this task's alarm or reminder notification: { choice 'snooze' | 'dismiss' | 'ignored' | 'later' | 'closed', at, minutes (a snooze's length), until (when the snooze or Later break ends), how ('home' | 'back' | 'closed': the alarm screen was left that way while it rang \u2014 on 'closed', and on a 'snooze' that Home or Back made for a time set inside quiet hours) }. Reported by the phone the moment it's made (build 39+); shown to Smart Reminders."
     },
     "alarm_report_ids": {
       "type": "array",
@@ -200,6 +200,10 @@
           "notification_body": {
             "type": "string",
             "description": "LLM-generated notification body"
+          },
+          "their_time": {
+            "type": "boolean",
+            "description": "True for a reminder the person added themselves at a time they picked (the reminder editor's Add). Like the task's own time it may go off, alarm and all, inside their quiet hours (RULES.md \u00a79 Q4)."
           }
         }
       },
@@ -306,6 +310,11 @@
       "default": 0,
       "description": "How many times a full-screen alarm for this task rang out with no response at all. Data only: nothing is rescheduled because of it \u2014 the task's remaining reminders carry on as booked."
     },
+    "closed_count": {
+      "type": "number",
+      "default": 0,
+      "description": "How many times a full-screen alarm for this task was closed with Home or Back while it rang, none of its buttons used (build 40 on). The ring stops and Smart Reminders decides when the task comes up again; no break. Data only."
+    },
     "later_count": {
       "type": "number",
       "default": 0,
@@ -388,6 +397,11 @@
     "anchor_time": {
       "type": "string",
       "description": "The clock time the user named for this task, local HH:MM. Each new occurrence of a recurring task starts here (a daily 'pills at 10' task made at 11:30 must still ring at 10:00 tomorrow, not 11:30)."
+    },
+    "time_stated": {
+      "type": "boolean",
+      "default": false,
+      "description": "True when the person set this task's clock time themselves: they said or typed a clock time ('5 AM', 'at 3', 'in 20 minutes'), picked one in the app, or it's the start of an event on their own calendar. False for a time the app chose from words like 'tonight' or 'before bed'. Only a time they set may go off, alarm and all, inside their quiet hours (RULES.md \u00a79 Q4, Anna Oct 12 2026: 'if I had a flight at 5 a.m., id want that alarm'); see isTimeTheySet in base44/shared/quietHours.ts."
     },
     "recurrence_pattern": {
       "type": "string",
