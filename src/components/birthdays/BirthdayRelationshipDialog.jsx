@@ -10,11 +10,17 @@ const QUICK_PICKS = [
   "Husband", "Wife", "Partner", "Son", "Daughter",
   "Sister-in-law", "Brother-in-law", "Mother-in-law", "Father-in-law",
   "Aunt", "Uncle", "Cousin", "Coworker", "Boss", "Neighbor",
+  "Dog", "Cat",
 ];
+// A pet's birthday gets the same reminders but no text (Anna, Oct 12 2026).
+// Another animal can be typed in ("my hamster"); the drafter tells those apart.
+const ANIMAL_PICKS = { Dog: "dog", Cat: "cat" };
 
 /**
  * Asks who this person is to the user before AI drafts the birthday text,
  * so the message tone and wording actually fit the relationship.
+ * onConfirm(value, animal, typed): animal is set for the Dog / Cat picks;
+ * typed is true when the answer wasn't one of the picks.
  */
 export default function BirthdayRelationshipDialog({ isOpen, personName, onConfirm, onClose }) {
   const [value, setValue] = useState("");
@@ -59,11 +65,11 @@ export default function BirthdayRelationshipDialog({ isOpen, personName, onConfi
 
           <div className="flex gap-2">
             <Button
-              onClick={() => onConfirm(value.trim())}
+              onClick={() => onConfirm(value.trim(), ANIMAL_PICKS[value] || null, !QUICK_PICKS.includes(value))}
               disabled={!value.trim()}
               className="flex-1 bg-pink-600 hover:bg-pink-700 text-white"
             >
-              Draft my text
+              {ANIMAL_PICKS[value] ? "Done" : "Draft my text"}
             </Button>
             <Button variant="outline" onClick={() => onConfirm("")}>
               Skip
