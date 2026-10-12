@@ -25,6 +25,22 @@ const openai = new OpenAI({
 // isn't an event falls through to day-only handling and smart nudges, which is
 // where non-event reminders were always meant to live.
 
+// An event with a day but no clock time ("Bike Night at COTA, October 12"):
+// the 9 AM it hangs on is only an anchor, so there is no "1 hour before" and no
+// "It's time" — on Oct 12 2026 Anna's phone rang "It's time — Attend Bike
+// Night at COTA" at 9 AM for an evening event. The day before, then the
+// morning of, worded for a day (Anna: "just a reminder, bike night is later
+// today"). "Is today", not "later today": with no time known, it may not be.
+function getDayOnlyEventSchedule(title) {
+  const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
+  return [
+    { days_before: 1, hour: 20, minute: 0, relative_minutes_before: null, label: 'night before',
+      notification_title: `Heads up 🌙 ${t}`, notification_body: `Just a heads up: "${t}" is tomorrow.` },
+    { days_before: 0, hour: 9, minute: 0, relative_minutes_before: null, label: 'morning of',
+      notification_title: `📅 ${t}`, notification_body: `Just a reminder: "${t}" is today.` },
+  ];
+}
+
 function getEventSchedule(lead) {
   return [
     { days_before: 1, hour: 20, minute: 0, relative_minutes_before: null, label: 'night before' },
@@ -126,7 +142,10 @@ export default async function(req) {
     }
 
     const bodyText = await req.text();
-    const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, timezone, location, homeOrigin, avoidTolls, reminderWish, canRecord } = JSON.parse(bodyText);
+    const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, timezone, location, homeOrigin, avoidTolls, reminderWish, canRecord, noClockTime } = JSON.parse(bodyText);
+    // An event with a date and no clock time (a day-only capture, an all-day
+    // calendar event): callers that know say so with dayOnly or noClockTime.
+    const timelessEvent = classification === 'event' && (!!dayOnly || noClockTime === true);
     // Can this person's phone record notes? Service-role callers (calendar sync,
     // captures, the refill cron) say so for the task's owner.
     const ownerCanRecord = canRecord === true || user?.notes_can_record === true;
@@ -139,7 +158,7 @@ export default async function(req) {
     // + cushion. Service-role callers (captureToTasks) have no session, so they
     // pass the origin explicitly — and the toll answer with it.
     const noTolls = user?.commute_avoid_tolls === true || avoidTolls === true;
-    const lead = dayOnly
+    const lead = dayOnly || timelessEvent
       ? null
       : await getTravelLead(location || '', getHomeOrigin(user) || homeOrigin || '', scheduledDateISO, { avoidTolls: noTolls });
     if (lead) {
@@ -185,6 +204,11 @@ export default async function(req) {
     // Driven only by the real classification (set by the parser / calendar
     // sync), never by words in the title. Keeping this deterministic also
     // prevents "2 months before" reminders for far-future events.
+    if (timelessEvent && !wish) {
+      const reminders = getDayOnlyEventSchedule(title);
+      console.log(`[generateReminderSchedule] Event with no clock time "${title}": night before + morning of`);
+      return Response.json({ reminders });
+    }
     if (classification === 'event' && !wish) {
       const schedule = getEventSchedule(lead);
       const notes = ownerCanRecord && !dayOnly ? await notesWouldHelp(title, location) : false;
@@ -460,7 +484,7 @@ Examples:
     // nudged BEFORE it happens. Reminders after the fact are noise — the
     // overdue system handles what happens once the time has passed.
     // Guarantee the two that actually matter: 1 hour before, and at the time.
-    if (!dayOnly) {
+    if (!dayOnly && !timelessEvent) {
       const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
       const fireTime = (r) => {
         if (r.relative_minutes_before != null) {
