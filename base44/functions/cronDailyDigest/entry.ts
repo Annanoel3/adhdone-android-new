@@ -9,7 +9,9 @@
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
-import { localMinutesOfDay, localDateKey, parseHHMM, resolveQuietHours, userTimeZone, DEFAULT_QUIET_END } from '../../shared/quietHours.ts';
+// localDateKey is this file's own (below). Importing it too, as on Oct 12 2026 at
+// 05:28 UTC, is a duplicate declaration and the function failed to start.
+import { localMinutesOfDay, parseHHMM, resolveQuietHours, userTimeZone, DEFAULT_QUIET_END } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
 
@@ -119,7 +121,7 @@ Deno.serve(async (req) => {
       // The name they asked to be called. full_name is often an email handle
       // or a legal name nobody uses ("Good morning, shirarose823!").
       const firstName = String(user.preferred_name || '').trim() || (user.full_name || '').split(' ')[0] || 'friend';
-      const message = await generateDigestMessage(todaysTasks, firstName);
+      const message = await generateDigestMessage(todaysTasks, firstName, Math.floor(localMinutesOfDay(now, timeZone) / 60));
       const sent = await sendDigestNotification(email, user, message);
 
       if (sent) {
@@ -185,8 +187,12 @@ function isSameLocalDay(d1: Date, d2: Date, timeZone: string): boolean {
 }
 
 // ── Helper: LLM-generated friendly digest message (with template fallback) ───
-async function generateDigestMessage(tasks: any[], firstName: string): Promise<{ title: string; body: string }> {
-  const title = `☀️ Good morning, ${firstName}!`;
+// It goes out when their quiet hours end: their morning, which for someone who
+// sleeps days is 4 PM. "Good morning" at 4 PM is odd, so outside clock morning
+// it's "Rise and shine" (Anna, Oct 12 2026).
+async function generateDigestMessage(tasks: any[], firstName: string, localHour: number): Promise<{ title: string; body: string }> {
+  const clockMorning = localHour >= 4 && localHour < 12;
+  const title = clockMorning ? `☀️ Good morning, ${firstName}!` : `✨ Rise and shine, ${firstName}!`;
 
   if (tasks.length === 0) {
     return {
@@ -203,7 +209,7 @@ async function generateDigestMessage(tasks: any[], firstName: string): Promise<{
       messages: [
         {
           role: 'system',
-          content: `You are a supportive ADHD productivity companion with a warm, friendly tone — like a supportive friend, never a clinician. Generate a short (1-2 sentences, under 180 characters) morning digest notification body that summarizes the user's tasks for today. Be encouraging and non-shaming. Use the user's first name naturally.
+          content: `You are a supportive ADHD productivity companion with a warm, friendly tone — like a supportive friend, never a clinician. Generate a short (1-2 sentences, under 180 characters) start-of-day digest notification body that summarizes the user's tasks for today. It is sent when they wake up, which is ${clockMorning ? 'in the morning' : `not morning on the clock (it's ${localHour > 12 ? localHour - 12 : localHour || 12} ${localHour >= 12 ? 'PM' : 'AM'} where they are; they keep different hours)`}, so never say "morning" unless it is morning. Be encouraging and non-shaming. Use the user's first name naturally.
 
 CRITICAL: keep every concrete detail from each task title exactly as written — store names, places, people, items (e.g. "from Costco", "at Martin's house"). Never drop, merge, or paraphrase those away; they are the whole point of the reminder. Shorten your own words, never the task's details.
 
@@ -211,7 +217,7 @@ Return only the notification body text, nothing else.`
         },
         {
           role: 'user',
-          content: `User's first name: ${firstName}\nTasks for today (${tasks.length} total):\n${taskList}\n\nGenerate a friendly morning digest notification body.`
+          content: `User's first name: ${firstName}\nTasks for today (${tasks.length} total):\n${taskList}\n\nGenerate a friendly start-of-day digest notification body.`
         }
       ],
       reasoning_effort: 'low',
