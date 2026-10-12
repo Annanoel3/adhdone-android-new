@@ -358,11 +358,19 @@ screen opens, and the switch stays on after granting); tap Later on an alarm for
 today that has another alarm later today (that one stays booked and rings). Publish Base44
 BEFORE installing 39: on the old server the phone's new reports are refused and dropped.
 
-### Waiting for the next build (after 41)
+### Build 42 (1.3.19) — written into adhdone-android-new, not built yet (Oct 12, 2026)
 
-Already written into adhdone-android-new; goes into the next AAB with anything else pending.
+41 (1.3.18) was accepted on Play Oct 12. `versionCode 42` / `versionName "1.3.19"` are already set
+in `android/app/build.gradle`. Add anything else pending before building.
 - "Notice when I wake up" counts only unlocks from the end of quiet hours on
   (`WakeWatch.firstUnlockToday`: `from = morning`, the 4-hour early look-back is gone). Anna,
   Oct 12 2026: a 6:46 AM look at the time, with quiet hours until 8, was reported as her
   getting up. Nothing is sent during quiet hours anyway. Test: with it on, unlock once before
   quiet hours end (nothing reported), then after (that time is reported, once).
+- With a PIN, pattern or password (`KeyguardManager.isDeviceSecure`) or any lock-screen event
+  that morning, only the lock screen going away (`KEYGUARD_HIDDEN`) counts. Pressing the power
+  button to see the time could bring an app up behind the lock screen, and the first such app
+  (`MOVE_TO_FOREGROUND`) used to count as getting up (Anna, Oct 12 2026: "I just pressed the
+  power button and looked at the clock"). The first app is used only on a phone with no secure
+  lock. Test: after quiet hours end, press power and look without unlocking (nothing reported);
+  then unlock (reported).
