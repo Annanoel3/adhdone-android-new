@@ -91,6 +91,20 @@ export default function TaskCard({
       handleBirthdayDateTimeChange(newDate || getCurrentReminderDate(task), newTime || getCurrentReminderTime(task));
       return;
     }
+    // An event's date and time are the event's own (event_time), with the
+    // event's reminders: leave now, at the time (Anna, Oct 12 2026: setting
+    // Bike Night to 6 PM here saved it like a to-do, with an AI plan and no
+    // event time). A day-only event moved to another day stays day-only.
+    if (isEvent) {
+      const date = newDate || getCurrentReminderDate(task);
+      const timeChanged = !!newTime && !sameTime;
+      if (timeChanged || (task.event_time && !task.day_only_task)) {
+        handleEventDateTimeChange(date, timeChanged ? newTime : null);
+      } else {
+        handleReminderDateChange(date, null);
+      }
+      return;
+    }
     handleReminderDateChange(newDate || getCurrentReminderDate(task), newTime || getCurrentReminderTime(task));
   };
 
@@ -631,9 +645,19 @@ export default function TaskCard({
         // Fire in the background — UI already updated optimistically.
         (async () => {
           try {
-            if (task.onesignal_notification_ids && task.onesignal_notification_ids.length > 0) {
+            // The new date and time are saved FIRST. They used to be saved
+            // last, after the slow reminder booking, so leaving the app part
+            // way lost the edit while the new reminders still went out (Anna,
+            // Oct 12 2026: Bike Night kept its old 9 AM and all-day after she
+            // set 6 PM, but got 6 PM reminders).
+            await Task.update(task.id, { next_reminder: nextReminder.toISOString(), ...namedTime });
+            const oldIds = Array.from(new Set([
+              ...(task.onesignal_notification_ids || []),
+              ...((task.reminder_schedule || []).map((r) => r.notification_id)),
+            ])).filter((id) => id && !String(id).startsWith('planned_'));
+            if (oldIds.length > 0) {
               const { cancelScheduledReminder } = await import('../utils/reminderScheduler');
-              await cancelScheduledReminder(task.onesignal_notification_ids).catch(e => console.error("Cancel failed:", e));
+              await cancelScheduledReminder(oldIds).catch(e => console.error("Cancel failed:", e));
             }
 
             const { base44 } = await import('@/api/base44Client');
@@ -752,9 +776,10 @@ export default function TaskCard({
       const updates = {
         event_time: iso,
         next_reminder: iso,
-        // A time picked here is one they set (RULES.md §9 Q4); a date-only
-        // move keeps whatever the old time was.
-        ...(newTime ? { time_stated: true } : {}),
+        // A time picked here is one they set (RULES.md §9 Q4), and an event
+        // with a time isn't all-day any more; a date-only move keeps whatever
+        // the old time was.
+        ...(newTime ? { time_stated: true, day_only_task: false } : {}),
         ...(task.due_date ? { due_date: iso } : {}),
         onesignal_notification_ids: [],
         reminder_schedule: [],
