@@ -357,3 +357,12 @@ the task's `snoozed_until` on the server; turn on "Notice when I wake up" (the U
 screen opens, and the switch stays on after granting); tap Later on an alarm for a task due
 today that has another alarm later today (that one stays booked and rings). Publish Base44
 BEFORE installing 39: on the old server the phone's new reports are refused and dropped.
+
+### Waiting for the next build (after 41)
+
+Already written into adhdone-android-new; goes into the next AAB with anything else pending.
+- "Notice when I wake up" counts only unlocks from the end of quiet hours on
+  (`WakeWatch.firstUnlockToday`: `from = morning`, the 4-hour early look-back is gone). Anna,
+  Oct 12 2026: a 6:46 AM look at the time, with quiet hours until 8, was reported as her
+  getting up. Nothing is sent during quiet hours anyway. Test: with it on, unlock once before
+  quiet hours end (nothing reported), then after (that time is reported, once).
