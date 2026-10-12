@@ -251,6 +251,10 @@ typed something" and "their phone rang", answer these in writing:
    heads-up, nudge and repeat ping. An app reminder that lands inside them moves to when they
    end, or is dropped if that's too late (`placeAppReminder`) — never booked as it came.
    Home or Back on one of these night alarms rings it again in 10 minutes (`throughQuiet`).
+   Not everyone sleeps at night (Anna, Oct 12 2026: "night shift people exist"). Never compare
+   the local clock to fixed hours (7 PM, 9 AM, 10 PM) to mean evening, morning or bedtime: their
+   night is their quiet hours (the times count even with the switch off), their morning is when
+   those end, and an overnight work shift belongs to the day it starts (workHours.ts).
 5. **What if the phone is on an older build, or the reminder style is notification, not
    alarm?** Check the fields the old build reads, and the path a push takes when nothing
    rings (`PushFilter`).
