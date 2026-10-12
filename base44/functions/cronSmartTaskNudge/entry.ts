@@ -824,7 +824,7 @@ Deno.serve(async (req) => {
           // wasn't working, and an alarm about laundry at 2 AM is how people end
           // up turning ADHDone's notifications off. It still comes, as a regular
           // notification.
-          const putOff = (nudgedTask.snooze_count || 0) + (nudgedTask.dismissed_count || 0) + (nudgedTask.later_count || 0);
+          const putOff = (nudgedTask.snooze_count || 0) + (nudgedTask.dismissed_count || 0) + (nudgedTask.later_count || 0) + (nudgedTask.closed_count || 0);
           const localHour = Math.floor(localMinutesOfDay(now, timeZone) / 60);
           const quietChore = noDate && (localHour >= 22 || localHour < 7 || putOff >= 3);
           ringsOutLoud = !quietChore && (overdue || dueToday || inWindow || noDate || (pressing && !pinnedLater));
@@ -1438,7 +1438,8 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if ((t.snooze_count || 0) > 0) parts.push(`snoozed ${t.snooze_count}x`);
       if ((t.ignored_count || 0) > 0) parts.push(`alarm rang with no answer ${t.ignored_count}x`);
       if ((t.later_count || 0) > 0) parts.push(`alarm put off with "Later" ${t.later_count}x`);
-      const putOff = (t.dismissed_count || 0) + (t.snooze_count || 0) + (t.ignored_count || 0) + (t.later_count || 0);
+      if ((t.closed_count || 0) > 0) parts.push(`alarm closed with Home or Back, no answer, ${t.closed_count}x`);
+      const putOff = (t.dismissed_count || 0) + (t.snooze_count || 0) + (t.ignored_count || 0) + (t.later_count || 0) + (t.closed_count || 0);
       if (putOff >= 3) parts.push(`PUT OFF ${putOff} TIMES IN ALL — the reminders for this task are not working`);
       if (parts.length) reactInfo = `, HOW THEY'VE REACTED: ${parts.join(', ')}`;
     }
@@ -1600,6 +1601,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if ((t.dismissed_count || 0) > 0) react.push(`swiped away or closed ${t.dismissed_count}x`);
       if ((t.ignored_count || 0) > 0) react.push(`rang out with no answer ${t.ignored_count}x`);
       if ((t.later_count || 0) > 0) react.push(`answered "Later" ${t.later_count}x`);
+      if ((t.closed_count || 0) > 0) react.push(`closed its alarm with Home or Back ${t.closed_count}x`);
       if (react.length) parts.push(`what they did with its reminders so far: ${react.join(', ')}`);
       const breakMs = utcMs(t.later_until);
       if (Number.isFinite(breakMs) && breakMs > nowMs) parts.push(`they tapped Later on it; that break runs until ${clock(breakMs)}`);
@@ -1608,7 +1610,10 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       const lc = t.last_alarm_choice;
       const lcMs = utcMs(lc?.at);
       if (lc?.choice && Number.isFinite(lcMs) && nowMs - lcMs < 24 * 60 * 60 * 1000) {
-        const what = lc.choice === 'snooze' ? `snoozed it${lc.minutes ? ` ${lc.minutes} min` : ''}`
+        const left = lc.how === 'home' || lc.how === 'back' ? `pressed ${lc.how === 'home' ? 'Home' : 'Back'} on its alarm` : 'its alarm screen closed';
+        const what = lc.choice === 'snooze' && lc.how ? `${left}, so it rings again in ${lc.minutes || 10} min`
+          : lc.choice === 'snooze' ? `snoozed it${lc.minutes ? ` ${lc.minutes} min` : ''}`
+          : lc.choice === 'closed' ? `${left} without answering`
           : lc.choice === 'dismiss' ? 'stopped its alarm'
           : lc.choice === 'ignored' ? 'let its alarm ring out with no answer'
           : lc.choice === 'later' ? 'tapped Later' : String(lc.choice);
