@@ -1458,9 +1458,10 @@ const NOTES_BUILD_ON_PLAY = true;
 // number WidgetTaskSync files as app_build), so the next build only needs
 // NEWEST_BUILD bumped. The plugin checks stay for builds that report no number.
 // Build 40 (1.3.17: alarm fixes, "Notice when I wake up", Home or Back stops
-// a ringing alarm) is live on Google Play, Oct 12 2026.
+// a ringing alarm) is live on Google Play, Oct 12 2026, and build 41 (1.3.18)
+// was accepted the same day.
 const LATER_BUILD_ON_PLAY = true;
-const NEWEST_BUILD = 40;
+const NEWEST_BUILD = 41;
 const hasQuietHoursBuild = () =>
   typeof window !== 'undefined' &&
   typeof window.Capacitor?.Plugins?.AlarmBridge?.quietFor === 'function';
