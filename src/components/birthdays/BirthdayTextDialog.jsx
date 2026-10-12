@@ -16,6 +16,8 @@ import { Switch } from "@/components/ui/switch";
 import ContactPickerButton from "./ContactPickerButton";
 import BirthdayRelationshipDialog from "./BirthdayRelationshipDialog";
 import { openSmsApp } from "@/components/utils/openSmsApp";
+import { setBirthdayAnimal } from "@/components/utils/birthdayScheduler";
+import { toast } from "@/components/ui/use-toast";
 
 /**
  * Prompts the user to draft a birthday text message when a birthday is created.
@@ -40,6 +42,11 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
 
   useEffect(() => {
     if (!isOpen || !birthdayTask) return;
+    // A pet's birthday has no text (Anna, Oct 12 2026).
+    if (birthdayTask.birthday_animal) {
+      onClose?.();
+      return;
+    }
 
     // Load saved phone number and message
     setPhone(birthdayTask.birthday_phone_number || "");
@@ -53,14 +60,36 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
     setAskRelationship(true);
   }, [isOpen, birthdayTask]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const fetchDraft = async (rel) => {
+  // A pet: same reminders, worded to celebrate them, and no text at all.
+  const makePet = async (animal) => {
+    try {
+      await setBirthdayAnimal(birthdayTask, animal);
+      toast({
+        title: `🐾 Got it`,
+        description: `No text needed for ${personName}. The reminders will just say to celebrate.`,
+        duration: 4000,
+      });
+      onSaved?.();
+    } catch (e) {
+      console.error('[BirthdayTextDialog] Saving the pet failed:', e);
+    }
+    onClose?.();
+  };
+
+  const fetchDraft = async (rel, typed = false) => {
     setLoading(true);
     try {
       const response = await base44.functions.invoke('draftBirthdayText', {
         personName,
         relationship: rel || "",
+        // Typed in ("my hamster"): it may say this is an animal.
+        askIfAnimal: !!(typed && rel),
       });
       const data = response.data || response;
+      if (data.animal) {
+        await makePet(data.animal);
+        return;
+      }
       if (data.message) setDraft(data.message);
     } catch (e) {
       console.error('[BirthdayTextDialog] Failed to draft:', e);
@@ -130,10 +159,14 @@ export default function BirthdayTextDialog({ isOpen, onClose, birthdayTask, onSa
         isOpen={askRelationship}
         personName={personName}
         onClose={() => setAskRelationship(false)}
-        onConfirm={(rel) => {
+        onConfirm={(rel, animal, typed) => {
           setRelationship(rel);
           setAskRelationship(false);
-          fetchDraft(rel);
+          if (animal) {
+            makePet(animal);
+            return;
+          }
+          fetchDraft(rel, typed);
         }}
       />
 
