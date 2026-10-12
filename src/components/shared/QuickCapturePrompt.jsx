@@ -1348,9 +1348,10 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
             Your quiet hours
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
-            Reminders and alarms stay silent during your quiet hours. Right now yours
-            are {hhmmLabel(was.start)} to {hhmmLabel(was.end)}, so a reminder can come as
-            early as {hhmmLabel(was.end)}. Want to change them?
+            Reminders and alarms stay silent during your quiet hours, unless you set a
+            time inside them yourself, like a 5 AM flight. Right now yours are{' '}
+            {hhmmLabel(was.start)} to {hhmmLabel(was.end)}, so the app's own reminders can
+            start as early as {hhmmLabel(was.end)}. Want to change them?
           </DialogDescription>
         </DialogHeader>
 
