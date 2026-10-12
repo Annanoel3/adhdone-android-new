@@ -40,6 +40,7 @@ import {
   requestAlarmPermissions,
   alarmQuietChoiceSupported,
   eventQuietSupported,
+  readRingLog,
 } from '../utils/widgetBridge';
 import { AlarmSoundPicker, AlarmQuietChoice, AlarmEventQuietChoice, QuietWhenButtons } from '../settings/QuickCaptureCard';
 import { NAG_INTERVALS } from '../utils/reminderScheduler';
@@ -1720,6 +1721,192 @@ export function AppUpdatePrompt({ user, theme }) {
             </>
           )}
         </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// "Notice when I wake up", offered once (Anna, Oct 12 2026). Two ways in:
+//  - Accounts made before this shipped get it the first app open where the
+//    phone can do it (build 39 on): right after they update.
+//  - Newer accounts get it only when their mornings look like an alarm is
+//    catching them asleep: on 3 different mornings in the last 7 days, an
+//    alarm in the first 2 hours after their quiet hours end was closed with
+//    Later, Back or Home within 10 seconds of starting to ring ("when any
+//    alarm goes off and wakes me up, its been dismissed within like 3
+//    seconds"). Read from the phone's own ring log (What rang), which keeps 7
+//    days; the window follows their quiet hours so night-shift people count
+//    their own mornings.
+// Never if the setting is already on, or if they ever switched it off
+// themselves; never on top of another popup (usePopupTurn). Shown once ever
+// (User.wake_offer_seen_at).
+const WAKE_OFFER_SINCE = Date.parse('2026-10-13T05:00:00Z'); // midnight Oct 13, Austin time
+const WAKE_OFFER_KEY = 'adhdone_wake_offer_seen';
+const ROUGH_MORNINGS = 3;
+const ROUGH_REACTION_MS = 10 * 1000;
+const MORNING_WINDOW_MIN = 120;
+// Checked at most once an hour while the app stays open (it can sit in the
+// background for days), so a third rough morning is noticed the same morning.
+let wakeOfferCheckedAt = 0;
+
+const platformMs = (v) => {
+  if (!v) return NaN;
+  const s = String(v);
+  return new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`).getTime();
+};
+
+// Mornings in the ring log where an alarm right after quiet hours ended was
+// swatted away (Later, Back or Home within 10 seconds).
+function roughMornings(rows, quietEnd) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(quietEnd || '08:00'));
+  const endMin = m ? Number(m[1]) * 60 + Number(m[2]) : 8 * 60;
+  const days = new Set();
+  for (const r of rows || []) {
+    if (!r || r.kind !== 'alarm') continue;
+    if (r.ended !== 'later' && r.ended !== 'closed') continue;
+    const at = Number(r.at);
+    const endedAt = Number(r.endedAt);
+    if (!Number.isFinite(at) || !Number.isFinite(endedAt) || endedAt - at > ROUGH_REACTION_MS) continue;
+    const d = new Date(at);
+    const sinceEnd = (d.getHours() * 60 + d.getMinutes() - endMin + 1440) % 1440;
+    if (sinceEnd >= MORNING_WINDOW_MIN) continue;
+    // The morning it belongs to: the day the window opened (it can cross midnight).
+    days.add(new Date(at - sinceEnd * 60000).toDateString());
+  }
+  return days.size;
+}
+
+export function WakeOfferPrompt({ user, theme }) {
+  const dark = theme === 'dark';
+  const [wanted, setWanted] = useState(false);
+  const [mornings, setMornings] = useState(false);
+  const [on, setOn] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState('');
+  const shown = usePopupTurn(wanted);
+  const pending = useRef(false);
+  const AB = () => window.Capacitor?.Plugins?.AlarmBridge;
+  const quietEnd = () => {
+    try { return localStorage.getItem('quiet_hours_end') || user?.quiet_hours_end || '08:00'; } catch (e) { return user?.quiet_hours_end || '08:00'; }
+  };
+
+  useEffect(() => {
+    if (!user || wanted || Date.now() - wakeOfferCheckedAt < 60 * 60 * 1000) return;
+    if (!window.Capacitor?.isNativePlatform?.() || typeof AB()?.wakeWatchStatus !== 'function') return;
+    wakeOfferCheckedAt = Date.now();
+    if (user.wake_offer_seen_at || user.wake_watch === true || user.wake_watch === false) return;
+    try { if (localStorage.getItem(WAKE_OFFER_KEY)) return; } catch (e) { /* no storage */ }
+    (async () => {
+      try {
+        const st = await AB().wakeWatchStatus();
+        if (st?.enabled) return;
+        const made = platformMs(user.created_date);
+        if (Number.isFinite(made) && made < WAKE_OFFER_SINCE) {
+          setWanted(true);
+          return;
+        }
+        const rows = await readRingLog(7);
+        if (Array.isArray(rows) && roughMornings(rows, quietEnd()) >= ROUGH_MORNINGS) {
+          setMornings(true);
+          setWanted(true);
+        }
+      } catch (e) {
+        console.warn('Wake-up offer check failed:', e?.message || e);
+      }
+    })();
+  }, [user]);
+
+  // Once it's really on screen it counts as offered, whatever they choose.
+  useEffect(() => {
+    if (!shown) return;
+    try { localStorage.setItem(WAKE_OFFER_KEY, String(Date.now())); } catch (e) { /* no storage */ }
+    base44.auth.updateMe({ wake_offer_seen_at: new Date().toISOString() }).catch(() => {});
+  }, [shown]);
+
+  const turnOn = async () => {
+    const r = await AB().setWakeWatch({ enabled: true, quietEnd: quietEnd() });
+    if (r?.enabled) {
+      await base44.auth.updateMe({ wake_watch: true }).catch(() => {});
+      setOn(true);
+      setNote('');
+    } else {
+      setOn(false);
+      setNote('Usage access is still off. Switch it on for ADHDone, then try again.');
+    }
+  };
+
+  // Back from Android's Usage access screen: finish turning it on.
+  useEffect(() => {
+    if (!shown) return undefined;
+    const back = async () => {
+      if (!pending.current || document.visibilityState !== 'visible') return;
+      pending.current = false;
+      setBusy(true);
+      try {
+        const st = await AB().wakeWatchStatus();
+        if (st?.hasAccess) await turnOn();
+        else setNote('Usage access is still off. Switch it on for ADHDone, then try again.');
+      } catch (e) {
+        setNote("Couldn't turn it on. You can try again in Settings.");
+      } finally {
+        setBusy(false);
+      }
+    };
+    document.addEventListener('visibilitychange', back);
+    return () => document.removeEventListener('visibilitychange', back);
+  }, [shown]);
+
+  const toggle = async (want) => {
+    setBusy(true);
+    setNote('');
+    try {
+      if (want) {
+        const st = await AB().wakeWatchStatus();
+        if (!st?.hasAccess) {
+          pending.current = true;
+          await AB().openUsageAccessSettings();
+          return;
+        }
+        await turnOn();
+      } else {
+        await AB().setWakeWatch({ enabled: false });
+        await base44.auth.updateMe({ wake_watch: false }).catch(() => {});
+        setOn(false);
+      }
+    } catch (e) {
+      setNote("Couldn't change it. You can try again in Settings.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Dialog open={shown} onOpenChange={(o) => { if (!o && !busy) setWanted(false); }}>
+      <DialogContent className={`max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
+        <DialogHeader>
+          <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
+            <AlarmClock className="w-5 h-5" />
+            {mornings ? "Start reminders when you're up?" : 'New: notice when you wake up'}
+          </DialogTitle>
+          <DialogDescription className={dark ? 'text-gray-400' : ''}>
+            {mornings ? 'Your morning reminders seem to be catching you before you\'re up. ' : ''}
+            ADHDone can start your day's reminders the first time you unlock your phone in the
+            morning, instead of at a set time. Anything you set for a specific time still goes
+            off on time. It uses Android's Usage access only to see when your phone was first
+            unlocked each day.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex items-center justify-between gap-3 py-1">
+          <span className={`text-sm font-medium ${dark ? 'text-gray-100' : 'text-gray-900'}`}>Notice when I wake up</span>
+          <Switch checked={on} onCheckedChange={toggle} disabled={busy} />
+        </div>
+        {note && <p className="text-xs text-red-500">{note}</p>}
+        <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
+          You can change this any time in Settings.
+        </p>
+        <Button variant={on ? 'default' : 'outline'} onClick={() => setWanted(false)} disabled={busy} className="w-full">
+          {on ? 'Done' : 'Not now'}
+        </Button>
       </DialogContent>
     </Dialog>
   );
