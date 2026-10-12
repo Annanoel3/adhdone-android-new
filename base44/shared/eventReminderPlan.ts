@@ -23,6 +23,9 @@ export const MAX_REMINDERS_PER_EVENT = 2;
 export const BOOKABLE_WINDOW_MS = 29 * 24 * 60 * 60 * 1000;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// How long after an all-day event's 9 AM anchor its reminders may still go:
+// the rest of that day (quiet hours that end at 4 PM move the morning-of there).
+const ALL_DAY_GRACE_MS = 14 * 60 * 60 * 1000;
 
 export type PlanEntry = {
   notification_id: string; // `planned_…` until a real OneSignal id replaces it
@@ -100,8 +103,10 @@ export function buildEventReminderPlan(opts: {
     .filter((r) => !(isAllDay && r.isRelative))
     .filter((r): r is typeof r & { atMs: number } => r.atMs != null)
     .filter((r) => r.atMs > earliest)
-    // Events: nothing after the start, and nothing more than a day ahead.
-    .filter((r) => !isEvent || (r.atMs <= startMs && startMs - r.atMs <= DAY_MS))
+    // Events: nothing after the start, and nothing more than a day ahead. An
+    // all-day event's start is only its 9 AM anchor: its morning-of reminder
+    // may land later that day (moved to when quiet hours end).
+    .filter((r) => !isEvent || (r.atMs <= startMs + (isAllDay ? ALL_DAY_GRACE_MS : 0) && startMs - r.atMs <= DAY_MS))
     .sort((a, b) => a.atMs - b.atMs)
     // Two reminders that resolve to (nearly) the same minute are one reminder.
     .filter((r, i, arr) => i === 0 || r.atMs - arr[i - 1].atMs > 5 * 60 * 1000)
@@ -114,9 +119,10 @@ export function buildEventReminderPlan(opts: {
     entries.push({
       atMs: fallbackMs,
       isRelative: true,
-      label: 'at the time',
+      label: isAllDay ? 'morning of' : 'at the time',
       notification_title: `📅 ${title}`,
-      notification_body: `You've got this! ${title} is coming up.`,
+      // No clock time: never "coming up" at a 9 AM that isn't its time.
+      notification_body: isAllDay ? `Just a reminder: "${title}" is today.` : `You've got this! ${title} is coming up.`,
     });
   }
 
