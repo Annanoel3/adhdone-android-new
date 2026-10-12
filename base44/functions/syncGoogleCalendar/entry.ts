@@ -13,6 +13,7 @@ import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { filterAll } from '../../shared/listAll.ts';
 import { buildEventReminderPlan, isBookableNow, isBookedId } from '../../shared/eventReminderPlan.ts';
 import { withChallengeRetry } from '../../shared/sdkRetry.ts';
+import { resolveQuietHours } from '../../shared/quietHours.ts';
 
 // Payment detection for imported calendar items. Calendar payment entries are
 // usually terse ("Discover payment", "$450 rent", "Pay water bill", "Chase"),
@@ -784,6 +785,9 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         due_date: dueDateISO,
         end_date: endDateISO,
         event_time: eventTimeISO,
+        // A time on their own calendar is a time they set: it may ring inside
+        // their quiet hours (a 5 AM flight; RULES.md §9 Q4).
+        time_stated: !!eventTimeISO,
         // The AI's own read of the title decides event vs task. It used to be
         // "anything with a single reminder is an event", which turned every
         // dated bill or errand from the calendar into an event.
@@ -898,6 +902,10 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
           isAllDay,
           isEvent: createdTask.classification === 'event',
           timeZone: (user as any)?.timezone || null,
+          // Nothing the app picked lands in their quiet hours; the event's own
+          // start, a time they set, may (RULES.md §9 Q4).
+          quiet: resolveQuietHours(user),
+          startIsTheirs: !isAllDay && ((createdTask as any).time_stated === true || (taskRecord as any)?.time_stated === true),
         });
 
         for (const entry of plan) {
