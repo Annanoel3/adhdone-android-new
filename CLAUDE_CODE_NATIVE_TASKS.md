@@ -331,6 +331,17 @@ project's real libraries; it has not been run on a phone yet. What changed from 
 - Two reminders at times the person set (🔔), a minute apart, both ring on their own minute
   (Oct 11 test): neither may move. Only reminders the app picked wait 10 minutes.
 
+### Build 40 (1.3.17) — replaces 39 before it was approved (Oct 11, 2026)
+
+Everything in 39, plus: a stray Back or Home during an alarm left it ringing with nothing on
+screen to stop it. Now Back does nothing while the alarm rings (once nothing rings, Back
+closes the screen), and Home / recent apps / any other way the screen closes without one of
+its buttons brings it back after a second (and again ~5 s later if Android held the first
+try). It relies on "Display over other apps" (the same grant that lets the alarm open its
+screen over other apps); without it the ringing notification's Snooze / Done / Stop stay
+the way out (`AlarmActivity.bringBackSoon`, `answered`, `onUserLeaveHint`). Test: during an
+alarm press Home (the screen returns), press Back (nothing happens), then tap Stop.
+
 Phone test before the upload (force-stop first): two alarms a minute apart for unrelated
 tasks (the second rings 10 minutes after the first is answered); two for related tasks (one
 alarm naming both, with a Done for each that finishes only that one); snooze one with the app closed and check
