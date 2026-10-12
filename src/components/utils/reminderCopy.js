@@ -12,19 +12,57 @@ function dayLabel(due, daysAway) {
   return due.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-// Nobody's doing an oil change at 7:30 PM. When a snooze would land in the
-// evening and the task isn't due until a later day, slide the follow-up to
-// tomorrow morning instead of pinging again tonight.
+// Their own evening and morning, from their quiet hours (Settings, kept on
+// this device), not the clock: for someone who sleeps 8 AM to 4 PM, 6 AM is
+// bedtime and 5 PM is morning (Oct 12 2026). Defaults 10 PM to 8 AM.
+function quietWindow() {
+  const read = (k, d) => { try { return localStorage.getItem(k) || d; } catch (e) { return d; } };
+  const toMin = (s, d) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(s || ''));
+    return m ? Number(m[1]) * 60 + Number(m[2]) : d;
+  };
+  return { start: toMin(read('quiet_hours_start', '22:00'), 22 * 60), end: toMin(read('quiet_hours_end', '08:00'), 8 * 60) };
+}
+const minOfDay = (d) => d.getHours() * 60 + d.getMinutes();
+const inWindow = (m, from, to) => (from === to ? false : from > to ? (m >= from || m < to) : (m >= from && m < to));
+
+// Evening: the last 3 hours before their quiet hours start, and the quiet
+// hours themselves (7 PM to 8 AM for the usual 10 PM to 8 AM).
+function isTheirEvening(d) {
+  const { start, end } = quietWindow();
+  return inWindow(minOfDay(d), (start - 180 + 24 * 60) % (24 * 60), end);
+}
+
+// Their next morning after `from`: once their next quiet hours are over, at
+// 9 AM or an hour after quiet hours end, whichever is later (the same slot
+// the server uses for a day's first reminder, quietHours.ts anchorToDaytime).
+// At 1 AM that's this morning, not tomorrow's.
+export function nextMorning(from = new Date()) {
+  const { start, end } = quietWindow();
+  if (start === end) {
+    const t = new Date(from.getFullYear(), from.getMonth(), from.getDate() + 1, 9, 0, 0, 0);
+    return t;
+  }
+  const m = minOfDay(from);
+  const toEnd = inWindow(m, start, end)
+    ? (end - m + 24 * 60) % (24 * 60)
+    : ((start - m + 24 * 60) % (24 * 60)) + ((end - start + 24 * 60) % (24 * 60));
+  const after = Math.max(9 * 60, end + 60) - end;
+  const out = new Date(from.getTime() + (toEnd + after) * 60000);
+  out.setSeconds(0, 0);
+  return out;
+}
+
+// Nobody's doing an oil change at 7:30 PM. When a snooze would land in their
+// evening (or night) and the task isn't due until a later day, slide the
+// follow-up to their next morning instead of pinging again tonight.
 export function smartSnoozeTime(task, snoozeUntil) {
   const t = snoozeUntil instanceof Date ? snoozeUntil : new Date(snoozeUntil);
-  const hour = t.getHours();
-  if (hour < 19 && hour >= 7) return t;
+  if (!isTheirEvening(t)) return t;
   if (!task?.due_date) return t;
   const due = new Date(task.due_date);
   if (startOfDay(due) <= startOfDay(t)) return t;
-  const morning = new Date(t.getFullYear(), t.getMonth(), t.getDate(), 9, 0, 0, 0);
-  if (hour >= 19) morning.setDate(morning.getDate() + 1);
-  return morning;
+  return nextMorning(t);
 }
 
 // Every body names the task. The body is the line people read in the
@@ -37,8 +75,7 @@ export function getReminderCopy(task, sendAt = new Date()) {
   const send = sendAt instanceof Date ? sendAt : new Date(sendAt);
   const title = (task?.title || '').trim() || 'your task';
   const quoted = `"${title}"`;
-  const hour = send.getHours();
-  const evening = hour >= 19 || hour < 6;
+  const evening = isTheirEvening(send);
   const due = task?.due_date ? new Date(task.due_date) : null;
   // A rhythm the person asked for ("keep reminding me until I do it").
   const askedRhythm = !!task?.reminder_interval && task.reminder_interval !== 'once';
