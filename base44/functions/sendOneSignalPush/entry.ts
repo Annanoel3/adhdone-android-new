@@ -1,3 +1,5 @@
+// Re-saved Oct 12 2026 so the bundled shared/workHours.ts (via sendLedger) is picked up:
+// an overnight shift belongs to the day it starts and runs past midnight.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 
