@@ -71,6 +71,7 @@ export default function BirthdayStrip({ tasks, theme, specialMode, onWriteText, 
       <button onClick={seeAll} className="flex-1 min-w-0 text-left py-1.5">
         <span className={`text-sm font-semibold truncate block ${dark ? "text-gray-100" : "text-gray-900"}`}>
           {name}
+          {next.birthday_animal && <span title="Pet"> 🐾</span>}
           <span className={`ml-2 font-normal ${dark ? "text-gray-400" : "text-gray-600"}`}>
             {whenLabel(days)}
           </span>
