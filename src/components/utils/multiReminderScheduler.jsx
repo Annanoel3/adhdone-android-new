@@ -4,7 +4,7 @@
 // any task. Results are cached by title in localStorage (24h TTL) since the
 // minutes_before values are title-dependent, not date-dependent.
 
-import { scheduleReminder, resolveSendTime, cancelScheduledReminder } from './reminderScheduler';
+import { scheduleReminder, resolveSendTime, cancelScheduledReminder, isInQuietHours } from './reminderScheduler';
 import { getReminderCopy } from './reminderCopy';
 import { commitNotificationIds } from './notificationOwnership';
 import { base44 } from '@/api/base44Client';
@@ -87,7 +87,12 @@ async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, 
 // Supports two reminder types from the LLM:
 //   ABSOLUTE: { days_before, hour, minute } — a specific clock time on a day
 //   RELATIVE: { relative_minutes_before } — N minutes before the event time
-function resolveReminderTimes(reminders, scheduledDateISO, title = '', classification, dayOnly) {
+// `timeStated`: they set this clock time themselves (Task.time_stated). Then
+// the reminder AT that time goes out at that time even inside quiet hours (a
+// 5 AM flight; RULES.md §9 Q4). Every other reminder — the heads-ups the app
+// adds, or the at-time one for a time the app picked — follows quiet hours: it
+// moves to when they end, and is dropped below when that is past the time.
+function resolveReminderTimes(reminders, scheduledDateISO, title = '', classification, dayOnly, timeStated = false) {
   const scheduled = new Date(scheduledDateISO);
   const bufferMs = Date.now() + 2 * 60 * 1000;
   // Anything tied to a specific clock time — an event OR a task the user set
@@ -109,11 +114,21 @@ function resolveReminderTimes(reminders, scheduledDateISO, title = '', classific
         reminderTime.setDate(reminderTime.getDate() - (r.days_before || 0));
         reminderTime.setHours(r.hour || 0, r.minute || 0, 0, 0);
       }
+      const atTime = r.relative_minutes_before === 0;
+      // Quiet hours are applied HERE, before the "never after the time" check
+      // below, so a heads-up pushed past the time by quiet hours is dropped
+      // instead of arriving after it (an hour-before for a 5 AM flight used to
+      // go out at 8 AM).
+      if (!(atTime && timeStated) && isInQuietHours(reminderTime)) {
+        reminderTime = new Date(resolveSendTime(reminderTime.toISOString(), false));
+      }
       return {
         sendAtISO: reminderTime.toISOString(),
-        // The reminder AT the user's chosen time is sacred — it is never
-        // shifted for quiet hours and never deduped away by another reminder.
-        exact: r.relative_minutes_before === 0,
+        // Already placed for quiet hours above: booked at exactly this time.
+        exact: true,
+        // The reminder AT the user's chosen time is never deduped away by
+        // another reminder.
+        atTime,
         // Clock-time reminders ("morning of", "night before") are check-ins:
         // they yield to time-critical pushes in the collision ledger.
         checkin: r.relative_minutes_before == null,
@@ -137,7 +152,7 @@ function resolveReminderTimes(reminders, scheduledDateISO, title = '', classific
     // for each unique time so the user gets one notification at 9am, not two.
     .filter((r, i, arr) => {
       if (i === 0) return true;
-      if (r.exact) return true; // never drop the at-the-chosen-time reminder
+      if (r.atTime) return true; // never drop the at-the-chosen-time reminder
       const prevMin = Math.floor(new Date(arr[i - 1].sendAtISO).getTime() / 60000);
       const thisMin = Math.floor(new Date(r.sendAtISO).getTime() / 60000);
       return thisMin !== prevMin;
@@ -164,6 +179,7 @@ export async function scheduleMultiReminders({
   deadlineStyle,
   location,
   reminderWish,
+  timeStated,
 }) {
   try {
     // Every caller passes taskId, so the location is looked up here rather than
@@ -173,17 +189,24 @@ export async function scheduleMultiReminders({
     // off the task too, so an edited "by 5 PM" task keeps its deadline
     // behaviour instead of getting an "at 5 PM" plan. (Whether it's all-day is
     // NOT read: a caller that leaves dayOnly out has just given it a time.)
+    // Whether they set the clock time themselves (Task.time_stated) is read
+    // the same way when the caller doesn't say. A caller that has just saved
+    // a time the person picked passes timeStated: true, so a save still on
+    // its way can't make it read as false.
     let taskLocation = location;
     let style = deadlineStyle;
-    if ((taskLocation === undefined || style === undefined) && taskId) {
+    let stated = timeStated;
+    if ((taskLocation === undefined || style === undefined || stated === undefined) && taskId) {
       try {
         const task = await base44.entities.Task.get(taskId);
         if (taskLocation === undefined) taskLocation = task?.location || '';
         if (style === undefined) style = task?.deadline_style;
+        if (stated === undefined) stated = task?.time_stated === true;
       } catch {
         if (taskLocation === undefined) taskLocation = '';
       }
     }
+    stated = stated === true;
     dayOnly = !!dayOnly;
     deadlineStyle = style === 'by' ? 'by' : 'on';
     const clockDeadline = !dayOnly && deadlineStyle === 'by' && classification !== 'event';
@@ -204,7 +227,7 @@ export async function scheduleMultiReminders({
       });
     }
 
-    const reminderTimes = resolveReminderTimes(reminders, scheduledDateISO, title, classification, dayOnly);
+    const reminderTimes = resolveReminderTimes(reminders, scheduledDateISO, title, classification, dayOnly, stated);
     if (reminderTimes.length === 0) return clockDeadline ? [] : null;
 
     console.log(`[multiReminderScheduler] Scheduling ${reminderTimes.length} LLM-determined reminders for "${title}"`);
@@ -309,6 +332,9 @@ export async function moveRemindersToDate(task, whenISO, updates = {}) {
 
   const currentUser = await base44.auth.me();
   const dayOnly = !!task.day_only_task;
+  // A time they set themselves keeps its reminder at that time, quiet hours
+  // or not (RULES.md §9 Q4); the date pills pass time_stated in `updates`.
+  const stated = { ...task, ...updates }.time_stated === true;
   const multiIds = await scheduleMultiReminders({
     email: currentUser.email,
     title: task.title,
@@ -320,6 +346,7 @@ export async function moveRemindersToDate(task, whenISO, updates = {}) {
     // without this its 11:59 PM due time was planned as a clock time, with a
     // push at 11:59 PM.
     dayOnly,
+    timeStated: stated,
   });
   if (multiIds) {
     await commitNotificationIds(task.id, multiIds);
@@ -337,6 +364,7 @@ export async function moveRemindersToDate(task, whenISO, updates = {}) {
       ...getReminderCopy({ ...task, ...updates }, new Date(whenISO)),
       sendAtISO: whenISO,
       taskId: task.id,
+      exact: stated,
       data: { screen: '/TaskNotification', taskId: task.id, urgency: task.urgency, type: 'task_reminder' },
       buttons: [
         { id: 'snooze_15', text: 'Snooze 15 min' },
