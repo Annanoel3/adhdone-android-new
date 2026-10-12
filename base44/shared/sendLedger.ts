@@ -118,7 +118,7 @@ async function atWork(base44: any, email: string, at: Date): Promise<boolean> {
 
 export async function ledgerCheck(
   base44: any,
-  opts: { email: string; taskId?: string | null; kind?: string; sendAt?: string | Date; urgent?: boolean }
+  opts: { email: string; taskId?: string | null; kind?: string; sendAt?: string | Date; urgent?: boolean; firstClaim?: boolean }
 ): Promise<{ allowed: boolean; reason?: string }> {
   const email = opts.email;
   if (!email) return { allowed: true };
@@ -155,7 +155,13 @@ export async function ledgerCheck(
     const diff = Math.abs(new Date(entry.send_at).getTime() - sendAtMs);
     const sameTask = !!taskId && entry.task_id === taskId;
     const duplicate = sameTask && diff < SAME_TASK_GAP_MS;
-    const stacked = proactive && diff < (opts.urgent ? URGENT_STACK_GAP_MS : STACK_GAP_MS);
+    // The morning summary's first claim on the hour after they wake up (Anna,
+    // Oct 12 2026): it doesn't wait behind softer pushes or the owner's own
+    // health notes (those wait for it), and keeps only 5 minutes from a
+    // reminder tied to a real moment.
+    const softer = PROACTIVE_KINDS.has(entry.kind) || String(entry.kind || '').startsWith('owner_');
+    const stacked = proactive && !(opts.firstClaim && softer)
+      && diff < (opts.urgent || opts.firstClaim ? URGENT_STACK_GAP_MS : STACK_GAP_MS);
     // A time-critical push wins its slot: a pending proactive push already
     // booked there is cancelled rather than letting the two land together.
     const entryPending = new Date(entry.send_at).getTime() > Date.now() && !!entry.notification_id;
