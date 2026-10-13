@@ -2,6 +2,8 @@
 // an overnight shift belongs to the day it starts and runs past midnight.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
+import { atTimeWords, isPlainAtTimeWords } from '../../shared/reminderTitle.ts';
+import { userTimeZone } from '../../shared/quietHours.ts';
 
 // WHO MAY BOOK A PUSH
 // Like every Base44 function, this endpoint can be reached by anyone on the
@@ -96,11 +98,47 @@ Deno.serve(async (req) => {
             return Response.json({ success: true, skipped: true, reason: gate.reason, notificationId: null });
         }
 
+        // The reminder at a task's own time is booked everywhere with plain
+        // words ("It's time — "… "You've got this! 💪"); here they become the
+        // brief's words for that moment (shared/reminderTitle.ts, atTimeWords). Only for the
+        // app's own callers and the task's owner, only for a one-time task or
+        // an event, and never at the cost of the reminder: no answer within a
+        // few seconds and the plain words go out. The words used come back as
+        // `words`, so the caller saves them on the task and the phone's alarm
+        // says the same thing as the push.
+        let pushTitle = title;
+        let pushBody = messageBody;
+        let reworded = null;
+        if ((isInternal || isSelf) && data?.taskId && isPlainAtTimeWords(messageBody)) {
+            try {
+                const task = await base44.asServiceRole.entities.Task.get(String(data.taskId));
+                const to = String(toUserExternalId).toLowerCase();
+                const owns = !!task && [task.created_by, task.notification_recipient_email].some((e) => String(e || '').toLowerCase() === to);
+                const oneTime = !!task && (task.classification === 'event' || !task.reminder_interval || task.reminder_interval === 'once');
+                if (owns && oneTime && !task.day_only_task) {
+                    let owner = null;
+                    try {
+                        const users = await base44.asServiceRole.entities.User.filter({ email: String(toUserExternalId) });
+                        owner = users?.[0] || null;
+                    } catch (_) {
+                        owner = null;
+                    }
+                    reworded = await atTimeWords(task, new Date(resolvedSendAt).getTime(), userTimeZone(owner), 4500);
+                    if (reworded) {
+                        pushTitle = reworded.title;
+                        pushBody = reworded.body;
+                    }
+                }
+            } catch (e) {
+                console.log('[schedulePush] plain words kept:', e?.message || e);
+            }
+        }
+
         const notificationPayload = {
             app_id: appId,
             include_external_user_ids: [String(toUserExternalId)],
-            headings: { en: title },
-            contents: { en: messageBody },
+            headings: { en: pushTitle },
+            contents: { en: pushBody },
             data: data || {},
             channel_for_external_user_ids: "push",
             // Scheduling
@@ -165,8 +203,8 @@ Deno.serve(async (req) => {
         }
 
         console.log('[schedulePush] ========== SUCCESS ==========', oneSignalResult.id);
-        await ledgerRecord(base44, { email: String(toUserExternalId), taskId: ledgerTaskId, kind: ledgerKind, source: 'schedulePush', sendAt: resolvedSendAt, notificationId: oneSignalResult.id, title });
-        return Response.json({ success: true, notificationId: oneSignalResult.id, onesignal_response: oneSignalResult });
+        await ledgerRecord(base44, { email: String(toUserExternalId), taskId: ledgerTaskId, kind: ledgerKind, source: 'schedulePush', sendAt: resolvedSendAt, notificationId: oneSignalResult.id, title: pushTitle });
+        return Response.json({ success: true, notificationId: oneSignalResult.id, words: reworded ? { title: pushTitle, body: pushBody } : null, onesignal_response: oneSignalResult });
 
     } catch (error) {
         console.error('[schedulePush] Unhandled error:', error.message);
