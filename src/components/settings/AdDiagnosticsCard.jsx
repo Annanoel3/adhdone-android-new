@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Megaphone } from 'lucide-react';
 import { showInterstitialAd, resetAdLaunchState, getLastAdStatus } from '@/lib/admob';
+import { getAdManagerNotes } from '@/components/shared/AdManager';
 
 // Owner-only diagnostics: ad failures are silent by design (a failed ad must
 // never interrupt the user), which made "I never see ads" impossible to debug.
@@ -38,6 +39,13 @@ export default function AdDiagnosticsCard({ user, theme }) {
         <p className={`text-sm font-mono break-words mb-4 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
           {status}
         </p>
+        <p className={`text-xs mb-1 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+          What the last opens did about their ad (newest last):
+        </p>
+        <div className={`text-xs font-mono break-words mb-4 space-y-0.5 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
+          {getAdManagerNotes().length === 0 && <p>nothing noted yet</p>}
+          {getAdManagerNotes().map((line, i) => <p key={i}>{line}</p>)}
+        </div>
         <Button onClick={runTest} disabled={testing} variant="outline" className="w-full">
           {testing ? 'Requesting an ad...' : 'Try an ad right now'}
         </Button>
