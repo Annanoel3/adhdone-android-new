@@ -935,6 +935,9 @@ export default function NotesPage() {
   if (open) {
     const notes = open.notes || null;
     const followUps = followUpsOf(records, open.id);
+    // Ones whose notes went in; the rest (still transcribing, or stuck) get a
+    // line of their own below, since they have no card in the list.
+    const mergedFollowUps = followUps.filter((f) => f.status === "merged");
     const parts = withFollowUpText(open, records).transcript_parts.slice().sort((a, b) => a.index - b.index);
     // Where each follow-up's transcript starts, for a line between them.
     const followUpStarts = new Map(followUps.map((f, i) => [100000 * (i + 1), f]));
@@ -984,9 +987,19 @@ export default function NotesPage() {
                 </div>
               );
             })()}
-            {followUps.length > 0 && (
-              <p className={`mt-1 text-sm ${soft}`}>{followUps.length === 1 ? "1 recording added" : `${followUps.length} recordings added`} after the first.</p>
+            {mergedFollowUps.length > 0 && (
+              <p className={`mt-1 text-sm ${soft}`}>{mergedFollowUps.length === 1 ? "1 recording added" : `${mergedFollowUps.length} recordings added`} after the first.</p>
             )}
+            {followUps.filter((f) => f.status !== "merged").map((f) => (
+              <div key={f.id} className={`mt-2 flex items-center justify-between gap-2 text-sm ${soft}`}>
+                <span>Added {whenText(f.started_at)}: {progress?.recordId === f.id ? "Working on it…" : (STATUS_TEXT[f.status] || "Not finished")}</span>
+                {!progress && !live && f.status !== "recording" && (
+                  <Button onClick={() => retryNotes(f)} variant="outline" size="sm" className="shrink-0 rounded-lg">
+                    <RotateCcw className="w-3.5 h-3.5 mr-1" /> Finish
+                  </Button>
+                )}
+              </div>
+            ))}
             {canRecordMore && (
               <Button onClick={() => startRecording({ moreOf: open })} variant="outline" className="mt-3 h-11 rounded-xl">
                 <Mic className="w-4 h-4 mr-2" /> Record more
