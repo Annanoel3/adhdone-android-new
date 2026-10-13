@@ -689,6 +689,8 @@ Deno.serve(async (req) => {
         const result = res?.data || res;
         if (result?.notificationId) {
           entry.notification_id = result.notificationId;
+          // The minute it really went at (a heads-up moved off another push's minute).
+          if (typeof result.sendAt === 'string' && result.sendAt) entry.send_at = result.sendAt;
           entry.scheduled = true;
           delete entry.book_error;
           newIds.push(result.notificationId);
@@ -1073,6 +1075,8 @@ Deno.serve(async (req) => {
         const result = res?.data || res;
         if (result?.notificationId) {
           entry.notification_id = result.notificationId;
+          // The minute it really went at (a heads-up moved off another push's minute).
+          if (typeof result.sendAt === 'string' && result.sendAt) entry.send_at = result.sendAt;
           entry.scheduled = true;
           // The reminder at its own time goes out in the brief's words
           // (schedulePush, shared/reminderTitle.ts): saved, so the alarm matches.
