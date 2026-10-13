@@ -9,6 +9,72 @@
 // which is already Saturday in UTC — so a Friday-evening reminder said "due
 // tomorrow" and named the wrong weekday for US users.
 import { DEFAULT_TIME_ZONE, localDateKey, resolveQuietHours, isInQuietHours, isTimeTheySet } from './quietHours.ts';
+import OpenAI from 'npm:openai';
+import { REMINDER_BRIEF } from './reminderBrief.ts';
+
+// The words of the one reminder a task gets AT the time they set for it,
+// written from the same brief Smart Reminders runs on, so the app has one
+// voice. Anna, Oct 12 2026, on "It's time — 'Clean the litter box'. You've got
+// this! 💪": that is the app talking, not an assistant. The brief's own
+// example for that moment is "Litter box time. It's 9 — the cats will thank
+// you."
+//
+// Every path that books that reminder still starts from the plain words
+// ("It's time — "…), and schedulePush, which every booking goes through,
+// swaps them for these. Null when no good answer comes back in time: the plain
+// words go out, so a reminder is never held up or lost over its wording.
+export async function atTimeWords(task: any, atMs: number, timeZone: string, timeoutMs = 6000): Promise<{ title: string; body: string } | null> {
+  try {
+    const title = String(task?.title || '').trim();
+    if (!title || !Number.isFinite(atMs)) return null;
+    const said = String(task?.original_input || '').trim().replace(/\s+/g, ' ');
+    const notes = [task?.description, task?.notes].map((x: any) => String(x || '').trim()).filter(Boolean).join(' / ').replace(/\s+/g, ' ');
+    let when = '';
+    try {
+      when = new Intl.DateTimeFormat('en-US', { timeZone: timeZone || DEFAULT_TIME_ZONE, weekday: 'long', hour: 'numeric', minute: '2-digit' }).format(new Date(atMs));
+    } catch (_) {
+      when = new Date(atMs).toISOString();
+    }
+    const repeats = task?.recurrence_pattern && task.recurrence_pattern !== 'none' ? String(task.recurrence_pattern).replace(/_/g, ' ') : '';
+    const isEvent = task?.classification === 'event';
+    const facts = [
+      `The ${isEvent ? 'event' : 'task'}: "${title.slice(0, 200)}"`,
+      said && said.toLowerCase() !== title.toLowerCase() ? `Their words when they added it: "${said.slice(0, 400)}"` : '',
+      notes ? `Notes: ${notes.slice(0, 300)}` : '',
+      `The time they set for it: ${when}${repeats ? ` (it repeats ${repeats})` : ''}`,
+      task?.location ? `Location they typed: ${String(task.location).slice(0, 200)}` : '',
+    ].filter(Boolean).join('\n');
+    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+    const ask = openai.chat.completions.create({
+      model: 'gpt-6-luna',
+      reasoning_effort: 'low',
+      response_format: { type: 'json_object' },
+      max_completion_tokens: 2000,
+      messages: [
+        { role: 'system', content: REMINDER_BRIEF },
+        { role: 'user', content: `${facts}\n\nThis is the one reminder that goes out at exactly that time, the reminder for the time they set. Write it. It has to be plain from the words alone what it is for and that the time is now. Return JSON only: {"title": "<2-6 words, may include one emoji that fits what it literally says>", "body": "<one or two complete sentences>"}` },
+      ],
+    });
+    // A late answer is dropped, not waited for.
+    ask.catch(() => {});
+    const late = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs));
+    const res: any = await Promise.race([ask, late]);
+    if (!res) return null;
+    const parsed = JSON.parse(res.choices?.[0]?.message?.content || '{}');
+    const t = String(parsed?.title || '').replace(/\s+/g, ' ').trim();
+    const b = String(parsed?.body || '').replace(/\s+/g, ' ').trim();
+    if (!t || !b || t.length > 60 || b.length > 240) return null;
+    return { title: t, body: b };
+  } catch (e) {
+    console.log('[atTimeWords] no words, the plain ones stay:', (e as any)?.message || e);
+    return null;
+  }
+}
+
+// The plain words every path books the reminder at a task's own time with.
+export function isPlainAtTimeWords(body: any): boolean {
+  return /^It's time — "/.test(String(body || ''));
+}
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
