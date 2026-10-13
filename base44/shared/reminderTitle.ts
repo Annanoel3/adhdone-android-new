@@ -164,7 +164,7 @@ function whenMs(v: any): number {
 
 // Which of a task's reminders ring out loud (see ringsOutLoud in widgetBridge.js).
 // "Same day" is the owner's own calendar day.
-function ringsOutLoudOn(task: any, momentMs: number, timeZone: string, label = ''): boolean {
+export function ringsOutLoudOn(task: any, momentMs: number, timeZone: string, label = ''): boolean {
   const anchor = whenMs(task.event_time || task.due_date || task.next_reminder);
   if (isNaN(anchor)) return true;
   const isEvent = task.classification === 'event' || task.classification === 'birthday' || !!task.birthday_person;
