@@ -374,3 +374,13 @@ in `android/app/build.gradle`. Add anything else pending before building.
   power button and looked at the clock"). The first app is used only on a phone with no secure
   lock. Test: after quiet hours end, press power and look without unlocking (nothing reported);
   then unlock (reported).
+- Done on an alarm now notes the task as finished on the phone (`AlarmService.markedDone` →
+  `TaskPushes.finished`), so the task's own push for that same minute, landing a few seconds
+  after, is dropped (`PushFilter` → `sentBeforeFinish`) instead of sounding again. Anna, Oct 12
+  2026: the 9 PM litter box rang, she tapped Done, then it sounded again as a notification.
+  Test: an alarm-style task with a time; when its alarm rings, tap Done at once — no second
+  sound, nothing new in the tray.
+- "What rang" rows are written to disk right away (`RingLog.save`: `commit()` instead of
+  `apply()`). Anna, Oct 12 2026: alarms that rang while the app was closed (the sprinkler ones,
+  two afternoon nudges) never showed in the list. Test: close the app, let a reminder ring, then
+  open Settings → Reminders → What rang: it's listed.
