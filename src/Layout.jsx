@@ -81,6 +81,7 @@ import WelcomeDialog from "./components/onboarding/WelcomeDialog";
 import CatchUpDialog from "./components/onboarding/CatchUpDialog";
 import { applyOnboardingReplay } from "./components/onboarding/onboardingReplay";
 import { hydrateOnboardingFlags, clearOnboardingFlags, persistOnboardingFlag } from "./components/onboarding/onboardingSync";
+import { ONBOARDING_STEPS, ONBOARDING_STEP_EVENT, isStepDone, markStepDone } from "./components/onboarding/onboardingGate";
 import { trackFire } from "@/lib/appTrack";
 import { seedTaskSortFromProfile } from "@/hooks/useTaskSort";
 import useNewBadges from "@/hooks/useNewBadges";
@@ -277,7 +278,19 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   const canRecordNotes = usePluginPresent('RecorderBridge');
   const newDots = useNewBadges(currentPageName, !!(user?.email && authCheckComplete));
   const notesDot = canRecordNotes && newDots.Notes;
-  const anyDot = newDots.ParkingLot || notesDot;
+  // After the first-run chat, a red dot on the menu button and on "App Guide"
+  // until the guide has been opened once (onboardingGate: guideNudge/guideSeen).
+  // Re-read when a step lands (the chat closing, the guide opening) and when
+  // the account's flags arrive at sign-in.
+  const guideDotNow = () => isStepDone(ONBOARDING_STEPS.guideNudge) && !isStepDone(ONBOARDING_STEPS.guideSeen);
+  const [guideDot, setGuideDot] = useState(guideDotNow);
+  useEffect(() => {
+    const onStep = () => setGuideDot(guideDotNow());
+    onStep();
+    window.addEventListener(ONBOARDING_STEP_EVENT, onStep);
+    return () => window.removeEventListener(ONBOARDING_STEP_EVENT, onStep);
+  }, [user?.email, authCheckComplete]);
+  const anyDot = newDots.ParkingLot || notesDot || guideDot;
   const getDateBasedMode = () => {
     const now = new Date();
     const month = now.getMonth() + 1; // 1-12
@@ -1153,7 +1166,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 
               <Button
                 variant="outline"
-                onClick={() => setShowAppGuide(true)}
+                onClick={() => {
+                  setShowAppGuide(true);
+                  if (guideDot) markStepDone(ONBOARDING_STEPS.guideSeen);
+                }}
                 className={`w-full flex items-center justify-center gap-2 rounded-xl ${
                   isSeasonalTheme()
                     ? 'bg-white/60 hover:bg-white/80 text-gray-800 border-white/40'
@@ -1166,6 +1182,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               >
                 <HelpCircle className="w-4 h-4" />
                 <span>App Guide</span>
+                {guideDot && <span className="w-2.5 h-2.5 rounded-full bg-red-500" />}
               </Button>
 
               {/* The theme switcher lives in Settings → Look and feel now (Anna,
