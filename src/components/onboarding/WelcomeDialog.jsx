@@ -83,6 +83,9 @@ export default function WelcomeDialog({ user }) {
   const handleClose = () => {
     setMode(null);
     markStepDone(ONBOARDING_STEPS.welcome);
+    // The first-run chat is over: point them at the App Guide next (a red dot
+    // on the menu and on the guide's row, gone once they open it).
+    if (mode === 'welcome') markStepDone(ONBOARDING_STEPS.guideNudge);
     // Closed without a name? CatchUpDialog asks for the name once more — on a
     // LATER open, not the moment this closes. (sessionStorage: gone when the
     // app is next launched.)
