@@ -387,7 +387,13 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
       // An event (an appointment, Bike Night): the phone (build 42 on) shows
       // "Got it" only — no snooze, no Done, no Later (Anna, Oct 13 2026).
       // Older builds ignore this.
-      if (t.classification === 'event') alarm.event = true;
+      if (t.classification === 'event') {
+        alarm.event = true;
+        // The at-the-time reminder worded for recording notes ("want notes?"):
+        // the alarm's second button opens the event's page, where Record
+        // notes lives. Otherwise Got it is the only button.
+        if (/record notes/i.test(String(m.label || ''))) alarm.openLabel = 'Record notes';
+      }
       out.push({ alarm, quietExempt: !!t.quiet_hours_exempt });
     }
   }
