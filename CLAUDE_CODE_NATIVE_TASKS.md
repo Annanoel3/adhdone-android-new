@@ -403,3 +403,11 @@ in `android/app/build.gradle`. Add anything else pending before building.
   (Later), then the same reminder came back loud as a notification at 11:11 — eleven minutes
   past the 10-minute window. Test: an alarm-style task with a time; let it ring, tap Later, then
   force-stop and reopen the app 15 minutes later — no second sound, no second tray row.
+- An event's alarm (the web app's and the server's alarm lists mark it `event: true`:
+  widgetBridge.alarmSetFor, reminderTitle.phoneAlarmsFor) shows "Got it" only — no snooze
+  buttons, no Done, no Later, and Got it just stops the ring without opening anything
+  (`AlarmStore.Entry.event`, read in both AlarmScheduler list parsers; `AlarmActivity`,
+  `canMarkDone`, `dismiss`; the ring-out banner has no Snooze action either, AlarmService).
+  Anna, Oct 13 2026, on the 5 PM Bike Night alarm: "this is an event. Even alarms should never
+  have all the snooze buttons, done button, later etc". Test: an event with a time on an
+  alarm-style account; when it rings, only Got it shows, and tapping it closes the screen.
