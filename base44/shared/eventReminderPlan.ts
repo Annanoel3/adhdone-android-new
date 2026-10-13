@@ -83,7 +83,7 @@ export function buildEventReminderPlan(opts: {
     return placeAppReminder(atMs, isAllDay ? null : startMs, opts.quiet, timeZone || DEFAULT_TIME_ZONE);
   };
 
-  const entries = (rawReminders || [])
+  let entries = (rawReminders || [])
     .map((r: any) => {
       const isRelative = r.relative_minutes_before != null;
       const at = isRelative
@@ -109,8 +109,15 @@ export function buildEventReminderPlan(opts: {
     .filter((r) => !isEvent || (r.atMs <= startMs + (isAllDay ? ALL_DAY_GRACE_MS : 0) && startMs - r.atMs <= DAY_MS))
     .sort((a, b) => a.atMs - b.atMs)
     // Two reminders that resolve to (nearly) the same minute are one reminder.
-    .filter((r, i, arr) => i === 0 || r.atMs - arr[i - 1].atMs > 5 * 60 * 1000)
-    .slice(0, MAX_REMINDERS_PER_EVENT);
+    .filter((r, i, arr) => i === 0 || r.atMs - arr[i - 1].atMs > 5 * 60 * 1000);
+  // The cap is on the heads-ups. The reminder AT the start is the one that
+  // matters most (for an alarm user it is the only one that rings), and the
+  // cap of two used to drop it for every calendar event, since it sorts last:
+  // Anna's Functional Medicine appointment (Oct 13 2026) had the night before
+  // and "in about an hour", and nothing at 11:15.
+  const atStart = entries.filter((r) => Math.abs(r.atMs - startMs) < 60 * 1000);
+  const headsUps = entries.filter((r) => !atStart.includes(r)).slice(0, MAX_REMINDERS_PER_EVENT);
+  entries = [...headsUps, ...atStart].sort((a, b) => a.atMs - b.atMs);
 
   // Never leave a dated item with no plan at all: fall back to one reminder at
   // the start itself.
