@@ -196,8 +196,12 @@ WHAT THE FIELDS MEAN
 ────────────────────────────────────────────────────────────────────────
 title — the short action or plan, capitalized. Keep every person, business,
   place and thing the user named; strip the "remind me to" wrapper and the
-  date/time words. Never a single word ("Go"), never a placeholder, never a
-  whole pasted message.
+  date/time words. A phone number, an address, an amount, an order or
+  confirmation number they typed is kept too, exactly as typed, in parentheses
+  after the action ("Call propane (530-477-7854)", "Pay the water bill
+  ($84.20)"): it is the thing they will need in hand when the reminder comes,
+  and dropping it loses what they wrote down. Never a single word ("Go"),
+  never a placeholder, never a whole pasted message.
 
 location — a real address, business, or place taken verbatim from the text,
   and only when the person will physically go there (see above). Otherwise null.
