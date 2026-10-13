@@ -44,7 +44,7 @@ import { getProximity, formatProximityNotes, lookupBusinessHours, businessHoursL
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
-// Bundles reminderBrief.ts r40 (Oct 13 2026: nothing during an appointment or
+// Bundles reminderBrief.ts r40 (saved after the brief landed; Oct 13 2026: nothing during an appointment or
 // meeting on their calendar; a chore they keep putting off keeps its daily
 // mention, something that doesn't have to happen yet gets space).
 import { REMINDER_BRIEF, REMINDER_BRIEF_VERSION } from '../../shared/reminderBrief.ts';
