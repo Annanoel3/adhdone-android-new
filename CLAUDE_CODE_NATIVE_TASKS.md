@@ -408,6 +408,11 @@ in `android/app/build.gradle`. Add anything else pending before building.
   buttons, no Done, no Later, and Got it just stops the ring without opening anything
   (`AlarmStore.Entry.event`, read in both AlarmScheduler list parsers; `AlarmActivity`,
   `canMarkDone`, `dismiss`; the ring-out banner has no Snooze action either, AlarmService).
+  The one addition: an appointment whose at-the-time reminder is worded for recording notes
+  arrives with `openLabel: "Record notes"`, and that shows as a second button (Done's slot,
+  `AlarmActivity.openEventPage`) that stops the ring and opens the event's page, where
+  recording starts — the same two choices the in-app reminder page gives an event.
   Anna, Oct 13 2026, on the 5 PM Bike Night alarm: "this is an event. Even alarms should never
   have all the snooze buttons, done button, later etc". Test: an event with a time on an
-  alarm-style account; when it rings, only Got it shows, and tapping it closes the screen.
+  alarm-style account; when it rings, only Got it shows, and tapping it closes the screen;
+  a doctor's appointment shows Got it and Record notes, and Record notes opens the event.
