@@ -205,9 +205,28 @@ export function alertStyleFor(task, userDefault = alarmMode) {
 //    is never an alarm — its real pushes are in the schedule;
 //  - a "by 5 PM" deadline's next_reminder is the deadline itself, which is
 //    never booked as a push either (too late then) — only its schedule rings.
+// An ordinary task (not an event, a birthday or a rhythm they asked for)
+// rings only at its own time: the one reminder booked for it, or a reminder
+// they added themselves. Everything else about it is Smart Reminders', whose
+// nudges ring on arrival on their own (Anna, Oct 12 2026: "It's literally just
+// supposed to be smart reminders and events and birthdays ... and tasks that
+// the user gave a specific time to"). Older tasks still carry AI plans
+// (heads-ups, "📅 due today"); those don't ring.
+function onlyItsOwnTime(task) {
+  if (task.classification === 'event' || task.classification === 'birthday' || task.birthday_person || task.is_own_birthday) return false;
+  return !task.reminder_interval || task.reminder_interval === 'once';
+}
+
+function hasItsOwnTime(task) {
+  return task.reminder_interval === 'once' && !task.day_only_task && task.deadline_style !== 'by';
+}
+
 function reminderMomentsFor(task) {
   const out = new Map();
-  const schedule = (task.reminder_schedule || []).filter((r) => r && r.send_at);
+  const own = onlyItsOwnTime(task);
+  const ownAt = own && hasItsOwnTime(task) && task.next_reminder ? new Date(task.next_reminder).getTime() : NaN;
+  const schedule = (task.reminder_schedule || []).filter((r) => r && r.send_at)
+    .filter((r) => !own || r.their_time === true || Math.abs(new Date(r.send_at).getTime() - ownAt) < 60 * 1000);
   for (const r of schedule) {
     const t = new Date(r.send_at).getTime();
     if (isNaN(t) || out.has(t)) continue;
@@ -215,7 +234,8 @@ function reminderMomentsFor(task) {
     // editor's "Add"), which may ring inside quiet hours like the task's own.
     out.set(t, { at: t, heading: r.notification_title || '', body: r.notification_body || '', theirs: r.their_time === true });
   }
-  if (schedule.length === 0 && task.next_reminder && !task.day_only_task && task.deadline_style !== 'by') {
+  if (schedule.length === 0 && task.next_reminder && !task.day_only_task && task.deadline_style !== 'by'
+      && (!own || hasItsOwnTime(task))) {
     const t = new Date(task.next_reminder).getTime();
     if (!isNaN(t) && !out.has(t)) {
       let copy = { title: '', body: '' };
