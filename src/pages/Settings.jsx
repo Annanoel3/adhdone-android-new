@@ -134,6 +134,16 @@ export default function Settings() {
   };
   const page = SECTIONS[section] || null;
   useEffect(() => { window.scrollTo(0, 0); }, [section]);
+  // /settings#quick-capture and /settings?section=reminders#quiet-hours — the
+  // App Guide's "in Settings" links — land on that card, not the top of the page.
+  useEffect(() => {
+    const id = (location.hash || '').slice(1);
+    if (!id) return undefined;
+    const t = setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 250);
+    return () => clearTimeout(t);
+  }, [location.hash, section]);
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [specialMode, setSpecialMode] = useState(() => localStorage.getItem('special_mode') || 'normal');
   const [seasonalUnlocked, setSeasonalUnlocked] = useState(() => localStorage.getItem('seasonal_unlocked') === 'true');
@@ -507,7 +517,7 @@ export default function Settings() {
 
         {section === 'reminders' && (<>
         {/* Quiet Hours Section */}
-        <Card className={`mb-6 border-none shadow-lg ${
+        <Card id="quiet-hours" className={`mb-6 border-none shadow-lg ${
           theme === 'dark' ? 'bg-gray-800' : 'bg-white'
         }`}>
           <CardHeader>
@@ -633,7 +643,7 @@ export default function Settings() {
 
         {!page && (<>
         <p className={`text-xs font-bold uppercase tracking-wider mt-8 mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Adding tasks</p>
-        <QuickCaptureCard theme={theme} />
+        <div id="quick-capture"><QuickCaptureCard theme={theme} /></div>
 
         <p className={`text-xs font-bold uppercase tracking-wider mt-8 mb-3 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Account</p>
         {/* Account Settings */}
