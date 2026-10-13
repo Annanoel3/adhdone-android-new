@@ -5,6 +5,13 @@ import { anyPopupOpen } from '@/components/onboarding/onboardingSurface';
 
 const AD_OPEN_KEY = 'admgr_open_count';
 const LAST_LAUNCH_KEY = 'admgr_last_launch_at';
+// An owed ad that found no pause carries over to the next open (Anna, Oct 13
+// 2026: owed opens that were short, or spent on Notes, forfeited their ad, and
+// she went 3½ days with none). One flag, so two owed opens in a row still
+// owe one ad, not two.
+const AD_OWED_KEY = 'admgr_ad_owed';
+const readOwed = () => { try { return localStorage.getItem(AD_OWED_KEY) === '1'; } catch (e) { return false; } };
+const writeOwed = (owed) => { try { if (owed) localStorage.setItem(AD_OWED_KEY, '1'); else localStorage.removeItem(AD_OWED_KEY); } catch (e) { /* storage off */ } };
 // Coming back after this long away counts as a fresh launch. Android keeps
 // frequently-used apps alive in memory, so cold starts alone were rare enough
 // that qualifying launches almost never came around.
@@ -23,7 +30,7 @@ const NEW_LAUNCH_GAP_MS = 30 * 60 * 1000;
 // If neither happens, the owed ad falls back to the next page switch, but
 // only once they've been in the app a while (so the task pauses get their
 // chance first), and only onto a page where an ad makes sense. An open that
-// ends with no pause at all shows no ad — it is not carried to the next open.
+// ends with no pause at all carries its ad to the next open (AD_OWED_KEY).
 // Nothing here waits on a timer and retries: a pause that isn't quiet when
 // it comes is simply let go, and the next one is waited for.
 const AFTER_TASK_DONE_MS = 4000;
@@ -126,11 +133,13 @@ function registerLaunch() {
   localStorage.setItem(AD_OPEN_KEY, String(count));
   launchCount = count;
   openStartedAt = Date.now();
-  owedThisOpen = shouldShowAd(count);
+  const carried = readOwed();
+  owedThisOpen = shouldShowAd(count) || carried;
+  writeOwed(owedThisOpen);
   lastPathname = window.location.pathname;
   resetAdLaunchState();
   cancelPending();
-  note(`open #${count}: ${owedThisOpen ? 'an ad is due this open, waiting for a pause' : 'no ad due this open'}`);
+  note(`open #${count}: ${owedThisOpen ? (carried && !shouldShowAd(count) ? 'an ad carried over from an earlier open, waiting for a pause' : 'an ad is due this open, waiting for a pause') : 'no ad due this open'}`);
   return true;
 }
 
@@ -142,6 +151,7 @@ async function attempt(source) {
   if (document.visibilityState === 'hidden') { note(`${source}: app not on screen`); return; }
   if (inGrace(signedUpAt, launchCount)) {
     owedThisOpen = false;
+    writeOwed(false);
     note(`${source}: new account, no ads yet`);
     return;
   }
@@ -152,7 +162,10 @@ async function attempt(source) {
   try {
     const shown = await showInterstitialAd(source);
     note(`${source}: ${shown ? 'ad shown' : 'no ad (see last attempt above)'}`);
-    if (shown) owedThisOpen = false;
+    if (shown) {
+      owedThisOpen = false;
+      writeOwed(false);
+    }
   } catch (e) {
     note(`${source}: ad request failed`);
   }
