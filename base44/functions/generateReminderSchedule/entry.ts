@@ -43,9 +43,17 @@ function getDayOnlyEventSchedule(title) {
   ];
 }
 
-function getEventSchedule(lead) {
+// `afternoonOrLater`: the event starts at noon or after in the owner's zone.
+// Then the morning of gets a reminder too (9 AM, moved past quiet hours if
+// need be), because the night before and "in about an hour" leave the whole
+// day in between with nothing — Anna, Oct 13 2026, on a 5 PM Bike Night:
+// "I should have gotten a reminder way earlier in the day reminding me it was
+// happening today … now it's too late for me to decide to go." A morning
+// event already has its hour-before in the morning.
+function getEventSchedule(lead, afternoonOrLater) {
   return [
     { days_before: 1, hour: 20, minute: 0, relative_minutes_before: null, label: 'night before' },
+    ...(afternoonOrLater ? [{ days_before: 0, hour: 9, minute: 0, relative_minutes_before: null, label: 'morning of' }] : []),
     { days_before: null, hour: null, minute: null, relative_minutes_before: lead ? lead.leadMinutes : 60, label: lead ? 'leave now' : '1 hour before' },
     { days_before: null, hour: null, minute: null, relative_minutes_before: 0, label: 'at the time' },
   ];
@@ -113,11 +121,13 @@ function notesText(label, title) {
   return null;
 }
 
-function getEventNotificationText(label, title, lead) {
+function getEventNotificationText(label, title, lead, whenToday) {
   const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
 
   const templates = {
     'night before': { title: `🎉 ${t}`, body: `Heads up! Your "${t}" is tomorrow. Don't forget to prep! ✨` },
+    // Early enough in the day to still plan around it (see getEventSchedule).
+    'morning of': { title: `📅 ${t}`, body: whenToday ? `Just a reminder: "${t}" is today at ${whenToday}.` : `Just a reminder: "${t}" is today.` },
     // Without a measured drive time we can't claim it's time to leave — that's
     // the whole reason a blanket "head out now" an hour ahead was wrong.
     '1 hour before': { title: `⏰ ${t}`, body: `Almost time! Your "${t}" is in about an hour. Start wrapping up ✨` },
@@ -223,10 +233,12 @@ export default async function(req) {
       return Response.json({ reminders });
     }
     if (classification === 'event' && !wish) {
-      const schedule = getEventSchedule(lead);
+      const schedule = getEventSchedule(lead, scheduledLocal.hour >= 12);
+      // The event's own clock time, as the owner reads it ("5:00 PM").
+      const whenToday = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', minute: '2-digit' }).format(scheduled);
       const notes = ownerCanRecord && !dayOnly ? await notesWouldHelp(title, location) : false;
       const reminders = schedule.map(r => {
-        const text = (notes && notesText(r.label, title)) || getEventNotificationText(r.label, title, lead);
+        const text = (notes && notesText(r.label, title)) || getEventNotificationText(r.label, title, lead, whenToday);
         return {
           days_before: r.days_before,
           hour: r.hour,
