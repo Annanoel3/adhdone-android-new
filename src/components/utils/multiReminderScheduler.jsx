@@ -300,6 +300,9 @@ export async function scheduleMultiReminders({
           body: reminder.notification_body,
           // The one at the event's time comes back in the brief's words.
           onWords: (w) => { reminder.notification_title = w.title; reminder.notification_body = w.body; },
+          // A heads-up moved off another push's minute: the saved entry says
+          // the minute it really goes at.
+          onSendAt: (iso) => { reminder.sendAtISO = iso; reminder.exact = true; },
           sendAtISO: reminder.sendAtISO,
           taskId,
           exact: reminder.exact,
