@@ -64,6 +64,7 @@ function persist(capture) {
     kind: capture.kind || null,
     doneCount: capture.doneCount || 0,
     createdAt: capture.createdAt,
+    handedOff: capture.handedOff || null,
     touchedAt: Date.now(),
   };
   writeStore([...readStore().filter((c) => c.id !== capture.id), entry]);
@@ -95,6 +96,7 @@ const fromEntry = (entry) => ({
   kind: entry.kind || null,
   doneCount: entry.doneCount || 0,
   createdAt: entry.createdAt || Date.now(),
+  handedOff: entry.handedOff || null,
   resumed: true,
   started: false,
 });
@@ -256,6 +258,24 @@ export function saveCaptureProgress(id, { parts, doneCount, kind }) {
   if (typeof doneCount === 'number') capture.doneCount = doneCount;
   persist(capture);
   emit();
+}
+
+// Every capture on the list right now (TaskCaptureProcessor reads it when the
+// app goes off screen, to hand unfinished ones to the server).
+export function currentCaptures() {
+  return [...captures];
+}
+
+// The app went off screen before this capture made anything, so it was handed
+// to the server (TaskCaptureProcessor). From here on only the server makes it:
+// whatever the app does when it's back is ask the server for the result, never
+// make the task itself. Written to storage at once (the app may be stopped any
+// moment), so a capture finished on a later open knows it too.
+export function markCaptureHandedOff(id) {
+  const capture = captures.find((c) => c.id === id);
+  if (!capture || capture.handedOff) return;
+  capture.handedOff = Date.now();
+  persist(capture);
 }
 
 export function removeCapture(id) {
