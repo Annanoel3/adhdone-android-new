@@ -80,6 +80,8 @@ function quietHoursNote(quiet?: { enabled: boolean; startMin: number; endMin: nu
   return `\n\nTHEIR QUIET HOURS: ${hhmm(quiet.startMin)} to ${hhmm(quiet.endMin)} (the app stays silent then). `
     + 'When you pick the clock time yourself from a part of the day ("before bed", "tonight", "first thing in the morning"), '
     + 'pick one outside these hours: "before bed" is shortly before they start, "first thing in the morning" shortly after they end. '
+    + 'Something to do "tonight" or on a named night ("trash night", "Wednesday night") is the evening, with time left to do it '
+    + 'before they wind down — around two hours before quiet hours start, not the last minutes before them. '
     + 'If nothing outside them is left on the day they meant, pick what a reasonable person would mean anyway. '
     + 'A clock time the user stated stays exactly as they said it, even inside these hours.';
 }
@@ -178,8 +180,9 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
 // 2026: "take trash to the curb every Wednesday and Sunday night" got 10:30 PM
 // for someone whose quiet hours start at 10). Inside them, the reminder is
 // moved to the next morning or dropped, so "night" would never ring at night.
-// It goes to the nearer edge instead: 30 minutes before they start, or the
-// moment they end. Across midnight, the day (and a weekly repeat's weekdays)
+// It goes to the nearer edge instead: two hours before they start (time left
+// to do it that evening — Anna: "it should have chosen 8 pm or something"),
+// or the moment they end. Across midnight, the day (and a weekly repeat's weekdays)
 // moves with it. A time the user stated is never touched.
 export function keepPickedTimeOutOfQuietHours(parsed: any,
   quiet?: { enabled: boolean; startMin: number; endMin: number }) {
@@ -194,7 +197,7 @@ export function keepPickedTimeOutOfQuietHours(parsed: any,
   const inside = s < e ? (t >= s && t < e) : (t >= s || t < e);
   if (!inside) return parsed;
   const toStart = (t - s + DAY) % DAY <= (e - t + DAY) % DAY;
-  const moved = toStart ? (s - 30 + DAY) % DAY : e;
+  const moved = toStart ? (s - 120 + DAY) % DAY : e;
   const dayShift = toStart ? (moved > t ? -1 : 0) : (moved < t ? 1 : 0);
   const was = parsed.target_time;
   parsed.target_time = `${String(Math.floor(moved / 60)).padStart(2, '0')}:${String(moved % 60).padStart(2, '0')}`;
