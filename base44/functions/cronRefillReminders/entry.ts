@@ -1362,10 +1362,22 @@ async function stalledCaptures(base44: any, sinceMs: number, nowMs: number): Pro
     const later = sorted.slice(i + 1).filter((x: any) => x.user_email === r.user_email);
     const finished = later.some((x: any) => {
       const t = Date.parse(String(x.created_date).endsWith('Z') ? x.created_date : `${x.created_date}Z`) || 0;
-      return t - atMs < 15 * 60 * 1000 && (x.step === 'mainCreate' || x.step === 'captureAlreadyCreated');
+      return t - atMs < 15 * 60 * 1000 && (x.step === 'mainCreate' || x.step === 'captureAlreadyCreated' || x.step === 'captureServerDone');
     });
     const claimedAgain = later.some((x: any) => x.step === 'captureClaimed' && String(x.detail || '').includes(text.slice(0, 40)));
-    if (!finished && !claimedAgain) out.push({ email: r.user_email, text, atMs });
+    if (finished || claimedAgain) continue;
+    // Handed to the server when the app went off screen (TaskCaptureProcessor,
+    // since Oct 13 2026): the server made it under the app's id, and the app
+    // may never have said so (it can stay closed). Made means finished.
+    const captureId = String(detail.id || '');
+    if (captureId) {
+      const [tasks, ideas] = await Promise.all([
+        base44.asServiceRole.entities.Task.filter({ capture_id: captureId }).catch(() => []),
+        base44.asServiceRole.entities.ParkingLotIdea.filter({ capture_id: captureId }).catch(() => []),
+      ]);
+      if ((tasks || []).length || (ideas || []).length) continue;
+    }
+    out.push({ email: r.user_email, text, atMs });
   }
   return out;
 }
