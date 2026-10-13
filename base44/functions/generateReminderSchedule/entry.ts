@@ -8,6 +8,7 @@ import OpenAI from 'npm:openai';
 import { getTravelLead } from '../../shared/travelLead.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { atTimeWords } from '../../shared/reminderTitle.ts';
+// (Re-saved Oct 13 2026 after shared/captureToTasks.ts: the reminder at a task's own time saves the words schedulePush sent it with.)
 
 const openai = new OpenAI({
   apiKey: Deno.env.get('OPENAI_API_KEY')
