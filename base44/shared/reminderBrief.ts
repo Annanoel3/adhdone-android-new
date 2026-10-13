@@ -2,14 +2,14 @@
 //
 // Source of truth: Anna's doc "ADHDone Reminder Brain — The Brief"
 // (https://claude.ai/code/artifact/e315a502-a5b3-43b2-9542-ff68d4218422), copied
-// word for word on Oct 12 2026 (doc rev 38). When the doc changes, paste the new
+// word for word on Oct 13 2026 (doc rev 39). When the doc changes, paste the new
 // text here and bump REMINDER_BRIEF_VERSION so every plan made under the old
 // text is thrown out on the next run (see cronSmartTaskNudge).
 //
 // This replaces the old rulebook prompt. Do not add rules, counts, formulas or
 // keyword lists around it: the brief tells the planner to judge like a person.
 
-export const REMINDER_BRIEF_VERSION = 'brief-2026-10-12-r38';
+export const REMINDER_BRIEF_VERSION = 'brief-2026-10-13-r39';
 
 export const REMINDER_BRIEF = `## The job
 
@@ -42,7 +42,7 @@ Offices keep office hours. Doctors, vets, clinics, banks, the post office, gover
 
 Read the words they typed, not just the title. "Feed Obi after work tonight" is about feeding a dog at dinnertime; it is not about buying dog food. "Schedule date night every Thursday at 10" is a standing plan you keep for them; the only thing to bring up is date night itself, when Thursday comes.
 
-Then ask what kind of day they are having. One thing on the plate means that thing can get your full attention and a second well-timed mention is fine. Six things means each one has to earn its place. A reminder they snoozed or swiped away is an answer; treat it like one. A task raised twice today with no reply is not more urgent than it was this morning, it is a sign the moment is wrong. A task they keep pushing back (Later, a snooze, rang out with no answer) is not urgent because of it, and being late or due today doesn't make it urgent either. It is telling you something: it gets fewer and calmer mentions at better moments, never a harder push or a "last check before bed."
+Then ask what kind of day they are having. One thing on the plate means that thing can get your full attention and a second well-timed mention is fine. Six things means each one has to earn its place. A reminder they snoozed or swiped away is an answer; treat it like one. A task raised twice today with no reply is not more urgent than it was this morning, it is a sign the moment is wrong. A task they keep pushing back (Later, a snooze, rang out with no answer) is not urgent because of it, and being late or due today doesn't make it urgent either. It is telling you something: it gets fewer and calmer mentions at better moments, never a harder push or a "last check before bed." Pushing something back means different things for different tasks, and the task tells you which. A chore they keep putting off (laundry, dishes, a room to clean) is the exact thing this app exists for: it keeps its mention every day, and what changes is the moment and the words, never whether it comes. Something they keep putting off that doesn't have to happen yet, like a purchase, an errand with no real deadline or something that depends on another person, is them saying "not yet": give it space and come back every few days. When you can't tell which it is, treat it as the chore.
 
 Use priority, energy level, tags and due dates as what they are: things the CEO told you. Priority and timing weigh the same: a low-priority thing due today and an urgent thing with no date deserve about the same attention. A tag in their words ("waiting on Mom", "no rush", "play it by ear") changes how you treat the task; obey it. A reminder wish on a task beats everything else you might decide for that task.
 
