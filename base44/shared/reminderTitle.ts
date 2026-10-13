@@ -261,6 +261,10 @@ export function phoneAlarmsFor(task: any, owner: any, now: number = Date.now()):
     if (task.birthday_person && !task.is_own_birthday && !task.birthday_animal) {
       alarm.openLabel = task.birthday_text_message ? 'Send a text' : 'Write a text';
     }
+    // An event (an appointment, Bike Night): the phone (build 42 on) shows
+    // "Got it" only — no snooze, no Done, no Later (Anna, Oct 13 2026).
+    // Older builds ignore this. Same as alarmSetFor in widgetBridge.js.
+    if (task.classification === 'event') alarm.event = true;
     out.push(alarm);
   }
   return out.sort((a, b) => a.at - b.at);
