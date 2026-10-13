@@ -384,3 +384,12 @@ in `android/app/build.gradle`. Add anything else pending before building.
   `apply()`). Anna, Oct 12 2026: alarms that rang while the app was closed (the sprinkler ones,
   two afternoon nudges) never showed in the list. Test: close the app, let a reminder ring, then
   open Settings → Reminders → What rang: it's listed.
+- New `ShareBridge.handOffCapture({ id, text, createdAt })` → `CaptureQueue.enqueueWithId`
+  (source `app`) + `CaptureSyncWorker.kick`. When the app goes off screen while a task typed in
+  it is still being set up, the web app (TaskCaptureProcessor) hands the capture here, and the
+  background sender the share sheet uses finishes it with the app closed (captureText, with the
+  app's own id as capture_id, so the app's own later attempt makes nothing twice). Oct 13 2026:
+  "call propane 530-477-7854 today" sat unmade on a phone because the app was left mid-setup.
+  Older builds don't have the method; the web app then sends the capture to captureText itself,
+  best effort. Test: type a task in the app and press Home within 2 seconds; with no signal
+  too (airplane mode on, Home, airplane mode off) — the task shows up without opening the app.
