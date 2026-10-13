@@ -164,14 +164,21 @@ function whenMs(v: any): number {
 
 // Which of a task's reminders ring out loud (see ringsOutLoud in widgetBridge.js).
 // "Same day" is the owner's own calendar day.
-function ringsOutLoudOn(task: any, momentMs: number, timeZone: string): boolean {
+function ringsOutLoudOn(task: any, momentMs: number, timeZone: string, label = ''): boolean {
   const anchor = whenMs(task.event_time || task.due_date || task.next_reminder);
   if (isNaN(anchor)) return true;
+  const isEvent = task.classification === 'event' || task.classification === 'birthday' || !!task.birthday_person;
+  // A timed event rings at its own time and at "leave now"; its heads-ups
+  // (the night before, "in about an hour") stay pushes (Anna, Oct 13 2026).
+  // A day-only event keeps its morning-of.
+  if (task.classification === 'event' && task.event_time && !task.day_only_task) {
+    const eventMs = whenMs(task.event_time);
+    return Math.abs(momentMs - eventMs) < 60 * 1000 || /leave now/i.test(String(label || ''));
+  }
   const day = (ms: number) => localDateKey(new Date(ms), timeZone);
   const momentDay = day(momentMs);
   const anchorDay = day(anchor);
   if (momentDay === anchorDay) return true;
-  const isEvent = task.classification === 'event' || task.classification === 'birthday' || !!task.birthday_person;
   if (isEvent) return false;
   const start = whenMs(task.start_date);
   if (!isNaN(start) && momentDay >= day(start) && momentMs <= anchor) return true;
@@ -197,8 +204,8 @@ function hasItsOwnTime(task: any): boolean {
   return task.reminder_interval === 'once' && !task.day_only_task && task.deadline_style !== 'by';
 }
 
-function reminderMoments(task: any, timeZone: string): { at: number; heading: string; body: string; theirs?: boolean }[] {
-  const out = new Map<number, { at: number; heading: string; body: string; theirs?: boolean }>();
+function reminderMoments(task: any, timeZone: string): { at: number; heading: string; body: string; theirs?: boolean; label?: string }[] {
+  const out = new Map<number, { at: number; heading: string; body: string; theirs?: boolean; label?: string }>();
   const own = onlyItsOwnTime(task);
   const ownAt = own && hasItsOwnTime(task) ? whenMs(task.next_reminder) : NaN;
   const schedule = (Array.isArray(task.reminder_schedule) ? task.reminder_schedule : []).filter((r: any) => r && r.send_at)
@@ -208,7 +215,7 @@ function reminderMoments(task: any, timeZone: string): { at: number; heading: st
     if (isNaN(t) || out.has(t)) continue;
     // their_time: a reminder they added at a time they picked (see
     // SmartReminderEditor), which may ring inside quiet hours.
-    out.set(t, { at: t, heading: r.notification_title || '', body: r.notification_body || '', theirs: r.their_time === true });
+    out.set(t, { at: t, heading: r.notification_title || '', body: r.notification_body || '', theirs: r.their_time === true, label: String(r.label || '') });
   }
   if (schedule.length === 0 && task.next_reminder && !task.day_only_task && task.deadline_style !== 'by'
       && (!own || hasItsOwnTime(task))) {
@@ -241,7 +248,7 @@ export function phoneAlarmsFor(task: any, owner: any, now: number = Date.now()):
     const inQuiet = quiet.enabled && isInQuietHours(new Date(m.at), quiet.startMin, quiet.endMin, timeZone);
     const theirTime = inQuiet && (m.theirs === true || isTimeTheySet(task, m.at, timeZone));
     if (inQuiet && task.quiet_hours_exempt !== true && !theirTime) continue;
-    if (!ringsOutLoudOn(task, m.at, timeZone)) continue;
+    if (!ringsOutLoudOn(task, m.at, timeZone, m.label)) continue;
     const alarm: any = { id: `${task.id}:${m.at}`, at: m.at, title: task.title || 'Task', heading: m.heading, body: m.body };
     // Home or Back on this one rings it again in 10 minutes instead of closing
     // it (build 40 on; AlarmService.leftRinging): one sleepy press mustn't
