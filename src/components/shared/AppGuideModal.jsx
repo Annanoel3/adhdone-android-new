@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { useNavigate } from "react-router-dom";
 import { ADD_PATHS } from "@/components/onboarding/pageIntros";
 import { AutoClip } from "@/components/onboarding/PageIntroTour";
 import {
@@ -15,7 +16,6 @@ import {
   MessageCircleHeart,
   Lightbulb,
   TrendingUp,
-  Users,
   Plus,
   Mic,
   Camera,
@@ -23,103 +23,119 @@ import {
   Share2,
   CalendarDays,
   Cake,
-  Rocket,
   Moon,
   Sparkles,
   LayoutGrid
 } from "lucide-react";
 
 const ADD_PATH_ICONS = { text: Share2, screenshot: Camera, widget: LayoutGrid, pinned: Zap };
+// The how-to clips, by the same keys the Tasks page walkthrough uses.
+const ADD_PATH_VIDEOS = Object.fromEntries(ADD_PATHS.map((p) => [p.key, p.video]));
 
 export default function AppGuideModal({ isOpen, onClose, theme }) {
-  // One short line per page. The long version read as a wall of text and got
-  // skipped (Anna, Oct 13 2026: "a lot of text ... will definitely be skipped
-  // over by an adhd brain"). The ways to add a task from outside the app stay,
-  // with their clips, behind one tap.
-  const [showWays, setShowWays] = useState(false);
+  const navigate = useNavigate();
+  // "Turn it on in Settings" / "Set them in Settings": the guide closes and the
+  // app goes straight to that card (Settings scrolls to the #hash).
+  const go = (to) => { onClose(); navigate(to); };
+
+  // Wording is Anna's (Oct 13 2026), lightly tidied.
   const guides = [
     {
       icon: LayoutDashboard,
       title: "Home",
-      description: "Today's tasks and quick actions."
+      description: "Your command center. Today's tasks, quick actions, a daily tip, and gentle nudges when you need them."
     },
     {
       icon: Plus,
-      title: "Adding a task",
-      description: "Say it, type it, or share it in. The app works out the when.",
-      moreLabel: "5 ways to add without opening the app",
+      title: "Adding tasks is easy",
       subItems: [
         {
           icon: Mic,
-          title: "Talk it out",
-          description: "Tap the mic and just say it — 'remind me to call the dentist Friday'"
+          title: "Say it",
+          description: "Tap the mic in the app and just say your task or idea. You can even say features you wish the app had, to put in a request."
         },
-        // The four outside-the-app ways, each with its how-to clip — same
-        // order and wording as the Tasks page walkthrough.
-        ...ADD_PATHS.map((path) => ({
-          icon: ADD_PATH_ICONS[path.key],
-          title: path.title,
-          description: path.text,
-          video: path.video,
-        })),
+        {
+          icon: ADD_PATH_ICONS.text,
+          title: "Share selected text",
+          description: "Highlight text in any app. Tap Share and pick ADHDone.",
+          video: ADD_PATH_VIDEOS.text,
+        },
+        {
+          icon: ADD_PATH_ICONS.screenshot,
+          title: "Share a screenshot",
+          description: "Screenshot an invite, a flyer, a receipt, then share it to ADHDone. It reads the information from the picture and turns it into a task.",
+          video: ADD_PATH_VIDEOS.screenshot,
+        },
+        {
+          icon: ADD_PATH_ICONS.widget,
+          title: "The home-screen widget",
+          description: "Tap + to add tasks.",
+          video: ADD_PATH_VIDEOS.widget,
+        },
+        {
+          icon: ADD_PATH_ICONS.pinned,
+          title: "The pinned notification",
+          description: "With quick capture on, pull down your notification tray and tap the permanent notification to add a task.",
+          link: { label: "Turn it on in Settings", to: "/settings#quick-capture" },
+        },
       ]
     },
     {
       icon: ListTodo,
       title: "Tasks",
-      description: "Everything you've added. Push the date, split into steps, or park it on the Back Burner."
+      description: "Everything in one place with urgency, subtasks, and smart reminders. Push a due date, break a task into steps, or drop it on the Back Burner when it's not today's problem."
     },
     {
       icon: CalendarDays,
       title: "Calendar",
-      description: "Tasks and events by day or week. Bring in your phone's calendars."
+      description: "Sync any calendar on your phone to add its tasks and events here."
     },
     {
       icon: Cake,
       title: "Birthdays",
-      description: "Reminded a week out, the day before, and the day of — with a text ready to send."
+      description: "Birthdays live on their own page and repeat every year. Get reminded a week out, the day before, and the day of — plus help drafting the text so you actually send it."
     },
     {
       icon: Timer,
       title: "Task Timer",
-      description: "Pick a length, it counts down. When it rings: keep going, check it off, or stop."
+      description: "Time tasks to learn how long things really take you. Good for time blindness."
     },
     {
       icon: Timer,
       title: "Focus Timer",
-      description: "Work and break rounds that fit your brain."
+      description: "Pomodoro-style sessions with work and break lengths. Plus, all task reminders go quiet until you're finished."
     },
     {
       icon: Lightbulb,
       title: "Parking Lot",
-      description: "Dump ideas without derailing. Turn them into tasks later."
+      description: "Brain dump ideas without derailing what you're doing. Add to the Parking Lot anywhere you can add a task — just say it's an idea."
     },
     {
       icon: TrendingUp,
       title: "Insights",
-      description: "Streaks, focus time, and when you actually get things done."
+      description: "For the data lovers. Your patterns, streaks, and productivity — what times you're most productive, and proof of how far you've come."
     },
     {
       icon: MessageCircleHeart,
       title: "Talk It Out",
-      description: "A judgment-free place to plan, get unstuck, or vent."
+      description: "A judgment-free space for ADHD and executive-function strategy. App questions go here too."
     },
     {
       icon: Sparkles,
       title: "Themes",
-      description: "Light, dark, Spicy Brains, seasonal. Settings → Look and feel."
+      description: "Light, dark, colorful, or Spicy Brains — plus seasonal themes, unlocked when you find a special something in the app. Keep an eye out 👀"
     },
     {
       icon: Moon,
       title: "Quiet Hours",
-      description: "Reminders hold until morning. Settings → Reminders."
-    },
-    {
-      icon: Users,
-      title: "Community — coming soon",
-      description: "Partners, chat, focus rooms, leaderboards — once enough people are here."
+      description: "Set the hours you don't want to be bothered.",
+      link: { label: "Set them in Settings", to: "/settings?section=reminders#quiet-hours" },
     }
   ];
+
+  const linkClass = `mt-1 inline-block text-sm font-medium underline underline-offset-2 ${
+    theme === 'dark' ? 'text-green-400' : 'text-purple-600'
+  }`;
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -160,26 +176,20 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
                     }`}>
                       {guide.title}
                     </h3>
-                    <p className={`text-sm ${
-                      theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-                    }`}>
-                      {guide.description}
-                    </p>
-                    
-                    {guide.subItems && (
-                      <button
-                        type="button"
-                        onClick={() => setShowWays((v) => !v)}
-                        aria-expanded={showWays}
-                        className={`mt-2 text-sm font-medium underline-offset-2 hover:underline ${
-                          theme === 'dark' ? 'text-green-400' : 'text-purple-600'
-                        }`}
-                      >
-                        {showWays ? 'Hide' : guide.moreLabel}
+                    {guide.description && (
+                      <p className={`text-sm ${
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                      }`}>
+                        {guide.description}
+                      </p>
+                    )}
+                    {guide.link && (
+                      <button type="button" onClick={() => go(guide.link.to)} className={linkClass}>
+                        {guide.link.label}
                       </button>
                     )}
-
-                    {guide.subItems && showWays && (
+                    
+                    {guide.subItems && (
                       <div className="mt-3 ml-4 space-y-2">
                         {guide.subItems.map((subItem) => (
                           <div key={subItem.title} className="flex items-start gap-2">
@@ -197,6 +207,13 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
                               }`}>
                                 {subItem.description}
                               </span>
+                              {subItem.link && (
+                                <div>
+                                  <button type="button" onClick={() => go(subItem.link.to)} className={linkClass}>
+                                    {subItem.link.label}
+                                  </button>
+                                </div>
+                              )}
                               {subItem.video && (
                                 <AutoClip src={subItem.video} className="mt-2 w-full max-h-[50vh] rounded-lg bg-black object-contain" />
                               )}
