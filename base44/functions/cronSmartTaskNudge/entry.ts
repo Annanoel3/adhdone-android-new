@@ -44,7 +44,9 @@ import { getProximity, formatProximityNotes, lookupBusinessHours, businessHoursL
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
-// Bundles reminderBrief.ts r36 (Oct 12 2026: their day runs on their own clock).
+// Bundles reminderBrief.ts r38 (Oct 12 2026: "keeps coming back" only when
+// something is actually lost tonight; a task pushed back again and again is
+// not urgent because of it).
 import { REMINDER_BRIEF, REMINDER_BRIEF_VERSION } from '../../shared/reminderBrief.ts';
 import { assignTaskFamilies } from '../../shared/runTaskParse.ts';
 
@@ -184,9 +186,13 @@ Deno.serve(async (req) => {
       console.error('[SMART NUDGE] Work shifts unavailable:', e);
     }
 
-    // Smart nudges own everything EXCEPT birthdays, events, an "at" task
-    // whose time is still ahead, and a user-asked rhythm the refill cron sends
-    // (see the notes at the top). A 'once' task is pinned only while its time
+    // Smart nudges own everything EXCEPT birthdays, events and a user-asked
+    // rhythm the refill cron sends (see the notes at the top). An "at" task is
+    // theirs too before its time: its reminder AT that time is booked by the
+    // app, and the brief decides whether anything comes before it (a drive, a
+    // window that closes, prep). The AI heads-ups the app used to book for
+    // every timed task are gone (Anna, Oct 12 2026), so without this nothing
+    // could ever say "leave now" for a timed errand that isn't an event. A 'once' task is pinned only while its time
     // is ahead: once that passes and it isn't done, it's overdue and it's
     // ours. A "by" clock deadline is never pinned — its whole run-up is ours.
     // (This used to exclude any 'once' task with an event_time forever, and a
@@ -198,8 +204,7 @@ Deno.serve(async (req) => {
       !t.parent_task_id && // sub-tasks are context for their parent, not independent nudges
       t.classification !== 'birthday' && t.classification !== 'event' &&
       !t.birthday_person &&
-      (!RECURRING_INTERVALS.has(t.reminder_interval) || !refillSendsRhythm(t)) &&
-      !(isAtTime(t) && pinnedMoment(t) > nowMs);
+      (!RECURRING_INTERVALS.has(t.reminder_interval) || !refillSendsRhythm(t));
 
     // Sub-task map: parent_id → [sub-tasks]. Sub-tasks are NOT nudged
     // independently — they're context for the parent task's wording so the LLM
@@ -1418,8 +1423,11 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
         dueInfo = `DEADLINE ${whenLabel(pin)} (in ${days} day${days === 1 ? '' : 's'}) — can be worked on any time before then`;
       }
     } else if (isAtTime(t) && Number.isFinite(pin)) {
-      // An "at" task is only in this list once its time has gone by undone.
-      dueInfo = `⚠️ OVERDUE — MISSED ITS TIME: it was set for ${whenLabel(pin)} (${span(nowMs - pin)} ago) and hasn't been done`;
+      // An "at" task: its own reminder is booked for its time; once that has
+      // gone by undone, it's overdue.
+      dueInfo = pin > nowMs
+        ? `SET FOR ${whenLabel(pin)} — its reminder at that time is already booked and goes out on its own`
+        : `⚠️ OVERDUE — MISSED ITS TIME: it was set for ${whenLabel(pin)} (${span(nowMs - pin)} ago) and hasn't been done`;
     } else if (t.due_date) {
       const days = daysTo(t.due_date);
       if (days === 0) {
@@ -1621,7 +1629,9 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if (isClockDeadline(t) && Number.isFinite(pin)) {
         parts.push(pin <= nowMs ? `due by ${whenLabel(pin)} — that time has passed and it isn't done` : `due by ${whenLabel(pin)}`);
       } else if (isAtTime(t) && Number.isFinite(pin)) {
-        parts.push(`set for ${whenLabel(pin)} — that time has passed and it isn't done`);
+        parts.push(pin <= nowMs
+          ? `set for ${whenLabel(pin)} — that time has passed and it isn't done`
+          : `set for ${whenLabel(pin)} — its reminder at that time is already booked and goes out on its own`);
       } else if (t.due_date) {
         const days = daysTo(t.due_date);
         const d = formatDateShort(t.due_date, timeZone);
