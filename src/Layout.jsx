@@ -1477,6 +1477,9 @@ export default function Layout({ children, currentPageName }) {
       }
       setUser(currentUser);
       setAuthCheckComplete(true);
+      // An account has signed in on this phone: when its session ends, the
+      // app opens on log-in rather than sign-up (see LandingPage).
+      try { localStorage.setItem('adhdone_has_account', '1'); } catch (_) { /* storage off */ }
 
       // Set signed_up_at on first login; update last_active_at every session.
       // The sign-up moment is when the account was made, not whichever open
