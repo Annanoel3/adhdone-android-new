@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
+import { useAuth } from "@/lib/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Brain, CheckCircle2, Sparkles, Bell, Lightbulb, Timer, Cake, Share2, TrendingUp, Play } from "lucide-react";
 import BrandBackdrop from "@/components/brand/BrandBackdrop";
@@ -17,10 +18,36 @@ const BLURBS = [
   { icon: TrendingUp, tint: "#DDEBFF", color: "#3B7DD8", title: "Your data, your patterns", desc: "See when you actually get things done — without ever being guilt-tripped about it." },
 ];
 
+// The phone app opens at "/" too. This page is for people who found ADHDone on
+// the web (an ad, a post); someone who just installed the app from the Play
+// Store already has it, so they go straight to sign-up, someone signed in goes
+// to Home, and someone who has signed in on this phone before (session ended,
+// signed out) goes to log-in. Nothing of the page is drawn in the app
+// (Anna, Oct 13 2026). Layout sets the marker once an account has loaded.
+const onPhone = () => typeof window !== "undefined" && !!window.Capacitor?.isNativePlatform?.();
+const signedInBefore = () => { try { return localStorage.getItem("adhdone_has_account") === "1"; } catch (_) { return false; } };
+
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const inApp = onPhone();
 
   useEffect(() => {
+    if (!inApp) return;
+    if (isAuthenticated) {
+      if (sessionStorage.getItem('adhd_calendar_oauth_return') === '1') {
+        sessionStorage.removeItem('adhd_calendar_oauth_return');
+        navigate('/Calendar', { replace: true });
+      } else {
+        navigate("/Home", { replace: true });
+      }
+    } else {
+      navigate(signedInBefore() ? "/login" : "/register", { replace: true });
+    }
+  }, [inApp, isAuthenticated, navigate]);
+
+  useEffect(() => {
+    if (inApp) return;
     base44.auth.isAuthenticated().then((authed) => {
       if (!authed) return;
       if (sessionStorage.getItem('adhd_calendar_oauth_return') === '1') {
@@ -30,7 +57,9 @@ export default function LandingPage() {
         navigate("/Home", { replace: true });
       }
     });
-  }, [navigate]);
+  }, [inApp, navigate]);
+
+  if (inApp) return null;
 
   const handleSignIn = () => {
     base44.auth.redirectToLogin(window.location.origin + "/Home");
