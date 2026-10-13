@@ -18,6 +18,8 @@ import {
   stampCaptureOwner,
   saveCaptureProgress,
   resumeAbandonedCaptures,
+  currentCaptures,
+  markCaptureHandedOff,
 } from "@/lib/pendingCaptures";
 import {
   classifyCapture,
@@ -81,6 +83,27 @@ async function finishIdeaConversion(idea, madeTask, taskId) {
 // simply waits for the app to be back.
 const RETRY_PAUSES_MS = [3000, 10000, 30000];
 
+// Android stops the app's work once it is off screen (another app opened, the
+// phone locked), so a task typed a moment before used to wait, unmade, until
+// the app was opened again. Oct 13 2026: "call propane 530-477-7854 today" was
+// sorted, then nothing; the app was most likely left to make that very call.
+// So when the app goes off screen before a capture has made anything, the
+// capture is handed to the server (captureText, the path the share sheet and
+// the pinned notification use), which makes it with the app closed. The
+// app's own id goes with it as capture_id: captureText makes a capture once
+// however many times it is sent. Phones with the newer build hand it to their
+// own background sender (ShareBridge.handOffCapture: kept on the phone and
+// retried until it lands, even with no signal); older ones send it straight
+// from here, best effort, and finish it the same way when the app is back.
+// Not handed over: a Parking Lot idea being turned into a task, and a task
+// added under a picked calendar day — captureText knows neither — and a
+// capture already waiting on a question to the person, which they'll answer.
+const canHandOff = (c) => !!c && !!String(c.text || '').trim() && !c.fromIdea && !c.presetDate && !c.presetDueDateISO;
+const localZone = () => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined; } catch (e) { return undefined; }
+};
+const handOffPayload = (c) => ({ text: c.text, timezone: localZone(), capture_id: c.id, said_at: c.createdAt || Date.now() });
+
 // Lives in the app Layout so task parsing keeps running after the user leaves
 // the Add Task screen. Drains the pending-capture queue and asks the user for
 // the few things the AI can't infer (priority, date, advance reminder).
@@ -91,6 +114,10 @@ export default function TaskCaptureProcessor({ userEmail }) {
   const runningRef = useRef(false);
   const emailRef = useRef(null);
   const drainRef = useRef(() => {});
+  // The capture being worked on, and whether it can still be handed to the
+  // server: true until the part it is on comes back from the parser (made, or
+  // waiting on a question).
+  const inflightRef = useRef(null);
 
   const resolveRef = useRef(null);
   const [ask, setAsk] = useState(null); // { type, data }
@@ -121,8 +148,25 @@ export default function TaskCaptureProcessor({ userEmail }) {
           // Set when this attempt didn't finish; the capture is then kept for
           // another go instead of being dropped.
           let failure = null;
+          inflightRef.current = { id: capture.id, open: (capture.doneCount || 0) === 0 && canHandOff(capture) };
+          // Handed to the server (see canHandOff): ask it for the result — the
+          // same call again, which makes the task if it isn't made yet and
+          // otherwise just says what was made. The app never makes it itself.
+          const finishOnServer = async () => {
+            const res = await base44.functions.invoke('captureText', handOffPayload(capture));
+            const d = res?.data || {};
+            if (!d.success) throw new Error(d.error || 'Could not finish setting up this task');
+            trace('captureServerDone', { id: capture.id, count: d.count || 0, duplicate: !!d.duplicate, kind: d.kind || '' });
+            madeTask = true;
+            madeTaskId = d.tasks?.[0]?.id || madeTaskId;
+            if (d.kind === 'idea') window.dispatchEvent(new Event('parking-lot-changed'));
+          };
           try {
-            trace('captureClaimed', { text: capture.text.slice(0, 200), resumed: !!capture.resumed });
+            trace('captureClaimed', { id: capture.id, text: capture.text.slice(0, 200), resumed: !!capture.resumed });
+            if (capture.handedOff) {
+              await finishOnServer();
+              continue;
+            }
             if (capture.resumed) {
               toast({ title: 'Finishing a task you added earlier', description: capture.text.slice(0, 80) });
             }
@@ -155,6 +199,10 @@ export default function TaskCaptureProcessor({ userEmail }) {
             const firstPart = capture.doneCount || 0;
             for (let part = firstPart; part < taskList.length; part++) {
               const text = taskList[part];
+              if (capture.handedOff && !madeTask) {
+                await finishOnServer();
+                break;
+              }
               if ((capture.resumed || capture.retrying) && part === firstPart && await alreadyCreated(text, capture.createdAt)) {
                 trace('captureAlreadyCreated', { text: text.slice(0, 60) });
                 madeTask = true;
@@ -168,7 +216,19 @@ export default function TaskCaptureProcessor({ userEmail }) {
                 kind: partKind,
                 // Date words count from when this was typed, however late it runs.
                 saidAt: capture.createdAt || null,
+                // Stamped on what it makes, so the server can see it was made
+                // if the app goes off screen with the save already on its way.
+                captureId: canHandOff(capture) ? capture.id : null,
+                // Handed to the server meanwhile: make nothing here.
+                stopIf: () => !!capture.handedOff && !madeTask,
               });
+              if (inflightRef.current?.id === capture.id) inflightRef.current.open = false;
+              // Handed over before this part was saved: the server has it now,
+              // including any question the parser would have asked.
+              if (capture.handedOff && !madeTask && result.status !== 'done') {
+                await finishOnServer();
+                break;
+              }
 
               if (result.status === 'done') {
                 madeTask = true;
@@ -211,6 +271,7 @@ export default function TaskCaptureProcessor({ userEmail }) {
             trace('captureFailed', { message: String(e?.message || e) });
             console.error('[CAPTURE] Failed:', e);
           } finally {
+            if (inflightRef.current?.id === capture.id) inflightRef.current = null;
             let keep = false;
             if (failure) {
               const hidden = document.visibilityState === 'hidden';
@@ -245,9 +306,33 @@ export default function TaskCaptureProcessor({ userEmail }) {
     };
     drainRef.current = drain;
 
+    // Off screen: every capture that hasn't made anything yet goes to the
+    // server (see canHandOff). The one being worked on only while its part is
+    // still with the parser; one not started yet always.
+    const handOff = () => {
+      const bridge = window.Capacitor?.Plugins?.ShareBridge;
+      const viaPhone = typeof bridge?.handOffCapture === 'function';
+      for (const c of currentCaptures()) {
+        if (c.held || c.handedOff || !canHandOff(c) || (c.doneCount || 0) > 0) continue;
+        if (c.started && !(inflightRef.current?.id === c.id && inflightRef.current.open)) continue;
+        if (!c.ownerEmail) continue;
+        markCaptureHandedOff(c.id);
+        const payload = handOffPayload(c);
+        if (viaPhone) {
+          bridge.handOffCapture({ id: c.id, text: c.text, createdAt: payload.said_at })
+            .catch(() => base44.functions.invoke('captureText', payload).catch(() => {}));
+        } else {
+          base44.functions.invoke('captureText', payload).catch(() => {});
+        }
+      }
+    };
+
     // A capture waiting for the app to be back on screen, or back online, is
     // picked up the moment that happens.
-    const onVisible = () => { if (document.visibilityState === 'visible') drain(); };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') drain();
+      else if (document.visibilityState === 'hidden') handOff();
+    };
     const onOnline = () => drain();
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('online', onOnline);
