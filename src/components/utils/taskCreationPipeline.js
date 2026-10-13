@@ -121,12 +121,13 @@ export async function classifyCapture(text) {
 // An idea: into the Parking Lot. A real list becomes a parent idea with the
 // items the person wrote as checkboxes; anything else is one idea holding
 // their own words.
-async function saveIdeas(kind, inputText) {
+async function saveIdeas(kind, inputText, captureId = null) {
   if (kind.is_list && Array.isArray(kind.items) && kind.items.length > 1) {
     const mainIdea = await base44.entities.ParkingLotIdea.create({
       idea: kind.main_idea || inputText.trim(),
       converted_to_task: false,
-      list_format: 'checkbox'
+      list_format: 'checkbox',
+      ...(captureId ? { capture_id: captureId } : {})
     });
     for (const item of kind.items) {
       await base44.entities.ParkingLotIdea.create({
@@ -140,7 +141,8 @@ async function saveIdeas(kind, inputText) {
     await base44.entities.ParkingLotIdea.create({
       idea: inputText.trim(),
       converted_to_task: false,
-      list_format: 'plain'
+      list_format: 'plain',
+      ...(captureId ? { capture_id: captureId } : {})
     });
   }
   window.dispatchEvent(new Event('parking-lot-changed'));
@@ -151,12 +153,13 @@ async function saveIdeas(kind, inputText) {
 // the app asks whether to send them to the developer (FeedbackPrompt). Nothing
 // is sent unless they say yes there. A question already waiting for an answer
 // is left alone rather than replaced.
-async function saveAppFeedback(inputText) {
+async function saveAppFeedback(inputText, captureId = null) {
   const text = inputText.trim();
   await base44.entities.ParkingLotIdea.create({
     idea: text,
     converted_to_task: false,
-    list_format: 'plain'
+    list_format: 'plain',
+    ...(captureId ? { capture_id: captureId } : {})
   });
   window.dispatchEvent(new Event('parking-lot-changed'));
   toast({
@@ -176,11 +179,35 @@ async function saveAppFeedback(inputText) {
   }
 }
 
+// The capture was handed to the server (TaskCaptureProcessor) while this save
+// was on its way, so both may have made it. The earliest row carrying the
+// capture's id wins — the same rule captureText uses on its side — and this
+// one goes if it wasn't first. Returns the id of the one kept.
+async function keepEarliest(captureId, myTaskId) {
+  try {
+    const [tasks, ideas] = await Promise.all([
+      base44.entities.Task.filter({ capture_id: captureId }),
+      base44.entities.ParkingLotIdea.filter({ capture_id: captureId }),
+    ]);
+    const age = (r) => new Date(/[zZ]$/.test(String(r.created_date || '')) ? r.created_date : `${r.created_date}Z`).getTime() || 0;
+    const rows = [...(tasks || []), ...(ideas || [])].sort((a, b) => age(a) - age(b));
+    const first = rows[0];
+    if (first && first.id !== myTaskId) {
+      await base44.entities.Task.delete(myTaskId);
+      return first.id;
+    }
+  } catch (e) {
+    console.error('[CAPTURE] Could not compare with the server\'s copy, keeping this one:', e);
+  }
+  return myTaskId;
+}
+
 // Processes ONE piece of a capture. Resolves to a descriptor:
 //   { status: 'done', taskId?, kind? }   (kind: 'idea' | 'feedback' | 'birthday' when it wasn't a task)
 //   { status: 'needs_priority', data }
 //   { status: 'needs_date', data }
 //   { status: 'error', message }
+//   { status: 'handed_off' }   (the capture went to the server meanwhile; nothing saved here)
 export async function processAndCreateTask(inputText, opts = {}) {
   // kind: what the whole capture already turned out to be (see
   // TaskCaptureProcessor), so it isn't asked twice. Without it, this piece is
@@ -196,6 +223,15 @@ export async function processAndCreateTask(inputText, opts = {}) {
   // Wednesday (Oct 6-7 2026).
   const { presetDate = null, presetDueDateISO = null, skipIdeaCheck = false, kind: knownKind = null, saidAt = null } = opts;
   const asOf = Number.isFinite(saidAt) && saidAt > 0 ? saidAt : undefined;
+  // captureId: the capture this piece belongs to, stamped on what gets saved
+  // (capture_id), so the server sees it was made if the capture is handed to
+  // it with the save already on its way. stopIf: true once the capture has
+  // been handed to the server (the app went off screen, see
+  // TaskCaptureProcessor) — then nothing is saved here.
+  const captureId = opts.captureId || null;
+  const stamp = captureId ? { capture_id: captureId } : {};
+  const handedOff = () => { try { return !!opts.stopIf?.(); } catch (e) { return false; } };
+  const HANDED_OFF = { status: 'handed_off' };
 
   if (!inputText.trim()) return { status: 'error', message: 'Empty input' };
 
@@ -211,6 +247,7 @@ export async function processAndCreateTask(inputText, opts = {}) {
     // Birthdays are tracked as their own thing (🎂 card), not as tasks. With no
     // usable day (or no name) it carries on as a task instead of being lost.
     if (kind.category === 'birthday') {
+      if (handedOff()) return HANDED_OFF;
       try {
         const birthday = await createBirthdayFromKind(kind, inputText, currentUser.email);
         if (birthday) {
@@ -229,13 +266,15 @@ export async function processAndCreateTask(inputText, opts = {}) {
     }
 
     if (kind.category === 'parking_lot') {
-      await saveIdeas(kind, inputText);
+      if (handedOff()) return HANDED_OFF;
+      await saveIdeas(kind, inputText, captureId);
       toast({ title: '💡 Saved to your Parking Lot', duration: 1500 });
       return { status: 'done', kind: 'idea' };
     }
 
     if (kind.category === 'app_feedback') {
-      await saveAppFeedback(inputText);
+      if (handedOff()) return HANDED_OFF;
+      await saveAppFeedback(inputText, captureId);
       return { status: 'done', kind: 'feedback' };
     }
 
@@ -258,7 +297,9 @@ export async function processAndCreateTask(inputText, opts = {}) {
       const sched = deriveSchedule(mainTaskParsed, now);
       const nextReminder = sched.nextReminder;
 
+      if (handedOff()) return HANDED_OFF;
       const parentTask = await base44.entities.Task.create({
+        ...stamp,
         title: subtaskCheck.main_task,
         original_input: inputText,
         location: mainTaskParsed.location || null,
@@ -290,6 +331,10 @@ export async function processAndCreateTask(inputText, opts = {}) {
         // cron to stay out until the ids land (see commitNotificationIds).
         reminder_scheduling_since: nextReminder ? new Date().toISOString() : null
       });
+      if (captureId && handedOff()) {
+        const kept = await keepEarliest(captureId, parentTask.id);
+        if (kept !== parentTask.id) return { status: 'done', taskId: kept };
+      }
 
       maybeAskForHomeZip(`${subtaskCheck.main_task} ${inputText}`, mainTaskParsed.location);
       announceTaskCreated(parentTask);
@@ -512,8 +557,10 @@ export async function processAndCreateTask(inputText, opts = {}) {
       }
     }
 
+    if (handedOff()) return HANDED_OFF;
     trace('mainCreate', { title: parsed.title || inputText.trim(), interval: actualReminderInterval });
     const createdTask = await base44.entities.Task.create({
+      ...stamp,
       title: parsed.title || inputText.trim(),
       original_input: inputText,
       location: parsed.location || null,
@@ -549,6 +596,10 @@ export async function processAndCreateTask(inputText, opts = {}) {
       notification_recipient_email: currentUser.email,
       reminder_scheduling_since: nextReminder ? new Date().toISOString() : null
     });
+    if (captureId && handedOff()) {
+      const kept = await keepEarliest(captureId, createdTask.id);
+      if (kept !== createdTask.id) return { status: 'done', taskId: kept };
+    }
 
     maybeAskForHomeZip(`${createdTask.title} ${inputText}`, parsed.location);
     announceEventConflict(createdTask);
