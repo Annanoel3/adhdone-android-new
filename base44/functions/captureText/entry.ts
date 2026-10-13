@@ -303,6 +303,8 @@ Deno.serve(async (req) => {
 
       // Reminder failures must not lose the task — the record is already safe,
       // and the refill cron picks up anything left without notifications.
+      // Only an event gets a plan; any other task gets one reminder at its own
+      // time, or none (captureToTasks.scheduleTaskReminders, Oct 12 2026).
       let reminderResult: unknown = null;
       try {
         reminderResult = await scheduleTaskReminders(base44, task, parsed, user.email, tz);
