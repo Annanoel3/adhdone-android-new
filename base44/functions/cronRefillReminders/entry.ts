@@ -859,6 +859,20 @@ Deno.serve(async (req) => {
     if (new Date(task.next_reminder).getTime() - now.getTime() <= BOOKABLE_WINDOW_MS) continue;
     if (isBeingScheduledElsewhere(task, now.getTime()) || isInRetryBackoff(task, now.getTime())) continue;
 
+    // Only an event gets a plan. Any other task is Smart Reminders', with ONE
+    // reminder at its own time when it has one (Anna, Oct 12 2026: "It's
+    // literally just supposed to be smart reminders and events and birthdays
+    // ... and tasks that the user gave a specific time to").
+    if (task.classification !== 'event') {
+      const plan = atItsOwnTimeEntry(task, userMap[task.notification_recipient_email]);
+      await base44.asServiceRole.entities.Task.update(task.id, {
+        ...(plan ? { reminder_schedule: [plan] } : {}),
+        reminder_plan_built_at: now.toISOString(),
+      }).catch(() => {});
+      if (plan) task.reminder_schedule = [plan];
+      continue;
+    }
+
     plansBuilt++;
     try {
       const owner = userMap[task.notification_recipient_email];
@@ -936,6 +950,9 @@ Deno.serve(async (req) => {
     if (!task.reminder_scheduling_since) continue;
     if (isBeingScheduledElsewhere(task, now.getTime()) || isInRetryBackoff(task, now.getTime())) continue;
     if (task.deadline_style === 'by') continue;
+    // A task with no time of its own (all day) gets no "📅 due today" push:
+    // Smart Reminders has it (Anna, Oct 12 2026).
+    if (task.classification !== 'event' && !hasItsOwnTime(task)) continue;
     const hasPlan = Array.isArray(task.reminder_schedule) && task.reminder_schedule.length > 0;
     const hasIds = Array.isArray(task.onesignal_notification_ids) && task.onesignal_notification_ids.length > 0;
     if (hasPlan || hasIds) continue;
@@ -1004,8 +1021,13 @@ Deno.serve(async (req) => {
     if (refusedEmails.has(task.notification_recipient_email)) continue;
     // Nothing inside the booking window yet? Nothing to do (and no need to
     // read the task again).
+    // A task that isn't an event books only its reminder at its own time, or
+    // one they added themselves. The rest of an old AI plan (heads-ups, "📅
+    // due today") stays unbooked: that is Smart Reminders' now (Anna, Oct 12 2026).
+    const bookable = (t: any, e: any) => t.classification === 'event' || e?.their_time === true
+      || (hasItsOwnTime(t) && Math.abs(new Date(e?.send_at).getTime() - new Date(t.next_reminder).getTime()) < 60 * 1000);
     const hasDue = task.reminder_schedule.some((e: any) =>
-      !isBookedId(e?.notification_id) && isBookableNow(e?.send_at, now.getTime()));
+      !isBookedId(e?.notification_id) && isBookableNow(e?.send_at, now.getTime()) && bookable(task, e));
     if (!hasDue) continue;
     // Read the task again right before booking, and book from that copy:
     // finished, deleted or back-burnered since the run started gets nothing,
@@ -1026,6 +1048,8 @@ Deno.serve(async (req) => {
 
       // Only inside OneSignal's window, never in the past. Nothing is booked early.
       if (!isBookableNow(entry.send_at, now.getTime())) continue;
+      if (!bookable(current, entry)) continue;
+      const isEventTask = current.classification === 'event';
 
       try {
         const res = await base44.asServiceRole.functions.invoke('schedulePush', {
@@ -1034,7 +1058,13 @@ Deno.serve(async (req) => {
           title: entry.notification_title || task.title,
           body: entry.notification_body || task.title,
           sendAtISO: entry.send_at,
-          data: { screen: '/TaskNotification', taskId: task.id, type: 'event_reminder' },
+          // A task's reminder carries a task's buttons (Done, Snooze), not an event's.
+          data: { screen: '/TaskNotification', taskId: task.id, type: isEventTask ? 'event_reminder' : 'task_reminder' },
+          ...(isEventTask ? {} : { buttons: [
+            { id: 'snooze_15', text: 'Snooze 15 min' },
+            { id: 'snooze_60', text: 'Snooze 1 hour' },
+            { id: 'complete', text: '✅ Done' },
+          ] }),
         });
         const result = res?.data || res;
         if (result?.notificationId) {
@@ -1576,4 +1606,34 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       console.error('[HEALTH] daily note failed:', e);
     }
   }
+}
+
+// ── A task's own time ─────────────────────────────────────────────────────────
+// A one-time task with a clock time of its own (not all day, not a "by"
+// deadline): the one kind of ordinary task that gets a reminder booked ahead,
+// at that time (Anna, Oct 12 2026). Same test as Smart Reminders' isAtTime.
+function hasItsOwnTime(task: any): boolean {
+  return task?.reminder_interval === 'once' && !task.day_only_task && task.deadline_style !== 'by';
+}
+
+// That one reminder, as a PLANNED entry the promotion loop books once it's
+// inside OneSignal's window. Null when the task has no time of its own, or the
+// app picked a time that falls in their quiet hours.
+function atItsOwnTimeEntry(task: any, owner: any): any | null {
+  if (!hasItsOwnTime(task) || !task.next_reminder) return null;
+  const at = new Date(task.next_reminder);
+  if (!Number.isFinite(at.getTime())) return null;
+  const timeZone = userTimeZone(owner);
+  const quiet = resolveQuietHours(owner);
+  if (!isTimeTheySet(task, at.getTime(), timeZone) && quiet.enabled
+      && isInQuietHours(at, quiet.startMin, quiet.endMin, timeZone)) return null;
+  const full = (task.title || '').trim() || 'your task';
+  const t = full.length > 40 ? `${full.slice(0, 37)}...` : full;
+  return {
+    notification_id: `planned_${task.id}_at_${at.getTime()}`,
+    send_at: at.toISOString(),
+    label: 'at the time',
+    notification_title: `🔔 ${t}`,
+    notification_body: `It's time — "${t}". You've got this! 💪`,
+  };
 }
