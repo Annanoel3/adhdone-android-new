@@ -935,17 +935,25 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
               title: entry.notification_title,
               body: entry.notification_body,
               sendAtISO: entry.send_at,
+              // The type decides the buttons the phone puts on the push
+              // (TaskActions): an EVENT's reminder gets Snooze only, a
+              // check-in (night before, morning of) none, a task's Done and
+              // Snooze. Calendar events used to go out as task reminders, with
+              // Done on them (Oct 13 2026) — the same rule as
+              // multiReminderScheduler and captureToTasks now.
               data: {
                 screen: '/TaskNotification',
                 taskId: createdTask.id,
                 urgency: createdTask.urgency || 'medium',
-                type: 'task_reminder',
+                type: /night before|morning of/i.test(String(entry.label || ''))
+                  ? 'task_checkin'
+                  : (createdTask.classification === 'event' ? 'event_reminder' : 'task_reminder'),
               },
-              buttons: [
+              ...(createdTask.classification === 'event' ? {} : { buttons: [
                 { id: 'snooze_15', text: 'Snooze 15 min' },
                 { id: 'snooze_60', text: 'Snooze 1 hour' },
                 { id: 'complete', text: '✅ Done' },
-              ],
+              ] }),
             });
             const result = res?.data || res;
             // The id goes on the entry it belongs to — never matched up by position.
