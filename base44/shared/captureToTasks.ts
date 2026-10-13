@@ -367,7 +367,9 @@ export async function scheduleTaskReminders(
       ids.push(res.notificationId);
       entries.push({
         notification_id: res.notificationId,
-        send_at: sendAt.toISOString(),
+        // The minute it really went at: schedulePush moves a heads-up that
+        // would land on another push (Bike Night, Oct 13 2026).
+        send_at: (typeof res.sendAt === 'string' && res.sendAt) || sendAt.toISOString(),
         label: r.label,
         notification_title: r.notification_title,
         notification_body: r.notification_body,
