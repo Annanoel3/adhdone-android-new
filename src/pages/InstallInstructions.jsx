@@ -7,6 +7,8 @@ import { enqueueCapture } from "@/lib/pendingCaptures";
 import {
   Mic, Pause, Play, Square, ChevronLeft, ChevronRight, Trash2, Plus, Check, Loader2, Info, RotateCcw, X, Pencil,
 } from "lucide-react";
+import { FileDown } from "lucide-react";
+import { downloadNotesPdf } from "@/components/notes/notesPdf";
 
 // ── Notes: record a meeting, appointment or class; get ADHD-friendly notes ────
 //
@@ -1066,6 +1068,9 @@ export default function NotesPage() {
                 </div>
                 {changeSaid && <p className={`text-sm ${soft}`}>{changeSaid}</p>}
               </div>
+              <Button variant="outline" onClick={() => downloadNotesPdf(open, whenText(open.started_at)).catch(() => {})} className="w-full rounded-xl">
+                <FileDown className="w-4 h-4 mr-2" /> Download PDF
+              </Button>
               {notes.gist?.length > 0 && (
                 <div className={card}>
                   <h2 className={`text-lg font-bold mb-2 ${heading}`}>The gist</h2>
