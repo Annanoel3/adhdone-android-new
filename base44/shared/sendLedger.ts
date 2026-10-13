@@ -209,7 +209,12 @@ export async function ledgerCancel(base44: any, notificationIds: (string | null 
   const ids = (notificationIds || []).filter(Boolean) as string[];
   if (ids.length === 0) return;
   try {
-    await ledger(base44).deleteMany({ notification_id: { $in: ids } });
+    // Only bookings still ahead: one that already went out stays on the
+    // record, because it reached them. Deleting those made the day look
+    // lighter than it was to Smart Reminders, which budgets their attention
+    // from this ledger (Oct 12 2026: Bike Night's 1 PM push vanished from it
+    // when the event's reminders were re-booked that afternoon).
+    await ledger(base44).deleteMany({ notification_id: { $in: ids }, send_at: { $gt: new Date().toISOString() } });
   } catch (e) {
     console.error('[sendLedger] cancel failed:', e);
   }
