@@ -350,6 +350,14 @@ export async function scheduleTaskReminders(
     // data.taskId / data.type for the collision ledger, and the tap-through
     // handler reads screen + taskId. A clock-time reminder ("morning of",
     // "night before") is a check-in — it yields to time-critical pushes.
+    // The type also decides the buttons the phone puts on the push
+    // (TaskActions): a task's reminder gets Done and Snooze, an EVENT's gets
+    // Snooze only (an event isn't something you finish early), a check-in
+    // none. Captured events used to go out as task reminders, with Done on
+    // them (Oct 13 2026) — the same rule as multiReminderScheduler now.
+    const pushType = r.relative_minutes_before == null
+      ? "task_checkin"
+      : (task.classification === "event" ? "event_reminder" : "task_reminder");
     const res = await callFunction(base44, "schedulePush", {
       toUserExternalId: email,
       title: r.notification_title || task.title,
@@ -359,7 +367,7 @@ export async function scheduleTaskReminders(
         screen: "/TaskNotification",
         taskId: task.id,
         urgency: task.urgency || "medium",
-        type: r.relative_minutes_before != null ? "task_reminder" : "task_checkin",
+        type: pushType,
       },
     });
 
