@@ -264,7 +264,13 @@ export function phoneAlarmsFor(task: any, owner: any, now: number = Date.now()):
     // An event (an appointment, Bike Night): the phone (build 42 on) shows
     // "Got it" only — no snooze, no Done, no Later (Anna, Oct 13 2026).
     // Older builds ignore this. Same as alarmSetFor in widgetBridge.js.
-    if (task.classification === 'event') alarm.event = true;
+    if (task.classification === 'event') {
+      alarm.event = true;
+      // The at-the-time reminder worded for recording notes: the alarm's
+      // second button opens the event's page (Record notes). Otherwise Got
+      // it is the only button. Same as alarmSetFor in widgetBridge.js.
+      if (/record notes/i.test(String(m.label || ''))) alarm.openLabel = 'Record notes';
+    }
     out.push(alarm);
   }
   return out.sort((a, b) => a.at - b.at);
