@@ -149,6 +149,8 @@ async function applyLaterBreak(base44: any, task: any, body: any, appId: string,
       if (res.ok) cancelled++;
     } catch (_) { /* a push that already went is nothing to cancel */ }
   }
+  // (Only the ones still ahead leave the ledger; one already sent stays on
+  // the record Smart Reminders budgets from — sendLedger.ledgerCancel.)
   if (dropIds.size) await ledgerCancel(base44, Array.from(dropIds));
 
   const fields: any = {
