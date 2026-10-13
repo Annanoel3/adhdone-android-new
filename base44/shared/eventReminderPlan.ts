@@ -17,7 +17,10 @@
 import { localReminderUtc } from './timezoneReminders.ts';
 import { DEFAULT_TIME_ZONE, placeAppReminder } from './quietHours.ts';
 
-export const MAX_REMINDERS_PER_EVENT = 2;
+// Three since Oct 13 2026: an afternoon or evening event's heads-ups are the
+// night before, the morning of and "in about an hour" / "leave now" (Anna: a
+// 5 PM Bike Night with nothing between the night before and 4 PM was missed).
+export const MAX_REMINDERS_PER_EVENT = 3;
 
 // OneSignal's limit is 30 days; stay a day inside it.
 export const BOOKABLE_WINDOW_MS = 29 * 24 * 60 * 60 * 1000;
