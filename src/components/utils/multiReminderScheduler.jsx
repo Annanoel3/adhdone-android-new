@@ -232,12 +232,15 @@ export async function scheduleMultiReminders({
       // when they end would put it after the time it was for.
       if (!stated && isInQuietHours(at)) return [];
       const t = title.length > 40 ? `${title.slice(0, 37)}...` : title;
+      // Plain words; schedulePush rewrites them in the brief's voice and
+      // onWords hands back the ones that went out, which are the ones saved.
       const words = { title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` };
       let id = null;
       try {
         id = await scheduleReminder({
           email,
           ...words,
+          onWords: (w) => { words.title = w.title; words.body = w.body; },
           sendAtISO: at.toISOString(),
           taskId,
           // Already checked against quiet hours above: booked at exactly this time.
@@ -295,6 +298,8 @@ export async function scheduleMultiReminders({
           email,
           title: reminder.notification_title,
           body: reminder.notification_body,
+          // The one at the event's time comes back in the brief's words.
+          onWords: (w) => { reminder.notification_title = w.title; reminder.notification_body = w.body; },
           sendAtISO: reminder.sendAtISO,
           taskId,
           exact: reminder.exact,
@@ -491,13 +496,20 @@ export async function saveTaskTitle(taskIn, newTitle) {
         newSchedule.push(entry);
         continue;
       }
-      const t = renameIn(entry.notification_title, false);
-      const b = renameIn(entry.notification_body, true);
+      // The reminder at the task's own time starts again from the plain words
+      // with the new name, so schedulePush writes it fresh (shared/reminderTitle.ts, atTimeWords)
+      // instead of pasting the name in front of words written for the old one.
+      const ownMs = task.next_reminder ? new Date(task.next_reminder).getTime() : NaN;
+      const isOwnTime = /^(at the time|right now)$/i.test(String(entry.label || ''))
+        && Math.abs(sendMs - ownMs) < 60 * 1000;
+      const words = isOwnTime
+        ? { title: `🔔 ${short(title)}`, body: `It's time — "${short(title)}". You've got this! 💪` }
+        : { title: renameIn(entry.notification_title, false), body: renameIn(entry.notification_body, true) };
       const oldId = entry.notification_id || null;
       // Not booked yet (planned far out) or parked on the Back Burner: only
       // its words change — whoever books it later books these.
       if (!isBooked(oldId) || task.silenced) {
-        newSchedule.push({ ...entry, notification_title: t, notification_body: b });
+        newSchedule.push({ ...entry, notification_title: words.title, notification_body: words.body });
         continue;
       }
       let newId = null;
@@ -508,8 +520,9 @@ export async function saveTaskTitle(taskIn, newTitle) {
         replacedIds.push(oldId);
         newId = await scheduleReminder({
           email,
-          title: t,
-          body: b,
+          title: words.title,
+          body: words.body,
+          onWords: (w) => { words.title = w.title; words.body = w.body; },
           sendAtISO: entry.send_at,
           taskId: task.id,
           // send_at is already the real send time (moved for quiet hours when
@@ -524,7 +537,7 @@ export async function saveTaskTitle(taskIn, newTitle) {
       if (newId) addedIds.push(newId);
       // Saved even when the booking failed, with no id: the hourly refill
       // books any schedule entry that has none.
-      newSchedule.push({ ...entry, notification_id: newId || null, notification_title: t, notification_body: b });
+      newSchedule.push({ ...entry, notification_id: newId || null, notification_title: words.title, notification_body: words.body });
     }
     // Anything booked outside the plan (a snooze) is kept.
     const ids = [
