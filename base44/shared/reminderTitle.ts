@@ -119,9 +119,24 @@ function ringsOutLoudOn(task: any, momentMs: number, timeZone: string): boolean 
 
 // Every moment a push is booked for this task, with that push's words
 // (see reminderMomentsFor in widgetBridge.js).
+// An ordinary task (not an event, a birthday or a rhythm they asked for)
+// rings only at its own time; the rest is Smart Reminders' (see
+// onlyItsOwnTime in widgetBridge.js, Anna Oct 12 2026).
+function onlyItsOwnTime(task: any): boolean {
+  if (task.classification === 'event' || task.classification === 'birthday' || task.birthday_person || task.is_own_birthday) return false;
+  return !task.reminder_interval || task.reminder_interval === 'once';
+}
+
+function hasItsOwnTime(task: any): boolean {
+  return task.reminder_interval === 'once' && !task.day_only_task && task.deadline_style !== 'by';
+}
+
 function reminderMoments(task: any, timeZone: string): { at: number; heading: string; body: string; theirs?: boolean }[] {
   const out = new Map<number, { at: number; heading: string; body: string; theirs?: boolean }>();
-  const schedule = (Array.isArray(task.reminder_schedule) ? task.reminder_schedule : []).filter((r: any) => r && r.send_at);
+  const own = onlyItsOwnTime(task);
+  const ownAt = own && hasItsOwnTime(task) ? whenMs(task.next_reminder) : NaN;
+  const schedule = (Array.isArray(task.reminder_schedule) ? task.reminder_schedule : []).filter((r: any) => r && r.send_at)
+    .filter((r: any) => !own || r.their_time === true || Math.abs(whenMs(r.send_at) - ownAt) < 60 * 1000);
   for (const r of schedule) {
     const t = whenMs(r.send_at);
     if (isNaN(t) || out.has(t)) continue;
@@ -129,7 +144,8 @@ function reminderMoments(task: any, timeZone: string): { at: number; heading: st
     // SmartReminderEditor), which may ring inside quiet hours.
     out.set(t, { at: t, heading: r.notification_title || '', body: r.notification_body || '', theirs: r.their_time === true });
   }
-  if (schedule.length === 0 && task.next_reminder && !task.day_only_task && task.deadline_style !== 'by') {
+  if (schedule.length === 0 && task.next_reminder && !task.day_only_task && task.deadline_style !== 'by'
+      && (!own || hasItsOwnTime(task))) {
     const t = whenMs(task.next_reminder);
     if (!isNaN(t) && !out.has(t)) {
       const copy = getReminderContent(task.title, task.due_date, new Date(t).toISOString(), timeZone);
