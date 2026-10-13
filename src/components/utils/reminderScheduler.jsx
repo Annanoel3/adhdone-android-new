@@ -142,7 +142,10 @@ export async function scheduleReminder({
   // the ones passed in: the reminder at a task's own time is reworded by
   // schedulePush (shared/reminderTitle.ts, atTimeWords), and whoever saves the entry on the
   // task saves those, so the phone's alarm says the same thing as the push.
-  onWords
+  onWords,
+  // Called with the ISO time the push was really booked for, when that
+  // differs from sendAtISO (a heads-up moved off another push's minute).
+  onSendAt
 }) {
   console.log('[scheduleReminder] Called with:', { email, title, body, sendAtISO, minutesFromNow, taskId, exact });
   
@@ -207,6 +210,11 @@ export async function scheduleReminder({
     console.log('[scheduleReminder] SUCCESS - Notification ID:', result.notificationId);
     if (onWords && result.notificationId && result.words?.title && result.words?.body) {
       try { onWords({ title: result.words.title, body: result.words.body }); } catch (e) { /* the id still counts */ }
+    }
+    // The minute it really went at: a heads-up that would have landed on
+    // another push is moved to a free minute nearby (schedulePush).
+    if (onSendAt && result.notificationId && typeof result.sendAt === 'string' && result.sendAt) {
+      try { onSendAt(result.sendAt); } catch (e) { /* the id still counts */ }
     }
     return result.notificationId; // Return the OneSignal notification ID
   } catch (error) {
