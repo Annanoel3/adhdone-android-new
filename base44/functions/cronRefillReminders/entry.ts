@@ -983,7 +983,10 @@ Deno.serve(async (req) => {
       });
       const result = res?.data || res;
       if (result?.notificationId) {
-        const entry = { notification_id: result.notificationId, send_at: task.next_reminder, label: 'at the time', notification_title: words.title, notification_body: words.body };
+        // schedulePush rewrites the plain words in the brief's voice
+        // (shared/reminderTitle.ts, atTimeWords); the ones that went out are the ones saved.
+        const said = result.words?.title && result.words?.body ? result.words : words;
+        const entry = { notification_id: result.notificationId, send_at: task.next_reminder, label: 'at the time', notification_title: said.title, notification_body: said.body };
         await base44.asServiceRole.entities.Task.update(task.id, {
           onesignal_notification_ids: [result.notificationId],
           reminder_schedule: [entry],
@@ -1070,6 +1073,12 @@ Deno.serve(async (req) => {
         if (result?.notificationId) {
           entry.notification_id = result.notificationId;
           entry.scheduled = true;
+          // The reminder at its own time goes out in the brief's words
+          // (schedulePush, shared/reminderTitle.ts): saved, so the alarm matches.
+          if (result.words?.title && result.words?.body) {
+            entry.notification_title = result.words.title;
+            entry.notification_body = result.words.body;
+          }
           newIds.push(result.notificationId);
           dirty = true;
           eventScheduled++;
