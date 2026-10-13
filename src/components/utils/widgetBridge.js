@@ -384,6 +384,10 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
       if (t.birthday_person && !t.is_own_birthday && !t.birthday_animal) {
         alarm.openLabel = t.birthday_text_message ? 'Send a text' : 'Write a text';
       }
+      // An event (an appointment, Bike Night): the phone (build 42 on) shows
+      // "Got it" only — no snooze, no Done, no Later (Anna, Oct 13 2026).
+      // Older builds ignore this.
+      if (t.classification === 'event') alarm.event = true;
       out.push({ alarm, quietExempt: !!t.quiet_hours_exempt });
     }
   }
