@@ -78,6 +78,10 @@
         }
       }
     },
+    "parent_record_id": {
+      "type": "string",
+      "description": "Set on a recording made with \"Record more\" on a finished recording's page (Oct 13 2026): the id of that first recording. Its transcript shows under the first one's, and its notes are added to the first one's notes as new sections (\"Added 12:40 PM\") without touching what was already there. Hidden from the Notes list; status \"merged\" once its notes went in."
+    },
     "notes": {
       "type": "object",
       "description": "Recorded notes: { title, gist[], todos[{text, who, at}], details[{label, value, at}], sections[{heading, points[], at}], decisions[{text, at}], questions[{text, at}], asked[{question, answered, answer, at}] }. \"asked\" is there when the recording had questions. \"at\" is the time mark in the transcript it came from."
