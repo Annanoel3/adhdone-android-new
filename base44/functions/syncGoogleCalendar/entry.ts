@@ -950,6 +950,8 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
             const result = res?.data || res;
             // The id goes on the entry it belongs to — never matched up by position.
             if (result?.notificationId) entry.notification_id = result.notificationId;
+            // The minute it really went at (a heads-up moved off another push's minute).
+            if (result?.notificationId && typeof result.sendAt === 'string' && result.sendAt) entry.send_at = result.sendAt;
             // Refused (device not subscribed, OneSignal down): every other booking
             // this run would be refused too. Stop booking — the plans are still
             // saved, and the hourly job books them when it can.
