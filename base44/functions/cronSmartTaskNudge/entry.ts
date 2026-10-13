@@ -44,9 +44,9 @@ import { getProximity, formatProximityNotes, lookupBusinessHours, businessHoursL
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
-// Bundles reminderBrief.ts r38 (Oct 12 2026: "keeps coming back" only when
-// something is actually lost tonight; a task pushed back again and again is
-// not urgent because of it).
+// Bundles reminderBrief.ts r39 (Oct 13 2026: a chore they keep putting off
+// keeps its daily mention; something that doesn't have to happen yet gets
+// space).
 import { REMINDER_BRIEF, REMINDER_BRIEF_VERSION } from '../../shared/reminderBrief.ts';
 import { assignTaskFamilies } from '../../shared/runTaskParse.ts';
 
