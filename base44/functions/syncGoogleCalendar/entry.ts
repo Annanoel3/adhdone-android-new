@@ -1,3 +1,4 @@
+// Re-saved Oct 13 2026 so the bundled shared/eventReminderPlan.ts is picked up: the reminder at an event's start is never the one the per-event cap drops.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 // The shared prompt is bundled at deploy time; this function was last redeployed
