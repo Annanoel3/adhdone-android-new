@@ -137,7 +137,12 @@ export async function scheduleReminder({
   data,
   android_channel_id,
   buttons,
-  exact
+  exact,
+  // Called with { title, body } when the push went out in other words than
+  // the ones passed in: the reminder at a task's own time is reworded by
+  // schedulePush (shared/reminderTitle.ts, atTimeWords), and whoever saves the entry on the
+  // task saves those, so the phone's alarm says the same thing as the push.
+  onWords
 }) {
   console.log('[scheduleReminder] Called with:', { email, title, body, sendAtISO, minutesFromNow, taskId, exact });
   
@@ -200,6 +205,9 @@ export async function scheduleReminder({
     }
     
     console.log('[scheduleReminder] SUCCESS - Notification ID:', result.notificationId);
+    if (onWords && result.notificationId && result.words?.title && result.words?.body) {
+      try { onWords({ title: result.words.title, body: result.words.body }); } catch (e) { /* the id still counts */ }
+    }
     return result.notificationId; // Return the OneSignal notification ID
   } catch (error) {
     console.error('[scheduleReminder] FAILED - Error:', error);
