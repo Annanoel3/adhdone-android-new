@@ -36,6 +36,7 @@ Deno.serve(async (req) => {
     const result = await response.json().catch(() => ({}));
     
     console.log(`[cancelScheduled] OneSignal response:`, result);
+    // Off the ledger only if it hadn't gone out yet (sendLedger.ledgerCancel).
     await ledgerCancel(createClientFromRequest(req), [notificationId]);
 
     return Response.json({ 
