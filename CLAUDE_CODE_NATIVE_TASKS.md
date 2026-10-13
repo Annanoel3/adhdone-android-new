@@ -393,3 +393,13 @@ in `android/app/build.gradle`. Add anything else pending before building.
   Older builds don't have the method; the web app then sends the capture to captureText itself,
   best effort. Test: type a task in the app and press Home within 2 seconds; with no signal
   too (airplane mode on, Home, airplane mode off) — the task shows up without opening the app.
+- A reminder push the phone has already handled once is never shown or sounded a second time
+  (`PushFilter.seenBefore` / `rememberSeen`, by OneSignal id, kept 4 days). OneSignal re-delivers
+  recent pushes whenever the app process starts fresh ("restore"), and they came through the
+  filter again; a ring-now push already had a guard (`alreadyRang`), an ordinary task reminder
+  did not. And whether an alarm covers a task's push is now judged by the push's SEND time as
+  well as by arrival (`bookedAlarmNear(taskId, sentAt, 10 min)`), so a push the phone hands over
+  late still counts as the alarm that rang. Anna, Oct 13 2026: the 11:00 "Take Pills" alarm rang
+  (Later), then the same reminder came back loud as a notification at 11:11 — eleven minutes
+  past the 10-minute window. Test: an alarm-style task with a time; let it ring, tap Later, then
+  force-stop and reopen the app 15 minutes later — no second sound, no second tray row.
