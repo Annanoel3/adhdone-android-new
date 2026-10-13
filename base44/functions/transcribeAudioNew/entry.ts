@@ -379,8 +379,58 @@ async function notesMake(base44: any, user: any, body: any) {
     }
   }
   const title = String(rec.title || "").trim() || notes.title || "Recording";
+  // "Record more" on a finished recording (Anna, Oct 13 2026): this recording
+  // is a follow-up to an earlier one. Its notes go onto the first recording's
+  // notes as additions, under a heading with the time it was recorded, and
+  // nothing already in those notes is touched. The follow-up keeps its own
+  // notes and transcript too (the page shows its transcript under the first).
+  const parentId = String(rec.parent_record_id || "");
+  const parent = parentId ? await getRecording(base44, parentId) : null;
+  if (parent && parent.id !== rec.id) {
+    const merged = addNotesTo(parent.notes, notes, whenAdded(rec.started_at, user?.timezone));
+    await base44.entities.EnergyLog.update(parent.id, { notes: merged, status: parent.status === "ready" ? "ready" : parent.status });
+    await base44.entities.EnergyLog.update(recordId, { notes, title, status: "merged" });
+    return Response.json({ ok: true, notes: merged, title: parent.title || title, merged_into: parent.id });
+  }
   await base44.entities.EnergyLog.update(recordId, { notes, title, status: "ready" });
   return Response.json({ ok: true, notes, title });
+}
+
+// The clock time a follow-up recording started, in the person's zone ("12:40 PM").
+function whenAdded(startedAt: string, timeZone?: string): string {
+  try {
+    return new Intl.DateTimeFormat("en-US", { timeZone: timeZone || "America/Chicago", hour: "numeric", minute: "2-digit" }).format(new Date(startedAt || Date.now()));
+  } catch (_) {
+    return "";
+  }
+}
+
+// The first recording's notes with a follow-up's added on: everything already
+// there stays as it is, in the same order; the follow-up's gist becomes a
+// section headed "Added <time>", its own sections follow with the same mark,
+// and its to-dos, details, decisions and open questions go on the end of the
+// matching lists (appended, so a to-do already marked "added" keeps its place).
+function addNotesTo(existing: any, extra: any, when: string) {
+  // Taken as saved, not re-cleaned: cleanNotes caps each list, and an earlier
+  // addition may already have taken a list past its cap.
+  const list = (v: any) => (Array.isArray(v) ? v : []);
+  const base = {
+    ...(existing && typeof existing === "object" ? existing : {}),
+    gist: list(existing?.gist), todos: list(existing?.todos), details: list(existing?.details),
+    sections: list(existing?.sections), decisions: list(existing?.decisions), questions: list(existing?.questions),
+  };
+  const mark = when ? `Added ${when}` : "Added later";
+  const sections = [...(base.sections || [])];
+  if (extra?.gist?.length) sections.push({ heading: mark, points: extra.gist.slice(0, 8), at: "" });
+  for (const s of extra?.sections || []) sections.push({ heading: `${s.heading} (${mark.toLowerCase()})`, points: s.points, at: s.at || "" });
+  return {
+    ...base,
+    sections,
+    todos: [...(base.todos || []), ...(extra?.todos || [])],
+    details: [...(base.details || []), ...(extra?.details || [])],
+    decisions: [...(base.decisions || []), ...(extra?.decisions || [])],
+    questions: [...(base.questions || []), ...(extra?.questions || [])],
+  };
 }
 
 // The whole transcript of a recording, with [time] marks, cut at `max`.
