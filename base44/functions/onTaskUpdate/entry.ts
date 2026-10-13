@@ -684,9 +684,16 @@ async function handleTaskEvent(req: Request): Promise<Response> {
         // preserved send_at times, repopulating the live OneSignal IDs.
         const newIds = [];
         const newSchedule = [];
+        // A task that isn't an event gets back only its reminder at its own
+        // time (or one they added themselves); an old AI plan's heads-ups are
+        // Smart Reminders' now (Anna, Oct 12 2026).
+        const isEventTask = data.classification === 'event';
+        const ownAt = data.reminder_interval === 'once' && !data.day_only_task && data.deadline_style !== 'by' && data.next_reminder
+          ? new Date(data.next_reminder).getTime() : NaN;
         for (const entry of data.reminder_schedule) {
           const sendAtMs = entry?.send_at ? new Date(entry.send_at).getTime() : 0;
           if (sendAtMs <= now) { newSchedule.push(entry); continue; }
+          if (!isEventTask && entry?.their_time !== true && !(Math.abs(sendAtMs - ownAt) < 60 * 1000)) continue;
           const sendAtISO = entry.send_at;
           const title = entry.notification_title || `📌 ${data.title}`;
           const body = entry.notification_body || `You've got this! ${data.title}`;
