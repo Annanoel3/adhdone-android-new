@@ -1,3 +1,4 @@
+// Re-saved Oct 13 2026 (night) so the bundled shared/captureToTasks.ts is picked up: a captured event's pushes carry an event's buttons (Snooze only), not a task's.
 // Re-saved Oct 13 2026 (evening) so the bundled shared/captureToTasks.ts is picked up: a heads-up moved off another push's minute is saved at the minute it really goes.
 // Re-saved Oct 13 2026 so the bundled shared/runTaskParse.ts is picked up: one more ask when words that name a part of the day ("tonight") came back with no time.
 // Re-saved Oct 13 2026 so the bundled shared/taskParsePrompt.ts is picked up: a phone number, address or amount they typed stays in the title.
