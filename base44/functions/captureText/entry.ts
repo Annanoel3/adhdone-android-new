@@ -272,7 +272,8 @@ Deno.serve(async (req) => {
 
       // about_me goes in here too, exactly like the in-app add path — otherwise
       // a task shared from the phone gets classified for a generic person.
-      // Quiet hours too: a time the model picks itself lands outside them
+      // Quiet hours too: a time the model picks itself lands outside them, a
+      // night one about two hours before they start
       // (runTaskParse.keepPickedTimeOutOfQuietHours, RULES.md §9 Q4).
       const parsed = await runTaskParse(base44, buildTaskParsePrompt(piece, tz, saidAt), tz, user.about_me, saidAt,
         resolveQuietHours(user));
