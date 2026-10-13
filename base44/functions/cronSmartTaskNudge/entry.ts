@@ -843,18 +843,12 @@ Deno.serve(async (req) => {
           // its earlier heads-ups stay pushes whatever the priority.
           const pinnedLater = Number.isFinite(anchorMs) && !isDeadline && !dueToday && anchorMs > nowMs;
           const noDate = !Number.isFinite(anchorMs);
-          // A chore with no date (laundry, clean the car) never rings as a full
-          // alarm late at night, or once it's been put off 3 times: ringing
-          // wasn't working, and an alarm about laundry at 2 AM is how people end
-          // up turning ADHDone's notifications off. It still comes, as a regular
-          // notification.
-          const putOff = (nudgedTask.snooze_count || 0) + (nudgedTask.dismissed_count || 0) + (nudgedTask.later_count || 0) + (nudgedTask.closed_count || 0);
-          const localHour = Math.floor(localMinutesOfDay(now, timeZone) / 60);
-          // "Late at night" is their own night: the quiet-hours window (its
-          // times count even with the switch off), not a fixed 10 PM to 7 AM,
-          // which is the middle of the day for someone who sleeps days.
-          const quietChore = noDate && (isInQuietHours(now, quiet.startMin, quiet.endMin, timeZone) || putOff >= 3);
-          ringsOutLoud = !quietChore && (overdue || dueToday || inWindow || noDate || (pressing && !pinnedLater));
+          // A nudge on a phone set to full-screen reminders rings as one. It
+          // used to drop to a plain notification once a dateless chore had been
+          // put off 3 times, or at night — a rule Anna never asked for (Oct 13
+          // 2026: "I never approved turning alarms into notifications"); how
+          // often a put-off task comes up is the brief's call, not how loud.
+          ringsOutLoud = overdue || dueToday || inWindow || noDate || (pressing && !pinnedLater);
           // A rare, gentle mention about a task the boss tagged "no rush" (or
           // the like) is a plain notification whatever the task's date or
           // priority says: a light mention that rings the house isn't light
