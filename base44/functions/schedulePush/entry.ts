@@ -2,8 +2,8 @@
 // an overnight shift belongs to the day it starts and runs past midnight.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
-import { atTimeWords, isPlainAtTimeWords } from '../../shared/reminderTitle.ts';
-import { userTimeZone } from '../../shared/quietHours.ts';
+import { atTimeWords, isPlainAtTimeWords, taskRingsAsAlarm, ringsOutLoudOn } from '../../shared/reminderTitle.ts';
+import { userTimeZone, resolveQuietHours, isInQuietHours } from '../../shared/quietHours.ts';
 
 // WHO MAY BOOK A PUSH
 // Like every Base44 function, this endpoint can be reached by anyone on the
@@ -93,7 +93,42 @@ Deno.serve(async (req) => {
         // systems booking the same task minutes apart get caught.
         const ledgerKind = data?.type || 'task_reminder';
         const ledgerTaskId = data?.taskId || data?.scheduledTextId || null;
-        const gate = await ledgerCheck(base44, { email: String(toUserExternalId), taskId: ledgerTaskId, kind: ledgerKind, sendAt: resolvedSendAt });
+        let gate = await ledgerCheck(base44, { email: String(toUserExternalId), taskId: ledgerTaskId, kind: ledgerKind, sendAt: resolvedSendAt });
+        // A heads-up about a dated thing (an event's "tomorrow" the night
+        // before, "today at 5" the morning of) that lands within 20 minutes of
+        // another push used to be dropped outright, and nothing ever booked it
+        // again: Anna's Bike Night (Oct 13 2026) lost its night-before to another
+        // event's night-before at the same 8 PM, so the first she heard of it
+        // that day was "in about an hour". Now it moves to a free minute nearby
+        // instead — later first, earlier if it must — never into their quiet
+        // hours and never within half an hour of the thing itself. The caller
+        // gets the time it really went at (`sendAt`).
+        if (!gate.allowed && gate.reason === 'stacked_on_other_push' && (isInternal || isSelf) && data?.taskId && ledgerKind === 'task_checkin') {
+            try {
+                const task = await base44.asServiceRole.entities.Task.get(String(data.taskId));
+                const users = await base44.asServiceRole.entities.User.filter({ email: String(toUserExternalId) });
+                const owner = users?.[0] || null;
+                const tz = userTimeZone(owner);
+                const quiet = resolveQuietHours(owner);
+                const startMs = new Date(task?.event_time || task?.next_reminder || 0).getTime();
+                const wantMs = new Date(resolvedSendAt).getTime();
+                for (const shiftMin of [25, 50, 75, -25, -50]) {
+                    const t = wantMs + shiftMin * 60 * 1000;
+                    if (t <= Date.now() + 2 * 60 * 1000) continue;
+                    if (Number.isFinite(startMs) && startMs > 0 && t >= startMs - 30 * 60 * 1000) continue;
+                    if (quiet.enabled && isInQuietHours(new Date(t), quiet.startMin, quiet.endMin, tz)) continue;
+                    const again = await ledgerCheck(base44, { email: String(toUserExternalId), taskId: ledgerTaskId, kind: ledgerKind, sendAt: new Date(t).toISOString() });
+                    if (again.allowed) {
+                        console.log(`[schedulePush] heads-up moved ${shiftMin} min to a free minute (was ${resolvedSendAt})`);
+                        resolvedSendAt = new Date(t).toISOString();
+                        gate = again;
+                        break;
+                    }
+                }
+            } catch (e) {
+                console.log('[schedulePush] could not move the heads-up:', e?.message || e);
+            }
+        }
         if (!gate.allowed) {
             return Response.json({ success: true, skipped: true, reason: gate.reason, notificationId: null });
         }
@@ -109,20 +144,28 @@ Deno.serve(async (req) => {
         let pushTitle = title;
         let pushBody = messageBody;
         let reworded = null;
-        if ((isInternal || isSelf) && data?.taskId && isPlainAtTimeWords(messageBody)) {
+        // The task and its owner, for the two decisions below. Only for the
+        // app's own callers, and only a task the recipient owns.
+        let task = null;
+        let owner = null;
+        if ((isInternal || isSelf) && data?.taskId && (ledgerKind === 'task_reminder' || ledgerKind === 'event_reminder')) {
             try {
-                const task = await base44.asServiceRole.entities.Task.get(String(data.taskId));
+                const t = await base44.asServiceRole.entities.Task.get(String(data.taskId));
                 const to = String(toUserExternalId).toLowerCase();
-                const owns = !!task && [task.created_by, task.notification_recipient_email].some((e) => String(e || '').toLowerCase() === to);
-                const oneTime = !!task && (task.classification === 'event' || !task.reminder_interval || task.reminder_interval === 'once');
-                if (owns && oneTime && !task.day_only_task) {
-                    let owner = null;
-                    try {
-                        const users = await base44.asServiceRole.entities.User.filter({ email: String(toUserExternalId) });
-                        owner = users?.[0] || null;
-                    } catch (_) {
-                        owner = null;
-                    }
+                const owns = !!t && [t.created_by, t.notification_recipient_email].some((e) => String(e || '').toLowerCase() === to);
+                if (owns) {
+                    task = t;
+                    const users = await base44.asServiceRole.entities.User.filter({ email: String(toUserExternalId) });
+                    owner = users?.[0] || null;
+                }
+            } catch (e) {
+                console.log('[schedulePush] task not read:', e?.message || e);
+            }
+        }
+        if (task && isPlainAtTimeWords(messageBody)) {
+            try {
+                const oneTime = task.classification === 'event' || !task.reminder_interval || task.reminder_interval === 'once';
+                if (oneTime && !task.day_only_task) {
                     reworded = await atTimeWords(task, new Date(resolvedSendAt).getTime(), userTimeZone(owner), 4500);
                     if (reworded) {
                         pushTitle = reworded.title;
@@ -131,6 +174,26 @@ Deno.serve(async (req) => {
                 }
             } catch (e) {
                 console.log('[schedulePush] plain words kept:', e?.message || e);
+            }
+        }
+        // Does this phone's own alarm ring for this very moment? Then the push
+        // is only the quiet tray copy next to that alarm, and it gets a short
+        // life (10 minutes, like a ring-on-arrival push): OneSignal's app
+        // re-delivers a recent push whenever the app process starts fresh, and
+        // the phone's filter, past the alarm's 10-minute window, showed it as a
+        // new reminder (Anna, Oct 13 2026: Take Pills rang at 11:00, Later, then
+        // the same words came back as a notification at 11:11). A push held back
+        // by the phone for longer than that is dropped the same way. The one
+        // cost: a phone that is off for more than 10 minutes around the moment
+        // gets neither the alarm nor this copy; Smart Reminders takes the task
+        // up as overdue on its next run.
+        let coveredByAlarm = false;
+        if (task && owner) {
+            try {
+                const label = /time to leave/i.test(String(pushTitle)) ? 'leave now' : '';
+                coveredByAlarm = taskRingsAsAlarm(task, owner) && ringsOutLoudOn(task, new Date(resolvedSendAt).getTime(), userTimeZone(owner), label);
+            } catch (_) {
+                coveredByAlarm = false;
             }
         }
 
@@ -163,6 +226,9 @@ Deno.serve(async (req) => {
         // the ring-on-arrival pushes (data.alarm) were high priority (Anna:
         // "make things that have to be at an exact time high priority").
         notificationPayload.priority = 10;
+        if (coveredByAlarm) {
+            notificationPayload.ttl = 10 * 60;
+        }
         if (data && data.alarm === true) {
             // A push that asks to ring on arrival also gets a short lifetime:
             // OneSignal's app re-delivers recent pushes every time the app starts
@@ -204,7 +270,7 @@ Deno.serve(async (req) => {
 
         console.log('[schedulePush] ========== SUCCESS ==========', oneSignalResult.id);
         await ledgerRecord(base44, { email: String(toUserExternalId), taskId: ledgerTaskId, kind: ledgerKind, source: 'schedulePush', sendAt: resolvedSendAt, notificationId: oneSignalResult.id, title: pushTitle });
-        return Response.json({ success: true, notificationId: oneSignalResult.id, words: reworded ? { title: pushTitle, body: pushBody } : null, onesignal_response: oneSignalResult });
+        return Response.json({ success: true, notificationId: oneSignalResult.id, sendAt: resolvedSendAt, words: reworded ? { title: pushTitle, body: pushBody } : null, onesignal_response: oneSignalResult });
 
     } catch (error) {
         console.error('[schedulePush] Unhandled error:', error.message);
