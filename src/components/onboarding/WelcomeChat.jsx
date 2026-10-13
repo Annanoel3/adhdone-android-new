@@ -26,9 +26,10 @@ const FIRST_WIN_DEMO_KEY = 'first_win_demo_push';
 const FIRST_WIN_PLANNED_EVENT = 'adhdone:first-win-planned';
 
 // "When should it remind you?" — three taps that fit the time of day, plus a
-// way out for someone who already typed a time. `phrase` is what gets added
-// to the capture, in the same plain words the parser reads from anyone;
-// `said` is how the chat repeats it back.
+// looser "sometime today" underneath. (A task that already names its time
+// skips the question entirely; see saysWhen in welcomeScript.) `phrase` is
+// what gets added to the capture, in the same plain words the parser reads
+// from anyone; `said` is how the chat repeats it back.
 function whenOptions(now = new Date()) {
   const h = now.getHours();
   const opts = [];
@@ -38,6 +39,14 @@ function whenOptions(now = new Date()) {
   if (h >= 18) opts.push({ label: 'Tomorrow at 7 PM', phrase: 'tomorrow at 7pm', said: 'tomorrow at 7 PM' });
   if (h >= 21) opts.push({ label: 'Tomorrow at noon', phrase: 'tomorrow at 12pm', said: 'tomorrow at noon' });
   return opts.slice(0, 3);
+}
+
+// The no-exact-time choice. Late at night "sometime today" is already over,
+// so it becomes tomorrow.
+function sometimeOption(now = new Date()) {
+  return now.getHours() >= 21
+    ? { label: 'Sometime tomorrow', phrase: 'tomorrow', said: 'tomorrow' }
+    : { label: 'Sometime today', phrase: 'today', said: 'today' };
 }
 
 // The notifications question used to be its own card after the chat (with the
@@ -198,7 +207,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   const submitWhen = (opt) => {
     setWhen(opt ? opt.said : '');
     phraseRef.current = opt ? opt.phrase : '';
-    answer(opt ? opt.label : 'It already has a time');
+    answer(opt ? opt.label : '');
   };
 
   // Android's own prompt, from the chat, and the pinned shortcut right behind
@@ -300,7 +309,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
               </Button>
             ))}
           </div>
-          <Button variant="ghost" onClick={() => submitWhen(null)} className="w-full text-xs">It already has a time</Button>
+          <Button variant="ghost" onClick={() => submitWhen(sometimeOption())} className="w-full text-xs">{sometimeOption().label}</Button>
         </div>
       )}
 
