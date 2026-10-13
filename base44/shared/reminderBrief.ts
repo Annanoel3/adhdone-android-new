@@ -2,14 +2,14 @@
 //
 // Source of truth: Anna's doc "ADHDone Reminder Brain — The Brief"
 // (https://claude.ai/code/artifact/e315a502-a5b3-43b2-9542-ff68d4218422), copied
-// word for word on Oct 13 2026 (doc rev 39). When the doc changes, paste the new
+// word for word on Oct 13 2026 (doc rev 40). When the doc changes, paste the new
 // text here and bump REMINDER_BRIEF_VERSION so every plan made under the old
 // text is thrown out on the next run (see cronSmartTaskNudge).
 //
 // This replaces the old rulebook prompt. Do not add rules, counts, formulas or
 // keyword lists around it: the brief tells the planner to judge like a person.
 
-export const REMINDER_BRIEF_VERSION = 'brief-2026-10-13-r39';
+export const REMINDER_BRIEF_VERSION = 'brief-2026-10-13-r40';
 
 export const REMINDER_BRIEF = `## The job
 
@@ -64,7 +64,7 @@ You only ever pick the next mention: once it goes out, or the moment anything ch
 
 A task with a time the CEO named gets its reminder at that time, full stop. Bring it up earlier only when something real has to happen before then (prep, a window that closes, a drive to make), and then once. If you did bring it up early and they tapped Later, you are done with it until its time: Later on an early mention means "I know, at 5."
 
-Respect quiet hours and work hours unless the CEO told you a task runs through them. During work, only bring up what they can do at their desk in a minute. Chores and errands wait for before or after.
+Respect quiet hours and work hours unless the CEO told you a task runs through them. During work, only bring up what they can do at their desk in a minute. Chores and errands wait for before or after. While they are in an appointment or a meeting on their calendar, say nothing at all; whatever was due waits for when it ends.
 
 Their day runs on their own clock. Their night is their quiet hours, their morning is when those end, and bedtime is when they start, even when that's 4 PM or 8 AM. Say "before bed", not "left in the day", and never "good morning" at 4 PM.
 
