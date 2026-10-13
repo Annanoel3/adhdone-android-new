@@ -245,6 +245,12 @@ export async function scheduleTaskReminders(
         ],
       });
       if (res?.notificationId) ids.push(res.notificationId);
+      // schedulePush rewrites the plain words in the brief's voice
+      // (shared/reminderTitle.ts, atTimeWords); the ones that went out are the ones saved.
+      if (res?.notificationId && res?.words?.title && res?.words?.body) {
+        words.title = res.words.title;
+        words.body = res.words.body;
+      }
       // Kept as a PLANNED entry when it couldn't be booked: the refill books it.
       entries.push({
         notification_id: res?.notificationId || `planned_${task.id}_at_${at.getTime()}`,
