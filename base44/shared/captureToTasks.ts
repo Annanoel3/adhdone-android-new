@@ -215,6 +215,52 @@ export async function scheduleTaskReminders(
     return { planned: 1, scheduled: ids.length };
   }
 
+  // Only an event gets a plan of reminders. Any other task gets ONE reminder,
+  // at its own time, or nothing booked when it has none (all day, a "by"
+  // deadline): Smart Reminders has it (Anna, Oct 12 2026: "It's literally just
+  // supposed to be smart reminders and events and birthdays ... and tasks that
+  // the user gave a specific time to"). Same rule as the in-app path
+  // (multiReminderScheduler.scheduleMultiReminders).
+  if (task.classification !== "event") {
+    const ownTime = task.reminder_interval === "once" && !task.day_only_task && task.deadline_style !== "by";
+    const at = new Date(task.next_reminder);
+    const entries: any[] = [];
+    const ids: string[] = [];
+    // A time the app picked never rings inside quiet hours.
+    const pickedInQuiet = quiet.enabled && task.quiet_hours_exempt !== true
+      && isInQuietHours(at, quiet.startMin, quiet.endMin, tz) && !isTimeTheySet(task, at.getTime(), tz);
+    if (ownTime && at.getTime() > Date.now() + 2 * 60 * 1000 && !pickedInQuiet) {
+      const full = String(task.title || "").trim() || "your task";
+      const t = full.length > 40 ? `${full.slice(0, 37)}...` : full;
+      const words = { title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` };
+      const res = await callFunction(base44, "schedulePush", {
+        toUserExternalId: email,
+        ...words,
+        sendAtISO: at.toISOString(),
+        data: { screen: "/TaskNotification", taskId: task.id, urgency: task.urgency || "medium", type: "task_reminder" },
+        buttons: [
+          { id: "snooze_15", text: "Snooze 15 min" },
+          { id: "snooze_60", text: "Snooze 1 hour" },
+          { id: "complete", text: "✅ Done" },
+        ],
+      });
+      if (res?.notificationId) ids.push(res.notificationId);
+      // Kept as a PLANNED entry when it couldn't be booked: the refill books it.
+      entries.push({
+        notification_id: res?.notificationId || `planned_${task.id}_at_${at.getTime()}`,
+        send_at: at.toISOString(),
+        label: "at the time",
+        notification_title: words.title,
+        notification_body: words.body,
+      });
+    }
+    await base44.asServiceRole.entities.Task.update(task.id, {
+      reminder_scheduling_since: null,
+      ...(entries.length ? { reminder_schedule: entries, onesignal_notification_ids: ids } : {}),
+    });
+    return { planned: entries.length, scheduled: ids.length };
+  }
+
   // Service-role calls have no end-user session, so the home origin the
   // travel-aware "leave now" reminder needs has to be looked up and passed.
   // An event also needs to know whether the owner's phone can record notes.
