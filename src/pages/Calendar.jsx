@@ -70,6 +70,11 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
+  // How many events the running sync is working through (null until the phone
+  // has been read). A first import of a full calendar takes a while, and a
+  // spinner with no words next to it read as the app hanging (Anna, Oct 13
+  // 2026: "feels like a glitch").
+  const [importing, setImporting] = useState(null);
   const [lastSynced, setLastSynced] = useState(() => localStorage.getItem('device_calendar_last_synced_at') || null);
   // The calendar list sits behind a dropdown; a phone with several accounts
   // can have a dozen calendars, which is a lot to be greeted by.
@@ -111,10 +116,24 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
     syncingRef.current = true;
     setBusy(true);
     setError(null);
+    setImporting(null);
     try {
-      const data = await runDeviceCalendarSync(ids);
+      const data = await runDeviceCalendarSync(ids, { onEvents: setImporting });
       if (data && !data.aborted) {
-        setResult(data);
+        // A tick made during a sync queues one more run right after it, and that
+        // second run finds everything already imported. Its "Imported 0" must
+        // not replace the first run's "Imported 8" — runs that follow within a
+        // couple of minutes are added up, so the line says what this sitting did.
+        setResult((prev) => {
+          const recent = prev && !prev.in_progress && !data.in_progress && Date.now() - (prev.at || 0) < 2 * 60 * 1000;
+          return {
+            ...data,
+            at: Date.now(),
+            created: (recent ? prev.created || 0 : 0) + (data.created || 0),
+            updated: (recent ? prev.updated || 0 : 0) + (data.updated || 0),
+            cancelled_removed: (recent ? prev.cancelled_removed || 0 : 0) + (data.cancelled_removed || 0),
+          };
+        });
         setLastSynced(localStorage.getItem('device_calendar_last_synced_at'));
         if (onSynced) await onSynced();
       }
@@ -125,6 +144,7 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
     } finally {
       syncingRef.current = false;
       setBusy(false);
+      setImporting(null);
       const queued = queuedRef.current;
       queuedRef.current = null;
       if (queued && queued.length) sync(queued);
@@ -243,13 +263,26 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
             <AlertCircle className="w-4 h-4 mt-0.5 flex-shrink-0" /> <span>{error}</span>
           </div>
         )}
-        {result && !error && (
+        {busy && (
+          <p className={`text-sm ${textSecondary}`}>
+            {importing == null
+              ? 'Reading your phone\'s calendar…'
+              : importing === 0
+                ? 'Nothing on that calendar to bring in.'
+                : lastSynced
+                  ? `Checking ${importing} event${importing === 1 ? '' : 's'}…`
+                  : `Bringing in ${importing} event${importing === 1 ? '' : 's'}. The first time takes a while — usually ${importing <= 5 ? 'under a minute' : importing <= 15 ? 'a minute or two' : 'a few minutes'}. You can leave this page; it keeps going.`}
+          </p>
+        )}
+        {result && !error && !busy && (
           <div className={`flex items-start gap-2 text-sm ${textSecondary}`}>
             <CheckCircle2 className="w-4 h-4 mt-0.5 text-green-500 flex-shrink-0" />
             <span>
               {result.in_progress
                 ? 'A sync is already running.'
-                : `Imported ${result.created ?? 0}, updated ${result.updated ?? 0}${result.cancelled_removed ? `, removed ${result.cancelled_removed}` : ''}.`}
+                : !(result.created || result.updated || result.cancelled_removed)
+                  ? 'Up to date — nothing new.'
+                  : `Imported ${result.created ?? 0}, updated ${result.updated ?? 0}${result.cancelled_removed ? `, removed ${result.cancelled_removed}` : ''}.`}
             </span>
           </div>
         )}
