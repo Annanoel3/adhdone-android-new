@@ -151,7 +151,9 @@ Deno.serve(async (req) => {
       if (t.status === 'cancelled') u.tasks_cancelled++;
       if (t.classification === 'event') u.events_count++;
       if (t.birthday_person || t.classification === 'birthday') u.birthdays++;
-      if (t.capture_id) u.captures++;
+      // Made from outside the app. In-app captures carry the app's own "pending-" id
+      // since Oct 13 2026 (handed to the server when the app goes off screen).
+      if (t.capture_id && !String(t.capture_id).startsWith('pending-')) u.captures++;
       if (t.google_event_id) u.calendar_tasks++;
       u.snoozes += t.snooze_count || 0;
       u.dismissed += t.dismissed_count || 0;
