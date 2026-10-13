@@ -211,6 +211,27 @@ const STATUS_TEXT = {
   notes_failed: "Notes not made yet",
   over_limit: "Stopped at this month's free minutes",
   ready: "",
+  merged: "",
+};
+
+// "Record more" (Anna, Oct 13 2026): a recording made from a finished
+// recording's page is a follow-up to it (parent_record_id). The server adds
+// its notes to the first recording's notes as "Added 12:40 PM" sections and
+// leaves what was there alone; here its transcript shows under the first
+// one's, and it never gets a card of its own.
+const followUpsOf = (rows, id) => (rows || [])
+  .filter((r) => r && r.parent_record_id === id)
+  .sort((a, b) => new Date(a.started_at || 0) - new Date(b.started_at || 0));
+const withFollowUpText = (r, rows) => {
+  const more = followUpsOf(rows, r?.id);
+  if (!more.length) return r;
+  const parts = [...(r.transcript_parts || [])];
+  let offset = 100000;
+  for (const f of more) {
+    for (const p of (f.transcript_parts || [])) parts.push({ ...p, index: offset + (p.index || 0) });
+    offset += 100000;
+  }
+  return { ...r, transcript_parts: parts };
 };
 
 // ── Search (Anna, Oct 8 2026: "search all notes for keywords") ──
@@ -401,7 +422,7 @@ export default function NotesPage() {
         await R.deleteSession({ sessionId: session.id }).catch(() => {});
       }
       await loadRecords();
-      setOpenId(record.id);
+      setOpenId(record.parent_record_id || record.id);
       setTab("notes");
     } catch (e) {
       console.error("[Notes] processing stopped", e);
@@ -603,11 +624,12 @@ export default function NotesPage() {
   // ── Controls ───────────────────────────────────────────────────────────────
 
   // link: { task } when it's for an event, so the recording carries the event
-  // and its questions.
+  // and its questions; { moreOf } when it's "Record more" on a finished
+  // recording, so it becomes that recording's follow-up (see followUpsOf).
   const startRecording = async (link = null) => {
     const R = recorder();
     if (!R || busy) return;
-    const name = (link?.task?.title || title).trim();
+    const name = (link?.moreOf?.title || link?.moreOf?.notes?.title || link?.task?.title || title).trim();
     const now = usageFrom(await refreshUser());
     if (now.left_seconds < 60) {
       setCapOpen(true);
@@ -627,9 +649,11 @@ export default function NotesPage() {
       }
       setLive({ sessionId: res.sessionId, paused: false, baseMs: 0, baseAt: Date.now() });
       if (!res.alreadyRecording) {
-        const linkFields = link?.task
-          ? { task_id: link.task.id, questions: cleanQuestions(link.task.prep_questions) }
-          : {};
+        const linkFields = link?.moreOf
+          ? { task_id: link.moreOf.task_id || "", questions: [], parent_record_id: link.moreOf.id }
+          : link?.task
+            ? { task_id: link.task.id, questions: cleanQuestions(link.task.prep_questions) }
+            : {};
         sessionLinks.set(res.sessionId, linkFields);
         setLiveQuestions(linkFields.questions || []);
         base44.entities.EnergyLog.create({
@@ -643,6 +667,9 @@ export default function NotesPage() {
       }
       setPrepTask(null);
       setTitle("");
+      // The recording screen is drawn after a recording's own page: leave
+      // that page so the controls show. It opens again when the notes land.
+      if (link?.moreOf) { setOpenId(null); setChangeText(""); setChangeSaid(""); }
     } finally {
       setBusy(false);
     }
@@ -707,6 +734,12 @@ export default function NotesPage() {
     try {
       await base44.entities.EnergyLog.delete(record.id);
       if (record.device_session_id) recorder()?.deleteSession({ sessionId: record.device_session_id }).catch(() => {});
+      // Its follow-ups ("Record more") have no card of their own: they go too.
+      for (const f of followUpsOf(recordsRef.current, record.id)) {
+        await base44.entities.EnergyLog.delete(f.id).catch(() => {});
+        if (f.device_session_id) recorder()?.deleteSession({ sessionId: f.device_session_id }).catch(() => {});
+      }
+      setRecords((rows) => rows.filter((r) => r.parent_record_id !== record.id));
     } catch (e) {
       setRecords((rows) => (rows.some((r) => r.id === record.id) ? rows : [record, ...rows]));
       toast({ title: "Couldn't delete that recording", description: "It's still here. Try again in a moment." });
@@ -901,7 +934,11 @@ export default function NotesPage() {
   // ── One recording's notes and transcript ──
   if (open) {
     const notes = open.notes || null;
-    const parts = (open.transcript_parts || []).slice().sort((a, b) => a.index - b.index);
+    const followUps = followUpsOf(records, open.id);
+    const parts = withFollowUpText(open, records).transcript_parts.slice().sort((a, b) => a.index - b.index);
+    // Where each follow-up's transcript starts, for a line between them.
+    const followUpStarts = new Map(followUps.map((f, i) => [100000 * (i + 1), f]));
+    const canRecordMore = !!recorder() && !live && !busy && !progress && open.status === "ready";
     const jump = (at) => {
       const ms = clockToMs(at);
       if (ms === null || !parts.length) return;
@@ -947,6 +984,14 @@ export default function NotesPage() {
                 </div>
               );
             })()}
+            {followUps.length > 0 && (
+              <p className={`mt-1 text-sm ${soft}`}>{followUps.length === 1 ? "1 recording added" : `${followUps.length} recordings added`} after the first.</p>
+            )}
+            {canRecordMore && (
+              <Button onClick={() => startRecording({ moreOf: open })} variant="outline" className="mt-3 h-11 rounded-xl">
+                <Mic className="w-4 h-4 mr-2" /> Record more
+              </Button>
+            )}
           </div>
 
           <>
@@ -1118,8 +1163,11 @@ export default function NotesPage() {
               {parts.length === 0 && <div className={card}><p className={soft}>No transcript yet.</p></div>}
               {parts.map((p) => (
                 <div key={p.index} id={`notes-part-${p.index}`} className={card}>
+                  {followUpStarts.has(p.index) && (
+                    <p className={`text-xs font-bold mb-2 ${dark ? "text-purple-300" : "text-purple-700"}`}>Added {whenText(followUpStarts.get(p.index).started_at)}</p>
+                  )}
                   {parts.length > 1 && (
-                    <p className={`text-xs font-semibold mb-2 ${soft}`}>{clock(p.index === 0 ? 0 : p.start_ms)}</p>
+                    <p className={`text-xs font-semibold mb-2 ${soft}`}>{clock(p.index % 100000 === 0 ? 0 : p.start_ms)}</p>
                   )}
                   {paragraphs(p.text).map((para, i) => (
                     <p key={i} className={`mb-3 leading-relaxed ${heading}`}>{para}</p>
@@ -1358,7 +1406,7 @@ export default function NotesPage() {
               </div>
             )}
             {(() => {
-              const hits = records.map((r) => ({ r, m: searchMatch(r, search) })).filter((h) => h.m.ok);
+              const hits = records.filter((r) => !r.parent_record_id).map((r) => ({ r, m: searchMatch(withFollowUpText(r, records), search) })).filter((h) => h.m.ok);
               // A question asked: the answer above is the result, not "nothing has these words".
               if (search.trim().length >= 2 && hits.length === 0) {
                 if (asked && asked.question === search.trim()) return null;
