@@ -215,6 +215,55 @@ export async function scheduleMultiReminders({
     dayOnly = !!dayOnly;
     deadlineStyle = style === 'by' ? 'by' : 'on';
     const clockDeadline = !dayOnly && deadlineStyle === 'by' && classification !== 'event';
+
+    // Only an event gets a plan of reminders. Every other task is Smart
+    // Reminders' (Anna, Oct 12 2026: "It's literally just supposed to be smart
+    // reminders and events and birthdays ... and tasks that the user gave a
+    // specific time to"). A task with its own time gets ONE reminder, at that
+    // time; whether anything comes before it is Smart Reminders' call. An
+    // all-day task or a "by" deadline gets nothing booked here: no "📅 due
+    // today" push, no AI heads-ups (they were landing on top of Smart
+    // Reminders, which never saw them coming).
+    if (classification !== 'event') {
+      if (dayOnly || deadlineStyle === 'by') return [];
+      const at = new Date(scheduledDateISO);
+      if (!(at.getTime() > Date.now() + 2 * 60 * 1000)) return [];
+      // A time the app picked never rings inside quiet hours; moving it to
+      // when they end would put it after the time it was for.
+      if (!stated && isInQuietHours(at)) return [];
+      const t = title.length > 40 ? `${title.slice(0, 37)}...` : title;
+      const words = { title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` };
+      let id = null;
+      try {
+        id = await scheduleReminder({
+          email,
+          ...words,
+          sendAtISO: at.toISOString(),
+          taskId,
+          // Already checked against quiet hours above: booked at exactly this time.
+          exact: true,
+          data: { screen: '/TaskNotification', taskId, urgency: urgency || 'medium', type: 'task_reminder' },
+          buttons: [
+            { id: 'snooze_15', text: 'Snooze 15 min' },
+            { id: 'snooze_60', text: 'Snooze 1 hour' },
+            { id: 'complete', text: '✅ Done' },
+          ],
+        });
+      } catch (e) {
+        console.error('[multiReminderScheduler] Could not book the reminder at its time:', e);
+      }
+      // Kept as a PLANNED entry when it couldn't be booked (no push link yet):
+      // the hourly refill books it.
+      const entry = {
+        notification_id: id || `planned_0_${Date.now().toString(36)}`,
+        send_at: at.toISOString(),
+        label: 'at the time',
+        notification_title: words.title,
+        notification_body: words.body,
+      };
+      base44.entities.Task.update(taskId, { reminder_schedule: [entry] }).catch(() => {});
+      return id ? [id] : [];
+    }
     const reminders = await fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, taskLocation, reminderWish);
     if (!reminders || reminders.length === 0) return clockDeadline ? [] : null;
 
