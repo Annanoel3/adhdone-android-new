@@ -54,6 +54,22 @@ function isCapacitor() {
   return window.Capacitor?.isNativePlatform?.() ?? false;
 }
 
+// What this open did about its ad, for the owner's Ad Diagnostics card
+// (Anna, Oct 13 2026: "I haven't gotten an ad in quite a while" — every pause
+// that was let go was let go silently, so there was nothing to read). The
+// phone keeps the last few lines; nothing is sent anywhere.
+const NOTE_KEY = 'admgr_notes';
+function note(msg) {
+  try {
+    const lines = JSON.parse(localStorage.getItem(NOTE_KEY) || '[]');
+    lines.push(`${new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} — ${msg}`);
+    localStorage.setItem(NOTE_KEY, JSON.stringify(lines.slice(-12)));
+  } catch (e) { /* storage off */ }
+}
+export function getAdManagerNotes() {
+  try { return JSON.parse(localStorage.getItem(NOTE_KEY) || '[]'); } catch (e) { return []; }
+}
+
 function isUserBusy() {
   const el = document.activeElement;
   if (el) {
@@ -114,6 +130,7 @@ function registerLaunch() {
   lastPathname = window.location.pathname;
   resetAdLaunchState();
   cancelPending();
+  note(`open #${count}: ${owedThisOpen ? 'an ad is due this open, waiting for a pause' : 'no ad due this open'}`);
   return true;
 }
 
@@ -122,18 +139,22 @@ function registerLaunch() {
 async function attempt(source) {
   pendingTimer = null;
   if (!owedThisOpen) return;
-  if (document.visibilityState === 'hidden') return;
+  if (document.visibilityState === 'hidden') { note(`${source}: app not on screen`); return; }
   if (inGrace(signedUpAt, launchCount)) {
     owedThisOpen = false;
+    note(`${source}: new account, no ads yet`);
     return;
   }
-  if (Date.now() - openStartedAt < MIN_OPEN_AGE_MS) return;
-  if (NO_AD_PAGE.test(window.location.pathname)) return;
-  if (anyPopupOpen() || isUserBusy()) return;
+  if (Date.now() - openStartedAt < MIN_OPEN_AGE_MS) { note(`${source}: too soon after opening`); return; }
+  if (NO_AD_PAGE.test(window.location.pathname)) { note(`${source}: no ads on ${window.location.pathname}`); return; }
+  if (anyPopupOpen()) { note(`${source}: a popup is open`); return; }
+  if (isUserBusy()) { note(`${source}: typing, recording or just tapped`); return; }
   try {
-    if (await showInterstitialAd(source)) owedThisOpen = false;
+    const shown = await showInterstitialAd(source);
+    note(`${source}: ${shown ? 'ad shown' : 'no ad (see last attempt above)'}`);
+    if (shown) owedThisOpen = false;
   } catch (e) {
-    /* nothing to show; the next pause gets its turn */
+    note(`${source}: ad request failed`);
   }
 }
 
