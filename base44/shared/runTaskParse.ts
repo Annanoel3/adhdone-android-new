@@ -98,6 +98,15 @@ function quietHoursNote(quiet?: { enabled: boolean; startMin: number; endMin: nu
 // them, so the only time that can land inside them is one the user stated
 // (RULES.md §9 Q4, Anna Oct 12 2026: "the only way that would ever happen is
 // if a user explicitly says a time outside of their hours").
+// Whether the person's words name a part of the day (see runTaskParse). Only
+// their own words count: the block between the first pair of """ marks in
+// the prompt (buildTaskParsePrompt); the instructions after it use the same
+// phrases as examples.
+function namesPartOfDay(prompt: string): boolean {
+  const text = String(prompt || '').split('"""')[1] || '';
+  return /\b(tonight|this evening|this morning|this afternoon|before bed|bedtime|after work|after dinner|after lunch|first thing|when i get up|when i wake up)\b/i.test(text);
+}
+
 export async function runTaskParse(_base44: any, prompt: string, tz?: string, aboutMe?: string, asOfMs?: number,
   quiet?: { enabled: boolean; startMin: number; endMin: number }) {
   // Callers are supposed to pass a prompt already built by
@@ -110,29 +119,43 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
     : buildTaskParsePrompt(prompt || '', tz, asOfMs);
 
   const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
-  const completion = await openai.chat.completions.create({
-    model: MODEL,
-    // A little thinking is what makes the model actually apply the prompt's
-    // rules (mirror the date into due_date, "night" is a clock time, an errand
-    // means leaving the house) instead of skimming them. Tested against the
-    // previous parser on the same inputs before this was chosen.
-    reasoning_effort: "low",
-    messages: [
-      {
-        role: "system",
-        content: TASK_PARSE_SYSTEM_PROMPT
-          + (aboutMe?.trim() ? `\n\nABOUT THE USER (in their own words): ${aboutMe.trim()}` : '')
-          + quietHoursNote(quiet),
+  const ask = async (nudge = '') => {
+    const completion = await openai.chat.completions.create({
+      model: MODEL,
+      // A little thinking is what makes the model actually apply the prompt's
+      // rules (mirror the date into due_date, "night" is a clock time, an errand
+      // means leaving the house) instead of skimming them. Tested against the
+      // previous parser on the same inputs before this was chosen.
+      reasoning_effort: "low",
+      messages: [
+        {
+          role: "system",
+          content: TASK_PARSE_SYSTEM_PROMPT
+            + (aboutMe?.trim() ? `\n\nABOUT THE USER (in their own words): ${aboutMe.trim()}` : '')
+            + quietHoursNote(quiet)
+            + nudge,
+        },
+        { role: "user", content: fullPrompt },
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: { name: "task_parse", strict: true, schema: TASK_PARSE_SCHEMA },
       },
-      { role: "user", content: fullPrompt },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: { name: "task_parse", strict: true, schema: TASK_PARSE_SCHEMA },
-    },
-  });
+    });
+    return JSON.parse(completion.choices[0]?.message?.content || "{}");
+  };
 
-  const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}");
+  let parsed = await ask();
+  // The prompt already says a part of the day ("tonight", "after work") is a
+  // time to pick, and the model mostly does; about half the time, on the
+  // self-test (Oct 13 2026), it came back with no time at all, which turns
+  // "take out the trash tonight" into an all-day task that nothing rings for.
+  // One more ask when the words name a part of the day and no time came
+  // back. Only a retry trigger: the model still picks the time.
+  if (!parsed?.target_time && namesPartOfDay(fullPrompt)) {
+    const again = await ask("\n\nTHE WORDS NAME A PART OF THE DAY (tonight, this evening, before bed, after work, this morning, this afternoon, after dinner, first thing). That is a time: pick the clock time a reasonable person would mean by it, on the day they meant. target_time must not be null here.");
+    if (again?.target_time) parsed = again;
+  }
   // A time can only be "stated" when there is one.
   parsed.time_stated = parsed?.time_stated === true && !!parsed?.target_time;
   // recurrence_pattern feeds a strict entity enum, so a free-text answer like
