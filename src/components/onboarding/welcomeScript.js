@@ -12,6 +12,22 @@
 // and a Places explainer before the first task, and most new people left
 // inside four minutes with nothing set up that could reach them. The about-you
 // question now comes after their first task is checked off.
+// Did they already say when, inside the task itself? "call the dentist at 3",
+// "dentist tomorrow", "pay rent friday", "in 20 minutes" — then "when should
+// it remind you?" is a question they just answered, so it isn't asked; the
+// parser reads the time out of their words the same as it does on Home. Only
+// plain time words count — a bare number ("pick up 3 things") is not a time.
+export function saysWhen(text) {
+  const t = String(text || '').toLowerCase();
+  return /\b\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.)\b/.test(t)
+    || /\bat\s+\d{1,2}(:\d{2})?\b/.test(t)
+    || /\b(today|tonight|tomorrow|tmrw|this (morning|afternoon|evening|weekend)|next week|noon|midnight)\b/.test(t)
+    || /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|tues|wed|thu|thurs|fri|sat|sun)\b/.test(t)
+    || /\bin\s+(a|an|\d+)\s*(min|mins|minute|minutes|hour|hours|hr|hrs|day|days|week|weeks)\b/.test(t)
+    || /\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{1,2}\b/.test(t)
+    || /\b\d{1,2}\/\d{1,2}\b/.test(t);
+}
+
 const SCRIPT = [
   {
     text: () => "Hey — welcome to ADHDone. Built by Anna, a girl who just wants to stop missing doctors appointments and got tired of apps that just don't work.",
@@ -32,10 +48,12 @@ const SCRIPT = [
     input: 'task',
   },
   {
-    // Three taps, no typing. Skipped when they skipped the task.
+    // Three taps, no typing. Skipped when they skipped the task, and when the
+    // task already says when (Anna, Oct 13 2026: "it already has a time" as a
+    // button made no sense — the app can tell, so it doesn't ask).
     text: () => "When should it remind you?",
     input: 'when',
-    skip: (name, handle, about, task) => !task,
+    skip: (name, handle, about, task) => !task || saysWhen(task),
   },
   {
     // The notifications question, asked at the one moment it makes sense —
