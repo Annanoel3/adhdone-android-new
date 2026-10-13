@@ -7,6 +7,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
 import { getTravelLead } from '../../shared/travelLead.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
+import { atTimeWords } from '../../shared/reminderTitle.ts';
 
 const openai = new OpenAI({
   apiKey: Deno.env.get('OPENAI_API_KEY')
@@ -142,7 +143,18 @@ export default async function(req) {
     }
 
     const bodyText = await req.text();
-    const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, timezone, location, homeOrigin, avoidTolls, reminderWish, canRecord, noClockTime } = JSON.parse(bodyText);
+    const parsedBody = JSON.parse(bodyText);
+    // { atTimeWords: { task, atISO, timezone } }: a look at the words the one
+    // reminder at a task's own time would get (shared/reminderTitle.ts, atTimeWords), without
+    // booking anything. The real rewording happens in schedulePush. Only the
+    // facts passed in are used, nothing is read. { words: null } means the
+    // plain words would stay.
+    if (parsedBody?.atTimeWords && typeof parsedBody.atTimeWords === 'object') {
+      const w = parsedBody.atTimeWords;
+      const words = await atTimeWords(w.task || {}, new Date(w.atISO).getTime(), w.timezone || user?.timezone || '');
+      return Response.json({ words });
+    }
+    const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, timezone, location, homeOrigin, avoidTolls, reminderWish, canRecord, noClockTime } = parsedBody;
     // An event with a date and no clock time (a day-only capture, an all-day
     // calendar event): callers that know say so with dayOnly or noClockTime.
     const timelessEvent = classification === 'event' && (!!dayOnly || noClockTime === true);
