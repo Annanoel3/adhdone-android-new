@@ -265,8 +265,10 @@ export function isDeviceAutoSyncDue() {
 }
 
 // Reads the chosen calendars on the phone and imports them. Resolves with the
-// backend result. Joins a run already in progress.
-export function runDeviceCalendarSync(calendarIds, { background = false } = {}) {
+// backend result. Joins a run already in progress. `onEvents` hears how many
+// events were read off the phone, before the import starts, so the screen can
+// say what it's waiting on.
+export function runDeviceCalendarSync(calendarIds, { background = false, onEvents = null } = {}) {
   if (deviceInFlight) return deviceInFlight;
   const ids = (calendarIds || []).map(String).filter(Boolean);
   const plugin = calendarPlugin();
@@ -285,6 +287,7 @@ export function runDeviceCalendarSync(calendarIds, { background = false } = {}) 
     }
     notePermission(false);
     const events = (read.events || []).map(deviceRowToEvent).filter(Boolean);
+    if (onEvents) { try { onEvents(events.length); } catch (e) { /* display only */ } }
     const res = await base44.functions.invoke('syncGoogleCalendar', {
       source: 'device',
       calendarIds: ids,
