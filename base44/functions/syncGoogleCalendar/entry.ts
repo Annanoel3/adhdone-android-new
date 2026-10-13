@@ -72,6 +72,22 @@ function isOwnBirthday(title, personName, user) {
 // event dates (next_reminder, due_date, end_date for one-time events) and
 // refresh the sync record — so editing a Google event (e.g. extending a
 // hotel stay to multi-day) actually updates the app on resync.
+// Does the event run past the day it starts? An all-day event's end is
+// exclusive (a one-day event ends "tomorrow"), and a timed event ends the same
+// day unless it crosses midnight.
+function spansDays(startRaw, endRaw) {
+  if (!startRaw || !endRaw) return false;
+  const dayOnly = /^\d{4}-\d{2}-\d{2}$/;
+  if (dayOnly.test(startRaw) && dayOnly.test(endRaw)) {
+    const s = Date.UTC(+startRaw.slice(0, 4), +startRaw.slice(5, 7) - 1, +startRaw.slice(8, 10));
+    const e = Date.UTC(+endRaw.slice(0, 4), +endRaw.slice(5, 7) - 1, +endRaw.slice(8, 10));
+    return e - s > 24 * 60 * 60 * 1000;
+  }
+  const s = new Date(startRaw), e = new Date(endRaw);
+  if (isNaN(s.getTime()) || isNaN(e.getTime())) return false;
+  return e > s && e.toISOString().slice(0, 10) !== s.toISOString().slice(0, 10);
+}
+
 async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone) {
   const startRaw = event.start?.dateTime || event.start?.date || null;
   const endRaw = event.end?.dateTime || event.end?.date || null;
@@ -80,8 +96,11 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone)
   // Backfill end_date for one-time events that are missing it (e.g. synced
   // before the multi-day span logic landed). Without this, a re-sync where the
   // Google dates are unchanged returns early and never records end_date, so the
-  // event detail never shows the full date range.
-  const needsEndBackfill = taskRec.reminder_interval === 'once' && !taskRec.end_date && !!endRaw;
+  // event detail never shows the full date range. Only a MULTI-day event has
+  // one to backfill: every one-day event has an end too, and flagging those
+  // re-wrote each birthday on every sync and reported it as "updated" (Anna,
+  // Oct 13 2026: a sync that changed nothing said "updated 8").
+  const needsEndBackfill = taskRec.reminder_interval === 'once' && !taskRec.end_date && spansDays(startRaw, endRaw);
   // Events synced before the address feature landed have no location stored.
   const needsLocationBackfill = !!event.location && !taskRec.location;
   // Tasks imported before the task-level dedupe key existed get it stamped on
@@ -592,18 +611,25 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
       continue;
     }
 
-    // Run AI classification
-    let ai;
-    try {
-      ai = await classifyEventWithAI(base44, event, user);
-    } catch (e) {
-      console.log('[syncGoogleCalendar] parseTask failed, defaulting to event:', e.message);
-      // Fallback if AI fails — default to a one-time event so we don't spam
-      // recurring reminders for something we couldn't classify.
-      ai = { urgency: 'medium', energy_required: 'medium', reminder_interval: 'once', needs_date_pick: false, target_date: null };
-    }
-
     const isBirthday = isBirthdayEvent(title, recurrenceRule);
+
+    // Run AI classification — not for a birthday. Everything about a birthday
+    // (its title, yearly repeat, its own reminder rules) is fixed below and
+    // nothing from the AI is used, yet the call was most of the ~8 seconds each
+    // one took to import (Anna, Oct 13 2026: a first sync of 8 birthdays spun
+    // for a minute and a half, "feels like a glitch").
+    // Fallback if AI fails — default to a one-time event so we don't spam
+    // recurring reminders for something we couldn't classify.
+    const plainEvent = { urgency: 'medium', energy_required: 'medium', reminder_interval: 'once', needs_date_pick: false, target_date: null };
+    let ai = plainEvent;
+    if (!isBirthday) {
+      try {
+        ai = await classifyEventWithAI(base44, event, user);
+      } catch (e) {
+        console.log('[syncGoogleCalendar] parseTask failed, defaulting to event:', e.message);
+        ai = plainEvent;
+      }
+    }
     const routedAs = isBirthday ? 'birthday' : 'task';
 
     // Build rich description including location, meeting link, notes
