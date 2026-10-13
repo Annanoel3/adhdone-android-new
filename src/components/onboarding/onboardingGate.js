@@ -17,9 +17,17 @@ export const ONBOARDING_STEPS = {
   // Not part of the first-run sequence: the one-off catch-up for accounts that
   // onboarded before the name + about-me questions existed.
   catchUp: 'onboarding_catchup_done',
+  // After the first-run chat closes, a red dot sits on the menu button and on
+  // "App Guide" inside it until the guide has been opened once (Anna, Oct 13
+  // 2026: a nudge toward the guide, not a popup). guideNudge is set when the
+  // chat closes — only the first-run chat, so nobody who onboarded earlier
+  // gets a dot out of nowhere — and guideSeen when the guide opens.
+  guideNudge: 'onboarding_guide_nudge',
+  guideSeen: 'onboarding_guide_seen',
 };
 
 const EVENT = 'adhd_onboarding_step';
+export const ONBOARDING_STEP_EVENT = EVENT;
 
 // A step is done when THAT step's own flag is set — never because some other
 // tour finished. The one exception is precise: users who completed the
