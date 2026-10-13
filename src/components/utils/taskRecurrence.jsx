@@ -225,6 +225,9 @@ export async function bookAtTimeReminder(task, email, now = new Date()) {
       email,
       title: plan.title,
       body: plan.body,
+      // schedulePush rewrites the plain words in the brief's voice
+      // (shared/reminderTitle.ts, atTimeWords); the ones that went out are the ones saved.
+      onWords: (w) => { plan.title = w.title; plan.body = w.body; },
       sendAtISO,
       taskId: task.id,
       exact: true,
