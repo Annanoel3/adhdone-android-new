@@ -869,7 +869,12 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         // If the schedule generator fails, the planner still gives the event one
         // reminder at its start — never nothing.
         let rawReminders: any[] = [];
-        try {
+        // Only an event gets a plan; anything else imported (a payment, a task)
+        // gets one reminder at its own time, or none when it's all day (Anna,
+        // Oct 12 2026: "smart reminders and events and birthdays ... and tasks
+        // that the user gave a specific time to"). No AI plan is asked for it.
+        const importedEvent = createdTask.classification === 'event';
+        if (importedEvent) try {
           const scheduleRes = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
             title,
             scheduledDateISO: createdTask.next_reminder,
@@ -897,7 +902,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
           console.log('[syncGoogleCalendar] schedule generator failed, using the at-the-time fallback:', e.message);
         }
 
-        const plan = buildEventReminderPlan({
+        let plan = buildEventReminderPlan({
           taskId: createdTask.id,
           rawReminders,
           eventStartISO: createdTask.next_reminder,
@@ -910,6 +915,11 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
           quiet: resolveQuietHours(user),
           startIsTheirs: !isAllDay && ((createdTask as any).time_stated === true || (taskRecord as any)?.time_stated === true),
         });
+
+        if (!importedEvent) {
+          const startMs = new Date(createdTask.next_reminder).getTime();
+          plan = isAllDay ? [] : plan.filter((e: any) => Math.abs(new Date(e.send_at).getTime() - startMs) < 60 * 1000);
+        }
 
         for (const entry of plan) {
           // Out of budget or outside the window → stays planned for the hourly job.
