@@ -1,3 +1,4 @@
+// Re-saved Oct 13 2026 (night) so the bundled shared/captureToTasks.ts is picked up: a captured event's pushes carry an event's buttons (Snooze only), not a task's.
 // LLM-powered reminder schedule generator.
 // Takes a task title + scheduled date/time and returns an optimal reminder
 // schedule based on ADHD research principles. The LLM determines how many
