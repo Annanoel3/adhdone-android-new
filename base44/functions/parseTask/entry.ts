@@ -75,7 +75,8 @@ Deno.serve(async (req) => {
     const asOf = Number.isFinite(asOfRaw) && asOfRaw > Date.now() - 60 * 24 * 60 * 60 * 1000 && asOfRaw <= Date.now() + 60 * 1000
       ? asOfRaw : undefined;
     // Their quiet hours, so a time picked from "before bed" lands outside them
-    // (RULES.md §9 Q4); runTaskParse moves one the model still put inside them
+    // (RULES.md §9 Q4); runTaskParse moves one the model still put inside them,
+    // to two hours before they start or to when they end
     // (keepPickedTimeOutOfQuietHours). An internal call has no user: no
     // quiet-hours line.
     const response = await runTaskParse(base44, body?.prompt, user?.timezone, user?.about_me, asOf,
