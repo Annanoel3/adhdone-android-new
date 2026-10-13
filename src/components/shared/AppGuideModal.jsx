@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ADD_PATHS } from "@/components/onboarding/pageIntros";
 import { AutoClip } from "@/components/onboarding/PageIntroTour";
 import {
@@ -32,16 +32,22 @@ import {
 const ADD_PATH_ICONS = { text: Share2, screenshot: Camera, widget: LayoutGrid, pinned: Zap };
 
 export default function AppGuideModal({ isOpen, onClose, theme }) {
+  // One short line per page. The long version read as a wall of text and got
+  // skipped (Anna, Oct 13 2026: "a lot of text ... will definitely be skipped
+  // over by an adhd brain"). The ways to add a task from outside the app stay,
+  // with their clips, behind one tap.
+  const [showWays, setShowWays] = useState(false);
   const guides = [
     {
       icon: LayoutDashboard,
       title: "Home",
-      description: "Your command center. Today's tasks, quick actions, a daily tip, and gentle nudges when you need them."
+      description: "Today's tasks and quick actions."
     },
     {
       icon: Plus,
-      title: "Adding a task — pick whatever's easiest",
-      description: "Say it, type it, or share it in. You don't have to open the app to get a thought out of your head — the AI figures out the date, the steps, and how often to bug you:",
+      title: "Adding a task",
+      description: "Say it, type it, or share it in. The app works out the when.",
+      moreLabel: "5 ways to add without opening the app",
       subItems: [
         {
           icon: Mic,
@@ -61,57 +67,57 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
     {
       icon: ListTodo,
       title: "Tasks",
-      description: "Everything in one place with urgency, energy level, subtasks, and smart reminders. Push a due date, break a task into steps, or drop it on the Back Burner when it's genuinely not today's problem — Back Burner tasks go quiet until you bring them back."
+      description: "Everything you've added. Push the date, split into steps, or park it on the Back Burner."
     },
     {
       icon: CalendarDays,
       title: "Calendar",
-      description: "See your tasks and events by day or week, always starting on today. Bring in your phone's calendars to pull your real events in — they show up labeled so you can tell them from your own tasks."
+      description: "Tasks and events by day or week. Bring in your phone's calendars."
     },
     {
       icon: Cake,
       title: "Birthdays",
-      description: "Birthdays live on their own page and repeat every year. Get reminded a week out, the day before, and the day of — plus help drafting the text so you actually send it."
+      description: "Reminded a week out, the day before, and the day of — with a text ready to send."
     },
     {
       icon: Timer,
       title: "Task Timer",
-      description: "Pick how long, and a timer counts down on screen. When it rings, keep going in Focus Mode, check the task off, or just stop for now. Handy for anything from dishes to deep work."
+      description: "Pick a length, it counts down. When it rings: keep going, check it off, or stop."
     },
     {
       icon: Timer,
       title: "Focus Timer",
-      description: "Pomodoro-style sessions with work and break lengths that fit your brain."
+      description: "Work and break rounds that fit your brain."
     },
     {
       icon: Lightbulb,
       title: "Parking Lot",
-      description: "Brain dump ideas without derailing what you're doing. Make checklists, attach photos and notes, then convert anything into a task later."
+      description: "Dump ideas without derailing. Turn them into tasks later."
     },
     {
       icon: TrendingUp,
       title: "Insights",
-      description: "Your patterns, streaks, focus time, and achievements — what times you actually get things done, and proof of how far you've come."
+      description: "Streaks, focus time, and when you actually get things done."
     },
     {
       icon: MessageCircleHeart,
       title: "Talk It Out",
-      description: "A judgment-free space for ADHD and executive-function strategy — planning, unsticking, venting, or figuring out how to use the app."
+      description: "A judgment-free place to plan, get unstuck, or vent."
     },
     {
       icon: Sparkles,
       title: "Themes",
-      description: "Light, dark, colorful, or Spicy Brains — plus seasonal themes that change with the calendar once you unlock them. Pick yours at the top of Settings, under Look and feel."
+      description: "Light, dark, Spicy Brains, seasonal. Settings → Look and feel."
     },
     {
       icon: Moon,
       title: "Quiet Hours",
-      description: "Set the hours you don't want to be bothered and reminders hold until morning. Set it in Settings → Reminders."
+      description: "Reminders hold until morning. Settings → Reminders."
     },
     {
       icon: Users,
       title: "Community — coming soon",
-      description: "Accountability partners, chat, focus rooms, and leaderboards are on the way. We're waiting until there are enough people here to make it actually worth showing up for."
+      description: "Partners, chat, focus rooms, leaderboards — once enough people are here."
     }
   ];
 
@@ -161,6 +167,19 @@ export default function AppGuideModal({ isOpen, onClose, theme }) {
                     </p>
                     
                     {guide.subItems && (
+                      <button
+                        type="button"
+                        onClick={() => setShowWays((v) => !v)}
+                        aria-expanded={showWays}
+                        className={`mt-2 text-sm font-medium underline-offset-2 hover:underline ${
+                          theme === 'dark' ? 'text-green-400' : 'text-purple-600'
+                        }`}
+                      >
+                        {showWays ? 'Hide' : guide.moreLabel}
+                      </button>
+                    )}
+
+                    {guide.subItems && showWays && (
                       <div className="mt-3 ml-4 space-y-2">
                         {guide.subItems.map((subItem) => (
                           <div key={subItem.title} className="flex items-start gap-2">
