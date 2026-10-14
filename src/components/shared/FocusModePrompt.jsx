@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import {
   Dialog,
@@ -50,6 +51,28 @@ export default function FocusModePrompt({ user, theme }) {
   const [focusTaskId, setFocusTaskId] = useState(user?.focus_mode_task_id || null);
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("offer"); // 'offer' | 'active' | 'celebrate'
+
+  // The quiet-hours question (Anna, Oct 13 2026). A minute before quiet hours
+  // start, a focus session gets a push: "Quiet time usually starts now. Keep
+  // going until you finish, or pick this up tomorrow morning?" Tapping it
+  // opens the app on /Home?focusQuiet=<taskId>, which is this dialog. "Keep
+  // going" rebooks the hourly check-ins straight through the night; "tomorrow
+  // morning" leaves them waiting for the end of quiet hours.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const quietAskTaskId = new URLSearchParams(location.search).get("focusQuiet");
+  const [quietBusy, setQuietBusy] = useState(false);
+  const answerQuiet = async (choice) => {
+    setQuietBusy(true);
+    try {
+      await base44.functions.invoke("setFocusMode", { action: "quiet", choice });
+    } catch (e) {
+      console.warn("[FocusMode] quiet-hours answer failed:", e?.message || e);
+    } finally {
+      setQuietBusy(false);
+      navigate("/Home", { replace: true });
+    }
+  };
   const [focusTask, setFocusTask] = useState(null);
   const [pickableTasks, setPickableTasks] = useState([]);
   const [showInfo, setShowInfo] = useState(false);
@@ -558,6 +581,25 @@ export default function FocusModePrompt({ user, theme }) {
           </span>
         </button>
       )}
+
+      <Dialog open={!!quietAskTaskId} onOpenChange={(o) => { if (!o && !quietBusy) navigate("/Home", { replace: true }); }}>
+        <DialogContent className={`max-w-sm ${cardClass}`}>
+          <DialogHeader>
+            <DialogTitle>Quiet time usually starts now</DialogTitle>
+            <DialogDescription>
+              Would you like to keep going until you finish, or pick this up tomorrow morning?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 pt-2">
+            <Button onClick={() => answerQuiet("keep")} disabled={quietBusy} className="w-full">
+              Keep going until I finish
+            </Button>
+            <Button variant="outline" onClick={() => answerQuiet("morning")} disabled={quietBusy} className="w-full">
+              Pick it up tomorrow morning
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
