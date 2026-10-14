@@ -416,3 +416,17 @@ in `android/app/build.gradle`. Add anything else pending before building.
   have all the snooze buttons, done button, later etc". Test: an event with a time on an
   alarm-style account; when it rings, only Got it shows, and tapping it closes the screen;
   a doctor's appointment shows Got it and Record notes, and Record notes opens the event.
+- The app survives its WebView renderer dying (`MainActivity` WebViewClient
+  `onRenderProcessGone`: `recreate()`, which runs Capacitor's onCreate again with a fresh
+  WebView; at most twice a minute, then the old behaviour). Left unhandled, Android kills the
+  whole app the moment the renderer goes (out of memory, a WebView bug) — the person sees a
+  crash, and a renderer that dies again on the next open reads as "it crashes every time I
+  open it". Anna, Oct 13 2026: a brand-new Google account on her S20 Ultra crashed right after
+  sign-up and on every open until she swiped everything away; the web app logged nothing in
+  that stretch, so the cause was native. This is a SAFETY NET for one class of crash, not a
+  confirmed fix for that one — the crash's stack trace (Play Console → Android vitals →
+  Crashes, or Android Studio Logcat with the phone plugged in, filter "FATAL") is still what
+  names it. Test (debug build, phone plugged in): Chrome on the PC → chrome://inspect → the
+  app's WebView → Console → `let a = []; for (;;) a.push(new Array(1e7).fill(1));` — the
+  renderer runs out of memory; the app must go blank for a second and come back at Home
+  instead of closing, and Logcat shows "onRenderProcessGone: crashed=true restarts=1".
