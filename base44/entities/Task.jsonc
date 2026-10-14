@@ -357,6 +357,11 @@
       },
       "description": "OneSignal ids of the hourly Focus Mode check-ins booked for this task. Kept separate from onesignal_notification_ids so exiting Focus Mode cancels only the check-ins and never a task's own reminders."
     },
+    "focus_mode_checkins_until": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the last booked Focus Mode check-in goes out. setFocusMode writes it on enter; cronRefillReminders books the next hour's check-ins when it is under two hours away, so a one-time or smart-reminder task in focus keeps getting its hourly check-in until it is done (Anna, Oct 13 2026). Cleared on exit."
+    },
     "completed_at": {
       "type": "string",
       "format": "date-time",
