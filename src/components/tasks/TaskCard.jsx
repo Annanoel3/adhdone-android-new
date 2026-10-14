@@ -489,6 +489,19 @@ export default function TaskCard({
       }
       return { label: evToday ? 'Today' : formatReminderDate(at), overdue: false, isTodayLabel: evToday };
     }
+    // A deadline ("by Friday", "sometime this week") is not the day the task
+    // happens, so the chip says "By Oct 18", not "Oct 18 • all day", and says
+    // Overdue once that day is gone (Anna, Oct 14 2026). The task itself sits
+    // under Today from the day it was said (start_date, see taskSchedule).
+    if (task.deadline_style === 'by' && task.due_date && !(task.recurrence_pattern && task.recurrence_pattern !== 'none')) {
+      const overdue = isPastDue(task.due_date) && task.status !== 'completed';
+      const dueToday = new Date(task.due_date).toDateString() === today.toDateString();
+      return {
+        label: overdue ? formatReminderDate(task.due_date) : dueToday ? 'Today' : `By ${formatReminderDate(task.due_date)}`,
+        overdue,
+        isTodayLabel: dueToday && !overdue,
+      };
+    }
     if (task.reminder_interval === 'once' && task.next_reminder) {
       // Multi-day events show the full span (e.g. "Dec 3 – Dec 7") on the
       // collapsed card instead of just the start date.
@@ -861,6 +874,9 @@ export default function TaskCard({
   // hasn't passed yet (or there's no due_date).
   const isInProgress = (() => {
     if (!task.start_date || task.status === 'completed') return false;
+    // A deadline's window ("by Friday", on Today until then) is not them
+    // having started on it — no badge for that.
+    if (task.deadline_style === 'by' && !(task.reminder_interval && task.reminder_interval !== 'once')) return false;
     if (new Date(task.start_date) > new Date()) return false;
     if (task.due_date && new Date(task.due_date) < new Date()) return false;
     return true;
@@ -1399,6 +1415,8 @@ export default function TaskCard({
                         const datePart = task.end_date && new Date(task.next_reminder).toDateString() !== new Date(task.end_date).toDateString()
                           ? formatEventDateRange()
                           : formatReminderDate(task.next_reminder);
+                        // A deadline reads as one: "By Oct 18" (Anna, Oct 14 2026).
+                        if (task.deadline_style === 'by' && !isEvent) return task.day_only_task ? `By ${datePart}` : `By ${datePart} • ${timeRange || formatReminderTime(task.next_reminder)}`;
                         if (task.day_only_task) return `${datePart} • all day`;
                         return `${datePart} • ${timeRange || formatReminderTime(task.next_reminder)}`;
                       })()}
