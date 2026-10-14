@@ -382,6 +382,44 @@ export default function ParkingLot() {
     }
   };
 
+  // Linked trackers show as ONE card (the oldest one's), with every tracker's
+  // latest reading on it, one Log box for all of them and one History chart.
+  // Anna, Oct 14 2026: "I had hoped to be able to see all bp and hr trends
+  // in one glance" — a heart rate card of its own was not that.
+  const groupOf = (t) => {
+    if (!t?.tracker) return [t].filter(Boolean);
+    const mates = (t.tracker_companions || []).map((id) => ideas.find((i) => i.id === id && i.tracker && !i.parent_idea_id)).filter(Boolean);
+    return [t, ...mates];
+  };
+  const groupTitle = (t) => groupOf(t).map((x) => x.idea).join(' · ');
+  // Shown inside an older companion's card rather than on its own.
+  const isSecondaryTracker = (t) => t?.tracker && groupOf(t).slice(1).some((m) => rowMs(m.created_date) < rowMs(t.created_date));
+
+  // One Log box for a linked group: the AI splits what was typed into a
+  // reading per tracker (with the note); anything it can't place goes to the
+  // card's own tracker, so nothing typed is ever lost.
+  const splitLogForGroup = async (text, group) => {
+    const list = group.map((t) => ({ id: t.id, name: t.idea }));
+    const prompt = `Someone logged this to the things they keep track of: "${text.slice(0, 500)}"
+Those things: ${JSON.stringify(list)}
+Give one item per reading, in order: {"log_to": "<its id>", "entry": "<the reading, as they said it, without its name>", "note": "<anything else they said that goes with it — when it was taken, what they had just done, eaten or taken, how they felt — in their words, else null>"}. Context that applies to the whole sentence goes on every item. Match by meaning, short forms included ("bp" is blood pressure, "hr" or "heart" is heart rate). Answer with JSON only: {"actions": [ ... ]}.`;
+    try {
+      const res = await base44.functions.invoke('categorizeIdea', { prompt });
+      const raw = String(res?.data?.message || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+      const out = JSON.parse(raw);
+      const actions = (Array.isArray(out?.actions) ? out.actions : []).filter((a) => a && typeof a === 'object');
+      const placed = [];
+      for (const a of actions) {
+        const target = group.find((t) => t.id === a.log_to);
+        const entry = typeof a.entry === 'string' ? a.entry.trim() : '';
+        if (target && entry) placed.push({ target, entry, note: typeof a.note === 'string' ? a.note.trim() : '' });
+      }
+      return placed;
+    } catch (e) {
+      return [];
+    }
+  };
+
   // The day a reminder repeats on: the one it already had, else today's.
   const remindDayFor = (tracker, choice) => {
     if (tracker?.tracker_remind === choice && tracker?.tracker_remind_day != null) return Number(tracker.tracker_remind_day);
@@ -448,8 +486,15 @@ export default function ParkingLot() {
     if (!logFor || !text) return;
     setTrackerBusy(true);
     try {
-      await addTrackerEntry(logFor, text);
-      toast({ title: `Logged to ${logFor.idea}` });
+      const group = groupOf(logFor);
+      const placed = group.length > 1 ? await splitLogForGroup(text, group) : [];
+      if (placed.length) {
+        for (const { target, entry, note } of placed) await addTrackerEntry(target, entry, note);
+        toast({ title: `Logged to ${placed.map((x) => x.target.idea).join(' · ')}` });
+      } else {
+        await addTrackerEntry(logFor, text);
+        toast({ title: `Logged to ${logFor.idea}` });
+      }
       setLogFor(null);
       setLogText("");
       refreshIdeas();
@@ -468,7 +513,9 @@ export default function ParkingLot() {
       if (at < 0) return;
       list.splice(at, 1);
       await base44.entities.ParkingLotIdea.update(tracker.id, { tracker_entries: list });
-      setHistoryFor({ ...(fresh || tracker), tracker_entries: list });
+      // A companion's entry (one History for the linked group): the dialog
+      // stays on the card's own tracker and re-reads the companion from the list.
+      if (tracker.id === historyFor?.id) setHistoryFor({ ...(fresh || tracker), tracker_entries: list });
       refreshIdeas();
     } catch (e) {
       toast({ title: "Couldn't remove that", description: 'Try again in a moment.' });
@@ -749,8 +796,9 @@ Return ONLY the category name, nothing else.`;
   const topLevelIdeas = ideas.filter(i => !i.parent_idea_id);
   
   const filteredIdeas = topLevelIdeas.filter(idea => {
+    if (isSecondaryTracker(idea)) return false; // shown on its older companion's card
     const matchesSearch = searchQuery === "" || 
-      idea.idea.toLowerCase().includes(searchQuery.toLowerCase());
+      (idea.tracker ? groupTitle(idea) : idea.idea).toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = categoryFilter === "all" || 
       idea.category === categoryFilter;
     return matchesSearch && matchesCategory;
@@ -1165,7 +1213,7 @@ Return ONLY the category name, nothing else.`;
                         specialMode !== 'normal' ? `${specialMode}-title` :
                         theme === 'dark' ? 'text-gray-100' : 'text-gray-900'
                       }`}>
-                        {group.parent.idea}
+                        {group.parent.tracker ? groupTitle(group.parent) : group.parent.idea}
                       </h3>
                     </div>
                     {group.parent.category && (
@@ -1262,14 +1310,26 @@ Return ONLY the category name, nothing else.`;
                   const t = group.parent;
                   const entries = t.tracker_entries || [];
                   const last = entries[entries.length - 1];
+                  // Linked trackers: the latest reading of each. Taken together
+                  // (same minute, same note) they read as one line.
+                  const mates = groupOf(t);
+                  const lasts = mates.map((m) => ({ name: m.idea, last: (m.tracker_entries || []).slice(-1)[0] })).filter((x) => x.last);
+                  const together = lasts.length > 1 && lasts.every((x) => Math.abs(rowMs(x.last.at) - rowMs(lasts[0].last.at)) < 2 * 60 * 1000 && (x.last.note || '') === (lasts[0].last.note || ''));
+                  const line = (text, at, note) => (
+                    <p className={`text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <span className="font-semibold">{text}</span>
+                      <span className="text-gray-500"> · {formatLogTime(at)}</span>
+                      {note ? <span className="block text-xs text-gray-500 italic">{note}</span> : null}
+                    </p>
+                  );
                   return (
                     <div className={`mt-2 p-3 rounded-lg ${theme === 'dark' ? 'bg-gray-900/50' : 'bg-white/70'}`}>
-                      {last ? (
-                        <p className={`text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                          <span className="font-semibold">{last.text}</span>
-                          <span className="text-gray-500"> · {formatLogTime(last.at)}</span>
-                          {last.note ? <span className="block text-xs text-gray-500 italic">{last.note}</span> : null}
-                        </p>
+                      {mates.length > 1 && lasts.length ? (
+                        together
+                          ? line(lasts.map((x) => x.last.text).join(' · '), lasts[0].last.at, lasts[0].last.note)
+                          : <div className="space-y-1">{lasts.map((x) => <React.Fragment key={x.name}>{line(`${x.name} ${x.last.text}`, x.last.at, x.last.note)}</React.Fragment>)}</div>
+                      ) : last ? (
+                        line(last.text, last.at, last.note)
                       ) : (
                         <p className="text-sm text-gray-500">Nothing logged yet.</p>
                       )}
@@ -1629,12 +1689,12 @@ Return ONLY the category name, nothing else.`;
       <Dialog open={!!logFor} onOpenChange={(o) => { if (!o) { setLogFor(null); setLogText(""); } }}>
         <DialogContent className="max-w-sm w-[calc(100vw-2rem)]">
           <DialogHeader>
-            <DialogTitle>Log: {logFor?.idea}</DialogTitle>
+            <DialogTitle>Log: {logFor ? groupTitle(logFor) : ''}</DialogTitle>
           </DialogHeader>
           <Textarea
             value={logText}
             onChange={(e) => setLogText(e.target.value)}
-            placeholder="What do you want to log?"
+            placeholder={logFor && groupOf(logFor).length > 1 ? `e.g. ${groupOf(logFor).map((t) => t.idea).join(' and ')}, plus anything about the moment` : "What do you want to log?"}
             className={`min-h-[90px] ${theme === 'dark' ? 'bg-gray-800 text-gray-100 border-gray-700' : ''}`}
             autoFocus
           />
@@ -1655,7 +1715,6 @@ Return ONLY the category name, nothing else.`;
             <DialogTitle>{[historyFor?.idea, ...((historyFor?.tracker_companions || []).map((id) => ideas.find((i) => i.id === id && i.tracker)?.idea).filter(Boolean))].join(' · ')}</DialogTitle>
           </DialogHeader>
           {(() => {
-            const entries = historyFor?.tracker_entries || [];
             // One chart for this tracker and the ones its readings arrive with
             // (tracker_companions): every entry is a row in time order, each
             // line drawn through its own rows (connectNulls bridges the rest).
@@ -1698,24 +1757,31 @@ Return ONLY the category name, nothing else.`;
                     </ResponsiveContainer>
                   </div>
                 )}
-                {entries.length === 0 ? (
-                  <p className="text-sm text-gray-500">Nothing logged yet.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {[...entries].reverse().map((e, i) => (
-                      <div key={`${e.at}-${i}`} className={`flex items-start justify-between gap-2 p-2 rounded-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                        <div className="min-w-0">
-                          <p className="text-sm whitespace-pre-wrap break-words">{e.text}</p>
-                          {e.note ? <p className="text-xs text-gray-500 italic whitespace-pre-wrap break-words">{e.note}</p> : null}
-                          <p className="text-xs text-gray-500">{formatLogTime(e.at)}</p>
+                {(() => {
+                  // Every tracker in the linked group, newest first, each
+                  // entry named after its tracker when there is more than one.
+                  const listed = [historyFor, ...companions].filter(Boolean)
+                    .flatMap((t) => (t.tracker_entries || []).map((e) => ({ e, t })))
+                    .sort((x, y) => rowMs(y.e.at) - rowMs(x.e.at));
+                  return listed.length === 0 ? (
+                    <p className="text-sm text-gray-500">Nothing logged yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {listed.map(({ e, t }, i) => (
+                        <div key={`${t.id}-${e.at}-${i}`} className={`flex items-start justify-between gap-2 p-2 rounded-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}>
+                          <div className="min-w-0">
+                            <p className="text-sm whitespace-pre-wrap break-words">{companions.length > 0 ? <span className="text-gray-500">{t.idea} </span> : null}{e.text}</p>
+                            {e.note ? <p className="text-xs text-gray-500 italic whitespace-pre-wrap break-words">{e.note}</p> : null}
+                            <p className="text-xs text-gray-500">{formatLogTime(e.at)}</p>
+                          </div>
+                          <button onClick={() => removeTrackerEntry(t, e)} className="text-gray-400 hover:text-red-600 p-1 flex-shrink-0" aria-label="Remove this entry">
+                            <X className="w-4 h-4" />
+                          </button>
                         </div>
-                        <button onClick={() => removeTrackerEntry(historyFor, e)} className="text-gray-400 hover:text-red-600 p-1 flex-shrink-0" aria-label="Remove this entry">
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  );
+                })()}
               </>
             );
           })()}
