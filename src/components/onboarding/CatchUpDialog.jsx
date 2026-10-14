@@ -123,6 +123,9 @@ export default function CatchUpDialog({ user }) {
     // The name re-ask doesn't stand in for the catch-up: the about-you
     // question still comes after their first checked-off task.
     markStepDone(kind === 'name' ? NAME_RETRY_STEP : ONBOARDING_STEPS.catchUp);
+    // Done with an onboarding chat: the App Guide's red dot (see
+    // WelcomeDialog), unless they've opened the guide already.
+    if (!isStepDone(ONBOARDING_STEPS.guideSeen)) markStepDone(ONBOARDING_STEPS.guideNudge);
   };
 
   return (
