@@ -5,6 +5,17 @@ Not after. Not "if it seems relevant." First. Every conversation.
 Most of the mistakes this file exists to prevent were not caused by the rules being
 missing — they were caused by starting to talk before reading them.
 
+## 0. CHANGE ONLY WHAT WAS ASKED — NEVER ADD BEHAVIOR NOBODY REQUESTED
+
+**Sept 4 2026 a builder commit ("Force all-day tasks for silent shared items and prevent time prompts") was asked to STOP a prompt and instead invented a NEW one: ask "when?" for undated appointments. It sat unnoticed for 40 days, and on Oct 14 2026 a real user got four "when?" questions in a row and left the app.**
+
+Rules that follow from it:
+- Do exactly the requested change. No new carve-outs, exceptions, prompts, questions, rules, defaults or "while I'm here" behavior — in code OR in LLM prompts (`base44/shared/taskParsePrompt.ts` and every other prompt count as code).
+- A request to REMOVE or REDUCE something must never ADD something. If a rewrite seems to need a new case, stop and ask Anna first.
+- Never add anything that interrupts the user (a question, popup, dialog, extra notification) unless Anna explicitly asked for that exact interruption.
+- In the final message, say plainly every behavior that changed. If anything beyond the ask changed, that is a bug — revert it.
+- The app never asks "when?" or "how urgent?" when a task is captured (Anna, Oct 14 2026). Don't bring either back.
+
 ## 1. NO BASE44 LLM — EVER
 
 **This is a hard, non-negotiable rule. Never call `base44.integrations.Core.InvokeLLM` or `base44.asServiceRole.integrations.Core.InvokeLLM` anywhere in this codebase — not in backend functions, not in frontend components, not in utilities. No exceptions.**
