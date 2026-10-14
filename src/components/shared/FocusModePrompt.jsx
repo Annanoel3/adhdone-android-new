@@ -47,6 +47,21 @@ function broadcast(taskId) {
   );
 }
 
+// Focus Mode's morning offer, as setFocusMode leaves it on the profile: the
+// task whose session paused for quiet hours, asked about from the end of quiet
+// hours (when the push goes out) until they start again. Outside that window
+// there is nothing to ask.
+function offerFrom(u) {
+  const id = u?.focus_mode_offer_task_id;
+  if (!id) return null;
+  const from = Date.parse(u.focus_mode_offer_from || "");
+  const until = Date.parse(u.focus_mode_offer_until || "");
+  const now = Date.now();
+  if (!from || !until || now < from || now >= until) return null;
+  return { taskId: id, until };
+}
+const MORNING_DISMISSED_KEY = "focus_morning_dismissed";
+
 export default function FocusModePrompt({ user, theme }) {
   const [focusTaskId, setFocusTaskId] = useState(user?.focus_mode_task_id || null);
   const [open, setOpen] = useState(false);
@@ -54,19 +69,61 @@ export default function FocusModePrompt({ user, theme }) {
 
   // The morning question (Anna, Oct 13 2026). Quiet hours just start — the
   // check-ins stop for the night, nothing asks anyone to stay up — and at
-  // their end a push asks "pick up where you left off?". Tapping it opens the
-  // app on /Home?focusMorning=<taskId>, which is this dialog: continue (the
-  // hourly check-ins resume) or let it go (Focus Mode ends, everything back
-  // to normal).
+  // their end a push asks "pick up where you left off?" (tapping it opens the
+  // app on /Home?focusMorning=<taskId>). Anna, Oct 14 2026: unanswered, the
+  // session ends on its own (cronRefillReminders), but opening the app that
+  // day — until quiet hours start again — still asks, from the offer on the
+  // profile (offerFrom). Continue: Focus Mode is (back) on that task until
+  // it's done or quiet hours. Let it go: Focus Mode ends, everything back to
+  // normal.
   const location = useLocation();
   const navigate = useNavigate();
   const morningTaskId = new URLSearchParams(location.search).get("focusMorning");
+  const [morningOffer, setMorningOffer] = useState(() => offerFrom(user));
+  const [morningTask, setMorningTask] = useState(null); // the task to ask about, once it's loaded and still active
   const [quietBusy, setQuietBusy] = useState(false);
+  let morningDismissed = false;
+  try { morningDismissed = sessionStorage.getItem(MORNING_DISMISSED_KEY) === (morningOffer?.taskId || ""); } catch {}
+  // A tap on the push always asks; the profile's offer asks until tucked away this app session.
+  const askAboutId = morningTaskId || (morningOffer && !morningDismissed ? morningOffer.taskId : null);
+  useEffect(() => {
+    if (!askAboutId) { setMorningTask(null); return; }
+    let gone = false;
+    (async () => {
+      try {
+        const t = await base44.entities.Task.get(askAboutId);
+        if (gone) return;
+        // Finished meanwhile (or not theirs any more): nothing to pick up.
+        setMorningTask(t && t.status === "active" ? t : null);
+      } catch {
+        if (!gone) setMorningTask({ id: askAboutId, title: "" });
+      }
+    })();
+    return () => { gone = true; };
+  }, [askAboutId]);
+  const closeMorning = () => {
+    setMorningOffer(null);
+    setMorningTask(null);
+    if (morningTaskId) navigate("/Home", { replace: true });
+  };
+  const dismissMorning = () => {
+    try { if (askAboutId) sessionStorage.setItem(MORNING_DISMISSED_KEY, askAboutId); } catch {}
+    closeMorning();
+  };
   const answerMorning = async (choice) => {
+    const id = morningTask?.id || askAboutId;
     setQuietBusy(true);
     try {
       if (choice === "continue") {
-        await base44.functions.invoke("setFocusMode", { action: "morning" });
+        const res = await base44.functions.invoke("setFocusMode", { action: "morning", taskId: id });
+        const r = res?.data || res;
+        if (r?.success) {
+          sessionStorage.removeItem("focus_popup_hidden");
+          broadcast(id);
+        } else {
+          console.warn("[FocusMode] morning continue declined:", r?.error);
+          syncFocusFromServer();
+        }
       } else {
         await base44.functions.invoke("setFocusMode", { action: "exit" });
         sessionStorage.removeItem("focus_popup_hidden");
@@ -77,7 +134,7 @@ export default function FocusModePrompt({ user, theme }) {
       console.warn("[FocusMode] morning answer failed:", e?.message || e);
     } finally {
       setQuietBusy(false);
-      navigate("/Home", { replace: true });
+      closeMorning();
     }
   };
   const [focusTask, setFocusTask] = useState(null);
@@ -144,7 +201,10 @@ export default function FocusModePrompt({ user, theme }) {
       setFocusTaskId(tid);
       setMode(tid ? "active" : "offer");
       setEnteredAt(me?.focus_mode_entered_at || null);
-      if (tid) setOpen(true);
+      const offer = offerFrom(me);
+      setMorningOffer(offer);
+      // The morning question comes first; the session popup follows the answer.
+      if (tid && !offer) setOpen(true);
     } catch (e) {
       console.error("FocusMode sync error:", e);
     }
@@ -209,8 +269,9 @@ export default function FocusModePrompt({ user, theme }) {
   useEffect(() => {
     if (!user?.email || !focusTaskId) return;
     if (sessionStorage.getItem("focus_popup_hidden") === "1") return;
+    if (askAboutId) return; // the morning question is up (or about to be); never two popups at once
     waitForTourEnd().then(() => setOpen(true));
-  }, [user?.email, focusTaskId]);
+  }, [user?.email, focusTaskId, askAboutId]);
 
   // Completing the focus task ANYWHERE (task card, notification, subtask flow)
   // ends the session — normal reminders come back immediately instead of the
@@ -589,12 +650,12 @@ export default function FocusModePrompt({ user, theme }) {
         </button>
       )}
 
-      <Dialog open={!!morningTaskId} onOpenChange={(o) => { if (!o && !quietBusy) navigate("/Home", { replace: true }); }}>
+      <Dialog open={!!morningTask} onOpenChange={(o) => { if (!o && !quietBusy) dismissMorning(); }}>
         <DialogContent className={`max-w-sm ${cardClass}`}>
           <DialogHeader>
             <DialogTitle>Good morning ☀️</DialogTitle>
             <DialogDescription>
-              Pick up where you left off? Your focus session is still on; the other reminders stay quiet while it is.
+              Pick up {morningTask?.title ? <>"{morningTask.title}"</> : "your task"} where you left off? Continue and Focus Mode is back on it until it's done or quiet hours start; the other reminders stay quiet while it is.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2 pt-2">
