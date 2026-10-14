@@ -7,6 +7,7 @@ import { startAlertLoop, stopAlertLoop } from '@/components/utils/alertLoop';
 import { getLaunchAlertSound, COMPLETION_SOUNDS } from '@/components/utils/completionSounds';
 import { timerAlarmsSupported, bookOwnAlarm, cancelOwnAlarm, requestAlarmPermissions } from '@/components/utils/widgetBridge';
 import SprintPopup from '@/components/launch/SprintPopup';
+import { checkInPlan, sayCheckIn, voiceCheckInsOn, speechAvailable } from '@/components/utils/speak';
 import { Timer } from 'lucide-react';
 import { readThemeState, chipClasses } from '@/components/utils/launchTheme';
 import { toast } from '@/components/ui/use-toast';
@@ -229,6 +230,9 @@ export function LaunchProvider({ children }) {
       title: task.title,
       stopwatch: true,
       startedAtISO: new Date().toISOString(),
+      // How long this usually takes (from past timed sessions), so the voice
+      // can speak up when that mark passes (speak.js).
+      estimateMin: Number(task.typical_minutes) > 0 ? Math.round(Number(task.typical_minutes)) : null,
       // Kept so nothing that reads a session's end breaks; never reached.
       endTimeISO: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
       notifId: null,
@@ -343,6 +347,37 @@ export function LaunchProvider({ children }) {
     stopAfterSprint(sp);
     finishTimerTask(sp);
   }, [stopAfterSprint]);
+
+  // Spoken check-ins while a timer runs (speak.js, Anna Oct 13 2026).
+  // One timeout at a time, for the next one due; redone whenever the session
+  // changes (a stopwatch's pause moves its start, so its plan moves too) and
+  // paused along with a paused stopwatch. A check-in whose moment went by
+  // while the app was asleep is only spoken if it is under 90 seconds late —
+  // a stack of stale ones after an hour away would just be noise. Lives here,
+  // not in the popup, so the voice keeps going with the popup tucked away.
+  const spokenRef = useRef(new Set());
+  useEffect(() => {
+    if (!sprint || sprintEnded || sprint.pausedAtISO) return undefined;
+    if (!voiceCheckInsOn() || !speechAvailable()) return undefined;
+    const sessionKey = sprint.stopwatch
+      ? `sw:${sprint.taskId}:${sprint.startedAtISO}`
+      : `cd:${sprint.taskId}:${sprint.endTimeISO}`;
+    let timer = null;
+    const arm = () => {
+      const now = Date.now();
+      const plan = checkInPlan(sprint).filter((c) => !spokenRef.current.has(`${sessionKey}:${c.key}`));
+      plan.filter((c) => c.at < now - 90 * 1000).forEach((c) => spokenRef.current.add(`${sessionKey}:${c.key}`));
+      const next = plan.find((c) => c.at >= now - 90 * 1000);
+      if (!next) return;
+      timer = setTimeout(() => {
+        spokenRef.current.add(`${sessionKey}:${next.key}`);
+        sayCheckIn(next.text);
+        arm();
+      }, Math.max(0, next.at - now));
+    };
+    arm();
+    return () => { if (timer) clearTimeout(timer); };
+  }, [sprint, sprintEnded]);
 
   // A button tapped on the alarm screen lands here as ?sprint=keep,
   // ?sprint=finish or ?sprint=stop. The query is cleared first so a remount
