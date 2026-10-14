@@ -394,6 +394,15 @@ async function handleTaskEvent(req: Request): Promise<Response> {
         } catch (e) {
           console.error('[onTaskUpdate] clear focus state failed:', e);
         }
+        // Everything back to normal now: the other recurring reminders that
+        // went quiet for the session are booked again at once (the refill job,
+        // scoped to this account) rather than at its next hourly run. Anna,
+        // Oct 13 2026: "then everything goes back to normal".
+        try {
+          await base44.asServiceRole.functions.invoke('cronRefillReminders', { onlyEmail: user.email });
+        } catch (e) {
+          console.warn('[onTaskUpdate] could not rebook the other reminders right away; the hourly job will:', e);
+        }
       }
     }
 
