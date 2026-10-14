@@ -292,11 +292,12 @@ deadline_style — "on" if the thing happens ON that day or AT that time and
   the 20th"). Judge what the person means, for a clock time as much as for a
   day: "at 5" is a moment, "by 5" is a deadline.
 
-needs_date_pick — almost always false. A day with no clock time is an ALL-DAY
-  thing and needs nothing from the user, so never set this just because a time
-  is missing: set day_only_task instead. Only true when the user gave NO day at
-  all and the thing genuinely can't exist without one (an appointment they said
-  they need to schedule). Never true when target_date is filled in.
+needs_date_pick — always false. The app never asks the person for a day. A
+  thing with no day is a to-do the app nudges about on its own (target_date
+  null); a day with no clock time is an all-day thing (day_only_task). "Need
+  to make an appointment for the dentist" has no day and gets none — making
+  the appointment IS the task. (Oct 14 2026: four such appointments typed at
+  once became four "when?" questions in a row; the third was never answered.)
 
 user_asked_to_repeat_every — answer ONLY this narrow question: did the user
   ask to be pinged OVER AND OVER at a fixed rhythm until they've done it?
