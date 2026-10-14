@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Timer, PartyPopper } from 'lucide-react';
+import { Timer, PartyPopper, Volume2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import KeepAppOpenNote from '@/components/shared/KeepAppOpenNote';
-import { speak } from '@/components/utils/speak';
+import { speak, voiceCheckInsOn, speechAvailable } from '@/components/utils/speak';
 import { timerAlarmsSupported } from '@/components/utils/widgetBridge';
 import {
   surfaceClasses,
@@ -81,16 +81,19 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
     return () => clearInterval(id);
   }, [ended, endTime]);
 
+  // The voice (speak.js): on unless turned off in Settings → Reminders.
+  const voiceOn = voiceCheckInsOn() && speechAvailable();
+
   // Say it out loud: a quiet chime is easy to miss, and this is the moment to
-  // decide whether to keep going.
+  // decide whether to keep going. Quiet when the voice is off.
   useEffect(() => {
-    if (!ended) return;
+    if (!ended || !voiceOn) return;
     const t = setTimeout(
       () => speak(`Your ${minutesWord(totalMin)} ${totalMin === 1 ? 'is' : 'are'} up. Would you like to keep going?`),
       400
     );
     return () => clearTimeout(t);
-  }, [ended, totalMin]);
+  }, [ended, totalMin, voiceOn]);
 
   const clock = (ms) => {
     const s = Math.floor(ms / 1000);
@@ -173,6 +176,11 @@ export default function SprintPopup({ session, ended, onComplete, onKeepGoing, o
 
             {!stopwatch && !timerAlarmsSupported() && (
               <KeepAppOpenNote className="mb-1" text="Keep the app open — closing it stops the timer." />
+            )}
+            {voiceOn && (
+              <p className={`text-xs mb-1 flex items-center justify-center gap-1 ${subtle}`}>
+                <Volume2 className="w-3.5 h-3.5" /> Turn your volume up to stay on track.
+              </p>
             )}
             <p className={`text-xs ${subtle}`}>
               {stopwatch
