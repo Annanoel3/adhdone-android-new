@@ -205,7 +205,6 @@ export async function keepEarliest(captureId, myTaskId) {
 // Processes ONE piece of a capture. Resolves to a descriptor:
 //   { status: 'done', taskId?, kind? }   (kind: 'idea' | 'feedback' | 'birthday' when it wasn't a task)
 //   { status: 'needs_priority', data }
-//   { status: 'needs_date', data }
 //   { status: 'error', message }
 //   { status: 'handed_off' }   (the capture went to the server meanwhile; nothing saved here)
 export async function processAndCreateTask(inputText, opts = {}) {
@@ -431,28 +430,14 @@ export async function processAndCreateTask(inputText, opts = {}) {
       };
     }
 
-    if (parsed.needs_date_pick) {
-      return {
-        status: 'needs_date',
-        data: {
-          title: parsed.title || inputText.trim(),
-          original_input: inputText,
-          reminder_wish: parsed.reminder_wish || null,
-          location: parsed.location || null,
-          energy_required: parsed.energy_required || 'medium',
-          urgency: parsed.urgency || 'medium',
-          initialDate: parsed.target_date || null,
-          initialTime: parsed.target_time || null,
-          classification: parsed.classification || 'task',
-          takes_time: parsed.takes_time === true,
-          life_area: parsed.life_area === 'work' ? 'work' : 'personal',
-          end_date: parsed.end_date || null,
-          presetDueDateISO,
-          captureId,
-          currentUser
-        }
-      };
-    }
+    // The app never asks "when?" (Anna, Oct 14 2026: "the app didn't use to
+    // ask when... that's not by design"). A task with no day is made with no
+    // day — Smart Reminders take it from there — the same as the share sheet,
+    // the pinned notification and a hand-off to the server already did.
+    // Until today the parser could set needs_date_pick for "an appointment
+    // they said they need to schedule", and four appointments typed at once
+    // became four "when?" questions in a row; the third was never answered.
+    parsed.needs_date_pick = false;
 
     let nextReminder = null;
     let actualReminderInterval = parsed.reminder_interval || null;
