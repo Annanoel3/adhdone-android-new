@@ -397,8 +397,9 @@ takes_time — true when DOING it is a stretch of hands-on work someone might
   event. Judge by the work itself, not the words used for it.
 
 is_flexible — true when the task can be done any day. priority_uninferrable —
-  true only if the input is so vague that no urgency can be guessed at all;
-  this should be almost never, so default urgency "medium" instead.
+  always false. The app never asks the person how urgent something is: make
+  your best call in urgency ("medium" when nothing says otherwise) and they
+  can change it on the card if it's wrong.
 
 life_area — "work" if this belongs to the user's job / professional life,
   "personal" for everything else (home, family, health, errands, fun). Use
