@@ -103,6 +103,26 @@ const localISO = (dateStr, h, min) => {
   return new Date(y, m - 1, d, h, min, 0, 0).toISOString();
 };
 
+// "Sometime this week", "by Friday", "before the 20th": a DEADLINE, not the
+// day the task happens. It belongs on Today from the moment it was said until
+// that day (Anna, Oct 14 2026: "by a certain date ... means that it should be
+// on my task list for today and every day of this week"), the way a task with
+// a start date already works everywhere (todayTasks.getTaskDueLocalDate,
+// TaskSections, the digest, the widget, the calendar). Without this the app
+// pinned "get a watch battery sometime this week" to the deadline day under
+// Next 7 Days as "Oct 18 • all day". Returns the start_date to save, or null
+// when there is no window: no "by", a deadline that is today or already past,
+// or a thing tied to its day (an event, a birthday, a repeat).
+export function deadlineWindowStart(parsed, dueISO, now = new Date()) {
+  if (!parsed || parsed.deadline_style !== 'by' || !dueISO) return null;
+  if (parsed.classification === 'event' || parsed.classification === 'birthday') return null;
+  if (parsed.recurrence_pattern && parsed.recurrence_pattern !== 'none') return null;
+  const due = new Date(dueISO);
+  if (isNaN(due.getTime())) return null;
+  const dayOf = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  return dayOf(due) > dayOf(now) ? now.toISOString() : null;
+}
+
 // Turns a parsed task into its concrete schedule fields.
 export function deriveSchedule(parsed, now = new Date()) {
   const out = { interval: parsed?.reminder_interval || null, nextReminder: null, dueDateISO: null, endDateISO: null, eventTimeISO: null };
