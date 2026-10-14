@@ -1,5 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
-import { adjustForQuietHours, localMinutesOfDay, resolveQuietHours, userTimeZone } from '../../shared/quietHours.ts';
+import { adjustForQuietHours, isInQuietHours, localMinutesOfDay, resolveQuietHours, userTimeZone } from '../../shared/quietHours.ts';
 import { FOCUS_MODE_INTERVAL, FOCUS_MODE_INTERVAL_MS, getFocusModeContent } from '../../shared/focusMode.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
@@ -18,6 +18,107 @@ async function cancelOneSignal(ids: string[]) {
       headers: { Authorization: `Basic ${ONESIGNAL_REST_API_KEY}` }
     })
   ));
+}
+
+// The next moment quiet hours begin, on the owner's clock, at or after `fromMs`
+// (null when quiet hours are off or start and end coincide).
+function nextQuietStartMs(fromMs: number, startMin: number, endMin: number, timeZone: string): number | null {
+  if (startMin === endMin) return null;
+  const base = Math.floor(fromMs / 60000) * 60000;
+  for (let i = 0; i <= 24 * 60; i++) {
+    const t = base + i * 60000;
+    if (localMinutesOfDay(new Date(t), timeZone) === startMin) return t;
+  }
+  return null;
+}
+
+// Books the hourly "how's it going?" check-ins from `fromMs`, up to six, and
+// returns their ids with the last one's time. Quiet hours move a slot to their
+// end (one such slot is kept) unless `throughQuiet` — the person answered the
+// quiet-hours question with "keep going".
+async function bookCheckins(base44: any, user: any, focusTask: any, fromMs: number, throughQuiet: boolean) {
+  const { enabled: quietEnabled, startMin, endMin } = resolveQuietHours(user);
+  const timeZone = userTimeZone(user);
+  const useQuiet = quietEnabled && !throughQuiet && focusTask.quiet_hours_exempt !== true;
+  const now = Date.now();
+  const slots: Date[] = [];
+  let lastPlanned: Date | null = null;
+  let scheduleTime = fromMs + FOCUS_MODE_INTERVAL_MS;
+  for (let i = 0; i < 6; i++, scheduleTime += FOCUS_MODE_INTERVAL_MS) {
+    let sendAt = new Date(scheduleTime);
+    if (useQuiet) {
+      sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
+      // Several night slots land on the same morning minute: one is enough.
+      if (lastPlanned && Math.abs(sendAt.getTime() - lastPlanned.getTime()) < 60000) continue;
+    }
+    if (sendAt.getTime() <= now) continue;
+    slots.push(sendAt);
+    lastPlanned = sendAt;
+  }
+  const { title, body } = getFocusModeContent(focusTask.title);
+  const booked = await Promise.all(slots.map(async (sendAt) => {
+    try {
+      const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+        internalKey: Deno.env.get('CRON_SECRET'), // proves this call comes from the app's own backend
+        toUserExternalId: user.email,
+        title,
+        body,
+        sendAtISO: sendAt.toISOString(),
+        data: { screen: '/TaskNotification', taskId: focusTask.id, urgency: focusTask.urgency || 'medium', type: 'task_reminder', focus: true },
+        buttons: [
+          { id: 'snooze_15', text: 'Snooze 15 min' },
+          { id: 'snooze_60', text: 'Snooze 1 hour' },
+          { id: 'complete', text: '✅ Done' }
+        ]
+      });
+      const r = res?.data || res;
+      return r?.notificationId ? { id: String(r.notificationId), sendAt } : null;
+    } catch (e) {
+      console.error('[setFocusMode] Failed to schedule focus check-in:', e);
+      return null;
+    }
+  }));
+  const ids: string[] = [];
+  let lastAt: Date | null = null;
+  for (const b of booked) {
+    if (!b) continue;
+    ids.push(b.id);
+    lastAt = b.sendAt;
+  }
+  return { ids, lastAt };
+}
+
+// The quiet-hours question (Anna, Oct 13 2026): a minute before quiet hours
+// start — or right away, for a session that starts inside them — one push:
+// "Quiet time usually starts now. Keep going until you finish, or pick this up
+// tomorrow morning?" A tap opens the app on that choice (FocusModePrompt).
+// Returns the push id and its time, or null when quiet hours are off or the
+// person already answered this session.
+async function bookQuietQuestion(base44: any, user: any, focusTask: any) {
+  if (focusTask.quiet_hours_exempt === true) return null;
+  const { enabled, startMin, endMin } = resolveQuietHours(user);
+  if (!enabled) return null;
+  const timeZone = userTimeZone(user);
+  const now = Date.now();
+  const inside = isInQuietHours(new Date(now), startMin, endMin, timeZone);
+  const startMs = inside ? now + 60000 : nextQuietStartMs(now, startMin, endMin, timeZone);
+  if (!startMs) return null;
+  const sendAt = new Date(inside ? startMs : startMs - 60000);
+  try {
+    const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+      internalKey: Deno.env.get('CRON_SECRET'),
+      toUserExternalId: user.email,
+      title: inside ? 'Quiet time has started' : 'Quiet time usually starts now',
+      body: `Still on "${(focusTask.title || '').trim() || 'your task'}"? Keep going until you finish, or pick this up tomorrow morning? Tap to choose.`,
+      sendAtISO: sendAt.toISOString(),
+      data: { screen: '/Home', taskId: focusTask.id, type: 'focus_quiet', focus: true },
+    });
+    const r = res?.data || res;
+    return r?.notificationId ? { id: String(r.notificationId), sendAt } : null;
+  } catch (e) {
+    console.error('[setFocusMode] Failed to book the quiet-hours question:', e);
+    return null;
+  }
 }
 
 export default async function(req: Request): Promise<Response> {
@@ -56,64 +157,12 @@ export default async function(req: Request): Promise<Response> {
       // cancelling them here is how a dated task lost its reminders for good.
       if (wasRecurring && ownIds.length) await cancelOneSignal(ownIds);
 
-      // Owner quiet hours (applied to the focus check-in batch). They default
-      // to ON — a profile that never touched the setting used to read as "off"
-      // here, so a late-night focus session booked check-ins at 1, 2, 3 AM.
-      // The shared timezone fallback applies when none is saved.
-      const { enabled: quietEnabled, startMin, endMin } = resolveQuietHours(user);
-      const timeZone = userTimeZone(user);
-      const useQuiet = quietEnabled;
-
+      // The six hourly check-ins (bookCheckins: quiet hours move a slot to
+      // their end), then the quiet-hours question for tonight.
       const now = Date.now();
-      const checkinIds: string[] = [];
-      let lastScheduledAt: Date | null = null;
-      let scheduleTime = now + FOCUS_MODE_INTERVAL_MS;
-
-      // Work out the six check-in moments first (the quiet-hours shuffle needs
-      // them in order), then book them all at once — six pushes one after the
-      // other was most of the wait behind "Keep going" and liftoff.
-      const slots: Date[] = [];
-      let lastPlanned: Date | null = null;
-      for (let i = 0; i < 6; i++) {
-        let sendAt = new Date(scheduleTime);
-        if (useQuiet) {
-          sendAt = adjustForQuietHours(sendAt, startMin, endMin, timeZone);
-          if (localMinutesOfDay(sendAt, timeZone) === endMin) { scheduleTime += FOCUS_MODE_INTERVAL_MS; continue; }
-          if (lastPlanned && Math.abs(sendAt.getTime() - lastPlanned.getTime()) < 60000) { scheduleTime += FOCUS_MODE_INTERVAL_MS; continue; }
-        }
-        if (sendAt.getTime() <= now) { scheduleTime += FOCUS_MODE_INTERVAL_MS; continue; }
-        slots.push(sendAt);
-        lastPlanned = sendAt;
-        scheduleTime += FOCUS_MODE_INTERVAL_MS;
-      }
-      const { title, body } = getFocusModeContent(focusTask.title);
-      const booked = await Promise.all(slots.map(async (sendAt) => {
-        try {
-          const res = await base44.asServiceRole.functions.invoke('schedulePush', {
-            internalKey: Deno.env.get('CRON_SECRET'), // proves this call comes from the app's own backend
-            toUserExternalId: user.email,
-            title,
-            body,
-            sendAtISO: sendAt.toISOString(),
-            data: { screen: '/TaskNotification', taskId, urgency: focusTask.urgency || 'medium', type: 'task_reminder', focus: true },
-            buttons: [
-              { id: 'snooze_15', text: 'Snooze 15 min' },
-              { id: 'snooze_60', text: 'Snooze 1 hour' },
-              { id: 'complete', text: '✅ Done' }
-            ]
-          });
-          const r = res?.data || res;
-          return r?.notificationId ? { id: String(r.notificationId), sendAt } : null;
-        } catch (e) {
-          console.error('[setFocusMode] Failed to schedule focus check-in:', e);
-          return null;
-        }
-      }));
-      for (const b of booked) {
-        if (!b) continue;
-        checkinIds.push(b.id);
-        lastScheduledAt = b.sendAt;
-      }
+      const { ids: checkinIds, lastAt: lastScheduledAt } = await bookCheckins(base44, user, focusTask, now, false);
+      const quietAsk = await bookQuietQuestion(base44, user, focusTask);
+      if (quietAsk) checkinIds.push(quietAsk.id);
 
       if (wasRecurring) {
         const newLastScheduledUntil = lastScheduledAt
@@ -128,6 +177,8 @@ export default async function(req: Request): Promise<Response> {
           focus_mode_original_next_reminder: focusTask.next_reminder || null,
           focus_mode_notification_ids: checkinIds,
           focus_mode_checkins_until: lastScheduledAt ? lastScheduledAt.toISOString() : null,
+          focus_mode_quiet_choice: null,
+          focus_mode_quiet_ask_at: quietAsk ? quietAsk.sendAt.toISOString() : null,
           onesignal_notification_ids: checkinIds,
           last_scheduled_until: newLastScheduledUntil,
           next_reminder: new Date(now + FOCUS_MODE_INTERVAL_MS).toISOString()
@@ -140,7 +191,9 @@ export default async function(req: Request): Promise<Response> {
         // keep the check-ins coming past these first six, until it's done.
         await base44.asServiceRole.entities.Task.update(taskId, {
           focus_mode_notification_ids: checkinIds,
-          focus_mode_checkins_until: lastScheduledAt ? lastScheduledAt.toISOString() : new Date(now).toISOString()
+          focus_mode_checkins_until: lastScheduledAt ? lastScheduledAt.toISOString() : new Date(now).toISOString(),
+          focus_mode_quiet_choice: null,
+          focus_mode_quiet_ask_at: quietAsk ? quietAsk.sendAt.toISOString() : null
         });
       }
 
@@ -191,6 +244,8 @@ export default async function(req: Request): Promise<Response> {
               focus_mode_original_next_reminder: null,
               focus_mode_notification_ids: [],
               focus_mode_checkins_until: null,
+              focus_mode_quiet_choice: null,
+              focus_mode_quiet_ask_at: null,
               onesignal_notification_ids: [],
               last_scheduled_until: null,
               next_reminder: nextStillAhead ? savedNext : null
@@ -200,10 +255,12 @@ export default async function(req: Request): Promise<Response> {
             await cancelOneSignal(checkinIds);
             await base44.asServiceRole.entities.Task.update(focusTaskId, {
               focus_mode_notification_ids: [],
-              focus_mode_checkins_until: null
+              focus_mode_checkins_until: null,
+              focus_mode_quiet_choice: null,
+              focus_mode_quiet_ask_at: null
             });
           } else {
-            await base44.asServiceRole.entities.Task.update(focusTaskId, { focus_mode_checkins_until: null }).catch(() => {});
+            await base44.asServiceRole.entities.Task.update(focusTaskId, { focus_mode_checkins_until: null, focus_mode_quiet_choice: null, focus_mode_quiet_ask_at: null }).catch(() => {});
           }
         }
       }
@@ -224,6 +281,41 @@ export default async function(req: Request): Promise<Response> {
       }
 
       return Response.json({ success: true, focusMode: false });
+    }
+
+    // The answer to the quiet-hours question. keep: the check-ins carry on
+    // through quiet hours until the task is done — tonight's deferred ones are
+    // replaced by hourly ones from now. morning: nothing to rebook; what is
+    // booked already waits for the end of quiet hours.
+    if (action === 'quiet') {
+      const choice = body.choice === 'keep' ? 'keep' : 'morning';
+      const focusTaskId = user.focus_mode_task_id;
+      if (!focusTaskId) return Response.json({ success: false, error: 'not_in_focus' });
+      const focusTask = await base44.asServiceRole.entities.Task.get(focusTaskId).catch(() => null);
+      if (!focusTask) return Response.json({ success: false, error: 'task_missing' });
+      if (choice === 'morning') {
+        await base44.asServiceRole.entities.Task.update(focusTaskId, { focus_mode_quiet_choice: 'morning' });
+        return Response.json({ success: true, choice });
+      }
+      const wasRecurring = !!focusTask.focus_mode_original_interval; // a recurring task's session keeps its check-ins in both id lists
+      const oldIds = Array.from(new Set([
+        ...(Array.isArray(focusTask.focus_mode_notification_ids) ? focusTask.focus_mode_notification_ids : []),
+        ...(wasRecurring && Array.isArray(focusTask.onesignal_notification_ids) ? focusTask.onesignal_notification_ids : []),
+      ]));
+      if (oldIds.length) await cancelOneSignal(oldIds);
+      const { ids, lastAt } = await bookCheckins(base44, user, focusTask, Date.now(), true);
+      const patch: any = {
+        focus_mode_quiet_choice: 'keep',
+        focus_mode_notification_ids: ids,
+        focus_mode_checkins_until: lastAt ? lastAt.toISOString() : new Date().toISOString(),
+      };
+      if (wasRecurring) {
+        patch.onesignal_notification_ids = ids;
+        patch.last_scheduled_until = lastAt ? lastAt.toISOString() : null;
+        patch.next_reminder = new Date(Date.now() + FOCUS_MODE_INTERVAL_MS).toISOString();
+      }
+      await base44.asServiceRole.entities.Task.update(focusTaskId, patch);
+      return Response.json({ success: true, choice, booked: ids.length });
     }
 
     return Response.json({ error: 'Unknown action' }, { status: 400 });
