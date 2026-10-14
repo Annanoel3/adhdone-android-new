@@ -357,18 +357,10 @@
       },
       "description": "OneSignal ids of the hourly Focus Mode check-ins booked for this task. Kept separate from onesignal_notification_ids so exiting Focus Mode cancels only the check-ins and never a task's own reminders."
     },
-    "focus_mode_quiet_choice": {
-      "type": "string",
-      "enum": [
-        "keep",
-        "morning"
-      ],
-      "description": "Focus Mode's answer to the quiet-hours question (Anna, Oct 13 2026: at the start of quiet hours, 'quiet time usually starts now \u2014 keep going until you finish, or pick this up tomorrow morning?'). keep: the hourly check-ins carry on through quiet hours until the task is done. morning: they wait for the end of quiet hours. Cleared on exit."
-    },
     "focus_mode_quiet_ask_at": {
       "type": "string",
       "format": "date-time",
-      "description": "When the quiet-hours question for this Focus Mode session was (or is) sent \u2014 a minute before quiet hours start, or right away for a session that starts inside them. Asked once per session. Cleared on exit."
+      "description": "When the morning question for this Focus Mode session goes out: at the end of the owner's quiet hours, 'pick up where you left off?' (Anna, Oct 13 2026: quiet hours just start \u2014 nothing asks anyone to stay up \u2014 and in the morning the app asks whether to continue the focus session). Booked on enter; cleared on exit."
     },
     "focus_mode_checkins_until": {
       "type": "string",
