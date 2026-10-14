@@ -4,7 +4,7 @@
 // Re-saved Oct 12 2026 (pets) so the bundled shared/reminderTitle.ts is picked up: a pet's birthday alarm has no "Write a text" button.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent, pushPhoneAlarms } from '../../shared/reminderTitle.ts';
-import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, isInQuietHours, placeAppReminder, wakeStartMs } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, resolveQuietHours, adjustForQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, isInQuietHours, placeAppReminder, wakeStartMs } from '../../shared/quietHours.ts';
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
@@ -89,12 +89,19 @@ Deno.serve(async (req) => {
     // CRON_SECRET, so a secret gate here would 401 every scheduled run and get
     // the automation disabled. The POST check is sufficient.
     const base44 = createClientFromRequest(req);
-    await ledgerPrune(base44);
+    // One account only (setFocusMode exit, onTaskUpdate when the focused task
+    // is finished): their recurring reminders come back right away instead of
+    // at the next hourly run. Only the recurring pass and the Focus Mode
+    // check-ins run in that mode.
+    const onlyEmail = await req.json().then((b: any) => (b && typeof b.onlyEmail === 'string' ? b.onlyEmail.trim() : '')).catch(() => '');
+    if (!onlyEmail) await ledgerPrune(base44);
 
     // EVERY active task, paged — not "the 500 most recently updated". Every pass
     // below only ever looks at active tasks.
-    const allTasks = await filterAll(base44.asServiceRole.entities.Task, { status: 'active' });
-    console.log(`📦 [REFILL] Active tasks fetched: ${allTasks.length}`);
+    const allTasks = onlyEmail
+      ? await filterAll(base44.asServiceRole.entities.Task, { status: 'active', notification_recipient_email: onlyEmail })
+      : await filterAll(base44.asServiceRole.entities.Task, { status: 'active' });
+    console.log(`📦 [REFILL] Active tasks fetched: ${allTasks.length}${onlyEmail ? ` (only ${onlyEmail})` : ''}`);
 
     // Tasks with no due date, no event time, and no start date are handled by
     // cronSmartTaskNudge (one intelligent nudge per hour) instead of interval
@@ -466,6 +473,87 @@ Deno.serve(async (req) => {
       } catch (error) {
         console.error(`❌ [REFILL] Failed to refill task ${task.id}:`, error);
       }
+    }
+
+    // ── Focus Mode check-ins, until the task is done ─────────────────────────
+    // setFocusMode books the first six hourly "how's it going?" check-ins. A
+    // recurring focus task then carries on through the pass above (its rhythm
+    // is 1hour for the session). A one-time or smart-reminder focus task has
+    // no rhythm, so after six hours it went quiet while still in focus. Anna,
+    // Oct 13 2026: "remind the user of whatever task they are focusing on once
+    // an hour until done". When the last booked check-in is under two hours
+    // out, the next six go on — hourly, through quiet hours as the owner set
+    // them (a slot inside quiet hours moves to their end; one of those is kept).
+    let focusCheckins = 0;
+    for (const owner of allUsers) {
+      const focusId = owner?.focus_mode_task_id;
+      if (!focusId || !owner?.email) continue;
+      if (onlyEmail && owner.email !== onlyEmail) continue;
+      const task = allTasks.find((t: any) => t.id === focusId);
+      if (!task || task.status !== 'active') continue;
+      if (task.reminder_interval && task.reminder_interval !== 'once' && intervalMsMap[task.reminder_interval]) continue; // the pass above keeps this one going
+      const H = 60 * 60 * 1000;
+      const untilMs = task.focus_mode_checkins_until ? new Date(task.focus_mode_checkins_until).getTime() : 0;
+      if (untilMs > now.getTime() + 2 * H) continue;
+      try {
+        const { enabled: fqEnabled, startMin: fqStart, endMin: fqEnd } = resolveQuietHours(owner);
+        const tz = userTimeZone(owner);
+        const slots: Date[] = [];
+        let t = Math.max(untilMs, now.getTime()) + H;
+        let lastPlanned = 0;
+        for (let i = 0; i < 6; i++, t += H) {
+          let sendAt = new Date(t);
+          if (fqEnabled) sendAt = adjustForQuietHours(sendAt, fqStart, fqEnd, tz);
+          if (sendAt.getTime() <= now.getTime()) continue;
+          if (lastPlanned && Math.abs(sendAt.getTime() - lastPlanned) < 60000) continue; // several moved to the same moment: one is enough
+          slots.push(sendAt);
+          lastPlanned = sendAt.getTime();
+        }
+        if (!slots.length) continue;
+        const { title, body } = getFocusModeContent(task.title);
+        const ids: string[] = [];
+        let lastAt: Date | null = null;
+        for (const sendAt of slots) {
+          const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+            internalKey: CRON_SECRET,
+            toUserExternalId: owner.email,
+            title,
+            body,
+            sendAtISO: sendAt.toISOString(),
+            data: { screen: '/TaskNotification', taskId: task.id, urgency: task.urgency || 'medium', type: 'task_reminder', focus: true },
+            buttons: [
+              { id: 'snooze_15', text: 'Snooze 15 min' },
+              { id: 'snooze_60', text: 'Snooze 1 hour' },
+              { id: 'complete', text: '✅ Done' }
+            ]
+          });
+          const r = res?.data || res;
+          if (r?.notificationId) { ids.push(String(r.notificationId)); lastAt = sendAt; }
+          else if (r && r.success === false) break;
+        }
+        if (!ids.length) continue;
+        // Still in focus on this task? (The run takes a while.)
+        const fresh = await base44.asServiceRole.entities.Task.get(task.id).catch(() => null);
+        const ownerNow = await base44.asServiceRole.entities.User.get(owner.id).catch(() => null);
+        if (!fresh || fresh.status !== 'active' || !ownerNow || ownerNow.focus_mode_task_id !== task.id) {
+          await cancelJustBooked(base44, ids);
+          continue;
+        }
+        await base44.asServiceRole.entities.Task.update(task.id, {
+          focus_mode_notification_ids: [...(Array.isArray(fresh.focus_mode_notification_ids) ? fresh.focus_mode_notification_ids : []), ...ids],
+          focus_mode_checkins_until: (lastAt || slots[slots.length - 1]).toISOString(),
+        });
+        focusCheckins += ids.length;
+        console.log(`🎯 [REFILL] Booked ${ids.length} more Focus Mode check-ins for "${task.title}" (${owner.email}), last at ${(lastAt || slots[slots.length - 1]).toISOString()}`);
+      } catch (e) {
+        console.error(`[REFILL] Focus Mode check-ins failed for ${owner.email}:`, e);
+      }
+    }
+
+    if (onlyEmail) {
+      const scoped = { success: true, onlyEmail, refilled, skipped, focusCheckins, at: now.toISOString() };
+      console.log('✅ [REFILL] Complete (one account):', scoped);
+      return Response.json(scoped);
     }
 
     // ── Birthday reminders (yearly recurring) ───────────────────────────────────
@@ -1271,7 +1359,7 @@ Deno.serve(async (req) => {
     console.error("[HEALTH] check failed:", e);
   }
 
-  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, eventScheduled, scheduledTextReminders, at: now.toISOString() };
+  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, focusCheckins, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, eventScheduled, scheduledTextReminders, at: now.toISOString() };
     console.log('✅ [REFILL] Complete:', result);
     return Response.json(result);
   } catch (err) {
