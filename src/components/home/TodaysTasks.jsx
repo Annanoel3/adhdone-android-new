@@ -26,6 +26,7 @@ import TaskSortDropdown from "../tasks/TaskSortDropdown";
 import BreakIntoStepsButton from "../tasks/BreakIntoStepsButton";
 import LifeAreaPill, { TagPill } from "../tasks/LifeAreaPill";
 import PendingTaskCards, { usePendingCaptures } from "./PendingTaskCards";
+import HomeSecretLink from "./HomeSecretLink";
 import TaskCard from "../tasks/TaskCard";
 
 export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails, onUpdateTask, loadFailed = false, onRetry, onRefreshTasks, onEditTitle, onUncomplete, onSnooze, onDelete, tasksLoaded = true }) {
@@ -498,6 +499,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
           titles clipped at two lines (Anna, Oct 3 2026). */}
       <CardContent className="p-3 sm:p-6">
         <div className="space-y-3">
+          <HomeSecretLink theme={theme} />
           <PendingTaskCards theme={theme} captures={pending} />
           {activeTasks.length === 0 && pending.length === 0 && loadFailed ? (
             <div className="text-center py-10">

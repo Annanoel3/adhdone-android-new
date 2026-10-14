@@ -85,6 +85,7 @@ import { ONBOARDING_STEPS, ONBOARDING_STEP_EVENT, isStepDone, markStepDone } fro
 import { trackFire } from "@/lib/appTrack";
 import { seedTaskSortFromProfile } from "@/hooks/useTaskSort";
 import useNewBadges from "@/hooks/useNewBadges";
+import { secretPinnedToHome } from "./components/home/HomeSecretLink";
 import TaskCaptureProcessor from "./components/shared/TaskCaptureProcessor";
 import { AppDialogHost } from "@/components/ui/alert-dialog";
 import UsageTracker from "./components/shared/UsageTracker";
@@ -343,7 +344,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     const dayIndex = Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 86400000);
     return SECRET_PAGES[dayIndex % SECRET_PAGES.length];
   })();
-  const secretHere = !seasonalUnlocked && currentPageName === secretPageToday;
+  // While it's pinned to Today's Focus (HomeSecretLink), it isn't anywhere else.
+  const secretHere = !seasonalUnlocked && !secretPinnedToHome() && currentPageName === secretPageToday;
   const [secretFound, setSecretFound] = useState(false);
   const findSecret = () => {
     const seasonal = getDateBasedMode();
@@ -360,6 +362,13 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     saveThemeToProfile('minimalist', seasonal, true);
     trackFire('easter_egg_found', { props: { egg: 'Seasonal theme', found_on: currentPageName } });
   };
+  const findSecretRef = React.useRef(findSecret);
+  findSecretRef.current = findSecret;
+  useEffect(() => {
+    const onFind = () => findSecretRef.current();
+    window.addEventListener('adhd-find-secret', onFind);
+    return () => window.removeEventListener('adhd-find-secret', onFind);
+  }, []);
   const [showAppGuide, setShowAppGuide] = useState(false);
   const quietNotifications = useQuietNotifications();
   const [showQuietPicker, setShowQuietPicker] = useState(false);
