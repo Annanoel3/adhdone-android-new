@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Plus, Lightbulb, ArrowRight, Trash2, ChevronsDown, ChevronsUp, Search, Sparkles, Loader2, Filter, Mic, MoreVertical, CheckCircle2, Pencil, Image as ImageIcon, FileText, X, TrendingUp, Bell } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, Tooltip as ChartTooltip, ResponsiveContainer } from "recharts";
+import { LineChart, Line, XAxis, YAxis, Tooltip as ChartTooltip, ResponsiveContainer, Legend as ChartLegend } from "recharts";
 import { toast } from "@/components/ui/use-toast";
 import { usePopupTurn } from "@/components/onboarding/onboardingSurface";
 import { Badge } from "@/components/ui/badge";
@@ -366,6 +366,22 @@ export default function ParkingLot() {
     await base44.entities.ParkingLotIdea.update(tracker.id, { tracker_entries: entries });
   };
 
+  // Readings that arrived in one sentence belong together (blood pressure
+  // and heart rate said in the same breath): their trackers are linked, both
+  // ways, and History shows them on one chart. Anna, Oct 14 2026: "I had
+  // hoped to be able to see all bp and hr trends in one glance."
+  const linkTrackers = async (ids) => {
+    const list = Array.from(new Set(ids.filter(Boolean)));
+    if (list.length < 2) return;
+    for (const id of list) {
+      const row = await base44.entities.ParkingLotIdea.get(id).catch(() => null);
+      if (!row) continue;
+      const have = Array.isArray(row.tracker_companions) ? row.tracker_companions : [];
+      const want = Array.from(new Set([...have, ...list.filter((x) => x !== id)]));
+      if (want.length !== have.length) await base44.entities.ParkingLotIdea.update(id, { tracker_companions: want }).catch(() => {});
+    }
+  };
+
   // The day a reminder repeats on: the one it already had, else today's.
   const remindDayFor = (tracker, choice) => {
     if (tracker?.tracker_remind === choice && tracker?.tracker_remind_day != null) return Number(tracker.tracker_remind_day);
@@ -518,6 +534,7 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
         if (target && entry) logs.push({ target, entry, note });
         else if (trackName && !target) news.push({ name: trackName, entry, note, remind: a.remind, time: a.time });
       }
+      const together = logs.map((l) => l.target.id); // every tracker this one sentence touched
       for (const { target, entry, note } of logs) {
         await addTrackerEntry(target, entry, note);
         toast({ title: `Logged to ${target.idea}`, description: note ? `${entry} — ${note}` : entry });
@@ -525,6 +542,7 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
       if (news.length === 0) {
         if (logs.length > 0) await base44.entities.ParkingLotIdea.delete(idea.id);
         else await base44.entities.ParkingLotIdea.update(idea.id, { tracker_checked: true });
+        await linkTrackers(together);
       } else {
         // The first new tracker takes over this row; any other becomes its own.
         const [first, ...rest] = news;
@@ -535,8 +553,9 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
           idea: first.name,
           tracker_entries: entriesOf(first),
         });
+        together.push(idea.id);
         for (const n of rest) {
-          await base44.entities.ParkingLotIdea.create({
+          const made = await base44.entities.ParkingLotIdea.create({
             idea: n.name,
             tracker: true,
             tracker_checked: true,
@@ -544,8 +563,10 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
             converted_to_task: false,
             parent_idea_id: null,
           });
+          if (made?.id) together.push(made.id);
           toast({ title: `Now keeping track of ${n.name}`, description: n.entry ? `First entry: ${n.entry}. Tap its bell to set a reminder.` : 'Tap its bell to set a reminder.' });
         }
+        await linkTrackers(together);
         // The "remind you to log?" question, for the first one only — one
         // popup at a time; the others' bells are a tap away.
         const said = /^(\d{1,2}):(\d{2})$/.exec(String(first.time || ''));
@@ -1631,19 +1652,35 @@ Return ONLY the category name, nothing else.`;
       <Dialog open={!!historyFor} onOpenChange={(o) => { if (!o) setHistoryFor(null); }}>
         <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{historyFor?.idea}</DialogTitle>
+            <DialogTitle>{[historyFor?.idea, ...((historyFor?.tracker_companions || []).map((id) => ideas.find((i) => i.id === id && i.tracker)?.idea).filter(Boolean))].join(' · ')}</DialogTitle>
           </DialogHeader>
           {(() => {
             const entries = historyFor?.tracker_entries || [];
-            const points = entries
-              .map((e) => {
+            // One chart for this tracker and the ones its readings arrive with
+            // (tracker_companions): every entry is a row in time order, each
+            // line drawn through its own rows (connectNulls bridges the rest).
+            const companions = (historyFor?.tracker_companions || []).map((id) => ideas.find((i) => i.id === id && i.tracker)).filter(Boolean);
+            const series = [historyFor, ...companions].filter(Boolean).map((t, i) => ({ key: `s${i}`, name: t.idea, entries: t.tracker_entries || [] }));
+            const colors = ['#9333ea', '#ec4899', '#0ea5e9', '#f59e0b', '#10b981', '#ef4444', '#6366f1', '#14b8a6'];
+            const rows = [];
+            const lines = [];
+            let color = 0;
+            for (const sr of series) {
+              let hasB = false;
+              for (const e of sr.entries) {
                 const n = trackerNumbers(e.text);
                 const ms = rowMs(e.at);
-                return { label: Number.isFinite(ms) ? new Date(ms).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }) : '', a: n[0], b: n[1] };
-              })
-              .filter((p) => p.a != null);
-            const both = points.length > 0 && points.every((p) => p.b != null);
-            const axis = niceTicks(points.flatMap((p) => (both ? [p.a, p.b] : [p.a])));
+                if (n[0] == null || !Number.isFinite(ms)) continue;
+                const row = { ms, label: new Date(ms).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }), [`${sr.key}a`]: n[0] };
+                if (n[1] != null) { row[`${sr.key}b`] = n[1]; hasB = true; }
+                rows.push(row);
+              }
+              lines.push({ key: `${sr.key}a`, name: sr.name, color: colors[color++ % colors.length] });
+              if (hasB) lines.push({ key: `${sr.key}b`, name: `${sr.name} · 2nd number`, color: colors[color++ % colors.length] });
+            }
+            rows.sort((x, y) => x.ms - y.ms);
+            const points = rows;
+            const axis = niceTicks(rows.flatMap((r) => lines.map((l) => r[l.key])));
             return (
               <>
                 {points.length >= 2 && (
@@ -1653,8 +1690,10 @@ Return ONLY the category name, nothing else.`;
                         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                         <YAxis tick={{ fontSize: 11 }} domain={axis ? axis.domain : ['auto', 'auto']} ticks={axis ? axis.ticks : undefined} />
                         <ChartTooltip />
-                        <Line type="monotone" dataKey="a" name={historyFor?.idea} stroke="#9333ea" strokeWidth={2} dot={{ r: 3 }} />
-                        {both && <Line type="monotone" dataKey="b" name="2nd number" stroke="#ec4899" strokeWidth={2} dot={{ r: 3 }} />}
+                        {companions.length > 0 && <ChartLegend wrapperStyle={{ fontSize: 11 }} />}
+                        {lines.map((l) => (
+                          <Line key={l.key} type="monotone" dataKey={l.key} name={l.name} stroke={l.color} strokeWidth={2} dot={{ r: 3 }} connectNulls />
+                        ))}
                       </LineChart>
                     </ResponsiveContainer>
                   </div>
