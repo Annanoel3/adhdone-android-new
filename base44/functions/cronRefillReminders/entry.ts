@@ -201,8 +201,13 @@ Deno.serve(async (req) => {
         scheduledUntil = new Date(now.getTime() - 1);
       }
 
-      // Refill when within 2 intervals of the end of the window
-      const refillThreshold = new Date(now.getTime() + 2 * interval);
+      // Refill when within 2 intervals of the end of the window — and never
+      // later than the next run of this hourly job can cover. For a short
+      // rhythm ("every 10 minutes") two intervals is 20 minutes: a window that
+      // ended 25 minutes after one run was only noticed by the next, 35 minutes
+      // past its end, and the restart added up to 49 more minutes of stagger —
+      // "every 10 minutes" had holes of 30–90 minutes every couple of hours.
+      const refillThreshold = new Date(now.getTime() + Math.max(2 * interval, 75 * 60 * 1000));
       if (scheduledUntil > refillThreshold) {
         skipped++;
         continue;
@@ -283,7 +288,9 @@ Deno.serve(async (req) => {
       const timeZone = userTimeZone(owner);
       // "Keep reminding me until I mark it complete" + a yes to running through
       // the night (Task.quiet_hours_exempt): no quiet window for this one.
-      const useQuiet = quietEnabled && task.quiet_hours_exempt !== true;
+      // ...and so does a Focus Mode task whose owner answered the quiet-hours
+      // question with "keep going until I finish" (focus_mode_quiet_choice).
+      const useQuiet = quietEnabled && task.quiet_hours_exempt !== true && task.focus_mode_quiet_choice !== 'keep';
       // ...and on a phone set to full-screen reminders, each of its pings rings
       // as an alarm on arrival (the phone's own alarm only covers the first).
       const ringsEachTime = task.quiet_hours_exempt === true &&
@@ -498,12 +505,15 @@ Deno.serve(async (req) => {
       try {
         const { enabled: fqEnabled, startMin: fqStart, endMin: fqEnd } = resolveQuietHours(owner);
         const tz = userTimeZone(owner);
+        // "Keep going until I finish" (the quiet-hours question) or a task that
+        // runs through quiet hours anyway: no night-time shuffle.
+        const throughQuiet = task.focus_mode_quiet_choice === 'keep' || task.quiet_hours_exempt === true;
         const slots: Date[] = [];
         let t = Math.max(untilMs, now.getTime()) + H;
         let lastPlanned = 0;
         for (let i = 0; i < 6; i++, t += H) {
           let sendAt = new Date(t);
-          if (fqEnabled) sendAt = adjustForQuietHours(sendAt, fqStart, fqEnd, tz);
+          if (fqEnabled && !throughQuiet) sendAt = adjustForQuietHours(sendAt, fqStart, fqEnd, tz);
           if (sendAt.getTime() <= now.getTime()) continue;
           if (lastPlanned && Math.abs(sendAt.getTime() - lastPlanned) < 60000) continue; // several moved to the same moment: one is enough
           slots.push(sendAt);
