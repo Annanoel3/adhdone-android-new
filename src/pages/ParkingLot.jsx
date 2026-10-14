@@ -1775,27 +1775,49 @@ Return ONLY the category name, nothing else.`;
                   </div>
                 )}
                 {(() => {
-                  // Every tracker in the linked group, newest first, each
-                  // entry named after its tracker when there is more than one.
-                  const listed = [historyFor, ...companions].filter(Boolean)
+                  // Every tracker in the linked group, newest first. Readings
+                  // taken together (one sentence, so within a couple of
+                  // minutes, one per tracker) show as ONE record — "blood
+                  // pressure 98/70 · heart rate 89 bpm" — the way Anna liked
+                  // the old single entry that held both (Oct 14 2026).
+                  const flat = [historyFor, ...companions].filter(Boolean)
                     .flatMap((t) => (t.tracker_entries || []).map((e) => ({ e, t })))
                     .sort((x, y) => rowMs(y.e.at) - rowMs(x.e.at));
-                  return listed.length === 0 ? (
+                  const records = [];
+                  for (const item of flat) {
+                    const last = records[records.length - 1];
+                    const close = last && Math.abs(rowMs(last.parts[0].e.at) - rowMs(item.e.at)) < 2 * 60 * 1000;
+                    if (close && !last.parts.some((p) => p.t.id === item.t.id)) last.parts.push(item);
+                    else records.push({ parts: [item] });
+                  }
+                  const removeRecord = async (rec) => { for (const { e, t } of rec.parts) await removeTrackerEntry(t, e); };
+                  return records.length === 0 ? (
                     <p className="text-sm text-gray-500">Nothing logged yet.</p>
                   ) : (
                     <div className="space-y-2">
-                      {listed.map(({ e, t }, i) => (
-                        <div key={`${t.id}-${e.at}-${i}`} className={`flex items-start justify-between gap-2 p-2 rounded-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                          <div className="min-w-0">
-                            <p className="text-sm whitespace-pre-wrap break-words">{companions.length > 0 ? <span className="text-gray-500">{t.idea} </span> : null}{e.text}</p>
-                            {e.note ? <p className="text-xs text-gray-500 italic whitespace-pre-wrap break-words">{e.note}</p> : null}
-                            <p className="text-xs text-gray-500">{formatLogTime(e.at)}</p>
+                      {records.map((rec, i) => {
+                        const first = rec.parts[0];
+                        const note = rec.parts.map((p) => p.e.note).find(Boolean) || '';
+                        return (
+                          <div key={`${first.t.id}-${first.e.at}-${i}`} className={`flex items-start justify-between gap-2 p-2 rounded-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}>
+                            <div className="min-w-0">
+                              <p className="text-sm whitespace-pre-wrap break-words">
+                                {rec.parts.map((p, j) => (
+                                  <React.Fragment key={p.t.id}>
+                                    {j > 0 ? <span className="text-gray-400"> · </span> : null}
+                                    {companions.length > 0 ? <span className="text-gray-500">{p.t.idea} </span> : null}{p.e.text}
+                                  </React.Fragment>
+                                ))}
+                              </p>
+                              {note ? <p className="text-xs text-gray-500 italic whitespace-pre-wrap break-words">{note}</p> : null}
+                              <p className="text-xs text-gray-500">{formatLogTime(first.e.at)}</p>
+                            </div>
+                            <button onClick={() => removeRecord(rec)} className="text-gray-400 hover:text-red-600 p-1 flex-shrink-0" aria-label="Remove this entry">
+                              <X className="w-4 h-4" />
+                            </button>
                           </div>
-                          <button onClick={() => removeTrackerEntry(t, e)} className="text-gray-400 hover:text-red-600 p-1 flex-shrink-0" aria-label="Remove this entry">
-                            <X className="w-4 h-4" />
-                          </button>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   );
                 })()}
