@@ -110,7 +110,7 @@
     "start_date": {
       "type": "string",
       "format": "date-time",
-      "description": "Optional date the user began actively working on this task. When set alongside due_date, the task acts like a multi-day event: it shows on each day from start_date through due_date and appears in Today's Tasks the entire span, even if the due date is far out."
+      "description": "Optional date the user began actively working on this task. When set alongside due_date, the task acts like a multi-day event: it shows on each day from start_date through due_date and appears in Today's Tasks the entire span, even if the due date is far out. A parsed 'by' deadline ('sometime this week', 'by Friday') is saved with start_date = when it was said, so it sits under Today every day until the deadline (Anna, Oct 14 2026; taskSchedule.deadlineWindowStart / captureToTasks.buildTaskRecord)."
     },
     "end_date": {
       "type": "string",
