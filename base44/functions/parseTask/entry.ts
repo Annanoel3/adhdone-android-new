@@ -1,3 +1,4 @@
+// Re-saved Oct 14 2026 so the bundled shared/taskParsePrompt.ts is picked up: needs_date_pick is always false — the app never asks "when?" (four "make an appointment" tasks typed at once became four questions in a row).
 // Re-saved Oct 13 2026 so the bundled shared/runTaskParse.ts is picked up: one more ask when words that name a part of the day ("tonight") came back with no time.
 // Re-saved Oct 13 2026 so the bundled shared/taskParsePrompt.ts is picked up: a phone number, address or amount they typed stays in the title.
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
@@ -125,6 +126,9 @@ const PARSER_CHECKS: { text: string; saidAt: number; expect: Record<string, any>
   { text: "Water the plants every other day", saidAt: said("2026-10-05T10:00:00-05:00"), expect: { recurrence_pattern: "every_other_day" } },
   { text: "take out the trash tonight", saidAt: said("2026-10-09T15:00:00-05:00"), expect: { target_date: "2026-10-09", target_time: aTime } },
   { text: "Text mom", saidAt: said("2026-10-05T10:00:00-05:00"), expect: { target_date: null, target_time: null, recurrence_pattern: "none" } },
+  // An appointment they still have to make has no day and asks for none
+  // (Oct 14 2026: four of these typed at once became four "when?" questions).
+  { text: "Need to make appointment for cardiologist.", saidAt: said("2026-10-14T01:52:00-05:00"), expect: { target_date: null, needs_date_pick: (v: any) => !v } },
   // A number they typed stays in the title (Oct 13 2026: a user's "call propane
   // 530-477-7854 today" came out as "Call propane", the number gone).
   { text: "call propane 530-477-7854 today", saidAt: said("2026-10-13T08:46:00-07:00"), expect: { title: (v: any) => typeof v === "string" && v.includes("530-477-7854"), target_date: "2026-10-13", deadline_style: "by" } },
