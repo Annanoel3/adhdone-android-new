@@ -279,6 +279,25 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   const canRecordNotes = usePluginPresent('RecorderBridge');
   const newDots = useNewBadges(currentPageName, !!(user?.email && authCheckComplete));
   const notesDot = canRecordNotes && newDots.Notes;
+
+  // The phone's status bar. On Android 14 and below the WebView is drawn
+  // underneath it (the Capacitor StatusBar plugin's default, overlaysWebView),
+  // and the page can't measure the bar (env(safe-area-inset-top) is 0 in an
+  // Android WebView), so the header sat on top of the clock (Anna, Oct 13
+  // 2026, on the S20 Ultra). Ask the plugin to lay the page out below the bar
+  // instead, coloured to match the header. Android 15 and up already lay the
+  // page out below it (Capacitor pads for the system bars there), and the
+  // plugin makes these calls no-ops.
+  useEffect(() => {
+    const sb = window.Capacitor?.isNativePlatform?.() ? window.Capacitor?.Plugins?.StatusBar : null;
+    if (!sb) return;
+    const dark = theme === 'dark';
+    (async () => {
+      try { await sb.setOverlaysWebView({ overlay: false }); } catch (e) { /* older plugin */ }
+      try { await sb.setBackgroundColor({ color: dark ? '#111827' : '#ffffff' }); } catch (e) { /* ignored on 15+ */ }
+      try { await sb.setStyle({ style: dark ? 'DARK' : 'LIGHT' }); } catch (e) { /* ignored */ }
+    })();
+  }, [theme]);
   // After the first-run chat, a red dot on the menu button and on "App Guide"
   // until the guide has been opened once (onboardingGate: guideNudge/guideSeen).
   // Re-read when a step lands (the chat closing, the guide opening) and when
@@ -1339,6 +1358,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <AppGuideModal
           isOpen={showAppGuide}
           onClose={() => setShowAppGuide(false)}
+          onGo={() => { setShowAppGuide(false); handleNavClick(); }}
           theme={theme}
         />
 
