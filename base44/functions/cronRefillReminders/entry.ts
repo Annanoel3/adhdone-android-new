@@ -4,7 +4,7 @@
 // Re-saved Oct 12 2026 (pets) so the bundled shared/reminderTitle.ts is picked up: a pet's birthday alarm has no "Write a text" button.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { getReminderContent, pushPhoneAlarms } from '../../shared/reminderTitle.ts';
-import { localMinutesOfDay, resolveQuietHours, adjustForQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, isInQuietHours, placeAppReminder, wakeStartMs } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, localDateKey, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, isInQuietHours, placeAppReminder, wakeStartMs } from '../../shared/quietHours.ts';
 import { getFocusModeContent } from '../../shared/focusMode.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel, ledgerPrune } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
@@ -288,9 +288,7 @@ Deno.serve(async (req) => {
       const timeZone = userTimeZone(owner);
       // "Keep reminding me until I mark it complete" + a yes to running through
       // the night (Task.quiet_hours_exempt): no quiet window for this one.
-      // ...and so does a Focus Mode task whose owner answered the quiet-hours
-      // question with "keep going until I finish" (focus_mode_quiet_choice).
-      const useQuiet = quietEnabled && task.quiet_hours_exempt !== true && task.focus_mode_quiet_choice !== 'keep';
+      const useQuiet = quietEnabled && task.quiet_hours_exempt !== true;
       // ...and on a phone set to full-screen reminders, each of its pings rings
       // as an alarm on arrival (the phone's own alarm only covers the first).
       const ringsEachTime = task.quiet_hours_exempt === true &&
@@ -489,8 +487,7 @@ Deno.serve(async (req) => {
     // no rhythm, so after six hours it went quiet while still in focus. Anna,
     // Oct 13 2026: "remind the user of whatever task they are focusing on once
     // an hour until done". When the last booked check-in is under two hours
-    // out, the next six go on — hourly, through quiet hours as the owner set
-    // them (a slot inside quiet hours moves to their end; one of those is kept).
+    // out, the next six go on — hourly, never inside the owner's quiet hours.
     let focusCheckins = 0;
     for (const owner of allUsers) {
       const focusId = owner?.focus_mode_task_id;
@@ -505,19 +502,18 @@ Deno.serve(async (req) => {
       try {
         const { enabled: fqEnabled, startMin: fqStart, endMin: fqEnd } = resolveQuietHours(owner);
         const tz = userTimeZone(owner);
-        // "Keep going until I finish" (the quiet-hours question) or a task that
-        // runs through quiet hours anyway: no night-time shuffle.
-        const throughQuiet = task.focus_mode_quiet_choice === 'keep' || task.quiet_hours_exempt === true;
+        // A task that runs through quiet hours anyway keeps its night slots;
+        // otherwise a slot inside quiet hours is dropped — quiet hours just
+        // start, and the morning question (setFocusMode) picks the session
+        // back up at their end.
+        const throughQuiet = task.quiet_hours_exempt === true;
         const slots: Date[] = [];
         let t = Math.max(untilMs, now.getTime()) + H;
-        let lastPlanned = 0;
         for (let i = 0; i < 6; i++, t += H) {
-          let sendAt = new Date(t);
-          if (fqEnabled && !throughQuiet) sendAt = adjustForQuietHours(sendAt, fqStart, fqEnd, tz);
+          const sendAt = new Date(t);
+          if (fqEnabled && !throughQuiet && isInQuietHours(sendAt, fqStart, fqEnd, tz)) continue;
           if (sendAt.getTime() <= now.getTime()) continue;
-          if (lastPlanned && Math.abs(sendAt.getTime() - lastPlanned) < 60000) continue; // several moved to the same moment: one is enough
           slots.push(sendAt);
-          lastPlanned = sendAt.getTime();
         }
         if (!slots.length) continue;
         const { title, body } = getFocusModeContent(task.title);
