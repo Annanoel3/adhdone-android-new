@@ -52,22 +52,29 @@ export default function FocusModePrompt({ user, theme }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("offer"); // 'offer' | 'active' | 'celebrate'
 
-  // The quiet-hours question (Anna, Oct 13 2026). A minute before quiet hours
-  // start, a focus session gets a push: "Quiet time usually starts now. Keep
-  // going until you finish, or pick this up tomorrow morning?" Tapping it
-  // opens the app on /Home?focusQuiet=<taskId>, which is this dialog. "Keep
-  // going" rebooks the hourly check-ins straight through the night; "tomorrow
-  // morning" leaves them waiting for the end of quiet hours.
+  // The morning question (Anna, Oct 13 2026). Quiet hours just start — the
+  // check-ins stop for the night, nothing asks anyone to stay up — and at
+  // their end a push asks "pick up where you left off?". Tapping it opens the
+  // app on /Home?focusMorning=<taskId>, which is this dialog: continue (the
+  // hourly check-ins resume) or let it go (Focus Mode ends, everything back
+  // to normal).
   const location = useLocation();
   const navigate = useNavigate();
-  const quietAskTaskId = new URLSearchParams(location.search).get("focusQuiet");
+  const morningTaskId = new URLSearchParams(location.search).get("focusMorning");
   const [quietBusy, setQuietBusy] = useState(false);
-  const answerQuiet = async (choice) => {
+  const answerMorning = async (choice) => {
     setQuietBusy(true);
     try {
-      await base44.functions.invoke("setFocusMode", { action: "quiet", choice });
+      if (choice === "continue") {
+        await base44.functions.invoke("setFocusMode", { action: "morning" });
+      } else {
+        await base44.functions.invoke("setFocusMode", { action: "exit" });
+        sessionStorage.removeItem("focus_popup_hidden");
+        setFocusTask(null);
+        broadcast(null);
+      }
     } catch (e) {
-      console.warn("[FocusMode] quiet-hours answer failed:", e?.message || e);
+      console.warn("[FocusMode] morning answer failed:", e?.message || e);
     } finally {
       setQuietBusy(false);
       navigate("/Home", { replace: true });
@@ -582,20 +589,20 @@ export default function FocusModePrompt({ user, theme }) {
         </button>
       )}
 
-      <Dialog open={!!quietAskTaskId} onOpenChange={(o) => { if (!o && !quietBusy) navigate("/Home", { replace: true }); }}>
+      <Dialog open={!!morningTaskId} onOpenChange={(o) => { if (!o && !quietBusy) navigate("/Home", { replace: true }); }}>
         <DialogContent className={`max-w-sm ${cardClass}`}>
           <DialogHeader>
-            <DialogTitle>Quiet time usually starts now</DialogTitle>
+            <DialogTitle>Good morning ☀️</DialogTitle>
             <DialogDescription>
-              Would you like to keep going until you finish, or pick this up tomorrow morning?
+              Pick up where you left off? Your focus session is still on; the other reminders stay quiet while it is.
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2 pt-2">
-            <Button onClick={() => answerQuiet("keep")} disabled={quietBusy} className="w-full">
-              Keep going until I finish
+            <Button onClick={() => answerMorning("continue")} disabled={quietBusy} className="w-full">
+              Continue my focus session
             </Button>
-            <Button variant="outline" onClick={() => answerQuiet("morning")} disabled={quietBusy} className="w-full">
-              Pick it up tomorrow morning
+            <Button variant="outline" onClick={() => answerMorning("stop")} disabled={quietBusy} className="w-full">
+              Let it go for now
             </Button>
           </div>
         </DialogContent>
