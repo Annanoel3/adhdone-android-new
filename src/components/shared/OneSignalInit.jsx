@@ -61,6 +61,14 @@ function handleNotificationData(data, navigate) {
   const taskId = data.taskId || data.task_id;
   if (!taskId) return;
 
+  // Focus Mode's quiet-hours question ("keep going until you finish, or pick
+  // this up tomorrow morning?") opens the app on that choice (FocusModePrompt).
+  if (data.type === 'focus_quiet') {
+    const target = `/Home?focusQuiet=${encodeURIComponent(taskId)}`;
+    if (navigate) navigate(target); else window.location.href = target;
+    return;
+  }
+
   // A snooze button on the push itself ("Snooze 15 min", "Snooze 1 hour").
   // Native passes which button was tapped; until it did, every button just
   // opened the app. Snoozing here = one extra reminder, nothing else touched.
