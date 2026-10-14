@@ -1,3 +1,4 @@
+// Re-saved Oct 14 2026 (afternoon) so the bundled shared/captureToTasks.ts is picked up: a "by" deadline ("sometime this week") gets start_date = now, so it sits under Today every day until the deadline.
 // Re-saved Oct 14 2026 so the bundled shared/taskParsePrompt.ts is picked up: needs_date_pick is always false (the app never asks "when?"; a task with no day is made with no day, as this path always did).
 // Re-saved Oct 13 2026 (night) so the bundled shared/captureToTasks.ts is picked up: a captured event's pushes carry an event's buttons (Snooze only), not a task's.
 // Re-saved Oct 13 2026 (evening) so the bundled shared/captureToTasks.ts is picked up: a heads-up moved off another push's minute is saved at the minute it really goes.
