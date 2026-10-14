@@ -204,7 +204,6 @@ export async function keepEarliest(captureId, myTaskId) {
 
 // Processes ONE piece of a capture. Resolves to a descriptor:
 //   { status: 'done', taskId?, kind? }   (kind: 'idea' | 'feedback' | 'birthday' when it wasn't a task)
-//   { status: 'needs_priority', data }
 //   { status: 'error', message }
 //   { status: 'handed_off' }   (the capture went to the server meanwhile; nothing saved here)
 export async function processAndCreateTask(inputText, opts = {}) {
@@ -412,24 +411,9 @@ export async function processAndCreateTask(inputText, opts = {}) {
       parsed.needs_date_pick = false;
     }
 
-    if (parsed.priority_uninferrable && parsed.is_flexible) {
-      return {
-        status: 'needs_priority',
-        data: {
-          title: parsed.title || inputText.trim(),
-          original_input: inputText,
-          reminder_wish: parsed.reminder_wish || null,
-          energy_required: parsed.energy_required || 'medium',
-          takes_time: parsed.takes_time === true,
-          classification: parsed.classification || 'task',
-          life_area: parsed.life_area === 'work' ? 'work' : 'personal',
-          presetDueDateISO,
-          captureId,
-          currentUser
-        }
-      };
-    }
-
+    // The app never asks "how urgent?" either (Anna, Oct 14 2026: "the user
+    // can change it if it gets it wrong"): the parser's call stands, medium
+    // when it had nothing to go on, and the card's priority is editable.
     // The app never asks "when?" (Anna, Oct 14 2026: "the app didn't use to
     // ask when... that's not by design"). A task with no day is made with no
     // day — Smart Reminders take it from there — the same as the share sheet,
