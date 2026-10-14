@@ -1,3 +1,4 @@
+// Re-saved Oct 14 2026 (later) so the bundled shared/taskParsePrompt.ts is picked up: priority_uninferrable is always false — the app never asks "how urgent?"; the card's priority is editable.
 // Re-saved Oct 14 2026 so the bundled shared/taskParsePrompt.ts is picked up: needs_date_pick is always false — the app never asks "when?" (four "make an appointment" tasks typed at once became four questions in a row).
 // Re-saved Oct 13 2026 so the bundled shared/runTaskParse.ts is picked up: one more ask when words that name a part of the day ("tonight") came back with no time.
 // Re-saved Oct 13 2026 so the bundled shared/taskParsePrompt.ts is picked up: a phone number, address or amount they typed stays in the title.
