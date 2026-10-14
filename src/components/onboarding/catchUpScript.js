@@ -3,6 +3,12 @@
 // optional `input`), but deliberately shorter: it skips the introduction and
 // the Places explainer those users already saw, and asks only the two things
 // their profile is missing.
+// The line after the about-you question: an answer is thanked, a skip isn't.
+const afterAbout = (back) => (name, handle, about) =>
+  String(about || '').trim()
+    ? `Got it. That'll shape what counts as urgent and how hard this app nudges you about it. That's everything — back to your ${back}.`
+    : `That's ok — you can always revisit this in Settings. Back to your ${back}.`;
+
 const CATCH_UP_SCRIPT = [
   {
     text: () =>
@@ -29,8 +35,7 @@ const CATCH_UP_SCRIPT = [
     input: 'about',
   },
   {
-    text: () =>
-      "Got it. That'll shape what counts as urgent and how hard this app nudges you about it. That's everything — back to your tasks.",
+    text: afterAbout('tasks'),
     final: true,
   },
 ];
@@ -53,8 +58,7 @@ export const CATCH_UP_ABOUT_ONLY_SCRIPT = [
     input: 'about',
   },
   {
-    text: () =>
-      "Got it. That'll shape what counts as urgent and how hard this app nudges you about it. That's everything — back to your tasks.",
+    text: afterAbout('tasks'),
     final: true,
   },
 ];
@@ -82,8 +86,7 @@ export const FIRST_DONE_SCRIPT = [
     input: 'about',
   },
   {
-    text: () =>
-      "Got it. That'll shape what counts as urgent and how hard this app nudges you about it. That's everything — back to your list.",
+    text: afterAbout('list'),
     final: true,
   },
 ];
@@ -100,8 +103,7 @@ export const FIRST_DONE_ABOUT_ONLY_SCRIPT = [
     input: 'about',
   },
   {
-    text: () =>
-      "Got it. That'll shape what counts as urgent and how hard this app nudges you about it. That's everything — back to your list.",
+    text: afterAbout('list'),
     final: true,
   },
 ];
