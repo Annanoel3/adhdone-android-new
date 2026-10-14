@@ -475,7 +475,7 @@ export default function ParkingLot() {
 Things they already keep track of here (they log entries to these over time): ${trackers.length ? JSON.stringify(trackers) : 'none yet'}
 
 What is it? It can be more than one thing at once ("blood pressure 91 over 57 and heart rate 89" is a reading for blood pressure AND a reading for heart rate) — give one item per part, in order:
-1. An entry for one of those they already keep track of (a reading, a number, a note for it), like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<just this part, as they said it, without its name>", "note": "<see below, else null>"}
+1. An entry for one of those they already keep track of (a reading, a number, a note for it), like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<just this part, as they said it, without its name>", "note": "<see below, else null>"}. Match by meaning, short forms included ("bp" is blood pressure, "hr" or "heart" is heart rate): something they already keep track of is always 1, never 2.
 2. They want to keep track of something over time, logging it again and again. It can be anything they choose: a measurement, money spent, a mood, how their day went. A reading for something they don't track yet counts, with that reading as its first entry. {"track": "<a short name for it, in their words>", "entry": "<an entry if they already gave one, else null>", "note": "<see below, else null>", "remind": "<daily, weekly or monthly if they said how often, else null>", "time": "<HH:MM, 24-hour, if they said a time, else null>"}
 3. Anything else: an idea, a to-do, a list, a note, a one-time thing. {"none": true}
 
@@ -506,12 +506,17 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
       const actions = (Array.isArray(out.actions) ? out.actions : [out]).filter((a) => a && typeof a === 'object');
       const logs = [];
       const news = [];
+      const sameName = (x, y) => String(x || '').trim().toLowerCase().replace(/\s+/g, ' ') === String(y || '').trim().toLowerCase().replace(/\s+/g, ' ');
       for (const a of actions) {
         const entry = typeof a.entry === 'string' ? a.entry.trim() : '';
         const note = typeof a.note === 'string' ? a.note.trim().slice(0, 300) : '';
-        const target = a.log_to ? all.find((i) => i.id === a.log_to && i.tracker) : null;
+        const trackName = typeof a.track === 'string' ? a.track.trim().slice(0, 120) : '';
+        // A "new" one with the name of one they already have is an entry for
+        // that one (the AI once started a second "heart rate" for "hr 77").
+        const target = (a.log_to ? all.find((i) => i.id === a.log_to && i.tracker) : null)
+          || (trackName ? all.find((i) => i.tracker && !i.parent_idea_id && i.id !== idea.id && sameName(i.idea, trackName)) : null);
         if (target && entry) logs.push({ target, entry, note });
-        else if (typeof a.track === 'string' && a.track.trim()) news.push({ name: a.track.trim().slice(0, 120), entry, note, remind: a.remind, time: a.time });
+        else if (trackName && !target) news.push({ name: trackName, entry, note, remind: a.remind, time: a.time });
       }
       for (const { target, entry, note } of logs) {
         await addTrackerEntry(target, entry, note);
