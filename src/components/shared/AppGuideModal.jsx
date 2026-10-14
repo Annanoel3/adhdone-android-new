@@ -105,7 +105,7 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     {
       icon: Target,
       title: "Focus Mode",
-      description: "Pick one task to focus on. Your other recurring reminders go quiet until it's done (events, due dates and birthdays still come through), and that task checks in with you hourly."
+      description: "Pick one task. Every hour until it's done, ADHDone reminds you of it, and your other recurring reminders stay quiet (events, due dates and birthdays still come through). Finish it and everything goes back to normal."
     },
     {
       icon: Timer,
