@@ -127,6 +127,7 @@ export default async function(req: Request): Promise<Response> {
           focus_mode_original_interval: focusTask.reminder_interval,
           focus_mode_original_next_reminder: focusTask.next_reminder || null,
           focus_mode_notification_ids: checkinIds,
+          focus_mode_checkins_until: lastScheduledAt ? lastScheduledAt.toISOString() : null,
           onesignal_notification_ids: checkinIds,
           last_scheduled_until: newLastScheduledUntil,
           next_reminder: new Date(now + FOCUS_MODE_INTERVAL_MS).toISOString()
@@ -135,8 +136,11 @@ export default async function(req: Request): Promise<Response> {
         // Smart-reminder or one-time task: its interval, its date/time and its
         // own reminders are left exactly as they are. Only the check-ins are
         // tracked, in their own field, so exit can cancel them and nothing else.
+        // focus_mode_checkins_until lets the hourly job (cronRefillReminders)
+        // keep the check-ins coming past these first six, until it's done.
         await base44.asServiceRole.entities.Task.update(taskId, {
-          focus_mode_notification_ids: checkinIds
+          focus_mode_notification_ids: checkinIds,
+          focus_mode_checkins_until: lastScheduledAt ? lastScheduledAt.toISOString() : new Date(now).toISOString()
         });
       }
 
@@ -186,6 +190,7 @@ export default async function(req: Request): Promise<Response> {
               focus_mode_original_interval: null,
               focus_mode_original_next_reminder: null,
               focus_mode_notification_ids: [],
+              focus_mode_checkins_until: null,
               onesignal_notification_ids: [],
               last_scheduled_until: null,
               next_reminder: nextStillAhead ? savedNext : null
@@ -194,8 +199,11 @@ export default async function(req: Request): Promise<Response> {
             // Smart-reminder or one-time task: cancel the check-ins, touch nothing else.
             await cancelOneSignal(checkinIds);
             await base44.asServiceRole.entities.Task.update(focusTaskId, {
-              focus_mode_notification_ids: []
+              focus_mode_notification_ids: [],
+              focus_mode_checkins_until: null
             });
+          } else {
+            await base44.asServiceRole.entities.Task.update(focusTaskId, { focus_mode_checkins_until: null }).catch(() => {});
           }
         }
       }
@@ -204,6 +212,16 @@ export default async function(req: Request): Promise<Response> {
         focus_mode_task_id: null,
         focus_mode_entered_at: null
       });
+
+      // Everything back to normal NOW, not at the next hourly run: the other
+      // recurring reminders that went quiet on enter are booked again (the
+      // refill job, scoped to this one account). Anna, Oct 13 2026: "then
+      // everything goes back to normal".
+      try {
+        await base44.asServiceRole.functions.invoke('cronRefillReminders', { onlyEmail: user.email });
+      } catch (e) {
+        console.warn('[setFocusMode] could not rebook the other reminders right away; the hourly job will:', e);
+      }
 
       return Response.json({ success: true, focusMode: false });
     }
