@@ -61,10 +61,10 @@ function handleNotificationData(data, navigate) {
   const taskId = data.taskId || data.task_id;
   if (!taskId) return;
 
-  // Focus Mode's quiet-hours question ("keep going until you finish, or pick
-  // this up tomorrow morning?") opens the app on that choice (FocusModePrompt).
-  if (data.type === 'focus_quiet') {
-    const target = `/Home?focusQuiet=${encodeURIComponent(taskId)}`;
+  // Focus Mode's morning question ("pick up where you left off?") opens the
+  // app on that choice (FocusModePrompt).
+  if (data.type === 'focus_morning') {
+    const target = `/Home?focusMorning=${encodeURIComponent(taskId)}`;
     if (navigate) navigate(target); else window.location.href = target;
     return;
   }
