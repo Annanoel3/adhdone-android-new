@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { 
-  Sun, 
-  Moon, 
-  Sparkles, 
+import {
+  Sun,
+  Moon,
+  Sparkles,
   Settings as SettingsIcon,
   Bell,
   Shield,
@@ -14,7 +14,8 @@ import {
   ArrowLeft,
   Info,
   User as UserIcon,
-  UserCircle
+  UserCircle,
+  Volume2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { base44 } from '@/api/base44Client';
@@ -23,6 +24,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import HomeZipCard from '@/components/settings/HomeZipCard';
 import QuickCaptureCard, { AlarmCard } from '@/components/settings/QuickCaptureCard';
+import { voiceCheckInsOn, setVoiceCheckIns, speechAvailable } from '@/components/utils/speak';
 import { refreshAlarms } from '@/components/utils/widgetBridge';
 import AdDiagnosticsCard from '@/components/settings/AdDiagnosticsCard';
 import { Textarea } from '@/components/ui/textarea';
@@ -145,6 +147,9 @@ export default function Settings() {
     return () => clearTimeout(t);
   }, [location.hash, section]);
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
+  // Spoken check-ins while a task is being timed (speak.js). On this
+  // phone only — the voice is the phone's.
+  const [timerVoice, setTimerVoice] = useState(() => voiceCheckInsOn());
   const [specialMode, setSpecialMode] = useState(() => localStorage.getItem('special_mode') || 'normal');
   const [seasonalUnlocked, setSeasonalUnlocked] = useState(() => localStorage.getItem('seasonal_unlocked') === 'true');
   const [user, setUser] = useState(null);
@@ -608,6 +613,36 @@ export default function Settings() {
             )}
           </CardContent>
         </Card>
+
+        {/* Spoken check-ins during a timer (Anna, Oct 13 2026): halfway, two
+            minutes out, and when a task passes its usual length — in case
+            the person drifted. Hidden where the phone has no speech. */}
+        {speechAvailable() && (
+          <Card id="timer-voice" className={`mb-6 border-none shadow-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+            <CardHeader>
+              <CardTitle className={`flex items-center gap-2 ${theme === 'dark' ? 'text-white' : ''}`}>
+                <Volume2 className="w-5 h-5" />
+                Timer voice
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <div className="pr-4">
+                  <p className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
+                    Spoken check-ins while you time a task
+                  </p>
+                  <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                    A quick "still on it?" out loud — halfway through a timer, two minutes before it ends, and when a task passes how long it usually takes you — in case you drifted. Keep your volume up. Only while the app is open.
+                  </p>
+                </div>
+                <Switch
+                  checked={timerVoice}
+                  onCheckedChange={(on) => { setTimerVoice(on); setVoiceCheckIns(on); }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Full-screen reminders: the account default, the ring sound and the
             phone permissions. The card renders nothing on a build without the
