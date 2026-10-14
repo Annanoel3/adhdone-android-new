@@ -354,9 +354,15 @@ export default function ParkingLot() {
 
   const refreshIdeas = () => queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
 
-  const addTrackerEntry = async (tracker, text) => {
+  // note: what they said around the reading (when it was taken, what they'd
+  // just done or taken, how they felt) — kept with the entry, shown under it,
+  // never charted (Anna, Oct 14 2026: "blood pressure is 98/70 and heart is
+  // 89 bpm. this is an hour after taking mestinon for the first time and
+  // eating a small snack" → two readings, each with that note).
+  const addTrackerEntry = async (tracker, text, note = '') => {
     const fresh = await base44.entities.ParkingLotIdea.get(tracker.id).catch(() => null);
-    const entries = [...((fresh || tracker).tracker_entries || []), { at: new Date().toISOString(), text }];
+    const clean = String(note || '').trim().slice(0, 300);
+    const entries = [...((fresh || tracker).tracker_entries || []), { at: new Date().toISOString(), text, ...(clean ? { note: clean } : {}) }];
     await base44.entities.ParkingLotIdea.update(tracker.id, { tracker_entries: entries });
   };
 
@@ -469,9 +475,11 @@ export default function ParkingLot() {
 Things they already keep track of here (they log entries to these over time): ${trackers.length ? JSON.stringify(trackers) : 'none yet'}
 
 What is it? It can be more than one thing at once ("blood pressure 91 over 57 and heart rate 89" is a reading for blood pressure AND a reading for heart rate) — give one item per part, in order:
-1. An entry for one of those they already keep track of (a reading, a number, a note for it), like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<just this part, as they said it, without its name>"}
-2. They want to keep track of something over time, logging it again and again. It can be anything they choose: a measurement, money spent, a mood, how their day went. A reading for something they don't track yet counts, with that reading as its first entry. {"track": "<a short name for it, in their words>", "entry": "<an entry if they already gave one, else null>", "remind": "<daily, weekly or monthly if they said how often, else null>", "time": "<HH:MM, 24-hour, if they said a time, else null>"}
+1. An entry for one of those they already keep track of (a reading, a number, a note for it), like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<just this part, as they said it, without its name>", "note": "<see below, else null>"}
+2. They want to keep track of something over time, logging it again and again. It can be anything they choose: a measurement, money spent, a mood, how their day went. A reading for something they don't track yet counts, with that reading as its first entry. {"track": "<a short name for it, in their words>", "entry": "<an entry if they already gave one, else null>", "note": "<see below, else null>", "remind": "<daily, weekly or monthly if they said how often, else null>", "time": "<HH:MM, 24-hour, if they said a time, else null>"}
 3. Anything else: an idea, a to-do, a list, a note, a one-time thing. {"none": true}
+
+note: anything else they said that goes with a reading — when it was taken, what they had just done, eaten or taken, how they felt — in their words, without the reading itself. Context that applies to the whole sentence goes on every part. "blood pressure is 98/70 and heart is 89 bpm. this is an hour after taking mestinon for the first time and eating a small snack." → entry "98/70" and entry "89 bpm", each with the note "an hour after taking mestinon for the first time and eating a small snack".
 
 Judge by what they mean. Only 1 or 2 when they clearly mean logging something over time; a to-do that mentions a number is 3. Answer with JSON only, in this shape: {"actions": [ ... ]} — one object per part, or a single {"none": true}.`;
     let out = null;
@@ -500,13 +508,14 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
       const news = [];
       for (const a of actions) {
         const entry = typeof a.entry === 'string' ? a.entry.trim() : '';
+        const note = typeof a.note === 'string' ? a.note.trim().slice(0, 300) : '';
         const target = a.log_to ? all.find((i) => i.id === a.log_to && i.tracker) : null;
-        if (target && entry) logs.push({ target, entry });
-        else if (typeof a.track === 'string' && a.track.trim()) news.push({ name: a.track.trim().slice(0, 120), entry, remind: a.remind, time: a.time });
+        if (target && entry) logs.push({ target, entry, note });
+        else if (typeof a.track === 'string' && a.track.trim()) news.push({ name: a.track.trim().slice(0, 120), entry, note, remind: a.remind, time: a.time });
       }
-      for (const { target, entry } of logs) {
-        await addTrackerEntry(target, entry);
-        toast({ title: `Logged to ${target.idea}`, description: entry });
+      for (const { target, entry, note } of logs) {
+        await addTrackerEntry(target, entry, note);
+        toast({ title: `Logged to ${target.idea}`, description: note ? `${entry} — ${note}` : entry });
       }
       if (news.length === 0) {
         if (logs.length > 0) await base44.entities.ParkingLotIdea.delete(idea.id);
@@ -514,7 +523,7 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
       } else {
         // The first new tracker takes over this row; any other becomes its own.
         const [first, ...rest] = news;
-        const entriesOf = (n) => (n.entry ? [{ at: new Date().toISOString(), text: n.entry }] : []);
+        const entriesOf = (n) => (n.entry ? [{ at: new Date().toISOString(), text: n.entry, ...(n.note ? { note: n.note } : {}) }] : []);
         await base44.entities.ParkingLotIdea.update(idea.id, {
           tracker: true,
           tracker_checked: true,
@@ -1233,6 +1242,7 @@ Return ONLY the category name, nothing else.`;
                         <p className={`text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                           <span className="font-semibold">{last.text}</span>
                           <span className="text-gray-500"> · {formatLogTime(last.at)}</span>
+                          {last.note ? <span className="block text-xs text-gray-500 italic">{last.note}</span> : null}
                         </p>
                       ) : (
                         <p className="text-sm text-gray-500">Nothing logged yet.</p>
@@ -1604,7 +1614,7 @@ Return ONLY the category name, nothing else.`;
           />
           {(() => {
             const last = (logFor?.tracker_entries || []).slice(-1)[0];
-            return last ? <p className="text-xs text-gray-500">Last time: {last.text} · {formatLogTime(last.at)}</p> : null;
+            return last ? <p className="text-xs text-gray-500">Last time: {last.text}{last.note ? ` — ${last.note}` : ''} · {formatLogTime(last.at)}</p> : null;
           })()}
           <Button onClick={saveLog} disabled={trackerBusy || !logText.trim()} className="w-full bg-purple-600 hover:bg-purple-700 text-white">
             {trackerBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
@@ -1652,6 +1662,7 @@ Return ONLY the category name, nothing else.`;
                       <div key={`${e.at}-${i}`} className={`flex items-start justify-between gap-2 p-2 rounded-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}>
                         <div className="min-w-0">
                           <p className="text-sm whitespace-pre-wrap break-words">{e.text}</p>
+                          {e.note ? <p className="text-xs text-gray-500 italic whitespace-pre-wrap break-words">{e.note}</p> : null}
                           <p className="text-xs text-gray-500">{formatLogTime(e.at)}</p>
                         </div>
                         <button onClick={() => removeTrackerEntry(historyFor, e)} className="text-gray-400 hover:text-red-600 p-1 flex-shrink-0" aria-label="Remove this entry">
