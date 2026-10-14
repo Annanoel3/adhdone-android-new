@@ -202,6 +202,20 @@
       "format": "date-time",
       "description": "When the user entered Focus Mode"
     },
+    "focus_mode_offer_task_id": {
+      "type": "string",
+      "description": "Focus Mode's morning offer (Anna, Oct 14 2026): the task whose session paused for quiet hours. The end-of-quiet-hours push asks 'pick up where you left off?'; unanswered, the session ends on its own (cronRefillReminders) but this offer stands, so opening the app that day still asks. Set by setFocusMode on enter/continue; cleared on a chosen exit."
+    },
+    "focus_mode_offer_from": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the morning offer opens: the end of the owner's quiet hours, when its push goes out."
+    },
+    "focus_mode_offer_until": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the morning offer lapses: the next start of the owner's quiet hours. The app asks only between from and until."
+    },
     "onesignal_player_ids": {
       "type": "array",
       "items": {
