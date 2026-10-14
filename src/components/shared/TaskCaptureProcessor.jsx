@@ -29,6 +29,7 @@ import {
   createTaskWithPriority,
   createTaskWithDate,
   createTaskAnyDay,
+  keepEarliest,
   trace,
 } from "../utils/taskCreationPipeline";
 
@@ -87,22 +88,33 @@ const RETRY_PAUSES_MS = [3000, 10000, 30000];
 // phone locked), so a task typed a moment before used to wait, unmade, until
 // the app was opened again. Oct 13 2026: "call propane 530-477-7854 today" was
 // sorted, then nothing; the app was most likely left to make that very call.
-// So when the app goes off screen before a capture has made anything, the
-// capture is handed to the server (captureText, the path the share sheet and
-// the pinned notification use), which makes it with the app closed. The
-// app's own id goes with it as capture_id: captureText makes a capture once
-// however many times it is sent. Phones with the newer build hand it to their
-// own background sender (ShareBridge.handOffCapture: kept on the phone and
+// So when the app goes off screen, whatever a capture hasn't made yet is
+// handed to the server (captureText, the path the share sheet and the pinned
+// notification use), which makes it with the app closed. The app's own id
+// goes with it as capture_id: captureText makes a capture once however many
+// times it is sent. Phones with the newer build hand it to their own
+// background sender (ShareBridge.handOffCapture: kept on the phone and
 // retried until it lands, even with no signal); older ones send it straight
 // from here, best effort, and finish it the same way when the app is back.
-// Not handed over: a Parking Lot idea being turned into a task, and a task
-// added under a picked calendar day — captureText knows neither — and a
-// capture already waiting on a question to the person, which they'll answer.
+// A capture not split yet goes over whole. One already split goes over part
+// by part — every part not made yet, each as its own capture (partId), the
+// one in progress included: it is either still with the parser (nothing
+// saved yet; the save is stopped, and a save already on its way carries the
+// same id, so the server sees it) or waiting on a question to the person,
+// which the server settles for itself. Oct 14 2026, 1:52 AM: four
+// appointments typed at once, two made through their "when?" questions, the
+// third question left open as the phone was put down — and the last two sat
+// unmade until the next open. Not handed over: a Parking Lot idea being
+// turned into a task, and a task added under a picked calendar day —
+// captureText knows neither.
 const canHandOff = (c) => !!c && !!String(c.text || '').trim() && !c.fromIdea && !c.presetDate && !c.presetDueDateISO;
 const localZone = () => {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined; } catch (e) { return undefined; }
 };
+// One part of a split capture, as the server knows it (its capture_id).
+const partId = (c, part) => `${c.id}#${part}`;
 const handOffPayload = (c) => ({ text: c.text, timezone: localZone(), capture_id: c.id, said_at: c.createdAt || Date.now() });
+const partPayload = (c, part) => ({ text: c.parts[part], timezone: localZone(), capture_id: partId(c, part), said_at: c.createdAt || Date.now() });
 
 // Lives in the app Layout so task parsing keeps running after the user leaves
 // the Add Task screen. Drains the pending-capture queue and asks the user for
@@ -120,17 +132,21 @@ export default function TaskCaptureProcessor({ userEmail }) {
   const inflightRef = useRef(null);
 
   const resolveRef = useRef(null);
+  // Which capture the open question belongs to (a hand-off closes it).
+  const askForRef = useRef(null);
   const [ask, setAsk] = useState(null); // { type, data }
 
-  const requestInput = (type, data) =>
+  const requestInput = (type, data, captureId = null) =>
     new Promise((resolve) => {
       resolveRef.current = resolve;
+      askForRef.current = captureId;
       setAsk({ type, data });
     });
 
   const answer = (value) => {
     const resolve = resolveRef.current;
     resolveRef.current = null;
+    askForRef.current = null;
     setAsk(null);
     if (resolve) resolve(value);
   };
@@ -152,14 +168,26 @@ export default function TaskCaptureProcessor({ userEmail }) {
           // Handed to the server (see canHandOff): ask it for the result — the
           // same call again, which makes the task if it isn't made yet and
           // otherwise just says what was made. The app never makes it itself.
+          // A capture handed over part by part is asked about part by part.
           const finishOnServer = async () => {
-            const res = await base44.functions.invoke('captureText', handOffPayload(capture));
-            const d = res?.data || {};
-            if (!d.success) throw new Error(d.error || 'Could not finish setting up this task');
-            trace('captureServerDone', { id: capture.id, count: d.count || 0, duplicate: !!d.duplicate, kind: d.kind || '' });
-            madeTask = true;
-            madeTaskId = d.tasks?.[0]?.id || madeTaskId;
-            if (d.kind === 'idea') window.dispatchEvent(new Event('parking-lot-changed'));
+            const askServer = async (payload) => {
+              const res = await base44.functions.invoke('captureText', payload);
+              const d = res?.data || {};
+              if (!d.success) throw new Error(d.error || 'Could not finish setting up this task');
+              trace('captureServerDone', { id: payload.capture_id, count: d.count || 0, duplicate: !!d.duplicate, kind: d.kind || '' });
+              madeTask = true;
+              madeTaskId = d.tasks?.[0]?.id || madeTaskId;
+              if (d.kind === 'idea') window.dispatchEvent(new Event('parking-lot-changed'));
+            };
+            const from = Number.isInteger(capture.handedOffFrom) ? capture.handedOffFrom : null;
+            if (from === null || !Array.isArray(capture.parts) || !capture.parts.length) {
+              await askServer(handOffPayload(capture));
+              return;
+            }
+            for (let i = Math.max(from, capture.doneCount || 0); i < capture.parts.length; i++) {
+              await askServer(partPayload(capture, i));
+              saveCaptureProgress(capture.id, { doneCount: i + 1 });
+            }
           };
           try {
             trace('captureClaimed', { id: capture.id, text: capture.text.slice(0, 200), resumed: !!capture.resumed });
@@ -199,7 +227,8 @@ export default function TaskCaptureProcessor({ userEmail }) {
             const firstPart = capture.doneCount || 0;
             for (let part = firstPart; part < taskList.length; part++) {
               const text = taskList[part];
-              if (capture.handedOff && !madeTask) {
+              // With the server from here on: ask it, make nothing here.
+              if (capture.handedOff) {
                 await finishOnServer();
                 break;
               }
@@ -216,50 +245,51 @@ export default function TaskCaptureProcessor({ userEmail }) {
                 kind: partKind,
                 // Date words count from when this was typed, however late it runs.
                 saidAt: capture.createdAt || null,
-                // Stamped on what it makes, so the server can see it was made
-                // if the app goes off screen with the save already on its way.
-                captureId: canHandOff(capture) ? capture.id : null,
+                // Stamped on what it makes (this part's own id), so the server
+                // can see it was made if the app goes off screen with the save
+                // already on its way.
+                captureId: canHandOff(capture) ? partId(capture, part) : null,
                 // Handed to the server meanwhile: make nothing here.
-                stopIf: () => !!capture.handedOff && !madeTask,
+                stopIf: () => !!capture.handedOff,
               });
               if (inflightRef.current?.id === capture.id) inflightRef.current.open = false;
               // Handed over before this part was saved: the server has it now,
               // including any question the parser would have asked.
-              if (capture.handedOff && !madeTask && result.status !== 'done') {
+              if (capture.handedOff && result.status !== 'done') {
                 await finishOnServer();
                 break;
               }
+              // A question answered here while the app was going off screen:
+              // the server may have made this part too — keep one.
+              const settle = async (t) => {
+                madeTask = true;
+                madeTaskId = t?.id || madeTaskId;
+                if (t?.id && capture.handedOff && canHandOff(capture)) madeTaskId = await keepEarliest(partId(capture, part), t.id);
+              };
 
               if (result.status === 'done') {
                 madeTask = true;
                 madeTaskId = result.taskId || madeTaskId;
               } else if (result.status === 'needs_priority') {
-                const priority = await requestInput('priority', result.data);
-                if (priority) {
-                  const t = await createTaskWithPriority(result.data, priority);
-                  madeTask = true;
-                  madeTaskId = t?.id || madeTaskId;
-                }
+                const priority = await requestInput('priority', result.data, capture.id);
+                if (capture.handedOff) { await finishOnServer(); break; } // closed by the hand-off: the server's now
+                if (priority) await settle(await createTaskWithPriority(result.data, priority));
               } else if (result.status === 'needs_date') {
-                const choice = await requestInput('date', result.data);
+                const choice = await requestInput('date', result.data, capture.id);
+                if (capture.handedOff) { await finishOnServer(); break; }
                 if (choice?.anyDay) {
-                  const t = await createTaskAnyDay(result.data);
-                  madeTask = true;
-                  madeTaskId = t?.id || madeTaskId;
+                  await settle(await createTaskAnyDay(result.data));
                 } else if (choice?.date) {
                   try {
-                    const t = await createTaskWithDate(result.data, choice.date, choice.time);
-                    madeTask = true;
-                    madeTaskId = t?.id || madeTaskId;
+                    await settle(await createTaskWithDate(result.data, choice.date, choice.time));
                   } catch (e) {
                     toast({ title: e.message, variant: 'destructive' });
                   }
                 }
               } else if (result.status === 'needs_advance') {
-                const minutes = await requestInput('advance', result.taskData);
-                const t = await createAdvanceTask(result.taskData, result.currentUser, minutes ?? 0);
-                madeTask = true;
-                madeTaskId = t?.id || madeTaskId;
+                const minutes = await requestInput('advance', result.taskData, capture.id);
+                if (capture.handedOff) { await finishOnServer(); break; }
+                await settle(await createAdvanceTask(result.taskData, result.currentUser, minutes ?? 0));
               } else if (result.status === 'error') {
                 // Same handling as a thrown error: kept and tried again.
                 throw new Error(result.message || 'Could not set up the task');
@@ -306,25 +336,44 @@ export default function TaskCaptureProcessor({ userEmail }) {
     };
     drainRef.current = drain;
 
-    // Off screen: every capture that hasn't made anything yet goes to the
-    // server (see canHandOff). The one being worked on only while its part is
-    // still with the parser; one not started yet always.
+    // Off screen: everything not made yet goes to the server (see canHandOff).
+    // A capture not split yet goes over whole (only while its words are still
+    // with the sorter). One already split goes over from the part it is on,
+    // each part its own capture — and the question that part may be waiting
+    // on is closed, since the server settles it.
     const handOff = () => {
       const bridge = window.Capacitor?.Plugins?.ShareBridge;
       const viaPhone = typeof bridge?.handOffCapture === 'function';
-      for (const c of currentCaptures()) {
-        if (c.held || c.handedOff || !canHandOff(c) || (c.doneCount || 0) > 0) continue;
-        if (c.started && !(inflightRef.current?.id === c.id && inflightRef.current.open)) continue;
-        if (!c.ownerEmail) continue;
-        markCaptureHandedOff(c.id);
-        const payload = handOffPayload(c);
+      const send = (id, text, createdAt) => {
+        const payload = { text, timezone: localZone(), capture_id: id, said_at: createdAt };
         if (viaPhone) {
-          bridge.handOffCapture({ id: c.id, text: c.text, createdAt: payload.said_at })
+          bridge.handOffCapture({ id, text, createdAt })
             .catch(() => base44.functions.invoke('captureText', payload).catch(() => {}));
         } else {
           base44.functions.invoke('captureText', payload).catch(() => {});
         }
+      };
+      const handed = [];
+      for (const c of currentCaptures()) {
+        if (c.held || c.handedOff || !canHandOff(c) || !c.ownerEmail) continue;
+        const said = c.createdAt || Date.now();
+        if (Array.isArray(c.parts) && c.parts.length) {
+          const from = c.doneCount || 0;
+          if (from >= c.parts.length) continue; // every part made; the app is just wrapping up
+          markCaptureHandedOff(c.id, from);
+          for (let i = from; i < c.parts.length; i++) send(partId(c, i), c.parts[i], said);
+          trace('captureHandedOff', { id: c.id, from, parts: c.parts.length });
+        } else {
+          if (c.started && !(inflightRef.current?.id === c.id && inflightRef.current.open)) continue;
+          markCaptureHandedOff(c.id);
+          send(c.id, c.text, said);
+          trace('captureHandedOff', { id: c.id, whole: true });
+        }
+        handed.push(c.id);
       }
+      // The open question belongs to a capture the server now has: close it.
+      // The loop sees the hand-off and asks the server for the result.
+      if (resolveRef.current && askForRef.current && handed.includes(askForRef.current)) answer(null);
     };
 
     // A capture waiting for the app to be back on screen, or back online, is
