@@ -632,7 +632,7 @@ export default function Settings() {
                     Spoken check-ins while you time a task
                   </p>
                   <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                    A quick "still on it?" out loud — halfway through a timer, two minutes before it ends, and when a task passes how long it usually takes you — in case you drifted. Keep your volume up. Only while the app is open.
+                    A gentle hello out loud now and then while a timer runs — no clock, no scorekeeping, just a check that you haven't drifted off. Keep your volume up. Only while the app is open.
                   </p>
                 </div>
                 <Switch
