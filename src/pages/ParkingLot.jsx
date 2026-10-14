@@ -1734,12 +1734,29 @@ Return ONLY the category name, nothing else.`;
                 if (n[1] != null) { row[`${sr.key}b`] = n[1]; hasB = true; }
                 rows.push(row);
               }
-              lines.push({ key: `${sr.key}a`, name: sr.name, color: colors[color++ % colors.length] });
-              if (hasB) lines.push({ key: `${sr.key}b`, name: `${sr.name} · 2nd number`, color: colors[color++ % colors.length] });
+              // A pair's two lines get their own names: blood pressure is
+              // systolic and diastolic, not "blood pressure" twice.
+              const isBp = /blood\s*pressure|\bbp\b/i.test(sr.name);
+              const [nameA, nameB] = hasB ? (isBp ? ['systolic', 'diastolic'] : [`${sr.name} · 1st number`, `${sr.name} · 2nd number`]) : [sr.name, ''];
+              lines.push({ key: `${sr.key}a`, name: nameA, color: colors[color++ % colors.length] });
+              if (hasB) lines.push({ key: `${sr.key}b`, name: nameB, color: colors[color++ % colors.length] });
             }
             rows.sort((x, y) => x.ms - y.ms);
-            const points = rows;
-            const axis = niceTicks(rows.flatMap((r) => lines.map((l) => r[l.key])));
+            // Readings taken together (one sentence: blood pressure, then
+            // heart rate a second later) share one spot on the time line,
+            // so their dots sit in the same vertical line. Two readings of
+            // the SAME thing never merge, however close.
+            const points = [];
+            for (const r of rows) {
+              const last = points[points.length - 1];
+              const keys = Object.keys(r).filter((k) => k !== 'ms' && k !== 'label');
+              if (last && r.ms - last.ms < 2 * 60 * 1000 && keys.every((k) => !(k in last))) {
+                for (const k of keys) last[k] = r[k];
+              } else {
+                points.push({ ...r });
+              }
+            }
+            const axis = niceTicks(points.flatMap((r) => lines.map((l) => r[l.key])));
             return (
               <>
                 {points.length >= 2 && (
@@ -1749,7 +1766,7 @@ Return ONLY the category name, nothing else.`;
                         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                         <YAxis tick={{ fontSize: 11 }} domain={axis ? axis.domain : ['auto', 'auto']} ticks={axis ? axis.ticks : undefined} />
                         <ChartTooltip />
-                        {companions.length > 0 && <ChartLegend wrapperStyle={{ fontSize: 11 }} />}
+                        {lines.length > 1 && <ChartLegend wrapperStyle={{ fontSize: 11 }} />}
                         {lines.map((l) => (
                           <Line key={l.key} type="monotone" dataKey={l.key} name={l.name} stroke={l.color} strokeWidth={2} dot={{ r: 3 }} connectNulls />
                         ))}
