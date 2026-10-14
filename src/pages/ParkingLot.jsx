@@ -257,8 +257,35 @@ const formatLogTime = (at) => {
   return new Date(ms).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 };
 
-// The numbers in an entry, for the chart ("120/80" is two).
-const trackerNumbers = (text) => (String(text || '').match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+// The numbers in an entry, for the chart ("120/80" is two). A pair written
+// as "120/80" or "120 over 80" wins over whatever other numbers the entry
+// mentions ("felt 2 points better, 120/80" charts 120 and 80, not 2); an
+// entry with no such pair charts its numbers in the order written.
+const trackerNumbers = (text) => {
+  const t = String(text || '');
+  const pair = /(-?\d+(?:\.\d+)?)\s*(?:\/|over)\s*(-?\d+(?:\.\d+)?)/i.exec(t);
+  if (pair) return [Number(pair[1]), Number(pair[2])];
+  return (t.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+};
+
+// Round-number ticks for the chart's left edge (55 to 99 used to read as 55,
+// 66, 77, 88, 99 — correct, but hard to check at a glance). The axis still
+// zooms to the data rather than starting at zero, so a change shows.
+function niceTicks(values) {
+  const nums = values.filter((v) => Number.isFinite(v));
+  if (!nums.length) return null;
+  let lo = Math.min(...nums);
+  let hi = Math.max(...nums);
+  if (hi === lo) { lo -= 1; hi += 1; }
+  const span = hi - lo;
+  const steps = [0.5, 1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000, 10000];
+  const step = steps.find((st) => span / st <= 5) || steps[steps.length - 1];
+  const start = Math.floor(lo / step) * step;
+  const end = Math.ceil(hi / step) * step;
+  const ticks = [];
+  for (let v = start; v <= end + step / 1000; v += step) ticks.push(Number(v.toFixed(3)));
+  return { domain: [start, end], ticks };
+}
 
 export default function ParkingLot() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
@@ -1601,6 +1628,7 @@ Return ONLY the category name, nothing else.`;
               })
               .filter((p) => p.a != null);
             const both = points.length > 0 && points.every((p) => p.b != null);
+            const axis = niceTicks(points.flatMap((p) => (both ? [p.a, p.b] : [p.a])));
             return (
               <>
                 {points.length >= 2 && (
@@ -1608,7 +1636,7 @@ Return ONLY the category name, nothing else.`;
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
                         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} domain={['auto', 'auto']} />
+                        <YAxis tick={{ fontSize: 11 }} domain={axis ? axis.domain : ['auto', 'auto']} ticks={axis ? axis.ticks : undefined} />
                         <ChartTooltip />
                         <Line type="monotone" dataKey="a" name={historyFor?.idea} stroke="#9333ea" strokeWidth={2} dot={{ r: 3 }} />
                         {both && <Line type="monotone" dataKey="b" name="2nd number" stroke="#ec4899" strokeWidth={2} dot={{ r: 3 }} />}
