@@ -183,7 +183,7 @@ async function saveAppFeedback(inputText, captureId = null) {
 // was on its way, so both may have made it. The earliest row carrying the
 // capture's id wins — the same rule captureText uses on its side — and this
 // one goes if it wasn't first. Returns the id of the one kept.
-async function keepEarliest(captureId, myTaskId) {
+export async function keepEarliest(captureId, myTaskId) {
   try {
     const [tasks, ideas] = await Promise.all([
       base44.entities.Task.filter({ capture_id: captureId }),
@@ -425,6 +425,7 @@ export async function processAndCreateTask(inputText, opts = {}) {
           classification: parsed.classification || 'task',
           life_area: parsed.life_area === 'work' ? 'work' : 'personal',
           presetDueDateISO,
+          captureId,
           currentUser
         }
       };
@@ -447,6 +448,7 @@ export async function processAndCreateTask(inputText, opts = {}) {
           life_area: parsed.life_area === 'work' ? 'work' : 'personal',
           end_date: parsed.end_date || null,
           presetDueDateISO,
+          captureId,
           currentUser
         }
       };
@@ -770,6 +772,7 @@ export async function createAdvanceTask(taskData, currentUser, minutesBefore) {
 export async function createTaskWithPriority(data, priority) {
   const urgency = ['high', 'medium', 'low'].includes(priority) ? priority : 'medium';
   const createdTask = await base44.entities.Task.create({
+    ...(data.captureId ? { capture_id: data.captureId } : {}),
     title: data.title,
     original_input: data.original_input || null,
     reminder_wish: data.reminder_wish || null,
@@ -807,6 +810,7 @@ export async function createTaskWithDate(data, date, time) {
   }
 
   const createdTask = await base44.entities.Task.create({
+    ...(data.captureId ? { capture_id: data.captureId } : {}),
     title: data.title,
     original_input: data.original_input || null,
     reminder_wish: data.reminder_wish || null,
@@ -881,6 +885,7 @@ export async function createTaskAnyDay(data) {
   }
 
   return base44.entities.Task.create({
+    ...(data.captureId ? { capture_id: data.captureId } : {}),
     title: data.title,
     original_input: data.original_input || null,
     reminder_wish: data.reminder_wish || null,
