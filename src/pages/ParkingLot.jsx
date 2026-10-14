@@ -538,7 +538,7 @@ Give one item per reading, in order: {"log_to": "<its id>", "entry": "<the readi
 Things they already keep track of here (they log entries to these over time): ${trackers.length ? JSON.stringify(trackers) : 'none yet'}
 
 What is it? It can be more than one thing at once ("blood pressure 91 over 57 and heart rate 89" is a reading for blood pressure AND a reading for heart rate) — give one item per part, in order:
-1. An entry for one of those they already keep track of (a reading, a number, a note for it), like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<just this part, as they said it, without its name>", "note": "<see below, else null>"}. Match by meaning, short forms included ("bp" is blood pressure, "hr" or "heart" is heart rate): something they already keep track of is always 1, never 2.
+1. An entry for one of those they already keep track of (a reading, a number, a note for it), like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<just this part, as they said it, without its name>", "note": "<see below, else null>"}. Match by meaning, not spelling: "heartrate", "heart rate", "hr", "pulse" and "bpm" are all the same thing, "bp" is blood pressure. Something they already keep track of is ALWAYS 1 — never start a second one for it under a different spelling.
 2. They want to keep track of something over time, logging it again and again. It can be anything they choose: a measurement, money spent, a mood, how their day went. A reading for something they don't track yet counts, with that reading as its first entry. {"track": "<a short name for it, in their words>", "entry": "<an entry if they already gave one, else null>", "note": "<see below, else null>", "remind": "<daily, weekly or monthly if they said how often, else null>", "time": "<HH:MM, 24-hour, if they said a time, else null>"}
 3. Anything else: an idea, a to-do, a list, a note, a one-time thing. {"none": true}
 
@@ -569,7 +569,14 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
       const actions = (Array.isArray(out.actions) ? out.actions : [out]).filter((a) => a && typeof a === 'object');
       const logs = [];
       const news = [];
-      const sameName = (x, y) => String(x || '').trim().toLowerCase().replace(/\s+/g, ' ') === String(y || '').trim().toLowerCase().replace(/\s+/g, ' ');
+      // "heartrate", "heart rate", "Heart-Rate", "hr" and "pulse" are one
+      // thing (Oct 14 2026: a third tracker named "heartrate" appeared next to
+      // "heart rate"). Letters only, then the common short forms.
+      const canon = (name) => {
+        const k = String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        return ({ hr: 'heartrate', pulse: 'heartrate', heartbeat: 'heartrate', bpm: 'heartrate', bp: 'bloodpressure', pressure: 'bloodpressure', temp: 'temperature', wt: 'weight' })[k] || k;
+      };
+      const sameName = (x, y) => canon(x) !== '' && canon(x) === canon(y);
       for (const a of actions) {
         const entry = typeof a.entry === 'string' ? a.entry.trim() : '';
         const note = typeof a.note === 'string' ? a.note.trim().slice(0, 300) : '';
