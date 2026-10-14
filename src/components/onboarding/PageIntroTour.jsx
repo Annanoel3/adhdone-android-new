@@ -58,6 +58,7 @@ export default function PageIntroTour({ currentPageName, user }) {
     // refreshed mid-wait (that happens often) — only if this goes away.
     if (!user || walkthroughChecked.current) return;
     walkthroughChecked.current = true;
+    if (!ADD_PATHS_WALKTHROUGH_ON) return;
     if (localStorage.getItem(seenKey("Tasks"))) return;
     const setupFinished =
       isStepDone(ONBOARDING_STEPS.welcome) &&
@@ -102,8 +103,9 @@ export default function PageIntroTour({ currentPageName, user }) {
         });
       return () => { cancelledHome = true; };
     }
-    // The Tasks page's intro is the video walkthrough below, not a card.
-    const tour = currentPageName === "Tasks" ? ADD_PATHS_TOUR : PAGE_TOURS[currentPageName];
+    // The Tasks page's intro is the video walkthrough below, not a card —
+    // and with the walkthrough off, Tasks has no intro at all.
+    const tour = currentPageName === "Tasks" ? (ADD_PATHS_WALKTHROUGH_ON ? ADD_PATHS_TOUR : null) : PAGE_TOURS[currentPageName];
     if (!tour) return;
     if (localStorage.getItem(seenKey(currentPageName))) return;
 
@@ -174,6 +176,11 @@ export default function PageIntroTour({ currentPageName, user }) {
   );
 }
 const ADD_PATHS_TOUR = "add-paths";
+// The four-video walkthrough is switched OFF (Anna, Oct 13 2026): the App
+// Guide now carries the same five ways with the same clips, and the red dot
+// on the menu after onboarding leads people there and never clears until
+// they go. Everything below is kept so it can come back with one flip.
+const ADD_PATHS_WALKTHROUGH_ON = false;
 
 // A how-to clip that behaves like a GIF: silent, looping, and it starts on its
 // own the moment it scrolls into view (and pauses when it leaves), so nobody
