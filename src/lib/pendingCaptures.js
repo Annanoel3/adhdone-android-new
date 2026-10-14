@@ -65,6 +65,7 @@ function persist(capture) {
     doneCount: capture.doneCount || 0,
     createdAt: capture.createdAt,
     handedOff: capture.handedOff || null,
+    handedOffFrom: Number.isInteger(capture.handedOffFrom) ? capture.handedOffFrom : null,
     touchedAt: Date.now(),
   };
   writeStore([...readStore().filter((c) => c.id !== capture.id), entry]);
@@ -97,6 +98,7 @@ const fromEntry = (entry) => ({
   doneCount: entry.doneCount || 0,
   createdAt: entry.createdAt || Date.now(),
   handedOff: entry.handedOff || null,
+  handedOffFrom: Number.isInteger(entry.handedOffFrom) ? entry.handedOffFrom : null,
   resumed: true,
   started: false,
 });
@@ -266,15 +268,19 @@ export function currentCaptures() {
   return [...captures];
 }
 
-// The app went off screen before this capture made anything, so it was handed
-// to the server (TaskCaptureProcessor). From here on only the server makes it:
-// whatever the app does when it's back is ask the server for the result, never
-// make the task itself. Written to storage at once (the app may be stopped any
-// moment), so a capture finished on a later open knows it too.
-export function markCaptureHandedOff(id) {
+// The app went off screen before this capture was finished, so what was left
+// of it was handed to the server (TaskCaptureProcessor). From here on only the
+// server makes it: whatever the app does when it's back is ask the server for
+// the result, never make the task itself. `fromPart`: the capture was already
+// split, and its parts from this index on went over, each as its own capture
+// (see TaskCaptureProcessor.partId); null means the whole text went over
+// unsplit. Written to storage at once (the app may be stopped any moment), so
+// a capture finished on a later open knows it too.
+export function markCaptureHandedOff(id, fromPart = null) {
   const capture = captures.find((c) => c.id === id);
   if (!capture || capture.handedOff) return;
   capture.handedOff = Date.now();
+  capture.handedOffFrom = Number.isInteger(fromPart) ? fromPart : null;
   persist(capture);
 }
 
