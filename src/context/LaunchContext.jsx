@@ -167,6 +167,49 @@ export function LaunchProvider({ children }) {
     } catch { /* ignore */ }
   }, []);
 
+  // The task's own lines for the timer voice (speak.js): what the ten-minute
+  // mark says about THIS task ("your clothes are going to smell great, keep it
+  // up") and the every-ten-minutes lines after it. Asked for once when a timer
+  // starts; until it lands, the plain fallbacks speak, and if it never lands
+  // they keep speaking. Judgment, not a word list: the LLM decides what the
+  // good outcome of this task sounds like.
+  const writeTimerVoice = async (sessionAtStart, task) => {
+    if (!voiceCheckInsOn() || !speechAvailable()) return;
+    let voice = null;
+    try {
+      const res = await base44.integrations.Core.InvokeLLM({
+        prompt: `Someone with ADHD just started a timer to work on this task: "${String(task?.title || '').trim()}". A friendly voice will check in out loud while they work. Write:
+1. ten_minutes — ONE short sentence for the ten-minute mark that is about this task itself and paints the good outcome of doing it (for laundry: "Your clothes are going to smell great, keep it up."). Encouraging and concrete; no question.
+2. more — six different one-sentence encouragements for every ten minutes after that: warm, tied to this task where it feels natural, otherwise plain cheering on. Never mention time, never ask a question, never pressure.
+Plain spoken words, no emojis, no quotation marks.`,
+        response_json_schema: {
+          type: 'object',
+          properties: {
+            ten_minutes: { type: 'string' },
+            more: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      });
+      if (res && (res.ten_minutes || Array.isArray(res.more))) {
+        voice = { tenMin: String(res.ten_minutes || ''), more: Array.isArray(res.more) ? res.more.slice(0, 12) : [] };
+      }
+    } catch (e) {
+      console.warn('[timer voice] could not write the task lines, using the plain ones:', e?.message || e);
+    }
+    if (!voice) return;
+    setSprint((s) => {
+      // Only the timer this was written for; a later one asks for its own.
+      if (!s || s.taskId !== sessionAtStart.taskId || !!s.stopwatch !== !!sessionAtStart.stopwatch) return s;
+      if (!s.stopwatch && s.endTimeISO !== sessionAtStart.endTimeISO) return s;
+      const next = { ...s, voice };
+      lastSprint = next;
+      let minimized = false;
+      try { minimized = !!JSON.parse(localStorage.getItem(SPRINT_KEY) || 'null')?.minimized; } catch { /* not minimized */ }
+      localStorage.setItem(SPRINT_KEY, JSON.stringify({ ...next, minimized }));
+      return next;
+    });
+  };
+
   const startTimer = useCallback(async (task, minutes = DEFAULT_MINUTES) => {
     let user;
     try { user = await base44.auth.me(); } catch { return; }
@@ -216,6 +259,8 @@ export function LaunchProvider({ children }) {
     setSprintEnded(false);
     setSprintMinimized(false);
     setSprint(session);
+    writeTimerVoice(session, task);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // The task's own timer: a stopwatch. Tap it and it counts UP from zero — for
@@ -243,6 +288,8 @@ export function LaunchProvider({ children }) {
     setSprintEnded(false);
     setSprintMinimized(false);
     setSprint(session);
+    writeTimerVoice(session, task);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Pause / resume the stopwatch. Resuming moves its start forward by the
@@ -348,10 +395,11 @@ export function LaunchProvider({ children }) {
     finishTimerTask(sp);
   }, [stopAfterSprint]);
 
-  // Spoken check-ins while a timer runs (speak.js, Anna Oct 13 2026).
-  // One timeout at a time, for the next one due; redone whenever the session
-  // changes (a stopwatch's pause moves its start, so its plan moves too) and
-  // paused along with a paused stopwatch. A check-in whose moment went by
+  // The timer voice (speak.js, Anna Oct 13 2026): "let's get started", five
+  // minutes, the task's own line at ten, fifteen, "almost there", then every
+  // ten. One timeout at a time, for the next line due; redone whenever the
+  // session changes (the LLM lines arriving, a stopwatch's pause moving its
+  // start) and paused along with a paused stopwatch. A check-in whose moment went by
   // while the app was asleep is only spoken if it is under 90 seconds late —
   // a stack of stale ones after an hour away would just be noise. Lives here,
   // not in the popup, so the voice keeps going with the popup tucked away.
