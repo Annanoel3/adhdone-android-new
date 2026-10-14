@@ -427,7 +427,11 @@ export default function ParkingLot() {
   };
 
   // One look at each new entry: is it something to keep track of, or an
-  // entry for a tracker they already have?
+  // entry for a tracker they already have? One sentence can be several
+  // things at once — "blood pressure 91 over 57 and heart rate 89" is a
+  // reading for one tracker and, if there's no heart rate tracker yet, a new
+  // one (Anna, Oct 13 2026: "would it save my heart rate somewhere?") — so
+  // the answer is a list, each part logged or started on its own.
   const judgeIdea = async (idea, all) => {
     if (judging.current.has(idea.id)) return;
     judging.current.add(idea.id);
@@ -437,12 +441,12 @@ export default function ParkingLot() {
 
 Things they already keep track of here (they log entries to these over time): ${trackers.length ? JSON.stringify(trackers) : 'none yet'}
 
-Which is it?
-1. An entry for one of those (a reading, a number, a note for it), like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<the entry as they said it, without its name>"}
-2. They want to keep track of something over time, logging it again and again. It can be anything they choose: a measurement, money spent, a mood, how their day went. {"track": "<a short name for it, in their words>", "entry": "<an entry if they already gave one, else null>", "remind": "<daily, weekly or monthly if they said how often, else null>", "time": "<HH:MM, 24-hour, if they said a time, else null>"}
+What is it? It can be more than one thing at once ("blood pressure 91 over 57 and heart rate 89" is a reading for blood pressure AND a reading for heart rate) — give one item per part, in order:
+1. An entry for one of those they already keep track of (a reading, a number, a note for it), like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<just this part, as they said it, without its name>"}
+2. They want to keep track of something over time, logging it again and again. It can be anything they choose: a measurement, money spent, a mood, how their day went. A reading for something they don't track yet counts, with that reading as its first entry. {"track": "<a short name for it, in their words>", "entry": "<an entry if they already gave one, else null>", "remind": "<daily, weekly or monthly if they said how often, else null>", "time": "<HH:MM, 24-hour, if they said a time, else null>"}
 3. Anything else: an idea, a to-do, a list, a note, a one-time thing. {"none": true}
 
-Judge by what they mean. Only 1 or 2 when they clearly mean logging something over time; a to-do that mentions a number is 3. Answer with the JSON only.`;
+Judge by what they mean. Only 1 or 2 when they clearly mean logging something over time; a to-do that mentions a number is 3. Answer with JSON only, in this shape: {"actions": [ ... ]} — one object per part, or a single {"none": true}.`;
     let out = null;
     let answered = false;
     try {
@@ -463,25 +467,49 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
       return;
     }
     try {
-      const target = out.log_to ? all.find((i) => i.id === out.log_to && i.tracker) : null;
-      const entry = typeof out.entry === 'string' ? out.entry.trim() : '';
-      if (target && entry) {
+      // The old single-object answer still works: it's a list of one.
+      const actions = (Array.isArray(out.actions) ? out.actions : [out]).filter((a) => a && typeof a === 'object');
+      const logs = [];
+      const news = [];
+      for (const a of actions) {
+        const entry = typeof a.entry === 'string' ? a.entry.trim() : '';
+        const target = a.log_to ? all.find((i) => i.id === a.log_to && i.tracker) : null;
+        if (target && entry) logs.push({ target, entry });
+        else if (typeof a.track === 'string' && a.track.trim()) news.push({ name: a.track.trim().slice(0, 120), entry, remind: a.remind, time: a.time });
+      }
+      for (const { target, entry } of logs) {
         await addTrackerEntry(target, entry);
-        await base44.entities.ParkingLotIdea.delete(idea.id);
         toast({ title: `Logged to ${target.idea}`, description: entry });
-      } else if (typeof out.track === 'string' && out.track.trim()) {
-        const name = out.track.trim().slice(0, 120);
+      }
+      if (news.length === 0) {
+        if (logs.length > 0) await base44.entities.ParkingLotIdea.delete(idea.id);
+        else await base44.entities.ParkingLotIdea.update(idea.id, { tracker_checked: true });
+      } else {
+        // The first new tracker takes over this row; any other becomes its own.
+        const [first, ...rest] = news;
+        const entriesOf = (n) => (n.entry ? [{ at: new Date().toISOString(), text: n.entry }] : []);
         await base44.entities.ParkingLotIdea.update(idea.id, {
           tracker: true,
           tracker_checked: true,
-          idea: name,
-          tracker_entries: entry ? [{ at: new Date().toISOString(), text: entry }] : [],
+          idea: first.name,
+          tracker_entries: entriesOf(first),
         });
-        const said = /^(\d{1,2}):(\d{2})$/.exec(String(out.time || ''));
+        for (const n of rest) {
+          await base44.entities.ParkingLotIdea.create({
+            idea: n.name,
+            tracker: true,
+            tracker_checked: true,
+            tracker_entries: entriesOf(n),
+            converted_to_task: false,
+            parent_idea_id: null,
+          });
+          toast({ title: `Now keeping track of ${n.name}`, description: n.entry ? `First entry: ${n.entry}. Tap its bell to set a reminder.` : 'Tap its bell to set a reminder.' });
+        }
+        // The "remind you to log?" question, for the first one only — one
+        // popup at a time; the others' bells are a tap away.
+        const said = /^(\d{1,2}):(\d{2})$/.exec(String(first.time || ''));
         const time = said && Number(said[1]) < 24 ? `${said[1].padStart(2, '0')}:${said[2]}` : null;
-        openRemind({ ...idea, idea: name, tracker: true }, { remind: out.remind, time });
-      } else {
-        await base44.entities.ParkingLotIdea.update(idea.id, { tracker_checked: true });
+        openRemind({ ...idea, idea: first.name, tracker: true }, { remind: first.remind, time });
       }
     } catch (e) {
       console.warn('Tracker check failed:', e?.message || e);
