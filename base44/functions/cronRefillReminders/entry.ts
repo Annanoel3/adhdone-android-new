@@ -96,6 +96,42 @@ Deno.serve(async (req) => {
     const onlyEmail = await req.json().then((b: any) => (b && typeof b.onlyEmail === 'string' ? b.onlyEmail.trim() : '')).catch(() => '');
     if (!onlyEmail) await ledgerPrune(base44);
 
+    // Every profile, once: quiet hours are stored as local "HH:MM" on it, and
+    // Focus Mode lives on it. Fetched before the tasks because the pass right
+    // below can change tasks.
+    const allUsers = await listAll(base44.asServiceRole.entities.User);
+
+    // Focus Mode's morning question went unanswered — Anna, Oct 14 2026:
+    // "ignored morning ends focus mode". The question goes out at the end of
+    // quiet hours (Task.focus_mode_quiet_ask_at); "continue" moves that stamp
+    // to the next morning, so a stamp in the past means nobody answered. The
+    // session ends through setFocusMode's own exit (the task put back as it
+    // was, the other reminders back), and the morning offer stays on the
+    // profile so the app still asks when they open it that day. Runs before
+    // the task fetch so nothing below books on the session's stale state.
+    let focusEnded = 0;
+    for (const u of allUsers) {
+      if (!u?.email || !u?.focus_mode_task_id) continue;
+      if (onlyEmail && u.email !== onlyEmail) continue;
+      try {
+        const ft = await base44.asServiceRole.entities.Task.get(u.focus_mode_task_id).catch(() => null);
+        if (!ft || ft.status !== 'active') continue; // finished: onTaskUpdate ends the session itself
+        const askMs = ft.focus_mode_quiet_ask_at ? Date.parse(ft.focus_mode_quiet_ask_at) : 0;
+        if (!askMs || askMs > Date.now()) continue;
+        await base44.asServiceRole.functions.invoke('setFocusMode', {
+          internalKey: CRON_SECRET,
+          email: u.email,
+          action: 'exit',
+          keepOffer: true,
+        });
+        u.focus_mode_task_id = null; // the passes below read this copy
+        focusEnded++;
+        console.log(`🌅 [REFILL] Focus Mode ended for ${u.email}: this morning's "pick up where you left off?" went unanswered`);
+      } catch (e) {
+        console.error(`[REFILL] Could not end the unanswered focus session for ${u.email}:`, e);
+      }
+    }
+
     // EVERY active task, paged — not "the 500 most recently updated". Every pass
     // below only ever looks at active tasks.
     const allTasks = onlyEmail
@@ -133,9 +169,7 @@ Deno.serve(async (req) => {
 
     console.log(`📊 [REFILL] Found ${recurringTasks.length} recurring tasks`);
 
-    // Fetch all users once so we can apply each task owner's quiet hours in their
-    // local timezone (quiet hours are stored as local "HH:MM" on the user profile).
-    const allUsers = await listAll(base44.asServiceRole.entities.User);
+    // Each task owner's quiet hours apply in their local timezone (see allUsers above).
     const userMap: Record<string, any> = {};
     for (const u of allUsers) if (u && u.email) userMap[u.email] = u;
 
@@ -557,7 +591,7 @@ Deno.serve(async (req) => {
     }
 
     if (onlyEmail) {
-      const scoped = { success: true, onlyEmail, refilled, skipped, focusCheckins, at: now.toISOString() };
+      const scoped = { success: true, onlyEmail, refilled, skipped, focusCheckins, focusEnded, at: now.toISOString() };
       console.log('✅ [REFILL] Complete (one account):', scoped);
       return Response.json(scoped);
     }
@@ -1365,7 +1399,7 @@ Deno.serve(async (req) => {
     console.error("[HEALTH] check failed:", e);
   }
 
-  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, focusCheckins, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, eventScheduled, scheduledTextReminders, at: now.toISOString() };
+  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, focusCheckins, focusEnded, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, eventScheduled, scheduledTextReminders, at: now.toISOString() };
     console.log('✅ [REFILL] Complete:', result);
     return Response.json(result);
   } catch (err) {
