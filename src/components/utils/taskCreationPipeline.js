@@ -6,7 +6,7 @@ import { getReminderCopy } from "./reminderCopy";
 import dedupeSplitTasks from "./dedupeSplitTasks";
 import { createBirthdayFromKind } from "./birthdayScheduler";
 import { toast } from "@/components/ui/use-toast";
-import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule, anchorToDaytime, wantsRhythmFromTime } from "./taskSchedule";
+import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule, deadlineWindowStart, anchorToDaytime, wantsRhythmFromTime } from "./taskSchedule";
 import { announceEventConflict } from "./eventConflicts";
 import { commitNotificationIds } from "./notificationOwnership";
 import { trackFire } from "@/lib/appTrack";
@@ -316,6 +316,10 @@ export async function processAndCreateTask(inputText, opts = {}) {
         time_stated: !!mainTaskParsed.target_time && mainTaskParsed.time_stated === true,
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
         due_date: sched.dueDateISO || presetDueDateISO,
+        // "By Friday" / "this week": on Today from now until the deadline
+        // (taskSchedule.deadlineWindowStart). A day picked on the calendar
+        // ("Add task" under a date) is the day they chose, no window.
+        start_date: presetDate ? null : deadlineWindowStart(mainTaskParsed, sched.dueDateISO, now),
         end_date: sched.endDateISO,
         event_time: sched.eventTimeISO,
         reminder_count: 0,
@@ -557,6 +561,10 @@ export async function processAndCreateTask(inputText, opts = {}) {
       reminder_count: 0,
       next_reminder: nextReminder ? nextReminder.toISOString() : null,
       due_date: dueDateISO,
+      // "By Friday" / "sometime this week": a deadline, so the task is on
+      // Today from now until that day (taskSchedule.deadlineWindowStart). A
+      // day picked on the calendar is the day they chose, no window.
+      start_date: presetDate ? null : deadlineWindowStart(parsed, dueDateISO, now),
       end_date: endDateISO,
       event_time: eventTimeISO,
       urgency: parsed.urgency || 'medium',
