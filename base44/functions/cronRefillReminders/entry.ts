@@ -1479,9 +1479,9 @@ function localHourIn(tz: string, d: Date): number {
   }
 }
 
-// Captures that were typed but never became a task: a 'captureClaimed' with no
-// 'mainCreate' / 'captureAlreadyCreated' after it within 15 minutes, and not
-// claimed again since (a resume shows up as a later claim of the same text).
+// Captures that were typed but never became a task: a 'captureClaimed' whose
+// last part was never made (see below) within 15 minutes, and not claimed
+// again since (a resume shows up as a later claim of the same text).
 async function stalledCaptures(base44: any, sinceMs: number, nowMs: number): Promise<{ email: string; text: string; atMs: number }[]> {
   const rows = await filterAll(base44.asServiceRole.entities.CaptureTrace, { created_date: { $gte: new Date(sinceMs).toISOString() } });
   const sorted = rows.slice().sort((a: any, b: any) => String(a.created_date).localeCompare(String(b.created_date)));
@@ -1495,22 +1495,39 @@ async function stalledCaptures(base44: any, sinceMs: number, nowMs: number): Pro
     const atMs = Date.parse(String(r.created_date).endsWith('Z') ? r.created_date : `${r.created_date}Z`) || 0;
     if (!atMs || nowMs - atMs < 15 * 60 * 1000) continue; // still in progress
     const later = sorted.slice(i + 1).filter((x: any) => x.user_email === r.user_email);
-    const finished = later.some((x: any) => {
-      const t = Date.parse(String(x.created_date).endsWith('Z') ? x.created_date : `${x.created_date}Z`) || 0;
-      return t - atMs < 15 * 60 * 1000 && (x.step === 'mainCreate' || x.step === 'captureAlreadyCreated' || x.step === 'captureServerDone');
-    });
+    const soonAfter = (x: any) => (Date.parse(String(x.created_date).endsWith('Z') ? x.created_date : `${x.created_date}Z`) || 0) - atMs < 15 * 60 * 1000;
+    // How many parts the capture was split into (one when it never said).
+    let partCount = 1;
+    const split = later.find((x: any) => x.step === 'splitResult' && soonAfter(x));
+    try { partCount = Math.max(1, Number(JSON.parse(split?.detail || '{}').count) || 1); } catch (_) { /* one */ }
+    const finishedStep = later.some((x: any) => soonAfter(x) && (x.step === 'mainCreate' || x.step === 'captureAlreadyCreated' || x.step === 'captureServerDone'));
     const claimedAgain = later.some((x: any) => x.step === 'captureClaimed' && String(x.detail || '').includes(text.slice(0, 40)));
-    if (finished || claimedAgain) continue;
-    // Handed to the server when the app went off screen (TaskCaptureProcessor,
-    // since Oct 13 2026): the server made it under the app's id, and the app
-    // may never have said so (it can stay closed). Made means finished.
+    if (claimedAgain) continue;
+    // One part: any "made" step is the whole capture made. Several parts:
+    // the first part being made says nothing about the last (Oct 14 2026:
+    // four appointments, two made, two left) — that is settled below.
+    if (finishedStep && partCount === 1) continue;
+    // Made under the app's id — by the app (a part made through a question
+    // never logs a step), or by the server when the app went off screen
+    // (TaskCaptureProcessor, since Oct 13 2026; the app may never have said
+    // so). Since Oct 14 2026 each part carries its own id, <capture>#<part>:
+    // the last part made means the capture finished.
     const captureId = String(detail.id || '');
     if (captureId) {
-      const [tasks, ideas] = await Promise.all([
-        base44.asServiceRole.entities.Task.filter({ capture_id: captureId }).catch(() => []),
-        base44.asServiceRole.entities.ParkingLotIdea.filter({ capture_id: captureId }).catch(() => []),
-      ]);
-      if ((tasks || []).length || (ideas || []).length) continue;
+      // Several parts: the last part's own id, or the whole capture under the
+      // app's id (handed over before it was split; the server split it).
+      const ids = partCount > 1 ? [`${captureId}#${partCount - 1}`, captureId] : [captureId, `${captureId}#0`];
+      let made = false;
+      for (const id of ids) {
+        const [tasks, ideas] = await Promise.all([
+          base44.asServiceRole.entities.Task.filter({ capture_id: id }).catch(() => []),
+          base44.asServiceRole.entities.ParkingLotIdea.filter({ capture_id: id }).catch(() => []),
+        ]);
+        if ((tasks || []).length || (ideas || []).length) { made = true; break; }
+      }
+      if (made) continue;
+    } else if (finishedStep) {
+      continue; // an older app with no capture id: the step is all there is
     }
     out.push({ email: r.user_email, text, atMs });
   }
