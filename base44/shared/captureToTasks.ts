@@ -157,6 +157,19 @@ export function buildTaskRecord(
   if (eventISO && parsed.target_time) record.event_time = eventISO;
   if (parsed.end_date) record.end_date = localToUTC(parsed.end_date, "23:59", tz);
 
+  // "Sometime this week", "by Friday": a DEADLINE, not the day it happens.
+  // The task is on Today from now until that day, the way a task with a
+  // start date already works app-wide (Anna, Oct 14 2026: "by a certain date
+  // ... on my task list for today and every day of this week"). Same rule as
+  // deadlineWindowStart in taskSchedule.js; nothing tied to its day (an
+  // event, a birthday, a repeat) and no window for a deadline that is today.
+  const deadlineDay = parsed.due_date || (dayOnly ? parsed.target_date : null);
+  const tiedToDay = record.classification === "event" || record.classification === "birthday"
+    || (record.recurrence_pattern && record.recurrence_pattern !== "none");
+  if (record.deadline_style === "by" && deadlineDay && !tiedToDay && String(deadlineDay) > localToday(tz)) {
+    record.start_date = new Date().toISOString();
+  }
+
   return record;
 }
 
