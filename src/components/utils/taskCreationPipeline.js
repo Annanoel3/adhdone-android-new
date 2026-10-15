@@ -138,12 +138,24 @@ async function saveIdeas(kind, inputText, captureId = null) {
       });
     }
   } else {
-    await base44.entities.ParkingLotIdea.create({
+    // A reading for a tracker they already have ("bp 98/70, hr 89") goes
+    // straight onto it — the server's look (captureText { foldIdea }), the
+    // same one a capture from the phone gets — so the Parking Lot never shows
+    // it as a plain idea first (Anna, Oct 14 2026). Saved already marked
+    // tracker_checked so the page's own look stays out of the way; the server
+    // clears the mark when it hands the idea back (something new to track,
+    // or no answer), and so does this if the server can't be reached.
+    const made = await base44.entities.ParkingLotIdea.create({
       idea: inputText.trim(),
       converted_to_task: false,
       list_format: 'plain',
+      tracker_checked: true,
       ...(captureId ? { capture_id: captureId } : {})
     });
+    if (made?.id) {
+      const res = await base44.functions.invoke('captureText', { foldIdea: made.id }).catch(() => null);
+      if (!res) await base44.entities.ParkingLotIdea.update(made.id, { tracker_checked: false }).catch(() => {});
+    }
   }
   window.dispatchEvent(new Event('parking-lot-changed'));
 }
