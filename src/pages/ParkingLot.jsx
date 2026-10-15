@@ -1763,6 +1763,20 @@ Return ONLY the category name, nothing else.`;
                 points.push({ ...r });
               }
             }
+            // Several readings on one day: the first carries the date and the
+            // rest the time of day ("10/14", "2:03 PM", "4:07 PM"), so a day of
+            // readings isn't four ticks all saying "10/14" (Anna, Oct 14 2026).
+            const dayKey = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
+            const perDay = {};
+            for (const p of points) perDay[dayKey(p.ms)] = (perDay[dayKey(p.ms)] || 0) + 1;
+            const seenDay = {};
+            for (const p of points) {
+              const k = dayKey(p.ms);
+              seenDay[k] = (seenDay[k] || 0) + 1;
+              if (perDay[k] > 1 && seenDay[k] > 1) p.label = new Date(p.ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+            }
+            // The tooltip names the moment in full either way.
+            const whenOf = (label, payload) => { const ms = payload?.[0]?.payload?.ms; return Number.isFinite(ms) ? formatLogTime(new Date(ms).toISOString()) : label; };
             const axis = niceTicks(points.flatMap((r) => lines.map((l) => r[l.key])));
             return (
               <>
@@ -1772,7 +1786,7 @@ Return ONLY the category name, nothing else.`;
                       <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
                         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                         <YAxis tick={{ fontSize: 11 }} domain={axis ? axis.domain : ['auto', 'auto']} ticks={axis ? axis.ticks : undefined} />
-                        <ChartTooltip />
+                        <ChartTooltip labelFormatter={whenOf} />
                         {lines.length > 1 && <ChartLegend wrapperStyle={{ fontSize: 11 }} />}
                         {lines.map((l) => (
                           <Line key={l.key} type="monotone" dataKey={l.key} name={l.name} stroke={l.color} strokeWidth={2} dot={{ r: 3 }} connectNulls />
