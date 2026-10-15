@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Plus, Lightbulb, ArrowRight, Trash2, ChevronsDown, ChevronsUp, Search, Sparkles, Loader2, Filter, Mic, MoreVertical, CheckCircle2, Pencil, Image as ImageIcon, FileText, X, TrendingUp, Bell } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip as ChartTooltip, ResponsiveContainer, Legend as ChartLegend } from "recharts";
 import { toast } from "@/components/ui/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { usePopupTurn } from "@/components/onboarding/onboardingSurface";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -386,14 +387,24 @@ export default function ParkingLot() {
   // latest reading on it, one Log box for all of them and one History chart.
   // Anna, Oct 14 2026: "I had hoped to be able to see all bp and hr trends
   // in one glance" — a heart rate card of its own was not that.
+  // Deleted rows still inside their five-second Undo (see handleDelete).
+  const [hiddenIds, setHiddenIds] = useState(() => new Set());
+  const pendingDeletes = useRef(new Set());
   const groupOf = (t) => {
     if (!t?.tracker) return [t].filter(Boolean);
-    const mates = (t.tracker_companions || []).map((id) => ideas.find((i) => i.id === id && i.tracker && !i.parent_idea_id)).filter(Boolean);
+    const mates = (t.tracker_companions || []).map((id) => ideas.find((i) => i.id === id && i.tracker && !i.parent_idea_id && !hiddenIds.has(i.id))).filter(Boolean);
     return [t, ...mates];
   };
   const groupTitle = (t) => groupOf(t).map((x) => x.idea).join(' · ');
   // Shown inside an older companion's card rather than on its own.
-  const isSecondaryTracker = (t) => t?.tracker && groupOf(t).slice(1).some((m) => rowMs(m.created_date) < rowMs(t.created_date));
+  // The card belongs to whichever was kept longest: its first reading (or,
+  // with none, when it was made). Made-on dates alone put a tracker re-made
+  // today behind one from yesterday, though its readings go back further.
+  const trackerSince = (t) => {
+    const times = [rowMs(t?.created_date), ...((t?.tracker_entries || []).map((e) => rowMs(e.at)))].filter(Number.isFinite);
+    return times.length ? Math.min(...times) : Infinity;
+  };
+  const isSecondaryTracker = (t) => t?.tracker && groupOf(t).slice(1).some((m) => trackerSince(m) < trackerSince(t) || (trackerSince(m) === trackerSince(t) && String(m.id) < String(t.id)));
 
   // One Log box for a linked group: the AI splits what was typed into a
   // reading per tracker (with the note); anything it can't place goes to the
@@ -736,13 +747,56 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
     },
   });
 
+  // Delete gives five seconds to take it back, like a task's (Anna's rule:
+  // deleting is followed by an Undo). The card goes at once; the row goes
+  // when the five seconds are up. Oct 15 2026: a tap on Delete for a reading
+  // the page was folding into its tracker landed, as that card vanished, on
+  // the tracker card that slid up into its place, and blood pressure and its
+  // eight readings were gone for good with nothing to tap.
   const handleDelete = (id) => {
-    // A tracker's booked reminder goes with it.
     const doomed = ideas.find((i) => i.id === id);
-    if (doomed?.tracker_notification_id) {
-      base44.functions.invoke('cancelScheduled', { notificationId: doomed.tracker_notification_id }).catch(() => {});
-    }
-    deleteIdeaMutation.mutate(id);
+    if (!doomed || pendingDeletes.current.has(id)) return;
+    pendingDeletes.current.add(id);
+    const childIds = ideas.filter((i) => i.parent_idea_id === id).map((i) => i.id);
+    const show = () => setHiddenIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+    setHiddenIds((prev) => new Set(prev).add(id));
+    let settled = false;
+    let handle = null;
+    const commit = async () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      handle?.dismiss?.();
+      // A tracker's booked reminder goes with it.
+      if (doomed.tracker_notification_id) {
+        base44.functions.invoke('cancelScheduled', { notificationId: doomed.tracker_notification_id }).catch(() => {});
+      }
+      try {
+        for (const childId of childIds) await base44.entities.ParkingLotIdea.delete(childId).catch(() => {});
+        await base44.entities.ParkingLotIdea.delete(id);
+      } catch (e) {
+        // Already gone (the page's own tracker look removes a folded reading).
+      }
+      pendingDeletes.current.delete(id);
+      await queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+      show();
+    };
+    const undo = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      handle?.dismiss?.();
+      pendingDeletes.current.delete(id);
+      show();
+    };
+    const timer = setTimeout(commit, 5000);
+    const count = doomed.tracker ? (doomed.tracker_entries || []).length : 0;
+    handle = toast({
+      title: `Deleted "${String(doomed.idea || 'idea').slice(0, 60)}"`,
+      ...(count ? { description: `${count} ${count === 1 ? 'entry goes' : 'entries go'} with it.` } : {}),
+      duration: 5000,
+      action: <ToastAction altText="Undo delete" onClick={undo}>Undo</ToastAction>,
+    });
   };
 
   const editIdeaMutation = useMutation({
@@ -803,6 +857,7 @@ Return ONLY the category name, nothing else.`;
   const topLevelIdeas = ideas.filter(i => !i.parent_idea_id);
   
   const filteredIdeas = topLevelIdeas.filter(idea => {
+    if (hiddenIds.has(idea.id)) return false; // deleted, Undo still on screen
     if (isSecondaryTracker(idea)) return false; // shown on its older companion's card
     const matchesSearch = searchQuery === "" || 
       (idea.tracker ? groupTitle(idea) : idea.idea).toLowerCase().includes(searchQuery.toLowerCase());
