@@ -229,8 +229,10 @@ export default function Tasks() {
       checkCompletionEggs(task);
     }
 
-    const now = new Date();
-    const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
+    // When it was finished, in true UTC like every other way a task gets
+    // finished (until Oct 16 2026 this stamped local clock time as UTC, so
+    // wins, Insights and Smart Reminders read these completions hours off).
+    const localISOString = new Date().toISOString();
 
     // Optimistic — update UI instantly
     setAllTasks(prev => prev.map(t =>
