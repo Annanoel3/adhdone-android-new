@@ -38,7 +38,7 @@
     "finished_at": {
       "type": "string",
       "format": "date-time",
-      "description": "When the task was finished, by the server's clock (logTaskCompletion). completed_at is written by the phone in more than one format; completion habits are read from this."
+      "description": "When the task was finished, by the server's clock (logTaskCompletion). Completion habits are read from this. completed_at was written by the phone in two formats until Oct 16 2026 (some screens stamped local clock time as UTC); every screen now writes true UTC."
     },
     "typical_minutes": {
       "type": "number",
@@ -370,7 +370,7 @@
     "completed_at": {
       "type": "string",
       "format": "date-time",
-      "description": "When task was completed"
+      "description": "When task was completed, in true UTC (readers turn it into the person's own time)"
     },
     "pictures": {
       "type": "array",
