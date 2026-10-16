@@ -308,6 +308,13 @@ Deno.serve(async (req) => {
       // to plan (an AI call every run) or send. The app re-checks every time it
       // opens, so this picks up again as soon as they turn them back on.
       if (user.alarm_permissions?.notifications === false) continue;
+      // OneSignal answered the last nudge with "not subscribed" (the app was
+      // removed, or the phone signed out of pushes): every run went on planning
+      // a nudge (an AI call) and sending it into nothing, every 10 minutes all
+      // day (Oct 16 2026: four accounts). Nothing more until they're back in
+      // the app (opening it signs the phone up again), or a day has gone by.
+      const unreachableAt = utcMs(user.push_unreachable_at);
+      if (Number.isFinite(unreachableAt) && nowMs - unreachableAt < DAY_MS && !(utcMs(user.last_active_at) > unreachableAt)) continue;
 
       // Their day, not the calendar's: it turns over in the middle of their
       // quiet hours (Oct 12 2026), so a night-shift worker is still on Monday
@@ -691,6 +698,7 @@ Deno.serve(async (req) => {
 
       // Send due nudges in real-time (no LLM call — just OneSignal)
       const newLog: any[] = [];
+      let markedUnreachable = false;
       let lastSentTaskId: string | null = null;
       const holdForWake = waitingForWake(user, now, timeZone, todayStr, quiet.endMin, dayOf);
       if (holdForWake) console.log(`[SMART NUDGE] ${email}: phone not unlocked yet this morning, holding nudges`);
@@ -887,7 +895,52 @@ Deno.serve(async (req) => {
             continue;
           }
         }
-        const sent = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id, ringsOutLoud, entry.type === 'roundup' ? 'roundup' : 'smart_nudge');
+        // LAST LOOK. Every task was read when this run started, and a run can
+        // take half a minute or more; a task checked off in between still got
+        // its nudge (Anna's "Pills check-in", Oct 14 2026: the run read the task
+        // at 7:39:00 PM, she checked it off at 7:39:20, the alarm rang at
+        // 7:39:34). So each task the nudge names is read again right before it
+        // goes, and the same checks as above run on what's there now. A read
+        // that fails keeps the copy from the start of the run (a lost read is
+        // not a reason to skip a reminder).
+        const nowCopies = await Promise.all(referencedIds.map((id: string) =>
+          base44.asServiceRole.entities.Task.get(id).then((t: any) => t || taskById.get(id)).catch(() => taskById.get(id))));
+        const goneStale = (t: any): string => {
+          if (!t) return 'deleted';
+          if (t.status === 'completed') return 'completed';
+          if (t.silenced) return 'silenced';
+          const brk = utcMs(t.later_until);
+          if (Number.isFinite(brk) && brk > nowMs) return 'later';
+          const snz = utcMs(t.snoozed_until);
+          if (Number.isFinite(snz) && snz > nowMs && snz < nowMs + DAY_MS) return 'snoozed';
+          if (t.status !== 'active') return 'not_active';
+          return '';
+        };
+        const staleNow = nowCopies.map(goneStale);
+        const lastLookSkip = entry.type === 'roundup'
+          ? (staleNow.length > 0 && staleNow.every(Boolean) ? 'completed' : '')
+          : (staleNow.find(Boolean) || '');
+        if (lastLookSkip) {
+          entry.sent = true;
+          entry.sent_at = now.toISOString();
+          entry.skipped_reason = lastLookSkip;
+          newLog.push({ k: entryKey(entry), at: entry.sent_at, skip: lastLookSkip });
+          console.log(`[SMART NUDGE] Last look: "${entry.title}" for ${email} not sent (${lastLookSkip} since the run started)`);
+          continue;
+        }
+        const outcome = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id, ringsOutLoud, entry.type === 'roundup' ? 'roundup' : 'smart_nudge');
+        if (outcome === UNSUBSCRIBED) {
+          // Nothing can reach this phone: this nudge is done with (not tried
+          // again every run), and the account rests until they're back
+          // (push_unreachable_at, above).
+          entry.sent = true;
+          entry.sent_at = now.toISOString();
+          entry.skipped_reason = 'unreachable';
+          newLog.push({ k: entryKey(entry), at: entry.sent_at, skip: 'unreachable' });
+          markedUnreachable = true;
+          break;
+        }
+        const sent = outcome;
         if (sent) {
           await ledgerRecord(base44, { email, taskId: entry.task_id, kind: 'smart_nudge', source: 'cronSmartTaskNudge', notificationId: sent, title: entry.title });
           entry.sent = true;
@@ -917,6 +970,7 @@ Deno.serve(async (req) => {
           updateData.last_smart_nudge_task_id = lastSentTaskId;
           updateData.last_smart_nudge_at = now.toISOString();
         }
+        if (markedUnreachable) updateData.push_unreachable_at = now.toISOString();
         // ONE NUDGE AT A TIME: its nudge went out (or was skipped), so the
         // next run looks again before anything else goes out.
         if (useBrief) updateData.smart_nudge_look_at = now.toISOString();
@@ -1996,6 +2050,10 @@ Return ONLY valid JSON:
   }
 }
 
+// OneSignal's answer when no phone signed in to this account takes pushes
+// any more (the app removed, or signed out of pushes on the phone).
+const UNSUBSCRIBED = 'UNSUBSCRIBED';
+
 async function sendNudgeNotification(
   email: string,
   title: string,
@@ -2019,6 +2077,17 @@ async function sendNudgeNotification(
       : { screen: '/TaskNotification', taskId, type: 'smart_nudge' },
     include_external_user_ids: [email],
     channel_for_external_user_ids: 'push',
+    // Every nudge goes at high priority with a 30-minute lifetime. OneSignal's
+    // app puts recent pushes back on the screen each time the app starts fresh
+    // ("restore") for as long as they live (3 days by default): Anna's 6:39 PM
+    // "Halloween Joyride candy" and 7:02 PM "App for Juli" came back at 7:54 PM
+    // on Oct 14 2026, long after she'd dealt with them. Past its lifetime a
+    // push is never restored. High priority so a sleeping phone gets it right
+    // away (at normal priority Android can hold a push longer than that and it
+    // would be dropped unseen); a phone off or out of signal for the whole half
+    // hour misses that one nudge, and the next look plans again.
+    priority: 10,
+    ttl: 30 * 60,
   };
   if (ringAsAlarm) {
     // Rings the moment it arrives on a build that can (PushFilter); older
@@ -2044,6 +2113,8 @@ async function sendNudgeNotification(
     const result = await response.json();
     if (!response.ok || result.errors) {
       console.error(`[SMART NUDGE] OneSignal error for ${email}:`, result);
+      const errs = Array.isArray(result?.errors) ? result.errors.map(String) : [];
+      if (errs.some((e: string) => /not subscribed/i.test(e))) return UNSUBSCRIBED;
       return false;
     }
     return result.id || 'sent';
