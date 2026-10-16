@@ -22,9 +22,12 @@ const HEARTBEAT_MS = 15 * 1000;
 // No heartbeat for this long means the app that owned the capture is gone
 // (three missed beats). Until then a stored capture is shown but not claimed.
 const ABANDONED_AFTER_MS = 45 * 1000;
-// Older than this is dropped rather than resumed — a task surfacing days later
-// is more confusing than helpful.
-const MAX_AGE_MS = 72 * 60 * 60 * 1000;
+// Older than this is dropped rather than resumed. Was 3 days; Oct 16 2026:
+// Michelle typed four appointments at 1:52 AM Oct 14, two were made, and the
+// dentist and mammogram would have been thrown away had she next opened the
+// app after the third day — while she waited on reminders for them. Someone
+// who typed a task expects it to exist; two weeks covers a long break.
+const MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
 let captures = [];
 const listeners = new Set();
