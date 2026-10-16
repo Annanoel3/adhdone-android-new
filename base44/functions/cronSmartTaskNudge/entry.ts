@@ -928,6 +928,19 @@ Deno.serve(async (req) => {
       }
     }
     console.log(`[SMART NUDGE] Done — ${nudgesSent} nudge(s) sent, ${schedulesGenerated} schedule(s) generated at ${now.toISOString()}`);
+    // "Last ran at", for the owner health check (cronRefillReminders). Only a
+    // full scheduled run counts; a one-person re-plan isn't the schedule.
+    // Monitoring only: nothing here changes what gets planned or sent. Oct 16
+    // 2026: Base44 failed to start the 9:49 AM run and then skipped every run
+    // until 12:09 PM while the workflow still read "active", and the only
+    // alert was one person's plan looking stale.
+    if (!onlyEmail) {
+      const ownerRow = userMap[HEARTBEAT_ACCOUNT];
+      if (ownerRow?.id) {
+        await base44.asServiceRole.entities.User.update(ownerRow.id, { smart_nudge_cron_ran_at: now.toISOString() })
+          .catch((e: any) => console.error('[SMART NUDGE] heartbeat not saved:', e?.message || e));
+      }
+    }
     return Response.json({ success: true, nudgesSent, schedulesGenerated, results, at: now.toISOString() });
   } catch (err) {
     console.error('[SMART NUDGE] Fatal:', err);
@@ -936,6 +949,10 @@ Deno.serve(async (req) => {
 });
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+// The owner's editor account carries the "last ran at" mark (no phone signs
+// in to it, so nothing on a device reacts to it changing).
+const HEARTBEAT_ACCOUNT = 'annanoelwenballew@gmail.com';
 
 // How their day has started, for the planner (Anna, Oct 10 2026: people wake
 // up at different times through the week). With "Notice when I wake up" on,
