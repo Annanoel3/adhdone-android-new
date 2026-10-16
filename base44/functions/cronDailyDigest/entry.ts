@@ -75,7 +75,8 @@ Deno.serve(async (req) => {
       // from when their quiet hours ended (quiet hours default to ON; turned
       // off, 8 AM), or with "Notice when I wake up" on, from when their phone
       // was first unlocked. Until it reports, nothing yet (at most 4 hours past
-      // quiet hours end). Never inside quiet hours. 60 minutes with a 30-minute
+      // quiet hours end, 1 when the phone holds ADHDone back in the
+      // background). Never inside quiet hours. 60 minutes with a 30-minute
       // cron: two tries.
       const wokeAt = wakeStartMs(user, now, timeZone);
       if (wokeAt == null) continue;
