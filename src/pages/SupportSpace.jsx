@@ -52,9 +52,8 @@ export default function SupportSpace() {
       const activeTasks = tasks.filter(t => t.status === 'active');
       const completedToday = tasks.filter(t => {
         if (t.status !== 'completed' || !t.completed_at) return false;
-        const today = new Date().toISOString().split('T')[0];
-        const completedDate = new Date(t.completed_at).toISOString().split('T')[0];
-        return completedDate === today;
+        // The person's own calendar day on both sides.
+        return new Date(t.completed_at).toDateString() === new Date().toDateString();
       });
 
       const latestEnergy = energyLogs.length > 0 ? energyLogs[0].energy_level : 'unknown';
