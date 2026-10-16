@@ -8,9 +8,11 @@
 //   1. HEADS-UP (informational, ~45-100 min before they need to be there):
 //      only when traffic is meaningfully worse than the free-flow drive. It
 //      says what time to leave, but it is explicitly NOT the safety net —
-//      it's information, and it stays silent on a normal day. Never inside
+//      it's information, and it stays silent on a normal day. Not inside
 //      quiet hours (Anna, Oct 16 2026: hers came at 7:32 AM with quiet hours
-//      until 8 — "Yes. Respect quiet hours.").
+//      until 8 — "Yes. Respect quiet hours."), unless the traffic means
+//      leaving before quiet hours end ("it can ignore quiet hours if the
+//      traffic is so bad that it has to remind them earlier").
 //   2. LEAVE NOW (the safety net): fires AT departure time — arrival time
 //      minus measured drive time minus a get-out-the-door cushion. The cron
 //      only ticks every 15 minutes, so on the tick before departure it books
@@ -28,7 +30,7 @@ import { getTodaysCommute, localDateKey } from '../../shared/commuteSchedule.ts'
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { getProximity } from '../../shared/mapsDistance.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
-import { resolveQuietHours, isInQuietHours } from '../../shared/quietHours.ts';
+import { resolveQuietHours, isInQuietHours, adjustForQuietHours } from '../../shared/quietHours.ts';
 import { listAll } from '../../shared/listAll.ts';
 
 const CUSHION_MINUTES = 10;       // finding keys / shoes / getting in the car
@@ -226,9 +228,16 @@ export default async function (req: Request): Promise<Response> {
       // ── 2. HEADS-UP (only when traffic is genuinely worse than usual) ───────
       if (alreadyWarned) continue;
       if (minutesUntilArrival < HEADS_UP_LATEST || minutesUntilArrival > HEADS_UP_EARLIEST) continue;
-      // Information can wait for quiet hours to end; the leave-now above can't.
+      // Information waits for quiet hours to end, unless the traffic means
+      // they have to leave before then: waiting would make it useless, so it
+      // goes now (Oct 14 2026, the 7:32 AM one: leaving at 8:10 with quiet
+      // hours until 8 waits until 8; leaving at 7:50 would not). The
+      // leave-now above never waits.
       const quiet = resolveQuietHours(user);
-      if (quiet.enabled && isInQuietHours(now, quiet.startMin, quiet.endMin, timeZone)) continue;
+      if (quiet.enabled && isInQuietHours(now, quiet.startMin, quiet.endMin, timeZone)) {
+        const quietEndsAt = adjustForQuietHours(now, quiet.startMin, quiet.endMin, timeZone);
+        if (departUtc.getTime() > quietEndsAt.getTime()) continue;
+      }
       if (!drive.inTraffic) continue; // no traffic data = nothing to compare
 
       const freeFlow = await getProximity([commute.place], home, null, routeOpts);
