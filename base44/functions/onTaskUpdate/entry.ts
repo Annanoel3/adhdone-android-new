@@ -1,3 +1,4 @@
+// Re-saved Oct 16 2026 so the bundled shared/reminderTitle.ts is picked up: a daily reminder after its first day reads as a reminder, never "slipped past".
 // Re-saved Oct 13 2026 (night) so the bundled shared/reminderTitle.ts is picked up: an appointment's alarm carries "Record notes" as its second button.
 // Re-saved Oct 13 2026 (evening) so the bundled shared/reminderTitle.ts is picked up: an event's alarm is marked `event` for the phone (build 42 on shows "Got it" only).
 // Re-saved Oct 13 2026 so the bundled shared/reminderTitle.ts is picked up: a timed event's alarm rings at its time (and "leave now"), its heads-ups stay pushes.
@@ -858,7 +859,7 @@ async function handleTaskEvent(req: Request): Promise<Response> {
           // Only schedule if it's in the future
           if (sendAt.getTime() > now) {
             const sendAtISO = sendAt.toISOString();
-            const { title, body } = getReminderContent(currentTask.title, currentTask.due_date, sendAtISO, timeZone);
+            const { title, body } = getReminderContent(currentTask.title, currentTask.due_date, sendAtISO, timeZone, currentTask.reminder_interval);
             const notificationId = await scheduleOneSignalNotification(
               currentTask.notification_recipient_email || user.email,
               title,
