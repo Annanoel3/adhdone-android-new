@@ -1406,6 +1406,49 @@ Deno.serve(async (req) => {
     console.error('[REFILL] Tracker reminder pass failed:', e);
   }
 
+  // Two live pushes booked for the same task at the same minute. Oct 16 2026:
+  // Tabitha's "Trash to the Curb" for Sunday 8 PM was booked twice, 94 ms
+  // apart, the moment last week's copy was checked off, and the task only knew
+  // about one of them, so checking it off early would still have left the
+  // other to go off. The push the task keeps stays and the other is cancelled
+  // (with neither on the task, the first booked stays). Pushes the task itself
+  // lists are never touched, and nothing is done for a push that isn't for a
+  // task (a scheduled text). Lived in Duplicate Watch for an hour, but that
+  // workflow has been switched off since Sep 24 2026; this job runs hourly.
+  try {
+    const ahead = await filterAll(base44.asServiceRole.entities.NotificationLedger, { send_at: { $gt: now.toISOString() } });
+    const byPush: Record<string, any[]> = {};
+    for (const e of ahead || []) {
+      if (!e?.task_id || !e?.notification_id) continue;
+      const k = `${e.user_email}||${e.task_id}||${String(e.send_at).slice(0, 16)}`;
+      (byPush[k] ||= []).push(e);
+    }
+    let secondPushes = 0;
+    for (const group of Object.values(byPush)) {
+      const ids = [...new Set(group
+        .sort((a: any, b: any) => String(a.created_date || '').localeCompare(String(b.created_date || '')))
+        .map((e: any) => e.notification_id))] as string[];
+      if (ids.length < 2) continue;
+      const task = await base44.asServiceRole.entities.Task.get(group[0].task_id).catch(() => null);
+      if (!task) continue;
+      const tracked = new Set<string>([
+        ...(task.onesignal_notification_ids || []),
+        ...((task.reminder_schedule || []).map((s: any) => s?.notification_id)),
+        ...(task.focus_mode_notification_ids || []),
+        task.follow_up_notification_id,
+      ].filter(Boolean));
+      const keep = ids.find((id) => tracked.has(id)) || ids[0];
+      const extra = ids.filter((id) => id !== keep && !tracked.has(id));
+      if (!extra.length) continue;
+      await cancelJustBooked(base44, extra);
+      secondPushes += extra.length;
+      console.log(`🧹 [REFILL] Cancelled ${extra.length} second push(es) for "${task.title}" (${group[0].user_email}) at ${group[0].send_at}`);
+    }
+    if (secondPushes) console.log(`🧹 [REFILL] Second pushes cancelled: ${secondPushes}`);
+  } catch (e) {
+    console.error('[REFILL] Second-push check failed:', e);
+  }
+
   // The owner health check (see ownerHealthCheck below). Never fails the run.
   try {
     await ownerHealthCheck(base44, { allUsers, allTasks, now });
