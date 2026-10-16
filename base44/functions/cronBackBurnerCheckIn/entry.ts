@@ -24,6 +24,29 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const SEND_FROM_MIN_AFTER_WAKE = 6 * 60;
 const SEND_TO_MIN_AFTER_WAKE = 12 * 60;
 
+// COME BACK (Anna, Oct 16 2026). Someone with nothing on their list gets
+// nothing at all from ADHDone (no summary, no Smart Reminders, no check-in), so
+// after 3 days without opening the app they get one push, another at 7, and a
+// last one at 14. "Last one from us" never comes sooner than two weeks ("after
+// 1 short week is annoying… impatient and desperate"). The day-3 lines take
+// turns, a different one each time someone drifts away. Tapping one opens Add
+// Task. The count starts over each time they open the app. Anyone with a task
+// still open (Back Burner included) hears from the app another way and gets
+// none of these. Same afternoon window and quiet hours as the check-in.
+const DAY_MS = 24 * 60 * 60 * 1000;
+const COMEBACK_STEPS = [
+  {
+    day: 3,
+    lines: [
+      { title: 'Brain getting crowded?', body: 'Toss one thing in here and let ADHDone do the remembering.' },
+      { title: 'Your list is empty', body: "Either you're crushing it or life got busy. Either way, ADHDone's here when you need it." },
+      { title: "Anything you're trying to remember?", body: 'Tell ADHDone and stop carrying it in your head.' },
+    ],
+  },
+  { day: 7, lines: [{ title: 'No pressure, just a door left open', body: "Say it or type it when you're ready. We'll handle the reminders." }] },
+  { day: 14, lines: [{ title: 'Last one from us, promise', body: "Whenever something pops into your head, ADHDone's ready to hold onto it." }] },
+];
+
 Deno.serve(async (req) => {
   try {
     if (req.method !== 'POST') {
@@ -111,8 +134,72 @@ Deno.serve(async (req) => {
       console.log(`[BACK BURNER] Sent to ${email}: "${pick.title}" about "${pick.task.title}"`);
     }
 
-    console.log(`[BACK BURNER] Done — ${sent} check-in(s) at ${now.toISOString()}`);
-    return Response.json({ success: true, sent, results, at: now.toISOString() });
+    // ── Come back (see COMEBACK_STEPS) ────────────────────────────────────
+    let comebacks = 0;
+    try {
+      const openFor = new Set<string>();
+      for (const t of allTasks) {
+        if (t?.status !== 'active') continue;
+        if (t.created_by) openFor.add(String(t.created_by).toLowerCase());
+        if (t.notification_recipient_email) openFor.add(String(t.notification_recipient_email).toLowerCase());
+      }
+      const ms = (v: any) => { const n = Date.parse(String(v || '')); return Number.isFinite(n) ? n : NaN; };
+      for (const user of allUsers) {
+        const email = user?.email;
+        if (!email || openFor.has(String(email).toLowerCase())) continue;
+        if (user.alarm_permissions?.notifications === false) continue;
+        const seenIso = user.last_active_at || user.signed_up_at || user.created_date;
+        const seen = ms(seenIso);
+        if (!Number.isFinite(seen)) continue;
+        // OneSignal said nothing reaches this phone (cronSmartTaskNudge), and
+        // they haven't been back since.
+        const unreachable = ms(user.push_unreachable_at);
+        if (Number.isFinite(unreachable) && unreachable > seen) continue;
+        const sameAbsence = String(user.comeback_from || '') === String(seenIso);
+        const step = sameAbsence ? Math.max(0, Number(user.comeback_step) || 0) : 0;
+        const next = COMEBACK_STEPS[step];
+        if (!next) continue;
+        const away = now.getTime() - seen;
+        if (away < next.day * DAY_MS) continue;
+        // Steps keep their spacing even for someone who's been gone a while:
+        // 4 days after the first, 7 after the second.
+        if (step > 0) {
+          const lastAt = ms(user.comeback_last_at);
+          const gap = (next.day - COMEBACK_STEPS[step - 1].day) * DAY_MS;
+          if (Number.isFinite(lastAt) && now.getTime() - lastAt < gap) continue;
+        }
+        const timeZone = userTimeZone(user);
+        const quiet = resolveQuietHours(user);
+        const sinceWake = (localMinutesOfDay(now, timeZone) - quiet.endMin + 24 * 60) % (24 * 60);
+        if (sinceWake < SEND_FROM_MIN_AFTER_WAKE || sinceWake >= SEND_TO_MIN_AFTER_WAKE) continue;
+        if (quiet.enabled && isInQuietHours(now, quiet.startMin, quiet.endMin, timeZone)) continue;
+        const gate = await ledgerCheck(base44, { email, kind: 'general' });
+        if (!gate.allowed) continue;
+
+        const round = Math.max(0, Number(user.comeback_round) || 0) + (step === 0 ? 1 : 0);
+        const line = next.lines[(round - 1 + next.lines.length) % next.lines.length];
+        const outcome = await sendComeback(email, line.title, line.body);
+        const fields: Record<string, any> = { comeback_from: seenIso, comeback_round: round, comeback_last_at: now.toISOString() };
+        if (outcome === 'unsubscribed') {
+          // Nothing reaches this phone: no more this time away.
+          fields.comeback_step = COMEBACK_STEPS.length;
+        } else if (outcome) {
+          fields.comeback_step = step + 1;
+          await ledgerRecord(base44, { email, kind: 'general', source: 'comeback', notificationId: outcome, title: line.title });
+          comebacks++;
+          console.log(`[COME BACK] ${email}: day ${next.day} "${line.title}" (${Math.round(away / DAY_MS)} days away)`);
+        } else {
+          continue; // not sent; tried again on a later run
+        }
+        await base44.asServiceRole.entities.User.update(user.id, fields)
+          .catch((e: any) => console.error(`[COME BACK] Could not record for ${email}:`, e?.message || e));
+      }
+    } catch (e) {
+      console.error('[COME BACK] pass failed:', e);
+    }
+
+    console.log(`[BACK BURNER] Done — ${sent} check-in(s), ${comebacks} come-back push(es) at ${now.toISOString()}`);
+    return Response.json({ success: true, sent, comebacks, results, at: now.toISOString() });
   } catch (err) {
     console.error('[BACK BURNER] Fatal:', err);
     return Response.json({ success: false, error: String(err) }, { status: 500 });
@@ -193,6 +280,40 @@ If nothing back there is genuinely worth raising this week, return {"task_index"
   } catch (e) {
     console.error('[BACK BURNER] LLM error:', e);
     return null;
+  }
+}
+
+// A come-back push (see COMEBACK_STEPS): opens Add Task when tapped. Normal
+// priority, a 2-hour lifetime: nothing here is tied to a minute, and a short
+// life keeps OneSignal from putting it back on the screen later.
+async function sendComeback(email: string, title: string, body: string): Promise<string | false | 'unsubscribed'> {
+  const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+  const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+  if (!appId || !restApiKey) return false;
+  try {
+    const response = await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${restApiKey}` },
+      body: JSON.stringify({
+        app_id: appId,
+        headings: { en: title },
+        contents: { en: body },
+        data: { type: 'comeback', screen: '/AddTask' },
+        include_external_user_ids: [email],
+        channel_for_external_user_ids: 'push',
+        ttl: 2 * 60 * 60,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok || result.errors) {
+      console.error(`[COME BACK] OneSignal error for ${email}:`, result);
+      const errs = Array.isArray(result?.errors) ? result.errors.map(String) : [];
+      return errs.some((e: string) => /not subscribed/i.test(e)) ? 'unsubscribed' : false;
+    }
+    return result.id || 'sent';
+  } catch (e) {
+    console.error(`[COME BACK] Failed to send to ${email}:`, e);
+    return false;
   }
 }
 
