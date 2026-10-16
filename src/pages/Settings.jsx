@@ -25,7 +25,7 @@ import { Switch } from '@/components/ui/switch';
 import HomeZipCard from '@/components/settings/HomeZipCard';
 import QuickCaptureCard, { AlarmCard } from '@/components/settings/QuickCaptureCard';
 import { voiceCheckInsOn, setVoiceCheckIns, speechAvailable } from '@/components/utils/speak';
-import { refreshAlarms } from '@/components/utils/widgetBridge';
+import { refreshAlarms, alarmPermissionStatus } from '@/components/utils/widgetBridge';
 import AdDiagnosticsCard from '@/components/settings/AdDiagnosticsCard';
 import { Textarea } from '@/components/ui/textarea';
 import VersionTap from '@/components/settings/VersionTap';
@@ -174,6 +174,17 @@ export default function Settings() {
       await base44.auth.updateMe({ wake_watch: true });
       setWakeWatch({ available: true, hasAccess: true, enabled: true });
       showSaved();
+      // The one other switch it needs: with Android limiting ADHDone in the
+      // background, the check that reports the first unlock is held back and
+      // the morning waits (Rebecca, Oct 16 2026). Asked now, as it's turned on.
+      // Someone on full-screen alarms is asked by the alarm walkthrough.
+      try {
+        const st = await alarmPermissionStatus();
+        if (st && st.ignoringBatteryOptimizations === false && user?.alarm_mode !== 'alarm' && AB?.requestIgnoreBatteryOptimizations) {
+          toast({ title: 'One more switch', description: 'Let ADHDone run in the background so it doesn\'t miss when you wake up.', duration: 5000 });
+          await AB.requestIgnoreBatteryOptimizations();
+        }
+      } catch (e) { /* the wake-up popup asks again later */ }
     } else {
       setWakeWatch((s) => ({ ...s, enabled: false }));
       toast({ title: 'Usage access is still off', description: 'Switch it on for ADHDone, then try again.', duration: 3500 });
