@@ -337,6 +337,11 @@
       "format": "date-time",
       "description": "Owner editor account only: when the scheduled Smart Reminders run (cronSmartTaskNudge, every 10 minutes) last finished. The owner health check alerts when it is over 40 minutes old, which means Base44 stopped running the schedule (Oct 16 2026: no runs from 9:49 AM to 12:09 PM while the workflow still read active)."
     },
+    "push_unreachable_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When OneSignal last answered a Smart Reminders nudge with \"not subscribed\" (no phone signed in to this account takes pushes). Smart Reminders rests this account until they open the app again or a day has gone by (cronSmartTaskNudge)."
+    },
     "smart_nudge_dirty_at": {
       "type": "string",
       "format": "date-time",
