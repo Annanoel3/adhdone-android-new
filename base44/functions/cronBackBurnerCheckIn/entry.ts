@@ -212,6 +212,13 @@ async function sendPush(email: string, title: string, body: string, taskId: stri
         data: { screen: '/TaskNotification', taskId, type: 'backburner_checkin' },
         include_external_user_ids: [email],
         channel_for_external_user_ids: 'push',
+        // High priority with a 30-minute lifetime, like Smart Reminders'
+        // nudges: OneSignal's app puts recent pushes back on screen each time
+        // the app starts fresh for as long as they live (3 days by default),
+        // and Anna's 7:02 PM "App for Juli" check-in came back at 7:54 PM on
+        // Oct 14 2026. High priority so a sleeping phone still gets it in time.
+        priority: 10,
+        ttl: 30 * 60,
       }),
     });
     const result = await response.json();
