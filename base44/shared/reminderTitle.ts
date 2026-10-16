@@ -101,11 +101,19 @@ function sentence(s: string): string {
   return /[.!?]$/.test(s) ? s : `${s}.`;
 }
 
+// A reminder the person asked to get every day (or every other day). Once its
+// first day has gone by, every one after it is that same daily reminder, not
+// a task that "slipped past" anything (Oct 16 2026: Michelle's "Check email."
+// read "⚠️ … slipped past Wednesday. No shame…" every morning). Anna: "Daily
+// reminders should stop using that wording."
+const DAILY_RHYTHMS = new Set(['daily', 'every_other_day']);
+
 export function getReminderContent(
   taskTitle: string | null | undefined,
   dueDateISO: string | null | undefined,
   sendAtISO: string,
-  timeZone: string = DEFAULT_TIME_ZONE
+  timeZone: string = DEFAULT_TIME_ZONE,
+  interval: string | null | undefined = null
 ): { title: string; body: string } {
   const title = (taskTitle || '').trim() || 'your task';
   const quoted = `"${title}"`;
@@ -120,6 +128,7 @@ export function getReminderContent(
   const days = dueDay - localDay(sendAtISO, tz);
   const label = dayLabel(dueDay, days);
   if (days < 0) {
+    if (DAILY_RHYTHMS.has(String(interval || ''))) return { title: `📌 ${title}`, body: `Reminder: ${sentence(title)}` };
     return { title: `⚠️ ${title}`, body: `${quoted} slipped past ${label}. No shame — just pick it back up when you can.` };
   }
   if (days === 0) {
@@ -221,7 +230,7 @@ function reminderMoments(task: any, timeZone: string): { at: number; heading: st
       && (!own || hasItsOwnTime(task))) {
     const t = whenMs(task.next_reminder);
     if (!isNaN(t) && !out.has(t)) {
-      const copy = getReminderContent(task.title, task.due_date, new Date(t).toISOString(), timeZone);
+      const copy = getReminderContent(task.title, task.due_date, new Date(t).toISOString(), timeZone, task.reminder_interval);
       out.set(t, { at: t, heading: copy.title || '', body: copy.body || '' });
     }
   }
