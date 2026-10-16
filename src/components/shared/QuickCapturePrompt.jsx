@@ -1753,6 +1753,19 @@ const MORNING_WINDOW_MIN = 120;
 // Checked at most once an hour while the app stays open (it can sit in the
 // background for days), so a third rough morning is noticed the same morning.
 let wakeOfferCheckedAt = 0;
+// Wake-up detection on, but Android not letting ADHDone run in the background
+// (the battery switch): the phone holds back the check that reports the first
+// unlock, so it often never reports and the morning waits (Oct 16 2026:
+// Rebecca's summary went at 12:11 PM; the phones with the switch on reported
+// by 8:30). The same popup then asks for that one switch: right after the
+// setting is turned on, and on a later open at most once a day while it's
+// still off. Not for someone on full-screen alarms, whose own walkthrough
+// already asks for it daily (two asks for one switch would stack).
+const WAKE_BG_ASKED_KEY = 'adhdone_wake_background_asked';
+const backgroundHeldBack = async () => {
+  const st = await alarmPermissionStatus().catch(() => null);
+  return !!st && st.ignoringBatteryOptimizations === false;
+};
 
 const platformMs = (v) => {
   if (!v) return NaN;
@@ -1788,6 +1801,10 @@ export function WakeOfferPrompt({ user, theme }) {
   const [on, setOn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
+  // Asking only for the background switch (wake-up detection is already on).
+  const [bgOnly, setBgOnly] = useState(false);
+  // The background switch is off while wake-up detection is on.
+  const [bgMissing, setBgMissing] = useState(false);
   const shown = usePopupTurn(wanted);
   const pending = useRef(false);
   const AB = () => window.Capacitor?.Plugins?.AlarmBridge;
@@ -1812,6 +1829,16 @@ export function WakeOfferPrompt({ user, theme }) {
         let watch = user.wake_watch;
         if (phoneOn) {
           if (watch !== true) await base44.auth.updateMe({ wake_watch: true }).catch(() => {});
+          if (user.alarm_mode === 'alarm' || typeof AB()?.requestIgnoreBatteryOptimizations !== 'function') return;
+          let asked = 0;
+          try { asked = Number(localStorage.getItem(WAKE_BG_ASKED_KEY)) || 0; } catch (e) { /* fresh */ }
+          if (Date.now() - asked < 24 * 60 * 60 * 1000) return;
+          if (await backgroundHeldBack()) {
+            setOn(true);
+            setBgOnly(true);
+            setBgMissing(true);
+            setWanted(true);
+          }
           return;
         }
         if (watch === true) {
@@ -1839,9 +1866,33 @@ export function WakeOfferPrompt({ user, theme }) {
   // Once it's really on screen it counts as offered, whatever they choose.
   useEffect(() => {
     if (!shown) return;
+    if (bgOnly) {
+      try { localStorage.setItem(WAKE_BG_ASKED_KEY, String(Date.now())); } catch (e) { /* no storage */ }
+      return;
+    }
     try { localStorage.setItem(WAKE_OFFER_KEY, String(Date.now())); } catch (e) { /* no storage */ }
     base44.auth.updateMe({ wake_offer_seen_at: new Date().toISOString() }).catch(() => {});
   }, [shown]);
+
+  // While the background row is up: Android's battery prompt is drawn over
+  // the app (the page never goes hidden), so the switch is re-read every
+  // second rather than on coming back.
+  useEffect(() => {
+    if (!shown || !bgMissing) return undefined;
+    const id = setInterval(async () => {
+      if (!(await backgroundHeldBack())) setBgMissing(false);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [shown, bgMissing]);
+
+  const allowBackground = async () => {
+    setNote('');
+    try {
+      await AB().requestIgnoreBatteryOptimizations();
+    } catch (e) {
+      setNote("Couldn't open that setting. You can allow it in Android's battery settings for ADHDone.");
+    }
+  };
 
   const turnOn = async () => {
     const r = await AB().setWakeWatch({ enabled: true, quietEnd: quietEnd() });
@@ -1849,6 +1900,11 @@ export function WakeOfferPrompt({ user, theme }) {
       await base44.auth.updateMe({ wake_watch: true }).catch(() => {});
       setOn(true);
       setNote('');
+      // The moment it's turned on is when the one other switch it needs is
+      // asked for (the app's rule: each permission when its feature is used).
+      if (user?.alarm_mode !== 'alarm' && typeof AB()?.requestIgnoreBatteryOptimizations === 'function' && await backgroundHeldBack()) {
+        setBgMissing(true);
+      }
     } else {
       setOn(false);
       setNote('Usage access is still off. Switch it on for ADHDone, then try again.');
@@ -1906,26 +1962,48 @@ export function WakeOfferPrompt({ user, theme }) {
         <DialogHeader>
           <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
             <AlarmClock className="w-5 h-5" />
-            {mornings ? "Start reminders when you're up?" : 'New: notice when you wake up'}
+            {bgOnly ? 'One more switch for wake-up detection' : mornings ? "Start reminders when you're up?" : 'New: notice when you wake up'}
           </DialogTitle>
-          <DialogDescription className={dark ? 'text-gray-400' : ''}>
-            {mornings ? 'Your morning reminders seem to be catching you before you\'re up. ' : ''}
-            ADHDone can start your day's reminders the first time you unlock your phone in the
-            morning, instead of at a set time. Anything you set for a specific time still goes
-            off on time. It uses Android's Usage access only to see when your phone was first
-            unlocked each day.
-          </DialogDescription>
+          {bgOnly ? (
+            <DialogDescription className={dark ? 'text-gray-400' : ''}>
+              Your phone is limiting ADHDone in the background, so it can miss the first time you
+              unlock your phone in the morning. When it does, your morning reminders wait longer
+              than they need to. Letting ADHDone run in the background fixes that.
+            </DialogDescription>
+          ) : (
+            <DialogDescription className={dark ? 'text-gray-400' : ''}>
+              {mornings ? 'Your morning reminders seem to be catching you before you\'re up. ' : ''}
+              ADHDone can start your day's reminders the first time you unlock your phone in the
+              morning, instead of at a set time. Anything you set for a specific time still goes
+              off on time. It uses Android's Usage access only to see when your phone was first
+              unlocked each day.
+            </DialogDescription>
+          )}
         </DialogHeader>
-        <div className="flex items-center justify-between gap-3 py-1">
-          <span className={`text-sm font-medium ${dark ? 'text-gray-100' : 'text-gray-900'}`}>Notice when I wake up</span>
-          <Switch checked={on} onCheckedChange={toggle} disabled={busy} />
-        </div>
+        {!bgOnly && (
+          <div className="flex items-center justify-between gap-3 py-1">
+            <span className={`text-sm font-medium ${dark ? 'text-gray-100' : 'text-gray-900'}`}>Notice when I wake up</span>
+            <Switch checked={on} onCheckedChange={toggle} disabled={busy} />
+          </div>
+        )}
+        {on && (bgMissing || bgOnly) && (
+          <div className="flex items-center justify-between gap-3 py-1">
+            <span className={`text-sm font-medium ${dark ? 'text-gray-100' : 'text-gray-900'}`}>
+              {bgMissing ? 'Let ADHDone run in the background' : 'Running in the background'}
+            </span>
+            {bgMissing ? (
+              <Button size="sm" onClick={allowBackground} disabled={busy}>Allow</Button>
+            ) : (
+              <Check className="w-5 h-5 text-green-500" />
+            )}
+          </div>
+        )}
         {note && <p className="text-xs text-red-500">{note}</p>}
         <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
           You can change this any time in Settings.
         </p>
-        <Button variant={on ? 'default' : 'outline'} onClick={() => setWanted(false)} disabled={busy} className="w-full">
-          {on ? 'Done' : 'Not now'}
+        <Button variant={on && !bgMissing ? 'default' : 'outline'} onClick={() => setWanted(false)} disabled={busy} className="w-full">
+          {on && !bgMissing ? 'Done' : 'Not now'}
         </Button>
       </DialogContent>
     </Dialog>
