@@ -1592,6 +1592,23 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     problems.push({ title: '🚨 ADHDone: AI calls are failing', body: `OpenAI could not be reached: ${String((e as any)?.message || e).slice(0, 120)}` });
   }
 
+  // 1b. Is Smart Reminders running at all? It runs every 10 minutes and marks
+  //     the owner's editor account when it finishes (smart_nudge_cron_ran_at).
+  //     Oct 16 2026: Base44 failed to start the 9:49 AM run and then started
+  //     none until 12:09 PM, while the workflow read "active" with no failures
+  //     and every other scheduled job kept going. The only alert was check 2
+  //     naming the one person whose plan went stale first. No mark yet (before
+  //     the first run that writes one): nothing to compare.
+  let nudgeStopped = false;
+  {
+    const ranMs = Date.parse(userByEmail['annanoelwenballew@gmail.com']?.smart_nudge_cron_ran_at || '');
+    if (Number.isFinite(ranMs) && nowMs - ranMs > 40 * 60 * 1000) {
+      nudgeStopped = true;
+      const when = new Intl.DateTimeFormat('en-US', { timeZone: OWNER_TZ, hour: 'numeric', minute: '2-digit' }).format(new Date(ranMs));
+      problems.push({ title: '🚨 ADHDone: Smart Reminders stopped running', body: `Its last run finished at ${when} (${Math.round((nowMs - ranMs) / 60000)} minutes ago); it should run every 10 minutes. Nobody is getting Smart Reminders until it runs again.` });
+    }
+  }
+
   // 2. Smart Reminders plans marked out of date for over 90 minutes in the
   //    person's daytime: the planner is failing on them run after run, and
   //    nothing else notices (Anna's own plan sat like this for five hours).
@@ -1612,7 +1629,8 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     const dirtyAt = Date.parse(u.smart_nudge_dirty_at || '') || 0;
     if (u.smart_nudge_schedule_dirty === true && dirtyAt && nowMs - dirtyAt > 90 * 60 * 1000) stuckPlans.push(u.email);
   }
-  if (stuckPlans.length) {
+  // When the whole run has stopped (1b), that is the reason; no second alert.
+  if (stuckPlans.length && !nudgeStopped) {
     problems.push({ title: '⚠️ ADHDone: Smart Reminders not re-planning', body: `${stuckPlans.length} plan(s) have been out of date for over 90 minutes: ${stuckPlans.slice(0, 3).join(', ')}. The planner is failing on them every run.` });
   }
 
