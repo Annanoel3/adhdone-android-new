@@ -39,7 +39,7 @@
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
-import { localMinutesOfDay, isInQuietHours, adjustForQuietHours, resolveQuietHours, userTimeZone, theirDayKey, wakeStartMs } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, isInQuietHours, adjustForQuietHours, resolveQuietHours, userTimeZone, theirDayKey, wakeStartMs, wakeWaitMinutes } from '../../shared/quietHours.ts';
 import { getProximity, formatProximityNotes, lookupBusinessHours, businessHoursLine, BUSINESS_HOURS_MAX_AGE_MS } from '../../shared/mapsDistance.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
@@ -1035,13 +1035,14 @@ function dayStartLine(user: any, now: Date, timeZone: string, todayStr: string, 
 // "Notice when I wake up" is on and their phone hasn't been unlocked yet this
 // morning: no Smart Reminders go out yet (reminders they set for a time still
 // ring). Never past 4 hours after their quiet hours end, in case the phone
-// can't report (no signal, an old build).
+// can't report (no signal, an old build), and never past 1 when the phone
+// holds ADHDone back in the background (shared/quietHours.wakeWaitMinutes).
 function waitingForWake(user: any, now: Date, timeZone: string, todayStr: string, quietEndMin: number, dayOf: (ms: number) => string): boolean {
   if (user?.wake_watch !== true) return false;
   const isToday = (ms: number) => Number.isFinite(ms) && dayOf(ms) === todayStr;
   if (isToday(utcMs(user.woke_at)) || isToday(utcMs(user.day_first_sign_at)) || isToday(utcMs(user.last_active_at))) return false;
   const nowMin = localMinutesOfDay(now, timeZone);
-  return nowMin >= quietEndMin && nowMin < quietEndMin + 4 * 60;
+  return nowMin >= quietEndMin && nowMin < quietEndMin + wakeWaitMinutes(user);
 }
 
 function getLocalDateString(d: Date, timeZone: string): string {
