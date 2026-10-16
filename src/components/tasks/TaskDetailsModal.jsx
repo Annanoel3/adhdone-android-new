@@ -1082,9 +1082,12 @@ Return JSON:
       return;
     }
 
-    // CRITICAL FIX: Store local date/time, not UTC
-    const now = new Date();
-    const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
+    // When it was finished, in true UTC like every other way a task gets
+    // finished; every reader turns it into the person's own time. Until Oct 16
+    // 2026 this stamped local clock time as UTC (a Nov 11 2025 "store local
+    // date/time" change), so wins, Insights and Smart Reminders read these
+    // completions hours off.
+    const localISOString = new Date().toISOString();
 
     // Optimistic update — user sees the task complete instantly
     onUpdate({
@@ -1096,7 +1099,7 @@ Return JSON:
     onClose();
 
     try {
-      console.log('✅ [COMPLETE] Marking task complete with local time:', localISOString);
+      console.log('✅ [COMPLETE] Marking task complete at', localISOString);
 
       // The saved record, not the card: finished elsewhere (its notification,
       // another screen) already means its next copy exists.
