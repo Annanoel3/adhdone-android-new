@@ -280,7 +280,10 @@ async function sendDigestNotification(email: string, user: any, message: { title
       return false;
     }
 
-    console.log(`[DIGEST] Sent to ${email}: ${result.recipients || 0} recipients`);
+    // OneSignal's answer no longer carries a recipient count (it read "0
+    // recipients" for pushes that reached the phone, Oct 16 2026); the id is
+    // what the debug look-up ({ os: { id } }) takes to see what it reached.
+    console.log(`[DIGEST] Sent to ${email}: ${result.id || 'no id'}`);
     return result.id || 'sent';
   } catch (e) {
     console.error(`[DIGEST] Failed to send to ${email}:`, e);
