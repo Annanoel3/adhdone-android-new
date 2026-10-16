@@ -337,6 +337,24 @@
       "format": "date-time",
       "description": "Owner editor account only: when the scheduled Smart Reminders run (cronSmartTaskNudge, every 10 minutes) last finished. The owner health check alerts when it is over 40 minutes old, which means Base44 stopped running the schedule (Oct 16 2026: no runs from 9:49 AM to 12:09 PM while the workflow still read active)."
     },
+    "comeback_from": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Come-back pushes (cronBackBurnerCheckIn): the last-open time the current run of them counts from. When last_active_at moves on, the count starts over."
+    },
+    "comeback_step": {
+      "type": "integer",
+      "description": "How many come-back pushes went out since comeback_from: 1 = day 3, 2 = day 7, 3 = day 14 (the last)."
+    },
+    "comeback_last_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the last come-back push went out."
+    },
+    "comeback_round": {
+      "type": "integer",
+      "description": "How many times a run of come-back pushes has started for this person; picks which day-3 line they get so it differs each time."
+    },
     "push_unreachable_at": {
       "type": "string",
       "format": "date-time",
