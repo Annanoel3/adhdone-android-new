@@ -302,6 +302,19 @@ Deno.serve(async (req) => {
           batchStart = wanted;
         }
       }
+      // A daily (or every-other-day) rhythm starting over keeps its time of
+      // day: the next slot on its own clock (next_reminder plus whole
+      // intervals), not "a day from now" plus the stagger. Oct 16 2026: a 9 AM
+      // daily reminder rebuilt from scratch at 4:02 PM was booked for 4:46 PM
+      // every day.
+      if (!appending && interval >= 24 * 60 * 60 * 1000 && task.next_reminder) {
+        const anchor = new Date(task.next_reminder).getTime();
+        if (Number.isFinite(anchor)) {
+          let t = anchor;
+          if (t <= now.getTime()) t += Math.ceil((now.getTime() - t + 1) / interval) * interval;
+          batchStart = new Date(t);
+        }
+      }
       // They tapped Later on this task's alarm: the app cancelled the pings
       // inside the break and moved next_reminder to its end. Whatever else is
       // computed above, nothing is booked before the break ends.
