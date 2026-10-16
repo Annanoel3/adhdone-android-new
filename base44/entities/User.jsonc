@@ -332,6 +332,11 @@
       "type": "string",
       "description": "Which copy of the Smart Reminders brief (base44/shared/reminderBrief.ts) this person's current plan was made with. Empty = made by the old prompt. When it doesn't match the current brief, the waiting nudges are dropped and a new plan is made."
     },
+    "smart_nudge_cron_ran_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Owner editor account only: when the scheduled Smart Reminders run (cronSmartTaskNudge, every 10 minutes) last finished. The owner health check alerts when it is over 40 minutes old, which means Base44 stopped running the schedule (Oct 16 2026: no runs from 9:49 AM to 12:09 PM while the workflow still read active)."
+    },
     "smart_nudge_dirty_at": {
       "type": "string",
       "format": "date-time",
