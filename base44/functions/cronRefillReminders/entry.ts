@@ -1,3 +1,4 @@
+// Re-saved Oct 16 2026 so the bundled shared/reminderTitle.ts is picked up: a daily reminder after its first day reads as a reminder, never "slipped past".
 // Re-saved Oct 13 2026 (night) so the bundled shared/reminderTitle.ts is picked up: an appointment's alarm carries "Record notes" as its second button.
 // Re-saved Oct 13 2026 (evening) so the bundled shared/reminderTitle.ts is picked up: an event's alarm is marked `event` for the phone (build 42 on shows "Got it" only).
 // Re-saved Oct 13 2026 so the bundled shared/reminderTitle.ts and eventReminderPlan.ts are picked up (timed events: alarm at the time, heads-ups as pushes; the at-start entry survives the cap).
@@ -393,7 +394,7 @@ Deno.serve(async (req) => {
         const isFocusTask = !!(focusTaskId && task.id === focusTaskId);
         const { title, body } = isFocusTask
           ? getFocusModeContent(task.title)
-          : getReminderContent(task.title, task.due_date, sendAtISO, timeZone);
+          : getReminderContent(task.title, task.due_date, sendAtISO, timeZone, task.reminder_interval);
         try {
           const res = await base44.asServiceRole.functions.invoke('schedulePush', {
             internalKey: CRON_SECRET, // proves this call comes from the app's own backend
