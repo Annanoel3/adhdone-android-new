@@ -164,6 +164,28 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   };
 
   let parsed = await ask();
+  // A second look when the day may have been counted from the wrong moment.
+  // gpt-6-astra is handed the real date by OpenAI, and even with the said-at
+  // day in its system message it still sometimes counts "tonight" or
+  // "tomorrow" from the real date (1 of 26 self-test sentences, Oct 17 2026).
+  // That only matters when the words were said on an earlier day (a capture
+  // that finished late, a re-read of an old task), and such a slip always
+  // lands in the real coming week. Only a retry trigger: the model still
+  // decides the day, and a date the person named themselves stays.
+  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const realNow = nowInTimezone(tz);
+  const realToday = ymd(realNow);
+  const saidToday = saidDay?.[1] || ymd(nowInTimezone(tz, asOfMs));
+  if (saidToday < realToday) {
+    const weekOut = new Date(realNow);
+    weekOut.setDate(weekOut.getDate() + 7);
+    const lastDay = ymd(weekOut);
+    const inRealWeek = (v: any) => typeof v === 'string' && v.slice(0, 10) >= realToday && v.slice(0, 10) <= lastDay;
+    if (inRealWeek(parsed?.target_date) || inRealWeek(parsed?.due_date)) {
+      const again = await ask(`\n\nCHECK THE DAY YOU COUNTED FROM. The words were said on ${saidDay ? `${saidDay[2]} ${saidDay[1]}` : saidToday}, not on today's real date (${realToday}). "Today", "tonight", "tomorrow" and day names count from ${saidToday}. If a date you gave came from the real date, fix it; if the person named that date themselves, keep it.`);
+      if (again && typeof again === 'object') parsed = again;
+    }
+  }
   // The prompt already says a part of the day ("tonight", "after work") is a
   // time to pick, and the model mostly does; about half the time, on the
   // self-test (Oct 13 2026), it came back with no time at all, which turns
