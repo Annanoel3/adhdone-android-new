@@ -161,7 +161,8 @@ Then be honest about what you do and don't know:
   • A time can be stated without a clock number. "In an hour" or "in 20
     minutes" is a real time — count forward from CURRENT TIME below. "Tonight",
     "before bed", "this evening", "after dinner", "first thing in the morning"
-    is a part of the day — pick the clock time a reasonable person would mean
+    is a part of the day, and so is one with a day on it ("tomorrow morning",
+    "Sunday night") — pick the clock time a reasonable person would mean
     by it, on the day they meant (later today if it's still ahead of now).
     Only when the user gave no time in ANY form is target_time null; then never
     guess one.
