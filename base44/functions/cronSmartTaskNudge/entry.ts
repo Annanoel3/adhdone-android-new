@@ -1,3 +1,4 @@
+// Re-saved Oct 17 2026 so the bundled shared/runTaskParse.ts and shared/taskParsePrompt.ts are picked up: the parser and its helpers run on gpt-6-astra (was gpt-5.4), the parser's calendar beats the real date astra is given, and "tomorrow morning" / "Sunday night" get a time.
 // Smart nudges — the app's reminders for nearly every task.
 //
 // Smart nudges own every task EXCEPT: birthdays, events, a one-time task pinned
