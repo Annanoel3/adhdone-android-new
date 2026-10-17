@@ -1,3 +1,4 @@
+// Re-saved Oct 17 2026 (later) so the bundled shared/taskParsePrompt.ts is picked up: its calendar is the moment the words were said and beats the real date gpt-6-astra is given.
 // Re-saved Oct 17 2026 so the bundled shared/runTaskParse.ts is picked up: the parser and its helpers run on gpt-6-astra (was gpt-5.4).
 // Re-saved Oct 14 2026 (later) so the bundled shared/taskParsePrompt.ts is picked up: priority_uninferrable is always false — the app never asks "how urgent?"; the card's priority is editable.
 // Re-saved Oct 14 2026 so the bundled shared/taskParsePrompt.ts is picked up: needs_date_pick is always false — the app never asks "when?" (four "make an appointment" tasks typed at once became four questions in a row).
