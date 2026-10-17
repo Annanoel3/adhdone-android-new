@@ -279,7 +279,10 @@ time_stated — true only when the user gave the clock time itself: a number
   when target_time is null. Only a time the user stated may ring during their
   quiet hours (a 5 AM flight), so when unsure, false.
 
-end_date — for a stated multi-day range, the LAST day. Otherwise null.
+end_date — for a stated multi-day range (a trip Dec 3–7, a three-day
+  conference), the LAST day. Otherwise null. An event that runs past midnight
+  into the early morning (a party from 7 PM to 2 AM) is one night, on the day
+  it starts, not a range: end_date stays null.
 
 due_date — when the thing must be DONE by. Set it for deadlines ("by Friday",
   "this week", "today"), and also mirror target_date into it whenever
