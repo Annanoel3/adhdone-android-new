@@ -35,6 +35,13 @@ export const TASK_PARSE_SYSTEM_PROMPT =
 // open) and a re-read of an old task's words both used to count from the
 // moment they ran: Tabitha's "remind me tomorrow at 9am", typed Monday
 // night, landed on Wednesday, then on Thursday (Oct 6-8 2026). Left out, now.
+//
+// The calendar says outright that it is the said-at moment and beats any other
+// date the model was given: gpt-6-astra is handed the real date by OpenAI
+// before this prompt, and on the parser self-test (Oct 17 2026) it used that
+// date instead of this calendar on 15 of 25 sentences ("tomorrow", said Oct 5,
+// came back Oct 18), which would bring back Tabitha's bug for any capture that
+// finishes late.
 export function nowInTimezone(tz?: string, asOfMs?: number): Date {
   const base = Number.isFinite(asOfMs) && (asOfMs as number) > 0 ? new Date(asOfMs as number) : new Date();
   if (!tz) return base;
@@ -171,6 +178,9 @@ Then be honest about what you do and don't know:
 ────────────────────────────────────────────────────────────────────────
 THE CALENDAR (use these dates — never do the math yourself)
 ────────────────────────────────────────────────────────────────────────
+This is the day and time THE WORDS WERE SAID. If you were told a different
+date anywhere else, ignore it: for this task, today is ${todayISO} and the
+time is ${currentTime}.
 TODAY: ${todayISO} (${dayOfWeek})   CURRENT TIME: ${currentTime}
 TOMORROW: ${tomorrowISO}
 END OF THIS WEEK (Sun): ${endOfThisWeekISO}   END OF NEXT WEEK (Sun): ${endOfNextWeekISO}
