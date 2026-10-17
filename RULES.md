@@ -27,10 +27,13 @@ All LLM/AI calls must use the OpenAI SDK directly with the app's `OPENAI_API_KEY
 import OpenAI from 'npm:openai';
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 const completion = await openai.chat.completions.create({
-  model: 'gpt-5.4',   // the current model (Sept 2026); gpt-4o is two years old — do not use it for new code
+  model: 'gpt-6-astra',   // THE model, everywhere (Anna asked for the newest model on Sept 17 2026; "Move them to astra like I already asked weeks ago", Oct 17 2026). Never a cheaper or older one (no gpt-4o-mini, gpt-4o, gpt-5.4, gpt-6-luna) without her say-so
+  reasoning_effort: 'low',
   messages: [/* ... */],
 });
 ```
+
+gpt-6-astra is told the real date by OpenAI before your prompt, and it can trust that over a "today" you hand it. Anything that asks it to count from another moment (the parser reading words said earlier) has to say so in the system message as well as the prompt: on the parser self-test (Oct 17 2026) it counted "tomorrow" from the real date on 15 of 25 sentences until it did (`base44/shared/runTaskParse.ts`, saidNote).
 
 **Frontend pattern** — call a backend function that uses OpenAI; do NOT call Base44's InvokeLLM from the client.
 
@@ -43,7 +46,8 @@ If you need to add AI/LLM functionality, use OpenAI only. If you are not sure wh
 - `src/components/utils/calendarEmojiResolver.js`
 - `base44/shared/runTaskParse.ts` (moved to InvokeLLM on Sept 4 2026 without asking; back on OpenAI gpt-5.4 Sept 18 2026, tested side by side on the same inputs first)
 - `base44/shared/captureToTasks.ts` (same)
-- `base44/functions/readImageCapture/entry.ts` (same — photos go to gpt-5.4 as an image_url)
+- `base44/functions/readImageCapture/entry.ts` (same — photos go to the model as an image_url)
+- `src/context/LaunchContext.jsx` (the timer's spoken lines, Oct 13 2026) and `src/components/places/ShiftImportButton.jsx` (the work-schedule photo/PDF reader, Sept 18 2026) used InvokeLLM; both go through `categorizeIdea` on OpenAI since Oct 17 2026
 
 Why this rule exists, so nobody "improves" it away: InvokeLLM runs on Base44 integration credits. Base44's own docs say that when those run out, every call fails. Task entry must never depend on a shared credit pool.
 
