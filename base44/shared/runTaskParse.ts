@@ -105,9 +105,13 @@ function quietHoursNote(quiet?: { enabled: boolean; startMin: number; endMin: nu
 // their own words count: the block between the first pair of """ marks in
 // the prompt (buildTaskParsePrompt); the instructions after it use the same
 // phrases as examples.
+// Only decides whether to take a second look; the model judges what the
+// words mean. A bare "morning" or "night" ("tomorrow morning", "Wednesday and
+// Sunday night") is caught too: gpt-6-astra left both of those untimed on the
+// self-test (Oct 17 2026), which only "this morning" / "tonight" used to catch.
 function namesPartOfDay(prompt: string): boolean {
   const text = String(prompt || '').split('"""')[1] || '';
-  return /\b(tonight|this evening|this morning|this afternoon|before bed|bedtime|after work|after dinner|after lunch|first thing|when i get up|when i wake up)\b/i.test(text);
+  return /\b(tonight|morning|afternoon|evening|night|before bed|bedtime|after work|after dinner|after lunch|first thing|when i get up|when i wake up)\b/i.test(text);
 }
 
 export async function runTaskParse(_base44: any, prompt: string, tz?: string, aboutMe?: string, asOfMs?: number,
@@ -156,7 +160,7 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   // One more ask when the words name a part of the day and no time came
   // back. Only a retry trigger: the model still picks the time.
   if (!parsed?.target_time && namesPartOfDay(fullPrompt)) {
-    const again = await ask("\n\nTHE WORDS NAME A PART OF THE DAY (tonight, this evening, before bed, after work, this morning, this afternoon, after dinner, first thing). That is a time: pick the clock time a reasonable person would mean by it, on the day they meant. target_time must not be null here.");
+    const again = await ask("\n\nLOOK AGAIN AT THE TIME. If the words name a part of the day for doing it (tonight, tomorrow morning, Sunday night, this evening, before bed, after work, this afternoon, after dinner, first thing), that is a time: pick the clock time a reasonable person would mean by it, on the day they meant, and target_time must not be null. If such a word is only part of a name (\"night cream\", \"Morning Glory seeds\"), there is no time and target_time stays null.");
     if (again?.target_time) parsed = again;
   }
   // A time can only be "stated" when there is one.
