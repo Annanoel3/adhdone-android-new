@@ -125,6 +125,16 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
     ? prompt
     : buildTaskParsePrompt(prompt || '', tz, asOfMs);
 
+  // The calendar's "today" goes in the system message as well. gpt-6-astra is
+  // handed the real date by OpenAI; with the said-at day only in the user
+  // message it still counted "tomorrow" from the real date on 2 of 25 self-test
+  // sentences (Oct 17 2026), which is Tabitha's bug for any capture that
+  // finishes late. Read from the prompt itself, so the two can't disagree.
+  const saidDay = /TODAY: (\d{4}-\d{2}-\d{2}) \((\w+)\)\s+CURRENT TIME: ([^\n]+)/.exec(fullPrompt);
+  const saidNote = saidDay
+    ? `\n\nTHE WORDS WERE SAID ON ${saidDay[2]} ${saidDay[1]} AT ${saidDay[3].trim()}. For this task that is today and now: count "today", "tomorrow", "tonight" and every day name from it, even if you were told a different date anywhere else.`
+    : '';
+
   const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
   const ask = async (nudge = '') => {
     const completion = await openai.chat.completions.create({
@@ -138,6 +148,7 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
         {
           role: "system",
           content: TASK_PARSE_SYSTEM_PROMPT
+            + saidNote
             + (aboutMe?.trim() ? `\n\nABOUT THE USER (in their own words): ${aboutMe.trim()}` : '')
             + quietHoursNote(quiet)
             + nudge,
