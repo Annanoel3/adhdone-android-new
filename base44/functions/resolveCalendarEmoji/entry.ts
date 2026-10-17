@@ -27,14 +27,16 @@ Rules:
 - Return ONLY a single emoji character.`;
 
     const openai = new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') });
+    // gpt-6-astra (was gpt-4o, Base44's AI, July 29 2026). Anna, Oct 17 2026: "Move them to astra like I already asked weeks ago" (she asked for the newest model everywhere on Sept 17 2026).
+    // Astra takes no temperature.
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-6-astra',
+      reasoning_effort: 'low',
       messages: [
         { role: 'system', content: 'You are a helpful assistant that picks the best emoji for a given title. Always respond with valid JSON only.' },
         { role: 'user', content: prompt }
       ],
       response_format: { type: 'json_object' },
-      temperature: 0.3
     });
 
     const result = JSON.parse(completion.choices[0].message.content);
