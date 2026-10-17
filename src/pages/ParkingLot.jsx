@@ -345,6 +345,9 @@ export default function ParkingLot() {
   const [logText, setLogText] = useState("");
   const [historyFor, setHistoryFor] = useState(null);
   const [remindFor, setRemindFor] = useState(null);
+  // A tracker the look just started from something they typed: its
+  // "remind you to log?" popup also offers "keep it as an idea" (see below).
+  const [justStarted, setJustStarted] = useState(null);
   const [remindChoice, setRemindChoice] = useState("none");
   const [remindTime, setRemindTime] = useState("09:00");
   const [trackerBusy, setTrackerBusy] = useState(false);
@@ -363,8 +366,10 @@ export default function ParkingLot() {
   const addTrackerEntry = async (tracker, text, note = '') => {
     const fresh = await base44.entities.ParkingLotIdea.get(tracker.id).catch(() => null);
     const clean = String(note || '').trim().slice(0, 300);
-    const entries = [...((fresh || tracker).tracker_entries || []), { at: new Date().toISOString(), text, ...(clean ? { note: clean } : {}) }];
+    const at = new Date().toISOString();
+    const entries = [...((fresh || tracker).tracker_entries || []), { at, text, ...(clean ? { note: clean } : {}) }];
     await base44.entities.ParkingLotIdea.update(tracker.id, { tracker_entries: entries });
+    return at; // which entry it was, for Undo
   };
 
   // Readings that arrived in one sentence belong together (blood pressure
@@ -445,6 +450,44 @@ Give one item per reading, in order: {"log_to": "<its id>", "entry": "<the readi
     setRemindTime(suggest?.time || tracker.tracker_remind_time
       || `${String(now.getHours()).padStart(2, '0')}:${String(Math.floor(now.getMinutes() / 5) * 5).padStart(2, '0')}`);
     setRemindFor(tracker);
+  };
+
+  // The look got it wrong: what they typed wasn't something to keep track of
+  // (Oct 16 2026: a new user's "supplies to buy" became a tracker). The row
+  // goes back to the idea they typed, word for word; any other tracker the
+  // same look started is removed, and nothing stays linked to them.
+  const keepAsIdea = async () => {
+    const js = justStarted;
+    if (!js) return;
+    setTrackerBusy(true);
+    try {
+      await base44.entities.ParkingLotIdea.update(js.id, {
+        idea: js.original,
+        tracker: false,
+        tracker_entries: [],
+        tracker_companions: [],
+        tracker_remind: null,
+        tracker_checked: true,
+      });
+      for (const id of js.startedIds.filter((x) => x !== js.id)) {
+        await base44.entities.ParkingLotIdea.delete(id).catch(() => {});
+      }
+      const gone = new Set(js.startedIds);
+      for (const id of js.together.filter((x) => !gone.has(x))) {
+        const row = await base44.entities.ParkingLotIdea.get(id).catch(() => null);
+        const have = Array.isArray(row?.tracker_companions) ? row.tracker_companions : [];
+        const want = have.filter((x) => !gone.has(x));
+        if (row && want.length !== have.length) await base44.entities.ParkingLotIdea.update(id, { tracker_companions: want }).catch(() => {});
+      }
+      setJustStarted(null);
+      setRemindFor(null);
+      toast({ title: 'Kept as an idea' });
+    } catch (e) {
+      toast({ title: "Couldn't change that", description: 'Try again in a moment.' });
+    } finally {
+      setTrackerBusy(false);
+      refreshIdeas();
+    }
   };
 
   const saveReminder = async (tracker, choice, time) => {
@@ -555,11 +598,12 @@ What is it? It can be more than one thing at once ("blood pressure 91 over 57 an
 
 note: anything else they said that goes with a reading — when it was taken, what they had just done, eaten or taken, how they felt — in their words, without the reading itself. Context that applies to the whole sentence goes on every part. "blood pressure is 98/70 and heart is 89 bpm. this is an hour after taking mestinon for the first time and eating a small snack." → entry "98/70" and entry "89 bpm", each with the note "an hour after taking mestinon for the first time and eating a small snack".
 
-Judge by what they mean. Only 1 or 2 when they clearly mean logging something over time; a to-do that mentions a number is 3. Answer with JSON only, in this shape: {"actions": [ ... ]} — one object per part, or a single {"none": true}.`;
+Judge by what they mean. Only 1 or 2 when they clearly mean logging something over time; a to-do that mentions a number is 3. An entry for one they already track has to actually be about that thing (its value, or a note on it); words about anything else ("this is an idea", "buy milk") are never an entry for it, even when it's the only thing they track. A list of things to get or do ("supplies to buy") is 3, not something to keep track of. When there is no entry or note, give null, never the word "null". Answer with JSON only, in this shape: {"actions": [ ... ]} — one object per part, or a single {"none": true}.`;
     let out = null;
     let answered = false;
     try {
-      const res = await base44.functions.invoke('categorizeIdea', { prompt });
+      // judge: 'tracker' runs this on the parser's model (categorizeIdea).
+      const res = await base44.functions.invoke('categorizeIdea', { prompt, judge: 'tracker' });
       const raw = String(res?.data?.message || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
       answered = raw.length > 0;
       out = JSON.parse(raw);
@@ -588,10 +632,17 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
         return ({ hr: 'heartrate', pulse: 'heartrate', heartbeat: 'heartrate', bpm: 'heartrate', bp: 'bloodpressure', pressure: 'bloodpressure', temp: 'temperature', wt: 'weight' })[k] || k;
       };
       const sameName = (x, y) => canon(x) !== '' && canon(x) === canon(y);
+      // The word "null" (or "undefined") is an empty answer, not an entry: a
+      // new user's "supplies to buy" became a tracker whose entry read "null"
+      // (Oct 16 2026).
+      const answerText = (v) => {
+        const s = typeof v === 'string' ? v.trim() : '';
+        return /^(null|undefined)$/i.test(s) ? '' : s;
+      };
       for (const a of actions) {
-        const entry = typeof a.entry === 'string' ? a.entry.trim() : '';
-        const note = typeof a.note === 'string' ? a.note.trim().slice(0, 300) : '';
-        const trackName = typeof a.track === 'string' ? a.track.trim().slice(0, 120) : '';
+        const entry = answerText(a.entry);
+        const note = answerText(a.note).slice(0, 300);
+        const trackName = answerText(a.track).slice(0, 120);
         // A "new" one with the name of one they already have is an entry for
         // that one (the AI once started a second "heart rate" for "hr 77").
         const target = (a.log_to ? all.find((i) => i.id === a.log_to && i.tracker) : null)
@@ -600,17 +651,51 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
         else if (trackName && !target) news.push({ name: trackName, entry, note, remind: a.remind, time: a.time });
       }
       const together = logs.map((l) => l.target.id); // every tracker this one sentence touched
+      const added = [];
       for (const { target, entry, note } of logs) {
-        await addTrackerEntry(target, entry, note);
-        toast({ title: `Logged to ${target.idea}`, description: note ? `${entry} — ${note}` : entry });
+        const at = await addTrackerEntry(target, entry, note);
+        added.push({ target, at });
+      }
+      // What they typed is HIDDEN once it's logged, not deleted (the same as a
+      // capture the server folds in), so Undo can put it back. Oct 16 2026:
+      // Anna's "this is an idea" was logged as a heart rate reading and the
+      // idea itself deleted, with no way back.
+      const hidden = news.length === 0 && logs.length > 0;
+      if (logs.length > 0) {
+        let undone = false;
+        const undo = async () => {
+          if (undone) return;
+          undone = true;
+          try {
+            for (const { target, at } of added) {
+              const fresh = await base44.entities.ParkingLotIdea.get(target.id).catch(() => null);
+              if (!fresh) continue;
+              const kept = (fresh.tracker_entries || []).filter((e) => e?.at !== at);
+              await base44.entities.ParkingLotIdea.update(target.id, { tracker_entries: kept });
+            }
+            if (hidden) await base44.entities.ParkingLotIdea.update(idea.id, { converted_to_task: false, tracker_checked: true });
+            toast({ title: hidden ? 'Kept as an idea' : 'Taken back out' });
+          } catch (e) {
+            toast({ title: "Couldn't undo that", description: 'Try again in a moment.' });
+          } finally {
+            refreshIdeas();
+          }
+        };
+        toast({
+          title: `Logged to ${logs.map((l) => l.target.idea).join(' and ')}`,
+          description: logs.map((l) => (l.note ? `${l.entry} — ${l.note}` : l.entry)).join(' · '),
+          duration: 8000,
+          action: <ToastAction altText="Undo" onClick={undo}>Undo</ToastAction>,
+        });
       }
       if (news.length === 0) {
-        if (logs.length > 0) await base44.entities.ParkingLotIdea.delete(idea.id);
+        if (hidden) await base44.entities.ParkingLotIdea.update(idea.id, { converted_to_task: true, tracker_checked: true });
         else await base44.entities.ParkingLotIdea.update(idea.id, { tracker_checked: true });
         await linkTrackers(together);
       } else {
         // The first new tracker takes over this row; any other becomes its own.
         const [first, ...rest] = news;
+        const startedIds = [idea.id];
         const entriesOf = (n) => (n.entry ? [{ at: new Date().toISOString(), text: n.entry, ...(n.note ? { note: n.note } : {}) }] : []);
         await base44.entities.ParkingLotIdea.update(idea.id, {
           tracker: true,
@@ -628,7 +713,7 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
             converted_to_task: false,
             parent_idea_id: null,
           });
-          if (made?.id) together.push(made.id);
+          if (made?.id) { together.push(made.id); startedIds.push(made.id); }
           toast({ title: `Now keeping track of ${n.name}`, description: n.entry ? `First entry: ${n.entry}. Tap its bell to set a reminder.` : 'Tap its bell to set a reminder.' });
         }
         await linkTrackers(together);
@@ -636,6 +721,7 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
         // popup at a time; the others' bells are a tap away.
         const said = /^(\d{1,2}):(\d{2})$/.exec(String(first.time || ''));
         const time = said && Number(said[1]) < 24 ? `${said[1].padStart(2, '0')}:${said[2]}` : null;
+        setJustStarted({ id: idea.id, original: String(idea.idea || ''), startedIds, together: [...together] });
         openRemind({ ...idea, idea: first.name, tracker: true }, { remind: first.remind, time });
       }
     } catch (e) {
@@ -1709,7 +1795,7 @@ Return ONLY the category name, nothing else.`;
       </Dialog>
 
       {/* Trackers: "remind you to log?", the log, and the history. */}
-      <Dialog open={remindShown} onOpenChange={(o) => { if (!o) setRemindFor(null); }}>
+      <Dialog open={remindShown} onOpenChange={(o) => { if (!o) { setRemindFor(null); setJustStarted(null); } }}>
         <DialogContent className="max-w-sm w-[calc(100vw-2rem)]">
           <DialogHeader>
             <DialogTitle>Want a reminder to log {remindFor?.idea}?</DialogTitle>
@@ -1744,6 +1830,17 @@ Return ONLY the category name, nothing else.`;
                 Save
               </Button>
             </div>
+          )}
+          {justStarted && remindFor && justStarted.id === remindFor.id && (
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={trackerBusy}
+              onClick={keepAsIdea}
+              className="w-full text-sm text-gray-500"
+            >
+              This isn't something to track: keep it as an idea
+            </Button>
           )}
         </DialogContent>
       </Dialog>
