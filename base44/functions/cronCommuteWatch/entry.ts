@@ -24,14 +24,33 @@
 //
 // Both are claimed on the user record BEFORE sending, so a re-run (or a run cut
 // off mid-send) can't double-notify — the same rule the daily digest uses.
+//
+// 3. EVENTS' "LEAVE NOW", RE-CHECKED LIVE (Oct 17 2026). An event at a place
+//    gets its "leave now" booked when its reminders are made, from Google's
+//    traffic FORECAST for that hour (shared/travelLead.ts), and until now
+//    nothing ever looked again, so a bad traffic day never moved it. That was
+//    never Anna's call: on Sep 13 2026 she asked Base44's AI to make a demo's
+//    "14 min away with traffic right now" real, it built the one-time forecast
+//    and called it "live and real", and Commute Watch's live checks were only
+//    ever built for work ("I never said yes to not having live traffic data").
+//    Now, from 3 hours before a booked "leave now", every run measures the
+//    drive again on live traffic. When they need to leave at least 5 minutes
+//    earlier, the push moves earlier (or goes right away if that time has
+//    passed). It never moves later, so a light-traffic reading can't make
+//    anyone late. On the last check before it goes, its drive-time words are
+//    brought up to date, so "with traffic right now" is true when it's read.
+//    The phone's own alarm for it follows through onTaskUpdate (the task's
+//    reminder_schedule changes, and onTaskUpdate sends the phone its new
+//    alarm list).
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { getTodaysCommute, localDateKey } from '../../shared/commuteSchedule.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { getProximity } from '../../shared/mapsDistance.ts';
-import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
+import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
 import { resolveQuietHours, isInQuietHours, adjustForQuietHours } from '../../shared/quietHours.ts';
 import { listAll } from '../../shared/listAll.ts';
+import { taskRingsAsAlarm } from '../../shared/reminderTitle.ts';
 
 const CUSHION_MINUTES = 10;       // finding keys / shoes / getting in the car
 // OneSignal "Android notification channel" for the leave-now push, created in
@@ -121,17 +140,265 @@ async function sendPush(
   }
 }
 
+// ── Events' "leave now", re-checked on live traffic (see 3. at the top) ──────
+const EVENT_WATCH_MS = 3 * 60 * 60 * 1000; // live checks start this long before the booked push
+const EVENT_MOVE_MIN = 5;                  // moved only when they need to leave 5+ min earlier
+const EVENT_WORDS_MIN = 5;                 // words refreshed when the drive is 5+ min off
+const EVENT_FINAL_MS = 16 * 60 * 1000;     // the last run before it goes (runs are 15 min apart)
+const MAX_EVENT_LEAD = 180;                // same cap as shared/travelLead.ts
+
+// Same lead as the booking (shared/travelLead.ts): drive + cushion, up to the
+// next 5 minutes, so a re-check that finds the same traffic lands on the same minute.
+function eventLeadMinutes(driveMinutes: number): number {
+  return Math.min(Math.ceil((driveMinutes + CUSHION_MINUTES) / 5) * 5, MAX_EVENT_LEAD);
+}
+
+// The drive time a booked "leave now" states ("about 76 min away", "about a 76 min drive").
+function statedMinutes(body: any): number {
+  const m = /about (?:a )?(\d+)\s*min/i.exec(String(body || ''));
+  return m ? Number(m[1]) : NaN;
+}
+
+// A stored time in ms. The platform sometimes stores UTC with no zone letter.
+function timeMs(v: any): number {
+  if (!v) return NaN;
+  const s = String(v);
+  return new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`).getTime();
+}
+
+async function cancelOneSignal(appId: string, restApiKey: string, id: string): Promise<boolean> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(`https://onesignal.com/api/v1/notifications/${encodeURIComponent(id)}?app_id=${appId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Basic ${restApiKey}` },
+      });
+      if (res.ok) return true;
+      // Already sent or already gone: nothing left to cancel.
+      if (res.status === 400 || res.status === 404) return true;
+    } catch (_) { /* tried once more below */ }
+  }
+  return false;
+}
+
+// Books an event's "leave now" the way every event reminder is booked (same
+// data, so the phone gives it the event screen: Got it only). sendAt null =
+// right now. For someone with full-screen alarms it asks to ring: if the
+// phone's own alarm already rings for that moment (the alarm list onTaskUpdate
+// sends it), PushFilter shows the push quietly instead of ringing twice; if
+// that list never arrived, the push itself rings, so the moved time is never
+// left to a quiet tray entry.
+async function bookEventLeave(
+  appId: string, restApiKey: string, email: string, task: any, owner: any,
+  title: string, body: string, sendAt: Date | null,
+): Promise<string | null> {
+  const later = !!sendAt && sendAt.getTime() > Date.now() + 30_000;
+  const atMs = later ? sendAt!.getTime() : Date.now();
+  const payload: any = {
+    app_id: appId,
+    include_external_user_ids: [email],
+    headings: { en: title },
+    contents: { en: body },
+    data: { screen: '/TaskNotification', taskId: task.id, urgency: task.urgency || 'medium', type: 'event_reminder' },
+    channel_for_external_user_ids: 'push',
+    // A set time: high priority, so a dozing phone can't hold it.
+    priority: 10,
+    // A "leave now" read 20 minutes late is noise.
+    ttl: 20 * 60,
+  };
+  if (later) payload.send_after = sendAt!.toISOString();
+  let alarmUser = false;
+  try { alarmUser = taskRingsAsAlarm(task, owner); } catch (_) { alarmUser = false; }
+  if (alarmUser) {
+    payload.data.alarm = true;
+    payload.data.at = atMs;
+    payload.ttl = 10 * 60;
+  }
+  try {
+    const res = await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${restApiKey}` },
+      body: JSON.stringify(payload),
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok || result.errors || !result.id) {
+      console.error(`[EVENT LEAVE] OneSignal error for task ${task.id}:`, JSON.stringify(result));
+      return null;
+    }
+    return String(result.id);
+  } catch (e) {
+    console.error(`[EVENT LEAVE] Send failed for task ${task.id}:`, e);
+    return null;
+  }
+}
+
+async function checkEventLeaveTimes(base44: any, now: Date): Promise<any[]> {
+  const done: any[] = [];
+  const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+  const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+  if (!appId || !restApiKey) return done;
+  const nowMs = now.getTime();
+
+  let tasks: any[] = [];
+  try {
+    tasks = await base44.asServiceRole.entities.Task.filter({ status: 'active', 'reminder_schedule.label': 'leave now' }, '-updated_date', 200);
+  } catch (e) {
+    // If the nested filter is ever refused: every active event, sorted out below.
+    console.log('[EVENT LEAVE] nested filter failed, reading active events:', (e as any)?.message || e);
+    tasks = await base44.asServiceRole.entities.Task.filter({ status: 'active', classification: 'event' }, '-updated_date', 500);
+  }
+  console.log(`[EVENT LEAVE] ${(tasks || []).length} active task(s) with a leave-now to look at`);
+
+  const owners = new Map<string, any>();
+  for (const task of tasks || []) {
+    try {
+      if (!task?.id || task.silenced || task.parent_task_id) continue;
+      const place = String(task.location || '').trim();
+      if (!place) continue;
+      const schedule: any[] = Array.isArray(task.reminder_schedule) ? task.reminder_schedule : [];
+      const idx = schedule.findIndex((r: any) => r && /leave now/i.test(String(r.label || '')) && r.send_at);
+      if (idx < 0) continue;
+      const entry = schedule[idx];
+      // Only a push that is really booked. A planned one with no id yet is
+      // cronRefillReminders' to book (it promotes event plans into OneSignal's
+      // window); booking it here too would send it twice.
+      if (!entry.notification_id) continue;
+      const bookedMs = timeMs(entry.send_at);
+      // Already gone (or going this minute), or too far off for live traffic to mean much.
+      if (!Number.isFinite(bookedMs) || bookedMs <= nowMs + 60_000 || bookedMs - nowMs > EVENT_WATCH_MS) continue;
+      const arriveMs = timeMs(task.event_time || task.next_reminder);
+      if (!Number.isFinite(arriveMs) || arriveMs <= nowMs) continue;
+
+      const email = String(task.notification_recipient_email || task.created_by || '').trim();
+      if (!email) continue;
+      if (!owners.has(email)) {
+        const rows = await base44.asServiceRole.entities.User.filter({ email });
+        owners.set(email, rows?.[0] || null);
+      }
+      const owner = owners.get(email);
+      if (!owner || owner.notifications === false) continue;
+      const home = getHomeOrigin(owner);
+      if (!home) continue;
+      const routeOpts = { avoidTolls: owner.commute_avoid_tolls === true };
+      const timeZone = owner.timezone || 'America/Chicago';
+
+      // Two passes, like the commute: traffic now gives a first departure
+      // time, then the drive is measured again for that minute while it's ahead.
+      const first = (await getProximity([place], home, new Date(nowMs + 60_000), routeOpts)).fromHome[place];
+      if (!first?.minutes) {
+        console.log(`[EVENT LEAVE] Could not measure the drive for task ${task.id}`);
+        continue;
+      }
+      let drive = first;
+      const firstDepart = arriveMs - eventLeadMinutes(first.minutes) * 60000;
+      if (firstDepart > nowMs + 2 * 60000) {
+        const refined = (await getProximity([place], home, new Date(firstDepart), routeOpts)).fromHome[place];
+        if (refined?.minutes) drive = refined;
+      }
+      const leaveMs = arriveMs - eventLeadMinutes(drive.minutes) * 60000;
+      const about = aboutMinutes(drive.minutes);
+      const t = String(task.title || 'your event');
+      const title = entry.notification_title || `🚗 Time to leave — ${t}`;
+      const arriveBy = fmtLocalTime(new Date(arriveMs), timeZone);
+
+      const moveEarlier = leaveMs <= bookedMs - EVENT_MOVE_MIN * 60000;
+      const said = statedMinutes(entry.notification_body);
+      const finalCheck = bookedMs - nowMs <= EVENT_FINAL_MS;
+      const wordsOff = !!drive.inTraffic && (!Number.isFinite(said) || Math.abs(about - said) >= EVENT_WORDS_MIN);
+      if (!moveEarlier && !(finalCheck && wordsOff)) {
+        console.log(`[EVENT LEAVE] ${task.id}: about ${about} min, leave by ${new Date(leaveMs).toISOString()}, booked ${entry.send_at}, unchanged`);
+        continue;
+      }
+
+      let sendAt: Date | null;
+      let body: string;
+      if (moveEarlier) {
+        const late = leaveMs <= nowMs + 60_000;
+        sendAt = late ? null : new Date(leaveMs);
+        // "To get there by 1:00 PM" only when leaving then really does that:
+        // not when it's already too late, or the drive is past the 3-hour cap.
+        const onTime = !late && drive.minutes + CUSHION_MINUTES <= MAX_EVENT_LEAD;
+        body = late
+          ? `Traffic got worse: "${t}" is about ${about} min away right now, and it starts at ${arriveBy}. Leave as soon as you can. 🚗`
+          : onTime
+            ? `Traffic's worse than expected: "${t}" is about ${about} min away. Head out now to get there by ${arriveBy}. 🚗`
+            : `Traffic's worse than expected: "${t}" is about ${about} min away, and it starts at ${arriveBy}. Leave as soon as you can. 🚗`;
+      } else {
+        // The last check before it goes: same minute, true numbers.
+        sendAt = new Date(bookedMs);
+        body = Number.isFinite(said) && about < said
+          ? `"${t}" is about ${about} min away with traffic right now. Leaving now gets you there a little early. 🚗`
+          : `"${t}" is about ${about} min away with traffic right now. Head out now to get there by ${arriveBy}. 🚗`;
+      }
+
+      const newId = await bookEventLeave(appId, restApiKey, email, task, owner, title, body, sendAt);
+      if (!newId) continue; // the booked one stays as it was
+      const sendIso = (sendAt || new Date()).toISOString();
+      const oldId = entry.notification_id ? String(entry.notification_id) : '';
+
+      // A time moved into quiet hours by traffic still rings (the commute's
+      // rule, and Anna's for its heads-up, Oct 16 2026: it can ignore quiet
+      // hours when traffic means reminding them earlier).
+      const quiet = resolveQuietHours(owner);
+      const inQuiet = (ms: number) => quiet.enabled && isInQuietHours(new Date(ms), quiet.startMin, quiet.endMin, timeZone);
+      const theirTime = entry.their_time === true || (!!sendAt && inQuiet(sendAt.getTime()) && !inQuiet(bookedMs));
+
+      const nextSchedule = schedule.map((r: any, i: number) => i !== idx ? r : {
+        ...r,
+        notification_id: newId,
+        send_at: sendIso,
+        notification_title: title,
+        notification_body: body,
+        ...(theirTime ? { their_time: true } : {}),
+      });
+      const ids: string[] = (Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : []).map(String);
+      const nextIds = oldId && ids.includes(oldId) ? ids.map((x) => (x === oldId ? newId : x)) : [...ids, newId];
+      try {
+        await base44.asServiceRole.entities.Task.update(task.id, { reminder_schedule: nextSchedule, onesignal_notification_ids: nextIds });
+      } catch (e) {
+        // Not saved: take the new push back, so the next run doesn't book another.
+        console.error(`[EVENT LEAVE] Could not save the new leave-now for task ${task.id}, taking it back:`, e);
+        await cancelOneSignal(appId, restApiKey, newId);
+        continue;
+      }
+      await ledgerRecord(base44, {
+        email, taskId: task.id, kind: 'event_reminder', source: 'cronCommuteWatch',
+        sendAt: sendIso, notificationId: newId, title,
+      });
+      if (oldId) {
+        const gone = await cancelOneSignal(appId, restApiKey, oldId);
+        if (!gone) console.error(`[EVENT LEAVE] Could not cancel the old leave-now ${oldId} for task ${task.id}`);
+        await ledgerCancel(base44, [oldId]);
+      }
+      const what = moveEarlier ? (sendAt ? 'moved earlier' : 'sent now') : 'words refreshed';
+      console.log(`[EVENT LEAVE] ${task.id} ${what}: about ${about} min (said ${Number.isFinite(said) ? said : '?'}), ${entry.send_at} → ${sendIso}`);
+      done.push({ email, taskId: task.id, what, driveMinutes: drive.minutes, from: entry.send_at, to: sendIso });
+    } catch (e) {
+      console.error(`[EVENT LEAVE] task ${task?.id} failed:`, e);
+    }
+  }
+  return done;
+}
+
 export default async function (req: Request): Promise<Response> {
   try {
     const base44 = createClientFromRequest(req);
     const now = new Date();
     const sent: any[] = [];
 
+    // Events first, and on their own: a failure here never stops the commute.
+    let events: any[] = [];
+    try {
+      events = await checkEventLeaveTimes(base44, now);
+    } catch (e) {
+      console.error('[EVENT LEAVE] pass failed:', e);
+    }
+
     const users = await listAll(base44.asServiceRole.entities.User);
     // Remote workers have hours but no drive — never send them a "leave now".
     const commuters = users.filter((u: any) => u?.email && !u?.work_remote && u?.work_address && getHomeOrigin(u));
     if (commuters.length === 0) {
-      return Response.json({ success: true, checked: 0, sent: [] });
+      return Response.json({ success: true, checked: 0, sent: [], events });
     }
 
     // Shifts are only needed for people on a week-by-week schedule.
@@ -273,8 +540,8 @@ export default async function (req: Request): Promise<Response> {
       }
     }
 
-    console.log(`[COMMUTE] Checked ${commuters.length} commuter(s), sent ${sent.length} push(es)`);
-    return Response.json({ success: true, checked: commuters.length, sent });
+    console.log(`[COMMUTE] Checked ${commuters.length} commuter(s), sent ${sent.length} push(es); ${events.length} event leave-now change(s)`);
+    return Response.json({ success: true, checked: commuters.length, sent, events });
   } catch (err) {
     console.error('[COMMUTE] Fatal:', err);
     return Response.json({ success: false, error: String(err) }, { status: 500 });
