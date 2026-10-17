@@ -345,9 +345,13 @@ export default function ParkingLot() {
   const [logText, setLogText] = useState("");
   const [historyFor, setHistoryFor] = useState(null);
   const [remindFor, setRemindFor] = useState(null);
-  // A tracker the look just started from something they typed: its
-  // "remind you to log?" popup also offers "keep it as an idea" (see below).
-  const [justStarted, setJustStarted] = useState(null);
+  // Something they typed that looks like a thing to keep track of: they're
+  // ASKED before any tracker is made (askTrack, the "Keep track of …?" popup).
+  // Anna, Oct 17 2026: "Make a popup asking if they want to create a tracker
+  // rather than just creating it" (a new user's "supplies to buy" had been
+  // turned into a tracker on its own the night before).
+  const [askTrack, setAskTrack] = useState(null);
+  const askTrackShown = usePopupTurn(!!askTrack, { reactive: true });
   const [remindChoice, setRemindChoice] = useState("none");
   const [remindTime, setRemindTime] = useState("09:00");
   const [trackerBusy, setTrackerBusy] = useState(false);
@@ -452,40 +456,60 @@ Give one item per reading, in order: {"log_to": "<its id>", "entry": "<the readi
     setRemindFor(tracker);
   };
 
-  // The look got it wrong: what they typed wasn't something to keep track of
-  // (Oct 16 2026: a new user's "supplies to buy" became a tracker). The row
-  // goes back to the idea they typed, word for word; any other tracker the
-  // same look started is removed, and nothing stays linked to them.
-  const keepAsIdea = async () => {
-    const js = justStarted;
-    if (!js) return;
-    setTrackerBusy(true);
+  // Yes: the first new tracker takes over the row they typed; any other
+  // becomes its own; trackers from the same sentence are linked; then the
+  // "remind you to log?" question for the first one (one popup at a time).
+  const acceptTracker = async () => {
+    const ask = askTrack;
+    if (!ask) return;
+    setAskTrack(null);
+    const { idea, news, together } = ask;
     try {
-      await base44.entities.ParkingLotIdea.update(js.id, {
-        idea: js.original,
-        tracker: false,
-        tracker_entries: [],
-        tracker_companions: [],
-        tracker_remind: null,
+      const [first, ...rest] = news;
+      const entriesOf = (n) => (n.entry ? [{ at: new Date().toISOString(), text: n.entry, ...(n.note ? { note: n.note } : {}) }] : []);
+      await base44.entities.ParkingLotIdea.update(idea.id, {
+        tracker: true,
         tracker_checked: true,
+        idea: first.name,
+        tracker_entries: entriesOf(first),
       });
-      for (const id of js.startedIds.filter((x) => x !== js.id)) {
-        await base44.entities.ParkingLotIdea.delete(id).catch(() => {});
+      const linked = [...together, idea.id];
+      for (const n of rest) {
+        const made = await base44.entities.ParkingLotIdea.create({
+          idea: n.name,
+          tracker: true,
+          tracker_checked: true,
+          tracker_entries: entriesOf(n),
+          converted_to_task: false,
+          parent_idea_id: null,
+        });
+        if (made?.id) linked.push(made.id);
+        toast({ title: `Now keeping track of ${n.name}`, description: n.entry ? `First entry: ${n.entry}. Tap its bell to set a reminder.` : 'Tap its bell to set a reminder.' });
       }
-      const gone = new Set(js.startedIds);
-      for (const id of js.together.filter((x) => !gone.has(x))) {
-        const row = await base44.entities.ParkingLotIdea.get(id).catch(() => null);
-        const have = Array.isArray(row?.tracker_companions) ? row.tracker_companions : [];
-        const want = have.filter((x) => !gone.has(x));
-        if (row && want.length !== have.length) await base44.entities.ParkingLotIdea.update(id, { tracker_companions: want }).catch(() => {});
-      }
-      setJustStarted(null);
-      setRemindFor(null);
-      toast({ title: 'Kept as an idea' });
+      await linkTrackers(linked);
+      const said = /^(\d{1,2}):(\d{2})$/.exec(String(first.time || ''));
+      const time = said && Number(said[1]) < 24 ? `${said[1].padStart(2, '0')}:${said[2]}` : null;
+      openRemind({ ...idea, idea: first.name, tracker: true }, { remind: first.remind, time });
     } catch (e) {
-      toast({ title: "Couldn't change that", description: 'Try again in a moment.' });
+      toast({ title: "Couldn't start that", description: 'Try again in a moment.' });
     } finally {
-      setTrackerBusy(false);
+      refreshIdeas();
+    }
+  };
+
+  // No (or the popup closed): it stays the idea they typed, word for word,
+  // and it isn't asked about again. Readings from the same sentence that were
+  // logged to trackers they already have stay logged (their own Undo).
+  const declineTracker = async () => {
+    const ask = askTrack;
+    if (!ask) return;
+    setAskTrack(null);
+    try {
+      await base44.entities.ParkingLotIdea.update(ask.idea.id, { tracker_checked: true });
+      await linkTrackers(ask.together);
+    } catch (e) {
+      // Not saved: the look asks again the next time the page opens.
+    } finally {
       refreshIdeas();
     }
   };
@@ -602,8 +626,8 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
     let out = null;
     let answered = false;
     try {
-      // judge: 'tracker' runs this on the parser's model (categorizeIdea).
-      const res = await base44.functions.invoke('categorizeIdea', { prompt, judge: 'tracker' });
+      // categorizeIdea runs on gpt-6-astra (Oct 17 2026).
+      const res = await base44.functions.invoke('categorizeIdea', { prompt });
       const raw = String(res?.data?.message || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
       answered = raw.length > 0;
       out = JSON.parse(raw);
@@ -693,36 +717,11 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
         else await base44.entities.ParkingLotIdea.update(idea.id, { tracker_checked: true });
         await linkTrackers(together);
       } else {
-        // The first new tracker takes over this row; any other becomes its own.
-        const [first, ...rest] = news;
-        const startedIds = [idea.id];
-        const entriesOf = (n) => (n.entry ? [{ at: new Date().toISOString(), text: n.entry, ...(n.note ? { note: n.note } : {}) }] : []);
-        await base44.entities.ParkingLotIdea.update(idea.id, {
-          tracker: true,
-          tracker_checked: true,
-          idea: first.name,
-          tracker_entries: entriesOf(first),
-        });
-        together.push(idea.id);
-        for (const n of rest) {
-          const made = await base44.entities.ParkingLotIdea.create({
-            idea: n.name,
-            tracker: true,
-            tracker_checked: true,
-            tracker_entries: entriesOf(n),
-            converted_to_task: false,
-            parent_idea_id: null,
-          });
-          if (made?.id) { together.push(made.id); startedIds.push(made.id); }
-          toast({ title: `Now keeping track of ${n.name}`, description: n.entry ? `First entry: ${n.entry}. Tap its bell to set a reminder.` : 'Tap its bell to set a reminder.' });
-        }
-        await linkTrackers(together);
-        // The "remind you to log?" question, for the first one only — one
-        // popup at a time; the others' bells are a tap away.
-        const said = /^(\d{1,2}):(\d{2})$/.exec(String(first.time || ''));
-        const time = said && Number(said[1]) < 24 ? `${said[1].padStart(2, '0')}:${said[2]}` : null;
-        setJustStarted({ id: idea.id, original: String(idea.idea || ''), startedIds, together: [...together] });
-        openRemind({ ...idea, idea: first.name, tracker: true }, { remind: first.remind, time });
+        // Something new to keep track of: ask first (askTrack). Nothing is
+        // made until they say yes. One question at a time: if another is
+        // already up, this one stays a plain idea for now and is asked the
+        // next time the page opens.
+        setAskTrack((cur) => cur || { idea, news, together: [...together] });
       }
     } catch (e) {
       console.warn('Tracker check failed:', e?.message || e);
@@ -1795,7 +1794,7 @@ Return ONLY the category name, nothing else.`;
       </Dialog>
 
       {/* Trackers: "remind you to log?", the log, and the history. */}
-      <Dialog open={remindShown} onOpenChange={(o) => { if (!o) { setRemindFor(null); setJustStarted(null); } }}>
+      <Dialog open={remindShown} onOpenChange={(o) => { if (!o) setRemindFor(null); }}>
         <DialogContent className="max-w-sm w-[calc(100vw-2rem)]">
           <DialogHeader>
             <DialogTitle>Want a reminder to log {remindFor?.idea}?</DialogTitle>
@@ -1831,17 +1830,27 @@ Return ONLY the category name, nothing else.`;
               </Button>
             </div>
           )}
-          {justStarted && remindFor && justStarted.id === remindFor.id && (
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={trackerBusy}
-              onClick={keepAsIdea}
-              className="w-full text-sm text-gray-500"
-            >
-              This isn't something to track: keep it as an idea
+        </DialogContent>
+      </Dialog>
+
+      {/* "Keep track of …?" — asked before any tracker is made (askTrack). */}
+      <Dialog open={askTrackShown} onOpenChange={(o) => { if (!o) declineTracker(); }}>
+        <DialogContent className="max-w-sm w-[calc(100vw-2rem)]">
+          <DialogHeader>
+            <DialogTitle>Keep track of {(askTrack?.news || []).map((n) => n.name).join(' and ')}?</DialogTitle>
+          </DialogHeader>
+          <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+            You'd log it again and again and see how it changes over time.
+            {askTrack?.news?.[0]?.entry ? ` First entry: ${askTrack.news[0].entry}.` : ''}
+          </p>
+          <div className="grid gap-2">
+            <Button type="button" onClick={acceptTracker} className="w-full bg-purple-600 hover:bg-purple-700 text-white">
+              Yes, track it
             </Button>
-          )}
+            <Button type="button" variant="outline" onClick={declineTracker} className="w-full">
+              No, keep it as an idea
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
