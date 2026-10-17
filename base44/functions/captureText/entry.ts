@@ -1,3 +1,4 @@
+// Re-saved Oct 17 2026 so the bundled shared/runTaskParse.ts, shared/taskParsePrompt.ts and shared/captureToTasks.ts are picked up: the parser and the tracker look run on gpt-6-astra, the parser's calendar beats the real date astra is given, and "tomorrow morning" / "Sunday night" get a time.
 // Re-saved Oct 16 2026 so the bundled shared/captureToTasks.ts is picked up: the tracker look runs on the parser's model and never logs words that aren't about the tracker (or the word "null").
 // Re-saved Oct 14 2026 (night, again after the shared file itself was saved) so the bundled shared/captureToTasks.ts is picked up: a reading for a tracker they already have is logged to it the moment the capture lands, not when the Parking Lot page next opens.
 // Re-saved Oct 14 2026 (afternoon) so the bundled shared/captureToTasks.ts is picked up: a "by" deadline ("sometime this week") gets start_date = now, so it sits under Today every day until the deadline.
