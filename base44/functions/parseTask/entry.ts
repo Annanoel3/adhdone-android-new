@@ -1,3 +1,4 @@
+// Re-saved Oct 17 2026 (evening) so the bundled shared/taskParsePrompt.ts is picked up: an event that runs past midnight (7 PM–2 AM) is one night, not a two-day range.
 // Re-saved Oct 17 2026 (night) so the bundled shared/runTaskParse.ts and shared/taskParsePrompt.ts are picked up: "tomorrow morning" / "Sunday night" get a time on gpt-6-astra, and the said-at day is in its system message too.
 // Re-saved Oct 17 2026 (later) so the bundled shared/taskParsePrompt.ts is picked up: its calendar is the moment the words were said and beats the real date gpt-6-astra is given.
 // Re-saved Oct 17 2026 so the bundled shared/runTaskParse.ts is picked up: the parser and its helpers run on gpt-6-astra (was gpt-5.4).
@@ -136,6 +137,9 @@ const PARSER_CHECKS: { text: string; saidAt: number; expect: Record<string, any>
   // A number they typed stays in the title (Oct 13 2026: a user's "call propane
   // 530-477-7854 today" came out as "Call propane", the number gone).
   { text: "call propane 530-477-7854 today", saidAt: said("2026-10-13T08:46:00-07:00"), expect: { title: (v: any) => typeof v === "string" && v.includes("530-477-7854"), target_date: "2026-10-13", deadline_style: "by" } },
+  // A party that runs past midnight is one night, not a two-day range: this one
+  // showed on its card as "Nov 1 – Nov 2" (Anna, Oct 17 2026).
+  { text: "4th Anniversary Neon Velocity Halloween Party Edition on Nov 1st, Sunday of Halloween weekend, from 7PM-2AM at Reset Arcade Bar, 10402 Menchaca Rd #2, Austin TX 78748.", saidAt: said("2026-10-14T10:25:00-05:00"), expect: { target_date: "2026-11-01", target_time: "19:00", end_date: null } },
 ];
 
 async function runParserSelfTest(base44: any) {
