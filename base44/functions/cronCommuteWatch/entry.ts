@@ -40,9 +40,10 @@
 //    has passed). It never moves later, so a light-traffic reading can't make
 //    anyone late. On the last check before it goes (5 minutes or less), its
 //    drive-time words are brought up to date, so "with traffic right now" is
-//    true when it's read. The phone's own alarm for it follows through
-//    onTaskUpdate (the task's reminder_schedule changes, and onTaskUpdate
-//    sends the phone its new alarm list).
+//    true when it's read. The phone's own alarm for it moves too: this sends
+//    the phone the task's new alarm list itself (pushPhoneAlarms), because
+//    the "Reschedule OneSignal on Task Edit" workflow doesn't fire for a
+//    reminder_schedule-only change, so onTaskUpdate never sees it.
 //
 // 4. AFTER A "LEAVE NOW" (work and events, Oct 17 2026). Anna: "a huge wreck
 //    happens and now they won't make it." No check can see a wreck before it
@@ -61,7 +62,7 @@ import { getProximity } from '../../shared/mapsDistance.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
 import { resolveQuietHours, isInQuietHours, adjustForQuietHours } from '../../shared/quietHours.ts';
 import { listAll } from '../../shared/listAll.ts';
-import { taskRingsAsAlarm } from '../../shared/reminderTitle.ts';
+import { taskRingsAsAlarm, pushPhoneAlarms } from '../../shared/reminderTitle.ts';
 
 const CUSHION_MINUTES = 10;       // finding keys / shoes / getting in the car
 // OneSignal "Android notification channel" for the leave-now push, created in
@@ -210,10 +211,10 @@ async function cancelOneSignal(appId: string, restApiKey: string, id: string): P
 // Books an event's "leave now" the way every event reminder is booked (same
 // data, so the phone gives it the event screen: Got it only). sendAt null =
 // right now. For someone with full-screen alarms it asks to ring: if the
-// phone's own alarm already rings for that moment (the alarm list onTaskUpdate
-// sends it), PushFilter shows the push quietly instead of ringing twice; if
-// that list never arrived, the push itself rings, so the moved time is never
-// left to a quiet tray entry.
+// phone's own alarm already rings for that moment (the alarm list sent with
+// pushPhoneAlarms), PushFilter shows the push quietly instead of ringing
+// twice; if that list never arrived, the push itself rings, so the moved time
+// is never left to a quiet tray entry.
 async function bookEventLeave(
   appId: string, restApiKey: string, email: string, task: any, owner: any,
   title: string, body: string, sendAt: Date | null,
@@ -464,6 +465,17 @@ async function checkEventLeaveTimes(base44: any, now: Date): Promise<any[]> {
         console.error(`[EVENT LEAVE] Could not save the new leave-now for task ${task.id}, taking it back:`, e);
         await cancelOneSignal(appId, restApiKey, newId);
         continue;
+      }
+      // The phone's alarm moves with it (and the old one comes off), without
+      // the app being opened. Only for the task's own owner: the list goes to
+      // created_by's phone, with that person's alarm settings.
+      if (String(fresh.created_by || '').toLowerCase() === email.toLowerCase()) {
+        const phone = await pushPhoneAlarms(
+          { ...fresh, reminder_schedule: nextSchedule, onesignal_notification_ids: nextIds },
+          owner,
+          { before: fresh, changedAt: Date.now(), source: 'cronCommuteWatch' },
+        );
+        console.log(`[EVENT LEAVE] ${task.id} phone alarms: ${phone}`);
       }
       await ledgerRecord(base44, {
         email, taskId: task.id, kind: 'event_reminder', source: 'cronCommuteWatch',
