@@ -1,4 +1,4 @@
-// Re-saved Oct 17 2026 (night) so the bundled shared/runTaskParse.ts and shared/taskParsePrompt.ts are picked up: "tomorrow morning" / "Sunday night" get a time on gpt-6-astra.
+// Re-saved Oct 17 2026 (night) so the bundled shared/runTaskParse.ts and shared/taskParsePrompt.ts are picked up: "tomorrow morning" / "Sunday night" get a time on gpt-6-astra, and the said-at day is in its system message too.
 // Re-saved Oct 17 2026 (later) so the bundled shared/taskParsePrompt.ts is picked up: its calendar is the moment the words were said and beats the real date gpt-6-astra is given.
 // Re-saved Oct 17 2026 so the bundled shared/runTaskParse.ts is picked up: the parser and its helpers run on gpt-6-astra (was gpt-5.4).
 // Re-saved Oct 14 2026 (later) so the bundled shared/taskParsePrompt.ts is picked up: priority_uninferrable is always false — the app never asks "how urgent?"; the card's priority is editable.
