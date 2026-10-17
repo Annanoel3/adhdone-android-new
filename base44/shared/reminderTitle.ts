@@ -45,8 +45,9 @@ export async function atTimeWords(task: any, atMs: number, timeZone: string, tim
       task?.location ? `Location they typed: ${String(task.location).slice(0, 200)}` : '',
     ].filter(Boolean).join('\n');
     const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+    // gpt-6-astra (was gpt-6-luna, the cheaper one, from Sept 27 2026). Anna, Oct 17 2026: "Move them to astra like I already asked weeks ago" (she asked for the newest model everywhere on Sept 17 2026).
     const ask = openai.chat.completions.create({
-      model: 'gpt-6-luna',
+      model: 'gpt-6-astra',
       reasoning_effort: 'low',
       response_format: { type: 'json_object' },
       max_completion_tokens: 2000,
