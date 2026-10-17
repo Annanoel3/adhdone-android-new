@@ -209,7 +209,7 @@ What is it? It can be more than one thing at once ("blood pressure 91 over 57 an
 
 note: anything else they said that goes with a reading — when it was taken, what they had just done, eaten or taken, how they felt — in their words, without the reading itself. Context that applies to the whole sentence goes on every part. "blood pressure is 98/70 and heart is 89 bpm. this is an hour after taking mestinon for the first time and eating a small snack." → entry "98/70" and entry "89 bpm", each with the note "an hour after taking mestinon for the first time and eating a small snack".
 
-Judge by what they mean. Only 1 or 2 when they clearly mean logging something over time; a to-do that mentions a number is 3. Answer with JSON only, in this shape: {"actions": [ ... ]} — one object per part, or a single {"none": true}.`;
+Judge by what they mean. Only 1 or 2 when they clearly mean logging something over time; a to-do that mentions a number is 3. An entry for one they already track has to actually be about that thing (its value, or a note on it); words about anything else ("this is an idea", "buy milk") are never an entry for it, even when it's the only thing they track. A list of things to get or do ("supplies to buy") is 3, not something to keep track of. When there is no entry or note, give null, never the word "null". Answer with JSON only, in this shape: {"actions": [ ... ]} — one object per part, or a single {"none": true}.`;
 }
 
 export async function foldIdeaIntoTrackers(base44: any, idea: { id: string; title: string }) {
@@ -224,7 +224,10 @@ export async function foldIdeaIntoTrackers(base44: any, idea: { id: string; titl
     if (trackers.length === 0) return await handBack("no trackers yet");
     const prompt = trackerJudgePrompt(idea.title, trackers.map((i: any) => ({ id: i.id, name: i.idea })));
     const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
-    const completion = await openai.chat.completions.create({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }] });
+    // The parser's model, with a little thinking: gpt-4o-mini logged "this is
+    // an idea" as a heart rate reading (Oct 16 2026). Same as the page's look
+    // (categorizeIdea, judge: 'tracker').
+    const completion = await openai.chat.completions.create({ model: "gpt-5.4", reasoning_effort: "low", messages: [{ role: "user", content: prompt }] });
     const raw = String(completion.choices?.[0]?.message?.content || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
     let out: any = null;
     try { out = JSON.parse(raw); } catch (_) { out = null; }
@@ -239,10 +242,16 @@ export async function foldIdeaIntoTrackers(base44: any, idea: { id: string; titl
     const sameName = (x: unknown, y: unknown) => trackerCanon(x) !== "" && trackerCanon(x) === trackerCanon(y);
     const logs: { target: any; entry: string; note: string }[] = [];
     let wantsNew = false;
+    // The word "null" (or "undefined") is an empty answer, not an entry: a
+    // tracker got an entry reading "null" on Oct 16 2026.
+    const said = (v: unknown) => {
+      const s = typeof v === "string" ? v.trim() : "";
+      return /^(null|undefined)$/i.test(s) ? "" : s;
+    };
     for (const a of actions) {
-      const entry = typeof a.entry === "string" ? a.entry.trim() : "";
-      const note = typeof a.note === "string" ? a.note.trim().slice(0, 300) : "";
-      const trackName = typeof a.track === "string" ? a.track.trim().slice(0, 120) : "";
+      const entry = said(a.entry);
+      const note = said(a.note).slice(0, 300);
+      const trackName = said(a.track).slice(0, 120);
       // A "new" one with the name of one they already have is an entry for it.
       const target = (a.log_to ? trackers.find((i: any) => i.id === a.log_to) : null)
         || (trackName ? trackers.find((i: any) => sameName(i.idea, trackName)) : null);
