@@ -1,3 +1,4 @@
+// Re-saved Oct 17 2026 so the bundled shared/reminderTitle.ts is picked up: the at-the-time words are written by gpt-6-astra (was gpt-6-luna).
 // Re-saved Oct 13 2026 (night) so the bundled shared/captureToTasks.ts is picked up: a captured event's pushes carry an event's buttons (Snooze only), not a task's.
 // LLM-powered reminder schedule generator.
 // Takes a task title + scheduled date/time and returns an optimal reminder
@@ -91,8 +92,9 @@ const NOTES_LABELS = {
 async function notesWouldHelp(title, location) {
   try {
     const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+    // gpt-6-astra (was gpt-6-luna, from Sept 27 2026). Anna, Oct 17 2026: "Move them to astra like I already asked weeks ago" (she asked for the newest model everywhere on Sept 17 2026).
     const ask = openai.chat.completions.create({
-      model: 'gpt-6-luna',
+      model: 'gpt-6-astra',
       reasoning_effort: 'low',
       response_format: { type: 'json_object' },
       max_completion_tokens: 2000,
@@ -105,7 +107,8 @@ Would they likely want a recording of this and notes from it? Yes when it's the 
 Return {"notes": true} or {"notes": false}.` },
       ],
     });
-    const late = new Promise((resolve) => setTimeout(() => resolve(null), 4000));
+    // 6 seconds (was 4): gpt-6-astra answers in about 2.5–3.5 s (Oct 17 2026).
+    const late = new Promise((resolve) => setTimeout(() => resolve(null), 6000));
     const res = await Promise.race([ask, late]);
     if (!res) return false;
     return JSON.parse(res.choices?.[0]?.message?.content || '{}')?.notes === true;
