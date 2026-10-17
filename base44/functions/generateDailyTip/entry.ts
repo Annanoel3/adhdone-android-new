@@ -30,8 +30,11 @@ Deno.serve(async (req) => {
 
     // Categorize the tip
     const categoryPrompt = `Categorize this tip into ONE category: "${tipText}"\n\nCategories: focus, motivation, organization, self_care, time_management\n\nReturn ONLY the category name.`;
+    // gpt-6-astra like the tip itself (was gpt-4o-mini). Anna, Oct 17 2026: "Move them to astra like I already asked weeks ago" (she asked for the newest model everywhere on Sept 17 2026).
     const categoryResponse = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
+      model: 'gpt-6-astra',
+      reasoning_effort: 'low',
+      max_completion_tokens: 2000,
       messages: [
         {
           role: 'user',
