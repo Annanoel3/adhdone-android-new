@@ -1,5 +1,23 @@
 {
   "name": "Commute Watch",
+  "description": "Every 5 minutes (was 15, changed Oct 17 2026 at Anna's OK): work commute 'time to leave' + traffic heads-up; live re-check of events' booked 'leave now' for their last 3 hours; and one 'traffic got worse, you may get there around X' push in the 30 minutes after a leave-now if they'd now be 5+ min late. Google is still measured every 15 min when nothing is close.",
+  "trigger": {
+    "condition": null,
+    "config": {
+      "trigger_type": "scheduled",
+      "events": [],
+      "schedule_mode": "recurring",
+      "cron_expression": "*/5 * * * *",
+      "one_time_date": null,
+      "timezone": "UTC",
+      "interval_value": null,
+      "interval_unit": null,
+      "interval_anchor": null,
+      "ends_type": "never",
+      "ends_on_date": null,
+      "ends_after_count": null
+    }
+  },
   "definition": {
     "document": {
       "dsl": "1.0.0",
@@ -23,23 +41,5 @@
         }
       }
     ]
-  },
-  "trigger": {
-    "condition": null,
-    "config": {
-      "trigger_type": "scheduled",
-      "events": [],
-      "schedule_mode": "recurring",
-      "cron_expression": "*/15 * * * *",
-      "one_time_date": null,
-      "timezone": "UTC",
-      "interval_value": null,
-      "interval_unit": null,
-      "interval_anchor": null,
-      "ends_type": "never",
-      "ends_on_date": null,
-      "ends_after_count": null
-    }
-  },
-  "description": "Every 15 minutes: for anyone with a work address and a shift today, measures the drive with live traffic and sends the 'time to leave' push, plus a heads-up when traffic is worse than usual."
+  }
 }
