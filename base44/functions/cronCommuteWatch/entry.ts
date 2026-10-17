@@ -33,15 +33,26 @@
 //    "14 min away with traffic right now" real, it built the one-time forecast
 //    and called it "live and real", and Commute Watch's live checks were only
 //    ever built for work ("I never said yes to not having live traffic data").
-//    Now, from 3 hours before a booked "leave now", every run measures the
-//    drive again on live traffic. When they need to leave at least 5 minutes
-//    earlier, the push moves earlier (or goes right away if that time has
-//    passed). It never moves later, so a light-traffic reading can't make
-//    anyone late. On the last check before it goes, its drive-time words are
-//    brought up to date, so "with traffic right now" is true when it's read.
-//    The phone's own alarm for it follows through onTaskUpdate (the task's
-//    reminder_schedule changes, and onTaskUpdate sends the phone its new
-//    alarm list).
+//    Now, from 3 hours before a booked "leave now", the drive is measured
+//    again on live traffic: every 15 minutes, then on every run (5 minutes
+//    apart) for its last 30 minutes. When they need to leave at least 5
+//    minutes earlier, the push moves earlier (or goes right away if that time
+//    has passed). It never moves later, so a light-traffic reading can't make
+//    anyone late. On the last check before it goes (5 minutes or less), its
+//    drive-time words are brought up to date, so "with traffic right now" is
+//    true when it's read. The phone's own alarm for it follows through
+//    onTaskUpdate (the task's reminder_schedule changes, and onTaskUpdate
+//    sends the phone its new alarm list).
+//
+// 4. AFTER A "LEAVE NOW" (work and events, Oct 17 2026). Anna: "a huge wreck
+//    happens and now they won't make it." No check can see a wreck before it
+//    happens, so the blind spot was cut from 15 minutes to 5 (the workflow
+//    runs every 5 minutes, Base44's shortest) and the 30 minutes after a
+//    "leave now" are watched too: if the drive got bad enough that leaving
+//    on time now means arriving 5+ minutes late, ONE plain push ("Traffic got
+//    worse after we told you to leave… you may get there around 1:20 instead
+//    of 1:00") so they can let people know. Never an alarm: they may be
+//    driving. Never a second one.
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { getTodaysCommute, localDateKey } from '../../shared/commuteSchedule.ts';
@@ -59,7 +70,7 @@ const CUSHION_MINUTES = 10;       // finding keys / shoes / getting in the car
 // banner with sound instead of a silent tray entry. Paste its ID here. Empty
 // means "default channel", which is what this used to do.
 const LEAVE_NOW_CHANNEL_ID = '';
-const LEAVE_WINDOW_MINUTES = 16;  // one cron tick, so departure is never missed
+const LEAVE_WINDOW_MINUTES = 6;   // one cron tick (5 min since Oct 17 2026), so departure is never missed
 const HEADS_UP_EARLIEST = 100;    // minutes before arrival
 const HEADS_UP_LATEST = 40;
 // "Worse than usual" has to mean something, or the heads-up becomes noise the
@@ -144,8 +155,23 @@ async function sendPush(
 const EVENT_WATCH_MS = 3 * 60 * 60 * 1000; // live checks start this long before the booked push
 const EVENT_MOVE_MIN = 5;                  // moved only when they need to leave 5+ min earlier
 const EVENT_WORDS_MIN = 5;                 // words refreshed when the drive is 5+ min off
-const EVENT_FINAL_MS = 16 * 60 * 1000;     // the last run before it goes (runs are 15 min apart)
+const EVENT_FINAL_MS = 6 * 60 * 1000;      // the last run before it goes (runs are 5 min apart)
 const MAX_EVENT_LEAD = 180;                // same cap as shared/travelLead.ts
+
+// Runs are 5 minutes apart since Oct 17 2026 (they were 15). Far from the
+// moment, the drive is still measured only every 15 minutes, like before
+// (Google bills each measurement); within CLOSE_MS of it, every run.
+const CLOSE_MS = 30 * 60 * 1000;
+function onQuarterHour(ms: number): boolean {
+  return Math.floor(ms / 60000) % 15 < 5;
+}
+
+// After a "leave now" goes (work or an event): for FOLLOWUP_MS the drive is
+// watched, and if it got bad enough that leaving on time now means arriving
+// LATE_MIN+ minutes late, ONE heads-up says so (see 4. at the top).
+const FOLLOWUP_MS = 30 * 60 * 1000;
+const LATE_MIN = 5;
+const LATE_SOURCE = 'cronCommuteWatch:late';
 
 // Same lead as the booking (shared/travelLead.ts): drive + cushion, up to the
 // next 5 minutes, so a re-check that finds the same traffic lands on the same minute.
@@ -232,6 +258,55 @@ async function bookEventLeave(
   }
 }
 
+// The one "traffic got worse after we told you to leave" heads-up for an
+// event. Information, not an alarm: they may well be driving. Never a second
+// one for the same task (the ledger row is the claim).
+async function eventRunningLate(
+  base44: any, appId: string, restApiKey: string, email: string, task: any,
+  leftAtMs: number, arriveMs: number, drive: any, timeZone: string,
+): Promise<any | null> {
+  const etaMs = leftAtMs + drive.minutes * 60000;
+  const lateMin = Math.round((etaMs - arriveMs) / 60000);
+  if (lateMin < LATE_MIN) return null;
+  const ledgerRows = base44.asServiceRole.entities.NotificationLedger;
+  const prior = await ledgerRows.filter({ task_id: task.id, source: LATE_SOURCE }).catch(() => null);
+  // Unreadable ledger: no way to be sure it wasn't sent, so it isn't.
+  if (!Array.isArray(prior) || prior.length > 0) return null;
+  const t = String(task.title || 'your event');
+  const title = '🚧 Traffic got worse';
+  const body = `Traffic got worse after we told you to leave: "${t}" is now about ${aboutMinutes(drive.minutes)} min away, so you may get there around ${fmtLocalTime(new Date(etaMs), timeZone)} instead of ${fmtLocalTime(new Date(arriveMs), timeZone)}.`;
+  try {
+    const res = await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${restApiKey}` },
+      body: JSON.stringify({
+        app_id: appId,
+        include_external_user_ids: [email],
+        headings: { en: title },
+        contents: { en: body },
+        data: { screen: '/TaskNotification', taskId: task.id, type: 'event_heads_up' },
+        channel_for_external_user_ids: 'push',
+        priority: 10,
+        ttl: 15 * 60,
+      }),
+    });
+    const result = await res.json().catch(() => ({}));
+    if (!res.ok || result.errors || !result.id) {
+      console.error(`[EVENT LEAVE] running-late push failed for task ${task.id}:`, JSON.stringify(result));
+      return null;
+    }
+    await ledgerRecord(base44, {
+      email, taskId: task.id, kind: 'general', source: LATE_SOURCE,
+      notificationId: String(result.id), title,
+    });
+    console.log(`[EVENT LEAVE] ${task.id} running late: about ${aboutMinutes(drive.minutes)} min now, ~${lateMin} min late`);
+    return { email, taskId: task.id, what: 'running late', driveMinutes: drive.minutes, lateMin };
+  } catch (e) {
+    console.error(`[EVENT LEAVE] running-late send failed for task ${task.id}:`, e);
+    return null;
+  }
+}
+
 async function checkEventLeaveTimes(base44: any, now: Date): Promise<any[]> {
   const done: any[] = [];
   const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
@@ -259,15 +334,22 @@ async function checkEventLeaveTimes(base44: any, now: Date): Promise<any[]> {
       const idx = schedule.findIndex((r: any) => r && /leave now/i.test(String(r.label || '')) && r.send_at);
       if (idx < 0) continue;
       const entry = schedule[idx];
-      // Only a push that is really booked. A planned one with no id yet is
-      // cronRefillReminders' to book (it promotes event plans into OneSignal's
-      // window); booking it here too would send it twice.
-      if (!entry.notification_id) continue;
+      // Only a push that is really booked. A planned one ("planned_…" id, not
+      // yet scheduled) is cronRefillReminders' to book: it promotes event plans
+      // into OneSignal's window, and booking it here too would send it twice.
+      const oldId = entry.notification_id ? String(entry.notification_id) : '';
+      if (!oldId || entry.scheduled === false || /^planned_/i.test(oldId)) continue;
       const bookedMs = timeMs(entry.send_at);
-      // Already gone (or going this minute), or too far off for live traffic to mean much.
-      if (!Number.isFinite(bookedMs) || bookedMs <= nowMs + 60_000 || bookedMs - nowMs > EVENT_WATCH_MS) continue;
       const arriveMs = timeMs(task.event_time || task.next_reminder);
-      if (!Number.isFinite(arriveMs) || arriveMs <= nowMs) continue;
+      if (!Number.isFinite(bookedMs) || !Number.isFinite(arriveMs) || arriveMs <= nowMs) continue;
+      // Going out this very minute: nothing to change, nothing to follow up yet.
+      if (bookedMs > nowMs && bookedMs <= nowMs + 60_000) continue;
+      const gone = bookedMs <= nowMs;
+      // Gone: watched for half an hour after (running late?). Ahead: watched
+      // from 3 hours before, every 15 minutes, then every run for the last 30.
+      if (gone && nowMs - bookedMs > FOLLOWUP_MS) continue;
+      if (!gone && bookedMs - nowMs > EVENT_WATCH_MS) continue;
+      if (!gone && bookedMs - nowMs > CLOSE_MS && !onQuarterHour(nowMs)) continue;
 
       const email = String(task.notification_recipient_email || task.created_by || '').trim();
       if (!email) continue;
@@ -282,13 +364,25 @@ async function checkEventLeaveTimes(base44: any, now: Date): Promise<any[]> {
       const routeOpts = { avoidTolls: owner.commute_avoid_tolls === true };
       const timeZone = owner.timezone || 'America/Chicago';
 
-      // Two passes, like the commute: traffic now gives a first departure
-      // time, then the drive is measured again for that minute while it's ahead.
+      // Already told them it's running late: nothing more to measure.
+      if (gone) {
+        const prior = await base44.asServiceRole.entities.NotificationLedger.filter({ task_id: task.id, source: LATE_SOURCE }).catch(() => null);
+        if (!Array.isArray(prior) || prior.length > 0) continue;
+      }
+
       const first = (await getProximity([place], home, new Date(nowMs + 60_000), routeOpts)).fromHome[place];
       if (!first?.minutes) {
         console.log(`[EVENT LEAVE] Could not measure the drive for task ${task.id}`);
         continue;
       }
+      if (gone) {
+        const late = await eventRunningLate(base44, appId, restApiKey, email, task, bookedMs, arriveMs, first, timeZone);
+        if (late) done.push(late);
+        continue;
+      }
+
+      // Two passes, like the commute: traffic now gives a first departure
+      // time, then the drive is measured again for that minute while it's ahead.
       let drive = first;
       const firstDepart = arriveMs - eventLeadMinutes(first.minutes) * 60000;
       if (firstDepart > nowMs + 2 * 60000) {
@@ -307,6 +401,16 @@ async function checkEventLeaveTimes(base44: any, now: Date): Promise<any[]> {
       const wordsOff = !!drive.inTraffic && (!Number.isFinite(said) || Math.abs(about - said) >= EVENT_WORDS_MIN);
       if (!moveEarlier && !(finalCheck && wordsOff)) {
         console.log(`[EVENT LEAVE] ${task.id}: about ${about} min, leave by ${new Date(leaveMs).toISOString()}, booked ${entry.send_at}, unchanged`);
+        continue;
+      }
+
+      // Read it again right before changing it: if anything else re-booked
+      // this leave-now meanwhile (an edit, another run), leave it alone.
+      const fresh = await base44.asServiceRole.entities.Task.get(task.id).catch(() => null);
+      const freshEntry = (Array.isArray(fresh?.reminder_schedule) ? fresh.reminder_schedule : [])
+        .find((r: any) => r && /leave now/i.test(String(r.label || '')));
+      if (!fresh || fresh.status !== 'active' || !freshEntry || String(freshEntry.notification_id || '') !== oldId) {
+        console.log(`[EVENT LEAVE] ${task.id} changed since it was read, left alone`);
         continue;
       }
 
@@ -334,7 +438,6 @@ async function checkEventLeaveTimes(base44: any, now: Date): Promise<any[]> {
       const newId = await bookEventLeave(appId, restApiKey, email, task, owner, title, body, sendAt);
       if (!newId) continue; // the booked one stays as it was
       const sendIso = (sendAt || new Date()).toISOString();
-      const oldId = entry.notification_id ? String(entry.notification_id) : '';
 
       // A time moved into quiet hours by traffic still rings (the commute's
       // rule, and Anna's for its heads-up, Oct 16 2026: it can ignore quiet
@@ -343,7 +446,8 @@ async function checkEventLeaveTimes(base44: any, now: Date): Promise<any[]> {
       const inQuiet = (ms: number) => quiet.enabled && isInQuietHours(new Date(ms), quiet.startMin, quiet.endMin, timeZone);
       const theirTime = entry.their_time === true || (!!sendAt && inQuiet(sendAt.getTime()) && !inQuiet(bookedMs));
 
-      const nextSchedule = schedule.map((r: any, i: number) => i !== idx ? r : {
+      const freshSchedule: any[] = fresh.reminder_schedule;
+      const nextSchedule = freshSchedule.map((r: any) => r !== freshEntry ? r : {
         ...r,
         notification_id: newId,
         send_at: sendIso,
@@ -351,8 +455,8 @@ async function checkEventLeaveTimes(base44: any, now: Date): Promise<any[]> {
         notification_body: body,
         ...(theirTime ? { their_time: true } : {}),
       });
-      const ids: string[] = (Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : []).map(String);
-      const nextIds = oldId && ids.includes(oldId) ? ids.map((x) => (x === oldId ? newId : x)) : [...ids, newId];
+      const ids: string[] = (Array.isArray(fresh.onesignal_notification_ids) ? fresh.onesignal_notification_ids : []).map(String);
+      const nextIds = ids.includes(oldId) ? ids.map((x) => (x === oldId ? newId : x)) : [...ids, newId];
       try {
         await base44.asServiceRole.entities.Task.update(task.id, { reminder_schedule: nextSchedule, onesignal_notification_ids: nextIds });
       } catch (e) {
@@ -365,11 +469,9 @@ async function checkEventLeaveTimes(base44: any, now: Date): Promise<any[]> {
         email, taskId: task.id, kind: 'event_reminder', source: 'cronCommuteWatch',
         sendAt: sendIso, notificationId: newId, title,
       });
-      if (oldId) {
-        const gone = await cancelOneSignal(appId, restApiKey, oldId);
-        if (!gone) console.error(`[EVENT LEAVE] Could not cancel the old leave-now ${oldId} for task ${task.id}`);
-        await ledgerCancel(base44, [oldId]);
-      }
+      const cancelled = await cancelOneSignal(appId, restApiKey, oldId);
+      if (!cancelled) console.error(`[EVENT LEAVE] Could not cancel the old leave-now ${oldId} for task ${task.id}`);
+      await ledgerCancel(base44, [oldId]);
       const what = moveEarlier ? (sendAt ? 'moved earlier' : 'sent now') : 'words refreshed';
       console.log(`[EVENT LEAVE] ${task.id} ${what}: about ${about} min (said ${Number.isFinite(said) ? said : '?'}), ${entry.send_at} → ${sendIso}`);
       done.push({ email, taskId: task.id, what, driveMinutes: drive.minutes, from: entry.send_at, to: sendIso });
@@ -423,12 +525,51 @@ export default async function (req: Request): Promise<Response> {
 
       const alreadyLeft = user.last_commute_leave_date === today;
       const alreadyWarned = user.last_commute_headsup_date === today;
-      if (alreadyLeft) continue;
 
       const home = getHomeOrigin(user);
       // People who don't take toll roads get toll-free timing (asked on the
       // Places page when the work address goes in).
       const routeOpts = { avoidTolls: user.commute_avoid_tolls === true };
+
+      // ── 4. AFTER LEAVE NOW: traffic got worse on the way (see the top) ─────
+      if (alreadyLeft) {
+        const leftAt = timeMs(user.last_commute_leave_at);
+        const sinceLeave = now.getTime() - leftAt;
+        if (user.last_commute_late_date === today || !Number.isFinite(leftAt) || sinceLeave < 0 || sinceLeave > FOLLOWUP_MS) continue;
+        const live = (await getProximity([commute.place], home, new Date(now.getTime() + 60000), routeOpts)).fromHome[commute.place];
+        if (!live?.minutes) continue;
+        const etaMs = leftAt + live.minutes * 60000;
+        const lateMin = Math.round((etaMs - commute.arriveUtc.getTime()) / 60000);
+        if (lateMin < LATE_MIN) continue;
+        try {
+          await base44.asServiceRole.entities.User.update(user.id, { last_commute_late_date: today });
+        } catch (e) {
+          console.error(`[COMMUTE] Could not claim the running-late push for ${email}, skipping:`, e);
+          continue;
+        }
+        const title = '🚧 Traffic got worse';
+        const body = `Traffic got worse after we told you to leave: the drive is now about ${aboutMinutes(live.minutes)} min, so you may get to work around ${fmtLocalTime(new Date(etaMs), timeZone)} instead of ${fmtLocalTime(commute.arriveUtc, timeZone)}.`;
+        const id = await sendPush(email, user, title, body);
+        if (id) {
+          await ledgerRecord(base44, {
+            email, kind: 'general', source: 'cronCommuteWatch',
+            notificationId: typeof id === 'string' ? id : null, title,
+          });
+          sent.push({ email, type: 'running_late', driveMinutes: live.minutes, lateMin });
+        } else {
+          try {
+            await base44.asServiceRole.entities.User.update(user.id, { last_commute_late_date: user.last_commute_late_date || null });
+          } catch {}
+        }
+        continue;
+      }
+
+      // Runs are 5 minutes apart (Oct 17 2026). Far from departure the drive
+      // is measured every 15 minutes, as before (Google bills each one);
+      // within 30 minutes of the last estimated departure, on every run.
+      const estMs = timeMs(user.commute_depart_est);
+      const nearDepart = Number.isFinite(estMs) && Math.abs(estMs - now.getTime()) <= CLOSE_MS;
+      if (!onQuarterHour(now.getTime()) && !nearDepart) continue;
       // Traffic-aware drive, measured for the moment they'd actually be
       // DRIVING — not for the arrival time. Google's departure_time is when
       // the car leaves, and asking for 9:00 traffic when the drive starts at
@@ -459,8 +600,13 @@ export default async function (req: Request): Promise<Response> {
 
       // ── 1. LEAVE NOW ────────────────────────────────────────────────────────
       if (leaveInMinutes <= LEAVE_WINDOW_MINUTES) {
+        // When they were told to go, for the running-late check (4.).
+        const toldAt = leaveInMinutes < -5 ? now : departUtc;
         try {
-          await base44.asServiceRole.entities.User.update(user.id, { last_commute_leave_date: today });
+          await base44.asServiceRole.entities.User.update(user.id, {
+            last_commute_leave_date: today,
+            last_commute_leave_at: toldAt.toISOString(),
+          });
         } catch (e) {
           console.error(`[COMMUTE] Could not claim leave-now for ${email}, skipping:`, e);
           continue;
@@ -491,6 +637,10 @@ export default async function (req: Request): Promise<Response> {
         }
         continue;
       }
+
+      try {
+        await base44.asServiceRole.entities.User.update(user.id, { commute_depart_est: departUtc.toISOString() });
+      } catch {}
 
       // ── 2. HEADS-UP (only when traffic is genuinely worse than usual) ───────
       if (alreadyWarned) continue;
