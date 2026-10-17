@@ -1638,7 +1638,9 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Deno.env.get('OPENAI_API_KEY')}` },
-      body: JSON.stringify({ model: 'gpt-4o', max_tokens: 1, messages: [{ role: 'user', content: 'ok' }] }),
+      // The app's own model (gpt-6-astra), so this checks what every AI feature
+      // actually uses. Room for its thinking: a cut-off answer is still a 200.
+      body: JSON.stringify({ model: 'gpt-6-astra', reasoning_effort: 'low', max_completion_tokens: 200, messages: [{ role: 'user', content: 'ok' }] }),
     });
     if (!res.ok) {
       const err: any = await res.json().catch(() => ({}));
