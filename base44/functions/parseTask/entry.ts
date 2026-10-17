@@ -1,4 +1,4 @@
-// Re-saved Oct 17 2026 (evening) so the bundled shared/taskParsePrompt.ts is picked up: an event that runs past midnight (7 PM–2 AM) is one night, not a two-day range.
+// Re-saved Oct 17 2026 (evening) so the bundled shared/taskParsePrompt.ts and shared/runTaskParse.ts are picked up: an event that runs past midnight (7 PM–2 AM) is one night, not a two-day range, and a day counted from the real date instead of the said-at day gets a second look.
 // Re-saved Oct 17 2026 (night) so the bundled shared/runTaskParse.ts and shared/taskParsePrompt.ts are picked up: "tomorrow morning" / "Sunday night" get a time on gpt-6-astra, and the said-at day is in its system message too.
 // Re-saved Oct 17 2026 (later) so the bundled shared/taskParsePrompt.ts is picked up: its calendar is the moment the words were said and beats the real date gpt-6-astra is given.
 // Re-saved Oct 17 2026 so the bundled shared/runTaskParse.ts is picked up: the parser and its helpers run on gpt-6-astra (was gpt-5.4).
