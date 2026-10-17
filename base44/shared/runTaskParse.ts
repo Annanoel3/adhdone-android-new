@@ -164,7 +164,18 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   };
 
   let parsed = await ask();
-  // A second look when the day may have been counted from the wrong moment.
+  // The prompt already says a part of the day ("tonight", "after work") is a
+  // time to pick, and the model mostly does; about half the time, on the
+  // self-test (Oct 13 2026), it came back with no time at all, which turns
+  // "take out the trash tonight" into an all-day task that nothing rings for.
+  // One more ask when the words name a part of the day and no time came
+  // back. Only a retry trigger: the model still picks the time.
+  if (!parsed?.target_time && namesPartOfDay(fullPrompt)) {
+    const again = await ask("\n\nLOOK AGAIN AT THE TIME. If the words name a part of the day for doing it (tonight, tomorrow morning, Sunday night, this evening, before bed, after work, this afternoon, after dinner, first thing), that is a time: pick the clock time a reasonable person would mean by it, on the day they meant, and target_time must not be null. If such a word is only part of a name (\"night cream\", \"Morning Glory seeds\"), there is no time and target_time stays null.");
+    if (again?.target_time) parsed = again;
+  }
+  // A last look when the day may have been counted from the wrong moment, on
+  // the final answer (the part-of-day retry above can bring the slip back).
   // gpt-6-astra is handed the real date by OpenAI, and even with the said-at
   // day in its system message it still sometimes counts "tonight" or
   // "tomorrow" from the real date (1 of 26 self-test sentences, Oct 17 2026).
@@ -183,18 +194,12 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
     const inRealWeek = (v: any) => typeof v === 'string' && v.slice(0, 10) >= realToday && v.slice(0, 10) <= lastDay;
     if (inRealWeek(parsed?.target_date) || inRealWeek(parsed?.due_date)) {
       const again = await ask(`\n\nCHECK THE DAY YOU COUNTED FROM. The words were said on ${saidDay ? `${saidDay[2]} ${saidDay[1]}` : saidToday}, not on today's real date (${realToday}). "Today", "tonight", "tomorrow" and day names count from ${saidToday}. If a date you gave came from the real date, fix it; if the person named that date themselves, keep it.`);
-      if (again && typeof again === 'object') parsed = again;
+      if (again && typeof again === 'object') {
+        // Keep a time already picked for "tonight" if this answer dropped it.
+        if (!again.target_time && parsed?.target_time && namesPartOfDay(fullPrompt)) again.target_time = parsed.target_time;
+        parsed = again;
+      }
     }
-  }
-  // The prompt already says a part of the day ("tonight", "after work") is a
-  // time to pick, and the model mostly does; about half the time, on the
-  // self-test (Oct 13 2026), it came back with no time at all, which turns
-  // "take out the trash tonight" into an all-day task that nothing rings for.
-  // One more ask when the words name a part of the day and no time came
-  // back. Only a retry trigger: the model still picks the time.
-  if (!parsed?.target_time && namesPartOfDay(fullPrompt)) {
-    const again = await ask("\n\nLOOK AGAIN AT THE TIME. If the words name a part of the day for doing it (tonight, tomorrow morning, Sunday night, this evening, before bed, after work, this afternoon, after dinner, first thing), that is a time: pick the clock time a reasonable person would mean by it, on the day they meant, and target_time must not be null. If such a word is only part of a name (\"night cream\", \"Morning Glory seeds\"), there is no time and target_time stays null.");
-    if (again?.target_time) parsed = again;
   }
   // A time can only be "stated" when there is one.
   parsed.time_stated = parsed?.time_stated === true && !!parsed?.target_time;
