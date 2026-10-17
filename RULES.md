@@ -70,7 +70,7 @@ Do not describe, revive, or reference removed crons. The live senders are:
 | `cronRefillReminders` | hourly | Books recurring-task pushes, writes the reminder plan for one-time tasks dated more than ~30 days out, promotes planned event/birthday reminders into OneSignal's ~30-day window, yearly birthday rollover, hourly day-of text follow-ups |
 | `cronSmartTaskNudge` | every 10 min | Smart Reminders, which covers nearly every task. The AI picks only each person's NEXT nudge, the run sends it when due, then the AI looks again. Never a day booked ahead: see §10 before touching it |
 | `cronDailyDigest` | every 30 min | One morning summary per user after quiet hours end |
-| `cronCommuteWatch` | every 15 min | "Time to leave" + traffic heads-up |
+| `cronCommuteWatch` | every 15 min | Work: "Time to leave" + traffic heads-up. Events: re-checks each booked "leave now" on live traffic for its last 3 hours, moves it earlier (never later) when traffic is worse, and updates its drive-time words before it goes (Anna, Oct 17 2026: live traffic, not a one-time forecast) |
 | `onTaskUpdate` | Task entity events | Cancels / re-books on complete, delete, back-burner, un-complete, reminder-field edits. Leaves a snoozed task and a task in Focus Mode alone |
 | `cronDuplicateWatch` | hourly | Cleans duplicates, emails the owner — sends no user pushes |
 | `schedulePush` | called by the above | The actual OneSignal call (`notifySend` is switched off — see §2) |
