@@ -224,10 +224,9 @@ export async function foldIdeaIntoTrackers(base44: any, idea: { id: string; titl
     if (trackers.length === 0) return await handBack("no trackers yet");
     const prompt = trackerJudgePrompt(idea.title, trackers.map((i: any) => ({ id: i.id, name: i.idea })));
     const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
-    // The parser's model, with a little thinking: gpt-4o-mini logged "this is
-    // an idea" as a heart rate reading (Oct 16 2026). Same as the page's look
-    // (categorizeIdea, judge: 'tracker').
-    const completion = await openai.chat.completions.create({ model: "gpt-5.4", reasoning_effort: "low", messages: [{ role: "user", content: prompt }] });
+    // gpt-6-astra, like the page's look (categorizeIdea): gpt-4o-mini logged
+    // "this is an idea" as a heart rate reading (Oct 16 2026). Anna, Oct 17 2026: "Move them to astra like I already asked weeks ago" (she asked for the newest model everywhere on Sept 17 2026).
+    const completion = await openai.chat.completions.create({ model: "gpt-6-astra", reasoning_effort: "low", messages: [{ role: "user", content: prompt }] });
     const raw = String(completion.choices?.[0]?.message?.content || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
     let out: any = null;
     try { out = JSON.parse(raw); } catch (_) { out = null; }
