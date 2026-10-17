@@ -40,9 +40,10 @@ import OpenAI, { toFile } from "npm:openai";
 const NOTES_FREE_MINUTES = 60;
 const NO_CAP_EMAILS = ["s2kap2chick@gmail.com"];
 const TRANSCRIBE_MODEL = "gpt-transcribe";
-// Luna wrote notes as good as Astra's in side-by-side tests (Sept 27 2026) at
-// about a hundredth of the cost and twice the speed. Astra steps in if Luna fails.
-const NOTES_MODEL = "gpt-6-luna";
+// Astra writes the notes, and tries once more if the first try fails. From
+// Sept 27 2026 it was Luna (the cheaper one) with Astra as the backup; Anna
+// never approved a cheaper model. Anna, Oct 17 2026: "Move them to astra like I already asked weeks ago" (she asked for the newest model everywhere on Sept 17 2026).
+const NOTES_MODEL = "gpt-6-astra";
 const NOTES_BACKUP_MODEL = "gpt-6-astra";
 const NOTES_EFFORT = "low";
 const TRY_MODELS = ["gpt-6-astra", "gpt-6-luna"];
