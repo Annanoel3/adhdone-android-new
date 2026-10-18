@@ -990,10 +990,11 @@ Deno.serve(async (req) => {
   // Repeating events never moved on at all (an event isn't checked off).
   //
   // So once a copy's day is over on their clock (4 AM, see
-  // REPEAT_DAY_ENDS_MS), a daily task or a repeating event has that day
-  // wiped from it and is put on the next day it repeats (today, for a daily
-  // one). Weekly, monthly and the rest stay until checked off (see
-  // repeatRollPlan, Anna's later word the same evening). Wiped
+  // REPEAT_DAY_ENDS_MS), a task that repeats again the very next day (every
+  // day, weekdays Monday to Thursday, Saturday into Sunday) or a repeating
+  // event has that day wiped from it and is put on its next day. A task with
+  // a gap before its next day (weekly, monthly, Friday to Monday) stays until
+  // checked off (see repeatRollFor, Anna's later words). Wiped
   // means what a fresh copy starts with: that day's snoozes, Laters,
   // rang-out counts and booked pushes go; the words, notes, pictures and
   // settings stay. Its reminders move to the same times on the new day (the
@@ -2039,9 +2040,10 @@ function repeatShift(v: any, days: number, timeZone: string, hhmm: string | null
   return new Date(repeatWallMs(key, minutes, timeZone)).toISOString();
 }
 
-// Null while the copy's day isn't over yet. Otherwise the day it moves on to:
-// the first day the repeat lands on from today on (today itself, for a daily
-// one), and how many days that is.
+// Null while the copy's day isn't over yet, or when it stays where it is.
+// Otherwise the day it moves on to, and how many days that is: for an event,
+// the first day it happens again from today on; for a task, the day right
+// after, as long as the repeat runs on day after day (see below).
 function repeatRollFor(task: any, timeZone: string, nowMs: number): { fromKey: string; toKey: string; days: number } | null {
   const fromKey = repeatDayKey(task, timeZone);
   if (!fromKey) return null;
@@ -2053,17 +2055,40 @@ function repeatRollFor(task: any, timeZone: string, nowMs: number): { fromKey: s
   const todayKey = localDateKey(new Date(nowMs - REPEAT_DAY_ENDS_MS), timeZone);
   if (lastKey >= todayKey) return null;
   let toKey = fromKey;
-  for (let i = 0; i < 1000 && toKey < todayKey; i++) {
-    const next = repeatStep(toKey, task);
-    if (!next || next <= toKey) return null;
-    toKey = next;
+  if (task.classification === 'event') {
+    // An event is over once it has happened (there is nothing to check off):
+    // on to the next time it happens.
+    for (let i = 0; i < 1000 && toKey < todayKey; i++) {
+      const next = repeatStep(toKey, task);
+      if (!next || next <= toKey) return null;
+      toKey = next;
+    }
+    if (toKey < todayKey) return null;
+  } else {
+    // A task moves on only while its repeat runs from one day straight into
+    // the next: every day, Monday to Friday, a Saturday-and-Sunday chore. That
+    // next day still rings (Anna, Oct 18 2026: "Anything recurring that has
+    // two or more days in succession should be made to still ring the next
+    // day"). Where the repeat has a gap (Friday to Monday, once a week, once a
+    // month, every other day) the copy stays until it's checked off, and the
+    // app makes the next one then, on the right day (Anna, Oct 17 2026:
+    // "weekly things and monthly things will easily get lost ... It stays
+    // until it's checked off"). A copy found a few days late walks the
+    // day-after-day run as far as today, and stops on the last day before a
+    // gap.
+    for (let i = 0; i < 1000 && toKey < todayKey; i++) {
+      const next = repeatStep(toKey, task);
+      if (!next || next !== repeatAddDays(toKey, 1)) break;
+      toKey = next;
+    }
+    if (toKey === fromKey) return null;
   }
-  if (toKey < todayKey) return null;
   return { fromKey, toKey, days: Math.round((repeatKeyMs(toKey) - repeatKeyMs(fromKey)) / REPEAT_KEY_DAY_MS) };
 }
 
-// Every active daily task and repeating event whose day is over, and any left
-// alone because another copy of it already sits on that day or later.
+// Every active repeating task or event whose day is over and that moves on
+// (repeatRollFor), and any left alone because another copy of it already sits
+// on that day or later.
 function repeatRollPlan(tasks: any[], userMap: Record<string, any>, nowMs: number): { rolls: any[]; twins: any[] } {
   const rolls: any[] = [];
   const twins: any[] = [];
@@ -2072,15 +2097,7 @@ function repeatRollPlan(tasks: any[], userMap: Record<string, any>, nowMs: numbe
     if (!task.recurrence_pattern || task.recurrence_pattern === 'none') continue;
     // Birthdays roll over to next year in the birthday pass.
     if (task.birthday_person || task.is_own_birthday || task.classification === 'birthday') continue;
-    // Only a daily task and a repeating event move on by themselves. Anna, Oct
-    // 17 2026: "i feel like weekly things and monthly things will easily get
-    // lost. Let's put it back. It stays until it's checked off and then it's
-    // remade on the right day next week/ month etc". So a weekly, monthly or
-    // any other repeating task stays until it's checked off, and the app makes
-    // the next copy then, on the right day. A daily one moving on to the next
-    // day skips nothing, and an event is over once it has happened (there is
-    // nothing to check off).
-    if (task.classification !== 'event' && task.recurrence_pattern !== 'daily') continue;
+    // Which ones move on and which stay until checked off: see repeatRollFor.
     // In Focus Mode: setFocusMode puts it back as it was when the session ends.
     if (task.focus_mode_original_interval) continue;
     const owner = userMap[task.created_by] || userMap[task.notification_recipient_email];
