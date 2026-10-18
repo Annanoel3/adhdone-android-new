@@ -54,6 +54,11 @@ import { assignTaskFamilies } from '../../shared/runTaskParse.ts';
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// Smart Reminders pause for someone who hasn't opened the app in this long
+// (Anna, Oct 18 2026); see PAUSED AFTER 19 DAYS AWAY in the main loop.
+const SMART_PAUSE_AFTER_MS = 19 * DAY_MS;
+const PAUSE_TITLE = 'Your Smart Reminders are paused';
+const PAUSE_BODY = "You haven't opened ADHDone in a while, so we paused them. Just open the app anytime to start them again.";
 // Sent nudges are kept this long (for "last nudged 3 days ago"), then dropped.
 const HISTORY_KEEP_MS = 7 * DAY_MS;
 // A nudge already queued to go out this soon survives a re-plan. Edits can
@@ -316,6 +321,38 @@ Deno.serve(async (req) => {
       // the app (opening it signs the phone up again), or a day has gone by.
       const unreachableAt = utcMs(user.push_unreachable_at);
       if (Number.isFinite(unreachableAt) && nowMs - unreachableAt < DAY_MS && !(utcMs(user.last_active_at) > unreachableAt)) continue;
+
+      // PAUSED AFTER 19 DAYS AWAY (Anna, Oct 18 2026: "turn off smart reminders
+      // for people not active after 19 days ... But send them one last
+      // notification telling them their reminders will be paused and to simply
+      // open the app to restart them"). Every look is an AI call, and people
+      // who had stopped opening the app were still planned for and nudged (one
+      // account: 15 nudges in 3 days, a month after its last open). One notice
+      // per absence, at a waking hour (quiet hours are checked above); after
+      // it nothing is planned or sent for them. Opening the app moves
+      // last_active_at past the pause and the next run plans for them again.
+      // Only Smart Reminders stop: times they set, events and birthdays still
+      // come.
+      const awayFromMs = utcMs(user.last_active_at || user.signed_up_at || user.created_date);
+      if (Number.isFinite(awayFromMs) && nowMs - awayFromMs >= SMART_PAUSE_AFTER_MS) {
+        const pausedAtMs = utcMs(user.smart_nudge_paused_at);
+        if (!(Number.isFinite(pausedAtMs) && pausedAtMs > awayFromMs) && !previewOnly) {
+          const notice = await sendPauseNotice(email);
+          // Not sent for a passing reason (OneSignal down): tried again next run.
+          if (notice) {
+            await base44.asServiceRole.entities.User.update(user.id, {
+              smart_nudge_paused_at: now.toISOString(),
+              // A fresh plan when they're back, never a weeks-old one.
+              smart_nudge_schedule_dirty: true,
+            }).catch((e: any) => console.error(`[SMART NUDGE] Could not record the pause for ${email}:`, e?.message || e));
+            if (notice !== UNSUBSCRIBED) {
+              await ledgerRecord(base44, { email, kind: 'general', source: 'smart_pause', notificationId: notice, title: PAUSE_TITLE });
+            }
+          }
+          console.log(`[SMART NUDGE] ${email}: ${Math.round((nowMs - awayFromMs) / DAY_MS)} days since the app was opened, Smart Reminders paused (notice: ${notice || 'not sent, will retry'})`);
+        }
+        continue;
+      }
 
       // Their day, not the calendar's: it turns over in the middle of their
       // quiet hours (Oct 12 2026), so a night-shift worker is still on Monday
@@ -2049,6 +2086,41 @@ Return ONLY valid JSON:
   } catch (e) {
     console.error('[SMART NUDGE] LLM error:', e);
     return null;
+  }
+}
+
+// The one notice that Smart Reminders are paused (PAUSED AFTER 19 DAYS AWAY).
+// A plain push, never an alarm and with no task buttons (no taskId), that
+// opens the task list. Normal priority and a 2-hour lifetime like the
+// come-back pushes, so OneSignal never puts it back on the screen days later.
+async function sendPauseNotice(email: string): Promise<string | false> {
+  const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+  const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+  if (!appId || !restApiKey) return false;
+  try {
+    const response = await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${restApiKey}` },
+      body: JSON.stringify({
+        app_id: appId,
+        headings: { en: PAUSE_TITLE },
+        contents: { en: PAUSE_BODY },
+        data: { type: 'smart_pause', screen: '/Tasks' },
+        include_external_user_ids: [email],
+        channel_for_external_user_ids: 'push',
+        ttl: 2 * 60 * 60,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok || result.errors) {
+      console.error(`[SMART NUDGE] Pause notice: OneSignal error for ${email}:`, result);
+      const errs = Array.isArray(result?.errors) ? result.errors.map(String) : [];
+      return errs.some((e: string) => /not subscribed/i.test(e)) ? UNSUBSCRIBED : false;
+    }
+    return result.id || 'sent';
+  } catch (e) {
+    console.error(`[SMART NUDGE] Pause notice: failed to send to ${email}:`, e);
+    return false;
   }
 }
 
