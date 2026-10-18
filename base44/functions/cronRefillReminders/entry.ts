@@ -94,13 +94,36 @@ Deno.serve(async (req) => {
     // is finished): their recurring reminders come back right away instead of
     // at the next hourly run. Only the recurring pass and the Focus Mode
     // check-ins run in that mode.
-    const onlyEmail = await req.json().then((b: any) => (b && typeof b.onlyEmail === 'string' ? b.onlyEmail.trim() : '')).catch(() => '');
+    const body: any = await req.json().catch(() => ({}));
+    const onlyEmail = body && typeof body.onlyEmail === 'string' ? body.onlyEmail.trim() : '';
     if (!onlyEmail) await ledgerPrune(base44);
 
     // Every profile, once: quiet hours are stored as local "HH:MM" on it, and
     // Focus Mode lives on it. Fetched before the tasks because the pass right
     // below can change tasks.
     const allUsers = await listAll(base44.asServiceRole.entities.User);
+
+    // A look at what the repeating-task rollover would do right now, changing
+    // nothing (see REPEATING TASKS WHOSE DAY IS OVER below).
+    if (body?.previewRepeats === true) {
+      const users: Record<string, any> = {};
+      for (const u of allUsers) if (u && u.email) users[u.email] = u;
+      const active = await filterAll(base44.asServiceRole.entities.Task, { status: 'active' });
+      const nowMs = Date.now();
+      const { rolls, twins } = repeatRollPlan(active, users, nowMs);
+      return Response.json({
+        success: true,
+        rolls: rolls.map(({ task, owner, tz, roll }: any) => {
+          const { moved, cancel } = repeatMove(task, owner, tz, roll, nowMs);
+          return {
+            id: task.id, title: task.title, owner: task.created_by, tz, from: roll.fromKey, to: roll.toKey,
+            next_reminder: moved.next_reminder ?? null, due_date: moved.due_date ?? null, event_time: moved.event_time ?? null,
+            reminders: moved.reminder_schedule.map((e: any) => `${e.send_at} ${e.label || ''}`.trim()), cancel: cancel.length,
+          };
+        }),
+        twins: twins.map(({ task, twin }: any) => ({ id: task.id, title: task.title, owner: task.created_by, twin: twin.id })),
+      });
+    }
 
     // Focus Mode's morning question went unanswered — Anna, Oct 14 2026:
     // "ignored morning ends focus mode". The question goes out at the end of
@@ -956,6 +979,53 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── REPEATING TASKS WHOSE DAY IS OVER: on to the next day ───────────────
+  // Anna, Oct 17 2026: "once a recurring task passes the point of being due,
+  // just erase it and reschedule it for the next day". A repeating task only
+  // moved on when its copy was checked off (the app makes the next copy
+  // then), so a day it wasn't checked off left that copy sitting there with
+  // nothing booked after it: "Clean the litter box" (every day at 9 PM) was
+  // last checked off Wednesday Oct 14, rang Thursday at 9, then had no 9 PM
+  // reminder Friday or Saturday, and Smart Reminders filled in at 9:09.
+  // Repeating events never moved on at all (an event isn't checked off).
+  //
+  // So once a copy's day is over on their clock (4 AM, see
+  // REPEAT_DAY_ENDS_MS), that day is wiped from it and the same task is put
+  // on the next day the repeat lands on — today, for a daily one. Wiped
+  // means what a fresh copy starts with: that day's snoozes, Laters,
+  // rang-out counts and booked pushes go; the words, notes, pictures and
+  // settings stay. Its reminders move to the same times on the new day (the
+  // promotion pass below books them, in this same run) and the phone gets
+  // the new alarm. The record itself moves on, like the birthday rollover
+  // above: a copy made by the server wouldn't belong to them.
+  let repeatsRolled = 0;
+  {
+    const { rolls, twins } = repeatRollPlan(allTasks, userMap, now.getTime());
+    for (const t of twins) {
+      console.log(`🔁 [REFILL] "${t.task.title}" (${t.task.created_by}) left as is: another copy (${t.twin.id}) is already on that day or later`);
+    }
+    for (const { task, owner, tz, roll } of rolls) {
+      try {
+        // Read again right before the change: checked off or changed since
+        // the run started, it's left for the next run to look at again.
+        const fresh = await base44.asServiceRole.entities.Task.get(task.id).catch(() => null);
+        if (!fresh || fresh.status !== 'active' || fresh.silenced || trackerMs(fresh.updated_date) !== trackerMs(task.updated_date)) {
+          console.log(`🔁 [REFILL] "${task.title}" (${task.created_by}) changed during this run; looked at again next run`);
+          continue;
+        }
+        const { moved, cancel } = repeatMove(fresh, owner, tz, roll, Date.now());
+        await base44.asServiceRole.entities.Task.update(task.id, moved);
+        if (cancel.length) await cancelJustBooked(base44, cancel);
+        Object.assign(task, moved); // so the promotion pass below books its reminders this run
+        await pushPhoneAlarms({ ...fresh, ...moved }, owner, { before: fresh, changedAt: Date.now(), source: 'cronRefillReminders' });
+        repeatsRolled++;
+        console.log(`🔁 [REFILL] "${task.title}" (${task.created_by}): ${roll.fromKey} wasn't checked off, moved on to ${roll.toKey} (${moved.reminder_schedule.length} reminder(s) to book)`);
+      } catch (e) {
+        console.error(`[REFILL] Could not move "${task.title}" (${task.id}) on to its next day:`, e);
+      }
+    }
+  }
+
   // ── Event tasks (📅) — promote planned reminders within OneSignal's window ──
   // Events with classification='event' store a deterministic reminder schedule
   // (night before + 1 hour before) but OneSignal rejects scheduling more than
@@ -1456,7 +1526,7 @@ Deno.serve(async (req) => {
     console.error("[HEALTH] check failed:", e);
   }
 
-  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, focusCheckins, focusEnded, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, eventScheduled, scheduledTextReminders, at: now.toISOString() };
+  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, focusCheckins, focusEnded, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, repeatsRolled, eventScheduled, scheduledTextReminders, at: now.toISOString() };
     console.log('✅ [REFILL] Complete:', result);
     return Response.json(result);
   } catch (err) {
@@ -1857,6 +1927,204 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       console.error('[HEALTH] daily note failed:', e);
     }
   }
+}
+
+// ── Repeating tasks whose day is over (Anna, Oct 17 2026) ───────────────────
+// "once a recurring task passes the point of being due, just erase it and
+// reschedule it for the next day". See REPEATING TASKS WHOSE DAY IS OVER in
+// the handler for why. A day ends at 4 AM on their clock, the same line the
+// app's own repeat code draws (taskRecurrence.jsx): until then it's still
+// "last night", and the copy can still be checked off for that day.
+const REPEAT_DAY_ENDS_MS = 4 * 60 * 60 * 1000;
+const REPEAT_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const REPEAT_KEY_DAY_MS = 24 * 60 * 60 * 1000;
+
+// What a fresh copy starts with: the day's own history goes with the day.
+// The words, notes, pictures and settings stay.
+const REPEAT_FRESH_DAY = {
+  reminder_count: 0,
+  snooze_count: 0,
+  consecutive_snoozes: 0,
+  dismissed_count: 0,
+  ignored_count: 0,
+  closed_count: 0,
+  later_count: 0,
+  later_until: null,
+  last_alarm_choice: null,
+  snoozed_until: null,
+  due_date_pushes: 0,
+  last_scheduled_until: null,
+  reminder_retry_after: null,
+  reminder_scheduling_since: null,
+  follow_up_notification_id: null,
+};
+
+function repeatKeyMs(key: string): number {
+  const [y, m, d] = key.split('-').map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+
+function repeatAddDays(key: string, n: number): string {
+  return new Date(repeatKeyMs(key) + n * REPEAT_KEY_DAY_MS).toISOString().slice(0, 10);
+}
+
+// A wall-clock time on a day, on their clock, as an instant (the same two-pass
+// offset fix as trackerNextAt, so a DST change between is handled).
+function repeatWallMs(key: string, minutes: number, timeZone: string): number {
+  const asUtc = repeatKeyMs(key) + minutes * 60000;
+  let at = asUtc - trackerOffsetMin(asUtc, timeZone) * 60000;
+  at = asUtc - trackerOffsetMin(at, timeZone) * 60000;
+  return at;
+}
+
+function repeatValueKey(v: any, timeZone: string): string | null {
+  if (!v) return null;
+  const s = String(v);
+  if (REPEAT_DATE_ONLY.test(s)) return s;
+  const ms = trackerMs(s);
+  return Number.isFinite(ms) ? localDateKey(new Date(ms), timeZone) : null;
+}
+
+// The day a copy of a repeating task is for, on their clock (the same pick as
+// baseOf in taskRecurrence.jsx: an event's time, an all-day task's date,
+// otherwise its reminder time).
+function repeatDayKey(task: any, timeZone: string): string | null {
+  const v = task.classification === 'event' ? (task.event_time || task.next_reminder || task.due_date)
+    : task.day_only_task ? (task.due_date || task.next_reminder)
+    : (task.next_reminder || task.due_date || task.event_time || task.start_date);
+  return repeatValueKey(v, timeZone);
+}
+
+// The next day the repeat lands on after `key`. Same steps as the app's own
+// (nextDate in taskRecurrence.jsx).
+function repeatStep(key: string, task: any): string | null {
+  const dt = new Date(repeatKeyMs(key));
+  const days = Array.isArray(task.recurrence_days)
+    ? task.recurrence_days.filter((n: any) => Number.isInteger(n) && n >= 0 && n <= 6) : [];
+  switch (task.recurrence_pattern) {
+    case 'daily': dt.setUTCDate(dt.getUTCDate() + 1); break;
+    case 'every_other_day': dt.setUTCDate(dt.getUTCDate() + 2); break;
+    case 'weekdays':
+      do { dt.setUTCDate(dt.getUTCDate() + 1); } while (dt.getUTCDay() === 0 || dt.getUTCDay() === 6);
+      break;
+    case 'weekly':
+      if (days.length > 0) {
+        let i = 0;
+        do { dt.setUTCDate(dt.getUTCDate() + 1); } while (!days.includes(dt.getUTCDay()) && ++i < 7);
+      } else {
+        dt.setUTCDate(dt.getUTCDate() + 7);
+      }
+      break;
+    case 'every_other_week': dt.setUTCDate(dt.getUTCDate() + 14); break;
+    case 'monthly': dt.setUTCMonth(dt.getUTCMonth() + 1); break;
+    case 'yearly': dt.setUTCFullYear(dt.getUTCFullYear() + 1); break;
+    default: return null;
+  }
+  return dt.toISOString().slice(0, 10);
+}
+
+// A date on the task moved by whole days on their clock, keeping its time of
+// day (or `hhmm` when given). A date-only value stays date-only.
+function repeatShift(v: any, days: number, timeZone: string, hhmm: string | null = null): string | null {
+  if (!v) return null;
+  const s = String(v);
+  if (REPEAT_DATE_ONLY.test(s)) return repeatAddDays(s, days);
+  const ms = trackerMs(s);
+  if (!Number.isFinite(ms)) return null;
+  const key = repeatAddDays(localDateKey(new Date(ms), timeZone), days);
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
+  const minutes = m ? Number(m[1]) * 60 + Number(m[2]) : localMinutesOfDay(new Date(ms), timeZone);
+  return new Date(repeatWallMs(key, minutes, timeZone)).toISOString();
+}
+
+// Null while the copy's day isn't over yet. Otherwise the day it moves on to:
+// the first day the repeat lands on from today on (today itself, for a daily
+// one), and how many days that is.
+function repeatRollFor(task: any, timeZone: string, nowMs: number): { fromKey: string; toKey: string; days: number } | null {
+  const fromKey = repeatDayKey(task, timeZone);
+  if (!fromKey) return null;
+  // A stated multi-day range (a trip Dec 3–7) is over after its last day. An
+  // event that runs past midnight is still one night (end_date stays empty).
+  let lastKey = fromKey;
+  const endKey = repeatValueKey(task.end_date, timeZone);
+  if (endKey && endKey > lastKey) lastKey = endKey;
+  const todayKey = localDateKey(new Date(nowMs - REPEAT_DAY_ENDS_MS), timeZone);
+  if (lastKey >= todayKey) return null;
+  let toKey = fromKey;
+  for (let i = 0; i < 1000 && toKey < todayKey; i++) {
+    const next = repeatStep(toKey, task);
+    if (!next || next <= toKey) return null;
+    toKey = next;
+  }
+  if (toKey < todayKey) return null;
+  return { fromKey, toKey, days: Math.round((repeatKeyMs(toKey) - repeatKeyMs(fromKey)) / REPEAT_KEY_DAY_MS) };
+}
+
+// Every active repeating task whose day is over, and any left alone because
+// another copy of it already sits on that day or later.
+function repeatRollPlan(tasks: any[], userMap: Record<string, any>, nowMs: number): { rolls: any[]; twins: any[] } {
+  const rolls: any[] = [];
+  const twins: any[] = [];
+  for (const task of tasks) {
+    if (!task || task.status !== 'active' || task.silenced || task.parent_task_id) continue;
+    if (!task.recurrence_pattern || task.recurrence_pattern === 'none') continue;
+    // Birthdays roll over to next year in the birthday pass.
+    if (task.birthday_person || task.is_own_birthday || task.classification === 'birthday') continue;
+    // In Focus Mode: setFocusMode puts it back as it was when the session ends.
+    if (task.focus_mode_original_interval) continue;
+    const owner = userMap[task.created_by] || userMap[task.notification_recipient_email];
+    if (!owner || owner.focus_mode_task_id === task.id) continue;
+    const tz = userTimeZone(owner);
+    const roll = repeatRollFor(task, tz, nowMs);
+    if (!roll) continue;
+    const twin = tasks.find((o: any) => o && o.id !== task.id && o.status === 'active' && !o.parent_task_id
+      && o.created_by === task.created_by && o.title === task.title && o.recurrence_pattern === task.recurrence_pattern
+      && (repeatDayKey(o, tz) || '') >= roll.toKey);
+    if (twin) { twins.push({ task, twin }); continue; }
+    rolls.push({ task, owner, tz, roll });
+  }
+  return { rolls, twins };
+}
+
+// The change that moves a copy on to its new day, and the pushes of the old
+// day still ahead that have to be cancelled.
+function repeatMove(fresh: any, owner: any, timeZone: string, roll: { days: number }, nowMs: number): { moved: any; cancel: string[] } {
+  const days = roll.days;
+  const anchor = /^\d{1,2}:\d{2}$/.test(String(fresh.anchor_time || '')) ? String(fresh.anchor_time) : null;
+  const rhythm = !!fresh.reminder_interval && fresh.reminder_interval !== 'once';
+  const moved: any = { ...REPEAT_FRESH_DAY, prep_questions: [], onesignal_notification_ids: [] };
+  for (const f of ['due_date', 'event_time', 'end_time', 'end_date', 'start_date']) {
+    if (fresh[f]) moved[f] = repeatShift(fresh[f], days, timeZone);
+  }
+  // A rhythm ("every hour until it's done") starts again at the time they gave.
+  if (fresh.next_reminder) moved.next_reminder = repeatShift(fresh.next_reminder, days, timeZone, rhythm ? anchor : null);
+  // The day's reminders move with it: the same times on the new day, the same
+  // words, not booked yet (the promotion pass books them). Ones already past
+  // on the new day are dropped.
+  const old = Array.isArray(fresh.reminder_schedule) ? fresh.reminder_schedule : [];
+  const schedule: any[] = [];
+  old.forEach((e: any, i: number) => {
+    if (!e || !e.send_at) return;
+    const at = repeatShift(e.send_at, days, timeZone);
+    const atMs = at ? Date.parse(at) : NaN;
+    if (!Number.isFinite(atMs) || atMs <= nowMs) return;
+    const { book_error, scheduled, ...rest } = e;
+    schedule.push({ ...rest, send_at: at, notification_id: `planned_${fresh.id}_r${i}_${atMs}` });
+  });
+  // Nothing carried over (an earlier day had its time already past): the one
+  // reminder at the time they set, when they set one.
+  if (schedule.length === 0 && anchor) {
+    const own = atItsOwnTimeEntry({ ...fresh, ...moved }, owner);
+    if (own && Date.parse(own.send_at) > nowMs) schedule.push(own);
+  }
+  moved.reminder_schedule = schedule;
+  const cancel: string[] = old
+    .filter((e: any) => isBookedId(e?.notification_id) && Date.parse(e?.send_at) > nowMs)
+    .map((e: any) => String(e.notification_id));
+  if (rhythm && fresh.last_scheduled_until && Date.parse(fresh.last_scheduled_until) > nowMs) {
+    for (const id of fresh.onesignal_notification_ids || []) if (isBookedId(id)) cancel.push(String(id));
+  }
+  return { moved, cancel: [...new Set(cancel)] };
 }
 
 // ── A task's own time ─────────────────────────────────────────────────────────
