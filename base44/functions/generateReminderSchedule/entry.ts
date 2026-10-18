@@ -92,9 +92,10 @@ const NOTES_LABELS = {
 async function notesWouldHelp(title, location) {
   try {
     const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
-    // gpt-6-astra (was gpt-6-luna, from Sept 27 2026). Anna, Oct 17 2026: "Move them to astra like I already asked weeks ago" (she asked for the newest model everywhere on Sept 17 2026).
+    // gpt-6-luna, the cheaper model: a yes/no on whether notes would help
+    // (astra on Oct 17 2026). Anna, Oct 18 2026: "switch whatever wont be negatively affected to the cheaper one".
     const ask = openai.chat.completions.create({
-      model: 'gpt-6-astra',
+      model: 'gpt-6-luna',
       reasoning_effort: 'low',
       response_format: { type: 'json_object' },
       max_completion_tokens: 2000,
@@ -107,7 +108,7 @@ Would they likely want a recording of this and notes from it? Yes when it's the 
 Return {"notes": true} or {"notes": false}.` },
       ],
     });
-    // 6 seconds (was 4): gpt-6-astra answers in about 2.5–3.5 s (Oct 17 2026).
+    // 6 seconds (was 4), so a slow answer still counts.
     const late = new Promise((resolve) => setTimeout(() => resolve(null), 6000));
     const res = await Promise.race([ask, late]);
     if (!res) return false;
