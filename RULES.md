@@ -27,7 +27,7 @@ All LLM/AI calls must use the OpenAI SDK directly with the app's `OPENAI_API_KEY
 import OpenAI from 'npm:openai';
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 const completion = await openai.chat.completions.create({
-  model: 'gpt-6-astra',   // THE model, everywhere (Anna asked for the newest model on Sept 17 2026; "Move them to astra like I already asked weeks ago", Oct 17 2026). Never a cheaper or older one (no gpt-4o-mini, gpt-4o, gpt-5.4, gpt-6-luna) without her say-so
+  model: 'gpt-6-astra',   // the app's model (Anna asked for the newest model on Sept 17 2026; "Move them to astra like I already asked weeks ago", Oct 17 2026). gpt-6-luna (about 100x cheaper) ONLY where Anna OK'd it on Oct 18 2026 as not hurt by it: the calendar emoji, the daily tip, the AI-key check, voice-note notes (astra as backup) and the notes-would-help yes/no. Nothing else cheaper or older (no gpt-4o-mini, gpt-4o, gpt-5.4) without her say-so
   reasoning_effort: 'low',
   messages: [/* ... */],
 });
