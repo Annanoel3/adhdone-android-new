@@ -990,8 +990,10 @@ Deno.serve(async (req) => {
   // Repeating events never moved on at all (an event isn't checked off).
   //
   // So once a copy's day is over on their clock (4 AM, see
-  // REPEAT_DAY_ENDS_MS), that day is wiped from it and the same task is put
-  // on the next day the repeat lands on — today, for a daily one. Wiped
+  // REPEAT_DAY_ENDS_MS), a daily task or a repeating event has that day
+  // wiped from it and is put on the next day it repeats (today, for a daily
+  // one). Weekly, monthly and the rest stay until checked off (see
+  // repeatRollPlan, Anna's later word the same evening). Wiped
   // means what a fresh copy starts with: that day's snoozes, Laters,
   // rang-out counts and booked pushes go; the words, notes, pictures and
   // settings stay. Its reminders move to the same times on the new day (the
@@ -2060,8 +2062,8 @@ function repeatRollFor(task: any, timeZone: string, nowMs: number): { fromKey: s
   return { fromKey, toKey, days: Math.round((repeatKeyMs(toKey) - repeatKeyMs(fromKey)) / REPEAT_KEY_DAY_MS) };
 }
 
-// Every active repeating task whose day is over, and any left alone because
-// another copy of it already sits on that day or later.
+// Every active daily task and repeating event whose day is over, and any left
+// alone because another copy of it already sits on that day or later.
 function repeatRollPlan(tasks: any[], userMap: Record<string, any>, nowMs: number): { rolls: any[]; twins: any[] } {
   const rolls: any[] = [];
   const twins: any[] = [];
@@ -2070,6 +2072,15 @@ function repeatRollPlan(tasks: any[], userMap: Record<string, any>, nowMs: numbe
     if (!task.recurrence_pattern || task.recurrence_pattern === 'none') continue;
     // Birthdays roll over to next year in the birthday pass.
     if (task.birthday_person || task.is_own_birthday || task.classification === 'birthday') continue;
+    // Only a daily task and a repeating event move on by themselves. Anna, Oct
+    // 17 2026: "i feel like weekly things and monthly things will easily get
+    // lost. Let's put it back. It stays until it's checked off and then it's
+    // remade on the right day next week/ month etc". So a weekly, monthly or
+    // any other repeating task stays until it's checked off, and the app makes
+    // the next copy then, on the right day. A daily one moving on to the next
+    // day skips nothing, and an event is over once it has happened (there is
+    // nothing to check off).
+    if (task.classification !== 'event' && task.recurrence_pattern !== 'daily') continue;
     // In Focus Mode: setFocusMode puts it back as it was when the session ends.
     if (task.focus_mode_original_interval) continue;
     const owner = userMap[task.created_by] || userMap[task.notification_recipient_email];
