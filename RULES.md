@@ -145,6 +145,7 @@ Before proposing ANY mechanism below, assume it exists and go read it.
 |---|---|---|
 | Push deduplication / anti-stacking | `NotificationLedger` entity + `base44/shared/sendLedger.ts` | Blocks duplicate and stacked pushes, evicts proactive sends for time-critical ones |
 | Calendar import idempotency | `Task.google_event_id` | One imported Google event = one task, per user, across overlapping syncs |
+| Phone calendar sync | `src/lib/calendarSync.js` + `syncGoogleCalendar` (source `device`) + `CalendarSyncWorker` (phone, build 43 on) | The ticked phone calendars come in on their own (Anna, Oct 19 2026: "calendar still doesn't sync on it's own"; before, only on app open, at most every 6 hours). Build 43 on: the phone watches its calendar provider and sends the rows itself with the app closed (`CalendarBridge.setSyncCalendars` tells it which calendars on every open and tick; an empty read is held 6 hours before it's believed). Older builds: the app reads them on every open and every return to the app, at most every 10 minutes. An event moved in the calendar gets its reminders re-planned for the new time (one-time events that still have reminders), and its phone alarms are pushed right away |
 | Capture idempotency | `Task.capture_id` | Native share-sheet retries can't double-create |
 | Creator/cron race protection | `Task.reminder_scheduling_since` + `commitNotificationIds` | Refill cron stays out while the creator is still booking |
 | Per-user sync locking | `calendar_sync_in_progress_since` + heartbeat | One active Google Calendar sync per account |
