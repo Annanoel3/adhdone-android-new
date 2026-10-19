@@ -13,6 +13,18 @@
 // model judges, no word lists, on gpt-6-astra like every judgment in the app.
 // The answer is kept on the profile as quiet_hours_fit.
 //
+// What they told the app is acted on, not only asked about (Anna, Oct 19 2026:
+// "that spot where she indicated she is on night shift... that was supposed to
+// fix this in the first place. That spot isn't just a random spot for users to
+// put shit that the app will never look at"). Every timing in the app runs off
+// quiet hours: Smart Reminders reads them as the person's night, the morning
+// summary goes out when they end, a time the app picks stays outside them. So
+// when someone's quiet hours are still the ones every account starts with (10
+// PM to 8 AM) and the model is clear about when they sleep, those become their
+// quiet hours right away, and the popup tells them on their next open, where
+// they can change them. Hours they set to anything else are never moved: then
+// the popup only asks.
+//
 // { previewEmail } from the owner's account (Test Function) judges that person
 // fresh and saves nothing.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
@@ -114,6 +126,40 @@ export default async function(req: Request) {
     const verdict = !aboutMe && work.length === 0
       ? { fits: true, start: null, end: null }
       : await judge(aboutMe, quietLine, work);
+
+    // Still the starting hours, and a clear answer about when they sleep: use it.
+    const untouched = user.quiet_hours_enabled !== false
+      && (user.quiet_hours_start || '22:00') === '22:00' && (user.quiet_hours_end || '08:00') === '08:00';
+    if (verdict.fits === false && verdict.start && verdict.end && untouched) {
+      const nowIso = new Date().toISOString();
+      const moved = { ...user, quiet_hours_enabled: true, quiet_hours_start: verdict.start, quiet_hours_end: verdict.end };
+      const appliedFit = {
+        key: fitKey(moved),
+        fits: true,
+        start: null,
+        end: null,
+        at: nowIso,
+        // told: the popup has shown them the change (QuietHoursReviewPrompt).
+        applied: { from_start: '22:00', from_end: '08:00', start: verdict.start, end: verdict.end, at: nowIso, told: false },
+        answered_key: null,
+      };
+      if (previewEmail) return Response.json({ ...appliedFit, wouldApply: true, quietLine, aboutMe, work });
+      await base44.asServiceRole.entities.User.update(user.id, {
+        quiet_hours_enabled: true,
+        quiet_hours_start: verdict.start,
+        quiet_hours_end: verdict.end,
+        quiet_hours_fit: appliedFit,
+      });
+      // Reminders already booked inside the new hours come down, the same as a
+      // change in Settings.
+      try {
+        await base44.functions.invoke('applyQuietHours', { quietStart: verdict.start, quietEnd: verdict.end });
+      } catch (e) {
+        console.error('[checkQuietHoursFit] applyQuietHours failed:', e);
+      }
+      console.log(`[checkQuietHoursFit] ${user.email}: quiet hours moved to ${verdict.start}-${verdict.end}`);
+      return Response.json(appliedFit);
+    }
 
     const fit = {
       key,
