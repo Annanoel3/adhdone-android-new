@@ -1,3 +1,4 @@
+// Re-saved Oct 19 2026 so the bundled shared/runTaskParse.ts is picked up: a time picked from a part of the day ("morning medication") is never marked as one the person stated, so it can't ring inside their quiet hours.
 // Re-saved Oct 17 2026 (evening) so the bundled shared/taskParsePrompt.ts and shared/runTaskParse.ts are picked up: an event that runs past midnight (7 PM–2 AM) is one night, not a two-day range, and a day counted from the real date instead of the said-at day gets a last look.
 // Re-saved Oct 17 2026 (night) so the bundled shared/runTaskParse.ts and shared/taskParsePrompt.ts are picked up: "tomorrow morning" / "Sunday night" get a time on gpt-6-astra, and the said-at day is in its system message too.
 // Re-saved Oct 17 2026 (later) so the bundled shared/taskParsePrompt.ts is picked up: its calendar is the moment the words were said and beats the real date gpt-6-astra is given.
@@ -136,6 +137,10 @@ const PARSER_CHECKS: { text: string; saidAt: number; expect: Record<string, any>
   { text: "Need to make appointment for cardiologist.", saidAt: said("2026-10-14T01:52:00-05:00"), expect: { target_date: null, needs_date_pick: (v: any) => !v } },
   // A number they typed stays in the title (Oct 13 2026: a user's "call propane
   // 530-477-7854 today" came out as "Call propane", the number gone).
+  // A part of the day is a time the app picks, never one they stated (Oct 16
+  // 2026: this became 6:30 AM marked as stated, and rang inside the person's
+  // quiet hours every morning).
+  { text: "taking morning medication", saidAt: said("2026-10-16T11:30:00-05:00"), expect: { target_time: aTime, time_stated: false } },
   { text: "call propane 530-477-7854 today", saidAt: said("2026-10-13T08:46:00-07:00"), expect: { title: (v: any) => typeof v === "string" && v.includes("530-477-7854"), target_date: "2026-10-13", deadline_style: "by" } },
   // A party that runs past midnight is one night, not a two-day range: this one
   // showed on its card as "Nov 1 – Nov 2" (Anna, Oct 17 2026).
