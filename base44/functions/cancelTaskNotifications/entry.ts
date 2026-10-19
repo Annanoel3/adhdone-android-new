@@ -122,6 +122,7 @@ async function applyLaterBreak(base44: any, task: any, body: any, appId: string,
   if (reportId && seenIds.includes(reportId)) {
     return { success: true, taskId: task.id, later_until: task.later_until || null, duplicate: true };
   }
+  await logAlarmChoice(base44, task.notification_recipient_email || task.created_by, { task_id: task.id, choice: 'later', atMs: tapTime(body, nowMs), report_id: reportId });
   const owners = await base44.asServiceRole.entities.User.filter({ email: task.created_by }).catch(() => []);
   const owner = owners?.[0] || null;
   const timeZone = (typeof body?.timezone === 'string' && body.timezone.trim()) || userTimeZone(owner);
@@ -189,6 +190,32 @@ async function applyLaterBreak(base44: any, task: any, body: any, appId: string,
   }
   console.log(`[cancelTaskNotifications] Later break for task ${task.id} until ${fields.later_until}: ${cancelled} push(es) cancelled`);
   return { success: true, taskId: task.id, later_until: fields.later_until, canceledCount: cancelled };
+}
+
+// Every choice made on an alarm or a reminder's notification, one row each,
+// kept as AppEvent 'alarm_choice' (Anna, Oct 19 2026: "make it so that we
+// can't undercount missed alarms"). The task keeps only its last choice and
+// running counts, a repeating task's day is reset when it rolls over, and a
+// deleted task takes both with it, so the owner health check
+// (cronRefillReminders, check 10) counts rings from here. No titles (the
+// AppEvent rule): the task id only. Written before the task is changed, so a
+// report that fails after this and is sent again can show twice; the reader
+// keeps one per ring.
+async function logAlarmChoice(base44: any, email: string, e: { task_id: string; choice: string; atMs: number; how?: string | null; minutes?: number | null; report_id?: string; task_gone?: boolean }) {
+  try {
+    const props: any = {
+      task_id: e.task_id,
+      choice: e.choice,
+      at: new Date(e.atMs).toISOString(),
+      how: e.how || null,
+      minutes: e.minutes ?? null,
+      report_id: e.report_id || null,
+    };
+    if (e.task_gone) props.task_gone = true;
+    await base44.asServiceRole.entities.AppEvent.create({ event: 'alarm_choice', user_email: String(email || '').toLowerCase(), props });
+  } catch (err) {
+    console.error('[cancelTaskNotifications] alarm choice not logged:', (err as any)?.message || err);
+  }
 }
 
 // ── The phone's other reports (build 39 on, Base44Api.phoneReport) ─────────
@@ -282,8 +309,30 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
   }
 
   // "alarm_choice"
-  const task = await svc.Task.get(String(body?.task_id || '')).catch(() => null);
-  if (!task) return Response.json({ success: false, error: 'Task not found' }, { status: 404 });
+  let readErr: any = null;
+  const task = await svc.Task.get(String(body?.task_id || '')).catch((e: any) => { readErr = e; return null; });
+  if (!task) {
+    // A read that failed for a passing reason (the database busy, a timeout):
+    // a 5xx makes the phone keep the report and send it again, where a 404
+    // makes it drop the report for good (ChoiceSyncWorker).
+    const status = Number(readErr?.status ?? readErr?.response?.status ?? NaN);
+    const passing = !!readErr && (status >= 500 || status === 429
+      || (!Number.isFinite(status) && /fetch|network|timeout|timed out|ECONN|socket/i.test(String(readErr?.message || readErr))));
+    if (passing) return Response.json({ success: false, error: 'Try again' }, { status: 503 });
+    // Deleted while the report was on its way: the ring still counts.
+    const goneChoice = String(body?.choice || '');
+    if (body?.task_id && ['snooze', 'dismiss', 'ignored', 'closed'].includes(goneChoice)) {
+      await logAlarmChoice(base44, email, {
+        task_id: String(body.task_id).slice(0, 64),
+        choice: goneChoice,
+        atMs: tapTime(body, nowMs),
+        how: ['home', 'back', 'closed'].includes(String(body?.how || '')) ? String(body.how) : null,
+        report_id: typeof body?.report_id === 'string' ? body.report_id.slice(0, 64) : '',
+        task_gone: true,
+      });
+    }
+    return Response.json({ success: false, error: 'Task not found' }, { status: 404 });
+  }
   if (!owns(task)) return Response.json({ success: false, error: 'Not allowed' }, { status: 403 });
   const reportId = typeof body?.report_id === 'string' ? body.report_id.slice(0, 64) : '';
   const seenIds: string[] = Array.isArray(task.alarm_report_ids) ? task.alarm_report_ids : [];
@@ -300,6 +349,7 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
   // way), or a 'snooze' with how set when Home or Back rang it again in 10
   // minutes (a time they set inside quiet hours). Anna, Oct 12 2026.
   const how = ['home', 'back', 'closed'].includes(String(body?.how || '')) ? String(body.how) : null;
+  await logAlarmChoice(base44, email, { task_id: task.id, choice, atMs, how, minutes: choice === 'snooze' ? minutes : null, report_id: reportId });
   const fields: any = {
     last_alarm_choice: {
       choice,
