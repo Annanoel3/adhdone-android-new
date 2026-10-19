@@ -92,11 +92,14 @@ function isUserBusy() {
   return Date.now() - lastTapAt < RECENT_TAP_MS;
 }
 
-// Which opens get an ad: the 2nd, then every 3rd after that (5th, 8th, …).
+// Which opens get an ad: none of the first 3 (GRACE_OPENS, below), then the
+// 4th and every 3rd open after it (7th, 10th, …): one ad every third open
+// (Anna, Oct 8 2026). It used to be the 2nd, 5th, 8th, …, so once the first 3
+// opens went ad-free the first ad fell on the 5th open, or on the 4th when the
+// 2nd open's ad found no pause and carried over (Anna, Oct 18 2026: "Uh.
+// What?").
 function shouldShowAd(count) {
-  if (count === 2) return true;
-  if (count > 2 && (count - 2) % 3 === 0) return true;
-  return false;
+  return count >= 4 && (count - 4) % 3 === 0;
 }
 
 // No ads for the first 3 opens, however many days they're spread over (Anna,
@@ -146,7 +149,8 @@ function registerLaunch() {
   launchCount = count;
   openStartedAt = Date.now();
   const carried = readOwed();
-  owedThisOpen = shouldShowAd(count) || carried;
+  // Nothing is owed during the first 3 opens, carried over or not.
+  owedThisOpen = !inGrace(count) && (shouldShowAd(count) || carried);
   writeOwed(owedThisOpen);
   lastPathname = window.location.pathname;
   resetAdLaunchState();
