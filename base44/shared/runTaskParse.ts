@@ -201,6 +201,17 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
       }
     }
   }
+  // A part of the day is never a stated time. "taking morning medication" came
+  // back with 6:30 AM marked as stated (Chad, Oct 16 2026), so a time the app
+  // picked rang inside his quiet hours every morning, unanswered; only a time
+  // the person said themselves may (Anna, Oct 12 2026; RULES.md §9 Q4). When
+  // the words name a part of the day and a "stated" time came back, one more
+  // look at that one answer. Only a retry trigger: the model still judges, and
+  // only its time_stated is taken from the second look.
+  if (parsed?.time_stated === true && parsed?.target_time && namesPartOfDay(fullPrompt)) {
+    const again = await ask(`\n\nCHECK time_stated. You gave ${parsed.target_time} and said the person stated that clock time. time_stated is true only when their own words give the clock time itself: a number ("6:30", "7am", "at 3"), "noon" or "midnight", or an exact amount of time from now ("in 20 minutes"). A part of the day ("morning", "tonight", "after work", "before bed") means you picked the clock time, so time_stated is false.`).catch(() => null);
+    if (again?.time_stated === false) parsed.time_stated = false;
+  }
   // A time can only be "stated" when there is one.
   parsed.time_stated = parsed?.time_stated === true && !!parsed?.target_time;
   // recurrence_pattern feeds a strict entity enum, so a free-text answer like
