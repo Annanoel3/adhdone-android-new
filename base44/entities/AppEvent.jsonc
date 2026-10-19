@@ -4,7 +4,7 @@
   "properties": {
     "event": {
       "type": "string",
-      "description": "What happened, as a short machine name: session_start, session_end, page_view, task_created, task_create_failed, task_completed, calendar_sync, calendar_sync_failed, app_error, duplicate_detected."
+      "description": "What happened, as a short machine name: session_start, session_end, page_view, task_created, task_create_failed, task_completed, calendar_sync, calendar_sync_failed, app_error, duplicate_detected, alarm_choice (every choice made on an alarm or a reminder's notification, as the phone reports it to cancelTaskNotifications; props: task_id, choice snooze | dismiss | ignored | closed | later, at, how, minutes, report_id, task_gone; the owner health check counts missed alarms from these)."
     },
     "user_email": {
       "type": "string",
