@@ -1254,9 +1254,43 @@ const hhmmLabel = (hhmm) => {
   return `${h % 12 || 12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`;
 };
 
+// It also asks anyone whose quiet hours look like they miss when they sleep
+// (Anna, Oct 18 2026: "If someone says they work the night shift, prompt them
+// to make new quiet hours. Next time she opens, lets prompt that by quietly
+// addressing that the app may be sending her notifications at times she does
+// not prefer"). checkQuietHoursFit judges that from what they told the app
+// about themselves, their quiet hours and their work hours, only when one of
+// those has changed since it last looked, and keeps the answer on the profile
+// as quiet_hours_fit. Keep these, Save or closing it marks it answered, so it
+// only comes back if one of those changes and the hours look wrong again.
+// The same as fitKey in base44/functions/checkQuietHoursFit: change both
+// together.
+const fitKey = (u) => JSON.stringify([
+  String(u?.about_me || '').trim(),
+  u?.quiet_hours_enabled !== false,
+  u?.quiet_hours_start || '22:00',
+  u?.quiet_hours_end || '08:00',
+  u?.work_schedule_mode || 'fixed',
+  (Array.isArray(u?.work_fixed_days) ? u.work_fixed_days : [])
+    .map((d) => [Number(d?.day), d?.arrive_by || '', d?.ends_at || '']),
+]);
+// The Layout (and this popup with it) mounts again on every page, often before
+// the account record catches up: so this open's answer, the key last answered
+// here, and when it last looked are kept outside the component. It looks at
+// most every half hour, so something they type in mid-setup is asked about on
+// a later open, not in the middle of it.
+let fitThisOpen = null;
+let fitAnsweredKey = null;
+let fitLookedAt = 0;
+const FIT_LOOK_GAP_MS = 30 * 60 * 1000;
+
 export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
   const dark = theme === 'dark';
   const [wanted, setWanted] = useState(false);
+  // 'review' (quiet_hours_review_pending) or 'fit' (their hours look wrong).
+  const [mode, setMode] = useState('review');
+  const [fit, setFit] = useState(null);
+  const [enabledWas, setEnabledWas] = useState(true);
   const [start, setStart] = useState('22:00');
   const [end, setEnd] = useState('08:00');
   const [was, setWas] = useState({ start: '22:00', end: '08:00' });
@@ -1277,12 +1311,22 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
     // is refreshed mid-wait (that happens often) — only if this goes away.
     if (!user || checked.current) return;
     checked.current = true;
-    if (user.quiet_hours_review_pending !== true) return;
+    const review = user.quiet_hours_review_pending === true;
+    if (!review) {
+      // Nothing it could judge from, or it looked a moment ago: nothing to ask.
+      const hasWork = (Array.isArray(user.work_fixed_days) && user.work_fixed_days.length > 0) ||
+        user.work_schedule_mode === 'varies';
+      if (!String(user.about_me || '').trim() && !hasWork) return;
+      if (Date.now() - fitLookedAt < FIT_LOOK_GAP_MS) return;
+      fitLookedAt = Date.now();
+    }
     const s = user.quiet_hours_start || '22:00';
     const e = user.quiet_hours_end || '08:00';
     setStart(s);
     setEnd(e);
     setWas({ start: s, end: e });
+    setEnabledWas(user.quiet_hours_enabled !== false);
+    setMode(review ? 'review' : 'fit');
     // The Tasks walkthrough opens on its own the first app open after setup,
     // from Home. Same test it uses; when it's due, wait for it to open (it
     // marks itself seen as it does), and the turn below then waits for it to
@@ -1295,6 +1339,27 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
       (!!user.about_me || isStepDone(ONBOARDING_STEPS.catchUp)) &&
       pageRef.current === 'Home';
     (async () => {
+      if (!review) {
+        const key = fitKey(user);
+        let f = fitThisOpen && fitThisOpen.key === key ? fitThisOpen
+          : (user.quiet_hours_fit && user.quiet_hours_fit.key === key ? user.quiet_hours_fit : null);
+        if (!f) {
+          try {
+            const res = await base44.functions.invoke('checkQuietHoursFit', {});
+            f = res?.data && typeof res.data.fits === 'boolean' ? res.data : null;
+          } catch (err) {
+            f = null;
+          }
+          if (f) fitThisOpen = f;
+        }
+        if (!f || f.fits !== false || f.answered_key === f.key || fitAnsweredKey === f.key) return;
+        if (!mounted.current) return;
+        setFit(f);
+        if (f.start && f.end) {
+          setStart(f.start);
+          setEnd(f.end);
+        }
+      }
       if (walkthroughDue) {
         const began = Date.now();
         while (mounted.current && !localStorage.getItem(seenKey('Tasks')) && Date.now() - began < 30000) {
@@ -1311,22 +1376,41 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
     setError('');
     try {
       if (save) {
-        const enabled = user?.quiet_hours_enabled !== false;
+        // Picking hours here because theirs looked wrong means they want them on.
+        const enabled = mode === 'fit' ? true : user?.quiet_hours_enabled !== false;
         localStorage.setItem('quiet_hours_enabled', enabled ? 'true' : 'false');
         localStorage.setItem('quiet_hours_start', start);
         localStorage.setItem('quiet_hours_end', end);
-        await base44.auth.updateMe({
+        const changes = {
           quiet_hours_enabled: enabled,
           quiet_hours_start: start,
           quiet_hours_end: end,
           quiet_hours_review_pending: false,
-        });
+        };
+        // Hours they picked themselves: answered, and nothing to judge again
+        // until something else changes.
+        const picked = mode === 'fit' && fit ? fitKey({ ...user, ...changes }) : null;
+        if (picked) {
+          changes.quiet_hours_fit = {
+            ...fit, key: picked, fits: true, start: null, end: null, by: 'them',
+            at: new Date().toISOString(), answered_key: picked,
+          };
+        }
+        await base44.auth.updateMe(changes);
+        if (picked) {
+          fitAnsweredKey = picked;
+          fitThisOpen = changes.quiet_hours_fit;
+        }
         if (enabled) {
           await base44.functions.invoke('applyQuietHours', { quietStart: start, quietEnd: end }).catch(() => {});
         }
         // Same as Settings: nothing booked on the phone may ring inside the
         // new window.
         refreshAlarms().catch(() => {});
+      } else if (mode === 'fit' && fit) {
+        // Asked once for these hours and these words; not held open on a save.
+        fitAnsweredKey = fit.key;
+        base44.auth.updateMe({ quiet_hours_fit: { ...fit, answered_key: fit.key } }).catch(() => {});
       } else {
         await base44.auth.updateMe({ quiet_hours_review_pending: false });
       }
@@ -1338,7 +1422,7 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
     }
   };
 
-  const changed = start !== was.start || end !== was.end;
+  const changed = start !== was.start || end !== was.end || (mode === 'fit' && !enabledWas);
 
   return (
     <Dialog open={shown} onOpenChange={(o) => { if (!o && !saving) finish(false); }}>
@@ -1349,10 +1433,28 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
             Your quiet hours
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
-            Reminders and alarms stay silent during your quiet hours, unless you set a
-            time inside them yourself, like a 5 AM flight. Right now yours are{' '}
-            {hhmmLabel(was.start)} to {hhmmLabel(was.end)}, so the app's own reminders can
-            start as early as {hhmmLabel(was.end)}. Want to change them?
+            {mode === 'fit' ? (
+              <>
+                ADHDone might be sending you reminders at times that don't suit you.{' '}
+                {enabledWas ? (
+                  <>
+                    Right now your quiet hours are {hhmmLabel(was.start)} to {hhmmLabel(was.end)},
+                    so reminders and alarms can start at {hhmmLabel(was.end)}.
+                  </>
+                ) : (
+                  <>Right now your quiet hours are off, so reminders and alarms can come at any hour.</>
+                )}{' '}
+                If you sleep at other times, set your quiet hours to match.
+                {fit?.start && fit?.end ? ' We filled in times that might suit you better, so change them if they’re off.' : ''}
+              </>
+            ) : (
+              <>
+                Reminders and alarms stay silent during your quiet hours, unless you set a
+                time inside them yourself, like a 5 AM flight. Right now yours are{' '}
+                {hhmmLabel(was.start)} to {hhmmLabel(was.end)}, so the app's own reminders can
+                start as early as {hhmmLabel(was.end)}. Want to change them?
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
