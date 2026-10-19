@@ -62,6 +62,8 @@ function AboutYouCard({ user, theme, onSaved }) {
       // The name IS the username (display_name), the same field the welcome
       // chat sets. The handle (@name1234) is left alone — it is minted once.
       await base44.auth.updateMe({ preferred_name: n, display_name: n, about_me: a });
+      // Their quiet hours follow what they just told us, right away (checkQuietHoursFit; Anna, Oct 19 2026).
+      base44.functions.invoke('checkQuietHoursFit', {}).catch(() => {});
       setNote(''); showSaved();
       if (onSaved) await onSaved();
     } catch (e) {
