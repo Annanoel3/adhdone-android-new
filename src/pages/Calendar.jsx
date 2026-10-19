@@ -26,7 +26,7 @@ import KeepAppOpenNote from '@/components/shared/KeepAppOpenNote';
 import FirstUseDialog, { firstUseSeen, markFirstUseSeen } from '@/components/onboarding/FirstUseDialog';
 import {
   runCalendarSync, maybeAutoSync, getInFlightSync, setCalendarConnected,
-  hasDeviceCalendars, listDeviceCalendars, requestDeviceCalendarPermission, runDeviceCalendarSync,
+  hasDeviceCalendars, listDeviceCalendars, requestDeviceCalendarPermission, runDeviceCalendarSync, handPhoneCalendars,
 } from '@/lib/calendarSync';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
@@ -173,6 +173,9 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
     saveChainRef.current = saveChainRef.current
       .then(() => base44.auth.updateMe({ device_calendar_ids: Array.from(chosenRef.current) }))
       .then(() => {
+        // The phone watches these calendars from now on, app closed too
+        // (none ticked: it stops).
+        handPhoneCalendars(Array.from(chosenRef.current));
         // A newly ticked calendar imports in the background; unticking only
         // stops future syncs — what was already imported stays as tasks.
         if (adding) sync(Array.from(chosenRef.current));
