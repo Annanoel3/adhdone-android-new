@@ -637,6 +637,7 @@ Deno.serve(async (req) => {
           aboutMe: user.about_me || '',
           avoidTolls: user.commute_avoid_tolls === true,
           nudgeHistory: nudgeHistoryFor(schedule, todayStr, dayOf),
+          pastNudges: pastNudgesFor(schedule),
           queued,
           // Nudges that went out in the last 45 minutes: new ones keep their distance.
           recentSent: schedule
@@ -1251,6 +1252,33 @@ async function alreadyInLedger(base44: any, email: string, entry: any): Promise<
   }
 }
 
+// Per task: what went out about it this past week (the sent nudges kept on the
+// person, HISTORY_KEEP_MS), with the words, newest first. Smart Reminders used
+// to be told only when it last brought a task up, never what it said, so it
+// kept sending the same thing at the same times: Sally, who has alarms on, got
+// "Give the oil room clean out two minutes … one small area" around 7:40 AM and
+// 4:10 PM nearly every day Oct 13–18 2026 while she snoozed it 4 times, tapped
+// Later, let it ring out and pressed Home on it. Anna's rule: once a task has
+// been put off 3 or more times it must stop getting the same notifications
+// (Oct 18 2026: "If I have a rule and smart reminders isnt following it... why
+// would you not strive to follow my rule").
+function pastNudgesFor(schedule: any[]) {
+  const out = new Map<string, { at: number; body: string }[]>();
+  for (const e of schedule || []) {
+    if (!e?.sent || e.skipped_reason || e.type === 'roundup') continue;
+    const at = utcMs(e.sent_at || e.send_at);
+    const body = String(e.body || '').replace(/\s+/g, ' ').trim();
+    if (!Number.isFinite(at) || !body) continue;
+    for (const id of entryTaskIds(e)) {
+      const list = out.get(id) || [];
+      list.push({ at, body });
+      out.set(id, list);
+    }
+  }
+  for (const list of out.values()) list.sort((a, b) => b.at - a.at);
+  return out;
+}
+
 // Per task: when it was nudged today, and the last time before today.
 function nudgeHistoryFor(schedule: any[], todayStr: string, dayOf: (ms: number) => string) {
   const out = new Map<string, { today: number[]; lastBefore: number }>();
@@ -1363,6 +1391,8 @@ interface PlanContext {
   aboutMe: string;
   avoidTolls: boolean;
   nudgeHistory: Map<string, { today: number[]; lastBefore: number }>;
+  // What went out about each task this past week, words included (pastNudgesFor).
+  pastNudges?: Map<string, { at: number; body: string }[]>;
   queued: any[];
   recentSent: number[];
   work: { lines: string[]; remote: boolean; quietAtWork: boolean };
@@ -1778,6 +1808,9 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       const h = nudgeHistory.get(t.id);
       if (h && h.today.length) parts.push(`you brought it up today at ${[...h.today].sort((a, b) => a - b).map(clock).join(', ')}`);
       else if (h && Number.isFinite(h.lastBefore)) parts.push(`you last brought it up ${daysAgoLabel(h.lastBefore)}`);
+      // The words and times of what already went out about it (pastNudgesFor).
+      const past = (ctx.pastNudges?.get(t.id) || []).slice(0, 10);
+      if (past.length) parts.push(`what you sent about it this past week, newest first: ${past.map((p) => `${whenLabel(p.at)}: "${p.body.slice(0, 200)}"`).join(' | ')}`);
       const react: string[] = [];
       if ((t.snooze_count || 0) > 0) react.push(`snoozed ${t.snooze_count}x`);
       if ((t.dismissed_count || 0) > 0) react.push(`swiped away or closed ${t.dismissed_count}x`);
@@ -1785,6 +1818,10 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if ((t.later_count || 0) > 0) react.push(`answered "Later" ${t.later_count}x`);
       if ((t.closed_count || 0) > 0) react.push(`closed its alarm with Home or Back ${t.closed_count}x`);
       if (react.length) parts.push(`what they did with its reminders so far: ${react.join(', ')}`);
+      // Anna's rule (see pastNudgesFor): put off 3 or more times, it stops
+      // getting the same notifications. A time they named themselves stays.
+      const putOff = (t.snooze_count || 0) + (t.dismissed_count || 0) + (t.ignored_count || 0) + (t.later_count || 0) + (t.closed_count || 0);
+      if (putOff >= 3) parts.push(`put off ${putOff} times in all, so nothing you send about it repeats the words, the angle or the time of day of what it already got${past.length ? ' (listed above)' : ''}${hhmmLabel(t.anchor_time) ? ', except the time they named' : ''}`);
       const breakMs = utcMs(t.later_until);
       if (Number.isFinite(breakMs) && breakMs > nowMs) parts.push(`they tapped Later on it; that break runs until ${clock(breakMs)}`);
       // The last thing they did with its alarm or reminder (the phone reports
@@ -1848,7 +1885,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       "delay_minutes": <minutes from now to send it, 0 for right now; nothing lands in quiet hours>,
       "title": "<2-6 words, may include one emoji that fits what the task literally says>",
       "body": "<the message itself: one or two complete sentences>",
-      "light": <true when this should arrive as a plain notification and never ring, e.g. a gentle mention of a task they tagged "no rush"; otherwise false>,
+      "light": <true only for a rare, gentle mention of a task whose tag asks for that (a tag like "no rush"); otherwise false. For someone with alarms on, everything else rings, a task they keep putting off included>,
       "roundup": <true only for the once-a-week single notification listing the tasks they parked with a tag like "play it by ear" or "waiting on X", so those aren't forgotten; otherwise false>,
       "rationale": "<a short phrase: why this, why now>"
     }
@@ -2041,7 +2078,13 @@ Return ONLY valid JSON:
         type: n.roundup === true ? 'roundup' : (n.type || 'initial'),
         // A rare, gentle mention about a task whose tag says "no rush" (the
         // prompt's A TAG ON A TASK): shown as a plain notification, never rung.
-        light: n.light === true || n.roundup === true,
+        // Only when a task it names has a tag. Anna's rule: an alarm user's
+        // alarm is never turned into a plain notification for any reason, and
+        // too many alarms is never fixed that way (Oct 7 and Oct 13 2026).
+        // Oct 13–18 2026 Smart Reminders sent 10 of Sally's 13 nudges about an
+        // untagged chore as plain notifications, to "offer a quiet, small start
+        // rather than another alarm", though she has alarms on.
+        light: n.roundup === true || (n.light === true && taskIds.some((id: any) => String(tasks.find((x: any) => x.id === id)?.tag || '').trim() !== '')),
         rationale: n.rationale || '',
         sent: false,
         sent_at: null,
