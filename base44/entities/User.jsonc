@@ -184,6 +184,10 @@
       "type": "boolean",
       "description": "Set by hand from the dashboard (never by the app) to ask this person, once, to look at their quiet hours: the next time they open the app a popup shows their current quiet hours and lets them keep or change them. Cleared as soon as they answer or close it."
     },
+    "quiet_hours_fit": {
+      "type": "object",
+      "description": "Whether their quiet hours look like they cover when they sleep, judged by checkQuietHoursFit from what they told the app about themselves, their quiet hours and their work hours: { key (what it was judged from), fits, start and end (suggested HH:MM, or null), at, answered_key (the key they last answered the quiet-hours popup for), by ('them' once they picked hours there) }. When fits is false and answered_key isn't key, the next app open asks them to set quiet hours that match when they sleep (Anna, Oct 18 2026: night shift)."
+    },
     "calendar_sync_in_progress_since": {
       "type": "string",
       "format": "date-time",
