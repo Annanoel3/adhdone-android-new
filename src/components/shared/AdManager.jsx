@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { initAdMob, showInterstitialAd, resetAdLaunchState } from '@/lib/admob';
 import { anyPopupOpen } from '@/components/onboarding/onboardingSurface';
+import { currentCaptures } from '@/lib/pendingCaptures';
 
 const AD_OPEN_KEY = 'admgr_open_count';
 const LAST_LAUNCH_KEY = 'admgr_last_launch_at';
@@ -115,6 +116,21 @@ function inGrace(signedUp, count) {
   return Date.now() - t < GRACE_DAYS * 24 * 60 * 60 * 1000;
 }
 
+// A task they just added is still being set up (sorted, split, parsed, saved).
+// An ad on top of it puts the app behind the ad half-way through (Oct 13 2026:
+// "call propane ... today" had just been sorted when a page-switch ad showed
+// 70 ms later; the task was never made, and that person never opened the app
+// again). Anna's rule: an ad never interrupts someone mid-task.
+function taskBeingSetUp() {
+  try {
+    const now = Date.now();
+    return currentCaptures().some((c) => !c.held && !c.handedOff
+      && (c.started || now - (c.createdAt || 0) < 2 * 60 * 1000));
+  } catch (e) {
+    return false;
+  }
+}
+
 function cancelPending() {
   if (pendingTimer) clearTimeout(pendingTimer);
   pendingTimer = null;
@@ -149,6 +165,8 @@ async function attempt(source) {
   pendingTimer = null;
   if (!owedThisOpen) return;
   if (document.visibilityState === 'hidden') { note(`${source}: app not on screen`); return; }
+  // Waits for the pause after the task is made (task_added) instead.
+  if (taskBeingSetUp()) { note(`${source}: a task is still being set up`); return; }
   if (inGrace(signedUpAt, launchCount)) {
     owedThisOpen = false;
     writeOwed(false);
