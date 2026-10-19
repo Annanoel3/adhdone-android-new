@@ -160,7 +160,14 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   const submitAbout = () => {
     const value = draft.trim();
     setAbout(value);
-    if (value) base44.auth.updateMe({ about_me: value }).catch(() => {});
+    // Their quiet hours follow what they just told us, right away: "I work
+    // nights" moves the starting 10 PM-8 AM to when they sleep
+    // (checkQuietHoursFit; Anna, Oct 19 2026).
+    if (value) {
+      base44.auth.updateMe({ about_me: value })
+        .then(() => base44.functions.invoke('checkQuietHoursFit', {}))
+        .catch(() => {});
+    }
     answer(value);
   };
 
