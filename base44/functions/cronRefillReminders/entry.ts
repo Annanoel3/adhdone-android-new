@@ -103,6 +103,21 @@ Deno.serve(async (req) => {
     // below can change tasks.
     const allUsers = await listAll(base44.asServiceRole.entities.User);
 
+    // The two looks below show people's tasks and emails: the owner's
+    // account only (Test Function in the editor).
+    if (body?.previewRepeats === true || body?.previewHealth === true) {
+      const me = await base44.auth.me().catch(() => null);
+      if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
+    }
+
+    // What the owner health check would tell Anna right now, sending nothing
+    // (see ownerHealthCheck).
+    if (body?.previewHealth === true) {
+      const active = await filterAll(base44.asServiceRole.entities.Task, { status: 'active' });
+      const problems = await ownerHealthCheck(base44, { allUsers, allTasks: active, now: new Date(), dryRun: true });
+      return Response.json({ success: true, problems });
+    }
+
     // A look at what the repeating-task rollover would do right now, changing
     // nothing (see REPEATING TASKS WHOSE DAY IS OVER below).
     if (body?.previewRepeats === true) {
@@ -1696,10 +1711,12 @@ async function pushOwner(base44: any, kind: string, title: string, body: string)
   }
 }
 
-async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: any[]; now: Date }) {
+async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: any[]; now: Date; dryRun?: boolean }): Promise<any[] | void> {
   const { allUsers, allTasks, now } = ctx;
   const nowMs = now.getTime();
-  const problems: { title: string; body: string }[] = [];
+  // sinceMs: told once since then (checks 9-11, about one person), instead of
+  // again every ALERT_COOLDOWN_MS.
+  const problems: { title: string; body: string; sinceMs?: number }[] = [];
   const realUser = (email: string) => !!email && !OWNER_ACCOUNTS.has(email);
   const activeLately = (u: any) => nowMs - (Date.parse(u?.last_active_at || '') || 0) < 7 * H_DAY;
   const userByEmail: Record<string, any> = {};
@@ -1887,10 +1904,151 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     problems.push({ title: '⚠️ ADHDone: due today, never reminded', body: `${unreminded.length} task(s) due today got no reminder from anything by 7 PM: ${unreminded.slice(0, 3).join('; ')}.` });
   }
 
-  // Send what's new. Each title repeats at most every ALERT_COOLDOWN_MS.
+  // 9-11. The app failing one person, told to Anna by name (Anna, Oct 19
+  //    2026, after Michelle uninstalled: "very sad we lost michelle and that
+  //    the app was not working well for her the whole time. this should have
+  //    been flagged"). Michelle wrote "i work night shift" and kept the
+  //    starting 10 PM to 8 AM quiet hours, so her alarms rang in the day while
+  //    she most likely slept; three rang out unanswered Oct 14-15, and on Oct
+  //    19 OneSignal said her phone no longer takes pushes. Nothing told Anna.
+  //    Each is told once per happening (sinceMs), not every 6 hours. Left out
+  //    with her own accounts: family who only installed it to try it.
+  const notReal = new Set([...OWNER_ACCOUNTS, 'antonio.baird1996@gmail.com', 'aleck.baird@gmail.com']);
+  const people = allUsers.filter((u: any) => u?.email && !notReal.has(u.email));
+  const msOf = (v: any) => {
+    const s = String(v || '');
+    return s ? Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`) : NaN;
+  };
+  const nameOf = (u: any) => String(u?.preferred_name || u?.full_name || u?.email || 'Someone').trim();
+  const clock12 = (hhmm: any) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
+    if (!m) return String(hhmm || '');
+    const h = Number(m[1]);
+    return `${h % 12 || 12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`;
+  };
+  const theirClock = (u: any, ms: number) => {
+    try {
+      return new Intl.DateTimeFormat('en-US', { timeZone: userTimeZone(u), weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(ms));
+    } catch (_) {
+      return new Date(ms).toISOString();
+    }
+  };
+  const quietOf = (u: any) => (u?.quiet_hours_enabled === false
+    ? 'turned off'
+    : `${clock12(u?.quiet_hours_start || '22:00')} to ${clock12(u?.quiet_hours_end || '08:00')}`);
+  const theirWords = (u: any) => {
+    const s = String(u?.about_me || '').trim().replace(/\s+/g, ' ');
+    return s ? ` They wrote: "${s.slice(0, 110)}${s.length > 110 ? '...' : ''}"` : '';
+  };
+
+  // 9. Quiet hours and what they told the app (checkQuietHoursFit): moved for
+  //    them, about to be asked to change them, or the model unsure (then they
+  //    are not asked on a guess, and Anna looks instead).
+  for (const u of people) {
+    const f = u.quiet_hours_fit;
+    if (!f || typeof f !== 'object') continue;
+    const appliedMs = msOf(f.applied?.at);
+    const atMs = msOf(f.at);
+    const why = f.why ? ` Why: ${String(f.why).slice(0, 140)}` : '';
+    if (Number.isFinite(appliedMs) && nowMs - appliedMs < 3 * H_DAY) {
+      problems.push({
+        title: `🌙 ADHDone: moved ${nameOf(u)}'s quiet hours`,
+        body: `From 10 PM to 8 AM to ${clock12(f.applied.start)} to ${clock12(f.applied.end)}, going by what they told the app. ${f.applied.told ? 'They have seen the change.' : 'The app tells them the next time they open it.'}${theirWords(u)} ${u.email}`,
+        sinceMs: appliedMs,
+      });
+    } else if (Number.isFinite(atMs) && nowMs - atMs < 3 * H_DAY && f.answered_key !== f.key && f.fits === false) {
+      problems.push({
+        title: `🌙 ADHDone: ${nameOf(u)}'s quiet hours may miss their sleep`,
+        body: `Their quiet hours are ${quietOf(u)}. The app asks them to set ones that fit when they open it${f.start && f.end ? ` (it suggests ${clock12(f.start)} to ${clock12(f.end)})` : ''}.${why}${theirWords(u)} ${u.email}`,
+        sinceMs: atMs,
+      });
+    } else if (Number.isFinite(atMs) && nowMs - atMs < 3 * H_DAY && f.unsure === true) {
+      problems.push({
+        title: `🌙 ADHDone: not sure ${nameOf(u)}'s quiet hours fit`,
+        body: `Their quiet hours are ${quietOf(u)}. The model thinks they may not fit when they sleep but couldn't say when that is, so they weren't asked.${why}${theirWords(u)} ${u.email}`,
+        sinceMs: atMs,
+      });
+    }
+  }
+
+  // 10. Alarms that rang out with no answer, or were left with Home or Back:
+  //     2 or more in 2 days (Task.last_alarm_choice 'ignored' / 'closed'). Any
+  //     task, finished ones too: a repeating task's ring is on that day's
+  //     copy. Two is enough to look: Chad's 6:30 AM medication alarm, a time
+  //     the app picked, rang out on Oct 18 and again on Oct 19.
+  try {
+    const recent = await filterAll(base44.asServiceRole.entities.Task, { updated_date: { $gte: new Date(nowMs - 2 * H_DAY).toISOString() } });
+    const seenTask = new Set<string>();
+    const missedBy: Record<string, { title: string; ms: number; how: string }[]> = {};
+    for (const t of [...recent, ...allTasks]) {
+      if (!t?.id || seenTask.has(t.id)) continue;
+      seenTask.add(t.id);
+      const c = t.last_alarm_choice;
+      if (!c || (c.choice !== 'ignored' && c.choice !== 'closed')) continue;
+      const ms = msOf(c.at);
+      if (!Number.isFinite(ms) || ms > nowMs || nowMs - ms > 2 * H_DAY) continue;
+      const e = t.notification_recipient_email || t.created_by;
+      if (!e || notReal.has(e) || !userByEmail[e]) continue;
+      (missedBy[e] ||= []).push({ title: String(t.title || ''), ms, how: c.choice });
+    }
+    for (const [e, list] of Object.entries(missedBy)) {
+      if (list.length < 2) continue;
+      const u = userByEmail[e];
+      list.sort((a, b) => a.ms - b.ms);
+      const rings = list.slice(-4).map((x) => `"${x.title.slice(0, 28)}" ${theirClock(u, x.ms)}${x.how === 'closed' ? ' (left with Home or Back)' : ''}`).join('; ');
+      problems.push({
+        title: `⚠️ ADHDone: ${nameOf(u)}'s alarms are going unanswered`,
+        body: `${list.length} alarms in 2 days rang out with no answer: ${rings} (their time). Quiet hours ${quietOf(u)}. ${e}`,
+        sinceMs: nowMs - 2 * H_DAY,
+      });
+    }
+  } catch (e) {
+    console.error('[HEALTH] unanswered-alarm check failed:', e);
+  }
+
+  // 11. Their phone stopped taking ADHDone's notifications: OneSignal answered
+  //     "not subscribed" after their last open (push_unreachable_at: the app
+  //     was uninstalled, or its notifications turned off), or the app saw its
+  //     notifications off when they opened it (alarm_permissions). Only people
+  //     in the app in the last 14 days: an account long gone quiet is not news.
+  for (const u of people) {
+    const lastMs = msOf(u.last_active_at);
+    if (!Number.isFinite(lastMs) || nowMs - lastMs > 14 * H_DAY) continue;
+    const goneMs = msOf(u.push_unreachable_at);
+    if (Number.isFinite(goneMs) && goneMs > lastMs && nowMs - goneMs < 2 * H_DAY) {
+      problems.push({
+        title: `📵 ADHDone: ${nameOf(u)}'s phone stopped taking notifications`,
+        body: `OneSignal said ${theirClock(u, goneMs)} (their time) that their phone no longer takes ADHDone's pushes: the app was uninstalled, or its notifications were turned off. Last in the app ${theirClock(u, lastMs)}. ${u.email}`,
+        sinceMs: lastMs,
+      });
+      continue;
+    }
+    const perm = u.alarm_permissions;
+    const permMs = msOf(perm?.checked_at);
+    if (perm?.notifications === false && Number.isFinite(permMs) && nowMs - permMs < 2 * H_DAY) {
+      problems.push({
+        title: `📵 ADHDone: ${nameOf(u)} has notifications off`,
+        body: `When they opened the app ${theirClock(u, permMs)} (their time), ADHDone's notifications were off on their phone, so no reminder or alarm can reach them. ${u.email}`,
+        sinceMs: nowMs - 7 * H_DAY,
+      });
+    }
+  }
+
+  // A look at what would go out, sending nothing ({ previewHealth: true }).
+  if (ctx.dryRun) {
+    const out: any[] = [];
+    for (const p of problems) {
+      const told = await sentToOwner(base44, 'owner_alert', p.title, p.sinceMs ?? nowMs - ALERT_COOLDOWN_MS).catch(() => null);
+      out.push({ ...p, sinceMs: p.sinceMs ? new Date(p.sinceMs).toISOString() : null, alreadyTold: told });
+    }
+    return out;
+  }
+
+  // Send what's new. Each title repeats at most every ALERT_COOLDOWN_MS, or
+  // is told once since its sinceMs.
   for (const p of problems) {
     try {
-      if (await sentToOwner(base44, 'owner_alert', p.title, nowMs - ALERT_COOLDOWN_MS)) continue;
+      if (await sentToOwner(base44, 'owner_alert', p.title, p.sinceMs ?? nowMs - ALERT_COOLDOWN_MS)) continue;
       await pushOwner(base44, 'owner_alert', p.title, p.body);
       console.log(`[HEALTH] alerted the owner: ${p.title}`);
     } catch (e) {
