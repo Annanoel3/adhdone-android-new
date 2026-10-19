@@ -114,8 +114,8 @@ Deno.serve(async (req) => {
     // (see ownerHealthCheck).
     if (body?.previewHealth === true) {
       const active = await filterAll(base44.asServiceRole.entities.Task, { status: 'active' });
-      const problems = await ownerHealthCheck(base44, { allUsers, allTasks: active, now: new Date(), dryRun: true });
-      return Response.json({ success: true, problems });
+      const look: any = await ownerHealthCheck(base44, { allUsers, allTasks: active, now: new Date(), dryRun: true });
+      return Response.json({ success: true, ...look });
     }
 
     // A look at what the repeating-task rollover would do right now, changing
@@ -1711,7 +1711,7 @@ async function pushOwner(base44: any, kind: string, title: string, body: string)
   }
 }
 
-async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: any[]; now: Date; dryRun?: boolean }): Promise<any[] | void> {
+async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: any[]; now: Date; dryRun?: boolean }): Promise<any> {
   const { allUsers, allTasks, now } = ctx;
   const nowMs = now.getTime();
   // sinceMs: told once since then (checks 9-11, about one person), instead of
@@ -1981,6 +1981,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   //     ring in both is counted once. Two is enough to look: Chad's 6:30 AM
   //     medication alarm, a time the app picked, rang out on Oct 18 and again
   //     on Oct 19.
+  let alarmLogRows: number | null = null;
   try {
     const sinceIso = new Date(nowMs - 2 * H_DAY).toISOString();
     const [recent, logged] = await Promise.all([
@@ -2005,6 +2006,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       if (reportId) seenRing.add(`r|${reportId}`);
       (missedBy[e] ||= []).push({ taskId, ms, how: String(choice) });
     };
+    alarmLogRows = logged.length;
     for (const r of logged) {
       const p = r?.props || {};
       addRing(r.user_email, String(p.task_id || ''), p.choice, msOf(p.at), p.report_id ? String(p.report_id) : undefined);
@@ -2070,7 +2072,8 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       const told = await sentToOwner(base44, 'owner_alert', p.title, p.sinceMs ?? nowMs - ALERT_COOLDOWN_MS).catch(() => null);
       out.push({ ...p, sinceMs: p.sinceMs ? new Date(p.sinceMs).toISOString() : null, alreadyTold: told });
     }
-    return out;
+    // alarmLogRows: alarm reports read for check 10 (null: that read failed).
+    return { problems: out, alarmLogRows } as any;
   }
 
   // Send what's new. Each title repeats at most every ALERT_COOLDOWN_MS, or
