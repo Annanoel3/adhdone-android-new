@@ -138,6 +138,26 @@ export default function WidgetTaskSync({ user }) {
       .catch(() => {});
   }, [user?.id, (user?.device_calendar_ids || []).join(',')]);
 
+  // Coming back to the app: the phone calendars get another look too (on a
+  // build whose phone can't watch them in the background, at most every 10
+  // minutes; isDeviceAutoSyncDue). Anna, Oct 19 2026: "calendar still doesn't
+  // sync on it's own".
+  const calendarIdsKey = (user?.device_calendar_ids || []).join(',');
+  useEffect(() => {
+    if (!userId || !calendarIdsKey) return;
+    const ids = calendarIdsKey.split(',');
+    const onVisible = () => {
+      if (document.visibilityState !== 'visible') return;
+      maybeAutoSyncDevice({ device_calendar_ids: ids })
+        .then((res) => {
+          if (res && !res.aborted && window.Capacitor?.Plugins?.AlarmBridge) refreshAlarms();
+        })
+        .catch(() => {});
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [userId, calendarIdsKey]);
+
   // Coming back to the app (it was only in the background, so nothing above
   // re-runs): rebuild the alarm list from the tasks as they are now. A task
   // finished or deleted somewhere else, or an event the calendar moved, must
