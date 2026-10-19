@@ -80,7 +80,7 @@ Do these quiet hours fit the hours this person most likely sleeps? Judge it the 
 
 If it doesn't fit, and what they said or their work hours make their sleep reasonably clear (for example, the stretch after a night shift ends), suggest quiet hours that would cover it. Otherwise leave the suggestion empty.
 
-Answer in JSON only: {"fits": true or false, "suggest_start": "HH:MM" in 24-hour time or null, "suggest_end": "HH:MM" or null}`;
+Answer in JSON only: {"fits": true or false, "why": "one short sentence on what you went by", "suggest_start": "HH:MM" in 24-hour time or null, "suggest_end": "HH:MM" or null}`;
 
   const openai = new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') });
   const completion = await openai.chat.completions.create({
@@ -98,7 +98,8 @@ Answer in JSON only: {"fits": true or false, "suggest_start": "HH:MM" in 24-hour
   const start = isHhmm(out?.suggest_start) ? String(out.suggest_start).padStart(5, '0') : null;
   const end = isHhmm(out?.suggest_end) ? String(out.suggest_end).padStart(5, '0') : null;
   const both = !fits && start && end && start !== end;
-  return { fits, start: both ? start : null, end: both ? end : null };
+  const why = String(out?.why || '').trim().slice(0, 240);
+  return { fits, why, start: both ? start : null, end: both ? end : null };
 }
 
 export default async function(req: Request) {
@@ -124,7 +125,7 @@ export default async function(req: Request) {
       ? 'turned off, so reminders can come at any hour'
       : `${clock(isHhmm(user.quiet_hours_start) ? user.quiet_hours_start : '22:00')} to ${clock(isHhmm(user.quiet_hours_end) ? user.quiet_hours_end : '08:00')}`;
     const verdict = !aboutMe && work.length === 0
-      ? { fits: true, start: null, end: null }
+      ? { fits: true, why: '', start: null, end: null }
       : await judge(aboutMe, quietLine, work);
 
     // Still the starting hours, and a clear answer about when they sleep: use it.
@@ -139,6 +140,7 @@ export default async function(req: Request) {
         start: null,
         end: null,
         at: nowIso,
+        why: verdict.why || null,
         // told: the popup has shown them the change (QuietHoursReviewPrompt).
         applied: { from_start: '22:00', from_end: '08:00', start: verdict.start, end: verdict.end, at: nowIso, told: false },
         answered_key: null,
@@ -161,9 +163,17 @@ export default async function(req: Request) {
       return Response.json(appliedFit);
     }
 
+    // Unsure: it doesn't fit, but there is no clear stretch of sleep to offer.
+    // They are not asked on a guess (Oct 19 2026: Tabby, who set 3 AM to 10 AM
+    // herself and works 12:30 to 9:30 PM, was asked whether her hours suited
+    // her, with nothing to suggest). The owner's health check tells Anna
+    // instead (cronRefillReminders, check 9).
+    const unsure = verdict.fits === false && !(verdict.start && verdict.end);
     const fit = {
       key,
-      fits: verdict.fits,
+      fits: unsure ? true : verdict.fits,
+      unsure,
+      why: verdict.why || null,
       start: verdict.start,
       end: verdict.end,
       at: new Date().toISOString(),
