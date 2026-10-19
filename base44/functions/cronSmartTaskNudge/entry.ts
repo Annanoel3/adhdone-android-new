@@ -1745,6 +1745,8 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
   // Facts only. The brief (base44/shared/reminderBrief.ts) is the whole of the
   // instructions; nothing in here tells the planner what to do with a fact
   // (no "must be nudged", no "these reminders aren't working", no scores).
+  // The one exception is Anna's own put-off rule (pastNudgesFor; RULES.md §10,
+  // point 4).
   const briefData = (): string => {
     // A yes to "you usually do this around…" (logTaskCompletion) on any open
     // task of the family.
