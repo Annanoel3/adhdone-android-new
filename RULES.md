@@ -161,7 +161,7 @@ Before proposing ANY mechanism below, assume it exists and go read it.
 | Server-side task parsing | `base44/shared/runTaskParse.ts` + `taskParsePrompt.ts` | One parser. Never add a second one (native-side parsing was tried and rejected) |
 | On-screen messages (toasts) | `toast` from `src/components/ui/use-toast` + the `<Toaster />` in `src/App.jsx` | The ONLY toast system that is on screen. Every toast closes itself after 4 s and always has an X, and the container sits below the phone's status bar. `import { toast } from "sonner"` shows NOTHING — sonner is not mounted; never use it |
 | Notifications-off notice | `src/components/home/NotificationsOffBanner.jsx` + `myPushStatus` function | One row on Home, phone app only, shown when OneSignal reports no switched-on Android subscription for the signed-in user. Not dismissable on purpose; "Turn on" calls `NotifyBridge.requestPermission()`. Newer app builds answer from the phone via `NotifyBridge.getPermissionState()` |
-| Smart Reminders brief | `base44/shared/reminderBrief.ts` (word-for-word copy of Anna's "Reminder Brain — The Brief" doc) | The AI's whole instructions for Smart Reminders, every account since Oct 10 2026. It is shown facts only, no rules. A plan made under any other copy is dropped and redone. `{"email": "…", "preview": true}` to `cronSmartTaskNudge` shows what it was given and what it chose, saving and sending nothing. Changes only together with Anna's doc (§10) |
+| Smart Reminders brief | `base44/shared/reminderBrief.ts` (word-for-word copy of Anna's "Reminder Brain — The Brief" doc) | The AI's whole instructions for Smart Reminders, every account since Oct 10 2026. It is shown facts only, plus Anna's own put-off rule (§10, point 4). A plan made under any other copy is dropped and redone. `{"email": "…", "preview": true}` to `cronSmartTaskNudge` shows what it was given and what it chose, saving and sending nothing. Changes only together with Anna's doc (§10) |
 | Who may book a push | caller check inside `schedulePush` | Backend callers prove themselves with `internalKey` (the CRON_SECRET secret); a signed-in user may book only for their own email. Watch-only (logs, blocks nothing) until `ENFORCE_CALLER_CHECK` is flipped to true |
 
 ### Correct states that are NOT bugs
@@ -299,6 +299,17 @@ How it works, and how it must keep working:
 3. **Never trade its judgment for credits.** Don't make it look less often, reuse an old
    answer for the rest of the day, switch it to a cheaper model, or move it to InvokeLLM to
    save calls or credits. If cost is a worry, tell Anna and let her decide.
+4. **It sees what it already said, and a put-off task stops getting the same thing.** Each
+   task's line shows the words and times of every nudge sent about it this past week. Once
+   a task has been put off 3 or more times (snoozed, swiped away, rang out, Later, Home or
+   Back), its line also says that nothing sent about it repeats the words, the angle or the
+   time of day it already got (a time they named themselves stays). Anna's rule, Oct 18
+   2026: "If I have a rule and smart reminders isnt following it... why would you not
+   strive to follow my rule". Before this it only knew when it last brought a task up, and
+   Sally got nearly the same oil-room nudge at the same two times every day Oct 13–18.
+   A nudge is a plain notification instead of an alarm ("light") only when a task it names
+   has a tag; for an alarm user everything else rings (Anna, Oct 7 and Oct 13 2026: an alarm
+   is never turned into a plain notification, and too many alarms is never fixed that way).
 
 **Do not change `base44/functions/cronSmartTaskNudge`, `base44/shared/reminderBrief.ts`, the
 "Smart Task Nudge" workflow, or the `smart_nudge_*` fields on User unless Anna explicitly
