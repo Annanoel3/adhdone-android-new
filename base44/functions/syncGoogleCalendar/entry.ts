@@ -20,6 +20,7 @@ import { filterAll } from '../../shared/listAll.ts';
 import { buildEventReminderPlan, isBookableNow, isBookedId } from '../../shared/eventReminderPlan.ts';
 import { withChallengeRetry } from '../../shared/sdkRetry.ts';
 import { resolveQuietHours } from '../../shared/quietHours.ts';
+import { pushPhoneAlarms } from '../../shared/reminderTitle.ts';
 
 // Payment detection for imported calendar items. Calendar payment entries are
 // usually terse ("Discover payment", "$450 rent", "Pay water bill", "Chase"),
@@ -91,7 +92,7 @@ function spansDays(startRaw, endRaw) {
   return e > s && e.toISOString().slice(0, 10) !== s.toISOString().slice(0, 10);
 }
 
-async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone) {
+async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone, ctx: any = null) {
   const startRaw = event.start?.dateTime || event.start?.date || null;
   const endRaw = event.end?.dateTime || event.end?.date || null;
   const startChanged = (syncRec.start_time || null) !== startRaw;
@@ -181,8 +182,56 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone)
     }
   }
 
+  // The event moved in the calendar: its reminders move with it. Before this
+  // only the task's date followed, and every reminder booked for it still
+  // went out at the old time (Oct 19 2026, once the phone imports calendar
+  // changes on its own). A one-time event only, not a repeating series (its
+  // next date moves on by itself, and the hourly repeat pass owns that), and
+  // only one that still has reminders: a plan the person emptied stays empty.
+  // Its booked pushes come down first (an identical push still on the books
+  // would block the new one), then the same planner as at import plans the
+  // new time.
+  const instant = (raw: any) => (!raw || /^\d{4}-\d{2}-\d{2}$/.test(String(raw)) ? NaN : Date.parse(String(raw)));
+  const oldMs = instant(syncRec.start_time);
+  const newMs = instant(startRaw);
+  const moved = startChanged && (Number.isFinite(oldMs) && Number.isFinite(newMs)
+    ? oldMs !== newMs
+    : String(syncRec.start_time || '') !== String(startRaw || ''));
+  const oldPlan = Array.isArray(taskRec.reminder_schedule) ? taskRec.reminder_schedule : [];
+  if (ctx?.user && moved && patch.next_reminder && taskRec.reminder_interval === 'once' && taskRec.status === 'active'
+    && taskRec.classification !== 'birthday' && !(event.recurrence || []).length
+    && (!taskRec.recurrence_pattern || taskRec.recurrence_pattern === 'none')
+    && oldPlan.length > 0 && new Date(patch.next_reminder).getTime() > Date.now()) {
+    const nowMs = Date.now();
+    const booked = new Set<string>();
+    for (const e of oldPlan) {
+      const id = String(e?.notification_id || '');
+      if (id && !id.startsWith('planned_') && new Date(e?.send_at || 0).getTime() > nowMs) booked.add(id);
+    }
+    for (const id of (taskRec.onesignal_notification_ids || [])) if (id) booked.add(String(id));
+    for (const id of booked) {
+      await base44.asServiceRole.functions.invoke('cancelScheduled', { notificationId: id }).catch(() => {});
+    }
+    const fresh = await planEventReminders(base44, ctx.user, { ...taskRec, ...patch }, {
+      title: taskRec.title || event.summary || 'Untitled event',
+      isAllDay: !event.start?.dateTime,
+      location: taskRec.location || event.location || '',
+      startIsTheirs: !!event.start?.dateTime || taskRec.time_stated === true,
+      budget: ctx.budget,
+    });
+    patch.reminder_schedule = fresh.reminder_schedule || [];
+    patch.onesignal_notification_ids = fresh.onesignal_notification_ids || [];
+    // Planning failed outright: no plan is marked as built, so nothing reads
+    // the empty list as one the person chose.
+    patch.reminder_plan_built_at = fresh.reminder_plan_built_at || null;
+    if (!fresh.reminder_schedule) console.error('[syncGoogleCalendar] moved event could not be re-planned:', taskRec.id);
+    console.log('[syncGoogleCalendar] event moved in the calendar, reminders moved with it:', taskRec.id, booked.size, 'cancelled,', patch.reminder_schedule.length, 'planned');
+  }
+
   if (Object.keys(patch).length > 0) {
     await base44.asServiceRole.entities.Task.update(taskRec.id, patch);
+    // The phone's alarms for it follow now, app open or not.
+    if (ctx?.user) await pushPhoneAlarms({ ...taskRec, ...patch }, ctx.user, { before: taskRec, source: 'calendarSync' }).catch(() => {});
   }
   await base44.asServiceRole.entities.CalendarSyncedEvent.update(syncRec.id, {
     start_time: startRaw,
@@ -191,6 +240,163 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone)
     title: event.summary || syncRec.title || 'Untitled event',
   });
   return true;
+}
+
+// A phone calendar row as the phone reads it (CalendarBridge.readEvents) ->
+// the event shape this import understands. The same as deviceRowToEvent in
+// src/lib/calendarSync.js, where the app shapes the rows itself; the phone's
+// own background sync (CalendarSyncWorker, build 43 on) sends them as read, so
+// the phone doesn't carry a copy of this. Change both together.
+const utcDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+function deviceRowToEvent(row: any) {
+  if (!row || !row.id) return null;
+  const cal = String(row.calendarId || '');
+  const id = row.originalId
+    ? `device:${cal}:${row.originalId}_${row.originalInstanceTime || row.dtstart || 0}`
+    : `device:${cal}:${row.id}`;
+  const begin = Number(row.nextBegin) || Number(row.dtstart) || 0;
+  if (!begin) return null;
+  const end = Number(row.nextEnd) || Number(row.dtend) || 0;
+  const allDay = !!row.allDay;
+  const event: any = {
+    id,
+    summary: row.title || 'Untitled event',
+    description: row.description || '',
+    location: row.location || '',
+    status: 'confirmed',
+    start: allDay ? { date: utcDay(begin) } : { dateTime: new Date(begin).toISOString() },
+    recurrence: row.rrule ? [`RRULE:${row.rrule}`] : [],
+    attendees: [],
+    source: 'device',
+    calendarId: cal,
+    syncId: row.syncId ? String(row.syncId) : '',
+  };
+  if (end) event.end = allDay ? { date: utcDay(end) } : { dateTime: new Date(end).toISOString() };
+  if (row.organizer) event.organizer = { email: row.organizer };
+  return event;
+}
+
+// An imported one-time item's reminders: the plan from the shared planner (the
+// same one cronRefillReminders uses), booked now where OneSignal can take it
+// and this run still has push budget, the rest left planned for the hourly
+// job. Returns the fields to save on the task (none when planning failed).
+// Used when an item is imported, and when its start moves in the calendar.
+async function planEventReminders(base44: any, user: any, task: any, opts: { title: string; isAllDay: boolean; location: string; startIsTheirs: boolean; budget: { n: number } }): Promise<any> {
+  const out: any = {};
+  const { title, isAllDay, budget } = opts;
+  try {
+    // If the schedule generator fails, the planner still gives the event one
+    // reminder at its start — never nothing.
+    let rawReminders: any[] = [];
+    // Only an event gets a plan; anything else imported (a payment, a task)
+    // gets one reminder at its own time, or none when it's all day (Anna,
+    // Oct 12 2026: "smart reminders and events and birthdays ... and tasks
+    // that the user gave a specific time to"). No AI plan is asked for it.
+    const importedEvent = task.classification === 'event';
+    if (importedEvent) try {
+      const scheduleRes = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
+        title,
+        scheduledDateISO: task.next_reminder,
+        urgency: task.urgency,
+        classification: task.classification || 'event',
+        // An all-day event: the day before and the morning of, not "It's
+        // time" at its 9 AM anchor (Oct 12 2026).
+        noClockTime: !(task as any).event_time,
+        // Lets the "leave now" reminder be based on real drive time from home
+        // instead of a blanket hour before.
+        location: opts.location,
+        // generateReminderSchedule reads `homeOrigin`. This used to be sent as
+        // `homeZip`, which nothing reads, so an imported event with a location
+        // never got its drive-time "leave now" reminder.
+        homeOrigin: getHomeOrigin(user),
+        avoidTolls: (user as any)?.commute_avoid_tolls === true,
+        reminderWish: (task as any)?.reminder_wish || null,
+        timezone: (user as any)?.timezone || undefined,
+        // Lets an appointment's reminders offer recording notes (build 36+).
+        canRecord: (user as any)?.notes_can_record === true,
+      });
+      const scheduleData = scheduleRes?.data || scheduleRes || {};
+      rawReminders = scheduleData.reminders || [];
+    } catch (e) {
+      console.log('[syncGoogleCalendar] schedule generator failed, using the at-the-time fallback:', e.message);
+    }
+
+    let plan = buildEventReminderPlan({
+      taskId: task.id,
+      rawReminders,
+      eventStartISO: task.next_reminder,
+      title,
+      isAllDay,
+      isEvent: task.classification === 'event',
+      timeZone: (user as any)?.timezone || null,
+      // Nothing the app picked lands in their quiet hours; the event's own
+      // start, a time they set, may (RULES.md §9 Q4).
+      quiet: resolveQuietHours(user),
+      startIsTheirs: opts.startIsTheirs,
+    });
+
+    if (!importedEvent) {
+      const startMs = new Date(task.next_reminder).getTime();
+      plan = isAllDay ? [] : plan.filter((e: any) => Math.abs(new Date(e.send_at).getTime() - startMs) < 60 * 1000);
+    }
+
+    for (const entry of plan) {
+      // Out of budget or outside the window → stays planned for the hourly job.
+      if (budget.n <= 0 || !isBookableNow(entry.send_at)) continue;
+      budget.n--;
+      try {
+        const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+          internalKey: Deno.env.get('CRON_SECRET'), // proves this call comes from the app's own backend
+          toUserExternalId: user.email,
+          title: entry.notification_title,
+          body: entry.notification_body,
+          sendAtISO: entry.send_at,
+          // The type decides the buttons the phone puts on the push
+          // (TaskActions): an EVENT's reminder gets Snooze only, a
+          // check-in (night before, morning of) none, a task's Done and
+          // Snooze. Calendar events used to go out as task reminders, with
+          // Done on them (Oct 13 2026) — the same rule as
+          // multiReminderScheduler and captureToTasks now.
+          data: {
+            screen: '/TaskNotification',
+            taskId: task.id,
+            urgency: task.urgency || 'medium',
+            type: /night before|morning of/i.test(String(entry.label || ''))
+              ? 'task_checkin'
+              : (task.classification === 'event' ? 'event_reminder' : 'task_reminder'),
+          },
+          ...(task.classification === 'event' ? {} : { buttons: [
+            { id: 'snooze_15', text: 'Snooze 15 min' },
+            { id: 'snooze_60', text: 'Snooze 1 hour' },
+            { id: 'complete', text: '✅ Done' },
+          ] }),
+        });
+        const result = res?.data || res;
+        // The id goes on the entry it belongs to — never matched up by position.
+        if (result?.notificationId) entry.notification_id = result.notificationId;
+        // The minute it really went at (a heads-up moved off another push's minute).
+        if (result?.notificationId && typeof result.sendAt === 'string' && result.sendAt) entry.send_at = result.sendAt;
+        // Refused (device not subscribed, OneSignal down): every other booking
+        // this run would be refused too. Stop booking — the plans are still
+        // saved, and the hourly job books them when it can.
+        else if (result && result.success === false) budget.n = 0;
+      } catch (e) {
+        console.log('[syncGoogleCalendar] reminder scheduling failed:', e.message);
+      }
+    }
+
+    if (plan.length > 0) {
+      out.reminder_schedule = plan;
+      // Tells cronRefillReminders this task already has its server-written
+      // plan, so it never rebuilds one the user later clears.
+      out.reminder_plan_built_at = new Date().toISOString();
+      // Only real OneSignal ids go in the id list — never a placeholder.
+      out.onesignal_notification_ids = plan.map((e) => e.notification_id).filter(isBookedId);
+    }
+  } catch (e) {
+    console.log('[syncGoogleCalendar] event reminder scheduling failed:', e.message);
+  }
+  return out;
 }
 
 async function classifyEventWithAI(base44, event, user) {
@@ -387,7 +593,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
   }
 
   let created = 0, updated = 0, skipped = 0, cancelledRemoved = 0;
-  let pushBudget = MAX_REMINDERS_PER_SYNC;
+  const budget = { n: MAX_REMINDERS_PER_SYNC };
   const results = [];
 
   // --- Cancelled in Google → skip it here too ---
@@ -477,7 +683,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
       const existing = existingByGoogleId[event.id];
       const existingTask = tasksById[existing.adhd_task_id];
       if (existingTask) {
-        const didUpdate = await patchExistingTaskDates(base44, existing, existingTask, event, userTz);
+        const didUpdate = await patchExistingTaskDates(base44, existing, existingTask, event, userTz, { user, budget });
         if (didUpdate) { updated++; } else { skipped++; }
         return;
       }
@@ -897,122 +1103,23 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     // everything else stays planned (a `planned_…` placeholder id) and the hourly
     // event pass books it later. No imported event is ever left without a plan.
     if (!isBirthday && reminderInterval === 'once' && createdTask.next_reminder) {
-      try {
-        // If the schedule generator fails, the planner still gives the event one
-        // reminder at its start — never nothing.
-        let rawReminders: any[] = [];
-        // Only an event gets a plan; anything else imported (a payment, a task)
-        // gets one reminder at its own time, or none when it's all day (Anna,
-        // Oct 12 2026: "smart reminders and events and birthdays ... and tasks
-        // that the user gave a specific time to"). No AI plan is asked for it.
-        const importedEvent = createdTask.classification === 'event';
-        if (importedEvent) try {
-          const scheduleRes = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
-            title,
-            scheduledDateISO: createdTask.next_reminder,
-            urgency: createdTask.urgency,
-            classification: createdTask.classification || 'event',
-            // An all-day event: the day before and the morning of, not "It's
-            // time" at its 9 AM anchor (Oct 12 2026).
-            noClockTime: !(createdTask as any).event_time,
-            // Lets the "leave now" reminder be based on real drive time from home
-            // instead of a blanket hour before.
-            location: (createdTask as any).location || (taskRecord as any).location || '',
-            // generateReminderSchedule reads `homeOrigin`. This used to be sent as
-            // `homeZip`, which nothing reads, so an imported event with a location
-            // never got its drive-time "leave now" reminder.
-            homeOrigin: getHomeOrigin(user),
-            avoidTolls: (user as any)?.commute_avoid_tolls === true,
-            reminderWish: (createdTask as any)?.reminder_wish || null,
-            timezone: (user as any)?.timezone || undefined,
-            // Lets an appointment's reminders offer recording notes (build 36+).
-            canRecord: (user as any)?.notes_can_record === true,
-          });
-          const scheduleData = scheduleRes?.data || scheduleRes || {};
-          rawReminders = scheduleData.reminders || [];
-        } catch (e) {
-          console.log('[syncGoogleCalendar] schedule generator failed, using the at-the-time fallback:', e.message);
-        }
-
-        let plan = buildEventReminderPlan({
-          taskId: createdTask.id,
-          rawReminders,
-          eventStartISO: createdTask.next_reminder,
-          title,
-          isAllDay,
-          isEvent: createdTask.classification === 'event',
-          timeZone: (user as any)?.timezone || null,
-          // Nothing the app picked lands in their quiet hours; the event's own
-          // start, a time they set, may (RULES.md §9 Q4).
-          quiet: resolveQuietHours(user),
-          startIsTheirs: !isAllDay && ((createdTask as any).time_stated === true || (taskRecord as any)?.time_stated === true),
-        });
-
-        if (!importedEvent) {
-          const startMs = new Date(createdTask.next_reminder).getTime();
-          plan = isAllDay ? [] : plan.filter((e: any) => Math.abs(new Date(e.send_at).getTime() - startMs) < 60 * 1000);
-        }
-
-        for (const entry of plan) {
-          // Out of budget or outside the window → stays planned for the hourly job.
-          if (pushBudget <= 0 || !isBookableNow(entry.send_at)) continue;
-          pushBudget--;
-          try {
-            const res = await base44.asServiceRole.functions.invoke('schedulePush', {
-              internalKey: Deno.env.get('CRON_SECRET'), // proves this call comes from the app's own backend
-              toUserExternalId: user.email,
-              title: entry.notification_title,
-              body: entry.notification_body,
-              sendAtISO: entry.send_at,
-              // The type decides the buttons the phone puts on the push
-              // (TaskActions): an EVENT's reminder gets Snooze only, a
-              // check-in (night before, morning of) none, a task's Done and
-              // Snooze. Calendar events used to go out as task reminders, with
-              // Done on them (Oct 13 2026) — the same rule as
-              // multiReminderScheduler and captureToTasks now.
-              data: {
-                screen: '/TaskNotification',
-                taskId: createdTask.id,
-                urgency: createdTask.urgency || 'medium',
-                type: /night before|morning of/i.test(String(entry.label || ''))
-                  ? 'task_checkin'
-                  : (createdTask.classification === 'event' ? 'event_reminder' : 'task_reminder'),
-              },
-              ...(createdTask.classification === 'event' ? {} : { buttons: [
-                { id: 'snooze_15', text: 'Snooze 15 min' },
-                { id: 'snooze_60', text: 'Snooze 1 hour' },
-                { id: 'complete', text: '✅ Done' },
-              ] }),
-            });
-            const result = res?.data || res;
-            // The id goes on the entry it belongs to — never matched up by position.
-            if (result?.notificationId) entry.notification_id = result.notificationId;
-            // The minute it really went at (a heads-up moved off another push's minute).
-            if (result?.notificationId && typeof result.sendAt === 'string' && result.sendAt) entry.send_at = result.sendAt;
-            // Refused (device not subscribed, OneSignal down): every other booking
-            // this run would be refused too. Stop booking — the plans are still
-            // saved, and the hourly job books them when it can.
-            else if (result && result.success === false) pushBudget = 0;
-          } catch (e) {
-            console.log('[syncGoogleCalendar] reminder scheduling failed:', e.message);
-          }
-        }
-
-        if (plan.length > 0) {
-          finalPatch.reminder_schedule = plan;
-          // Tells cronRefillReminders this task already has its server-written
-          // plan, so it never rebuilds one the user later clears.
-          finalPatch.reminder_plan_built_at = new Date().toISOString();
-          // Only real OneSignal ids go in the id list — never a placeholder.
-          finalPatch.onesignal_notification_ids = plan.map((e) => e.notification_id).filter(isBookedId);
-        }
-      } catch (e) {
-        console.log('[syncGoogleCalendar] event reminder scheduling failed:', e.message);
-      }
+      Object.assign(finalPatch, await planEventReminders(base44, user, createdTask, {
+        title,
+        isAllDay,
+        location: (createdTask as any).location || (taskRecord as any).location || '',
+        // Nothing the app picked lands in their quiet hours; the event's own
+        // start, a time they set, may (RULES.md §9 Q4).
+        startIsTheirs: !isAllDay && ((createdTask as any).time_stated === true || (taskRecord as any)?.time_stated === true),
+        budget,
+      }));
     }
 
     await base44.asServiceRole.entities.Task.update(createdTask.id, finalPatch).catch((e) =>
       console.log('[syncGoogleCalendar] could not finalize task reminders:', e.message));
+    // Its alarms go to the phone now: an import made with the app closed (the
+    // phone's own calendar sync, CalendarSyncWorker) has no app open to rebuild
+    // them, and an alarm user's event has to ring as an alarm (PushFilter).
+    await pushPhoneAlarms({ ...createdTask, ...finalPatch }, user, { source: 'calendarSync' }).catch(() => {});
   }
 
   return { created, updated, skipped, cancelledRemoved, total_events: events.length, results, connectedEmail };
@@ -1046,11 +1153,15 @@ Deno.serve(async (req) => {
     // them here — no Google token involved. Same lock, same import pipeline.
     if (body.source === 'device') {
       step = 'device.validate';
-      if (!Array.isArray(body.events)) {
-        return Response.json({ error: 'bad_request', message: 'events[] required for a phone calendar sync' }, { status: 400 });
+      // The app sends events it shaped itself; the phone's background sync
+      // (CalendarSyncWorker) sends its calendar rows as read.
+      const fromRows = Array.isArray(body.rows);
+      if (!Array.isArray(body.events) && !fromRows) {
+        return Response.json({ error: 'bad_request', message: 'events[] or rows[] required for a phone calendar sync' }, { status: 400 });
       }
+      console.log('[syncGoogleCalendar] phone sync from', body.from === 'phone_background' ? 'the phone, app closed' : 'the app');
       const device = {
-        events: body.events.slice(0, 2500),
+        events: fromRows ? body.rows.slice(0, 2500).map(deviceRowToEvent).filter(Boolean) : body.events.slice(0, 2500),
         calendarIds: Array.isArray(body.calendarIds) ? body.calendarIds.map(String) : [],
       };
       step = 'acquireSyncLock';
