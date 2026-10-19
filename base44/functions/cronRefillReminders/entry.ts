@@ -1972,33 +1972,62 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   }
 
   // 10. Alarms that rang out with no answer, or were left with Home or Back:
-  //     2 or more in 2 days (Task.last_alarm_choice 'ignored' / 'closed'). Any
-  //     task, finished ones too: a repeating task's ring is on that day's
-  //     copy. Two is enough to look: Chad's 6:30 AM medication alarm, a time
-  //     the app picked, rang out on Oct 18 and again on Oct 19.
+  //     2 or more in 2 days. Counted from every report the phone sends (the
+  //     AppEvent 'alarm_choice' log, cancelTaskNotifications), not only each
+  //     task's last choice, which keeps one ring per task and loses it when
+  //     the task is deleted or its day rolls over (Anna, Oct 19 2026: "make
+  //     it so that we can't undercount missed alarms"). The tasks' last
+  //     choices are read too, for rings reported before the log existed; a
+  //     ring in both is counted once. Two is enough to look: Chad's 6:30 AM
+  //     medication alarm, a time the app picked, rang out on Oct 18 and again
+  //     on Oct 19.
   try {
-    const recent = await filterAll(base44.asServiceRole.entities.Task, { updated_date: { $gte: new Date(nowMs - 2 * H_DAY).toISOString() } });
-    const seenTask = new Set<string>();
-    const missedBy: Record<string, { title: string; ms: number; how: string }[]> = {};
-    for (const t of [...recent, ...allTasks]) {
-      if (!t?.id || seenTask.has(t.id)) continue;
-      seenTask.add(t.id);
+    const sinceIso = new Date(nowMs - 2 * H_DAY).toISOString();
+    const [recent, logged] = await Promise.all([
+      filterAll(base44.asServiceRole.entities.Task, { updated_date: { $gte: sinceIso } }),
+      filterAll(base44.asServiceRole.entities.AppEvent, { event: 'alarm_choice', created_date: { $gte: sinceIso } }),
+    ]);
+    const taskById: Record<string, any> = {};
+    for (const t of [...allTasks, ...recent]) if (t?.id) taskById[t.id] = t;
+    const userByLower: Record<string, any> = {};
+    for (const u of allUsers) if (u?.email) userByLower[String(u.email).toLowerCase()] = u;
+    const seenRing = new Set<string>();
+    const missedBy: Record<string, { taskId: string; ms: number; how: string }[]> = {};
+    const addRing = (email: any, taskId: string, choice: any, ms: number, reportId?: string) => {
+      if (choice !== 'ignored' && choice !== 'closed') return;
+      if (!taskId || !Number.isFinite(ms) || ms > nowMs || nowMs - ms > 2 * H_DAY) return;
+      const e = String(email || '').toLowerCase();
+      if (!e || notReal.has(e) || !userByLower[e]) return;
+      // The same ring, from the log and from the task (or sent twice).
+      const key = `${taskId}|${Math.round(ms / 1000)}`;
+      if (seenRing.has(key) || (reportId && seenRing.has(`r|${reportId}`))) return;
+      seenRing.add(key);
+      if (reportId) seenRing.add(`r|${reportId}`);
+      (missedBy[e] ||= []).push({ taskId, ms, how: String(choice) });
+    };
+    for (const r of logged) {
+      const p = r?.props || {};
+      addRing(r.user_email, String(p.task_id || ''), p.choice, msOf(p.at), p.report_id ? String(p.report_id) : undefined);
+    }
+    for (const t of Object.values(taskById)) {
       const c = t.last_alarm_choice;
-      if (!c || (c.choice !== 'ignored' && c.choice !== 'closed')) continue;
-      const ms = msOf(c.at);
-      if (!Number.isFinite(ms) || ms > nowMs || nowMs - ms > 2 * H_DAY) continue;
-      const e = t.notification_recipient_email || t.created_by;
-      if (!e || notReal.has(e) || !userByEmail[e]) continue;
-      (missedBy[e] ||= []).push({ title: String(t.title || ''), ms, how: c.choice });
+      if (c) addRing(t.notification_recipient_email || t.created_by, t.id, c.choice, msOf(c.at));
     }
     for (const [e, list] of Object.entries(missedBy)) {
       if (list.length < 2) continue;
-      const u = userByEmail[e];
+      const u = userByLower[e];
       list.sort((a, b) => a.ms - b.ms);
-      const rings = list.slice(-4).map((x) => `"${x.title.slice(0, 28)}" ${theirClock(u, x.ms)}${x.how === 'closed' ? ' (left with Home or Back)' : ''}`).join('; ');
+      const shown = list.slice(-4);
+      for (const x of shown) {
+        if (!taskById[x.taskId]) taskById[x.taskId] = (await base44.asServiceRole.entities.Task.get(x.taskId).catch(() => null)) || { title: null };
+      }
+      const rings = shown.map((x) => {
+        const title = taskById[x.taskId]?.title;
+        return `${title ? `"${String(title).slice(0, 28)}"` : 'a deleted task'} ${theirClock(u, x.ms)}${x.how === 'closed' ? ' (left with Home or Back)' : ''}`;
+      }).join('; ');
       problems.push({
         title: `⚠️ ADHDone: ${nameOf(u)}'s alarms are going unanswered`,
-        body: `${list.length} alarms in 2 days rang out with no answer: ${rings} (their time). Quiet hours ${quietOf(u)}. ${e}`,
+        body: `${list.length} alarms in 2 days rang out with no answer${list.length > shown.length ? `, the last ${shown.length}` : ''}: ${rings} (their time). Quiet hours ${quietOf(u)}. ${u.email}`,
         sinceMs: nowMs - 2 * H_DAY,
       });
     }
