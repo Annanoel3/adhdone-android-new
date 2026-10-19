@@ -1263,6 +1263,10 @@ const hhmmLabel = (hhmm) => {
 // those has changed since it last looked, and keeps the answer on the profile
 // as quiet_hours_fit. Keep these, Save or closing it marks it answered, so it
 // only comes back if one of those changes and the hours look wrong again.
+// When their quiet hours were still the starting 10 PM to 8 AM and the model
+// was clear about when they sleep, checkQuietHoursFit has already moved them
+// (Anna, Oct 19 2026: what they tell the app has to be acted on); then this
+// says so instead of asking, once, with the new hours ready to change.
 // The same as fitKey in base44/functions/checkQuietHoursFit: change both
 // together.
 const fitKey = (u) => JSON.stringify([
@@ -1352,12 +1356,30 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
           }
           if (f) fitThisOpen = f;
         }
-        if (!f || f.fits !== false || f.answered_key === f.key || fitAnsweredKey === f.key) return;
-        if (!mounted.current) return;
-        setFit(f);
-        if (f.start && f.end) {
-          setStart(f.start);
-          setEnd(f.end);
+        if (f && f.applied && f.applied.told !== true && fitAnsweredKey !== f.key) {
+          // Already moved to when they sleep: the phone follows now, and the
+          // popup tells them.
+          if (!mounted.current) return;
+          setFit(f);
+          setMode('applied');
+          setStart(f.applied.start);
+          setEnd(f.applied.end);
+          setWas({ start: f.applied.start, end: f.applied.end });
+          setEnabledWas(true);
+          try {
+            localStorage.setItem('quiet_hours_enabled', 'true');
+            localStorage.setItem('quiet_hours_start', f.applied.start);
+            localStorage.setItem('quiet_hours_end', f.applied.end);
+          } catch (err) { /* storage off */ }
+          refreshAlarms().catch(() => {});
+        } else {
+          if (!f || f.fits !== false || f.answered_key === f.key || fitAnsweredKey === f.key) return;
+          if (!mounted.current) return;
+          setFit(f);
+          if (f.start && f.end) {
+            setStart(f.start);
+            setEnd(f.end);
+          }
         }
       }
       if (walkthroughDue) {
@@ -1377,7 +1399,7 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
     try {
       if (save) {
         // Picking hours here because theirs looked wrong means they want them on.
-        const enabled = mode === 'fit' ? true : user?.quiet_hours_enabled !== false;
+        const enabled = mode === 'fit' || mode === 'applied' ? true : user?.quiet_hours_enabled !== false;
         localStorage.setItem('quiet_hours_enabled', enabled ? 'true' : 'false');
         localStorage.setItem('quiet_hours_start', start);
         localStorage.setItem('quiet_hours_end', end);
@@ -1389,11 +1411,12 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
         };
         // Hours they picked themselves: answered, and nothing to judge again
         // until something else changes.
-        const picked = mode === 'fit' && fit ? fitKey({ ...user, ...changes }) : null;
+        const picked = (mode === 'fit' || mode === 'applied') && fit ? fitKey({ ...user, ...changes }) : null;
         if (picked) {
           changes.quiet_hours_fit = {
             ...fit, key: picked, fits: true, start: null, end: null, by: 'them',
             at: new Date().toISOString(), answered_key: picked,
+            ...(fit.applied ? { applied: { ...fit.applied, told: true } } : {}),
           };
         }
         await base44.auth.updateMe(changes);
@@ -1407,10 +1430,13 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
         // Same as Settings: nothing booked on the phone may ring inside the
         // new window.
         refreshAlarms().catch(() => {});
-      } else if (mode === 'fit' && fit) {
-        // Asked once for these hours and these words; not held open on a save.
+      } else if ((mode === 'fit' || mode === 'applied') && fit) {
+        // Asked (or told) once for these hours and these words; not held open
+        // on a save.
         fitAnsweredKey = fit.key;
-        base44.auth.updateMe({ quiet_hours_fit: { ...fit, answered_key: fit.key } }).catch(() => {});
+        base44.auth.updateMe({
+          quiet_hours_fit: { ...fit, answered_key: fit.key, ...(fit.applied ? { applied: { ...fit.applied, told: true } } : {}) },
+        }).catch(() => {});
       } else {
         await base44.auth.updateMe({ quiet_hours_review_pending: false });
       }
@@ -1433,7 +1459,13 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
             Your quiet hours
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
-            {mode === 'fit' ? (
+            {mode === 'applied' ? (
+              <>
+                Going by what you told us, we moved your quiet hours to {hhmmLabel(was.start)} to{' '}
+                {hhmmLabel(was.end)}, so reminders and alarms stay silent while you're most likely
+                asleep. If you sleep at other times, change them here.
+              </>
+            ) : mode === 'fit' ? (
               <>
                 ADHDone might be sending you reminders at times that don't suit you.{' '}
                 {enabledWas ? (
@@ -1487,7 +1519,7 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
         </p>
         <div className="flex gap-2 pt-1">
           <Button variant="outline" onClick={() => finish(false)} disabled={saving} className="flex-1">
-            Keep these
+            {mode === 'applied' ? 'Looks right' : 'Keep these'}
           </Button>
           <Button onClick={() => finish(true)} disabled={saving || !changed || !start || !end} className="flex-1">
             {saving ? 'Saving…' : 'Save'}
