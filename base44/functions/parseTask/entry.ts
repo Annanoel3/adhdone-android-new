@@ -146,7 +146,7 @@ const PARSER_CHECKS: { text: string; saidAt: number; expect: Record<string, any>
   // A link the task needs goes in notes, and neither it nor the time zone is
   // in the title (Anna, Oct 19 2026: this became "Video session with your
   // therapist (CDT; betterhelp.com/s/c248xy5qjem6)").
-  { text: "A Video Session with your therapist is scheduled for Tuesday, Oct 20 at 11:00am CDT at betterhelp.com/s/c248xy5qjem6.", saidAt: said("2026-10-18T20:29:00-05:00"), expect: { title: (v: any) => typeof v === "string" && !/betterhelp|CDT/i.test(v), notes: (v: any) => typeof v === "string" && v.includes("betterhelp.com/s/c248xy5qjem6"), target_date: "2026-10-20", target_time: "11:00" } },
+  { text: "A Video Session with your therapist is scheduled for Tuesday, Oct 20 at 11:00am CDT at betterhelp.com/s/c248xy5qjem6.", saidAt: said("2026-10-18T20:29:00-05:00"), expect: { title: (v: any) => typeof v === "string" && !/betterhelp|CDT/i.test(v), notes: (v: any) => typeof v === "string" && v.includes("betterhelp.com/s/c248xy5qjem6") && !/CDT|time zone/i.test(v), target_date: "2026-10-20", target_time: "11:00" } },
   { text: "call propane 530-477-7854 today", saidAt: said("2026-10-13T08:46:00-07:00"), expect: { title: (v: any) => typeof v === "string" && v.includes("530-477-7854"), target_date: "2026-10-13", deadline_style: "by" } },
   // A party that runs past midnight is one night, not a two-day range: this one
   // showed on its card as "Nov 1 – Nov 2" (Anna, Oct 17 2026).
