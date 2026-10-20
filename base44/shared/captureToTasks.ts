@@ -153,6 +153,13 @@ export function buildTaskRecord(
   };
 
   if (parsed.location) record.location = parsed.location;
+  // The business it involves, so its opening hours are looked up and
+  // reminders land while it's open: the app's own capture always saved it
+  // (taskCreationPipeline.js), this one never did.
+  if (parsed.business_name) record.business_name = parsed.business_name;
+  // A link the task needs goes in its notes, not its title (Anna, Oct 19
+  // 2026: "This link should have ended up in notes").
+  if (parsed.notes) record.notes = parsed.notes;
   if (nextReminder) record.next_reminder = nextReminder;
   if (dueISO) record.due_date = dueISO;
   if (eventISO && parsed.target_time) record.event_time = eventISO;
