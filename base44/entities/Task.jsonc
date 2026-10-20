@@ -323,7 +323,16 @@
     "later_until": {
       "type": "string",
       "format": "date-time",
-      "description": "A break the person asked for by tapping Later on this task's alarm: nothing about the task (smart nudges, planned reminders, rhythm pings, phone alarms) until this time. The first Later in a day gives three hours; a second Later the same day runs until tomorrow morning. Set by the app when the phone reports the tap; read by the nudge planner, the reminder refill and the alarm sync."
+      "description": "A break the person asked for by saying \"not now\" to this task (Later on its alarm or reminder, or a snooze they picked): nothing about the task (smart nudges, planned reminders, rhythm pings, phone alarms) until this time, except the time they set for it today. How long depends on its priority and how many \"not now\"s it had today (not_now_count; cancelTaskNotifications notNowUntil, Anna's table, Oct 20 2026). Read by the nudge planner, the reminder refill and the alarm sync."
+    },
+    "not_now_day": {
+      "type": "string",
+      "description": "The day (YYYY-MM-DD, in the owner's time zone) that not_now_count counts. A different day means none yet today."
+    },
+    "not_now_count": {
+      "type": "number",
+      "default": 0,
+      "description": "How many times on not_now_day the person said \"not now\" to this task: each Later, and each run of snoozes (snoozed again when it rang back counts once). Sets the length of the next break (later_until): the 3rd for a low or medium task, the 4th for a high or urgent one, ends it for the day."
     },
     "quiet_hours_exempt": {
       "type": "boolean",
