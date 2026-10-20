@@ -43,6 +43,7 @@ const TASK_PARSE_SCHEMA = {
     title: { type: "string" },
     location: { type: ["string", "null"] },
     business_name: { type: ["string", "null"] },
+    notes: { type: ["string", "null"] },
     urgency: { type: "string", enum: ["low", "medium", "high", "urgent"] },
     energy_required: { type: "string", enum: ["low", "medium", "high"] },
     classification: { type: "string", enum: ["task", "event", "birthday", "payment"] },
@@ -67,7 +68,7 @@ const TASK_PARSE_SCHEMA = {
     recurrence_days: { type: ["array", "null"], items: { type: "integer" } },
   },
   required: [
-    "title", "location", "business_name", "urgency", "energy_required", "classification",
+    "title", "location", "business_name", "notes", "urgency", "energy_required", "classification",
     "target_date", "target_time", "time_stated", "end_date", "due_date",
     "user_asked_to_repeat_every", "repeat_words", "recurrence_pattern", "deadline_style",
     "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
@@ -239,6 +240,11 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   // trimmed, or nothing — it is shown to the reminder planners verbatim.
   const wish = String(parsed?.reminder_wish || '').trim().replace(/\s+/g, ' ');
   parsed.reminder_wish = wish ? wish.slice(0, 200) : null;
+  // A link the task needs (a video-session or meeting link) is kept for the
+  // task's notes, never its title (Anna, Oct 19 2026: "This link should have
+  // ended up in notes").
+  const notes = String(parsed?.notes || '').trim();
+  parsed.notes = notes ? notes.slice(0, 1000) : null;
   // A rhythm only stands when the model can quote the words that named its
   // pace ("every hour"). "Keep reminding me until I do it" names none: the
   // wish carries it and the nudge planner keeps at them every 2-3 hours
