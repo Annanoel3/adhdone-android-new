@@ -220,8 +220,9 @@ title — the short action or plan, capitalized. Keep every person, business,
 
 notes — a web link the person will need for this task, exactly as written:
   the video-session or meeting link, the booking, check-in or form page. More
-  than one goes one per line. Nothing else goes here (a phone number, address
-  or amount stays in the title), and junk links (see above) never do.
+  than one goes one per line. Only links go here: never the time zone, a
+  remark of your own or anything else from the text (a phone number, address
+  or amount stays in the title), and never a junk link (see above).
   Otherwise null.
 
 location — a real address, business, or place taken verbatim from the text,
