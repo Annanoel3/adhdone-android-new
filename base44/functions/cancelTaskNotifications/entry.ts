@@ -9,15 +9,14 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
 import { userTimeZone, resolveQuietHours } from '../../shared/quietHours.ts';
-import { pushPhoneAlarms } from '../../shared/reminderTitle.ts';
+import { pushPhoneAlarms, phoneAlarmsFor } from '../../shared/reminderTitle.ts';
 import { judgeAlarmPairs } from '../../shared/runTaskParse.ts';
 
 // ── Mode "later": a break the person asked for ───────────────────────────────
 // Later on an alarm (or a reminder's notification) used to change nothing but a
-// count. From Oct 6 2026 it gives the task a break: the first Later in a day,
-// three hours; a second the same day, until their next morning, when their
-// quiet hours end (never shorter
-// than a break already running). Same rule as widgetBridge.js laterBreakUntil,
+// count. From Oct 6 2026 it gives the task a break, and from Oct 20 2026 a
+// snooze does too (see "Not now" below for how long). Same rule as
+// widgetBridge.js laterBreakUntil,
 // which applies it when the app syncs; the phone (1.3.14+, LaterBreak) calls
 // this the moment Later is tapped so it takes effect with the app closed.
 // Here: the task's booked pushes inside the break are cancelled (found in the
@@ -25,9 +24,8 @@ import { judgeAlarmPairs } from '../../shared/runTaskParse.ts';
 // moves to the break's end, the nudge planner is told its plan is out of date,
 // and the phone gets the task's alarm list without the break's alarms.
 const LATER_BREAK_MS = 3 * 60 * 60 * 1000;
-// A second Later's break ends at their morning: when their quiet hours end
-// (08:00 unless they changed it), next one coming, never less than the
-// three hours a first Later gives.
+// "Done for the day" ends at their morning: when their quiet hours end
+// (08:00 unless they changed it), next one coming, never less than three hours.
 
 function zoneParts(ms: number, timeZone: string) {
   const p = new Intl.DateTimeFormat('en-US', {
@@ -57,52 +55,82 @@ function atZoneTime(y: number, m: number, d: number, hour: number, timeZone: str
   return guess;
 }
 
-// Due today: its due date falls on today in their time zone ("by end of today",
-// "by 5", "today"), or, with no due date, the time they set for it does ("walk
-// the dog at 8:20").
-function dueToday(task: any, timeZone: string, nowMs: number): boolean {
-  const raw = task?.due_date ? String(task.due_date) : (task?.event_time ? String(task.event_time) : '');
-  if (!raw) return false;
-  if (raw.length <= 10) return raw === zoneDateKey(nowMs, timeZone);
-  const ms = Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(raw) ? raw : raw + 'Z');
-  return Number.isFinite(ms) && zoneDateKey(ms, timeZone) === zoneDateKey(nowMs, timeZone);
+// ── "Not now": Later, or a snooze (Anna, Oct 20 2026) ────────────────────────
+// Each time someone says "not now" to a task in a day, it gets a break, by its
+// priority (Anna's table):
+//   1st: 3 hours (low, medium), 2 hours (high), 1 hour (urgent)
+//   2nd: 3 hours (low, medium, high), 1 hour (urgent)
+//   3rd: done for the day (low, medium); 2 more hours (high, urgent)
+//   4th: done for the day (high, urgent)
+// Done for the day runs until their next morning, when their quiet hours end.
+// A snooze is one "not now" however many times in a row it's snoozed, and its
+// break starts once the snooze has rung again: the ring they asked for always
+// comes. Two things end a break early: the time they set for the task today
+// still rings (Anna, Oct 10 2026: Later on an early reminder means nothing
+// more until the named time), and a "by" deadline later today keeps one
+// reminder 30 minutes before it.
+// Until Oct 20 a task due today, or an urgent one, got no break at all (Oct 11
+// 2026, after a second Later sent "Go to PetSmart" to the next morning), and
+// every daily routine is due today: Anna's vitamins rang 6 times on Oct 19,
+// three of them after she'd said Later ("it becomes harassment once a user
+// presses a later or time button").
+const HOUR_MS = 60 * 60 * 1000;
+const NOT_NOW_STEPS: Record<string, (number | 'day')[]> = {
+  low: [3, 3, 'day'],
+  medium: [3, 3, 'day'],
+  high: [2, 3, 2, 'day'],
+  urgent: [1, 1, 2, 'day'],
+};
+
+// A time as the platform stores it (it can come back with no zone letter; UTC).
+function parseMs(v: any): number {
+  if (!v) return NaN;
+  const s = String(v);
+  return Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`);
 }
 
-function laterBreakUntil(task: any, timeZone: string, nowMs: number, owner: any): number {
-  // A task due today doesn't count for the Later rules (Anna, Oct 11 2026,
-  // after a second Later at 3:19 PM sent "Go to PetSmart", due by the end of
-  // the day, to the next morning): no break. Later only says "not this
-  // minute"; Smart Reminders decides when it comes back today. The same for
-  // an urgent task, whatever its date (Anna, Oct 11 2026: "urgent tasks should
-  // maybe not get long breaks after pressing later").
-  if (task?.urgency === 'urgent' || dueToday(task, timeZone, nowMs)) return nowMs;
-  const prevMs = task?.later_until ? new Date(task.later_until).getTime() : NaN;
-  const today = zoneDateKey(nowMs, timeZone);
-  // A break already given today (it ends today or later): this one runs
-  // until tomorrow morning.
-  const secondToday = Number.isFinite(prevMs) && zoneDateKey(prevMs, timeZone) >= today;
-  let until: number;
-  if (secondToday) {
-    // Their next morning (Anna, Oct 10 2026: not everyone's quiet hours end at
-    // 8): a Later at 2 PM comes back tomorrow morning, one at 1 AM this
-    // morning; one so close to their morning that it's under three hours away
-    // gets the three hours instead (never a whole day). It comes back as an ordinary
-    // task: Smart Reminders weighs it against everything else by priority, so
-    // it doesn't jump ahead of more urgent things (a repeating ping it already
-    // had resumes then, at its own pace).
-    const endMin = resolveQuietHours(owner).endMin;
-    until = NaN;
-    for (const dayOffset of [0, 1, 2]) {
-      const z = zoneParts(nowMs + dayOffset * 24 * 60 * 60 * 1000, timeZone);
-      const at = atZoneTime(z.y, z.m, z.d, Math.floor(endMin / 60), timeZone, endMin % 60);
-      if (at > nowMs) { until = Math.max(at, nowMs + LATER_BREAK_MS); break; }
-    }
-    if (!Number.isFinite(until)) until = nowMs + LATER_BREAK_MS;
-  } else {
-    until = nowMs + LATER_BREAK_MS;
+// Which "not now" this is today for the task (1 = the first).
+function notNowLevel(task: any, timeZone: string, atMs: number): { day: string; level: number } {
+  const day = zoneDateKey(atMs, timeZone);
+  const sofar = task?.not_now_day === day ? Math.max(0, Math.floor(Number(task?.not_now_count) || 0)) : 0;
+  return { day, level: sofar + 1 };
+}
+
+// Their next morning: when their quiet hours end (08:00 unless they changed
+// it; Anna, Oct 10 2026: not everyone's morning is 8), never less than three
+// hours away.
+function nextMorning(fromMs: number, timeZone: string, owner: any): number {
+  const endMin = resolveQuietHours(owner).endMin;
+  for (const dayOffset of [0, 1, 2]) {
+    const z = zoneParts(fromMs + dayOffset * 24 * HOUR_MS, timeZone);
+    const at = atZoneTime(z.y, z.m, z.d, Math.floor(endMin / 60), timeZone, endMin % 60);
+    if (at > fromMs) return Math.max(at, fromMs + LATER_BREAK_MS);
   }
+  return fromMs + LATER_BREAK_MS;
+}
+
+// The time they set for the task today still rings, and a "by" deadline later
+// today keeps one reminder 30 minutes before it.
+function clipToTheirTime(task: any, timeZone: string, startMs: number, untilMs: number): number {
+  const raw = task?.due_date ? String(task.due_date) : '';
+  if (!raw || raw.length <= 10 || task?.day_only_task) return untilMs;
+  const dueMs = parseMs(raw);
+  if (!Number.isFinite(dueMs) || dueMs <= startMs) return untilMs;
+  if (zoneDateKey(dueMs, timeZone) !== zoneDateKey(startMs, timeZone)) return untilMs;
+  const cap = task?.deadline_style === 'by' ? dueMs - 30 * 60 * 1000 : dueMs;
+  return cap > startMs && cap < untilMs ? cap : untilMs;
+}
+
+// When this "not now" break ends. startMs: when it starts (the tap for Later,
+// the snooze's ring for a snooze).
+function notNowUntil(task: any, timeZone: string, startMs: number, owner: any, level: number): number {
+  const steps = NOT_NOW_STEPS[String(task?.urgency || '')] || NOT_NOW_STEPS.medium;
+  const step = steps[Math.min(Math.max(1, level), steps.length) - 1];
+  let until = step === 'day' ? nextMorning(startMs, timeZone, owner) : startMs + step * HOUR_MS;
+  // Never shorter than a break already running.
+  const prevMs = parseMs(task?.later_until);
   if (Number.isFinite(prevMs) && prevMs > until) until = prevMs;
-  return until;
+  return clipToTheirTime(task, timeZone, startMs, until);
 }
 
 // When the phone says the tap happened (build 39 sends it, since a tap made
@@ -112,22 +140,17 @@ function tapTime(body: any, nowMs: number): number {
   return Number.isFinite(at) && at > nowMs - 3 * 24 * 60 * 60 * 1000 && at <= nowMs + 60 * 1000 ? Math.min(at, nowMs) : nowMs;
 }
 
-async function applyLaterBreak(base44: any, task: any, body: any, appId: string, restKey: string) {
-  const nowMs = Date.now();
-  // The phone's report queue retries until it hears back: a Later already
-  // applied is answered again, never applied twice (a second Later the same
-  // day means "until tomorrow morning").
-  const reportId = typeof body?.report_id === 'string' ? body.report_id.slice(0, 64) : '';
-  const seenIds: string[] = Array.isArray(task.alarm_report_ids) ? task.alarm_report_ids : [];
-  if (reportId && seenIds.includes(reportId)) {
-    return { success: true, taskId: task.id, later_until: task.later_until || null, duplicate: true };
-  }
-  await logAlarmChoice(base44, task.notification_recipient_email || task.created_by, { task_id: task.id, choice: 'later', atMs: tapTime(body, nowMs), report_id: reportId });
-  const owners = await base44.asServiceRole.entities.User.filter({ email: task.created_by }).catch(() => []);
-  const owner = owners?.[0] || null;
-  const timeZone = (typeof body?.timezone === 'string' && body.timezone.trim()) || userTimeZone(owner);
-  const untilMs = laterBreakUntil(task, timeZone, tapTime(body, nowMs), owner);
-  // No break (a task due today): nothing is cancelled or moved.
+// Puts a task on a break until untilMs: its booked pushes inside the break are
+// cancelled (found in the send ledger, which has every booked push with its
+// time), a rhythm's next ping moves to the break's end, the nudge planner is
+// told its plan is out of date, and the phone gets the task's alarm list
+// without the break's alarms. keepSnooze: a snooze is waiting on the phone,
+// and an empty list would take it off (AlarmScheduler.replaceTask), so then
+// nothing is sent and the phone's next sync tidies up.
+async function breakTask(base44: any, task: any, owner: any, untilMs: number, nowMs: number, extra: any, source: string, keepSnooze: boolean) {
+  const appId = String(Deno.env.get('ONESIGNAL_APP_ID') || '').trim();
+  const restKey = String(Deno.env.get('ONESIGNAL_REST_API_KEY') || '').trim();
+  // A tap that only reached us after its break was over: nothing to cancel or move.
   const noBreak = untilMs <= nowMs;
   const isRhythm = !noBreak && !!task.reminder_interval && task.reminder_interval !== 'once';
 
@@ -147,24 +170,21 @@ async function applyLaterBreak(base44: any, task: any, body: any, appId: string,
     if (e?.notification_id && !String(e.notification_id).startsWith('planned_') && at > nowMs && at < untilMs) dropIds.add(String(e.notification_id));
   }
   let cancelled = 0;
-  for (const id of dropIds) {
-    try {
-      const res = await fetch(`https://onesignal.com/api/v1/notifications/${id}?app_id=${appId}`, {
-        method: 'DELETE', headers: { 'Authorization': `Basic ${restKey}` },
-      });
-      if (res.ok) cancelled++;
-    } catch (_) { /* a push that already went is nothing to cancel */ }
+  if (appId && restKey) {
+    for (const id of dropIds) {
+      try {
+        const res = await fetch(`https://onesignal.com/api/v1/notifications/${id}?app_id=${appId}`, {
+          method: 'DELETE', headers: { 'Authorization': `Basic ${restKey}` },
+        });
+        if (res.ok) cancelled++;
+      } catch (_) { /* a push that already went is nothing to cancel */ }
+    }
   }
   // (Only the ones still ahead leave the ledger; one already sent stays on
   // the record Smart Reminders budgets from — sendLedger.ledgerCancel.)
   if (dropIds.size) await ledgerCancel(base44, Array.from(dropIds));
 
-  const fields: any = {
-    later_count: (task.later_count || 0) + 1,
-    later_until: new Date(untilMs).toISOString(),
-    last_alarm_choice: { choice: 'later', at: new Date(tapTime(body, nowMs)).toISOString(), until: new Date(untilMs).toISOString() },
-  };
-  if (reportId) fields.alarm_report_ids = [...seenIds, reportId].slice(-20);
+  const fields: any = { ...extra, later_until: new Date(untilMs).toISOString() };
   const ids = (task.onesignal_notification_ids || []).filter((id: string) => !dropIds.has(String(id)));
   if (ids.length !== (task.onesignal_notification_ids || []).length) fields.onesignal_notification_ids = ids;
   const schedule = (Array.isArray(task.reminder_schedule) ? task.reminder_schedule : []).filter((e: any) => !(e?.notification_id && dropIds.has(String(e.notification_id))));
@@ -186,10 +206,57 @@ async function applyLaterBreak(base44: any, task: any, body: any, appId: string,
   }
   // The phone's copy of the task's alarms, without the break's.
   if (owner) {
-    await pushPhoneAlarms({ ...task, ...fields }, owner, { before: task, changedAt: nowMs, source: 'laterBreak' });
+    const after = { ...task, ...fields };
+    if (!keepSnooze || phoneAlarmsFor(after, owner, nowMs).length > 0) {
+      await pushPhoneAlarms(after, owner, { before: task, changedAt: nowMs, source });
+    }
   }
-  console.log(`[cancelTaskNotifications] Later break for task ${task.id} until ${fields.later_until}: ${cancelled} push(es) cancelled`);
+  return { fields, cancelled };
+}
+
+async function applyLaterBreak(base44: any, task: any, body: any, _appId: string, _restKey: string) {
+  const nowMs = Date.now();
+  // The phone's report queue retries until it hears back: a Later already
+  // applied is answered again, never applied twice (each one counts toward
+  // the day's "not now"s).
+  const reportId = typeof body?.report_id === 'string' ? body.report_id.slice(0, 64) : '';
+  const seenIds: string[] = Array.isArray(task.alarm_report_ids) ? task.alarm_report_ids : [];
+  if (reportId && seenIds.includes(reportId)) {
+    return { success: true, taskId: task.id, later_until: task.later_until || null, duplicate: true };
+  }
+  const tapMs = tapTime(body, nowMs);
+  await logAlarmChoice(base44, task.notification_recipient_email || task.created_by, { task_id: task.id, choice: 'later', atMs: tapMs, report_id: reportId });
+  const owners = await base44.asServiceRole.entities.User.filter({ email: task.created_by }).catch(() => []);
+  const owner = owners?.[0] || null;
+  const timeZone = (typeof body?.timezone === 'string' && body.timezone.trim()) || userTimeZone(owner);
+  const notNow = notNowLevel(task, timeZone, tapMs);
+  const untilMs = notNowUntil(task, timeZone, tapMs, owner, notNow.level);
+  const extra: any = {
+    later_count: (task.later_count || 0) + 1,
+    not_now_day: notNow.day,
+    not_now_count: notNow.level,
+    last_alarm_choice: { choice: 'later', at: new Date(tapMs).toISOString(), until: new Date(untilMs).toISOString() },
+  };
+  if (reportId) extra.alarm_report_ids = [...seenIds, reportId].slice(-20);
+  const { fields, cancelled } = await breakTask(base44, task, owner, untilMs, nowMs, extra, 'laterBreak', false);
+  console.log(`[cancelTaskNotifications] Later (not now #${notNow.level} today) for task ${task.id}: break until ${fields.later_until}, ${cancelled} push(es) cancelled`);
   return { success: true, taskId: task.id, later_until: fields.later_until, canceledCount: cancelled };
+}
+
+// A snooze is a "not now" too (Anna, Oct 20 2026). Snoozed again when it rang
+// back, it's the same one; its break starts when the snooze rings again.
+async function snoozeBreak(base44: any, task: any, saved: any, owner: any, timeZone: string, atMs: number, minutes: number, untilMs: number, nowMs: number) {
+  if (!owner || task?.status !== 'active') return;
+  const backMs = Number.isFinite(untilMs) && untilMs > atMs && untilMs < atMs + 24 * HOUR_MS
+    ? untilMs
+    : atMs + Math.max(1, minutes || 10) * 60 * 1000;
+  const prevSnoozeMs = parseMs(task.snoozed_until);
+  const sameRun = Number.isFinite(prevSnoozeMs) && prevSnoozeMs <= atMs + 2 * 60 * 1000 && prevSnoozeMs >= atMs - 30 * 60 * 1000;
+  const notNow = notNowLevel(task, timeZone, atMs);
+  const level = sameRun && notNow.level > 1 ? notNow.level - 1 : notNow.level;
+  const breakUntil = notNowUntil(task, timeZone, backMs, owner, level);
+  const { fields } = await breakTask(base44, { ...task, ...saved }, owner, breakUntil, nowMs, { not_now_day: notNow.day, not_now_count: level }, 'snoozeBreak', true);
+  console.log(`[phoneReport] snooze (not now #${level} today${sameRun ? ', same run' : ''}) on task ${task.id}: break until ${fields.later_until}`);
 }
 
 // Every choice made on an alarm or a reminder's notification, one row each,
@@ -375,6 +442,15 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
     if (Number.isFinite(snoozeMs) && snoozeMs <= nowMs + 2 * 60 * 1000) fields.snoozed_until = null;
   }
   await svc.Task.update(task.id, fields);
+  // A snooze they picked is a "not now" (Anna, Oct 20 2026); Home or Back on a
+  // time they set inside quiet hours rings it again on its own, and isn't one.
+  if (choice === 'snooze' && !how) {
+    try {
+      await snoozeBreak(base44, task, fields, owner, timeZone, atMs, minutes, untilMs, nowMs);
+    } catch (e) {
+      console.error('[phoneReport] snooze break not applied:', (e as any)?.message || e);
+    }
+  }
   if (owner?.id) {
     const userFields: any = { smart_nudge_schedule_dirty: true, smart_nudge_dirty_at: nowIso };
     // The first time today they did something with a reminder: a sign they're
