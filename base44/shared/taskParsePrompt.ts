@@ -147,7 +147,9 @@ If it's messy, that's normal — reason through it:
   • The facts are scattered. The day might be in the first message and the
     address four messages later. Pull them from wherever they are.
   • Ignore the junk that came along for the ride — carrier/battery/clock
-    readouts, app buttons, timestamps, signatures, ads, URLs.
+    readouts, app buttons, timestamps, signatures, ads, and links that have
+    nothing to do with the task (unsubscribe, tracking, social media). A link
+    the task itself needs is not junk: it goes in notes (below).
   • Never echo the raw input back as the title, and never quote a message as
     the title. Write a short, natural title for the plan, like a person would
     put on their calendar.
@@ -211,8 +213,16 @@ title — the short action or plan, capitalized. Keep every person, business,
   confirmation number they typed is kept too, exactly as typed, in parentheses
   after the action ("Call propane (530-477-7854)", "Pay the water bill
   ($84.20)"): it is the thing they will need in hand when the reminder comes,
-  and dropping it loses what they wrote down. Never a single word ("Go"),
-  never a placeholder, never a whole pasted message.
+  and dropping it loses what they wrote down. A web link is never in the
+  title: it goes in notes. Neither is the time zone written with a time
+  ("11:00am CDT"): that is part of the time, not the title. Never a single
+  word ("Go"), never a placeholder, never a whole pasted message.
+
+notes — a web link the person will need for this task, exactly as written:
+  the video-session or meeting link, the booking, check-in or form page. More
+  than one goes one per line. Nothing else goes here (a phone number, address
+  or amount stays in the title), and junk links (see above) never do.
+  Otherwise null.
 
 location — a real address, business, or place taken verbatim from the text,
   and only when the person will physically go there (see above). Otherwise null.
@@ -438,6 +448,7 @@ Return JSON with exactly these keys:
   "title": string,
   "location": string | null,
   "business_name": string | null,
+  "notes": string | null,
   "urgency": "low" | "medium" | "high" | "urgent",
   "energy_required": "low" | "medium" | "high",
   "classification": "task" | "event" | "birthday" | "payment",
