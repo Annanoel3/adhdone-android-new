@@ -243,7 +243,10 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   // A link the task needs (a video-session or meeting link) is kept for the
   // task's notes, never its title (Anna, Oct 19 2026: "This link should have
   // ended up in notes").
-  const notes = String(parsed?.notes || '').trim();
+  // Only lines that are links: the model has added the time zone here too.
+  const notes = String(parsed?.notes || '').split('\n').map((l) => l.trim())
+    .filter((l) => /https?:\/\/|www\.|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b/i.test(l))
+    .join('\n');
   parsed.notes = notes ? notes.slice(0, 1000) : null;
   // A rhythm only stands when the model can quote the words that named its
   // pace ("every hour"). "Keep reminding me until I do it" names none: the
