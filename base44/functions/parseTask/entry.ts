@@ -1,3 +1,4 @@
+// Re-saved Oct 19 2026 (night) so the bundled shared/taskParsePrompt.ts and shared/runTaskParse.ts are picked up: a link the task needs (a video-session or meeting link) goes in the task's notes, never its title, and the time zone of a time stays out of the title.
 // Re-saved Oct 19 2026 (later) so the bundled shared/runTaskParse.ts is picked up: the same fix, now actually in the bundle (the first re-save went out before runTaskParse.ts was saved).
 // Re-saved Oct 19 2026 so the bundled shared/runTaskParse.ts is picked up: a time picked from a part of the day ("morning medication") is never marked as one the person stated, so it can't ring inside their quiet hours.
 // Re-saved Oct 17 2026 (evening) so the bundled shared/taskParsePrompt.ts and shared/runTaskParse.ts are picked up: an event that runs past midnight (7 PM–2 AM) is one night, not a two-day range, and a day counted from the real date instead of the said-at day gets a last look.
@@ -142,6 +143,10 @@ const PARSER_CHECKS: { text: string; saidAt: number; expect: Record<string, any>
   // 2026: this became 6:30 AM marked as stated, and rang inside the person's
   // quiet hours every morning).
   { text: "taking morning medication", saidAt: said("2026-10-16T11:30:00-05:00"), expect: { target_time: aTime, time_stated: false } },
+  // A link the task needs goes in notes, and neither it nor the time zone is
+  // in the title (Anna, Oct 19 2026: this became "Video session with your
+  // therapist (CDT; betterhelp.com/s/c248xy5qjem6)").
+  { text: "A Video Session with your therapist is scheduled for Tuesday, Oct 20 at 11:00am CDT at betterhelp.com/s/c248xy5qjem6.", saidAt: said("2026-10-18T20:29:00-05:00"), expect: { title: (v: any) => typeof v === "string" && !/betterhelp|CDT/i.test(v), notes: (v: any) => typeof v === "string" && v.includes("betterhelp.com/s/c248xy5qjem6"), target_date: "2026-10-20", target_time: "11:00" } },
   { text: "call propane 530-477-7854 today", saidAt: said("2026-10-13T08:46:00-07:00"), expect: { title: (v: any) => typeof v === "string" && v.includes("530-477-7854"), target_date: "2026-10-13", deadline_style: "by" } },
   // A party that runs past midnight is one night, not a two-day range: this one
   // showed on its card as "Nov 1 – Nov 2" (Anna, Oct 17 2026).
