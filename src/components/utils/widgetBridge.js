@@ -475,30 +475,48 @@ function laterMorningAfter(now) {
   }
   return new Date(now.getTime() + LATER_BREAK_MS);
 }
-function laterBreakUntil(t, now = new Date()) {
-  // A task due today doesn't count for the Later rules (Anna, Oct 11 2026): no
-  // break. Later only says "not this minute"; Smart Reminders decides when it
-  // comes back today. Same as cancelTaskNotifications. An urgent task, whatever
-  // its date, gets no break either.
-  if (t.urgency === 'urgent') return new Date(now);
-  const rawDue = t.due_date ? String(t.due_date) : (t.event_time ? String(t.event_time) : '');
-  const due = rawDue.length > 10 ? new Date(rawDue) : null;
-  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-  if ((rawDue.length === 10 && rawDue === todayKey) || (due && !isNaN(due.getTime()) && due.toDateString() === now.toDateString())) return new Date(now);
+// Each "not now" (Later) on a task in a day gives it a break by its priority
+// (Anna, Oct 20 2026): 1st: 3 hours (low, medium), 2 (high), 1 (urgent); 2nd:
+// 3 hours (low, medium, high), 1 (urgent); 3rd: done for the day (low,
+// medium), 2 more hours (high, urgent); 4th: done for the day. Done for the
+// day runs until their next morning. The time they set for the task today
+// still rings, and a "by" deadline later today keeps one reminder 30 minutes
+// before it. Same rule as cancelTaskNotifications (notNowUntil). Until Oct 20
+// a task due today, or an urgent one, got no break at all, and every daily
+// routine is due today.
+const NOT_NOW_STEPS = {
+  low: [3, 3, 'day'],
+  medium: [3, 3, 'day'],
+  high: [2, 3, 2, 'day'],
+  urgent: [1, 1, 2, 'day'],
+};
+function localDayKey(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+// Which "not now" this is today for the task, counting `taps` more.
+function notNowLevel(t, now = new Date(), taps = 1) {
+  const day = localDayKey(now);
+  const sofar = t.not_now_day === day ? Math.max(0, Math.floor(Number(t.not_now_count) || 0)) : 0;
+  return { day, level: sofar + Math.max(1, taps) };
+}
+function laterBreakUntil(t, now = new Date(), level = notNowLevel(t, now).level) {
+  const steps = NOT_NOW_STEPS[t.urgency] || NOT_NOW_STEPS.medium;
+  const step = steps[Math.min(Math.max(1, level), steps.length) - 1];
+  let until = step === 'day' ? laterMorningAfter(now) : new Date(now.getTime() + step * 60 * 60 * 1000);
+  // Never shorten a break that is already longer.
   const prev = t.later_until ? new Date(t.later_until) : null;
   const prevMs = prev && !isNaN(prev.getTime()) ? prev.getTime() : NaN;
-  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
-  // A break already given today (it ends today or later): this second Later
-  // runs until tomorrow morning.
-  const secondToday = !isNaN(prevMs) && prevMs >= startOfToday.getTime();
-  let until;
-  if (secondToday) {
-    until = laterMorningAfter(now);
-  } else {
-    until = new Date(now.getTime() + LATER_BREAK_MS);
-  }
-  // Never shorten a break that is already longer.
   if (!isNaN(prevMs) && prevMs > until.getTime()) until = new Date(prevMs);
+  // The time they set for it today still rings; a "by" deadline keeps one
+  // reminder 30 minutes before it.
+  const rawDue = t.due_date ? String(t.due_date) : '';
+  if (rawDue.length > 10 && !t.day_only_task) {
+    const due = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(rawDue) ? rawDue : `${rawDue}Z`);
+    if (!isNaN(due.getTime()) && due.getTime() > now.getTime() && localDayKey(due) === localDayKey(now)) {
+      const cap = t.deadline_style === 'by' ? due.getTime() - 30 * 60 * 1000 : due.getTime();
+      if (cap > now.getTime() && cap < until.getTime()) until = new Date(cap);
+    }
+  }
   return until;
 }
 
@@ -587,7 +605,10 @@ async function drainAlarmActivity(tasks) {
     let laterUntil = null;
     if (row.later > 0) {
       patch.later_count = (t.later_count || 0) + row.later;
-      laterUntil = laterBreakUntil(t);
+      const notNow = notNowLevel(t, new Date(), row.later);
+      patch.not_now_day = notNow.day;
+      patch.not_now_count = notNow.level;
+      laterUntil = laterBreakUntil(t, new Date(), notNow.level);
       patch.later_until = laterUntil.toISOString();
       try {
         Object.assign(patch, await applyLaterBreak(t, laterUntil));
