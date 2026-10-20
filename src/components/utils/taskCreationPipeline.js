@@ -314,6 +314,9 @@ export async function processAndCreateTask(inputText, opts = {}) {
         original_input: inputText,
         location: mainTaskParsed.location || null,
         business_name: mainTaskParsed.business_name || null,
+        // A link the task needs (a video-session or meeting link), never in
+        // the title (Anna, Oct 19 2026).
+        notes: mainTaskParsed.notes || null,
         description: '',
         classification: mainTaskParsed.classification || 'task',
         reminder_interval: sched.interval,
@@ -552,6 +555,9 @@ export async function processAndCreateTask(inputText, opts = {}) {
       original_input: inputText,
       location: parsed.location || null,
       business_name: parsed.business_name || null,
+      // A link the task needs (a video-session or meeting link), never in
+      // the title (Anna, Oct 19 2026).
+      notes: parsed.notes || null,
       description: '',
       classification: parsed.classification || 'task',
       reminder_interval: actualReminderInterval,
