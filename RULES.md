@@ -312,6 +312,18 @@ How it works, and how it must keep working:
    A nudge is a plain notification instead of an alarm ("light") only when a task it names
    has a tag; for an alarm user everything else rings (Anna, Oct 7 and Oct 13 2026: an alarm
    is never turned into a plain notification, and too many alarms is never fixed that way).
+5. **"Not now" gets a break, by Anna's table (Oct 20 2026).** Later, and a snooze they
+   picked (a run of snoozes counts once), are each a "not now". 1st: 3 hours for low and
+   medium, 2 for high, 1 for urgent. 2nd: 3 hours for low, medium and high, 1 for urgent.
+   3rd: done for the day for low and medium, 2 more hours for high and urgent. 4th: done
+   for the day. Done for the day runs to their next morning (quiet hours end). The time
+   they set for the task today still rings, and a "by" deadline later today keeps one
+   reminder 30 minutes before it. Code: `notNowUntil` in cancelTaskNotifications (every
+   build from 39 on) and `laterBreakUntil` in widgetBridge.js (older builds); the day's
+   count is on the task (`not_now_day`, `not_now_count`). From Oct 11 to Oct 20 a task due
+   that day, or an urgent one, got no break at all, so every daily routine came back
+   after Later as often as Smart Reminders picked it (Anna's vitamins rang 6 times on Oct
+   19: "it becomes harassment once a user presses a later or time button").
 
 **Do not change `base44/functions/cronSmartTaskNudge`, `base44/shared/reminderBrief.ts`, the
 "Smart Task Nudge" workflow, or the `smart_nudge_*` fields on User unless Anna explicitly
