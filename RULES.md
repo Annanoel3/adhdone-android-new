@@ -268,6 +268,13 @@ typed something" and "their phone rang", answer these in writing:
    heads-up, nudge and repeat ping. An app reminder that lands inside them moves to when they
    end, or is dropped if that's too late (`placeAppReminder`) — never booked as it came.
    Home or Back on one of these night alarms rings it again in 10 minutes (`throughQuiet`).
+   A time they set also never moves for another alarm, day or night: the phone's 10-minute
+   gap between two tasks' alarms (Anna, Oct 10 2026) is only for reminders the app picked.
+   Every alarm list (`phoneAlarmsFor`, `alarmSetFor`) marks those alarms `theirTime: true`
+   and starts their heading with 🔔 (builds 39–42 only know the bell); one the app picked that
+   is ringing at that moment makes way and rings 10 minutes after (build 43 on). Anna, Oct 21
+   2026, after her 10 AM call rang at 10:31 behind another task's alarm: "Events with a
+   certain time cannot be happening at a different time."
    Not everyone sleeps at night (Anna, Oct 12 2026: "night shift people exist"). Never compare
    the local clock to fixed hours (7 PM, 9 AM, 10 PM) to mean evening, morning or bedtime: their
    night is their quiet hours (the times count even with the switch off), their morning is when
