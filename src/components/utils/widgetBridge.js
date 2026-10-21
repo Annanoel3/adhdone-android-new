@@ -364,6 +364,20 @@ function bellHeading(heading, title) {
   return `🔔 ${rest}`;
 }
 
+// Alarms at times they set in the same minute ring in the order that matters
+// (the server's alarmOrder.ts keeps each task's place in alarm_order, by clock
+// time): each one after the first rings this much later per place, so the
+// phone rings it the moment the one before it is answered. Same as
+// orderWaitMs in base44/shared/reminderTitle.ts.
+const ORDER_STEP_MS = 10 * 1000;
+function orderWaitMs(t, atMs) {
+  const d = new Date(atMs);
+  const key = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const place = t?.alarm_order && typeof t.alarm_order === 'object' ? t.alarm_order[key] : null;
+  const rank = Math.max(0, Math.min(5, Math.floor(Number(place?.rank) || 0)));
+  return rank * ORDER_STEP_MS;
+}
+
 export function alarmSetFor(tasks, userDefault = alarmMode) {
   const cutoff = Date.now() - ALARM_KEEP_PAST_MS;
   const out = [];
@@ -386,7 +400,7 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
       if (inQuiet && !t.quiet_hours_exempt && !theirTime) continue;
       // Heads-ups stay regular pushes; see ringsOutLoud.
       if (!ringsOutLoud(t, m.at, m.label)) continue;
-      const alarm = { id: `${t.id}:${m.at}`, taskId: t.id, title: t.title || 'Task', at: m.at, heading: setByThem ? bellHeading(m.heading, t.title) : m.heading, body: m.body };
+      const alarm = { id: `${t.id}:${m.at}`, taskId: t.id, title: t.title || 'Task', at: setByThem ? m.at + orderWaitMs(t, m.at) : m.at, heading: setByThem ? bellHeading(m.heading, t.title) : m.heading, body: m.body };
       // It rings at that time: never moved to keep 10 minutes from another
       // task's alarm, and one the app picked that is ringing then makes way
       // for it (AlarmService: build 43 on reads theirTime, 39–42 the bell).
