@@ -1,3 +1,4 @@
+// Re-saved Oct 21 2026 so the bundled shared/reminderTitle.ts is picked up: an alarm at a time they set is marked theirTime and headed with the bell, so the phone never moves it.
 // Commute watch — the "leave now" reminder for work, plus a heads-up when
 // today's drive is running worse than it normally does.
 //
