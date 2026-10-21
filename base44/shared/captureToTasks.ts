@@ -210,7 +210,7 @@ export function trackerJudgePrompt(text: string, trackers: { id: string; name: s
 Things they already keep track of here (they log entries to these over time): ${trackers.length ? JSON.stringify(trackers) : 'none yet'}
 
 What is it? It can be more than one thing at once ("blood pressure 91 over 57 and heart rate 89" is a reading for blood pressure AND a reading for heart rate) — give one item per part, in order:
-1. An entry for one of those they already keep track of (a reading, a number, a note for it), like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<just this part, as they said it, without its name>", "note": "<see below, else null>"}. Match by meaning, not spelling: "heartrate", "heart rate", "hr", "pulse" and "bpm" are all the same thing, "bp" is blood pressure. Something they already keep track of is ALWAYS 1 — never start a second one for it under a different spelling.
+1. An entry for one of those they already keep track of, like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<the reading itself: the value they measured or counted, as they said it, without its name>", "note": "<see below, else null>"}. Something they noticed or describe about it that isn't a reading they took, numbers and all ("my pulse shot up to like 130 when I stood up", "it's been hovering in the 80s"), is a note for it: its own item, with "entry": null and their words in "note". "entry" is never a description: entries are drawn on a chart as numbers. Match by meaning, not spelling: "heartrate", "heart rate", "hr", "pulse" and "bpm" are all the same thing, "bp" is blood pressure. Something they already keep track of is ALWAYS 1 — never start a second one for it under a different spelling.
 2. They want to keep track of something over time, logging it again and again. It can be anything they choose: a measurement, money spent, a mood, how their day went. A reading for something they don't track yet counts, with that reading as its first entry. {"track": "<a short name for it, in their words>", "entry": "<an entry if they already gave one, else null>", "note": "<see below, else null>", "remind": "<daily, weekly or monthly if they said how often, else null>", "time": "<HH:MM, 24-hour, if they said a time, else null>"}
 3. Anything else: an idea, a to-do, a list, a note, a one-time thing. {"none": true}
 
@@ -261,7 +261,11 @@ export async function foldIdeaIntoTrackers(base44: any, idea: { id: string; titl
       // A "new" one with the name of one they already have is an entry for it.
       const target = (a.log_to ? trackers.find((i: any) => i.id === a.log_to) : null)
         || (trackName ? trackers.find((i: any) => sameName(i.idea, trackName)) : null);
-      if (target && entry) logs.push({ target, entry, note });
+      // A note with no reading ("entry": null): something they noticed about
+      // it, kept with no number, so it is never drawn on the chart (Anna, Oct
+      // 21 2026: "I noticed my heart slowing down to the 80s and then rapidly
+      // speeding up to the 90s or 100s" charted as a second heart rate line).
+      if (target && (entry || note)) logs.push({ target, entry, note });
       else if (trackName && !target) wantsNew = true;
     }
     if (wantsNew) return await handBack("starts a new tracker (the page does that)");
