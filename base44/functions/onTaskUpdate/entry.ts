@@ -1,3 +1,4 @@
+// Re-saved Oct 21 2026 so the bundled shared/reminderTitle.ts is picked up: an alarm at a time they set is marked theirTime and headed with the bell, so the phone never moves it.
 // Re-saved Oct 16 2026 so the bundled shared/reminderTitle.ts is picked up: a daily reminder after its first day reads as a reminder, never "slipped past".
 // Re-saved Oct 13 2026 (night) so the bundled shared/reminderTitle.ts is picked up: an appointment's alarm carries "Record notes" as its second button.
 // Re-saved Oct 13 2026 (evening) so the bundled shared/reminderTitle.ts is picked up: an event's alarm is marked `event` for the phone (build 42 on shows "Got it" only).
@@ -9,6 +10,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 // Reminder wording: every body names the task (the spoken alarm reads it).
 import { getReminderContent, pushPhoneAlarms, platformTimeMs } from '../../shared/reminderTitle.ts';
+import { orderSameMinuteAlarms } from '../../shared/alarmOrder.ts';
 import { adjustForQuietHours, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, placeAppReminder } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
 
@@ -959,7 +961,13 @@ async function movePhoneAlarms(client: any, payload: any) {
     const owners = await client.asServiceRole.entities.User.filter({ email: task.created_by });
     const owner = owners?.[0];
     if (!owner) return;
-    await pushPhoneAlarms(task, owner, {
+    // Another alarm at a time they set in the same minute: the one that
+    // matters rings first (alarmOrder.ts, Anna, Oct 21 2026).
+    const ordered = await orderSameMinuteAlarms(client, task, owner).catch((e: any) => {
+      console.error('[onTaskUpdate] alarm order failed:', e?.message || e);
+      return task;
+    });
+    await pushPhoneAlarms(ordered, owner, {
       before: oldData,
       changedAt: platformTimeMs(task.updated_date),
       source: 'onTaskUpdate',
