@@ -1,3 +1,4 @@
+// Re-saved Oct 21 2026 so the bundled shared/reminderTitle.ts is picked up: an alarm at a time they set is marked theirTime and headed with the bell, so the phone never moves it.
 // Weekly Back Burner check-in.
 //
 // Back-burnered tasks are deliberately silent — that's the point. But "silent
