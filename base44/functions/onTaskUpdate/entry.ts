@@ -370,6 +370,10 @@ async function handleTaskEvent(req: Request): Promise<Response> {
         const kick = await markPlanStale(base44, data.created_by || user.email, 'task added', !data.google_event_id && !data.parent_task_id);
         await kickPlanner(base44, kick);
       }
+      // An event made with no date or time gets no reminders, and the "would
+      // notes help?" check rides on its reminders, so it never showed Record
+      // notes (Anna, Oct 20 2026). Asked here instead.
+      await judgeNotesForUndatedEvent(base44, data, event.entity_id);
       return Response.json({ success: true, created: true, smartNudge: reads });
     }
 
@@ -911,6 +915,29 @@ async function handleTaskEvent(req: Request): Promise<Response> {
   } catch (error) {
     console.error('[onTaskUpdate] Unhandled error:', error);
     return Response.json({ success: false, error: error.message }, { status: 500 });
+  }
+}
+
+// An event with no date or time yet: would recording it help? (The same
+// yes/no its reminders ask once it has a time; generateReminderSchedule
+// notesCheck, gpt-6-luna.) Only for owners whose phone can record, once per
+// event. The answer is kept on the task (notes_worthy) for its Record notes
+// button. Never throws: no answer just means no button until it has a time.
+async function judgeNotesForUndatedEvent(base44: any, task: any, id: string) {
+  try {
+    if (!task || !id || task.classification !== 'event' || task.status !== 'active') return;
+    if (task.event_time || task.due_date || task.parent_task_id || task.birthday_person) return;
+    if (typeof task.notes_worthy === 'boolean') return;
+    const owners = await base44.asServiceRole.entities.User.filter({ email: task.created_by });
+    if (owners?.[0]?.notes_can_record !== true) return;
+    const res = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
+      notesCheck: { title: task.title || '', location: task.location || '' },
+    });
+    const notes = (res?.data ?? res)?.notes === true;
+    await base44.asServiceRole.entities.Task.update(id, { notes_worthy: notes });
+    console.log(`[onTaskUpdate] undated event ${id}: notes would ${notes ? '' : 'not '}help`);
+  } catch (e) {
+    console.error('[onTaskUpdate] notes check failed:', (e as any)?.message || e);
   }
 }
 
