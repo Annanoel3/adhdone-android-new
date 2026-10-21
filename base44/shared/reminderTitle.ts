@@ -8,7 +8,7 @@
 // dates, and a task captured as "due Friday" is saved as Friday 11:59 PM local,
 // which is already Saturday in UTC — so a Friday-evening reminder said "due
 // tomorrow" and named the wrong weekday for US users.
-import { DEFAULT_TIME_ZONE, localDateKey, resolveQuietHours, isInQuietHours, isTimeTheySet } from './quietHours.ts';
+import { DEFAULT_TIME_ZONE, localDateKey, localMinutesOfDay, resolveQuietHours, isInQuietHours, isTimeTheySet } from './quietHours.ts';
 import OpenAI from 'npm:openai';
 import { REMINDER_BRIEF } from './reminderBrief.ts';
 
@@ -254,6 +254,27 @@ export function bellHeading(heading: any, title: any): string {
   return `🔔 ${rest}`;
 }
 
+// Two or more alarms at times they set in the same minute ring in the order
+// that matters (alarmOrder.ts judges it; Anna, Oct 21 2026: "which one sounds
+// more important..... a scheduled phone call involving another persons time
+// or a watch setting"). Each task keeps its place by clock time in its own
+// alarm_order; each one after the first rings this much later per place, so
+// the first rings on the minute and the phone rings the next the moment it's
+// answered. Same as orderWaitMs in widgetBridge.js.
+export const ORDER_STEP_MS = 10 * 1000;
+
+export function clockKey(ms: number, timeZone: string): string {
+  const m = localMinutesOfDay(new Date(ms), timeZone || DEFAULT_TIME_ZONE);
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
+export function orderWaitMs(task: any, atMs: number, timeZone: string): number {
+  const all = task?.alarm_order && typeof task.alarm_order === 'object' ? task.alarm_order : null;
+  const place = all ? all[clockKey(atMs, timeZone)] : null;
+  const rank = Math.max(0, Math.min(5, Math.floor(Number(place?.rank) || 0)));
+  return rank * ORDER_STEP_MS;
+}
+
 // This task's upcoming alarms, exactly as the app would list them for the
 // phone. Empty when it doesn't ring (finished, silenced, a step, not an alarm
 // task, or nothing ahead outside quiet hours).
@@ -278,7 +299,7 @@ export function phoneAlarmsFor(task: any, owner: any, now: number = Date.now()):
     const theirTime = inQuiet && setByThem;
     if (inQuiet && task.quiet_hours_exempt !== true && !theirTime) continue;
     if (!ringsOutLoudOn(task, m.at, timeZone, m.label)) continue;
-    const alarm: any = { id: `${task.id}:${m.at}`, at: m.at, title: task.title || 'Task', heading: setByThem ? bellHeading(m.heading, task.title) : m.heading, body: m.body };
+    const alarm: any = { id: `${task.id}:${m.at}`, at: setByThem ? m.at + orderWaitMs(task, m.at, timeZone) : m.at, title: task.title || 'Task', heading: setByThem ? bellHeading(m.heading, task.title) : m.heading, body: m.body };
     // It rings at that time. The phone never moves it to keep 10 minutes from
     // another task's alarm, and a reminder the app picked that is ringing then
     // makes way for it (AlarmService: build 43 on reads theirTime, builds
