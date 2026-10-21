@@ -238,6 +238,22 @@ function reminderMoments(task: any, timeZone: string): { at: number; heading: st
   return Array.from(out.values());
 }
 
+// The heading of an alarm at a time they set themselves starts with the bell.
+// Phones on builds 39–42 only know such an alarm by that bell
+// (AlarmService.isPinned): without it, the alarm could be moved 10 minutes
+// past another task's alarm, again and again. The at-the-time words written by
+// atTimeWords (Oct 12 2026) and the plain 📌 / 📅 headings had no bell, so
+// Anna's 10 AM call ("Call (210) 621-7099 at 10:00 tomorrow") rang at 10:31 on
+// Oct 21 2026, behind "Set watch to record continuously", also at 10:00 and
+// snoozed twice. Build 43 on reads theirTime instead. Same as bellHeading in
+// widgetBridge.js.
+export function bellHeading(heading: any, title: any): string {
+  const h = String(heading || '').trim();
+  if (h.startsWith('🔔')) return h;
+  const rest = h.replace(/^(📌|📅)\s*/u, '').trim() || String(title || '').trim() || 'Reminder';
+  return `🔔 ${rest}`;
+}
+
 // This task's upcoming alarms, exactly as the app would list them for the
 // phone. Empty when it doesn't ring (finished, silenced, a step, not an alarm
 // task, or nothing ahead outside quiet hours).
@@ -256,10 +272,18 @@ export function phoneAlarmsFor(task: any, owner: any, now: number = Date.now()):
     // Inside quiet hours only a time they set themselves rings (RULES.md §9
     // Q4: a 5 AM flight), or a task they asked to run through the night.
     const inQuiet = quiet.enabled && isInQuietHours(new Date(m.at), quiet.startMin, quiet.endMin, timeZone);
-    const theirTime = inQuiet && (m.theirs === true || isTimeTheySet(task, m.at, timeZone));
+    // A time they set themselves (the call "at 10:00 tomorrow", "remind me at
+    // 10 a.m."), quiet hours or not.
+    const setByThem = m.theirs === true || isTimeTheySet(task, m.at, timeZone);
+    const theirTime = inQuiet && setByThem;
     if (inQuiet && task.quiet_hours_exempt !== true && !theirTime) continue;
     if (!ringsOutLoudOn(task, m.at, timeZone, m.label)) continue;
-    const alarm: any = { id: `${task.id}:${m.at}`, at: m.at, title: task.title || 'Task', heading: m.heading, body: m.body };
+    const alarm: any = { id: `${task.id}:${m.at}`, at: m.at, title: task.title || 'Task', heading: setByThem ? bellHeading(m.heading, task.title) : m.heading, body: m.body };
+    // It rings at that time. The phone never moves it to keep 10 minutes from
+    // another task's alarm, and a reminder the app picked that is ringing then
+    // makes way for it (AlarmService: build 43 on reads theirTime, builds
+    // 39–42 the bell at the start of the heading).
+    if (setByThem) alarm.theirTime = true;
     // Home or Back on this one rings it again in 10 minutes instead of closing
     // it (build 40 on; AlarmService.leftRinging): one sleepy press mustn't
     // silence the only alarm they asked for in the night.
