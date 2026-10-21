@@ -275,6 +275,12 @@ typed something" and "their phone rang", answer these in writing:
    is ringing at that moment makes way and rings 10 minutes after (build 43 on). Anna, Oct 21
    2026, after her 10 AM call rang at 10:31 behind another task's alarm: "Events with a
    certain time cannot be happening at a different time."
+   Two or more at times they set in the same minute: the phone shows one at a time, so the
+   model puts them in order (`shared/alarmOrder.ts`, gpt-6-astra, judged when one of them is made
+   or changed): the one where someone is waiting or that can't slip rings on the minute, and each
+   next one 10 seconds later, so the phone rings it the moment the one before is answered
+   (`Task.alarm_order`). Anna, Oct 21 2026: "which one sounds more important..... a scheduled
+   phone call involving another persons time or a watch setting".
    Not everyone sleeps at night (Anna, Oct 12 2026: "night shift people exist"). Never compare
    the local clock to fixed hours (7 PM, 9 AM, 10 PM) to mean evening, morning or bedtime: their
    night is their quiet hours (the times count even with the switch off), their morning is when
