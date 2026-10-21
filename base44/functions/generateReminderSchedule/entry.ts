@@ -1,3 +1,4 @@
+// Re-saved Oct 21 2026 (noon) so the bundled shared/reminderTitle.ts is picked up: alarms at a time they set in the same minute ring in the order alarmOrder.ts judged (alarm_order), each one marked theirTime with the bell.
 // Re-saved Oct 17 2026 so the bundled shared/reminderTitle.ts is picked up: the at-the-time words are written by gpt-6-astra (was gpt-6-luna).
 // Re-saved Oct 13 2026 (night) so the bundled shared/captureToTasks.ts is picked up: a captured event's pushes carry an event's buttons (Snooze only), not a task's.
 // LLM-powered reminder schedule generator.
