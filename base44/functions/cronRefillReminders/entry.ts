@@ -1997,7 +1997,12 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     const seenRing = new Set<string>();
     const missedBy: Record<string, { taskId: string; ms: number; how: string }[]> = {};
     const addRing = (email: any, taskId: string, choice: any, ms: number, reportId?: string) => {
-      if (choice !== 'ignored' && choice !== 'closed') return;
+      // Only alarms that rang out with nobody touching them. Home or Back on
+      // a ringing alarm means they saw it and put it away (Sally's "Clean Out
+      // Oil Room", Oct 20 and 21 2026): that's their "not now", still counted
+      // on the task for Smart Reminders, not an alarm that isn't reaching
+      // them. Anna, Oct 21 2026: "Should we even be flagging this?"
+      if (choice !== 'ignored') return;
       if (!taskId || !Number.isFinite(ms) || ms > nowMs || nowMs - ms > 2 * H_DAY) return;
       const e = String(email || '').toLowerCase();
       if (!e || notReal.has(e) || !userByLower[e]) return;
