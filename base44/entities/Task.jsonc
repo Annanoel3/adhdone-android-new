@@ -320,6 +320,10 @@
       "default": 0,
       "description": "How many times a full-screen alarm for this task was stopped with \"Later\" (put off without picking a snooze time; the task stays active, so smart nudges bring it back once its time has passed)."
     },
+    "alarm_order": {
+      "type": "object",
+      "description": "Where this task's alarm rings among others at a time they set in the same minute, by clock time in the owner's time zone: { \"HH:MM\": { rank, with, why } }. rank 0 rings on the minute; each place after that rings 10 seconds later, so the phone rings it the moment the one before is answered. with: the ids of the tasks in that minute, sorted and joined by |. Set by the model (shared/alarmOrder.ts) when a task with a time they set is made or changed (Anna, Oct 21 2026: a 10 AM call should ring before a 10 AM watch setting)."
+    },
     "notes_worthy": {
       "type": "boolean",
       "description": "For an event with no date or time yet (so no reminders): whether recording it and getting notes would help, judged once when it's made (onTaskUpdate asks generateReminderSchedule notesCheck, the same yes/no its reminders would ask). Its Record notes button shows from this until it has a time; once it has a date and time, its reminders' labels decide. Empty = not judged (Anna, Oct 20 2026)."
