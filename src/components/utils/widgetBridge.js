@@ -338,7 +338,9 @@ function foldClusters(entries) {
     others = [];
   };
   for (const e of entries) {
-    if (lead && e.alarm.at - lead.alarm.at < ALARM_FOLD_MS) {
+    // A time they set themselves is never folded into an earlier alarm: it
+    // rings at its own time.
+    if (lead && e.alarm.at - lead.alarm.at < ALARM_FOLD_MS && !e.alarm.theirTime) {
       // A second moment of the same task inside the window just doesn't ring.
       if (e.alarm.taskId !== lead.alarm.taskId && !others.includes(e.alarm.title)) others.push(e.alarm.title);
       continue;
@@ -348,6 +350,18 @@ function foldClusters(entries) {
   }
   flush();
   return out;
+}
+
+// The heading of an alarm at a time they set themselves starts with the bell:
+// phones on builds 39–42 only know such an alarm by it, and without it the
+// alarm could be moved 10 minutes past another task's (Anna's 10 AM call rang
+// at 10:31 on Oct 21 2026). Build 43 on reads theirTime. Same as bellHeading in
+// base44/shared/reminderTitle.ts.
+function bellHeading(heading, title) {
+  const h = String(heading || '').trim();
+  if (h.startsWith('🔔')) return h;
+  const rest = h.replace(/^(📌|📅)\s*/u, '').trim() || String(title || '').trim() || 'Reminder';
+  return `🔔 ${rest}`;
 }
 
 export function alarmSetFor(tasks, userDefault = alarmMode) {
@@ -366,11 +380,17 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
       // Inside quiet hours only a time they set themselves rings (a 5 AM
       // flight, RULES.md §9 Q4), or a task they asked to run through the night.
       const inQuiet = isInQuietHours(new Date(m.at));
-      const theirTime = inQuiet && (m.theirs || isTimeTheySet(t, m.at));
+      // A time they set themselves (the call "at 10:00 tomorrow"), quiet hours or not.
+      const setByThem = !!m.theirs || isTimeTheySet(t, m.at);
+      const theirTime = inQuiet && setByThem;
       if (inQuiet && !t.quiet_hours_exempt && !theirTime) continue;
       // Heads-ups stay regular pushes; see ringsOutLoud.
       if (!ringsOutLoud(t, m.at, m.label)) continue;
-      const alarm = { id: `${t.id}:${m.at}`, taskId: t.id, title: t.title || 'Task', at: m.at, heading: m.heading, body: m.body };
+      const alarm = { id: `${t.id}:${m.at}`, taskId: t.id, title: t.title || 'Task', at: m.at, heading: setByThem ? bellHeading(m.heading, t.title) : m.heading, body: m.body };
+      // It rings at that time: never moved to keep 10 minutes from another
+      // task's alarm, and one the app picked that is ringing then makes way
+      // for it (AlarmService: build 43 on reads theirTime, 39–42 the bell).
+      if (setByThem) alarm.theirTime = true;
       // Home or Back on this one rings it again in 10 minutes instead of
       // closing it (build 40 on): one sleepy press mustn't silence it.
       if (theirTime) alarm.throughQuiet = true;
