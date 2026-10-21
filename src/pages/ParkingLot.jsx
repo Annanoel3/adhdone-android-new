@@ -422,7 +422,7 @@ export default function ParkingLot() {
     const list = group.map((t) => ({ id: t.id, name: t.idea }));
     const prompt = `Someone logged this to the things they keep track of: "${text.slice(0, 500)}"
 Those things: ${JSON.stringify(list)}
-Give one item per reading, in order: {"log_to": "<its id>", "entry": "<the reading, as they said it, without its name>", "note": "<anything else they said that goes with it — when it was taken, what they had just done, eaten or taken, how they felt — in their words, else null>"}. Context that applies to the whole sentence goes on every item. Match by meaning, short forms included ("bp" is blood pressure, "hr" or "heart" is heart rate). Answer with JSON only: {"actions": [ ... ]}.`;
+Give one item per reading, in order: {"log_to": "<its id>", "entry": "<the reading, as they said it, without its name>", "note": "<anything else they said that goes with it — when it was taken, what they had just done, eaten or taken, how they felt — in their words, else null>"}. Context that applies to the whole sentence goes on every item. Something they noticed or describe about one of them that isn't a reading they took, numbers and all ("my pulse shot up to like 130 when I stood up", "it's been hovering in the 80s"), is its own item, with "entry": null and their words in "note": "entry" is only ever the reading itself, because entries are drawn on a chart as numbers. Match by meaning, short forms included ("bp" is blood pressure, "hr" or "heart" is heart rate). Answer with JSON only: {"actions": [ ... ]}.`;
     try {
       const res = await base44.functions.invoke('categorizeIdea', { prompt });
       const raw = String(res?.data?.message || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
@@ -431,8 +431,11 @@ Give one item per reading, in order: {"log_to": "<its id>", "entry": "<the readi
       const placed = [];
       for (const a of actions) {
         const target = group.find((t) => t.id === a.log_to);
-        const entry = typeof a.entry === 'string' ? a.entry.trim() : '';
-        if (target && entry) placed.push({ target, entry, note: typeof a.note === 'string' ? a.note.trim() : '' });
+        const said = (v) => { const s = typeof v === 'string' ? v.trim() : ''; return /^(null|undefined)$/i.test(s) ? '' : s; };
+        const entry = said(a.entry);
+        const note = said(a.note);
+        // A note with no reading is kept with no number (never charted).
+        if (target && (entry || note)) placed.push({ target, entry, note });
       }
       return placed;
     } catch (e) {
@@ -565,7 +568,9 @@ Give one item per reading, in order: {"log_to": "<its id>", "entry": "<the readi
     setTrackerBusy(true);
     try {
       const group = groupOf(logFor);
-      const placed = group.length > 1 ? await splitLogForGroup(text, group) : [];
+      // Even for one tracker: the AI keeps the reading apart from what they
+      // say about it, so a description is never charted (Oct 21 2026).
+      const placed = await splitLogForGroup(text, group);
       if (placed.length) {
         for (const { target, entry, note } of placed) await addTrackerEntry(target, entry, note);
         toast({ title: `Logged to ${placed.map((x) => x.target.idea).join(' · ')}` });
@@ -616,7 +621,7 @@ Give one item per reading, in order: {"log_to": "<its id>", "entry": "<the readi
 Things they already keep track of here (they log entries to these over time): ${trackers.length ? JSON.stringify(trackers) : 'none yet'}
 
 What is it? It can be more than one thing at once ("blood pressure 91 over 57 and heart rate 89" is a reading for blood pressure AND a reading for heart rate) — give one item per part, in order:
-1. An entry for one of those they already keep track of (a reading, a number, a note for it), like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<just this part, as they said it, without its name>", "note": "<see below, else null>"}. Match by meaning, not spelling: "heartrate", "heart rate", "hr", "pulse" and "bpm" are all the same thing, "bp" is blood pressure. Something they already keep track of is ALWAYS 1 — never start a second one for it under a different spelling.
+1. An entry for one of those they already keep track of, like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<the reading itself: the value they measured or counted, as they said it, without its name>", "note": "<see below, else null>"}. Something they noticed or describe about it that isn't a reading they took, numbers and all ("my pulse shot up to like 130 when I stood up", "it's been hovering in the 80s"), is a note for it: its own item, with "entry": null and their words in "note". "entry" is never a description: entries are drawn on a chart as numbers. Match by meaning, not spelling: "heartrate", "heart rate", "hr", "pulse" and "bpm" are all the same thing, "bp" is blood pressure. Something they already keep track of is ALWAYS 1 — never start a second one for it under a different spelling.
 2. They want to keep track of something over time, logging it again and again. It can be anything they choose: a measurement, money spent, a mood, how their day went. A reading for something they don't track yet counts, with that reading as its first entry. {"track": "<a short name for it, in their words>", "entry": "<an entry if they already gave one, else null>", "note": "<see below, else null>", "remind": "<daily, weekly or monthly if they said how often, else null>", "time": "<HH:MM, 24-hour, if they said a time, else null>"}
 3. Anything else: an idea, a to-do, a list, a note, a one-time thing. {"none": true}
 
@@ -671,7 +676,9 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
         // that one (the AI once started a second "heart rate" for "hr 77").
         const target = (a.log_to ? all.find((i) => i.id === a.log_to && i.tracker) : null)
           || (trackName ? all.find((i) => i.tracker && !i.parent_idea_id && i.id !== idea.id && sameName(i.idea, trackName)) : null);
-        if (target && entry) logs.push({ target, entry, note });
+        // A note with no reading ("entry": null) is kept with no number, so
+        // it never lands on the chart (Oct 21 2026, see captureToTasks.ts).
+        if (target && (entry || note)) logs.push({ target, entry, note });
         else if (trackName && !target) news.push({ name: trackName, entry, note, remind: a.remind, time: a.time });
       }
       const together = logs.map((l) => l.target.id); // every tracker this one sentence touched
