@@ -320,6 +320,10 @@
       "default": 0,
       "description": "How many times a full-screen alarm for this task was stopped with \"Later\" (put off without picking a snooze time; the task stays active, so smart nudges bring it back once its time has passed)."
     },
+    "notes_worthy": {
+      "type": "boolean",
+      "description": "For an event with no date or time yet (so no reminders): whether recording it and getting notes would help, judged once when it's made (onTaskUpdate asks generateReminderSchedule notesCheck, the same yes/no its reminders would ask). Its Record notes button shows from this until it has a time; once it has a date and time, its reminders' labels decide. Empty = not judged (Anna, Oct 20 2026)."
+    },
     "later_until": {
       "type": "string",
       "format": "date-time",
