@@ -174,6 +174,15 @@ export default async function(req) {
       const words = await atTimeWords(w.task || {}, new Date(w.atISO).getTime(), w.timezone || user?.timezone || '');
       return Response.json({ words });
     }
+    // { notesCheck: { title, location } }: the same "would notes help?" yes/no
+    // the event reminders ask (notesWouldHelp), for an event with no date or
+    // time yet, which gets no reminders to carry the answer (onTaskUpdate, on
+    // create). Anna, Oct 20 2026: a meeting captured with no time never showed
+    // Record notes ("Its not telling me to record notes anymore").
+    if (parsedBody?.notesCheck && typeof parsedBody.notesCheck === 'object') {
+      const n = parsedBody.notesCheck;
+      return Response.json({ notes: await notesWouldHelp(String(n.title || ''), String(n.location || '')) });
+    }
     const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, timezone, location, homeOrigin, avoidTolls, reminderWish, canRecord, noClockTime } = parsedBody;
     // An event with a date and no clock time (a day-only capture, an all-day
     // calendar event): callers that know say so with dayOnly or noClockTime.
