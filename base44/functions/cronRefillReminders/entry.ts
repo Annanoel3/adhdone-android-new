@@ -2027,12 +2027,20 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       }
       const rings = shown.map((x) => {
         const title = taskById[x.taskId]?.title;
-        return `${title ? `"${String(title).slice(0, 28)}"` : 'a deleted task'} ${theirClock(u, x.ms)}${x.how === 'closed' ? ' (left with Home or Back)' : ''}`;
+        // Finished later all the same: said, so a missed ring that was
+        // followed by the task getting done reads as that (Oct 21 2026).
+        const t = taskById[x.taskId];
+        const doneMs = t?.status === 'completed' ? msOf(t.completed_at) : NaN;
+        const done = Number.isFinite(doneMs) && doneMs > x.ms ? `, done ${theirClock(u, doneMs)}` : '';
+        return `${title ? `"${String(title).slice(0, 28)}"` : 'a deleted task'} ${theirClock(u, x.ms)}${x.how === 'closed' ? ' (left with Home or Back)' : ''}${done}`;
       }).join('; ');
       problems.push({
         title: `⚠️ ADHDone: ${nameOf(u)}'s alarms are going unanswered`,
         body: `${list.length} alarms in 2 days rang out with no answer${list.length > shown.length ? `, the last ${shown.length}` : ''}: ${rings} (their time). Quiet hours ${quietOf(u)}. ${u.email}`,
-        sinceMs: nowMs - 2 * H_DAY,
+        // Told again for every ring the last alert didn't have. It used to be
+        // once per 2 days, so Chad's Tuesday misses (8:21 and 9:10 AM) were
+        // held back by Sunday's alert and only came Wednesday at 11:30 AM.
+        sinceMs: list[list.length - 1].ms,
       });
     }
   } catch (e) {
