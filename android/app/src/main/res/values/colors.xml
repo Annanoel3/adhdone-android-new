@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Widget palette.
+
+  Deliberately theme-independent: there is NO values-night variant, because the
+  web app never goes dark on its own (Layout.jsx's getBackgroundClass() returns
+  the pastel gradient for every theme but the explicit "dark" one, which is a
+  user setting the widget cannot see). A values-night palette made the widget
+  render as a dark card whenever the phone was in dark mode, which never matched
+  what the user saw inside the app.
+
+  The gradient stops are the app's real background, not an approximation:
+  src/Layout.jsx:351 uses "bg-gradient-to-br from-purple-50 via-orange-50
+  to-teal-50", and tailwind.config.js does not override those swatches, so they
+  resolve to Tailwind 3.4's defaults.
+-->
+<resources>
+    <!-- Page gradient — Tailwind purple-50 -> orange-50 -> teal-50, to bottom right -->
+    <color name="widget_grad_start">#FFFAF5FF</color>   <!-- purple-50 -->
+    <color name="widget_grad_center">#FFFFF7ED</color>  <!-- orange-50 -->
+    <color name="widget_grad_end">#FFF0FDFA</color>     <!-- teal-50 -->
+
+    <!-- Task chips -->
+    <color name="widget_row_bg">#FFFFFFFF</color>
+    <color name="widget_row_border">#FFEDE9F3</color>
+
+    <!-- Text -->
+    <color name="widget_text_primary">#FF111827</color>   <!-- gray-900 -->
+    <color name="widget_text_secondary">#FF6B7280</color> <!-- gray-500 -->
+    <color name="widget_text_muted">#FF9CA3AF</color>     <!-- gray-400 -->
+    <color name="widget_header_text">#FF1F2937</color>    <!-- gray-800 -->
+
+    <!-- Brand accent -->
+    <color name="widget_accent">#FF9333EA</color>         <!-- purple-600 -->
+
+    <!-- Quick-add button -->
+    <color name="widget_add_surface">#FFF3E8FF</color>    <!-- purple-100 -->
+
+    <!-- Urgency pills -->
+    <color name="widget_pill_low_bg">#FFCCFBF1</color>
+    <color name="widget_pill_low_text">#FF0F766E</color>
+    <color name="widget_pill_medium_bg">#FFEDE9FE</color>
+    <color name="widget_pill_medium_text">#FF7C3AED</color>
+    <color name="widget_pill_high_bg">#FFFFEDD5</color>
+    <color name="widget_pill_high_text">#FFC2410E</color>
+    <color name="widget_pill_urgent_bg">#FFFEE2E2</color>
+    <color name="widget_pill_urgent_text">#FFDC2626</color>
+</resources>
