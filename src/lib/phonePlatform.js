@@ -55,9 +55,18 @@ const NOT_ON_IPHONE = {
   // Android's own alarm switches: exact alarms, full-screen notifications,
   // display over other apps, battery unrestricted, Usage access.
   androidSwitches: true,
+  // The how-to clips in the App Guide are Android screen recordings, and Apple
+  // turns down apps that show another phone platform. Hidden until iPhone
+  // ones are recorded.
+  androidClips: true,
   // Waiting on Haris: the spoken alarm ("Read it to me"). Hidden until he
   // confirms AlarmKit can ring a spoken sound file the app makes ahead of time.
   spokenAlarm: true,
+  // Waiting on Haris: sharing text or a screenshot into ADHDone (a share
+  // extension) and the home-screen widget. The App Guide only offers them once
+  // the iPhone app has them; set to false then.
+  shareToApp: true,
+  homeWidget: true,
 };
 
 export function onThisPhone(feature) {
