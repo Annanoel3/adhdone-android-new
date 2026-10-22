@@ -655,6 +655,13 @@ Deno.serve(async (req) => {
           dayPushes,
           lastSeenMs: seenMs,
           dayStart: dayStartLine(user, now, timeZone, todayStr, seenMs, quiet.endMin, dayOf),
+          // Joined in the last day and nothing from Smart Reminders has reached
+          // them yet (Anna, Oct 22 2026: a dateless first task gets a reminder
+          // the same day; Becky's first task went 25 days without one).
+          newAccount: (() => {
+            const made = utcMs(user.signed_up_at || user.created_date);
+            return Number.isFinite(made) && nowMs - made < DAY_MS && !sentLog.some((l: any) => l && !l.skip);
+          })(),
           sentSinceSeen,
           seenCountIsFloor: Number.isFinite(seenMs) && seenMs < nowMs - 3 * DAY_MS,
           laterLook: todaysEntries.some((e: any) => e.sent && !e.skipped_reason),
@@ -1422,6 +1429,8 @@ interface PlanContext {
   dayPushes: { at: number; title: string; mine: boolean }[];
   // How their day has started (dayStartLine).
   dayStart?: string;
+  // Joined in the last day, nothing from Smart Reminders yet.
+  newAccount?: boolean;
   lastSeenMs: number;
   sentSinceSeen: number;
   seenCountIsFloor: boolean;
@@ -1897,6 +1906,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     out.push(`Quiet hours: ${noQuietHours ? 'none (turned off)' : `${quietStartStr} to ${quietEndStr}`}. Time left before ${noQuietHours ? 'midnight' : 'bedtime (when their quiet hours start)'}: ${hoursLeftStr}.`);
     if (Number.isFinite(lastSeenMs)) out.push(`Last opened the app: ${whenLabel(lastSeenMs)} (${daysAgoLabel(lastSeenMs)}).`);
     if (ctx.dayStart) out.push(ctx.dayStart);
+    if (ctx.newAccount) out.push('NEW HERE: they joined ADHDone today, and nothing from you has reached them yet. These are their first tasks. Make sure at least one of them gets a mention today, at a waking hour, even one with no date or a low priority, so they see the app actually work. Not tomorrow.');
     if (aboutMe.trim()) out.push(`What they told you about themselves, in their own words: ${aboutMe.trim()}`);
     if (work.lines.length) out.push(`Work schedule (${work.remote ? 'works from home' : 'goes in to work'}${work.quietAtWork ? '; they turned on "don\'t notify me at work", so nothing goes out during those hours' : ''}):\n${work.lines.map((l) => `- ${l}`).join('\n')}`);
     out.push(`OPEN TASKS — yours to plan (numbered; use these numbers in your answer):\n${tasks.map(line).join('\n')}`);
