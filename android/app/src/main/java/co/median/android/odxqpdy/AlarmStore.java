@@ -76,6 +76,11 @@ final class AlarmStore {
         // Even alarms should never have all the snooze buttons, done button,
         // later etc"). Set by the web app's / server's alarm list ("event").
         boolean event = false;
+        // The eased plan's one alarm a day (Anna, Oct 22 2026): a task put off
+        // on 3 different days rings with only Done and Later — no snoozes, no
+        // Open. Set by the server's push ("eased"); normal alarms keep every
+        // button.
+        boolean eased = false;
         // Buttons the web app wants on the alarm screen instead of snooze, as a
         // JSON array of { label, path }: tapping one stops the ring and opens the
         // app at that path (the sprint's "Keep going" / "I'm done"). "" = none.
@@ -193,6 +198,7 @@ final class AlarmStore {
             o.put("soundUrl", soundUrl);
             o.put("noSnooze", noSnooze);
             o.put("event", event);
+            o.put("eased", eased);
             o.put("actionsJson", actionsJson);
             o.put("screen", screen);
             o.put("openLabel", openLabel);
@@ -228,6 +234,7 @@ final class AlarmStore {
             e.soundUrl = o.optString("soundUrl", "");
             e.noSnooze = o.optBoolean("noSnooze", false);
             e.event = o.optBoolean("event", false);
+            e.eased = o.optBoolean("eased", false);
             e.actionsJson = o.optString("actionsJson", "");
             e.screen = o.optString("screen", "");
             e.openLabel = o.optString("openLabel", "");
