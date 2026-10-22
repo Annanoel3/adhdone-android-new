@@ -23,6 +23,7 @@ import {
 import CalendarGrid from '@/components/calendar/CalendarGrid';
 import TaskDetailsModal from '@/components/tasks/TaskDetailsModal';
 import KeepAppOpenNote from '@/components/shared/KeepAppOpenNote';
+import { isIPhoneApp, phoneOs } from '@/lib/phonePlatform';
 import FirstUseDialog, { firstUseSeen, markFirstUseSeen } from '@/components/onboarding/FirstUseDialog';
 import {
   runCalendarSync, maybeAutoSync, getInFlightSync, setCalendarConnected,
@@ -198,7 +199,7 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
           <div>
             <h2 className={`text-xl font-bold ${textPrimary}`}>Phone calendars</h2>
             <p className={`text-sm ${textSecondary}`}>
-              Google, Samsung, Outlook — any calendar your phone's calendar app shows. Tick the ones to bring in; their events become tasks with reminders.
+              {isIPhoneApp() ? 'iCloud, Google, Outlook' : 'Google, Samsung, Outlook'} — any calendar your phone's calendar app shows. Tick the ones to bring in; their events become tasks with reminders.
             </p>
           </div>
           {granted && chosenIds.length > 0 && (
@@ -214,7 +215,7 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
           <div className="space-y-2">
             <p className={`text-sm ${textSecondary}`}>ADHDone needs read-only access to the calendars on this phone. Nothing is read until you pick a calendar below.</p>
             <Button onClick={allow} disabled={busy} className="bg-purple-600 hover:bg-purple-700 text-white">
-              {busy ? 'Waiting for Android…' : 'Allow calendar access'}
+              {busy ? `Waiting for ${phoneOs()}…` : 'Allow calendar access'}
             </Button>
           </div>
         )}
