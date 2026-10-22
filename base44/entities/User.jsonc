@@ -135,6 +135,10 @@
           "type": "boolean",
           "description": "Battery optimization is off for ADHDone (unrestricted). false = Android may put the app to sleep, and reminders and alarms can come late or not at all."
         },
+        "alarms": {
+          "type": "boolean",
+          "description": "iPhone app only: AlarmKit lets ADHDone ring alarms. false = alarms can't ring on that iPhone. The iPhone app files only notifications and this (it has none of Android's switches above). Missing = Android, or an iPhone build that doesn't report it."
+        },
         "last_rang_at": {
           "type": "string",
           "format": "date-time",
