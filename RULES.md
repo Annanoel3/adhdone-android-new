@@ -337,6 +337,21 @@ How it works, and how it must keep working:
    that day, or an urgent one, got no break at all, so every daily routine came back
    after Later as often as Smart Reminders picked it (Anna's vitamins rang 6 times on Oct
    19: "it becomes harassment once a user presses a later or time button").
+6. **Put off on 3 different days = a lighter plan (Anna, Oct 22 2026).** Later, a snooze,
+   swiped away, closed or rang out all count as putting it off; Done and Open don't. The
+   days are kept on the task (`put_off_days`). On the 3rd different day the AI judges the
+   plan from what they typed, the priority and who relies on it (`shared/easeOff.ts`,
+   `ease_plan`), never from keywords: `daily_alarm` (it matters: morning summary plus one
+   alarm a day), `alarm_then_notice` (ordinary, like the grocery store: morning summary plus
+   one alarm later in the day, and after 2 more put-off days one regular notification a
+   day), `digest` (low stakes: morning summary only). An eased alarm has only Done and
+   Later (push `data.eased`, build 43+; normal alarms keep every button). Editing the task's
+   wording, priority or date starts it over. The morning summary names every eased task.
+7. **A new account hears from it the first day (Anna, Oct 22 2026).** Someone who joined in
+   the last day and has had nothing from Smart Reminders gets a "NEW HERE" line, so one of
+   their first tasks is mentioned that same day even with no date or a low priority. The
+   app also shows a sample reminder 3 minutes after a new account's first task. To check:
+   `{"email": "…", "preview": true, "as_new": true}` to `cronSmartTaskNudge`.
 
 **Do not change `base44/functions/cronSmartTaskNudge`, `base44/shared/reminderBrief.ts`, the
 "Smart Task Nudge" workflow, or the `smart_nudge_*` fields on User unless Anna explicitly
