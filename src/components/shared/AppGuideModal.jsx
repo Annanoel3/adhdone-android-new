@@ -34,10 +34,12 @@ const ADD_PATH_ICONS = { text: Share2, screenshot: Camera, widget: LayoutGrid, p
 // The how-to clips, by the same keys the Tasks page walkthrough uses.
 // They're Android screen recordings, so the iPhone app shows none
 // (phonePlatform.js androidClips).
-const ADD_PATH_VIDEOS = Object.fromEntries(ADD_PATHS.map((p) => [p.key, onThisPhone('androidClips') ? p.video : undefined]));
+const ALL_ADD_PATH_VIDEOS = Object.fromEntries(ADD_PATHS.map((p) => [p.key, p.video]));
 
 export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
   const navigate = useNavigate();
+  // Decided when the guide opens, not when the page first loads.
+  const ADD_PATH_VIDEOS = onThisPhone('androidClips') ? ALL_ADD_PATH_VIDEOS : {};
   // "Turn it on in Settings" / "Set them in Settings": the guide closes — and
   // the side menu it was opened from (onGo, Anna Oct 13 2026) — and the app
   // goes straight to that card (Settings scrolls to the #hash).
