@@ -37,11 +37,13 @@ import {
   setAlarmMode,
   refreshAlarms,
   alarmPermissionStatus,
+  alarmSwitchesOff,
   requestAlarmPermissions,
   alarmQuietChoiceSupported,
   eventQuietSupported,
   readRingLog,
 } from '../utils/widgetBridge';
+import { isIPhoneApp, onThisPhone, phoneOs } from '@/lib/phonePlatform';
 import { AlarmSoundPicker, AlarmQuietChoice, AlarmEventQuietChoice, QuietWhenButtons } from '../settings/QuickCaptureCard';
 import { NAG_INTERVALS } from '../utils/reminderScheduler';
 import { subscribeCaptures } from '@/lib/pendingCaptures';
@@ -64,6 +66,9 @@ export default function QuickCapturePrompt() {
   const [declined, setDeclined] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pinWanted, setPinWanted] = useState(true);
+  // The iPhone app has no pinned notification: the card there only explains
+  // and asks for notifications (Anna, Oct 22 2026).
+  const offerPin = onThisPhone('pinnedCapture');
 
   const settle = () => {
     localStorage.setItem(SEEN_KEY, 'true');
@@ -88,8 +93,10 @@ export default function QuickCapturePrompt() {
     // not mid-typing or mid-tap.
     const start = Date.now();
     const poll = setInterval(() => {
-      const { ShareBridge } = getPlugins();
-      if (ShareBridge?.setQuickCaptureEnabled) {
+      const { ShareBridge, NotifyBridge: NB } = getPlugins();
+      // Android waits for the pinned shortcut's plugin; the iPhone app, which
+      // has no pinned shortcut, for the notifications one.
+      if (onThisPhone('pinnedCapture') ? ShareBridge?.setQuickCaptureEnabled : NB?.requestPermission) {
         clearInterval(poll);
         waitForStep(ONBOARDING_STEPS.homeTour)
           .then(waitForCalm)
@@ -122,7 +129,7 @@ export default function QuickCapturePrompt() {
     setBusy(true);
     try {
       if (NotifyBridge?.requestPermission) await NotifyBridge.requestPermission();
-      if (pinWanted) await getPlugins().ShareBridge?.setQuickCaptureEnabled({ enabled: true });
+      if (offerPin && pinWanted) await getPlugins().ShareBridge?.setQuickCaptureEnabled({ enabled: true });
     } catch (e) {
       // Nothing to recover here — the Settings toggle shows the real error.
     } finally {
@@ -146,8 +153,9 @@ export default function QuickCapturePrompt() {
             We need to ask for a couple of permissions
           </DialogTitle>
           <DialogDescription>
-            So you can get the most out of ADHDone. First, Android will ask if it can send
-            you notifications — every reminder and alarm rides on that.
+            {offerPin
+              ? `So you can get the most out of ADHDone. First, ${phoneOs()} will ask if it can send you notifications — every reminder and alarm rides on that.`
+              : `So you can get the most out of ADHDone. ${phoneOs({ capital: true })} will ask if it can send you notifications — every reminder and alarm rides on that.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -169,6 +177,7 @@ export default function QuickCapturePrompt() {
           </div>
         ) : (
           <div className="space-y-4 pt-2">
+            {offerPin && (
             <div className="flex items-start justify-between gap-3 rounded-xl border p-3">
               <div className="flex items-start gap-2">
                 <Zap className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
@@ -182,6 +191,7 @@ export default function QuickCapturePrompt() {
               </div>
               <Switch checked={pinWanted} onCheckedChange={setPinWanted} aria-label="Pin the quick-capture shortcut" />
             </div>
+            )}
             <div className="flex gap-2">
               <Button onClick={handleAllow} disabled={busy} className="flex-1">
                 {busy ? 'One sec...' : 'Allow notifications'}
@@ -313,6 +323,9 @@ export function WaysToAddPopup({ user }) {
     if (!user || started.current) return;
     started.current = true;
     if (isStepDone(WAYS_SEEN)) return;
+    // Its pictures and its first row are Android's (share sheet, pinned
+    // notification): never in the iPhone app.
+    if (!onThisPhone('pinnedCapture')) return;
 
     // A waiting "was that a request for the app?" prompt goes first, and
     // answering it marks this popup seen — so nobody is handed first-run
@@ -545,8 +558,7 @@ export function AlarmPermissionsDialog({ theme }) {
       if (cancelled || u?.alarm_mode !== 'alarm') return;
       const st = await alarmPermissionStatus();
       if (cancelled || !st || !st.notifications) return;
-      const missing = !st.exactAlarms || !st.fullScreen || !st.ignoringBatteryOptimizations || st.overlay === false;
-      if (!missing) return;
+      if (alarmSwitchesOff(st).length === 0) return;
       await waitForStep(ONBOARDING_STEPS.homeTour);
       await waitForCalm();
       if (cancelled) return;
@@ -648,14 +660,27 @@ export function AlarmPermissionsDialog({ theme }) {
     } catch (e) { /* stays on the list */ }
   };
 
-  const rows = [
-    {
-      key: 'notifications',
-      ok: !!status.notifications,
-      label: 'Notifications',
-      why: 'Without this, nothing from ADHDone reaches you: no reminders, no alarms, nothing.',
-      action: () => tryOpen(() => NotifyBridge?.requestPermission?.()),
-    },
+  const notificationsRow = {
+    key: 'notifications',
+    ok: !!status.notifications,
+    label: 'Notifications',
+    why: 'Without this, nothing from ADHDone reaches you: no reminders, no alarms, nothing.',
+    action: () => tryOpen(() => NotifyBridge?.requestPermission?.()),
+  };
+  // The iPhone app has none of Android's switches; the one thing it may ask
+  // for besides notifications is AlarmKit's own permission, when its
+  // getStatus reports one (`alarms`).
+  const rows = !onThisPhone('androidSwitches') ? [
+    notificationsRow,
+    ...(status.alarms === undefined ? [] : [{
+      key: 'alarms',
+      ok: !!status.alarms,
+      label: 'Alarms',
+      why: 'Lets ADHDone ring full screen, even on silent or in a Focus.',
+      action: () => tryOpen(() => AlarmBridge?.requestAlarmAccess?.()),
+    }]),
+  ] : [
+    notificationsRow,
     {
       key: 'exact',
       ok: !!status.exactAlarms,
@@ -705,14 +730,14 @@ export function AlarmPermissionsDialog({ theme }) {
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
             {feature === 'timers'
-              ? "The focus timer and task timers ring when their time is up, so Android needs these switched on. You can say no — they'll still work, just quieter and easier to miss."
+              ? `The focus timer and task timers ring when their time is up, so ${phoneOs()} needs these switched on. You can say no — they'll still work, just quieter and easier to miss.`
               : setup
               ? (allOk
-                ? 'Pick the sound it rings with. Every switch Android needed is already on.'
-                : "Pick the sound it rings with, then let Android know it may ring — tap each one and you'll hop out to a settings screen and straight back.")
+                ? `Pick the sound it rings with. Every switch ${phoneOs()} needed is already on.`
+                : `Pick the sound it rings with, then let ${phoneOs()} know it may ring — tap each one and you'll hop out to a settings screen and straight back.`)
               : allOk
-                ? 'Every switch Android needed is on.'
-                : "Android keeps these off until you say yes. Tap each one — you'll hop out to a settings screen and straight back."}
+                ? `Every switch ${phoneOs()} needed is on.`
+                : `${phoneOs({ capital: true })} keeps these off until you say yes. Tap each one — you'll hop out to a settings screen and straight back.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -1659,6 +1684,10 @@ export function AppUpdatePrompt({ user, theme }) {
     if (!NEWEST_BUILD_ON_PLAY) return;
     checked.current = true;
     if (!window.Capacitor?.isNativePlatform?.()) return;
+    // Android only: it counts Android build numbers and sends people to the
+    // Play Store. The iPhone app has its own numbers and store (Anna, Oct 22
+    // 2026); it gets no update card until one is made for it.
+    if (!onThisPhone('playUpdate')) return;
     // A return to the app after a while away is a new open.
     if (!updateOpenWatcher) {
       updateOpenWatcher = true;
@@ -1948,6 +1977,16 @@ export function WakeOfferPrompt({ user, theme }) {
 
   useEffect(() => {
     if (!user || wanted || Date.now() - wakeOfferCheckedAt < 60 * 60 * 1000) return;
+    // Never in the iPhone app: it can't see unlocks (Anna, Oct 22 2026: "that
+    // popup cant happen either"). The phone's switch is what counts, the same
+    // as below, so an account switched on from an Android phone goes back to
+    // "never set" here; otherwise Smart Reminders would wait each morning for
+    // a wake-up this phone can't report. Opening the Android phone again
+    // turns it back on from that phone's own switch.
+    if (isIPhoneApp()) {
+      if (user.wake_watch === true) base44.auth.updateMe({ wake_watch: null }).catch(() => {});
+      return;
+    }
     if (!window.Capacitor?.isNativePlatform?.() || typeof AB()?.wakeWatchStatus !== 'function') return;
     wakeOfferCheckedAt = Date.now();
     (async () => {
