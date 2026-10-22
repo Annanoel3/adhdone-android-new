@@ -403,6 +403,7 @@ public class PushFilter implements INotificationServiceExtension {
         // A pushed alarm about an event gets an event's screen (Got it only).
         e.event = data.optBoolean("event", false) || "event_reminder".equals(data.optString("type", ""));
         e.theirTime = data.optBoolean("theirTime", false);
+        e.eased = data.optBoolean("eased", false);
         String title = notification.getTitle() != null ? notification.getTitle() : "";
         String body = notification.getBody() != null ? notification.getBody() : "";
         e.title = title.isEmpty() ? "ADHDone" : title;
