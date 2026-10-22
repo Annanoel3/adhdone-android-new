@@ -109,9 +109,10 @@ export function easeFacts(task: any, owner: any, dayCount: number): string {
   if (task.urgency) lines.push(`Priority the app gave it: ${task.urgency}`);
   if (task.due_date) lines.push(`Date: ${String(task.due_date).slice(0, 10)}${task.deadline_style === 'by' ? ' (a deadline: "by" then)' : ''}`);
   else lines.push('Date: none');
-  const notes = String(task.description || task.notes || '').trim();
+  const notes = [task.description, task.notes].map((s) => String(s || '').trim()).filter(Boolean).join(' / ');
   if (notes) lines.push(`Their notes on it: "${notes.slice(0, 400)}"`);
-  if (Array.isArray(task.tags) && task.tags.length) lines.push(`Tags: ${task.tags.slice(0, 8).join(', ')}`);
+  const tag = Array.isArray(task.tag) ? task.tag.join(', ') : String(task.tag || '').trim();
+  if (tag) lines.push(`Tag: ${tag.slice(0, 120)}`);
   lines.push(`Put off on ${dayCount} different days, still not done.`);
   const about = String(owner?.about_me || '').trim();
   if (about) lines.push(`What they told the app about their life: "${about.slice(0, 400)}"`);
