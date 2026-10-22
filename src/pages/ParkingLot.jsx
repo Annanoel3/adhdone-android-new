@@ -2115,42 +2115,15 @@ Return ONLY the category name, nothing else.`;
                 if (near && !(near.notes || []).includes(String(e.note))) near.notes = [...(near.notes || []), String(e.note)];
               }
             }
-            // The tooltip names the moment in full either way.
-            const whenOf = (label, payload) => { const ms = payload?.[0]?.payload?.ms; return Number.isFinite(ms) ? formatLogTime(new Date(ms).toISOString()) : label; };
-            // Tapping a dot shows its numbers and, under them, the note(s)
-            // written with that reading. Same look as the chart's plain tooltip.
-            const NoteTip = ({ active, payload, label }) => {
-              if (!active || !payload || payload.length === 0) return null;
-              const notes = payload[0]?.payload?.notes || [];
-              return (
-                <div style={{ background: '#fff', border: '1px solid #ccc', padding: '8px 10px', maxWidth: 240, fontSize: 13, lineHeight: 1.35 }}>
-                  <p style={{ margin: '0 0 4px', color: '#111' }}>{whenOf(label, payload)}</p>
-                  {payload.map((it) => (
-                    <p key={it.dataKey} style={{ margin: 0, color: it.color }}>{it.name} : {it.value}</p>
-                  ))}
-                  {notes.map((nt, i) => (
-                    <p key={i} style={{ margin: '6px 0 0', color: '#555', fontStyle: 'italic', whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{nt}</p>
-                  ))}
-                </div>
-              );
-            };
-            const axis = niceTicks(points.flatMap((r) => lines.map((l) => r[l.key])));
             return (
               <>
                 {points.length >= 2 && (
-                  <div className="h-44 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
-                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} domain={axis ? axis.domain : ['auto', 'auto']} ticks={axis ? axis.ticks : undefined} />
-                        <ChartTooltip content={<NoteTip />} allowEscapeViewBox={{ x: false, y: true }} wrapperStyle={{ zIndex: 20 }} />
-                        {lines.length > 1 && <ChartLegend wrapperStyle={{ fontSize: 11 }} />}
-                        {lines.map((l) => (
-                          <Line key={l.key} type="monotone" dataKey={l.key} name={l.name} stroke={l.color} strokeWidth={2} dot={{ r: 3 }} connectNulls />
-                        ))}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
+                  <TrackerChart
+                    points={points}
+                    lines={lines}
+                    title={[historyFor, ...companions].filter(Boolean).map((t) => t.idea).join(' · ')}
+                    dark={theme === 'dark'}
+                  />
                 )}
                 {(() => {
                   // Every tracker in the linked group, newest first. Readings
