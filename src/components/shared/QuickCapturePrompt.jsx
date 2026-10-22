@@ -33,6 +33,7 @@ import {
   usePopupTurn,
 } from '@/components/onboarding/onboardingSurface';
 import { seenKey } from '@/components/onboarding/tourVersion';
+import { firstUseSeen, markFirstUseSeen } from '@/components/onboarding/FirstUseDialog';
 import {
   setAlarmMode,
   refreshAlarms,
