@@ -413,6 +413,30 @@ async function handleTaskEvent(req: Request): Promise<Response> {
       }
     }
 
+    // An edit puts a put-off task back on normal reminders (Anna, Oct 22 2026:
+    // editing it is new information): its put-off days and eased plan
+    // (shared/easeOff.ts) are cleared when they change its wording, priority
+    // or date. A repeating task's date moves on by itself, so only a one-off
+    // task's date counts. ease_plan is set to {} (an object field can't be null).
+    const hadEase = (Array.isArray(old_data?.put_off_days) && old_data.put_off_days.length > 0)
+      || !!(old_data?.ease_plan && old_data.ease_plan.plan);
+    if (hadEase && data.status === 'active') {
+      const differs = (k: string) => String(data?.[k] ?? '') !== String(old_data?.[k] ?? '');
+      const repeating = !!data.reminder_interval && !['once', 'none'].includes(String(data.reminder_interval));
+      const edited = ['title', 'urgency', 'original_input', 'description', 'notes'].some(differs)
+        || (!repeating && (differs('due_date') || differs('event_time')));
+      if (edited) {
+        try {
+          await base44.asServiceRole.entities.Task.update(event.entity_id, { put_off_days: [], ease_plan: {} });
+          data.put_off_days = [];
+          data.ease_plan = {};
+          console.log(`[onTaskUpdate] ${event.entity_id} edited: back on normal reminders (put-off days cleared)`);
+        } catch (e) {
+          console.error('[onTaskUpdate] could not clear the eased plan:', e);
+        }
+      }
+    }
+
     // A SNOOZE IS NOT A COMPLETION. The snooze handler has just booked the one
     // reminder the user asked for and written its id plus the new next_reminder.
     // Treating 'snoozed' like 'completed' cancelled that reminder and wiped the
