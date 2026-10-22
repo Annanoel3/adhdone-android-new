@@ -14,6 +14,7 @@ import { cancelScheduledReminder } from './reminderScheduler';
 import { isInQuietHours, isTimeTheySet } from './reminderScheduler';
 import { getReminderCopy } from './reminderCopy';
 import { isStepDone, markStepDone } from '@/components/onboarding/onboardingGate';
+import { isIPhoneApp, onThisPhone, IPHONE_SPACES_ALARMS } from '@/lib/phonePlatform';
 
 // The widget only has room for a handful of rows, and a wall of text is the
 // opposite of useful on a home screen.
@@ -434,8 +435,10 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
   // From build 39 the phone decides which close alarms ring as one (only
   // tasks that go together; anything else waits 10 minutes after the first,
   // Anna, Oct 10 2026), so the list goes over unfolded. Older builds keep the
-  // fold below, so they never ring alarms back to back.
-  if (window.Capacitor?.Plugins?.AlarmBridge?.wakeWatchStatus) {
+  // fold below, so they never ring alarms back to back. The iPhone app is
+  // judged by IPHONE_SPACES_ALARMS (phonePlatform.js), not by that method:
+  // it has no wake-up setting, so the method says nothing about it.
+  if (isIPhoneApp() ? IPHONE_SPACES_ALARMS : !!window.Capacitor?.Plugins?.AlarmBridge?.wakeWatchStatus) {
     out.sort((a, b) => a.alarm.at - b.alarm.at);
     return out.map((e) => e.alarm).slice(0, ALARM_MAX);
   }
@@ -769,6 +772,25 @@ export async function alarmPermissionStatus() {
   }
 }
 
+// The switches alarms need that are still off on this phone, not counting
+// notifications (every caller handles those first). Android: exact alarms,
+// full-screen, display over other apps (only builds that report it) and
+// battery. iPhone: just AlarmKit's own permission, which its getStatus reports
+// as `alarms` (none of Android's switches exist there, so they're never asked
+// for; Anna, Oct 22 2026). Each entry is a short name, as the profile lists them.
+export function alarmSwitchesOff(st) {
+  if (!st) return [];
+  if (!onThisPhone('androidSwitches')) {
+    return st.alarms === false ? ['Alarms'] : [];
+  }
+  return [
+    !st.exactAlarms && 'Exact alarms',
+    !st.fullScreen && 'Full-screen',
+    st.overlay === false && 'Display over apps',
+    !st.ignoringBatteryOptimizations && 'Battery',
+  ].filter(Boolean);
+}
+
 // Something still missing? Then the guided "let your phone ring" dialog
 // (mounted once in Layout) opens, and this resolves true. Called the moment
 // someone first turns an alarm on — a task's switch, the first-task question,
@@ -792,7 +814,7 @@ export async function requestAlarmPermissions({ setup = false, feature = '' } = 
   }
   // overlay ("Display over other apps") is only reported by newer builds; an
   // older build that doesn't know it must not be nagged about it.
-  const missing = !st.notifications || !st.exactAlarms || !st.fullScreen || !st.ignoringBatteryOptimizations || st.overlay === false;
+  const missing = !st.notifications || alarmSwitchesOff(st).length > 0;
   if (feature === 'timers') {
     if (isStepDone(TIMER_SETUP_STEP)) return false;
     markStepDone(TIMER_SETUP_STEP);
@@ -811,7 +833,7 @@ export async function requestAlarmPermissions({ setup = false, feature = '' } = 
 // alarms and timers alike. Only builds from 1.3.9 on have it; on older ones
 // the question is never shown.
 export function alarmQuietChoiceSupported() {
-  return typeof window.Capacitor?.Plugins?.AlarmBridge?.setQuietVibrate === 'function';
+  return onThisPhone('vibrateWhenQuiet') && typeof window.Capacitor?.Plugins?.AlarmBridge?.setQuietVibrate === 'function';
 }
 
 // "Silent alarms during events?" — the yes/no asked (and required) the first
@@ -879,7 +901,7 @@ export async function pushEventWindows(tasks) {
 export const QUIET_WHEN_CHOICES = ['silent', 'dnd', 'both'];
 
 export function alarmQuietWhenSupported() {
-  return typeof window.Capacitor?.Plugins?.AlarmBridge?.setQuietWhen === 'function';
+  return onThisPhone('vibrateWhenQuiet') && typeof window.Capacitor?.Plugins?.AlarmBridge?.setQuietWhen === 'function';
 }
 
 // The phone's setting from the account: 'off' unless vibrate-only is on.
@@ -891,6 +913,7 @@ export function quietWhenFor(user) {
 export async function pushAlarmQuietWhen(when) {
   const w = QUIET_WHEN_CHOICES.includes(when) ? when : 'off';
   const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
+  if (!onThisPhone('vibrateWhenQuiet')) return false;
   if (typeof AlarmBridge?.setQuietWhen === 'function') {
     try {
       await AlarmBridge.setQuietWhen({ when: w });
@@ -905,7 +928,7 @@ export async function pushAlarmQuietWhen(when) {
 
 export async function pushAlarmQuietVibrate(on) {
   const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
-  if (typeof AlarmBridge?.setQuietVibrate !== 'function') return false;
+  if (!onThisPhone('vibrateWhenQuiet') || typeof AlarmBridge?.setQuietVibrate !== 'function') return false;
   try {
     await AlarmBridge.setQuietVibrate({ on: !!on });
     return true;
