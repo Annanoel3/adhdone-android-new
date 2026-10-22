@@ -452,3 +452,8 @@ in `android/app/build.gradle`. Add anything else pending before building.
   picked (a smart reminder), then two both at 3:00 they set. In the first case the one they set
   rings at 3:00 even if the other started first; in the second, snoozing the first rings the
   second at once, not 10 minutes later.
+- The eased alarm (Oct 22, 2026): a task put off on 3 different days moves to an eased plan
+  (shared/easeOff.ts). Its one alarm a day comes as a smart-nudge push with `data.eased = true`,
+  read into `AlarmStore.Entry.eased` by PushFilter.ringOnArrival. The alarm screen then shows only
+  Done and Later (no snoozes, no Open) and the tray has no Snooze. Normal alarms keep every
+  button. Test: a push with `alarm: true, eased: true` and a taskId shows Done and Later only.
