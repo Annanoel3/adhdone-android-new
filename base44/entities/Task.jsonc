@@ -329,7 +329,7 @@
       "items": {
         "type": "string"
       },
-      "description": "The days (YYYY-MM-DD, the owner's own date) on which a reminder or alarm for this task was put off: Later, a snooze, swiped away or closed, or rang out unanswered (Done and Open don't count). Put off on 3 different days without being done, it moves to an eased plan (ease_plan). Cleared when they edit the task (its wording, priority or date). shared/easeOff.ts (Anna, Oct 22 2026)."
+      "description": "The days (YYYY-MM-DD, the owner's own date) on which a reminder or alarm for this task was put off: Later, a snooze, stopped without a snooze (the alarm's Open button, a swipe), closed, or rang out unanswered. Done doesn't count. Put off on 3 different days without being done, it moves to an eased plan (ease_plan). Cleared when they edit the task (its wording, priority or date). shared/easeOff.ts (Anna, Oct 22 2026)."
     },
     "ease_plan": {
       "type": "object",
