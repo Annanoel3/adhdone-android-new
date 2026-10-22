@@ -26,6 +26,7 @@ import HomeZipCard from '@/components/settings/HomeZipCard';
 import QuickCaptureCard, { AlarmCard } from '@/components/settings/QuickCaptureCard';
 import { voiceCheckInsOn, setVoiceCheckIns, speechAvailable } from '@/components/utils/speak';
 import { refreshAlarms, alarmPermissionStatus } from '@/components/utils/widgetBridge';
+import { onThisPhone } from '@/lib/phonePlatform';
 import AdDiagnosticsCard from '@/components/settings/AdDiagnosticsCard';
 import { Textarea } from '@/components/ui/textarea';
 import VersionTap from '@/components/settings/VersionTap';
@@ -195,7 +196,9 @@ export default function Settings() {
 
   useEffect(() => {
     const AB = alarmBridge();
-    if (!AB?.wakeWatchStatus) return undefined;
+    // Never in the iPhone app, which can't see unlocks (Anna, Oct 22 2026:
+    // "That cant be in the settings for iphone users").
+    if (!AB?.wakeWatchStatus || !onThisPhone('wakeWatch')) return undefined;
     const check = async () => {
       try {
         const st = await AB.wakeWatchStatus();
@@ -222,7 +225,7 @@ export default function Settings() {
 
   const handleWakeWatchToggle = async (on) => {
     const AB = alarmBridge();
-    if (!AB?.wakeWatchStatus) return;
+    if (!AB?.wakeWatchStatus || !onThisPhone('wakeWatch')) return;
     setWakeBusy(true);
     try {
       if (on) {
