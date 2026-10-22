@@ -963,8 +963,13 @@ export const LOUD_ALARM_SOUND_FOR = new Map([
 export async function pushAlarmSound(user) {
   const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
   if (!AlarmBridge?.setSound) return null;
+  // The spoken alarm ("speak:") picked on an Android phone means the phone's
+  // default alarm on a phone without it (the iPhone app until it has one).
+  let url = user?.alarm_sound_url || '';
+  let name = user?.alarm_sound_name || '';
+  if (url === 'speak:' && !onThisPhone('spokenAlarm')) { url = ''; name = ''; }
   try {
-    return await AlarmBridge.setSound({ url: user?.alarm_sound_url || '', name: user?.alarm_sound_name || '' });
+    return await AlarmBridge.setSound({ url, name });
   } catch (err) {
     console.error('Alarm sound sync failed:', err);
     return null;
