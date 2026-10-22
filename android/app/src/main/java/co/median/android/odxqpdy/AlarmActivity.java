@@ -235,6 +235,16 @@ public class AlarmActivity extends Activity {
                 done.setVisibility(android.view.View.VISIBLE);
             }
         }
+        if (e != null && e.eased && canMarkDone(e, taskId)) {
+            // The eased plan's one alarm a day: only Done and Later (Anna, Oct
+            // 22 2026: "these alarms that are happening after multiple
+            // dismissals should just have a done and later button").
+            snooze10.setVisibility(android.view.View.GONE);
+            snooze30.setVisibility(android.view.View.GONE);
+            snooze60.setVisibility(android.view.View.GONE);
+            findViewById(R.id.alarm_snooze_label).setVisibility(android.view.View.GONE);
+            dismiss.setVisibility(android.view.View.GONE);
+        }
         if (e != null && (e.noSnooze || e.event)) {
             // A timer's end or an event: nothing to put off, so only Stop is offered.
             snooze10.setVisibility(android.view.View.GONE);
