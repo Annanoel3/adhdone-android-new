@@ -143,10 +143,14 @@ Deno.serve(async (req) => {
     // saving or sending anything. For checking the planner from the
     // dashboard's Test Function.
     let previewOnly = false;
+    // as_new: true (preview only) = plan as if they joined today, to check
+    // the NEW HERE rule on a test account without making a new one.
+    let previewAsNew = false;
     try {
       const body = await req.json();
       if (body && typeof body.email === 'string') onlyEmail = body.email.trim();
       previewOnly = !!onlyEmail && body?.preview === true;
+      previewAsNew = previewOnly && body?.as_new === true;
     } catch { /* scheduled run: no body */ }
 
     // 1. Users
@@ -658,7 +662,7 @@ Deno.serve(async (req) => {
           // Joined in the last day and nothing from Smart Reminders has reached
           // them yet (Anna, Oct 22 2026: a dateless first task gets a reminder
           // the same day; Becky's first task went 25 days without one).
-          newAccount: (() => {
+          newAccount: previewAsNew || (() => {
             const made = utcMs(user.signed_up_at || user.created_date);
             return Number.isFinite(made) && nowMs - made < DAY_MS && !sentLog.some((l: any) => l && !l.skip);
           })(),
