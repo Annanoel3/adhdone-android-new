@@ -338,7 +338,8 @@ How it works, and how it must keep working:
    after Later as often as Smart Reminders picked it (Anna's vitamins rang 6 times on Oct
    19: "it becomes harassment once a user presses a later or time button").
 6. **Put off on 3 different days = a lighter plan (Anna, Oct 22 2026).** Later, a snooze,
-   swiped away, closed or rang out all count as putting it off; Done and Open don't. The
+   stopping it without a snooze (Open, a swipe), closed or rang out all count as putting
+   it off; Done doesn't. The
    days are kept on the task (`put_off_days`). On the 3rd different day the AI judges the
    plan from what they typed, the priority and who relies on it (`shared/easeOff.ts`,
    `ease_plan`), never from keywords: `daily_alarm` (it matters: morning summary plus one
