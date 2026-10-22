@@ -14,7 +14,6 @@ import { cancelScheduledReminder } from './reminderScheduler';
 import { isInQuietHours, isTimeTheySet } from './reminderScheduler';
 import { getReminderCopy } from './reminderCopy';
 import { isStepDone, markStepDone } from '@/components/onboarding/onboardingGate';
-import { isIPhoneApp, onThisPhone, IPHONE_SPACES_ALARMS } from '@/lib/phonePlatform';
 
 // The widget only has room for a handful of rows, and a wall of text is the
 // opposite of useful on a home screen.
@@ -339,9 +338,7 @@ function foldClusters(entries) {
     others = [];
   };
   for (const e of entries) {
-    // A time they set themselves is never folded into an earlier alarm: it
-    // rings at its own time.
-    if (lead && e.alarm.at - lead.alarm.at < ALARM_FOLD_MS && !e.alarm.theirTime) {
+    if (lead && e.alarm.at - lead.alarm.at < ALARM_FOLD_MS) {
       // A second moment of the same task inside the window just doesn't ring.
       if (e.alarm.taskId !== lead.alarm.taskId && !others.includes(e.alarm.title)) others.push(e.alarm.title);
       continue;
@@ -351,32 +348,6 @@ function foldClusters(entries) {
   }
   flush();
   return out;
-}
-
-// The heading of an alarm at a time they set themselves starts with the bell:
-// phones on builds 39–42 only know such an alarm by it, and without it the
-// alarm could be moved 10 minutes past another task's (Anna's 10 AM call rang
-// at 10:31 on Oct 21 2026). Build 43 on reads theirTime. Same as bellHeading in
-// base44/shared/reminderTitle.ts.
-function bellHeading(heading, title) {
-  const h = String(heading || '').trim();
-  if (h.startsWith('🔔')) return h;
-  const rest = h.replace(/^(📌|📅)\s*/u, '').trim() || String(title || '').trim() || 'Reminder';
-  return `🔔 ${rest}`;
-}
-
-// Alarms at times they set in the same minute ring in the order that matters
-// (the server's alarmOrder.ts keeps each task's place in alarm_order, by clock
-// time): each one after the first rings this much later per place, so the
-// phone rings it the moment the one before it is answered. Same as
-// orderWaitMs in base44/shared/reminderTitle.ts.
-const ORDER_STEP_MS = 10 * 1000;
-function orderWaitMs(t, atMs) {
-  const d = new Date(atMs);
-  const key = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-  const place = t?.alarm_order && typeof t.alarm_order === 'object' ? t.alarm_order[key] : null;
-  const rank = Math.max(0, Math.min(5, Math.floor(Number(place?.rank) || 0)));
-  return rank * ORDER_STEP_MS;
 }
 
 export function alarmSetFor(tasks, userDefault = alarmMode) {
@@ -395,17 +366,11 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
       // Inside quiet hours only a time they set themselves rings (a 5 AM
       // flight, RULES.md §9 Q4), or a task they asked to run through the night.
       const inQuiet = isInQuietHours(new Date(m.at));
-      // A time they set themselves (the call "at 10:00 tomorrow"), quiet hours or not.
-      const setByThem = !!m.theirs || isTimeTheySet(t, m.at);
-      const theirTime = inQuiet && setByThem;
+      const theirTime = inQuiet && (m.theirs || isTimeTheySet(t, m.at));
       if (inQuiet && !t.quiet_hours_exempt && !theirTime) continue;
       // Heads-ups stay regular pushes; see ringsOutLoud.
       if (!ringsOutLoud(t, m.at, m.label)) continue;
-      const alarm = { id: `${t.id}:${m.at}`, taskId: t.id, title: t.title || 'Task', at: setByThem ? m.at + orderWaitMs(t, m.at) : m.at, heading: setByThem ? bellHeading(m.heading, t.title) : m.heading, body: m.body };
-      // It rings at that time: never moved to keep 10 minutes from another
-      // task's alarm, and one the app picked that is ringing then makes way
-      // for it (AlarmService: build 43 on reads theirTime, 39–42 the bell).
-      if (setByThem) alarm.theirTime = true;
+      const alarm = { id: `${t.id}:${m.at}`, taskId: t.id, title: t.title || 'Task', at: m.at, heading: m.heading, body: m.body };
       // Home or Back on this one rings it again in 10 minutes instead of
       // closing it (build 40 on): one sleepy press mustn't silence it.
       if (theirTime) alarm.throughQuiet = true;
@@ -435,10 +400,8 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
   // From build 39 the phone decides which close alarms ring as one (only
   // tasks that go together; anything else waits 10 minutes after the first,
   // Anna, Oct 10 2026), so the list goes over unfolded. Older builds keep the
-  // fold below, so they never ring alarms back to back. The iPhone app is
-  // judged by IPHONE_SPACES_ALARMS (phonePlatform.js), not by that method:
-  // it has no wake-up setting, so the method says nothing about it.
-  if (isIPhoneApp() ? IPHONE_SPACES_ALARMS : !!window.Capacitor?.Plugins?.AlarmBridge?.wakeWatchStatus) {
+  // fold below, so they never ring alarms back to back.
+  if (window.Capacitor?.Plugins?.AlarmBridge?.wakeWatchStatus) {
     out.sort((a, b) => a.alarm.at - b.alarm.at);
     return out.map((e) => e.alarm).slice(0, ALARM_MAX);
   }
@@ -512,48 +475,30 @@ function laterMorningAfter(now) {
   }
   return new Date(now.getTime() + LATER_BREAK_MS);
 }
-// Each "not now" (Later) on a task in a day gives it a break by its priority
-// (Anna, Oct 20 2026): 1st: 3 hours (low, medium), 2 (high), 1 (urgent); 2nd:
-// 3 hours (low, medium, high), 1 (urgent); 3rd: done for the day (low,
-// medium), 2 more hours (high, urgent); 4th: done for the day. Done for the
-// day runs until their next morning. The time they set for the task today
-// still rings, and a "by" deadline later today keeps one reminder 30 minutes
-// before it. Same rule as cancelTaskNotifications (notNowUntil). Until Oct 20
-// a task due today, or an urgent one, got no break at all, and every daily
-// routine is due today.
-const NOT_NOW_STEPS = {
-  low: [3, 3, 'day'],
-  medium: [3, 3, 'day'],
-  high: [2, 3, 2, 'day'],
-  urgent: [1, 1, 2, 'day'],
-};
-function localDayKey(d) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-// Which "not now" this is today for the task, counting `taps` more.
-function notNowLevel(t, now = new Date(), taps = 1) {
-  const day = localDayKey(now);
-  const sofar = t.not_now_day === day ? Math.max(0, Math.floor(Number(t.not_now_count) || 0)) : 0;
-  return { day, level: sofar + Math.max(1, taps) };
-}
-function laterBreakUntil(t, now = new Date(), level = notNowLevel(t, now).level) {
-  const steps = NOT_NOW_STEPS[t.urgency] || NOT_NOW_STEPS.medium;
-  const step = steps[Math.min(Math.max(1, level), steps.length) - 1];
-  let until = step === 'day' ? laterMorningAfter(now) : new Date(now.getTime() + step * 60 * 60 * 1000);
-  // Never shorten a break that is already longer.
+function laterBreakUntil(t, now = new Date()) {
+  // A task due today doesn't count for the Later rules (Anna, Oct 11 2026): no
+  // break. Later only says "not this minute"; Smart Reminders decides when it
+  // comes back today. Same as cancelTaskNotifications. An urgent task, whatever
+  // its date, gets no break either.
+  if (t.urgency === 'urgent') return new Date(now);
+  const rawDue = t.due_date ? String(t.due_date) : (t.event_time ? String(t.event_time) : '');
+  const due = rawDue.length > 10 ? new Date(rawDue) : null;
+  const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  if ((rawDue.length === 10 && rawDue === todayKey) || (due && !isNaN(due.getTime()) && due.toDateString() === now.toDateString())) return new Date(now);
   const prev = t.later_until ? new Date(t.later_until) : null;
   const prevMs = prev && !isNaN(prev.getTime()) ? prev.getTime() : NaN;
-  if (!isNaN(prevMs) && prevMs > until.getTime()) until = new Date(prevMs);
-  // The time they set for it today still rings; a "by" deadline keeps one
-  // reminder 30 minutes before it.
-  const rawDue = t.due_date ? String(t.due_date) : '';
-  if (rawDue.length > 10 && !t.day_only_task) {
-    const due = new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(rawDue) ? rawDue : `${rawDue}Z`);
-    if (!isNaN(due.getTime()) && due.getTime() > now.getTime() && localDayKey(due) === localDayKey(now)) {
-      const cap = t.deadline_style === 'by' ? due.getTime() - 30 * 60 * 1000 : due.getTime();
-      if (cap > now.getTime() && cap < until.getTime()) until = new Date(cap);
-    }
+  const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
+  // A break already given today (it ends today or later): this second Later
+  // runs until tomorrow morning.
+  const secondToday = !isNaN(prevMs) && prevMs >= startOfToday.getTime();
+  let until;
+  if (secondToday) {
+    until = laterMorningAfter(now);
+  } else {
+    until = new Date(now.getTime() + LATER_BREAK_MS);
   }
+  // Never shorten a break that is already longer.
+  if (!isNaN(prevMs) && prevMs > until.getTime()) until = new Date(prevMs);
   return until;
 }
 
@@ -642,10 +587,7 @@ async function drainAlarmActivity(tasks) {
     let laterUntil = null;
     if (row.later > 0) {
       patch.later_count = (t.later_count || 0) + row.later;
-      const notNow = notNowLevel(t, new Date(), row.later);
-      patch.not_now_day = notNow.day;
-      patch.not_now_count = notNow.level;
-      laterUntil = laterBreakUntil(t, new Date(), notNow.level);
+      laterUntil = laterBreakUntil(t);
       patch.later_until = laterUntil.toISOString();
       try {
         Object.assign(patch, await applyLaterBreak(t, laterUntil));
@@ -772,25 +714,6 @@ export async function alarmPermissionStatus() {
   }
 }
 
-// The switches alarms need that are still off on this phone, not counting
-// notifications (every caller handles those first). Android: exact alarms,
-// full-screen, display over other apps (only builds that report it) and
-// battery. iPhone: just AlarmKit's own permission, which its getStatus reports
-// as `alarms` (none of Android's switches exist there, so they're never asked
-// for; Anna, Oct 22 2026). Each entry is a short name, as the profile lists them.
-export function alarmSwitchesOff(st) {
-  if (!st) return [];
-  if (!onThisPhone('androidSwitches')) {
-    return st.alarms === false ? ['Alarms'] : [];
-  }
-  return [
-    !st.exactAlarms && 'Exact alarms',
-    !st.fullScreen && 'Full-screen',
-    st.overlay === false && 'Display over apps',
-    !st.ignoringBatteryOptimizations && 'Battery',
-  ].filter(Boolean);
-}
-
 // Something still missing? Then the guided "let your phone ring" dialog
 // (mounted once in Layout) opens, and this resolves true. Called the moment
 // someone first turns an alarm on — a task's switch, the first-task question,
@@ -814,7 +737,7 @@ export async function requestAlarmPermissions({ setup = false, feature = '' } = 
   }
   // overlay ("Display over other apps") is only reported by newer builds; an
   // older build that doesn't know it must not be nagged about it.
-  const missing = !st.notifications || alarmSwitchesOff(st).length > 0;
+  const missing = !st.notifications || !st.exactAlarms || !st.fullScreen || !st.ignoringBatteryOptimizations || st.overlay === false;
   if (feature === 'timers') {
     if (isStepDone(TIMER_SETUP_STEP)) return false;
     markStepDone(TIMER_SETUP_STEP);
@@ -833,7 +756,7 @@ export async function requestAlarmPermissions({ setup = false, feature = '' } = 
 // alarms and timers alike. Only builds from 1.3.9 on have it; on older ones
 // the question is never shown.
 export function alarmQuietChoiceSupported() {
-  return onThisPhone('vibrateWhenQuiet') && typeof window.Capacitor?.Plugins?.AlarmBridge?.setQuietVibrate === 'function';
+  return typeof window.Capacitor?.Plugins?.AlarmBridge?.setQuietVibrate === 'function';
 }
 
 // "Silent alarms during events?" — the yes/no asked (and required) the first
@@ -901,7 +824,7 @@ export async function pushEventWindows(tasks) {
 export const QUIET_WHEN_CHOICES = ['silent', 'dnd', 'both'];
 
 export function alarmQuietWhenSupported() {
-  return onThisPhone('vibrateWhenQuiet') && typeof window.Capacitor?.Plugins?.AlarmBridge?.setQuietWhen === 'function';
+  return typeof window.Capacitor?.Plugins?.AlarmBridge?.setQuietWhen === 'function';
 }
 
 // The phone's setting from the account: 'off' unless vibrate-only is on.
@@ -913,7 +836,6 @@ export function quietWhenFor(user) {
 export async function pushAlarmQuietWhen(when) {
   const w = QUIET_WHEN_CHOICES.includes(when) ? when : 'off';
   const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
-  if (!onThisPhone('vibrateWhenQuiet')) return false;
   if (typeof AlarmBridge?.setQuietWhen === 'function') {
     try {
       await AlarmBridge.setQuietWhen({ when: w });
@@ -928,7 +850,7 @@ export async function pushAlarmQuietWhen(when) {
 
 export async function pushAlarmQuietVibrate(on) {
   const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
-  if (!onThisPhone('vibrateWhenQuiet') || typeof AlarmBridge?.setQuietVibrate !== 'function') return false;
+  if (typeof AlarmBridge?.setQuietVibrate !== 'function') return false;
   try {
     await AlarmBridge.setQuietVibrate({ on: !!on });
     return true;
@@ -963,13 +885,8 @@ export const LOUD_ALARM_SOUND_FOR = new Map([
 export async function pushAlarmSound(user) {
   const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
   if (!AlarmBridge?.setSound) return null;
-  // The spoken alarm ("speak:") picked on an Android phone means the phone's
-  // default alarm on a phone without it (the iPhone app until it has one).
-  let url = user?.alarm_sound_url || '';
-  let name = user?.alarm_sound_name || '';
-  if (url === 'speak:' && !onThisPhone('spokenAlarm')) { url = ''; name = ''; }
   try {
-    return await AlarmBridge.setSound({ url, name });
+    return await AlarmBridge.setSound({ url: user?.alarm_sound_url || '', name: user?.alarm_sound_name || '' });
   } catch (err) {
     console.error('Alarm sound sync failed:', err);
     return null;

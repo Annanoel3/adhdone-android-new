@@ -5,10 +5,8 @@ Deno.serve(async (req) => {
   await createClientFromRequest(req);
   const { prompt } = await req.json();
   const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
-  // gpt-6-astra (was gpt-4o-mini, Base44's AI, May 12 2026). Anna, Oct 17 2026: "Move them to astra like I already asked weeks ago" (she asked for the newest model everywhere on Sept 17 2026).
   const completion = await openai.chat.completions.create({
-    model: "gpt-6-astra",
-    reasoning_effort: "low",
+    model: "gpt-4o-mini",
     messages: [{ role: "user", content: prompt }],
     response_format: { type: "json_object" }
   });

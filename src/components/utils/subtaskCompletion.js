@@ -6,9 +6,8 @@ import { Task } from "@/entities/Task";
 export async function completeSubtasks(parentTaskId) {
   if (!parentTaskId) return;
 
-  // True UTC, like every other way a task gets finished (until Oct 16 2026
-  // this stamped local clock time as UTC, hours off for everyone).
-  const localISOString = new Date().toISOString();
+  const now = new Date();
+  const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
 
   const activeSubtasks = await Task.filter({ parent_task_id: parentTaskId, status: 'active' });
   if (activeSubtasks.length === 0) return;

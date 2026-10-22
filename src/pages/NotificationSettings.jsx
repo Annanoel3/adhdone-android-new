@@ -30,8 +30,6 @@ function ringEnding(r) {
     case 'done': return 'done';
     case 'ignored': return 'rang out, no answer';
     case 'folded': return 'rang with another for the same task';
-    // Build 43 on: stopped so an alarm at a time they set could ring at that time.
-    case 'made_way': return 'stopped for an alarm at a time you set, rang again after it';
     default: return r.kind === 'alarm' ? 'still open' : '';
   }
 }

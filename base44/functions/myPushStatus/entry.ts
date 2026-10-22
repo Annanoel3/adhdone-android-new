@@ -21,12 +21,6 @@ Deno.serve(async (req) => {
         if (!me?.email) {
             return Response.json({ success: false, error: 'Not signed in' }, { status: 401 });
         }
-        // The owner can look up one person by email (Test Function:
-        // { "email": "..." }), to tell an uninstalled app from notifications
-        // switched off: the same answer plus each subscription's state, never
-        // its token (Oct 19 2026, Michelle's phone stopped taking pushes).
-        const input = await req.json().catch(() => ({}));
-        const lookup = me.role === 'admin' && typeof input?.email === 'string' ? input.email.trim() : '';
 
         const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
         const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
@@ -35,7 +29,7 @@ Deno.serve(async (req) => {
         }
 
         const res = await fetch(
-            `https://api.onesignal.com/apps/${appId}/users/by/external_id/${encodeURIComponent(lookup || me.email)}`,
+            `https://api.onesignal.com/apps/${appId}/users/by/external_id/${encodeURIComponent(me.email)}`,
             { headers: { Authorization: `Basic ${restApiKey}` } }
         );
 
@@ -54,16 +48,7 @@ Deno.serve(async (req) => {
         const push = subscriptions.filter((s) => typeof s?.type === 'string' && s.type.endsWith('Push'));
         const pushTypes = [...new Set(push.map((s) => s.type))];
         const enabledPushTypes = [...new Set(push.filter((s) => s.enabled === true).map((s) => s.type))];
-        const detail = lookup ? {
-            email: lookup,
-            lastActive: body?.properties?.last_active ?? null,
-            subscriptions: push.map((s) => ({
-                type: s.type, enabled: s.enabled, notification_types: s.notification_types,
-                app_version: s.app_version ?? null, device_model: s.device_model ?? null,
-                session_count: s.session_count ?? null, session_time: s.session_time ?? null,
-            })),
-        } : {};
-        return Response.json({ success: true, known: true, pushTypes, enabledPushTypes, ...detail });
+        return Response.json({ success: true, known: true, pushTypes, enabledPushTypes });
     } catch (error) {
         console.error('[myPushStatus] Unhandled error:', error.message);
         return Response.json({ success: false, error: 'Internal server error' }, { status: 500 });

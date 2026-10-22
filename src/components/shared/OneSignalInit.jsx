@@ -58,13 +58,6 @@ function handleNotificationData(data, navigate) {
     if (navigate) navigate(target); else window.location.href = target;
     return;
   }
-  // A come-back push ("Brain getting crowded?", cronBackBurnerCheckIn) opens
-  // Add Task: it's about putting something on an empty list.
-  if (data.type === 'comeback') {
-    const target = data.screen || '/AddTask';
-    if (navigate) navigate(target); else window.location.href = target;
-    return;
-  }
   const taskId = data.taskId || data.task_id;
   if (!taskId) return;
 

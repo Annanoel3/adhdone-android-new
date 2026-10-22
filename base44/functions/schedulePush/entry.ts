@@ -1,5 +1,3 @@
-// Re-saved Oct 21 2026 (noon) so the bundled shared/reminderTitle.ts is picked up: alarms at a time they set in the same minute ring in the order alarmOrder.ts judged (alarm_order), each one marked theirTime with the bell.
-// Re-saved Oct 17 2026 so the bundled shared/reminderTitle.ts is picked up: the at-the-time words are written by gpt-6-astra (was gpt-6-luna).
 // Re-saved Oct 12 2026 so the bundled shared/workHours.ts (via sendLedger) is picked up:
 // an overnight shift belongs to the day it starts and runs past midnight.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
@@ -168,9 +166,7 @@ Deno.serve(async (req) => {
             try {
                 const oneTime = task.classification === 'event' || !task.reminder_interval || task.reminder_interval === 'once';
                 if (oneTime && !task.day_only_task) {
-                    // 6 seconds (was 4.5): gpt-6-astra writes these now, and answered in
-                    // 2.5–3.5 s in tests (Oct 17 2026); past this the plain words go out.
-                    reworded = await atTimeWords(task, new Date(resolvedSendAt).getTime(), userTimeZone(owner), 6000);
+                    reworded = await atTimeWords(task, new Date(resolvedSendAt).getTime(), userTimeZone(owner), 4500);
                     if (reworded) {
                         pushTitle = reworded.title;
                         pushBody = reworded.body;

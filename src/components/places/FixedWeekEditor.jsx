@@ -55,8 +55,6 @@ export default function FixedWeekEditor({ user, theme }) {
         ends_at: v.ends_at,
       }));
       await base44.auth.updateMe({ work_fixed_days: list });
-      // Their quiet hours follow what they just told us, right away (checkQuietHoursFit; Anna, Oct 19 2026).
-      base44.functions.invoke('checkQuietHoursFit', {}).catch(() => {});
       setSaved(true);
       showSaved();
     } finally {

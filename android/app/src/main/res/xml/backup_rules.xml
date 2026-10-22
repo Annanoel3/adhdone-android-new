@@ -1,5 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- The base44 access token must never leave the device via cloud backup. -->
-<full-backup-content>
-    <exclude domain="sharedpref" path="adhdone_session.xml" />
-</full-backup-content>

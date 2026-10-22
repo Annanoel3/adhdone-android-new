@@ -24,13 +24,8 @@ export default function ShiftImportButton({ theme, onImported }) {
 
     const { file_url } = await base44.integrations.Core.UploadPublicFile({ file });
 
-    // Read on the app's own OpenAI key through categorizeIdea (gpt-6-astra),
-    // which takes the photo or PDF itself. This used Base44's own AI
-    // (InvokeLLM) from Sept 18 2026 until Oct 17 2026, against RULES.md rule 1.
-    let result = null;
-    try {
-      const reply = await base44.functions.invoke('categorizeIdea', {
-        prompt: `This is a work schedule (photo or document). Today is ${format(new Date(), 'EEEE, MMMM d, yyyy')}.
+    const result = await base44.integrations.Core.InvokeLLM({
+      prompt: `This is a work schedule (photo or document). Today is ${format(new Date(), 'EEEE, MMMM d, yyyy')}.
 
 Extract ONLY the shifts for the person this schedule belongs to. For each working day return:
 - shift_date: the calendar date in YYYY-MM-DD. If the schedule shows only weekdays without a year, assume the upcoming/current week relative to today.
@@ -38,16 +33,26 @@ Extract ONLY the shifts for the person this schedule belongs to. For each workin
 - ends_at: the shift END time in 24-hour HH:MM, or empty if not shown.
 - place_label: location/store name if the schedule names one, otherwise empty.
 
-Skip days off, blanks, "OFF", or anything that isn't a real shift. If you cannot read any shifts, return an empty list.
-
-Answer with JSON only, in this shape: {"shifts": [{"shift_date": "YYYY-MM-DD", "arrive_by": "HH:MM", "ends_at": "HH:MM or empty", "place_label": "name or empty"}]}`,
-        file_url,
-      });
-      const raw = String(reply?.data?.message || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
-      result = JSON.parse(raw);
-    } catch (e) {
-      result = null;
-    }
+Skip days off, blanks, "OFF", or anything that isn't a real shift. If you cannot read any shifts, return an empty list.`,
+      file_urls: [file_url],
+      response_json_schema: {
+        type: 'object',
+        properties: {
+          shifts: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                shift_date: { type: 'string' },
+                arrive_by: { type: 'string' },
+                ends_at: { type: 'string' },
+                place_label: { type: 'string' },
+              },
+            },
+          },
+        },
+      },
+    });
 
     const found = (result?.shifts || []).filter((s) => s.shift_date && s.arrive_by);
 

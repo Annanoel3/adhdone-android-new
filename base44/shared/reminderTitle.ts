@@ -8,7 +8,7 @@
 // dates, and a task captured as "due Friday" is saved as Friday 11:59 PM local,
 // which is already Saturday in UTC — so a Friday-evening reminder said "due
 // tomorrow" and named the wrong weekday for US users.
-import { DEFAULT_TIME_ZONE, localDateKey, localMinutesOfDay, resolveQuietHours, isInQuietHours, isTimeTheySet } from './quietHours.ts';
+import { DEFAULT_TIME_ZONE, localDateKey, resolveQuietHours, isInQuietHours, isTimeTheySet } from './quietHours.ts';
 import OpenAI from 'npm:openai';
 import { REMINDER_BRIEF } from './reminderBrief.ts';
 
@@ -45,9 +45,8 @@ export async function atTimeWords(task: any, atMs: number, timeZone: string, tim
       task?.location ? `Location they typed: ${String(task.location).slice(0, 200)}` : '',
     ].filter(Boolean).join('\n');
     const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
-    // gpt-6-astra (was gpt-6-luna, the cheaper one, from Sept 27 2026). Anna, Oct 17 2026: "Move them to astra like I already asked weeks ago" (she asked for the newest model everywhere on Sept 17 2026).
     const ask = openai.chat.completions.create({
-      model: 'gpt-6-astra',
+      model: 'gpt-6-luna',
       reasoning_effort: 'low',
       response_format: { type: 'json_object' },
       max_completion_tokens: 2000,
@@ -102,19 +101,11 @@ function sentence(s: string): string {
   return /[.!?]$/.test(s) ? s : `${s}.`;
 }
 
-// A reminder the person asked to get every day (or every other day). Once its
-// first day has gone by, every one after it is that same daily reminder, not
-// a task that "slipped past" anything (Oct 16 2026: Michelle's "Check email."
-// read "⚠️ … slipped past Wednesday. No shame…" every morning). Anna: "Daily
-// reminders should stop using that wording."
-const DAILY_RHYTHMS = new Set(['daily', 'every_other_day']);
-
 export function getReminderContent(
   taskTitle: string | null | undefined,
   dueDateISO: string | null | undefined,
   sendAtISO: string,
-  timeZone: string = DEFAULT_TIME_ZONE,
-  interval: string | null | undefined = null
+  timeZone: string = DEFAULT_TIME_ZONE
 ): { title: string; body: string } {
   const title = (taskTitle || '').trim() || 'your task';
   const quoted = `"${title}"`;
@@ -129,7 +120,6 @@ export function getReminderContent(
   const days = dueDay - localDay(sendAtISO, tz);
   const label = dayLabel(dueDay, days);
   if (days < 0) {
-    if (DAILY_RHYTHMS.has(String(interval || ''))) return { title: `📌 ${title}`, body: `Reminder: ${sentence(title)}` };
     return { title: `⚠️ ${title}`, body: `${quoted} slipped past ${label}. No shame — just pick it back up when you can.` };
   }
   if (days === 0) {
@@ -231,48 +221,11 @@ function reminderMoments(task: any, timeZone: string): { at: number; heading: st
       && (!own || hasItsOwnTime(task))) {
     const t = whenMs(task.next_reminder);
     if (!isNaN(t) && !out.has(t)) {
-      const copy = getReminderContent(task.title, task.due_date, new Date(t).toISOString(), timeZone, task.reminder_interval);
+      const copy = getReminderContent(task.title, task.due_date, new Date(t).toISOString(), timeZone);
       out.set(t, { at: t, heading: copy.title || '', body: copy.body || '' });
     }
   }
   return Array.from(out.values());
-}
-
-// The heading of an alarm at a time they set themselves starts with the bell.
-// Phones on builds 39–42 only know such an alarm by that bell
-// (AlarmService.isPinned): without it, the alarm could be moved 10 minutes
-// past another task's alarm, again and again. The at-the-time words written by
-// atTimeWords (Oct 12 2026) and the plain 📌 / 📅 headings had no bell, so
-// Anna's 10 AM call ("Call (210) 621-7099 at 10:00 tomorrow") rang at 10:31 on
-// Oct 21 2026, behind "Set watch to record continuously", also at 10:00 and
-// snoozed twice. Build 43 on reads theirTime instead. Same as bellHeading in
-// widgetBridge.js.
-export function bellHeading(heading: any, title: any): string {
-  const h = String(heading || '').trim();
-  if (h.startsWith('🔔')) return h;
-  const rest = h.replace(/^(📌|📅)\s*/u, '').trim() || String(title || '').trim() || 'Reminder';
-  return `🔔 ${rest}`;
-}
-
-// Two or more alarms at times they set in the same minute ring in the order
-// that matters (alarmOrder.ts judges it; Anna, Oct 21 2026: "which one sounds
-// more important..... a scheduled phone call involving another persons time
-// or a watch setting"). Each task keeps its place by clock time in its own
-// alarm_order; each one after the first rings this much later per place, so
-// the first rings on the minute and the phone rings the next the moment it's
-// answered. Same as orderWaitMs in widgetBridge.js.
-export const ORDER_STEP_MS = 10 * 1000;
-
-export function clockKey(ms: number, timeZone: string): string {
-  const m = localMinutesOfDay(new Date(ms), timeZone || DEFAULT_TIME_ZONE);
-  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
-}
-
-export function orderWaitMs(task: any, atMs: number, timeZone: string): number {
-  const all = task?.alarm_order && typeof task.alarm_order === 'object' ? task.alarm_order : null;
-  const place = all ? all[clockKey(atMs, timeZone)] : null;
-  const rank = Math.max(0, Math.min(5, Math.floor(Number(place?.rank) || 0)));
-  return rank * ORDER_STEP_MS;
 }
 
 // This task's upcoming alarms, exactly as the app would list them for the
@@ -293,18 +246,10 @@ export function phoneAlarmsFor(task: any, owner: any, now: number = Date.now()):
     // Inside quiet hours only a time they set themselves rings (RULES.md §9
     // Q4: a 5 AM flight), or a task they asked to run through the night.
     const inQuiet = quiet.enabled && isInQuietHours(new Date(m.at), quiet.startMin, quiet.endMin, timeZone);
-    // A time they set themselves (the call "at 10:00 tomorrow", "remind me at
-    // 10 a.m."), quiet hours or not.
-    const setByThem = m.theirs === true || isTimeTheySet(task, m.at, timeZone);
-    const theirTime = inQuiet && setByThem;
+    const theirTime = inQuiet && (m.theirs === true || isTimeTheySet(task, m.at, timeZone));
     if (inQuiet && task.quiet_hours_exempt !== true && !theirTime) continue;
     if (!ringsOutLoudOn(task, m.at, timeZone, m.label)) continue;
-    const alarm: any = { id: `${task.id}:${m.at}`, at: setByThem ? m.at + orderWaitMs(task, m.at, timeZone) : m.at, title: task.title || 'Task', heading: setByThem ? bellHeading(m.heading, task.title) : m.heading, body: m.body };
-    // It rings at that time. The phone never moves it to keep 10 minutes from
-    // another task's alarm, and a reminder the app picked that is ringing then
-    // makes way for it (AlarmService: build 43 on reads theirTime, builds
-    // 39–42 the bell at the start of the heading).
-    if (setByThem) alarm.theirTime = true;
+    const alarm: any = { id: `${task.id}:${m.at}`, at: m.at, title: task.title || 'Task', heading: m.heading, body: m.body };
     // Home or Back on this one rings it again in 10 minutes instead of closing
     // it (build 40 on; AlarmService.leftRinging): one sleepy press mustn't
     // silence the only alarm they asked for in the night.

@@ -5,7 +5,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { base44 } from "@/api/base44Client";
 import { ONBOARDING_STEPS, isStepDone, markStepDone } from "@/components/onboarding/onboardingGate";
 import { usePopupTurn } from "@/components/onboarding/onboardingSurface";
-import { alarmPermissionStatus, alarmSwitchesOff, refreshAlarms } from "@/components/utils/widgetBridge";
+import { alarmPermissionStatus, refreshAlarms } from "@/components/utils/widgetBridge";
 import {
   deviceCalendarPermissionLost,
   DEVICE_PERMISSION_EVENT,
@@ -183,10 +183,14 @@ const ALARM_SETUP_STEP = "onboarding_alarm_setup_done";
 // sound step never reaches the set-up step, and used to be left with alarms
 // on and nothing ever pointing at the switches (Rycher, Sep 30 2026).
 const ALERT_STYLE_STEP = "onboarding_alert_style_done";
-// The iPhone app has none of Android's switches; there only AlarmKit's own
-// permission counts (widgetBridge alarmSwitchesOff).
 function alarmSwitchesMissing(st) {
-  return alarmSwitchesOff(st).length;
+  if (!st) return 0;
+  return [
+    !st.exactAlarms,
+    !st.fullScreen,
+    !st.ignoringBatteryOptimizations,
+    st.overlay === false,
+  ].filter(Boolean).length;
 }
 
 export function AlarmSetupBanner({ theme, specialMode, user }) {

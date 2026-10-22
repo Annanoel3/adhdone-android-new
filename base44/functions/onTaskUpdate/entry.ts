@@ -1,5 +1,3 @@
-// Re-saved Oct 21 2026 so the bundled shared/reminderTitle.ts is picked up: an alarm at a time they set is marked theirTime and headed with the bell, so the phone never moves it.
-// Re-saved Oct 16 2026 so the bundled shared/reminderTitle.ts is picked up: a daily reminder after its first day reads as a reminder, never "slipped past".
 // Re-saved Oct 13 2026 (night) so the bundled shared/reminderTitle.ts is picked up: an appointment's alarm carries "Record notes" as its second button.
 // Re-saved Oct 13 2026 (evening) so the bundled shared/reminderTitle.ts is picked up: an event's alarm is marked `event` for the phone (build 42 on shows "Got it" only).
 // Re-saved Oct 13 2026 so the bundled shared/reminderTitle.ts is picked up: a timed event's alarm rings at its time (and "leave now"), its heads-ups stay pushes.
@@ -10,7 +8,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 // Reminder wording: every body names the task (the spoken alarm reads it).
 import { getReminderContent, pushPhoneAlarms, platformTimeMs } from '../../shared/reminderTitle.ts';
-import { orderSameMinuteAlarms } from '../../shared/alarmOrder.ts';
 import { adjustForQuietHours, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, placeAppReminder } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
 
@@ -372,10 +369,6 @@ async function handleTaskEvent(req: Request): Promise<Response> {
         const kick = await markPlanStale(base44, data.created_by || user.email, 'task added', !data.google_event_id && !data.parent_task_id);
         await kickPlanner(base44, kick);
       }
-      // An event made with no date or time gets no reminders, and the "would
-      // notes help?" check rides on its reminders, so it never showed Record
-      // notes (Anna, Oct 20 2026). Asked here instead.
-      await judgeNotesForUndatedEvent(base44, data, event.entity_id);
       return Response.json({ success: true, created: true, smartNudge: reads });
     }
 
@@ -409,30 +402,6 @@ async function handleTaskEvent(req: Request): Promise<Response> {
           await base44.asServiceRole.functions.invoke('cronRefillReminders', { onlyEmail: user.email });
         } catch (e) {
           console.warn('[onTaskUpdate] could not rebook the other reminders right away; the hourly job will:', e);
-        }
-      }
-    }
-
-    // An edit puts a put-off task back on normal reminders (Anna, Oct 22 2026:
-    // editing it is new information): its put-off days and eased plan
-    // (shared/easeOff.ts) are cleared when they change its wording, priority
-    // or date. A repeating task's date moves on by itself, so only a one-off
-    // task's date counts. ease_plan is set to {} (an object field can't be null).
-    const hadEase = (Array.isArray(old_data?.put_off_days) && old_data.put_off_days.length > 0)
-      || !!(old_data?.ease_plan && old_data.ease_plan.plan);
-    if (hadEase && data.status === 'active') {
-      const differs = (k: string) => String(data?.[k] ?? '') !== String(old_data?.[k] ?? '');
-      const repeating = !!data.reminder_interval && !['once', 'none'].includes(String(data.reminder_interval));
-      const edited = ['title', 'urgency', 'original_input', 'description', 'notes'].some(differs)
-        || (!repeating && (differs('due_date') || differs('event_time')));
-      if (edited) {
-        try {
-          await base44.asServiceRole.entities.Task.update(event.entity_id, { put_off_days: [], ease_plan: {} });
-          data.put_off_days = [];
-          data.ease_plan = {};
-          console.log(`[onTaskUpdate] ${event.entity_id} edited: back on normal reminders (put-off days cleared)`);
-        } catch (e) {
-          console.error('[onTaskUpdate] could not clear the eased plan:', e);
         }
       }
     }
@@ -889,7 +858,7 @@ async function handleTaskEvent(req: Request): Promise<Response> {
           // Only schedule if it's in the future
           if (sendAt.getTime() > now) {
             const sendAtISO = sendAt.toISOString();
-            const { title, body } = getReminderContent(currentTask.title, currentTask.due_date, sendAtISO, timeZone, currentTask.reminder_interval);
+            const { title, body } = getReminderContent(currentTask.title, currentTask.due_date, sendAtISO, timeZone);
             const notificationId = await scheduleOneSignalNotification(
               currentTask.notification_recipient_email || user.email,
               title,
@@ -944,29 +913,6 @@ async function handleTaskEvent(req: Request): Promise<Response> {
   }
 }
 
-// An event with no date or time yet: would recording it help? (The same
-// yes/no its reminders ask once it has a time; generateReminderSchedule
-// notesCheck, gpt-6-luna.) Only for owners whose phone can record, once per
-// event. The answer is kept on the task (notes_worthy) for its Record notes
-// button. Never throws: no answer just means no button until it has a time.
-async function judgeNotesForUndatedEvent(base44: any, task: any, id: string) {
-  try {
-    if (!task || !id || task.classification !== 'event' || task.status !== 'active') return;
-    if (task.event_time || task.due_date || task.parent_task_id || task.birthday_person) return;
-    if (typeof task.notes_worthy === 'boolean') return;
-    const owners = await base44.asServiceRole.entities.User.filter({ email: task.created_by });
-    if (owners?.[0]?.notes_can_record !== true) return;
-    const res = await base44.asServiceRole.functions.invoke('generateReminderSchedule', {
-      notesCheck: { title: task.title || '', location: task.location || '' },
-    });
-    const notes = (res?.data ?? res)?.notes === true;
-    await base44.asServiceRole.entities.Task.update(id, { notes_worthy: notes });
-    console.log(`[onTaskUpdate] undated event ${id}: notes would ${notes ? '' : 'not '}help`);
-  } catch (e) {
-    console.error('[onTaskUpdate] notes check failed:', (e as any)?.message || e);
-  }
-}
-
 // After a task changes, the phone's alarms for it follow right away: an edit
 // made on another device, a calendar event that moved, or the server re-booking
 // the task used to leave the phone ringing at the old time until the app was
@@ -985,13 +931,7 @@ async function movePhoneAlarms(client: any, payload: any) {
     const owners = await client.asServiceRole.entities.User.filter({ email: task.created_by });
     const owner = owners?.[0];
     if (!owner) return;
-    // Another alarm at a time they set in the same minute: the one that
-    // matters rings first (alarmOrder.ts, Anna, Oct 21 2026).
-    const ordered = await orderSameMinuteAlarms(client, task, owner).catch((e: any) => {
-      console.error('[onTaskUpdate] alarm order failed:', e?.message || e);
-      return task;
-    });
-    await pushPhoneAlarms(ordered, owner, {
+    await pushPhoneAlarms(task, owner, {
       before: oldData,
       changedAt: platformTimeMs(task.updated_date),
       source: 'onTaskUpdate',

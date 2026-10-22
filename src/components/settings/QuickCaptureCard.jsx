@@ -12,7 +12,6 @@ import {
 import { Zap, AlarmClock } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { setAlarmMode, refreshAlarms, pushAlarmSound, requestAlarmPermissions, alarmQuietChoiceSupported, pushAlarmQuietVibrate, eventQuietSupported, pushEventQuiet, alarmQuietWhenSupported, pushAlarmQuietWhen } from '../utils/widgetBridge';
-import { onThisPhone } from '@/lib/phonePlatform';
 
 const getPlugins = () => {
   const p = (typeof window !== 'undefined' && window.Capacitor && window.Capacitor.Plugins) || {};
@@ -32,8 +31,7 @@ export default function QuickCaptureCard({ theme }) {
       .catch(() => {});
   }, [ShareBridge]);
 
-  // Android only: the iPhone app has no pinned notification (Anna, Oct 22 2026).
-  if (!ShareBridge?.setQuickCaptureEnabled || !onThisPhone('pinnedCapture')) return null;
+  if (!ShareBridge?.setQuickCaptureEnabled) return null;
 
   const handleToggle = async (next) => {
     setBusy(true);
@@ -131,9 +129,7 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
   const previewRef = useRef(null);
   const fileRef = useRef(null);
   const { AlarmBridge } = getPlugins();
-  // Hidden in the iPhone app until it can ring a spoken alarm (phonePlatform.js).
-  const speakHere = onThisPhone('spokenAlarm');
-  const canSpeak = speakHere && typeof AlarmBridge?.previewSpeech === 'function';
+  const canSpeak = typeof AlarmBridge?.previewSpeech === 'function';
 
   useEffect(() => {
     setSound({ url: user?.alarm_sound_url || '', name: user?.alarm_sound_name || '' });
@@ -248,21 +244,18 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
   const textMain = dark ? 'text-gray-200' : 'text-gray-900';
   const textSub = dark ? 'text-gray-400' : 'text-gray-600';
   const isPreset = !sound.url || sound.url === SPOKEN_SOUND_URL || ALARM_SOUND_PRESETS.some((p) => p.url === sound.url);
-  // The spoken alarm picked on an Android phone rings the phone's default
-  // alarm where there's no spoken one (pushAlarmSound), so that's what shows.
-  const shownUrl = !speakHere && sound.url === SPOKEN_SOUND_URL ? '' : sound.url;
 
   return (
     <div className={className}>
       <p className={`text-sm font-medium ${textMain}`}>Alarm sound</p>
       <div className="flex items-center gap-2 mt-2">
         <select
-          value={shownUrl}
+          value={sound.url}
           onChange={handlePick}
           disabled={soundBusy}
           className={`flex-1 min-w-0 text-sm rounded-lg px-2 py-2 border ${dark ? 'bg-gray-700 border-gray-600 text-gray-200' : 'bg-white border-gray-300 text-gray-900'}`}
         >
-          {(canSpeak || (speakHere && sound.url === SPOKEN_SOUND_URL)) && (
+          {(canSpeak || sound.url === SPOKEN_SOUND_URL) && (
             <option value={SPOKEN_SOUND_URL}>{SPOKEN_SOUND_NAME} (spoken, no tone)</option>
           )}
           <option value="">Phone's default alarm</option>
@@ -272,7 +265,7 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
           {!isPreset && <option value={sound.url}>Your upload: {sound.name || 'sound'}</option>}
           <option value="__upload__">Upload your own…</option>
         </select>
-        <Button size="sm" variant="outline" onClick={togglePreview} disabled={!shownUrl || soundBusy}>
+        <Button size="sm" variant="outline" onClick={togglePreview} disabled={!sound.url || soundBusy}>
           {previewing ? 'Stop' : 'Play'}
         </Button>
       </div>
@@ -712,18 +705,6 @@ export function AlarmCard({ user, theme }) {
               action="Ask again"
               onAction={() => NotifyBridge?.requestPermission?.()}
             />
-            {/* The iPhone app: AlarmKit's own permission, when its getStatus
-                reports one, instead of Android's four switches below. */}
-            {!onThisPhone('androidSwitches') && status.alarms !== undefined && (
-              <Row
-                ok={status.alarms}
-                label="Alarms"
-                detail="Lets ADHDone ring full screen, even on silent or in a Focus."
-                action="Allow"
-                onAction={() => AlarmBridge?.requestAlarmAccess?.()}
-              />
-            )}
-            {onThisPhone('androidSwitches') && (<>
             <Row
               ok={status.exactAlarms}
               label="Exact timing"
@@ -754,7 +735,6 @@ export function AlarmCard({ user, theme }) {
               action="Fix"
               onAction={() => AlarmBridge.requestIgnoreBatteryOptimizations()}
             />
-            </>)}
             <p className={`text-xs mt-2 ${textSub}`}>
               {status.booked === 1 ? '1 alarm set.' : `${status.booked || 0} alarms set.`}
             </p>

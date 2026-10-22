@@ -1,10 +1,3 @@
-// Re-saved Oct 19 2026 (night) so the bundled shared/taskParsePrompt.ts and shared/runTaskParse.ts are picked up: a link the task needs (a video-session or meeting link) goes in the task's notes, never its title, and the time zone of a time stays out of the title.
-// Re-saved Oct 19 2026 (later) so the bundled shared/runTaskParse.ts is picked up: the same fix, now actually in the bundle (the first re-save went out before runTaskParse.ts was saved).
-// Re-saved Oct 19 2026 so the bundled shared/runTaskParse.ts is picked up: a time picked from a part of the day ("morning medication") is never marked as one the person stated, so it can't ring inside their quiet hours.
-// Re-saved Oct 17 2026 (evening) so the bundled shared/taskParsePrompt.ts and shared/runTaskParse.ts are picked up: an event that runs past midnight (7 PM–2 AM) is one night, not a two-day range, and a day counted from the real date instead of the said-at day gets a last look.
-// Re-saved Oct 17 2026 (night) so the bundled shared/runTaskParse.ts and shared/taskParsePrompt.ts are picked up: "tomorrow morning" / "Sunday night" get a time on gpt-6-astra, and the said-at day is in its system message too.
-// Re-saved Oct 17 2026 (later) so the bundled shared/taskParsePrompt.ts is picked up: its calendar is the moment the words were said and beats the real date gpt-6-astra is given.
-// Re-saved Oct 17 2026 so the bundled shared/runTaskParse.ts is picked up: the parser and its helpers run on gpt-6-astra (was gpt-5.4).
 // Re-saved Oct 14 2026 (later) so the bundled shared/taskParsePrompt.ts is picked up: priority_uninferrable is always false — the app never asks "how urgent?"; the card's priority is editable.
 // Re-saved Oct 14 2026 so the bundled shared/taskParsePrompt.ts is picked up: needs_date_pick is always false — the app never asks "when?" (four "make an appointment" tasks typed at once became four questions in a row).
 // Re-saved Oct 13 2026 so the bundled shared/runTaskParse.ts is picked up: one more ask when words that name a part of the day ("tonight") came back with no time.
@@ -139,18 +132,7 @@ const PARSER_CHECKS: { text: string; saidAt: number; expect: Record<string, any>
   { text: "Need to make appointment for cardiologist.", saidAt: said("2026-10-14T01:52:00-05:00"), expect: { target_date: null, needs_date_pick: (v: any) => !v } },
   // A number they typed stays in the title (Oct 13 2026: a user's "call propane
   // 530-477-7854 today" came out as "Call propane", the number gone).
-  // A part of the day is a time the app picks, never one they stated (Oct 16
-  // 2026: this became 6:30 AM marked as stated, and rang inside the person's
-  // quiet hours every morning).
-  { text: "taking morning medication", saidAt: said("2026-10-16T11:30:00-05:00"), expect: { target_time: aTime, time_stated: false } },
-  // A link the task needs goes in notes, and neither it nor the time zone is
-  // in the title (Anna, Oct 19 2026: this became "Video session with your
-  // therapist (CDT; betterhelp.com/s/c248xy5qjem6)").
-  { text: "A Video Session with your therapist is scheduled for Tuesday, Oct 20 at 11:00am CDT at betterhelp.com/s/c248xy5qjem6.", saidAt: said("2026-10-18T20:29:00-05:00"), expect: { title: (v: any) => typeof v === "string" && !/betterhelp|CDT/i.test(v), notes: (v: any) => typeof v === "string" && v.includes("betterhelp.com/s/c248xy5qjem6") && !/CDT|time zone/i.test(v), target_date: "2026-10-20", target_time: "11:00" } },
   { text: "call propane 530-477-7854 today", saidAt: said("2026-10-13T08:46:00-07:00"), expect: { title: (v: any) => typeof v === "string" && v.includes("530-477-7854"), target_date: "2026-10-13", deadline_style: "by" } },
-  // A party that runs past midnight is one night, not a two-day range: this one
-  // showed on its card as "Nov 1 – Nov 2" (Anna, Oct 17 2026).
-  { text: "4th Anniversary Neon Velocity Halloween Party Edition on Nov 1st, Sunday of Halloween weekend, from 7PM-2AM at Reset Arcade Bar, 10402 Menchaca Rd #2, Austin TX 78748.", saidAt: said("2026-10-14T10:25:00-05:00"), expect: { target_date: "2026-11-01", target_time: "19:00", end_date: null } },
 ];
 
 async function runParserSelfTest(base44: any) {

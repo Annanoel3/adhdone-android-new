@@ -16,10 +16,8 @@ Deno.serve(async (req) => {
 
     const { prompt } = await req.json();
 
-    // gpt-6-luna, the cheaper model, for the tip and its category (astra on
-    // Oct 17 2026). Anna, Oct 18 2026: "switch whatever wont be negatively affected to the cheaper one".
     const tipCompletion = await openai.chat.completions.create({
-      model: 'gpt-6-luna',
+      model: 'gpt-6-astra',
       messages: [
         { role: 'system', content: 'You are an ADHD productivity expert. Generate a helpful, motivating daily tip. Respond with just the tip text.' },
         { role: 'user', content: prompt }
@@ -33,9 +31,7 @@ Deno.serve(async (req) => {
     // Categorize the tip
     const categoryPrompt = `Categorize this tip into ONE category: "${tipText}"\n\nCategories: focus, motivation, organization, self_care, time_management\n\nReturn ONLY the category name.`;
     const categoryResponse = await openai.chat.completions.create({
-      model: 'gpt-6-luna',
-      reasoning_effort: 'low',
-      max_completion_tokens: 2000,
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'user',

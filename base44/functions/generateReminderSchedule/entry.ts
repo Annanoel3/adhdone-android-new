@@ -1,5 +1,3 @@
-// Re-saved Oct 21 2026 (noon) so the bundled shared/reminderTitle.ts is picked up: alarms at a time they set in the same minute ring in the order alarmOrder.ts judged (alarm_order), each one marked theirTime with the bell.
-// Re-saved Oct 17 2026 so the bundled shared/reminderTitle.ts is picked up: the at-the-time words are written by gpt-6-astra (was gpt-6-luna).
 // Re-saved Oct 13 2026 (night) so the bundled shared/captureToTasks.ts is picked up: a captured event's pushes carry an event's buttons (Snooze only), not a task's.
 // LLM-powered reminder schedule generator.
 // Takes a task title + scheduled date/time and returns an optimal reminder
@@ -64,16 +62,12 @@ function getEventSchedule(lead, afternoonOrLater) {
 
 // The "leave now" wording. Only claims traffic was accounted for when Google
 // actually returned a traffic-adjusted duration — otherwise it's a plain drive
-// time and saying "with traffic" would be a lie. It's measured when the
-// reminders are made, often a day ahead, from the traffic Google EXPECTS for
-// that hour, so it never says "right now" (those words came from a Sep 13
-// 2026 demo). Commute Watch re-checks it on live traffic for the last 3 hours
-// and brings these words up to date before it goes (cronCommuteWatch, 3.).
+// time and saying "with traffic" would be a lie.
 function leaveNowBody(t, lead) {
   if (!lead) return `Time to head out for "${t}". 🚗`;
   return lead.inTraffic
-    ? `"${t}" is about ${lead.driveMinutes} min away with expected traffic, so head out now to get there on time. 🚗`
-    : `"${t}" is about ${lead.driveMinutes} min away, so head out now to get there on time. 🚗`;
+    ? `"${t}" is about ${lead.driveMinutes} min away with traffic right now — head out to get there on time. 🚗`
+    : `"${t}" is about a ${lead.driveMinutes} min drive, so head out now to get there on time. 🚗`;
 }
 
 // ── Events worth recording ─────────────────────────────────────────────────
@@ -93,8 +87,6 @@ const NOTES_LABELS = {
 async function notesWouldHelp(title, location) {
   try {
     const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
-    // gpt-6-luna, the cheaper model: a yes/no on whether notes would help
-    // (astra on Oct 17 2026). Anna, Oct 18 2026: "switch whatever wont be negatively affected to the cheaper one".
     const ask = openai.chat.completions.create({
       model: 'gpt-6-luna',
       reasoning_effort: 'low',
@@ -109,8 +101,7 @@ Would they likely want a recording of this and notes from it? Yes when it's the 
 Return {"notes": true} or {"notes": false}.` },
       ],
     });
-    // 6 seconds (was 4), so a slow answer still counts.
-    const late = new Promise((resolve) => setTimeout(() => resolve(null), 6000));
+    const late = new Promise((resolve) => setTimeout(() => resolve(null), 4000));
     const res = await Promise.race([ask, late]);
     if (!res) return false;
     return JSON.parse(res.choices?.[0]?.message?.content || '{}')?.notes === true;
@@ -174,15 +165,6 @@ export default async function(req) {
       const w = parsedBody.atTimeWords;
       const words = await atTimeWords(w.task || {}, new Date(w.atISO).getTime(), w.timezone || user?.timezone || '');
       return Response.json({ words });
-    }
-    // { notesCheck: { title, location } }: the same "would notes help?" yes/no
-    // the event reminders ask (notesWouldHelp), for an event with no date or
-    // time yet, which gets no reminders to carry the answer (onTaskUpdate, on
-    // create). Anna, Oct 20 2026: a meeting captured with no time never showed
-    // Record notes ("Its not telling me to record notes anymore").
-    if (parsedBody?.notesCheck && typeof parsedBody.notesCheck === 'object') {
-      const n = parsedBody.notesCheck;
-      return Response.json({ notes: await notesWouldHelp(String(n.title || ''), String(n.location || '')) });
     }
     const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, timezone, location, homeOrigin, avoidTolls, reminderWish, canRecord, noClockTime } = parsedBody;
     // An event with a date and no clock time (a day-only capture, an all-day
@@ -443,7 +425,7 @@ RULES:
 - For clock-time reminders (morning, afternoon, evening, X days before at Y AM): use ABSOLUTE
 - For "N minutes/hours before" reminders: use RELATIVE with just the number of minutes
 ${lead
-  ? `- TRAVEL: this task happens at a place that is a measured ${lead.driveMinutes} minute drive from the user's home${lead.inTraffic ? ", measured against the traffic predicted for that time of day (you MAY say 'with expected traffic', but never 'right now': it is a forecast made ahead of time)" : " (free-flow estimate — do NOT mention traffic)"}. The "leave now" reminder is ${lead.leadMinutes} minutes before — use exactly that number, and do NOT add any other "time to head out" reminder.`
+  ? `- TRAVEL: this task happens at a place that is a measured ${lead.driveMinutes} minute drive from the user's home${lead.inTraffic ? ", measured against the traffic predicted for that time of day (you MAY say 'with traffic')" : " (free-flow estimate — do NOT mention traffic)"}. The "leave now" reminder is ${lead.leadMinutes} minutes before — use exactly that number, and do NOT add any other "time to head out" reminder.`
   : `- TRAVEL: no location is known for this task, so NEVER tell the user to leave or head out. Say "coming up" / "start wrapping up" instead.`}
 - Only include reminders that would fire AFTER the current time (${nowStr})
 

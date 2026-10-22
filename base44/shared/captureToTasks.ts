@@ -10,7 +10,6 @@
 // plan, schedulePush for the actual OneSignal scheduling. Copies of that logic
 // are exactly how this app ended up with two parsers that disagreed.
 
-import OpenAI from "npm:openai";
 import { runTaskParse } from "./runTaskParse.ts";
 import { decideReminderInterval, isRecurringInterval } from "./reminderIntervalDecision.ts";
 import { getHomeOrigin } from "./homeOrigin.ts";
@@ -153,153 +152,12 @@ export function buildTaskRecord(
   };
 
   if (parsed.location) record.location = parsed.location;
-  // The business it involves, so its opening hours are looked up and
-  // reminders land while it's open: the app's own capture always saved it
-  // (taskCreationPipeline.js), this one never did.
-  if (parsed.business_name) record.business_name = parsed.business_name;
-  // A link the task needs goes in its notes, not its title (Anna, Oct 19
-  // 2026: "This link should have ended up in notes").
-  if (parsed.notes) record.notes = parsed.notes;
   if (nextReminder) record.next_reminder = nextReminder;
   if (dueISO) record.due_date = dueISO;
   if (eventISO && parsed.target_time) record.event_time = eventISO;
   if (parsed.end_date) record.end_date = localToUTC(parsed.end_date, "23:59", tz);
 
-  // "Sometime this week", "by Friday": a DEADLINE, not the day it happens.
-  // The task is on Today from now until that day, the way a task with a
-  // start date already works app-wide (Anna, Oct 14 2026: "by a certain date
-  // ... on my task list for today and every day of this week"). Same rule as
-  // deadlineWindowStart in taskSchedule.js; nothing tied to its day (an
-  // event, a birthday, a repeat) and no window for a deadline that is today.
-  const deadlineDay = parsed.due_date || (dayOnly ? parsed.target_date : null);
-  const tiedToDay = record.classification === "event" || record.classification === "birthday"
-    || (record.recurrence_pattern && record.recurrence_pattern !== "none");
-  if (record.deadline_style === "by" && deadlineDay && !tiedToDay && String(deadlineDay) > localToday(tz)) {
-    record.start_date = new Date().toISOString();
-  }
-
   return record;
-}
-
-// ── Trackers ───────────────────────────────────────────────────────────────
-// The one look the Parking Lot page gives each new idea (ParkingLot.jsx
-// judgeIdea): a reading for something they already keep track of? Done HERE,
-// the moment a capture lands, so a reading shared from the phone is already on
-// its tracker when they open the Parking Lot — not a plain idea card that sits
-// there for a few seconds until the page's own look folds it in (Anna, Oct 14
-// 2026: "it should just do that immediately"). The same question, word for
-// word, and the same name matching as the page; keep the two together.
-//
-// Only readings for trackers they already have are folded here. Something NEW
-// to keep track of is handed to the page, which starts the tracker and asks
-// its "remind you to log?" question (that part lives on the page). The row
-// arrives marked tracker_checked (createParkingLotIdeas lookFirst) so the
-// page's look stays out of the way; handing back clears that mark. A folded
-// reading is HIDDEN (converted_to_task: true, which the page never loads), not
-// deleted: the row keeps its capture_id, so a second delivery of the same
-// capture is still caught as a duplicate instead of logging twice.
-export const trackerCanon = (name: unknown): string => {
-  const k = String(name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-  return ({ hr: "heartrate", pulse: "heartrate", heartbeat: "heartrate", bpm: "heartrate", bp: "bloodpressure", pressure: "bloodpressure", temp: "temperature", wt: "weight" } as Record<string, string>)[k] || k;
-};
-
-export function trackerJudgePrompt(text: string, trackers: { id: string; name: string }[]): string {
-  return `Someone typed this into the Parking Lot of an app for people with ADHD (a place to dump thoughts so they don't lose them):
-"${String(text || '').slice(0, 500)}"
-
-Things they already keep track of here (they log entries to these over time): ${trackers.length ? JSON.stringify(trackers) : 'none yet'}
-
-What is it? It can be more than one thing at once ("blood pressure 91 over 57 and heart rate 89" is a reading for blood pressure AND a reading for heart rate) — give one item per part, in order:
-1. An entry for one of those they already keep track of, like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<the reading itself: the value they measured or counted, as they said it, without its name>", "note": "<see below, else null>"}. Something they noticed or describe about it that isn't a reading they took, numbers and all ("my pulse shot up to like 130 when I stood up", "it's been hovering in the 80s"), is a note for it: its own item, with "entry": null and their words in "note". "entry" is never a description: entries are drawn on a chart as numbers. Match by meaning, not spelling: "heartrate", "heart rate", "hr", "pulse" and "bpm" are all the same thing, "bp" is blood pressure. Something they already keep track of is ALWAYS 1 — never start a second one for it under a different spelling.
-2. They want to keep track of something over time, logging it again and again. It can be anything they choose: a measurement, money spent, a mood, how their day went. A reading for something they don't track yet counts, with that reading as its first entry. {"track": "<a short name for it, in their words>", "entry": "<an entry if they already gave one, else null>", "note": "<see below, else null>", "remind": "<daily, weekly or monthly if they said how often, else null>", "time": "<HH:MM, 24-hour, if they said a time, else null>"}
-3. Anything else: an idea, a to-do, a list, a note, a one-time thing. {"none": true}
-
-note: anything else they said that goes with a reading — when it was taken, what they had just done, eaten or taken, how they felt — in their words, without the reading itself. Context that applies to the whole sentence goes on every part. "blood pressure is 98/70 and heart is 89 bpm. this is an hour after taking mestinon for the first time and eating a small snack." → entry "98/70" and entry "89 bpm", each with the note "an hour after taking mestinon for the first time and eating a small snack".
-
-Judge by what they mean. Only 1 or 2 when they clearly mean logging something over time; a to-do that mentions a number is 3. An entry for one they already track has to actually be about that thing (its value, or a note on it); words about anything else ("this is an idea", "buy milk") are never an entry for it, even when it's the only thing they track. A list of things to get or do ("supplies to buy") is 3, not something to keep track of. When there is no entry or note, give null, never the word "null". Answer with JSON only, in this shape: {"actions": [ ... ]} — one object per part, or a single {"none": true}.`;
-}
-
-export async function foldIdeaIntoTrackers(base44: any, idea: { id: string; title: string }) {
-  // The page's look takes it from here.
-  const handBack = async (why: string) => {
-    await base44.entities.ParkingLotIdea.update(idea.id, { tracker_checked: false }).catch(() => {});
-    return { folded: false, why };
-  };
-  try {
-    const rows = await base44.entities.ParkingLotIdea.filter({ tracker: true, converted_to_task: false }).catch(() => []);
-    const trackers = (rows || []).filter((i: any) => i && i.tracker && !i.parent_idea_id && i.id !== idea.id);
-    if (trackers.length === 0) return await handBack("no trackers yet");
-    const prompt = trackerJudgePrompt(idea.title, trackers.map((i: any) => ({ id: i.id, name: i.idea })));
-    const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
-    // gpt-6-astra, like the page's look (categorizeIdea): gpt-4o-mini logged
-    // "this is an idea" as a heart rate reading (Oct 16 2026). Anna, Oct 17 2026: "Move them to astra like I already asked weeks ago" (she asked for the newest model everywhere on Sept 17 2026).
-    const completion = await openai.chat.completions.create({ model: "gpt-6-astra", reasoning_effort: "low", messages: [{ role: "user", content: prompt }] });
-    const raw = String(completion.choices?.[0]?.message?.content || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-    let out: any = null;
-    try { out = JSON.parse(raw); } catch (_) { out = null; }
-    if (!out || typeof out !== "object") {
-      // An answer that isn't what was asked for counts as "not a tracker"
-      // (same as the page: it stays marked, so it isn't asked again); no
-      // answer at all goes to the page's look.
-      if (raw) return { folded: false, why: "no usable answer" };
-      return await handBack("no answer");
-    }
-    const actions = (Array.isArray(out.actions) ? out.actions : [out]).filter((a: any) => a && typeof a === "object");
-    const sameName = (x: unknown, y: unknown) => trackerCanon(x) !== "" && trackerCanon(x) === trackerCanon(y);
-    const logs: { target: any; entry: string; note: string }[] = [];
-    let wantsNew = false;
-    // The word "null" (or "undefined") is an empty answer, not an entry: a
-    // tracker got an entry reading "null" on Oct 16 2026.
-    const said = (v: unknown) => {
-      const s = typeof v === "string" ? v.trim() : "";
-      return /^(null|undefined)$/i.test(s) ? "" : s;
-    };
-    for (const a of actions) {
-      const entry = said(a.entry);
-      const note = said(a.note).slice(0, 300);
-      const trackName = said(a.track).slice(0, 120);
-      // A "new" one with the name of one they already have is an entry for it.
-      const target = (a.log_to ? trackers.find((i: any) => i.id === a.log_to) : null)
-        || (trackName ? trackers.find((i: any) => sameName(i.idea, trackName)) : null);
-      // A note with no reading ("entry": null): something they noticed about
-      // it, kept with no number, so it is never drawn on the chart (Anna, Oct
-      // 21 2026: "I noticed my heart slowing down to the 80s and then rapidly
-      // speeding up to the 90s or 100s" charted as a second heart rate line).
-      if (target && (entry || note)) logs.push({ target, entry, note });
-      else if (trackName && !target) wantsNew = true;
-    }
-    if (wantsNew) return await handBack("starts a new tracker (the page does that)");
-    if (logs.length === 0) {
-      // Not a reading: stays marked, so the page doesn't ask again either.
-      await base44.entities.ParkingLotIdea.update(idea.id, { tracker_checked: true }).catch(() => {});
-      return { folded: false, why: "not a reading" };
-    }
-    const at = new Date().toISOString();
-    for (const { target, entry, note } of logs) {
-      const fresh = await base44.entities.ParkingLotIdea.get(target.id).catch(() => null);
-      const entries = [...((fresh || target).tracker_entries || []), { at, text: entry, ...(note ? { note } : {}) }];
-      await base44.entities.ParkingLotIdea.update(target.id, { tracker_entries: entries });
-    }
-    await base44.entities.ParkingLotIdea.update(idea.id, { converted_to_task: true, tracker_checked: true });
-    // Readings that arrived in one sentence belong together: their trackers
-    // are linked both ways, so History shows them on one chart (same as the
-    // page's linkTrackers).
-    const together = Array.from(new Set(logs.map((l) => l.target.id)));
-    if (together.length >= 2) {
-      for (const id of together) {
-        const row = await base44.entities.ParkingLotIdea.get(id).catch(() => null);
-        if (!row) continue;
-        const have: string[] = Array.isArray(row.tracker_companions) ? row.tracker_companions : [];
-        const want = Array.from(new Set([...have, ...together.filter((x) => x !== id)]));
-        if (want.length !== have.length) await base44.entities.ParkingLotIdea.update(id, { tracker_companions: want }).catch(() => {});
-      }
-    }
-    console.log(`[captureToTasks] reading(s) logged straight to ${logs.map((l) => l.target.idea).join(", ")}`);
-    return { folded: true, logged: logs.map((l) => ({ tracker: l.target.idea, entry: l.entry })) };
-  } catch (e: any) {
-    console.error("[captureToTasks] tracker look failed (the page will look instead):", e?.message || e);
-    return await handBack("error");
-  }
 }
 
 // ── Reminders ──────────────────────────────────────────────────────────────
@@ -669,16 +527,11 @@ export async function queueFeedbackPrompt(base44: any, text: string) {
 //
 // Created as the USER, not the service role: ParkingLotIdea RLS keys off
 // created_by, so a service-role insert saves a row the user can never see.
-// lookFirst: the server will give this idea its tracker look right away
-// (foldIdeaIntoTrackers), so it is saved already marked tracker_checked and
-// the Parking Lot page's own look leaves it alone until the server hands it
-// back — otherwise both could log the same reading. Lists are never readings.
 export async function createParkingLotIdeas(
   base44: any,
   category: any,
   rawText: string,
   captureId?: string,
-  lookFirst = false,
 ) {
   const stamp = (rec: Record<string, unknown>) =>
     captureId ? { ...rec, capture_id: captureId } : rec;
@@ -707,7 +560,6 @@ export async function createParkingLotIdeas(
     idea: rawText.trim(),
     converted_to_task: false,
     list_format: "plain",
-    ...(lookFirst ? { tracker_checked: true } : {}),
   }));
   made.push({ id: one.id, title: one.idea });
   return made;

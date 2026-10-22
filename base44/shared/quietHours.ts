@@ -277,26 +277,12 @@ export function theirDayKeyFor(user: any, d: Date, timeZone: string): string {
   return q.enabled ? theirDayKey(d, timeZone, q.startMin, q.endMin) : localDateKey(d, timeZone);
 }
 
-// How long Smart Reminders and the morning summary wait, after quiet hours
-// end, for "Notice when I wake up" to report the first unlock before going
-// ahead anyway: 4 hours, or 1 when the phone isn't letting ADHDone run in the
-// background (Android's battery switch, alarm_permissions.battery). That
-// phone holds back the background check that reports the unlock, so the
-// report often never comes (Oct 16 2026: Rebecca's didn't, and her morning
-// summary waited until 12:11 PM; the two phones with the switch on reported
-// by 8:30). Anna, Oct 16 2026: "Smart Reminders waits at most 1 hour instead
-// of 4."
-export function wakeWaitMinutes(user: any): number {
-  return user?.alarm_permissions?.battery === false ? 60 : 4 * 60;
-}
-
 // When they woke up today. The hour after it goes to the morning summary
 // first (Anna, Oct 12 2026: "the summary can get first claim on the hour after
 // I wake up"). It's when their quiet hours ended (8 AM with quiet hours off),
 // or with "Notice when I wake up" on, when the phone was first unlocked (never
 // before quiet hours end). Until the phone reports, null: they're most likely
-// still asleep, for up to 4 hours after quiet hours end (1 when the phone
-// holds ADHDone back in the background: wakeWaitMinutes, as Smart Reminders
+// still asleep, for up to 4 hours after quiet hours end (as Smart Reminders
 // waits), then that cap. Any other sign they're up today (they answered a
 // reminder, opened the app) counts from then. Also null inside quiet hours.
 export function wakeStartMs(user: any, now: Date, timeZone: string): number | null {
@@ -316,7 +302,6 @@ export function wakeStartMs(user: any, now: Date, timeZone: string): number | nu
     const ms = todays(v);
     if (Number.isFinite(ms)) return Math.max(ms, quietEnded);
   }
-  const waitMin = wakeWaitMinutes(user);
-  if (sinceEnd < waitMin) return null;
-  return quietEnded + waitMin * 60 * 1000;
+  if (sinceEnd < 4 * 60) return null;
+  return quietEnded + 4 * 60 * 60 * 1000;
 }

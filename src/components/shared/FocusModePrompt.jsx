@@ -360,10 +360,8 @@ export default function FocusModePrompt({ user, theme }) {
     setMode("offer");
     setFocusTaskId(null);
     setFocusTask(null);
-    // When it was finished, in true UTC like every other way a task gets
-    // finished. Until Oct 16 2026 this stamped local clock time as UTC, so
-    // wins, Insights and Smart Reminders read these completions hours off.
-    const localISO = new Date().toISOString();
+    const now = new Date();
+    const localISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString();
     // Tell the pages WHAT changed so they show the task finished right now.
     // A bare tasks-changed here made Home re-fetch before the save landed and
     // the finished task sat on the list looking untouched.

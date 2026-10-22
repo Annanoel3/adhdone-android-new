@@ -8,10 +8,7 @@ const NOTES_LABELS = ["night before · questions", "at the time · record notes"
 export function isRecordable(task) {
   if (!task || task.parent_task_id || task.birthday_person || task.status !== "active") return false;
   return (task.reminder_schedule || []).some((r) => NOTES_LABELS.includes(r?.label))
-    || (task.prep_questions || []).length > 0
-    // An event with no date or time yet has no reminders to carry the label:
-    // the same judgment, made when it was added (Anna, Oct 20 2026).
-    || (task.notes_worthy === true && !task.event_time && !task.due_date);
+    || (task.prep_questions || []).length > 0;
 }
 
 // A clear "Record notes" pill on the card, straight to this event on the Notes page.

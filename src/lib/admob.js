@@ -103,17 +103,7 @@ async function isRecordingNotes() {
   }
 }
 
-// The ad unit above belongs to the Android app in AdMob. AdMob ad units are
-// made per app and per platform, so the iPhone app needs its own (an iPhone
-// app added in AdMob, its ad unit pasted here). Until then the iPhone app
-// shows no ads rather than Android's (Anna, Oct 22 2026).
-const IOS_AD_UNIT_ID = '';
-
 export async function showInterstitialAd(source = 'auto') {
-  if (Capacitor.getPlatform() === 'ios' && !IOS_AD_UNIT_ID) {
-    setStatus('skipped: no iPhone ad unit yet');
-    return false;
-  }
   if (!(await appOnScreen())) {
     setStatus(NOT_ON_SCREEN);
     trackFire('ad_skipped', { props: { source, reason: 'app not on screen' } });
@@ -139,7 +129,7 @@ export async function showInterstitialAd(source = 'auto') {
 
   adInFlight = true;
   try {
-    await AdMob.prepareInterstitial({ adId: Capacitor.getPlatform() === 'ios' ? IOS_AD_UNIT_ID : AD_UNIT_ID, isTesting: false });
+    await AdMob.prepareInterstitial({ adId: AD_UNIT_ID, isTesting: false });
     // Loading takes a few seconds; recording may have started meanwhile, or
     // they may have switched to another app.
     if (await isRecordingNotes()) {

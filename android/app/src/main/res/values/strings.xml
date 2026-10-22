@@ -4,19 +4,4 @@
     <string name="title_activity_main">ADHDone</string>
     <string name="package_name">co.median.android.odxqpdy</string>
     <string name="custom_url_scheme">co.median.android.odxqpdy</string>
-
-    <!-- Home-screen widget -->
-    <string name="widget_title">Today</string>
-    <string name="widget_description">Today\'s tasks from ADHDone</string>
-    <string name="widget_empty">Nothing due today</string>
-    <string name="widget_needs_open">Open ADHDone to load today\'s tasks</string>
-    <string name="widget_stale">Open ADHDone to refresh today</string>
-    <string name="widget_add">Add a task</string>
-
-    <!-- Long-press menu on the app icon (res/xml/shortcuts.xml) and the Quick Settings tile -->
-    <string name="shortcut_add_short">Add task/idea</string>
-    <string name="shortcut_add_long">Add a task/idea</string>
-    <string name="shortcut_quiet_short">Quiet 1 hour</string>
-    <string name="shortcut_quiet_long">Quiet for 1 hour</string>
-    <string name="tile_add_task">Add a task/idea</string>
 </resources>

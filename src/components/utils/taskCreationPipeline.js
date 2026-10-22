@@ -6,7 +6,7 @@ import { getReminderCopy } from "./reminderCopy";
 import dedupeSplitTasks from "./dedupeSplitTasks";
 import { createBirthdayFromKind } from "./birthdayScheduler";
 import { toast } from "@/components/ui/use-toast";
-import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule, deadlineWindowStart, anchorToDaytime, wantsRhythmFromTime } from "./taskSchedule";
+import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule, anchorToDaytime, wantsRhythmFromTime } from "./taskSchedule";
 import { announceEventConflict } from "./eventConflicts";
 import { commitNotificationIds } from "./notificationOwnership";
 import { trackFire } from "@/lib/appTrack";
@@ -138,24 +138,12 @@ async function saveIdeas(kind, inputText, captureId = null) {
       });
     }
   } else {
-    // A reading for a tracker they already have ("bp 98/70, hr 89") goes
-    // straight onto it — the server's look (captureText { foldIdea }), the
-    // same one a capture from the phone gets — so the Parking Lot never shows
-    // it as a plain idea first (Anna, Oct 14 2026). Saved already marked
-    // tracker_checked so the page's own look stays out of the way; the server
-    // clears the mark when it hands the idea back (something new to track,
-    // or no answer), and so does this if the server can't be reached.
-    const made = await base44.entities.ParkingLotIdea.create({
+    await base44.entities.ParkingLotIdea.create({
       idea: inputText.trim(),
       converted_to_task: false,
       list_format: 'plain',
-      tracker_checked: true,
       ...(captureId ? { capture_id: captureId } : {})
     });
-    if (made?.id) {
-      const res = await base44.functions.invoke('captureText', { foldIdea: made.id }).catch(() => null);
-      if (!res) await base44.entities.ParkingLotIdea.update(made.id, { tracker_checked: false }).catch(() => {});
-    }
   }
   window.dispatchEvent(new Event('parking-lot-changed'));
 }
@@ -314,9 +302,6 @@ export async function processAndCreateTask(inputText, opts = {}) {
         original_input: inputText,
         location: mainTaskParsed.location || null,
         business_name: mainTaskParsed.business_name || null,
-        // A link the task needs (a video-session or meeting link), never in
-        // the title (Anna, Oct 19 2026).
-        notes: mainTaskParsed.notes || null,
         description: '',
         classification: mainTaskParsed.classification || 'task',
         reminder_interval: sched.interval,
@@ -331,10 +316,6 @@ export async function processAndCreateTask(inputText, opts = {}) {
         time_stated: !!mainTaskParsed.target_time && mainTaskParsed.time_stated === true,
         next_reminder: nextReminder ? nextReminder.toISOString() : null,
         due_date: sched.dueDateISO || presetDueDateISO,
-        // "By Friday" / "this week": on Today from now until the deadline
-        // (taskSchedule.deadlineWindowStart). A day picked on the calendar
-        // ("Add task" under a date) is the day they chose, no window.
-        start_date: presetDate ? null : deadlineWindowStart(mainTaskParsed, sched.dueDateISO, now),
         end_date: sched.endDateISO,
         event_time: sched.eventTimeISO,
         reminder_count: 0,
@@ -555,9 +536,6 @@ export async function processAndCreateTask(inputText, opts = {}) {
       original_input: inputText,
       location: parsed.location || null,
       business_name: parsed.business_name || null,
-      // A link the task needs (a video-session or meeting link), never in
-      // the title (Anna, Oct 19 2026).
-      notes: parsed.notes || null,
       description: '',
       classification: parsed.classification || 'task',
       reminder_interval: actualReminderInterval,
@@ -579,10 +557,6 @@ export async function processAndCreateTask(inputText, opts = {}) {
       reminder_count: 0,
       next_reminder: nextReminder ? nextReminder.toISOString() : null,
       due_date: dueDateISO,
-      // "By Friday" / "sometime this week": a deadline, so the task is on
-      // Today from now until that day (taskSchedule.deadlineWindowStart). A
-      // day picked on the calendar is the day they chose, no window.
-      start_date: presetDate ? null : deadlineWindowStart(parsed, dueDateISO, now),
       end_date: endDateISO,
       event_time: eventTimeISO,
       urgency: parsed.urgency || 'medium',

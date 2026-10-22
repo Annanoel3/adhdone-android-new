@@ -76,22 +76,11 @@
           },
           "text": {
             "type": "string"
-          },
-          "note": {
-            "type": "string"
           }
         }
       },
       "default": [],
-      "description": "What they logged, oldest first: { at, text, note? }. Numbers in the text are charted; note is anything they said that goes with the reading (when it was taken, what they'd just done or taken, how they felt \u2014 Anna, Oct 14 2026), shown under it, never charted."
-    },
-    "tracker_companions": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "default": [],
-      "description": "Ids of trackers whose readings arrived in the same sentence as this one's (blood pressure and heart rate said together). History shows them on one chart (Anna, Oct 14 2026: 'see all bp and hr trends in one glance'). Linked automatically, both ways."
+      "description": "What they logged, oldest first: { at, text }. Numbers in the text are charted."
     },
     "tracker_remind": {
       "type": "string",

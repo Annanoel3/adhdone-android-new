@@ -5,17 +5,6 @@ Not after. Not "if it seems relevant." First. Every conversation.
 Most of the mistakes this file exists to prevent were not caused by the rules being
 missing — they were caused by starting to talk before reading them.
 
-## 0. CHANGE ONLY WHAT WAS ASKED — NEVER ADD BEHAVIOR NOBODY REQUESTED
-
-**Sept 4 2026 a builder commit ("Force all-day tasks for silent shared items and prevent time prompts") was asked to STOP a prompt and instead invented a NEW one: ask "when?" for undated appointments. It sat unnoticed for 40 days, and on Oct 14 2026 a real user got four "when?" questions in a row and left the app.**
-
-Rules that follow from it:
-- Do exactly the requested change. No new carve-outs, exceptions, prompts, questions, rules, defaults or "while I'm here" behavior — in code OR in LLM prompts (`base44/shared/taskParsePrompt.ts` and every other prompt count as code).
-- A request to REMOVE or REDUCE something must never ADD something. If a rewrite seems to need a new case, stop and ask Anna first.
-- Never add anything that interrupts the user (a question, popup, dialog, extra notification) unless Anna explicitly asked for that exact interruption.
-- In the final message, say plainly every behavior that changed. If anything beyond the ask changed, that is a bug — revert it.
-- The app never asks "when?" or "how urgent?" when a task is captured (Anna, Oct 14 2026). Don't bring either back.
-
 ## 1. NO BASE44 LLM — EVER
 
 **This is a hard, non-negotiable rule. Never call `base44.integrations.Core.InvokeLLM` or `base44.asServiceRole.integrations.Core.InvokeLLM` anywhere in this codebase — not in backend functions, not in frontend components, not in utilities. No exceptions.**
@@ -27,13 +16,10 @@ All LLM/AI calls must use the OpenAI SDK directly with the app's `OPENAI_API_KEY
 import OpenAI from 'npm:openai';
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 const completion = await openai.chat.completions.create({
-  model: 'gpt-6-astra',   // the app's model (Anna asked for the newest model on Sept 17 2026; "Move them to astra like I already asked weeks ago", Oct 17 2026). gpt-6-luna (about 100x cheaper) ONLY where Anna OK'd it on Oct 18 2026 as not hurt by it: the calendar emoji, the daily tip, the AI-key check, voice-note notes (astra as backup) and the notes-would-help yes/no. Nothing else cheaper or older (no gpt-4o-mini, gpt-4o, gpt-5.4) without her say-so
-  reasoning_effort: 'low',
+  model: 'gpt-5.4',   // the current model (Sept 2026); gpt-4o is two years old — do not use it for new code
   messages: [/* ... */],
 });
 ```
-
-gpt-6-astra is told the real date by OpenAI before your prompt, and it can trust that over a "today" you hand it. Anything that asks it to count from another moment (the parser reading words said earlier) has to say so in the system message as well as the prompt: on the parser self-test (Oct 17 2026) it counted "tomorrow" from the real date on 15 of 25 sentences until it did (`base44/shared/runTaskParse.ts`, saidNote).
 
 **Frontend pattern** — call a backend function that uses OpenAI; do NOT call Base44's InvokeLLM from the client.
 
@@ -46,8 +32,7 @@ If you need to add AI/LLM functionality, use OpenAI only. If you are not sure wh
 - `src/components/utils/calendarEmojiResolver.js`
 - `base44/shared/runTaskParse.ts` (moved to InvokeLLM on Sept 4 2026 without asking; back on OpenAI gpt-5.4 Sept 18 2026, tested side by side on the same inputs first)
 - `base44/shared/captureToTasks.ts` (same)
-- `base44/functions/readImageCapture/entry.ts` (same — photos go to the model as an image_url)
-- `src/context/LaunchContext.jsx` (the timer's spoken lines, Oct 13 2026) and `src/components/places/ShiftImportButton.jsx` (the work-schedule photo/PDF reader, Sept 18 2026) used InvokeLLM; both go through `categorizeIdea` on OpenAI since Oct 17 2026
+- `base44/functions/readImageCapture/entry.ts` (same — photos go to gpt-5.4 as an image_url)
 
 Why this rule exists, so nobody "improves" it away: InvokeLLM runs on Base44 integration credits. Base44's own docs say that when those run out, every call fails. Task entry must never depend on a shared credit pool.
 
@@ -71,10 +56,10 @@ Do not describe, revive, or reference removed crons. The live senders are:
 
 | Sender | Trigger | Role |
 |---|---|---|
-| `cronRefillReminders` | hourly | Books recurring-task pushes, writes the reminder plan for one-time tasks dated more than ~30 days out, promotes planned event/birthday reminders into OneSignal's ~30-day window, yearly birthday rollover, repeating-task rollover (a task not checked off by 4 AM their time moves on to the next day, with its reminders, when it repeats again the very next day: every day, weekdays Mon–Thu, Saturday into Sunday; one with a gap before its next day (weekly, monthly, Friday to Monday) stays until checked off and the app makes the next copy then; a repeating event moves on to its next date once it has happened; Anna, Oct 17–18 2026), hourly day-of text follow-ups |
+| `cronRefillReminders` | hourly | Books recurring-task pushes, writes the reminder plan for one-time tasks dated more than ~30 days out, promotes planned event/birthday reminders into OneSignal's ~30-day window, yearly birthday rollover, hourly day-of text follow-ups |
 | `cronSmartTaskNudge` | every 10 min | Smart Reminders, which covers nearly every task. The AI picks only each person's NEXT nudge, the run sends it when due, then the AI looks again. Never a day booked ahead: see §10 before touching it |
 | `cronDailyDigest` | every 30 min | One morning summary per user after quiet hours end |
-| `cronCommuteWatch` | every 5 min (since Oct 17 2026; was 15) | Work: "Time to leave" + traffic heads-up. Events: re-checks each booked "leave now" on live traffic for its last 3 hours (every 15 min, then every run for the last 30), moves it earlier (never later) when traffic is worse, and updates its drive-time words before it goes (Anna, Oct 17 2026: live traffic, not a one-time forecast). Both: for 30 min after a "leave now", one plain "traffic got worse, you may get there around X" push if they would now be 5+ min late. Google measurements stay every 15 min when nothing is close, since Google bills each one |
+| `cronCommuteWatch` | every 15 min | "Time to leave" + traffic heads-up |
 | `onTaskUpdate` | Task entity events | Cancels / re-books on complete, delete, back-burner, un-complete, reminder-field edits. Leaves a snoozed task and a task in Focus Mode alone |
 | `cronDuplicateWatch` | hourly | Cleans duplicates, emails the owner — sends no user pushes |
 | `schedulePush` | called by the above | The actual OneSignal call (`notifySend` is switched off — see §2) |
@@ -145,12 +130,11 @@ Before proposing ANY mechanism below, assume it exists and go read it.
 |---|---|---|
 | Push deduplication / anti-stacking | `NotificationLedger` entity + `base44/shared/sendLedger.ts` | Blocks duplicate and stacked pushes, evicts proactive sends for time-critical ones |
 | Calendar import idempotency | `Task.google_event_id` | One imported Google event = one task, per user, across overlapping syncs |
-| Phone calendar sync | `src/lib/calendarSync.js` + `syncGoogleCalendar` (source `device`) + `CalendarSyncWorker` (phone, build 43 on) | The ticked phone calendars come in on their own (Anna, Oct 19 2026: "calendar still doesn't sync on it's own"; before, only on app open, at most every 6 hours). Build 43 on: the phone watches its calendar provider and sends the rows itself with the app closed (`CalendarBridge.setSyncCalendars` tells it which calendars on every open and tick; an empty read is held 6 hours before it's believed). Older builds: the app reads them on every open and every return to the app, at most every 10 minutes. An event moved in the calendar gets its reminders re-planned for the new time (one-time events that still have reminders), and its phone alarms are pushed right away |
 | Capture idempotency | `Task.capture_id` | Native share-sheet retries can't double-create |
 | Creator/cron race protection | `Task.reminder_scheduling_since` + `commitNotificationIds` | Refill cron stays out while the creator is still booking |
 | Per-user sync locking | `calendar_sync_in_progress_since` + heartbeat | One active Google Calendar sync per account |
 | Guessed-recurrence stripping | `stripGuessedRecurrence` in `taskSchedule.js` | Kills recurrence the user never asked for |
-| Quiet hours | `base44/shared/quietHours.ts` + `applyQuietHours` + `checkQuietHoursFit` | Timezone-aware overnight suppression. `checkQuietHoursFit` (astra) judges from what someone told the app about themselves, their quiet hours and their work hours whether their quiet hours miss when they sleep, and the quiet-hours popup (QuietHoursReviewPrompt) then asks them once to set ones that fit (Anna, Oct 18 2026: "If someone says they work the night shift, prompt them to make new quiet hours"). When their quiet hours are still the starting 10 PM–8 AM and the model is clear about when they sleep, it moves them right away and the popup tells them, with the new hours ready to change (Anna, Oct 19 2026: what someone tells the app about themselves has to be acted on; Michelle said "i work night shift", kept 10 PM–8 AM, got alarms in her sleep and uninstalled). Hours they set to anything else are never moved. When the model thinks they don't fit but can't say when the person sleeps, nobody is asked (Oct 19 2026: Tabby, who set 3 AM–10 AM herself, was asked with nothing to suggest); Anna's alert says so instead (`ownerHealthCheck`, check 9). `{"previewEmail": "…"}` from the owner's account judges someone without saving |
+| Quiet hours | `base44/shared/quietHours.ts` + `applyQuietHours` | Timezone-aware overnight suppression |
 | Far-future scheduling | `base44/shared/eventReminderPlan.ts` + `planned_` placeholder entries, promoted by `cronRefillReminders` | OneSignal can't book past ~30 days; the plan is saved with placeholders and booked once inside the window. Used by calendar import AND by the hourly job for far-out tasks made in the app. `Task.reminder_plan_built_at` = the server wrote this task's plan once; never rebuild it (an empty plan can be the user's own choice) |
 | Refused bookings | `Task.reminder_retry_after` | When OneSignal refuses (device not subscribed) the hourly job stops at the first refusal, never marks the task "covered", skips that owner for the run and waits 2 hours |
 | Reading whole tables | `base44/shared/listAll.ts` (`listAll`, `filterAll`) | `list()`/`filter()` return only 50 rows by default. Any job that needs every row pages through here |
@@ -162,9 +146,8 @@ Before proposing ANY mechanism below, assume it exists and go read it.
 | Server-side task parsing | `base44/shared/runTaskParse.ts` + `taskParsePrompt.ts` | One parser. Never add a second one (native-side parsing was tried and rejected) |
 | On-screen messages (toasts) | `toast` from `src/components/ui/use-toast` + the `<Toaster />` in `src/App.jsx` | The ONLY toast system that is on screen. Every toast closes itself after 4 s and always has an X, and the container sits below the phone's status bar. `import { toast } from "sonner"` shows NOTHING — sonner is not mounted; never use it |
 | Notifications-off notice | `src/components/home/NotificationsOffBanner.jsx` + `myPushStatus` function | One row on Home, phone app only, shown when OneSignal reports no switched-on Android subscription for the signed-in user. Not dismissable on purpose; "Turn on" calls `NotifyBridge.requestPermission()`. Newer app builds answer from the phone via `NotifyBridge.getPermissionState()` |
-| Smart Reminders brief | `base44/shared/reminderBrief.ts` (word-for-word copy of Anna's "Reminder Brain — The Brief" doc) | The AI's whole instructions for Smart Reminders, every account since Oct 10 2026. It is shown facts only, plus Anna's own put-off rule (§10, point 4). A plan made under any other copy is dropped and redone. `{"email": "…", "preview": true}` to `cronSmartTaskNudge` shows what it was given and what it chose, saving and sending nothing. Changes only together with Anna's doc (§10) |
+| Smart Reminders brief | `base44/shared/reminderBrief.ts` (word-for-word copy of Anna's "Reminder Brain — The Brief" doc) | The AI's whole instructions for Smart Reminders, every account since Oct 10 2026. It is shown facts only, no rules. A plan made under any other copy is dropped and redone. `{"email": "…", "preview": true}` to `cronSmartTaskNudge` shows what it was given and what it chose, saving and sending nothing. Changes only together with Anna's doc (§10) |
 | Who may book a push | caller check inside `schedulePush` | Backend callers prove themselves with `internalKey` (the CRON_SECRET secret); a signed-in user may book only for their own email. Watch-only (logs, blocks nothing) until `ENFORCE_CALLER_CHECK` is flipped to true |
-| Owner alerts | `ownerHealthCheck` in `cronRefillReminders` (hourly) | Pushes Anna's phone (s2kap2chick) when the app is down or failing people. Since Oct 19 2026 (after Michelle: "this should have been flagged") also about one person by name, once per happening: quiet hours moved for them, about to be asked about, or the model unsure (9); 2 or more alarms in 2 days rang out or were left with Home or Back, counted from every report the phone sends (AppEvent `alarm_choice`, written by `cancelTaskNotifications`), not only each task's last choice (10); a phone that stopped taking pushes or has notifications off, for anyone in the app in the last 14 days (11). Her own accounts and family who only installed it are left out. `{"previewHealth": true}` from the owner's account shows what it would send, sending nothing |
 
 ### Correct states that are NOT bugs
 - **Subtasks never have notifications.** A subtask (`parent_task_id` set) with null
@@ -268,19 +251,6 @@ typed something" and "their phone rang", answer these in writing:
    heads-up, nudge and repeat ping. An app reminder that lands inside them moves to when they
    end, or is dropped if that's too late (`placeAppReminder`) — never booked as it came.
    Home or Back on one of these night alarms rings it again in 10 minutes (`throughQuiet`).
-   A time they set also never moves for another alarm, day or night: the phone's 10-minute
-   gap between two tasks' alarms (Anna, Oct 10 2026) is only for reminders the app picked.
-   Every alarm list (`phoneAlarmsFor`, `alarmSetFor`) marks those alarms `theirTime: true`
-   and starts their heading with 🔔 (builds 39–42 only know the bell); one the app picked that
-   is ringing at that moment makes way and rings 10 minutes after (build 43 on). Anna, Oct 21
-   2026, after her 10 AM call rang at 10:31 behind another task's alarm: "Events with a
-   certain time cannot be happening at a different time."
-   Two or more at times they set in the same minute: the phone shows one at a time, so the
-   model puts them in order (`shared/alarmOrder.ts`, gpt-6-astra, judged when one of them is made
-   or changed): the one where someone is waiting or that can't slip rings on the minute, and each
-   next one 10 seconds later, so the phone rings it the moment the one before is answered
-   (`Task.alarm_order`). Anna, Oct 21 2026: "which one sounds more important..... a scheduled
-   phone call involving another persons time or a watch setting".
    Not everyone sleeps at night (Anna, Oct 12 2026: "night shift people exist"). Never compare
    the local clock to fixed hours (7 PM, 9 AM, 10 PM) to mean evening, morning or bedtime: their
    night is their quiet hours (the times count even with the switch off), their morning is when
@@ -314,80 +284,9 @@ How it works, and how it must keep working:
 3. **Never trade its judgment for credits.** Don't make it look less often, reuse an old
    answer for the rest of the day, switch it to a cheaper model, or move it to InvokeLLM to
    save calls or credits. If cost is a worry, tell Anna and let her decide.
-4. **It sees what it already said, and a put-off task stops getting the same thing.** Each
-   task's line shows the words and times of every nudge sent about it this past week. Once
-   a task has been put off 3 or more times (snoozed, swiped away, rang out, Later, Home or
-   Back), its line also says that nothing sent about it repeats the words, the angle or the
-   time of day it already got (a time they named themselves stays). Anna's rule, Oct 18
-   2026: "If I have a rule and smart reminders isnt following it... why would you not
-   strive to follow my rule". Before this it only knew when it last brought a task up, and
-   Sally got nearly the same oil-room nudge at the same two times every day Oct 13–18.
-   A nudge is a plain notification instead of an alarm ("light") only when a task it names
-   has a tag; for an alarm user everything else rings (Anna, Oct 7 and Oct 13 2026: an alarm
-   is never turned into a plain notification, and too many alarms is never fixed that way).
-5. **"Not now" gets a break, by Anna's table (Oct 20 2026).** Later, and a snooze they
-   picked (a run of snoozes counts once), are each a "not now". 1st: 3 hours for low and
-   medium, 2 for high, 1 for urgent. 2nd: 3 hours for low, medium and high, 1 for urgent.
-   3rd: done for the day for low and medium, 2 more hours for high and urgent. 4th: done
-   for the day. Done for the day runs to their next morning (quiet hours end). The time
-   they set for the task today still rings, and a "by" deadline later today keeps one
-   reminder 30 minutes before it. Code: `notNowUntil` in cancelTaskNotifications (every
-   build from 39 on) and `laterBreakUntil` in widgetBridge.js (older builds); the day's
-   count is on the task (`not_now_day`, `not_now_count`). From Oct 11 to Oct 20 a task due
-   that day, or an urgent one, got no break at all, so every daily routine came back
-   after Later as often as Smart Reminders picked it (Anna's vitamins rang 6 times on Oct
-   19: "it becomes harassment once a user presses a later or time button").
-6. **Put off on 3 different days = a lighter plan (Anna, Oct 22 2026).** Later, a snooze,
-   stopping it without a snooze (Open, a swipe), closed or rang out all count as putting
-   it off; Done doesn't. The
-   days are kept on the task (`put_off_days`). On the 3rd different day the AI judges the
-   plan from what they typed, the priority and who relies on it (`shared/easeOff.ts`,
-   `ease_plan`), never from keywords: `daily_alarm` (it matters: morning summary plus one
-   alarm a day), `alarm_then_notice` (ordinary, like the grocery store: morning summary plus
-   one alarm later in the day, and after 2 more put-off days one regular notification a
-   day), `digest` (low stakes: morning summary only). An eased alarm has only Done and
-   Later (push `data.eased`, build 43+; normal alarms keep every button). Editing the task's
-   wording, priority or date starts it over. The morning summary names every eased task.
-   The phone's taps reach `cancelTaskNotifications` through the published app, which runs
-   the copy of each function from the last Publish; scheduled jobs and automations run the
-   newest copy at once. A change to how taps are counted takes effect only after Publish
-   (seen Oct 22 2026: a ring-out at 2:40 PM CDT was saved by the old copy).
-7. **A new account hears from it the first day (Anna, Oct 22 2026).** Someone who joined in
-   the last day and has had nothing from Smart Reminders gets a "NEW HERE" line, so one of
-   their first tasks is mentioned that same day even with no date or a low priority. The
-   app also shows a sample reminder 3 minutes after a new account's first task. To check:
-   `{"email": "…", "preview": true, "as_new": true}` to `cronSmartTaskNudge`.
 
 **Do not change `base44/functions/cronSmartTaskNudge`, `base44/shared/reminderBrief.ts`, the
 "Smart Task Nudge" workflow, or the `smart_nudge_*` fields on User unless Anna explicitly
 asks for that change in her own words.** A request about something else (another feature's
 bug, a cleanup, "make it faster", "save credits") is not permission. If a fix somewhere else
 seems to need a change here, stop and ask her first.
-## 11. THE IPHONE APP — ANDROID-ONLY THINGS NEVER SHOW THERE
-
-The iPhone app (built by Haris, Oct 2026) loads this same website. Anna, Oct 22 2026: "show
-certain things to android users only and then show only the things that work to iphone users.
-Like the wakeup thing. That cant be in the settings for iphone users and that popup cant happen
-either."
-
-- **`src/lib/phonePlatform.js` is the one list.** `onThisPhone('<feature>')` is false in the
-  iPhone app for every Android-only feature (wake-up detection, the pinned notification,
-  vibrate-only on silent, Google Play's update popup, Android's alarm switches, the Android
-  how-to clips) and for the ones still waiting on Haris (spoken alarm, share extension, widget).
-  Anything new that only Android can do goes on that list and gets an `onThisPhone` check.
-  On Android and the plain website every check passes, so nothing there changes.
-- **Never rely on "the plugin doesn't have that method"** to hide something on iPhone; the
-  iPhone plugins may have a method of the same name. Check `onThisPhone` as well.
-- **No "Android", "Google Play", "Play Store" or "Samsung" on an iPhone screen.** Apple turns
-  down apps that name other phone platforms (App Review Guideline 2.3.10). Use `phoneOs()`
-  ("Android" / "your iPhone") in sentences.
-- **Alarm switches:** `alarmSwitchesOff(st)` in widgetBridge decides what's missing. On iPhone,
-  `AlarmBridge.getStatus()` reports `{ notifications, alarms }` (alarms = AlarmKit's own
-  permission) and `AlarmBridge.requestAlarmAccess()` asks for it.
-- **Alarm spacing on iPhone:** until `IPHONE_SPACES_ALARMS` is true, the website merges alarms
-  within 10 minutes into one before sending the list (foldClusters). A time the person set is
-  never merged or moved.
-- **Still open (server side):** `wakeStartMs` in `base44/shared/quietHours.ts` trusts
-  `wake_watch`. The iPhone app sets an account's `wake_watch` back to null when it opens (it
-  can't watch for waking), so this only matters for someone using an Android and an iPhone at
-  once. `app_platform` on User says which phone app they last opened.

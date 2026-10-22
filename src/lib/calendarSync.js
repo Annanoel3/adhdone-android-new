@@ -258,33 +258,10 @@ export async function requestDeviceCalendarPermission() {
   }
 }
 
-// The phone watches the ticked calendars itself and imports what changes with
-// the app closed (CalendarSyncWorker, build 43 on; Anna, Oct 19 2026: "calendar
-// still doesn't sync on it's own"). There, the app's own read is a 6-hourly
-// back-up. On older builds it is the only read, so it runs whenever the app is
-// opened or brought back, at most every 10 minutes.
-const DEVICE_GATE_WATCHED_MS = 6 * 3600000;
-const DEVICE_GATE_APP_ONLY_MS = 10 * 60000;
-
-export function phoneSyncsCalendarsItself() {
-  return !!calendarPlugin()?.setSyncCalendars;
-}
-
 export function isDeviceAutoSyncDue() {
   const lastRaw = localStorage.getItem(DEVICE_GATE_KEY);
   const lastMs = lastRaw ? new Date(lastRaw).getTime() : 0;
-  const gate = phoneSyncsCalendarsItself() ? DEVICE_GATE_WATCHED_MS : DEVICE_GATE_APP_ONLY_MS;
-  return Date.now() - lastMs > gate;
-}
-
-// Tells the phone which calendars to watch; an empty list stops it. Sent on
-// every open and after every tick. Older builds don't have it: nothing happens.
-export function handPhoneCalendars(ids) {
-  const plugin = calendarPlugin();
-  if (!plugin?.setSyncCalendars) return;
-  try {
-    Promise.resolve(plugin.setSyncCalendars({ calendarIds: (ids || []).map(String).filter(Boolean) })).catch(() => {});
-  } catch (e) { /* an older build */ }
+  return Date.now() - lastMs > THRESHOLDS['6hours'];
 }
 
 // Reads the chosen calendars on the phone and imports them. Resolves with the
@@ -338,13 +315,9 @@ export function runDeviceCalendarSync(calendarIds, { background = false, onEvent
   return deviceInFlight;
 }
 
-// Background trigger on app open and on coming back to the app: only for
-// accounts that chose phone calendars, only on the app build that can read
-// them, and no more often than isDeviceAutoSyncDue allows.
+// Background trigger on app open: only for accounts that chose phone
+// calendars, only on the app build that can read them, at most every 6 hours.
 export async function maybeAutoSyncDevice(user) {
-  // The phone's own watcher hears which calendars on every open, so a
-  // reinstall or a new phone picks them up (CalendarSyncWorker).
-  handPhoneCalendars(Array.isArray(user?.device_calendar_ids) ? user.device_calendar_ids : []);
   if (deviceInFlight) return deviceInFlight;
   const ids = user?.device_calendar_ids;
   if (!Array.isArray(ids) || ids.length === 0) return null;

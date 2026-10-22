@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- Soft pastel surface behind the "+" quick-add button, matching the app's
-     rounded pastel icon buttons. -->
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="@color/widget_add_surface" />
-    <corners android:radius="10dp" />
-</shape>

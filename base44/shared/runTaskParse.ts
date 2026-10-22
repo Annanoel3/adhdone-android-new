@@ -16,10 +16,7 @@ import { resolveParsedDates } from "./resolveDateWords.ts";
 // Runs on OpenAI with the app's own key (RULES.md rule 1). It briefly ran on
 // Base44's InvokeLLM, which draws on Base44 integration credits — and when
 // those run out every call fails, taking task entry down for everyone at once.
-// gpt-6-astra since Oct 17 2026; it had been gpt-5.4 since Sept 18 2026, the
-// day after Anna asked for the newest model everywhere ("Move them to astra
-// like I already asked weeks ago").
-const MODEL = "gpt-6-astra";
+const MODEL = "gpt-5.4";
 
 // A recurring reminder rhythm can ONLY come from the user asking to be pinged
 // repeatedly. The model is asked that one narrow question
@@ -43,7 +40,6 @@ const TASK_PARSE_SCHEMA = {
     title: { type: "string" },
     location: { type: ["string", "null"] },
     business_name: { type: ["string", "null"] },
-    notes: { type: ["string", "null"] },
     urgency: { type: "string", enum: ["low", "medium", "high", "urgent"] },
     energy_required: { type: "string", enum: ["low", "medium", "high"] },
     classification: { type: "string", enum: ["task", "event", "birthday", "payment"] },
@@ -68,7 +64,7 @@ const TASK_PARSE_SCHEMA = {
     recurrence_days: { type: ["array", "null"], items: { type: "integer" } },
   },
   required: [
-    "title", "location", "business_name", "notes", "urgency", "energy_required", "classification",
+    "title", "location", "business_name", "urgency", "energy_required", "classification",
     "target_date", "target_time", "time_stated", "end_date", "due_date",
     "user_asked_to_repeat_every", "repeat_words", "recurrence_pattern", "deadline_style",
     "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
@@ -106,13 +102,9 @@ function quietHoursNote(quiet?: { enabled: boolean; startMin: number; endMin: nu
 // their own words count: the block between the first pair of """ marks in
 // the prompt (buildTaskParsePrompt); the instructions after it use the same
 // phrases as examples.
-// Only decides whether to take a second look; the model judges what the
-// words mean. A bare "morning" or "night" ("tomorrow morning", "Wednesday and
-// Sunday night") is caught too: gpt-6-astra left both of those untimed on the
-// self-test (Oct 17 2026), which only "this morning" / "tonight" used to catch.
 function namesPartOfDay(prompt: string): boolean {
   const text = String(prompt || '').split('"""')[1] || '';
-  return /\b(tonight|morning|afternoon|evening|night|before bed|bedtime|after work|after dinner|after lunch|first thing|when i get up|when i wake up)\b/i.test(text);
+  return /\b(tonight|this evening|this morning|this afternoon|before bed|bedtime|after work|after dinner|after lunch|first thing|when i get up|when i wake up)\b/i.test(text);
 }
 
 export async function runTaskParse(_base44: any, prompt: string, tz?: string, aboutMe?: string, asOfMs?: number,
@@ -125,16 +117,6 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   const fullPrompt = prompt?.includes('THE CALENDAR')
     ? prompt
     : buildTaskParsePrompt(prompt || '', tz, asOfMs);
-
-  // The calendar's "today" goes in the system message as well. gpt-6-astra is
-  // handed the real date by OpenAI; with the said-at day only in the user
-  // message it still counted "tomorrow" from the real date on 2 of 25 self-test
-  // sentences (Oct 17 2026), which is Tabitha's bug for any capture that
-  // finishes late. Read from the prompt itself, so the two can't disagree.
-  const saidDay = /TODAY: (\d{4}-\d{2}-\d{2}) \((\w+)\)\s+CURRENT TIME: ([^\n]+)/.exec(fullPrompt);
-  const saidNote = saidDay
-    ? `\n\nTHE WORDS WERE SAID ON ${saidDay[2]} ${saidDay[1]} AT ${saidDay[3].trim()}. For this task that is today and now: count "today", "tomorrow", "tonight" and every day name from it, even if you were told a different date anywhere else.`
-    : '';
 
   const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
   const ask = async (nudge = '') => {
@@ -149,7 +131,6 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
         {
           role: "system",
           content: TASK_PARSE_SYSTEM_PROMPT
-            + saidNote
             + (aboutMe?.trim() ? `\n\nABOUT THE USER (in their own words): ${aboutMe.trim()}` : '')
             + quietHoursNote(quiet)
             + nudge,
@@ -172,46 +153,8 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   // One more ask when the words name a part of the day and no time came
   // back. Only a retry trigger: the model still picks the time.
   if (!parsed?.target_time && namesPartOfDay(fullPrompt)) {
-    const again = await ask("\n\nLOOK AGAIN AT THE TIME. If the words name a part of the day for doing it (tonight, tomorrow morning, Sunday night, this evening, before bed, after work, this afternoon, after dinner, first thing), that is a time: pick the clock time a reasonable person would mean by it, on the day they meant, and target_time must not be null. If such a word is only part of a name (\"night cream\", \"Morning Glory seeds\"), there is no time and target_time stays null.");
+    const again = await ask("\n\nTHE WORDS NAME A PART OF THE DAY (tonight, this evening, before bed, after work, this morning, this afternoon, after dinner, first thing). That is a time: pick the clock time a reasonable person would mean by it, on the day they meant. target_time must not be null here.");
     if (again?.target_time) parsed = again;
-  }
-  // A last look when the day may have been counted from the wrong moment, on
-  // the final answer (the part-of-day retry above can bring the slip back).
-  // gpt-6-astra is handed the real date by OpenAI, and even with the said-at
-  // day in its system message it still sometimes counts "tonight" or
-  // "tomorrow" from the real date (1 of 26 self-test sentences, Oct 17 2026).
-  // That only matters when the words were said on an earlier day (a capture
-  // that finished late, a re-read of an old task), and such a slip always
-  // lands in the real coming week. Only a retry trigger: the model still
-  // decides the day, and a date the person named themselves stays.
-  const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-  const realNow = nowInTimezone(tz);
-  const realToday = ymd(realNow);
-  const saidToday = saidDay?.[1] || ymd(nowInTimezone(tz, asOfMs));
-  if (saidToday < realToday) {
-    const weekOut = new Date(realNow);
-    weekOut.setDate(weekOut.getDate() + 7);
-    const lastDay = ymd(weekOut);
-    const inRealWeek = (v: any) => typeof v === 'string' && v.slice(0, 10) >= realToday && v.slice(0, 10) <= lastDay;
-    if (inRealWeek(parsed?.target_date) || inRealWeek(parsed?.due_date)) {
-      const again = await ask(`\n\nCHECK THE DAY YOU COUNTED FROM. The words were said on ${saidDay ? `${saidDay[2]} ${saidDay[1]}` : saidToday}, not on today's real date (${realToday}). "Today", "tonight", "tomorrow" and day names count from ${saidToday}. If a date you gave came from the real date, fix it; if the person named that date themselves, keep it.`);
-      if (again && typeof again === 'object') {
-        // Keep a time already picked for "tonight" if this answer dropped it.
-        if (!again.target_time && parsed?.target_time && namesPartOfDay(fullPrompt)) again.target_time = parsed.target_time;
-        parsed = again;
-      }
-    }
-  }
-  // A part of the day is never a stated time. "taking morning medication" came
-  // back with 6:30 AM marked as stated (Chad, Oct 16 2026), so a time the app
-  // picked rang inside his quiet hours every morning, unanswered; only a time
-  // the person said themselves may (Anna, Oct 12 2026; RULES.md §9 Q4). When
-  // the words name a part of the day and a "stated" time came back, one more
-  // look at that one answer. Only a retry trigger: the model still judges, and
-  // only its time_stated is taken from the second look.
-  if (parsed?.time_stated === true && parsed?.target_time && namesPartOfDay(fullPrompt)) {
-    const again = await ask(`\n\nCHECK time_stated. You gave ${parsed.target_time} and said the person stated that clock time. time_stated is true only when their own words give the clock time itself: a number ("6:30", "7am", "at 3"), "noon" or "midnight", or an exact amount of time from now ("in 20 minutes"). A part of the day ("morning", "tonight", "after work", "before bed") means you picked the clock time, so time_stated is false.`).catch(() => null);
-    if (again?.time_stated === false) parsed.time_stated = false;
   }
   // A time can only be "stated" when there is one.
   parsed.time_stated = parsed?.time_stated === true && !!parsed?.target_time;
@@ -240,14 +183,6 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
   // trimmed, or nothing — it is shown to the reminder planners verbatim.
   const wish = String(parsed?.reminder_wish || '').trim().replace(/\s+/g, ' ');
   parsed.reminder_wish = wish ? wish.slice(0, 200) : null;
-  // A link the task needs (a video-session or meeting link) is kept for the
-  // task's notes, never its title (Anna, Oct 19 2026: "This link should have
-  // ended up in notes").
-  // Only lines that are links: the model has added the time zone here too.
-  const notes = String(parsed?.notes || '').split('\n').map((l) => l.trim())
-    .filter((l) => /https?:\/\/|www\.|\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.[a-z]{2,}\b/i.test(l))
-    .join('\n');
-  parsed.notes = notes ? notes.slice(0, 1000) : null;
   // A rhythm only stands when the model can quote the words that named its
   // pace ("every hour"). "Keep reminding me until I do it" names none: the
   // wish carries it and the nudge planner keeps at them every 2-3 hours

@@ -13,39 +13,6 @@ import { snoozeTask, recordReminderDismissed } from "../components/utils/snoozeT
 import { usePluginPresent } from "../components/shared/WidgetTaskSync";
 import { formatTimeRange } from "../components/utils/timeRangeLabel";
 
-// A check-off that can't reach the server is tried again instead of dropped
-// (Anna, Oct 17 2026: "Add the retry"). Done on an alarm or on a reminder in
-// the tray opens the app, often cold and before the phone's connection is
-// back, and the alarm or the tray row is already gone by then: one failed
-// request used to mean the task quietly stayed open with nothing said. Now a
-// few tries over about 20 seconds, waiting for the connection when the phone
-// says it's offline, and if it still can't save, the page says so and Done
-// can be tapped again. A task that's gone (404) isn't retried.
-const RETRY_WAITS_MS = [1500, 3000, 6000];
-const RETRY_DEADLINE_MS = 20000;
-function waitForOnline(maxMs) {
-  return new Promise((resolve) => {
-    if (typeof navigator === "undefined" || navigator.onLine !== false || maxMs <= 0) { resolve(); return; }
-    const done = () => { window.removeEventListener("online", done); clearTimeout(timer); resolve(); };
-    const timer = setTimeout(done, maxMs);
-    window.addEventListener("online", done);
-  });
-}
-async function withRetries(fn) {
-  const deadline = Date.now() + RETRY_DEADLINE_MS;
-  for (let attempt = 0; ; attempt++) {
-    await waitForOnline(deadline - Date.now());
-    try {
-      return await fn();
-    } catch (e) {
-      const status = e?.status ?? e?.response?.status;
-      const wait = RETRY_WAITS_MS[attempt];
-      if (status === 404 || wait == null || Date.now() + wait > deadline) throw e;
-      await new Promise((r) => setTimeout(r, wait));
-    }
-  }
-}
-
 // A calendar event's reminder is a heads-up, not a to-do (Anna, Oct 3 2026):
 // nothing to "do", nothing to snooze — just when and where, and "Got it".
 function eventWhen(task, nowMs) {
@@ -101,10 +68,6 @@ export default function TaskNotification() {
   const [task, setTask] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [processingAction, setProcessingAction] = useState(null); // 'complete' | 'snooze-N'
-  // Done didn't save even after retrying (see withRetries): said on the page.
-  const [saveError, setSaveError] = useState(null);
-  // Opened by Done (done=1) but the task couldn't be loaded even after retrying.
-  const [loadError, setLoadError] = useState(false);
   // Leaving this page without completing or snoozing — back, Dismiss, the
   // home button — changes nothing about the task's reminders. It is only
   // counted. Opened from a full-screen alarm (?from=alarm), the alarm already
@@ -145,10 +108,9 @@ export default function TaskNotification() {
         return;
       }
 
-      const finishing = urlParams.get('done') === '1';
-      const tasks = await withRetries(() => base44.entities.Task.filter({ id: taskId }));
-      if (!tasks || tasks.length === 0) {
-        navigate(createPageUrl("Home"), finishing ? { state: { reload: true, message: "That task isn't there anymore" } } : undefined);
+      const tasks = await base44.entities.Task.filter({ id: taskId });
+      if (tasks.length === 0) {
+        navigate(createPageUrl("Home"));
         return;
       }
 
@@ -164,13 +126,6 @@ export default function TaskNotification() {
       }
     } catch (error) {
       console.error("Error loading task:", error);
-      // Done was tapped but the task couldn't be reached: say so and offer to
-      // try again, instead of dropping to Home as if it had been checked off.
-      if (new URLSearchParams(window.location.search).get('done') === '1') {
-        setLoadError(true);
-        setIsLoading(false);
-        return;
-      }
       navigate(createPageUrl("Home"));
     }
   };
@@ -188,18 +143,16 @@ export default function TaskNotification() {
       return;
     }
     setProcessingAction('complete');
-    setSaveError(null);
 
     try {
       const now = new Date();
-      await withRetries(() => base44.entities.Task.update(task.id, {
+      await base44.entities.Task.update(task.id, {
         status: 'completed',
         completed_at: now.toISOString()
-      }));
+      });
     } catch (error) {
       console.error("Error completing task:", error);
       setProcessingAction(null);
-      setSaveError("That didn't save, so the task is still open. Check your connection and tap “Yes, I did this!” again.");
       return;
     }
 
@@ -278,34 +231,7 @@ export default function TaskNotification() {
     );
   }
 
-  if (!task) {
-    if (!loadError) return null;
-    return (
-      <div className={`min-h-screen p-4 flex items-center justify-center ${
-        theme === 'dark' ? 'bg-gray-900' : 'bg-gradient-to-br from-purple-50 via-white to-orange-50'
-      }`}>
-        <Card className={`w-full max-w-md border-none shadow-2xl ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
-          <CardContent className="p-8 text-center">
-            <p className={`mb-6 ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
-              Couldn't reach ADHDone to check this off, so it's still open. Check your connection and try again.
-            </p>
-            <Button
-              onClick={() => { setLoadError(false); setIsLoading(true); loadTask(); }}
-              className="w-full h-12 mb-2 bg-green-600 hover:bg-green-700"
-            >
-              Try again
-            </Button>
-            <button
-              onClick={() => navigate(createPageUrl("Home"))}
-              className={`w-full mt-2 text-sm ${theme === 'dark' ? 'text-gray-500' : 'text-gray-400'}`}
-            >
-              Not now
-            </button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  if (!task) return null;
 
   const isProcessing = !!processingAction;
   const notesButtons = recorderPresent ? notesButtonsFor(task, Date.now()) : null;
@@ -449,10 +375,6 @@ export default function TaskNotification() {
               <CheckCircle2 className="w-5 h-5 mr-2" />
               Got it
             </Button>
-          )}
-
-          {saveError && !isEvent && (
-            <p role="alert" className="mb-3 text-sm text-center text-red-600">{saveError}</p>
           )}
 
           {/* Complete button */}

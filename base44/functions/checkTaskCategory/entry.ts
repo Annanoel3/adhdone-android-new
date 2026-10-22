@@ -17,11 +17,6 @@ import OpenAI from "npm:openai";
 // a task", so "Note to self: create a speech-to-text note taker for ADHD
 // brains" became a task (Sept 2026), and "I use Samsung date book calendar,
 // and I'd like to add that" became a task instead of a request for the app.
-// A note written to themselves is for keeping (Anna, Oct 20 2026: four monthly
-// bills written as a "note to self" became four tasks; "in the future, maybe we
-// put it in parking lot if someone says note to self or something"). It goes to
-// the Parking Lot even with dates or bills in it, unless it also asks to be
-// reminded.
 //
 // Callers: send { text, today?, about_me? }. today is the person's own date
 // (YYYY-MM-DD) so "her birthday is tomorrow" lands on the right day. The older
@@ -91,10 +86,8 @@ a thought, a plan to make or build something someday (an app, a business, a song
 maybe or someday, something to look into eventually, information to remember, a wish list, books
 or shows for someday, brainstorming. These go to the Parking Lot, where they can turn one into a
 task whenever they're ready. Ask yourself: would a good assistant put this on the to-do list and
-start reminding them about it, or file it so it isn't lost? When they've written it as a note to
-themselves ("note to self", "just so I remember", "for my records"), they're telling you it's for
-keeping: it's an idea, even when it holds dates, amounts, bills or things they'll need to do,
-unless they also ask to be reminded.
+start reminding them about it, or file it so it isn't lost? "Note to self" only tells you it's a
+note; what the note says decides which.
 
 "birthday" — they're telling the app about someone's birthday so they get reminded every year
 ("Mom's birthday is October 5th", "Jake's bday is the 12th"). A birthday party, a gift to buy, or

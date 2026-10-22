@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   TrendingUp,
   Sparkles,
+  Share2,
   Download,
   Lightbulb // Added Lightbulb icon for improvements section
 } from "lucide-react";
@@ -22,21 +23,9 @@ import { isTodayTask, isUpcomingTask, isCompletedToday } from "../utils/todayTas
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 
-// A read that hasn't answered in this long is given up on (the platform's own
-// requests have no time limit at all).
-const REVIEW_READ_TIMEOUT_MS = 15000;
-function withTimeout(promise, ms = REVIEW_READ_TIMEOUT_MS) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error(`no answer in ${ms / 1000}s`)), ms)),
-  ]);
-}
-
 export default function EndOfDayReview({ isOpen, onClose, theme }) {
   const [summary, setSummary] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  // The review couldn't be put together (see generateSummary).
-  const [loadFailed, setLoadFailed] = useState(false);
   const [upcomingCount, setUpcomingCount] = useState(0);
 
   useEffect(() => {
@@ -45,37 +34,14 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
     }
   }, [isOpen]);
 
-  // Never stuck on "Generating your day's review..." (Anna, Oct 18 2026: "App
-  // is stuck"). Every read here used to be awaited with no time limit and
-  // nothing catching a failure, so one request that never answered (the app
-  // coming back from the background before the phone's connection did) or
-  // that failed left the spinner up for good. Now each read gives up after 15
-  // seconds, the past summaries and energy check-ins are extras that can't
-  // sink the review, saving it never holds the screen, and a review that
-  // can't be put together says so, with Try again and Close.
   const generateSummary = async () => {
     setIsLoading(true);
-    setLoadFailed(false);
-    try {
-      await buildSummary();
-    } catch (error) {
-      console.error("[EndOfDayReview] Could not put the review together:", error);
-      setLoadFailed(true);
-      setIsLoading(false);
-    }
-  };
 
-  const buildSummary = async () => {
     const today = new Date().toLocaleDateString('en-CA'); // local YYYY-MM-DD
+    const startOfDay = new Date(today).toISOString();
 
-    // Get all tasks - use a high limit to ensure we get all tasks including
-    // completed ones. The past summaries (for the streak) and energy check-ins
-    // are read at the same time; either one failing just leaves it out.
-    const [allTasks, previousSummaries, energyRows] = await Promise.all([
-      withTimeout(base44.entities.Task.list('-updated_date', 500)),
-      withTimeout(DailySummary.list('-date', 30)).catch(() => []),
-      withTimeout(EnergyLog.list('-logged_at', 10)).catch(() => []),
-    ]);
+    // Get all tasks - use a high limit to ensure we get all tasks including completed ones
+    const allTasks = await base44.entities.Task.list('-updated_date', 500);
 
     // Completed today = any task completed today (regardless of when it was created)
     const completed = allTasks.filter(t => isCompletedToday(t, today));
@@ -117,7 +83,8 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
       ? Math.round((completed.length / todayTasks.length) * 100)
       : 0;
 
-    // Streak from the previous summaries (read above)
+    // Get previous summaries for streak
+    const previousSummaries = await DailySummary.list('-date', 30);
     let streakDays = 0;
     const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
@@ -132,7 +99,7 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
 
     // Get energy logs
     // Recorded notes share this table (kind: "note_recording"); only old energy check-ins count here.
-    const energyLogs = (energyRows || []).filter(log => !log.kind && log.logged_at);
+    const energyLogs = (await EnergyLog.list('-logged_at', 10)).filter(log => !log.kind && log.logged_at);
     const todayEnergy = energyLogs.filter(log => {
       const logDate = new Date(log.logged_at).toISOString().split('T')[0];
       return logDate === today;
@@ -242,31 +209,13 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
       improvements: improvements.length > 0 ? improvements : ["Keep striving for your goals! You've got this!"] // Added a default message
     };
 
-    // Saved in the background: the review shows either way.
-    DailySummary.create(summaryData).catch((error) => {
-      console.error("[EndOfDayReview] Could not save the day's summary:", error);
-    });
+    // Save summary
+    await DailySummary.create(summaryData);
 
     setUpcomingCount(upcoming.length);
     setSummary(summaryData);
     setIsLoading(false);
   };
-
-  if (loadFailed) {
-    return (
-      <Dialog open={isOpen} onOpenChange={onClose}>
-        <DialogContent className={`max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto flex flex-col items-center justify-center p-8 ${theme === 'dark' ? 'bg-gray-900 text-white border-gray-700' : 'bg-white'}`}>
-          <Sparkles className="w-12 h-12 text-purple-600" />
-          <p className={`mt-4 text-center text-lg font-semibold ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>Couldn't load your day's review</p>
-          <p className={`mt-1 text-center text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>Check your connection and try again.</p>
-          <div className="mt-6 flex w-full gap-3">
-            <Button variant="outline" className="flex-1" onClick={onClose}>Close</Button>
-            <Button className="flex-1 bg-purple-600 hover:bg-purple-700" onClick={generateSummary}>Try again</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
 
   if (!summary || isLoading) {
     return (
@@ -428,10 +377,18 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
           )}
 
           {/* Action Buttons */}
-          {/* "Share with Partner" was here: it only popped up "Share feature
-              coming soon!", and accountability partners don't exist in the
-              app (Anna had their settings removed Oct 10 2026). */}
           <div className="flex flex-col sm:flex-row gap-3">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                // TODO: Implement share functionality
+                alert("Share feature coming soon!");
+              }}
+            >
+              <Share2 className="w-4 h-4 mr-2" />
+              <span className="text-sm">Share with Partner</span>
+            </Button>
             <Button
               onClick={onClose}
               className={`flex-1 ${theme === 'minimalist'

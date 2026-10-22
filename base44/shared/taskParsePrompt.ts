@@ -35,13 +35,6 @@ export const TASK_PARSE_SYSTEM_PROMPT =
 // open) and a re-read of an old task's words both used to count from the
 // moment they ran: Tabitha's "remind me tomorrow at 9am", typed Monday
 // night, landed on Wednesday, then on Thursday (Oct 6-8 2026). Left out, now.
-//
-// The calendar says outright that it is the said-at moment and beats any other
-// date the model was given: gpt-6-astra is handed the real date by OpenAI
-// before this prompt, and on the parser self-test (Oct 17 2026) it used that
-// date instead of this calendar on 15 of 25 sentences ("tomorrow", said Oct 5,
-// came back Oct 18), which would bring back Tabitha's bug for any capture that
-// finishes late.
 export function nowInTimezone(tz?: string, asOfMs?: number): Date {
   const base = Number.isFinite(asOfMs) && (asOfMs as number) > 0 ? new Date(asOfMs as number) : new Date();
   if (!tz) return base;
@@ -147,9 +140,7 @@ If it's messy, that's normal — reason through it:
   • The facts are scattered. The day might be in the first message and the
     address four messages later. Pull them from wherever they are.
   • Ignore the junk that came along for the ride — carrier/battery/clock
-    readouts, app buttons, timestamps, signatures, ads, and links that have
-    nothing to do with the task (unsubscribe, tracking, social media). A link
-    the task itself needs is not junk: it goes in notes (below).
+    readouts, app buttons, timestamps, signatures, ads, URLs.
   • Never echo the raw input back as the title, and never quote a message as
     the title. Write a short, natural title for the plan, like a person would
     put on their calendar.
@@ -163,8 +154,7 @@ Then be honest about what you do and don't know:
   • A time can be stated without a clock number. "In an hour" or "in 20
     minutes" is a real time — count forward from CURRENT TIME below. "Tonight",
     "before bed", "this evening", "after dinner", "first thing in the morning"
-    is a part of the day, and so is one with a day on it ("tomorrow morning",
-    "Sunday night") — pick the clock time a reasonable person would mean
+    is a part of the day — pick the clock time a reasonable person would mean
     by it, on the day they meant (later today if it's still ahead of now).
     Only when the user gave no time in ANY form is target_time null; then never
     guess one.
@@ -181,9 +171,6 @@ Then be honest about what you do and don't know:
 ────────────────────────────────────────────────────────────────────────
 THE CALENDAR (use these dates — never do the math yourself)
 ────────────────────────────────────────────────────────────────────────
-This is the day and time THE WORDS WERE SAID. If you were told a different
-date anywhere else, ignore it: for this task, today is ${todayISO} and the
-time is ${currentTime}.
 TODAY: ${todayISO} (${dayOfWeek})   CURRENT TIME: ${currentTime}
 TOMORROW: ${tomorrowISO}
 END OF THIS WEEK (Sun): ${endOfThisWeekISO}   END OF NEXT WEEK (Sun): ${endOfNextWeekISO}
@@ -213,17 +200,8 @@ title — the short action or plan, capitalized. Keep every person, business,
   confirmation number they typed is kept too, exactly as typed, in parentheses
   after the action ("Call propane (530-477-7854)", "Pay the water bill
   ($84.20)"): it is the thing they will need in hand when the reminder comes,
-  and dropping it loses what they wrote down. A web link is never in the
-  title: it goes in notes. Neither is the time zone written with a time
-  ("11:00am CDT"): that is part of the time, not the title. Never a single
-  word ("Go"), never a placeholder, never a whole pasted message.
-
-notes — a web link the person will need for this task, exactly as written:
-  the video-session or meeting link, the booking, check-in or form page. More
-  than one goes one per line. Only links go here: never the time zone, a
-  remark of your own or anything else from the text (a phone number, address
-  or amount stays in the title), and never a junk link (see above).
-  Otherwise null.
+  and dropping it loses what they wrote down. Never a single word ("Go"),
+  never a placeholder, never a whole pasted message.
 
 location — a real address, business, or place taken verbatim from the text,
   and only when the person will physically go there (see above). Otherwise null.
@@ -290,10 +268,7 @@ time_stated — true only when the user gave the clock time itself: a number
   when target_time is null. Only a time the user stated may ring during their
   quiet hours (a 5 AM flight), so when unsure, false.
 
-end_date — for a stated multi-day range (a trip Dec 3–7, a three-day
-  conference), the LAST day. Otherwise null. An event that runs past midnight
-  into the early morning (a party from 7 PM to 2 AM) is one night, on the day
-  it starts, not a range: end_date stays null.
+end_date — for a stated multi-day range, the LAST day. Otherwise null.
 
 due_date — when the thing must be DONE by. Set it for deadlines ("by Friday",
   "this week", "today"), and also mirror target_date into it whenever
@@ -449,7 +424,6 @@ Return JSON with exactly these keys:
   "title": string,
   "location": string | null,
   "business_name": string | null,
-  "notes": string | null,
   "urgency": "low" | "medium" | "high" | "urgent",
   "energy_required": "low" | "medium" | "high",
   "classification": "task" | "event" | "birthday" | "payment",

@@ -1,5 +1,3 @@
-// Re-saved Oct 21 2026 (noon) so the bundled shared/reminderTitle.ts is picked up: alarms at a time they set in the same minute ring in the order alarmOrder.ts judged (alarm_order), each one marked theirTime with the bell.
-// Re-saved Oct 21 2026 so the bundled shared/reminderTitle.ts is picked up: an alarm at a time they set is marked theirTime and headed with the bell, so the phone never moves it.
 // Daily morning digest notification.
 // Replaces the "9 AM collision" (N individual task notifications all firing at
 // quiet-hours-end) with ONE friendly summary of the user's day. Runs every
@@ -18,7 +16,6 @@ import OpenAI from 'npm:openai';
 import { localMinutesOfDay, userTimeZone, theirDayKeyFor, wakeStartMs } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
-import { easeNow } from '../../shared/easeOff.ts';
 
 const openai = new OpenAI({
   apiKey: Deno.env.get('OPENAI_API_KEY')
@@ -78,8 +75,7 @@ Deno.serve(async (req) => {
       // from when their quiet hours ended (quiet hours default to ON; turned
       // off, 8 AM), or with "Notice when I wake up" on, from when their phone
       // was first unlocked. Until it reports, nothing yet (at most 4 hours past
-      // quiet hours end, 1 when the phone holds ADHDone back in the
-      // background). Never inside quiet hours. 60 minutes with a 30-minute
+      // quiet hours end). Never inside quiet hours. 60 minutes with a 30-minute
       // cron: two tries.
       const wokeAt = wakeStartMs(user, now, timeZone);
       if (wokeAt == null) continue;
@@ -94,12 +90,7 @@ Deno.serve(async (req) => {
 
       // Get today's tasks
       const userTasks = activeTasksByUser[email] || [];
-      // Tasks put off on 3 different days are on the eased plan
-      // (shared/easeOff.ts, Anna, Oct 22 2026): the morning summary is where
-      // they're always mentioned, so they lead the list and are named.
-      const easedTasks = userTasks.filter((t: any) => !t.parent_task_id && !t.silenced && easeNow(t));
-      const easedIds = new Set(easedTasks.map((t: any) => t.id));
-      const todaysTasks = [...easedTasks, ...getTodaysTasks(userTasks, now, timeZone).filter((t: any) => !easedIds.has(t.id))];
+      const todaysTasks = getTodaysTasks(userTasks, now, timeZone);
 
       // Nothing on the list today: no digest. "Your day is clear — what else
       // can we tackle?" went out every single morning to people who had never
@@ -137,7 +128,7 @@ Deno.serve(async (req) => {
       // The name they asked to be called. full_name is often an email handle
       // or a legal name nobody uses ("Good morning, shirarose823!").
       const firstName = String(user.preferred_name || '').trim() || (user.full_name || '').split(' ')[0] || 'friend';
-      const message = await generateDigestMessage(todaysTasks, firstName, Math.floor(localMinutesOfDay(now, timeZone) / 60), easedTasks.slice(0, 4).map((t: any) => String(t.title || '')).filter(Boolean));
+      const message = await generateDigestMessage(todaysTasks, firstName, Math.floor(localMinutesOfDay(now, timeZone) / 60));
       const sent = await sendDigestNotification(email, user, message);
 
       if (sent) {
@@ -206,7 +197,7 @@ function isSameLocalDay(d1: Date, d2: Date, timeZone: string): boolean {
 // It goes out when they wake up: their morning, which for someone who
 // sleeps days is 4 PM. "Good morning" at 4 PM is odd, so outside clock morning
 // it's "Rise and shine" (Anna, Oct 12 2026).
-async function generateDigestMessage(tasks: any[], firstName: string, localHour: number, mustName: string[] = []): Promise<{ title: string; body: string }> {
+async function generateDigestMessage(tasks: any[], firstName: string, localHour: number): Promise<{ title: string; body: string }> {
   const clockMorning = localHour >= 4 && localHour < 12;
   const title = clockMorning ? `☀️ Good morning, ${firstName}!` : `✨ Rise and shine, ${firstName}!`;
 
@@ -233,7 +224,7 @@ Return only the notification body text, nothing else.`
         },
         {
           role: 'user',
-          content: `User's first name: ${firstName}\nTasks for today (${tasks.length} total):\n${taskList}${mustName.length ? `\n\nThey keep putting these off, so this summary is where they get mentioned now. Name each one in the message, lightly and without guilt (it can run up to 240 characters to fit them):\n${mustName.map((n) => `- ${n}`).join('\n')}` : ''}\n\nGenerate a friendly start-of-day digest notification body.`
+          content: `User's first name: ${firstName}\nTasks for today (${tasks.length} total):\n${taskList}\n\nGenerate a friendly start-of-day digest notification body.`
         }
       ],
       reasoning_effort: 'low',
@@ -289,10 +280,7 @@ async function sendDigestNotification(email: string, user: any, message: { title
       return false;
     }
 
-    // OneSignal's answer no longer carries a recipient count (it read "0
-    // recipients" for pushes that reached the phone, Oct 16 2026); the id is
-    // what the debug look-up ({ os: { id } }) takes to see what it reached.
-    console.log(`[DIGEST] Sent to ${email}: ${result.id || 'no id'}`);
+    console.log(`[DIGEST] Sent to ${email}: ${result.recipients || 0} recipients`);
     return result.id || 'sent';
   } catch (e) {
     console.error(`[DIGEST] Failed to send to ${email}:`, e);
