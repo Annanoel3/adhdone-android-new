@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { pushWidgetTasks, pushAlarms, pushAlarmSound, LOUD_ALARM_SOUND_FOR, setAlarmMode, pushAlarmQuietWhen, quietWhenFor, pushEventQuiet, refreshAlarms, alarmPermissionStatus, listActiveTasks } from '../utils/widgetBridge';
+import { pushWidgetTasks, pushAlarms, pushAlarmSound, LOUD_ALARM_SOUND_FOR, setAlarmMode, pushAlarmQuietWhen, quietWhenFor, pushEventQuiet, refreshAlarms, alarmPermissionStatus, alarmSwitchesOff, listActiveTasks } from '../utils/widgetBridge';
+import { phonePlatform, onThisPhone } from '@/lib/phonePlatform';
 import { maybeAutoSyncDevice } from '@/lib/calendarSync';
 
 // Seeds the home-screen widget once on app open, from anywhere in the app — a
@@ -62,6 +63,9 @@ export default function WidgetTaskSync({ user }) {
   // had a moment to land (they can announce themselves after the first
   // render); written only when something changed.
   const savedBuild = user?.app_build;
+  // Which phone app: 'android' or 'ios' (Anna, Oct 22 2026), so the server and
+  // the dashboard can tell iPhone users apart once that app exists.
+  const savedPlatform = user?.app_platform || '';
   const savedPlugins = Array.isArray(user?.phone_plugins) ? user.phone_plugins.join(',') : '';
   useEffect(() => {
     if (!userId || !window.Capacitor?.isNativePlatform?.()) return;
@@ -77,10 +81,12 @@ export default function WidgetTaskSync({ user }) {
       const patch = {};
       if (build && build !== savedBuild) { patch.app_build = build; patch.app_version = version; }
       if (plugins.join(',') !== savedPlugins) patch.phone_plugins = plugins;
+      const platform = phonePlatform();
+      if (platform !== 'web' && platform !== savedPlatform) patch.app_platform = platform;
       if (Object.keys(patch).length) base44.auth.updateMe(patch).catch(() => {});
     }, 12000);
     return () => { gone = true; clearTimeout(t); };
-  }, [userId, savedBuild, savedPlugins]);
+  }, [userId, savedBuild, savedPlugins, savedPlatform]);
 
   // The reminder planner words an appointment's reminders around recording
   // notes only for people whose phone can record (app build 36+), so it has
@@ -201,14 +207,19 @@ export default function WidgetTaskSync({ user }) {
       last = Date.now();
       const st = await alarmPermissionStatus();
       if (!st) return;
-      const next = {
+      // The iPhone app has none of Android's switches: it files notifications
+      // and AlarmKit's own permission (when its getStatus reports one) only,
+      // so it's never listed as missing switches it can't have.
+      const android = onThisPhone('androidSwitches');
+      const next = android ? {
         notifications: !!st.notifications,
         exact_alarms: !!st.exactAlarms,
         full_screen: !!st.fullScreen,
         battery: !!st.ignoringBatteryOptimizations,
-      };
+      } : { notifications: !!st.notifications };
+      if (!android && typeof st.alarms === 'boolean') next.alarms = st.alarms;
       // Older builds don't report these two; leave them out rather than guess.
-      if (typeof st.overlay === 'boolean') next.overlay = st.overlay;
+      if (android && typeof st.overlay === 'boolean') next.overlay = st.overlay;
       if (Number(st.lastRangAt) > 0) next.last_rang_at = new Date(Number(st.lastRangAt)).toISOString();
       const keys = Object.keys(next);
       const same = !!saved
@@ -220,10 +231,7 @@ export default function WidgetTaskSync({ user }) {
       next.checked_at = new Date().toISOString();
       const missing = [
         !next.notifications && 'Notifications',
-        !next.exact_alarms && 'Exact alarms',
-        !next.full_screen && 'Full-screen',
-        next.overlay === false && 'Display over apps',
-        !next.battery && 'Battery',
+        ...alarmSwitchesOff(st),
       ].filter(Boolean);
       try {
         await base44.auth.updateMe({
