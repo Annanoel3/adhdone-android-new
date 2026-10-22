@@ -50,6 +50,7 @@ import { listAll, filterAll } from '../../shared/listAll.ts';
 // mention, something that doesn't have to happen yet gets space).
 import { REMINDER_BRIEF, REMINDER_BRIEF_VERSION } from '../../shared/reminderBrief.ts';
 import { assignTaskFamilies } from '../../shared/runTaskParse.ts';
+import { easeNow } from '../../shared/easeOff.ts';
 
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 
@@ -903,6 +904,24 @@ Deno.serve(async (req) => {
           // play-it-by-ear tasks).
           if (entry.light === true) ringsOutLoud = false;
         }
+        // The eased plan (shared/easeOff.ts, Anna, Oct 22 2026): put off on 3
+        // different days, its one mention a day rings as an alarm with only
+        // Done and Later (for someone on alarms), or, once that's been put off
+        // on 2 more days, comes as a regular notification. Low stakes: only
+        // the morning summary, never a nudge.
+        const easedNow = nudgedTask ? easeNow(nudgedTask) : null;
+        if (easedNow && entry.type !== 'roundup') {
+          const sentToday = sentLog.some((l: any) => l?.task_id === entry.task_id && !l?.skip && dayOf(utcMs(l.at)) === todayStr);
+          if (easedNow.nudge === 'none' || sentToday) {
+            entry.sent = true;
+            entry.sent_at = now.toISOString();
+            entry.skipped_reason = 'eased';
+            newLog.push({ k: entryKey(entry), at: entry.sent_at, skip: 'eased' });
+            console.log(`[SMART NUDGE] "${entry.title}" for ${email} not sent: on the eased plan (${easedNow.nudge === 'none' ? 'morning summary only' : 'already mentioned today'})`);
+            continue;
+          }
+          ringsOutLoud = easedNow.nudge === 'alarm' && alarmStyle;
+        }
         // ONE LIVE ALARM PER TASK. A nudge that rang as an alarm stays on the
         // phone until they deal with it: snoozed, it comes back on its own (10
         // min, 30 min, an hour — their pick), and the phone only tells the
@@ -967,7 +986,7 @@ Deno.serve(async (req) => {
           console.log(`[SMART NUDGE] Last look: "${entry.title}" for ${email} not sent (${lastLookSkip} since the run started)`);
           continue;
         }
-        const outcome = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id, ringsOutLoud, entry.type === 'roundup' ? 'roundup' : 'smart_nudge');
+        const outcome = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id, ringsOutLoud, entry.type === 'roundup' ? 'roundup' : 'smart_nudge', !!(easedNow && ringsOutLoud));
         if (outcome === UNSUBSCRIBED) {
           // Nothing can reach this phone: this nudge is done with (not tried
           // again every run), and the account rests until they're back
@@ -1505,6 +1524,14 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     // line, so the planner can put a check-in after it (or nothing).
     const breakMs = utcMs(t.later_until);
     if (Number.isFinite(breakMs) && breakMs > nowMs && dayOf(breakMs) !== todayStr) return false;
+    // Put off on 3 different days: the eased plan (shared/easeOff.ts, Anna,
+    // Oct 22 2026). A low-stakes one is only in the morning summary; the
+    // others get ONE mention a day, so once it went out today, nothing more.
+    const ease = easeNow(t);
+    if (ease) {
+      if (ease.nudge === 'none') return false;
+      if ((ctx.pastNudges?.get(t.id) || []).some((p) => dayOf(p.at) === todayStr)) return false;
+    }
     if (!t.due_date || !t.day_only_task) return true;
     if (t.deadline_style === 'by') return true; // deadlines get runway
     const days = daysTo(t.due_date);
@@ -1820,6 +1847,12 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if ((t.later_count || 0) > 0) react.push(`answered "Later" ${t.later_count}x`);
       if ((t.closed_count || 0) > 0) react.push(`closed its alarm with Home or Back ${t.closed_count}x`);
       if (react.length) parts.push(`what they did with its reminders so far: ${react.join(', ')}`);
+      // The eased plan (shared/easeOff.ts): what's left of its reminders.
+      const eased = easeNow(t);
+      if (eased) {
+        const days = Array.isArray(t.put_off_days) ? t.put_off_days.length : 0;
+        parts.push(`put off on ${days} different days, so it's on a lighter plan now: it's already in their morning summary, and it gets ONE mention a day from you, later in the day, as ${eased.nudge === 'notice' ? 'a regular notification' : 'an alarm with only Done and Later'}. Pick the one moment today it's most likely to get done; don't pile on`);
+      }
       // Anna's rule (see pastNudgesFor): put off 3 or more times, it stops
       // getting the same notifications. A time they named themselves stays.
       const putOff = (t.snooze_count || 0) + (t.dismissed_count || 0) + (t.ignored_count || 0) + (t.later_count || 0) + (t.closed_count || 0);
@@ -2179,7 +2212,8 @@ async function sendNudgeNotification(
   body: string,
   taskId: string,
   ringAsAlarm: boolean = false,
-  kind: string = 'smart_nudge'
+  kind: string = 'smart_nudge',
+  eased: boolean = false
 ): Promise<string | false> {
   const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
   const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
@@ -2217,6 +2251,9 @@ async function sendNudgeNotification(
     // ("restore"), and the phone rang a ring-now push again every time, for the
     // push's whole 3-day default lifetime. Ten minutes: never restored after that.
     payload.ttl = 10 * 60;
+    // The eased plan's one alarm a day: only Done and Later on the alarm
+    // screen (build 43 on; older builds show their usual buttons).
+    if (eased) payload.data.eased = true;
   }
 
   try {
