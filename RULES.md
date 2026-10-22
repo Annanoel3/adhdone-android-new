@@ -343,3 +343,31 @@ How it works, and how it must keep working:
 asks for that change in her own words.** A request about something else (another feature's
 bug, a cleanup, "make it faster", "save credits") is not permission. If a fix somewhere else
 seems to need a change here, stop and ask her first.
+## 11. THE IPHONE APP — ANDROID-ONLY THINGS NEVER SHOW THERE
+
+The iPhone app (built by Haris, Oct 2026) loads this same website. Anna, Oct 22 2026: "show
+certain things to android users only and then show only the things that work to iphone users.
+Like the wakeup thing. That cant be in the settings for iphone users and that popup cant happen
+either."
+
+- **`src/lib/phonePlatform.js` is the one list.** `onThisPhone('<feature>')` is false in the
+  iPhone app for every Android-only feature (wake-up detection, the pinned notification,
+  vibrate-only on silent, Google Play's update popup, Android's alarm switches, the Android
+  how-to clips) and for the ones still waiting on Haris (spoken alarm, share extension, widget).
+  Anything new that only Android can do goes on that list and gets an `onThisPhone` check.
+  On Android and the plain website every check passes, so nothing there changes.
+- **Never rely on "the plugin doesn't have that method"** to hide something on iPhone; the
+  iPhone plugins may have a method of the same name. Check `onThisPhone` as well.
+- **No "Android", "Google Play", "Play Store" or "Samsung" on an iPhone screen.** Apple turns
+  down apps that name other phone platforms (App Review Guideline 2.3.10). Use `phoneOs()`
+  ("Android" / "your iPhone") in sentences.
+- **Alarm switches:** `alarmSwitchesOff(st)` in widgetBridge decides what's missing. On iPhone,
+  `AlarmBridge.getStatus()` reports `{ notifications, alarms }` (alarms = AlarmKit's own
+  permission) and `AlarmBridge.requestAlarmAccess()` asks for it.
+- **Alarm spacing on iPhone:** until `IPHONE_SPACES_ALARMS` is true, the website merges alarms
+  within 10 minutes into one before sending the list (foldClusters). A time the person set is
+  never merged or moved.
+- **Still open (server side):** `wakeStartMs` in `base44/shared/quietHours.ts` trusts
+  `wake_watch`. The iPhone app sets an account's `wake_watch` back to null when it opens (it
+  can't watch for waking), so this only matters for someone using an Android and an iPhone at
+  once. `app_platform` on User says which phone app they last opened.
