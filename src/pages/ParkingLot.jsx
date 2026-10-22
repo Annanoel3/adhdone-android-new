@@ -1906,6 +1906,9 @@ Return ONLY the category name, nothing else.`;
                 const ms = rowMs(e.at);
                 if (n[0] == null || !Number.isFinite(ms)) continue;
                 const row = { ms, label: new Date(ms).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }), [`${sr.key}a`]: n[0] };
+                // Its note rides along, so tapping the dot shows it (Anna,
+                // Oct 22 2026: "click something to see the notes").
+                if (e.note) row.notes = [String(e.note)];
                 if (n[1] != null) { row[`${sr.key}b`] = n[1]; hasB = true; }
                 rows.push(row);
               }
@@ -1924,9 +1927,10 @@ Return ONLY the category name, nothing else.`;
             const points = [];
             for (const r of rows) {
               const last = points[points.length - 1];
-              const keys = Object.keys(r).filter((k) => k !== 'ms' && k !== 'label');
+              const keys = Object.keys(r).filter((k) => k !== 'ms' && k !== 'label' && k !== 'notes');
               if (last && r.ms - last.ms < 2 * 60 * 1000 && keys.every((k) => !(k in last))) {
                 for (const k of keys) last[k] = r[k];
+                for (const nt of r.notes || []) if (!(last.notes || []).includes(nt)) last.notes = [...(last.notes || []), nt];
               } else {
                 points.push({ ...r });
               }
@@ -1943,8 +1947,36 @@ Return ONLY the category name, nothing else.`;
               seenDay[k] = (seenDay[k] || 0) + 1;
               if (perDay[k] > 1 && seenDay[k] > 1) p.label = new Date(p.ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
             }
+            // A note logged on its own (no numbers, so no dot) belongs to the
+            // reading taken at the same moment: it shows with that dot.
+            for (const sr of series) {
+              for (const e of sr.entries) {
+                if (!e.note || trackerNumbers(e.text)[0] != null) continue;
+                const ms = rowMs(e.at);
+                if (!Number.isFinite(ms)) continue;
+                const near = points.find((p) => Math.abs(p.ms - ms) < 2 * 60 * 1000);
+                if (near && !(near.notes || []).includes(String(e.note))) near.notes = [...(near.notes || []), String(e.note)];
+              }
+            }
             // The tooltip names the moment in full either way.
             const whenOf = (label, payload) => { const ms = payload?.[0]?.payload?.ms; return Number.isFinite(ms) ? formatLogTime(new Date(ms).toISOString()) : label; };
+            // Tapping a dot shows its numbers and, under them, the note(s)
+            // written with that reading. Same look as the chart's plain tooltip.
+            const NoteTip = ({ active, payload, label }) => {
+              if (!active || !payload || payload.length === 0) return null;
+              const notes = payload[0]?.payload?.notes || [];
+              return (
+                <div style={{ background: '#fff', border: '1px solid #ccc', padding: '8px 10px', maxWidth: 240, fontSize: 13, lineHeight: 1.35 }}>
+                  <p style={{ margin: '0 0 4px', color: '#111' }}>{whenOf(label, payload)}</p>
+                  {payload.map((it) => (
+                    <p key={it.dataKey} style={{ margin: 0, color: it.color }}>{it.name} : {it.value}</p>
+                  ))}
+                  {notes.map((nt, i) => (
+                    <p key={i} style={{ margin: '6px 0 0', color: '#555', fontStyle: 'italic', whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{nt}</p>
+                  ))}
+                </div>
+              );
+            };
             const axis = niceTicks(points.flatMap((r) => lines.map((l) => r[l.key])));
             return (
               <>
@@ -1954,7 +1986,7 @@ Return ONLY the category name, nothing else.`;
                       <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
                         <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                         <YAxis tick={{ fontSize: 11 }} domain={axis ? axis.domain : ['auto', 'auto']} ticks={axis ? axis.ticks : undefined} />
-                        <ChartTooltip labelFormatter={whenOf} />
+                        <ChartTooltip content={<NoteTip />} allowEscapeViewBox={{ x: false, y: true }} wrapperStyle={{ zIndex: 20 }} />
                         {lines.length > 1 && <ChartLegend wrapperStyle={{ fontSize: 11 }} />}
                         {lines.map((l) => (
                           <Line key={l.key} type="monotone" dataKey={l.key} name={l.name} stroke={l.color} strokeWidth={2} dot={{ r: 3 }} connectNulls />
