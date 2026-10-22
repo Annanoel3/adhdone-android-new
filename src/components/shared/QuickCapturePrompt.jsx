@@ -836,6 +836,8 @@ const FIRST_WIN_DEMO_KEY = 'first_win_demo_push';
 // the welcome chat fires the other when it plans a demo.
 const PUSH_LINKED_EVENT = 'adhdone:push-linked';
 const FIRST_WIN_PLANNED_EVENT = 'adhdone:first-win-planned';
+// Booked once per account (the welcome chat sets the same flag).
+const FIRST_WIN_KEY = 'onboarding_first_win_push_booked';
 // A demo that still can't be booked this long after its planned time is
 // dropped — arriving much later it would no longer read as a demo.
 const FIRST_WIN_DEMO_STALE_MS = 15 * 60 * 1000;
@@ -900,6 +902,31 @@ if (typeof window !== 'undefined') {
   window.addEventListener(PUSH_LINKED_EVENT, () => { bookFirstWinDemo(); });
   window.addEventListener(FIRST_WIN_PLANNED_EVENT, () => {
     if (window.__adhdonePushLinked) bookFirstWinDemo();
+  });
+  // Everyone new gets the demo reminder after their first task, wherever they
+  // add it (Anna, Oct 22 2026). It used to come only from a task added in the
+  // welcome chat, so someone who skipped that and added one from Home or the
+  // Tasks page (M, Oct 16 2026) heard nothing at all on their first day. Only
+  // an account made in the last 2 days, in the phone app, and only once (the
+  // same flag the chat sets).
+  window.addEventListener('task-created', async (ev) => {
+    try {
+      if (!window.Capacitor?.isNativePlatform?.()) return;
+      if (firstUseSeen(FIRST_WIN_KEY) || readFirstWinDemo()) return;
+      const title = String(ev?.detail?.task?.title || '').trim();
+      if (!title) return;
+      const me = await base44.auth.me().catch(() => null);
+      const made = Date.parse(me?.signed_up_at || me?.created_date || '');
+      if (!(Number.isFinite(made) && Date.now() - made < 2 * 24 * 60 * 60 * 1000)) return;
+      if (firstUseSeen(FIRST_WIN_KEY) || readFirstWinDemo()) return;
+      markFirstUseSeen(FIRST_WIN_KEY);
+      saveFirstWinDemo({
+        title: 'This is what a reminder looks like 👋',
+        body: `"${title}" is on your list. When it's time, we'll nudge you just like this.`,
+        at: new Date(Date.now() + 3 * 60 * 1000).toISOString(),
+      });
+      window.dispatchEvent(new Event(FIRST_WIN_PLANNED_EVENT));
+    } catch (e) { /* no demo, then */ }
   });
 }
 
