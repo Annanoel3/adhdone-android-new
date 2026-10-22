@@ -150,7 +150,7 @@ export default function QuickCapturePrompt() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Bell className="w-5 h-5 text-green-600" />
-            We need to ask for a couple of permissions
+            {offerPin ? 'We need to ask for a couple of permissions' : 'We need to ask for one permission'}
           </DialogTitle>
           <DialogDescription>
             {offerPin
