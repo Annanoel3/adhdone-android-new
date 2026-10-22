@@ -120,6 +120,7 @@ import EasterEggVideo from "./components/shared/EasterEggVideo";
 import LongPressBrandTitle from "./components/eastereggs/LongPressBrandTitle";
 import EggBadge from "./components/eastereggs/EggBadge";
 import ChaosModeStyles from "./components/eastereggs/ChaosModeStyles";
+import { onThisPhone } from "@/lib/phonePlatform";
 import {
   Dialog,
   DialogContent,
@@ -1381,7 +1382,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                     : 'Choose how long notifications should be quiet 🔕'}
                 </DialogTitle>
                 <DialogDescription className="sr-only">
-                  The same quiet as the buttons on the pinned notification and the widget.
+                  {onThisPhone('pinnedCapture')
+                    ? 'The same quiet as the buttons on the pinned notification and the widget.'
+                    : 'Reminders and alarms still arrive, just quietly, until the time you pick.'}
                 </DialogDescription>
               </DialogHeader>
               {quietNotifications.quiet ? (
