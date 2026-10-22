@@ -940,14 +940,27 @@ export default function TaskCard({
         ? theme === 'dark' ? 'border-green-700 bg-green-900/30 text-green-400' : 'border-green-300 bg-green-50 text-green-700'
         : theme === 'dark' ? 'border-gray-700 bg-gray-800 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-600'
   }`;
-  // A repeating task's collapsed chip says when it repeats ("Daily at 9 PM")
-  // instead of the day — the section already says the day, and two daily
-  // doses with the same title otherwise read as duplicates (Anna, Oct 2 2026).
-  // Overdue still wins: that's the signal that matters.
-  const chipRepeats = !!(collapsedDate && showRepeatPill && !collapsedDate.overdue && repeatScheduleLabel);
+  // A repeating task's collapsed chip is the repeat circle and the day it's
+  // next due ("Nov 1"), plus the time they set when it has one ("Today 9 PM"),
+  // so two daily doses with the same title don't read as duplicates (Anna,
+  // Oct 2 2026). Until Oct 22 2026 it said how often it repeats ("Monthly");
+  // Anna: "put the date and the circle instead". The open card still says how
+  // often. Overdue still wins: that's the signal that matters.
+  const repeatDateLabel = (() => {
+    if (!task.due_date) return collapsedDate?.label || '';
+    const d = new Date(task.due_date);
+    return d.toDateString() === today.toDateString() ? 'Today' : formatReminderDate(task.due_date);
+  })();
+  const repeatTimeLabel = (() => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(task.anchor_time || ''));
+    if (!m) return '';
+    const h = Number(m[1]);
+    return `${h % 12 || 12}${m[2] === '00' ? '' : `:${m[2]}`} ${h < 12 ? 'AM' : 'PM'}`;
+  })();
+  const chipRepeats = !!(collapsedDate && showRepeatPill && !collapsedDate.overdue && repeatDateLabel);
   const chipText = collapsedDate
     ? chipRepeats
-      ? repeatScheduleLabel
+      ? `${repeatDateLabel}${repeatTimeLabel ? ` ${repeatTimeLabel}` : ''}`
       : `${collapsedDate.overdue ? `Overdue · ${collapsedDate.label}` : collapsedDate.label}${timeRange ? ` · ${timeRange}` : ''}`
     : '';
   const chipIcon = chipRepeats ? <RefreshCw className="w-3 h-3 inline-block mr-1 -mt-0.5" /> : null;
