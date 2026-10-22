@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Lightbulb, ArrowRight, Trash2, ChevronsDown, ChevronsUp, Search, Sparkles, Loader2, Filter, Mic, MoreVertical, CheckCircle2, Pencil, Image as ImageIcon, FileText, X, TrendingUp, Bell } from "lucide-react";
+import { Plus, Lightbulb, ArrowRight, Trash2, ChevronsDown, ChevronsUp, Search, Sparkles, Loader2, Filter, Mic, MoreVertical, CheckCircle2, Pencil, Image as ImageIcon, FileText, X, TrendingUp, Bell, Maximize2 } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip as ChartTooltip, ResponsiveContainer, Legend as ChartLegend } from "recharts";
 import { toast } from "@/components/ui/use-toast";
 import { ToastAction } from "@/components/ui/toast";
@@ -286,6 +286,163 @@ function niceTicks(values) {
   const ticks = [];
   for (let v = start; v <= end + step / 1000; v += step) ticks.push(Number(v.toFixed(3)));
   return { domain: [start, end], ticks };
+}
+
+// The tracker chart's bottom edge is real time (Anna, Oct 22 2026: it showed
+// times where past days should be). Readings sit where they were taken, and
+// the labels are dates; zoomed in to a day and a half or less they're times
+// of day, with the date at midnight.
+const HOUR_MS = 60 * 60 * 1000;
+function timeTicks(from, to, maxTicks) {
+  const span = to - from;
+  const out = [];
+  if (!(span > 0)) return out;
+  if (span <= 36 * HOUR_MS) {
+    const stepH = [1, 2, 3, 4, 6, 12].find((h) => span / (h * HOUR_MS) <= maxTicks) || 12;
+    const d = new Date(from);
+    d.setMinutes(0, 0, 0);
+    for (let guard = 0; (d.getTime() < from || d.getHours() % stepH !== 0) && guard < 48; guard++) d.setHours(d.getHours() + 1);
+    for (; d.getTime() <= to && out.length < 50; d.setHours(d.getHours() + stepH)) out.push(d.getTime());
+  } else {
+    const days = span / (24 * HOUR_MS);
+    const stepD = [1, 2, 3, 7, 14, 30, 61, 91].find((n) => days / n <= maxTicks) || 91;
+    const d = new Date(from);
+    d.setHours(0, 0, 0, 0);
+    if (d.getTime() < from) d.setDate(d.getDate() + 1);
+    for (; d.getTime() <= to && out.length < 50; d.setDate(d.getDate() + stepD)) out.push(d.getTime());
+  }
+  return out;
+}
+const timeTickLabel = (span) => (ms) => {
+  const d = new Date(ms);
+  const date = d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' });
+  if (span > 36 * HOUR_MS || (d.getHours() === 0 && d.getMinutes() === 0)) return date;
+  return d.toLocaleTimeString(undefined, { hour: 'numeric' });
+};
+
+// Tapping a dot shows its numbers and, under them, the note(s) written with
+// that reading (Anna, Oct 22 2026: "click something to see the notes").
+function TrackerNoteTip({ active, payload }) {
+  if (!active || !payload || payload.length === 0) return null;
+  const p = payload[0]?.payload || {};
+  const notes = p.notes || [];
+  return (
+    <div style={{ background: '#fff', border: '1px solid #ccc', padding: '8px 10px', maxWidth: 240, fontSize: 13, lineHeight: 1.35 }}>
+      <p style={{ margin: '0 0 4px', color: '#111' }}>{Number.isFinite(p.ms) ? formatLogTime(new Date(p.ms).toISOString()) : ''}</p>
+      {payload.map((it) => (
+        <p key={it.dataKey} style={{ margin: 0, color: it.color }}>{it.name} : {it.value}</p>
+      ))}
+      {notes.map((nt, i) => (
+        <p key={i} style={{ margin: '6px 0 0', color: '#555', fontStyle: 'italic', whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{nt}</p>
+      ))}
+    </div>
+  );
+}
+
+// The tracker chart, plus an Expand button that opens it full screen, where
+// two fingers zoom in and out and slide along the dates (Anna, Oct 22 2026).
+// One finger still taps a dot for its numbers and note.
+function TrackerChart({ points, lines, title, dark }) {
+  const [expanded, setExpanded] = useState(false);
+  const [view, setView] = useState(null);
+  const pinch = useRef(null);
+  const boxRef = useRef(null);
+  const first = points[0].ms;
+  const last = points[points.length - 1].ms;
+  const pad = Math.max((last - first) * 0.03, 30 * 60 * 1000);
+  const full = [first - pad, last + pad];
+  const cur = view || full;
+  const MIN_SPAN = 2 * HOUR_MS;
+  const clampView = (from, span) => {
+    const s = Math.min(Math.max(span, MIN_SPAN), full[1] - full[0]);
+    const f = Math.max(full[0], Math.min(from, full[1] - s));
+    return [f, f + s];
+  };
+  const zoomBy = (factor) => {
+    const mid = (cur[0] + cur[1]) / 2;
+    const span = (cur[1] - cur[0]) * factor;
+    setView(clampView(mid - span / 2, span));
+  };
+  // Where a finger is along the plotted area, 0 (left) to 1 (right). The
+  // left axis takes about 44px and the right margin 12px.
+  const ratioAt = (x) => {
+    const r = boxRef.current?.getBoundingClientRect();
+    if (!r) return 0.5;
+    const w = r.width - 56;
+    return w > 0 ? Math.min(1, Math.max(0, (x - r.left - 44) / w)) : 0.5;
+  };
+  const onTouchStart = (e) => {
+    if (e.touches.length !== 2) return;
+    const [a, b] = [e.touches[0], e.touches[1]];
+    pinch.current = { d0: Math.max(10, Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)), r0: ratioAt((a.clientX + b.clientX) / 2), from: cur[0], span: cur[1] - cur[0] };
+  };
+  const onTouchMove = (e) => {
+    const p = pinch.current;
+    if (!p || e.touches.length !== 2) return;
+    const [a, b] = [e.touches[0], e.touches[1]];
+    const d = Math.max(10, Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY));
+    const span = p.span * (p.d0 / d);
+    const anchor = p.from + p.r0 * p.span;
+    const r1 = ratioAt((a.clientX + b.clientX) / 2);
+    setView(clampView(anchor - r1 * span, span));
+  };
+  const onTouchEnd = (e) => { if (e.touches.length < 2) pinch.current = null; };
+
+  const chart = (range, maxTicks, animate) => {
+    const visible = points.filter((p) => p.ms >= range[0] && p.ms <= range[1]);
+    const axis = niceTicks((visible.length ? visible : points).flatMap((r) => lines.map((l) => r[l.key])));
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={points} margin={{ top: 8, right: 12, bottom: 0, left: -16 }}>
+          <XAxis dataKey="ms" type="number" scale="time" domain={range} allowDataOverflow ticks={timeTicks(range[0], range[1], maxTicks)} tickFormatter={timeTickLabel(range[1] - range[0])} tick={{ fontSize: 11 }} />
+          <YAxis tick={{ fontSize: 11 }} domain={axis ? axis.domain : ['auto', 'auto']} ticks={axis ? axis.ticks : undefined} allowDataOverflow />
+          <ChartTooltip content={<TrackerNoteTip />} allowEscapeViewBox={{ x: false, y: true }} wrapperStyle={{ zIndex: 20 }} />
+          {lines.length > 1 && <ChartLegend wrapperStyle={{ fontSize: 11 }} />}
+          {lines.map((l) => (
+            <Line key={l.key} type="monotone" dataKey={l.key} name={l.name} stroke={l.color} strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={animate} />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    );
+  };
+
+  const fmtDay = (ms) => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return (
+    <>
+      <div className="flex justify-end -mb-1">
+        <button onClick={() => setExpanded(true)} className="text-xs text-purple-600 hover:underline flex items-center gap-1" aria-label="Expand the chart">
+          <Maximize2 className="w-3.5 h-3.5" /> Expand
+        </button>
+      </div>
+      <div className="h-44 w-full">{chart(full, 5, true)}</div>
+      <Dialog open={expanded} onOpenChange={(o) => { setExpanded(o); if (!o) { setView(null); pinch.current = null; } }}>
+        <DialogContent className={`max-w-none w-screen h-[100dvh] rounded-none sm:rounded-none p-3 flex flex-col gap-2 ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
+          <DialogHeader>
+            <DialogTitle className="text-base pr-8">{title}</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" variant="outline" onClick={() => zoomBy(1.5)} aria-label="Zoom out">−</Button>
+            <Button size="sm" variant="outline" onClick={() => zoomBy(1 / 1.5)} aria-label="Zoom in">+</Button>
+            {view && <Button size="sm" variant="outline" onClick={() => setView(null)}>Show all</Button>}
+            <span className="text-xs text-gray-500">
+              {fmtDay(cur[0])}{fmtDay(cur[0]) !== fmtDay(cur[1]) ? ` to ${fmtDay(cur[1])}` : ''} · pinch to zoom, tap a dot for its note
+            </span>
+          </div>
+          <div
+            ref={boxRef}
+            className="flex-1 min-h-0 w-full"
+            style={{ touchAction: 'none' }}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            onTouchCancel={onTouchEnd}
+          >
+            {chart(cur, 6, false)}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 }
 
 export default function ParkingLot() {
