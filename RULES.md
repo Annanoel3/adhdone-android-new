@@ -348,6 +348,10 @@ How it works, and how it must keep working:
    day), `digest` (low stakes: morning summary only). An eased alarm has only Done and
    Later (push `data.eased`, build 43+; normal alarms keep every button). Editing the task's
    wording, priority or date starts it over. The morning summary names every eased task.
+   The phone's taps reach `cancelTaskNotifications` through the published app, which runs
+   the copy of each function from the last Publish; scheduled jobs and automations run the
+   newest copy at once. A change to how taps are counted takes effect only after Publish
+   (seen Oct 22 2026: a ring-out at 2:40 PM CDT was saved by the old copy).
 7. **A new account hears from it the first day (Anna, Oct 22 2026).** Someone who joined in
    the last day and has had nothing from Smart Reminders gets a "NEW HERE" line, so one of
    their first tasks is mentioned that same day even with no date or a low priority. The
