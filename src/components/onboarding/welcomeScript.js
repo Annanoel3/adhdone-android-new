@@ -17,6 +17,8 @@
 // it remind you?" is a question they just answered, so it isn't asked; the
 // parser reads the time out of their words the same as it does on Home. Only
 // plain time words count — a bare number ("pick up 3 things") is not a time.
+import { phoneOs } from '@/lib/phonePlatform';
+
 export function saysWhen(text) {
   const t = String(text || '').toLowerCase();
   return /\b\d{1,2}(:\d{2})?\s*(am|pm|a\.m\.|p\.m\.)\b/.test(t)
@@ -61,8 +63,8 @@ const SCRIPT = [
     // app; the browser has nothing to ask (WelcomeChat skips it there).
     text: (name, handle, about, task, when) =>
       task
-        ? `${when ? `Set for ${when}. ` : ''}So it can reach you, Android's about to ask if ADHDone can send notifications.`
-        : "So reminders can reach you, Android's about to ask if ADHDone can send notifications.",
+        ? `${when ? `Set for ${when}. ` : ''}So it can reach you, ${phoneOs()}'s about to ask if ADHDone can send notifications.`
+        : `So reminders can reach you, ${phoneOs()}'s about to ask if ADHDone can send notifications.`,
     input: 'notify',
   },
   {
