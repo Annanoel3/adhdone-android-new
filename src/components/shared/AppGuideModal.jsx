@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from "react-router-dom";
 import { ADD_PATHS } from "@/components/onboarding/pageIntros";
 import { AutoClip } from "@/components/onboarding/PageIntroTour";
+import { onThisPhone } from "@/lib/phonePlatform";
 import {
   Dialog,
   DialogContent,
@@ -31,7 +32,9 @@ import {
 
 const ADD_PATH_ICONS = { text: Share2, screenshot: Camera, widget: LayoutGrid, pinned: Zap };
 // The how-to clips, by the same keys the Tasks page walkthrough uses.
-const ADD_PATH_VIDEOS = Object.fromEntries(ADD_PATHS.map((p) => [p.key, p.video]));
+// They're Android screen recordings, so the iPhone app shows none
+// (phonePlatform.js androidClips).
+const ADD_PATH_VIDEOS = Object.fromEntries(ADD_PATHS.map((p) => [p.key, onThisPhone('androidClips') ? p.video : undefined]));
 
 export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
   const navigate = useNavigate();
@@ -56,6 +59,9 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
           title: "Say it",
           description: "Tap the mic in the app and just say your task or idea. You can even say features you wish the app had, to put in a request."
         },
+        // The rest only where this phone app has them (phonePlatform.js): the
+        // iPhone app doesn't offer what it can't do (Anna, Oct 22 2026).
+        ...(onThisPhone('shareToApp') ? [
         {
           icon: ADD_PATH_ICONS.text,
           title: "Share selected text",
@@ -68,18 +74,23 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
           description: "Screenshot an invite, a flyer, a receipt, then share it to ADHDone. It reads the information from the picture and turns it into a task.",
           video: ADD_PATH_VIDEOS.screenshot,
         },
+        ] : []),
+        ...(onThisPhone('homeWidget') ? [
         {
           icon: ADD_PATH_ICONS.widget,
           title: "The home-screen widget",
           description: "Tap + to add tasks.",
           video: ADD_PATH_VIDEOS.widget,
         },
+        ] : []),
+        ...(onThisPhone('pinnedCapture') ? [
         {
           icon: ADD_PATH_ICONS.pinned,
           title: "The pinned notification",
           description: "With quick capture on, pull down your notification tray and tap the permanent notification to add a task.",
           link: { label: "Turn it on in Settings", to: "/settings#quick-capture" },
         },
+        ] : []),
       ]
     },
     {
