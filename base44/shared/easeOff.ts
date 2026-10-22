@@ -5,8 +5,9 @@
 // pushes people out of the app. Her rules:
 //  - Put off = Later, any snooze, swiped away or closed (Home, Back, X), or it
 //    rang out unanswered. Later counts the same as dismissing it: "its easy to
-//    press any of those buttons just to get rid of the alarm". Done and Open
-//    don't count.
+//    press any of those buttons just to get rid of the alarm". Stopping it
+//    without a snooze (the alarm's Open button) is reported as a dismissal and
+//    counts too. Only Done doesn't.
 //  - Put off on 3 DIFFERENT DAYS without being done, the task moves to an
 //    eased plan. Same-day repeats are already handled by the "not now" breaks.
 //  - Which plan is the model's judgment, from context like every decision in
