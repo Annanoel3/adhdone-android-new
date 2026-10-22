@@ -13,6 +13,7 @@ import { ledgerCancel } from '../../shared/sendLedger.ts';
 import { userTimeZone, resolveQuietHours } from '../../shared/quietHours.ts';
 import { pushPhoneAlarms, phoneAlarmsFor } from '../../shared/reminderTitle.ts';
 import { judgeAlarmPairs } from '../../shared/runTaskParse.ts';
+import { putOffFields, easeStep } from '../../shared/easeOff.ts';
 
 // ── Mode "later": a break the person asked for ───────────────────────────────
 // Later on an alarm (or a reminder's notification) used to change nothing but a
@@ -240,6 +241,10 @@ async function applyLaterBreak(base44: any, task: any, body: any, _appId: string
     last_alarm_choice: { choice: 'later', at: new Date(tapMs).toISOString(), until: new Date(untilMs).toISOString() },
   };
   if (reportId) extra.alarm_report_ids = [...seenIds, reportId].slice(-20);
+  // Later counts as putting it off (Anna, Oct 22 2026): put off on 3
+  // different days, it moves to an eased plan (shared/easeOff.ts).
+  Object.assign(extra, putOffFields(task, tapMs, timeZone));
+  Object.assign(extra, await easeStep({ ...task, ...extra }, owner, nowMs).catch(() => ({})));
   const { fields, cancelled } = await breakTask(base44, task, owner, untilMs, nowMs, extra, 'laterBreak', false);
   console.log(`[cancelTaskNotifications] Later (not now #${notNow.level} today) for task ${task.id}: break until ${fields.later_until}, ${cancelled} push(es) cancelled`);
   return { success: true, taskId: task.id, later_until: fields.later_until, canceledCount: cancelled };
@@ -443,6 +448,10 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
     const snoozeMs = Date.parse(task.snoozed_until || '');
     if (Number.isFinite(snoozeMs) && snoozeMs <= nowMs + 2 * 60 * 1000) fields.snoozed_until = null;
   }
+  // Every one of these is putting it off (Anna, Oct 22 2026): put off on 3
+  // different days, the task moves to an eased plan (shared/easeOff.ts).
+  Object.assign(fields, putOffFields(task, atMs, timeZone));
+  Object.assign(fields, await easeStep({ ...task, ...fields }, owner, nowMs).catch(() => ({})));
   await svc.Task.update(task.id, fields);
   // A snooze they picked is a "not now" (Anna, Oct 20 2026); Home or Back on a
   // time they set inside quiet hours rings it again on its own, and isn't one.
