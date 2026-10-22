@@ -420,6 +420,10 @@
       "type": "string",
       "description": "The phone app's version name (1.3.12, ...) as last opened, alongside app_build."
     },
+    "app_platform": {
+      "type": "string",
+      "description": "Which phone app they last opened: 'android' or 'ios' (Capacitor's getPlatform). Empty for web-only accounts. Set by WidgetTaskSync alongside app_build."
+    },
     "wake_watch": {
       "type": "boolean",
       "description": "\"Notice when I wake up\" (Settings, next to quiet hours): the phone reports its first unlock each morning (Usage access, used only for that) and Smart Reminders starts their day from then. Turned on only once Android's Usage access is granted."
