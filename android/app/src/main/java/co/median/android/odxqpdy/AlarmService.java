@@ -429,7 +429,7 @@ public class AlarmService extends Service {
         // Re-posting it (a second alarm came due while this rang) must not
         // re-alert or re-open anything.
         b.setOnlyAlertOnce(true);
-        if (!e.noSnooze && !e.event) {
+        if (!e.noSnooze && !e.event && !e.eased) {
             b.addAction(0, ctx.getString(R.string.alarm_action_snooze_10), snooze);
         }
         // Ringing together with other tasks: Done is picked on the alarm screen,
@@ -445,7 +445,14 @@ public class AlarmService extends Service {
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             b.addAction(0, ctx.getString(R.string.alarm_action_done), donePi);
         }
-        b.addAction(0, ctx.getString(R.string.alarm_action_stop), dismiss);
+        if (e.eased && AlarmActivity.canMarkDone(e, e.taskId)) {
+            // The eased plan's alarm: Done and Later only, on the banner as on its
+            // screen (Anna, Oct 22 2026). Later stops the ring the way Stop does.
+            b.addAction(0, ctx.getString(R.string.alarm_action_later),
+                    servicePendingIntent(ctx, ACTION_LATER, e.id, 0, 4));
+        } else {
+            b.addAction(0, ctx.getString(R.string.alarm_action_stop), dismiss);
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             // Show the foreground-service notification at once, never after the
             // 10-second grace Android otherwise allows itself.
