@@ -12,6 +12,7 @@ import { claimHandle } from '@/functions/claimHandle';
 import { enqueueCapture } from '@/lib/pendingCaptures';
 import { firstUseSeen, markFirstUseSeen } from './FirstUseDialog';
 import { ONBOARDING_STEPS, markStepDone } from './onboardingGate';
+import { onThisPhone } from '@/lib/phonePlatform';
 
 // The "this is what a reminder looks like" push: booked once per account, a
 // few minutes after the first task goes in, through the same reminder pipe
@@ -80,6 +81,8 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   // The pinned quick-capture shortcut rides with the notifications question
   // (it IS a notification), on by default, same as the card it replaced.
   const [pinWanted, setPinWanted] = useState(true);
+  // The iPhone app has no pinned notification (Anna, Oct 22 2026).
+  const offerPin = onThisPhone('pinnedCapture');
   const [busy, setBusy] = useState(false);
   // Between sending the name and the next line: that line names the handle,
   // which the server mints a moment later. Starting the line without it and
@@ -225,7 +228,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
       setBusy(true);
       const plugins = window.Capacitor?.Plugins || {};
       try { await plugins.NotifyBridge?.requestPermission?.(); } catch (e) { /* the row on Home takes it from here */ }
-      if (pinWanted) {
+      if (offerPin && pinWanted) {
         try { await plugins.ShareBridge?.setQuickCaptureEnabled?.({ enabled: true }); } catch (e) { /* the Settings toggle shows the real error */ }
       }
       setBusy(false);
@@ -322,6 +325,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
 
       {done && beat?.input === 'notify' && (
         <div className="space-y-2">
+          {offerPin && (
           <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
             <div className="min-w-0">
               <p className="text-sm font-medium">Pin a quick-capture shortcut</p>
@@ -329,6 +333,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
             </div>
             <Switch checked={pinWanted} onCheckedChange={setPinWanted} aria-label="Pin the quick-capture shortcut" />
           </div>
+          )}
           <div className="flex gap-2">
             <Button onClick={() => submitNotify(true)} disabled={busy} className="flex-1">
               {busy ? 'One sec...' : 'Allow notifications'}
