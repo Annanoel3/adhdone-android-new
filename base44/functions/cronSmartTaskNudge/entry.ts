@@ -1588,11 +1588,13 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
   // nobody had mentioned yet looked overdue for a mention: the CRV question
   // rang 2 minutes after she typed it (10:49 PM), the acupuncture call 10
   // minutes after (Oct 20). Someone who just wrote a task down is looking at
-  // it. A calendar import (google_event_id) wasn't written down by them.
+  // it; so is someone who just checked off the last one of a repeating task
+  // (its next copy is made then). A calendar import (google_event_id) is
+  // neither.
   const addedLabel = (t: any, ms: number) => {
     const mins = Math.max(0, Math.round((nowMs - ms) / 60000));
     if (mins < 30 && !t?.google_event_id) {
-      return `added ${mins <= 1 ? 'just now' : `${mins} minutes ago`}: they just wrote this down and it's in front of them, so its first mention waits for a later good moment, not the next few minutes, unless waiting would cost something real`;
+      return `added ${mins <= 1 ? 'just now' : `${mins} minutes ago`}: they were just dealing with it (writing it down, or checking off the last one if it repeats), so it's in front of them and its first mention waits for a later good moment, not the next few minutes, unless waiting would cost something real`;
     }
     if (mins < 120) return `added ${mins} minutes ago`;
     return `added ${daysAgoLabel(ms)}`;
