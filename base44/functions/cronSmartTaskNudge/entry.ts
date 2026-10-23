@@ -1582,6 +1582,21 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     const d = -daysFromToday(ms);
     return d <= 0 ? 'today' : d === 1 ? 'yesterday' : `${d} days ago`;
   };
+  // How long ago a task was added, to the minute when it's recent. Anna, Oct
+  // 22 2026: "I just made this task less than 4 minutes ago and it gave me an
+  // alarm for it". The planner only saw "added today", so a high-priority task
+  // nobody had mentioned yet looked overdue for a mention: the CRV question
+  // rang 2 minutes after she typed it (10:49 PM), the acupuncture call 10
+  // minutes after (Oct 20). Someone who just wrote a task down is looking at
+  // it. A calendar import (google_event_id) wasn't written down by them.
+  const addedLabel = (t: any, ms: number) => {
+    const mins = Math.max(0, Math.round((nowMs - ms) / 60000));
+    if (mins < 30 && !t?.google_event_id) {
+      return `added ${mins <= 1 ? 'just now' : `${mins} minutes ago`}: they just wrote this down and it's in front of them, so its first mention waits for a later good moment, not the next few minutes, unless waiting would cost something real`;
+    }
+    if (mins < 120) return `added ${mins} minutes ago`;
+    return `added ${daysAgoLabel(ms)}`;
+  };
 
   const taskList = tasks.map((t, i) => {
     let dueInfo = 'no due date';
