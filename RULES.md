@@ -357,6 +357,14 @@ How it works, and how it must keep working:
    their first tasks is mentioned that same day even with no date or a low priority. The
    app also shows a sample reminder 3 minutes after a new account's first task. To check:
    `{"email": "…", "preview": true, "as_new": true}` to `cronSmartTaskNudge`.
+8. **A task they just added isn't mentioned in the next few minutes (Anna, Oct 22 2026).**
+   For 30 minutes after a task is made (typed, shared in, or the next copy of a repeating
+   task they just checked off; not a calendar import), its line says so and that its first
+   mention waits for a later good moment unless waiting would cost something real. Before
+   this the planner saw only "added today": "Ask dad about the CRV" rang 2 minutes after
+   she typed it (10:49 PM Oct 22), the acupuncture call 10 minutes after (Oct 20). Tested
+   on the 10:49 PM look: old wording sent it at once, new wording held it for the morning;
+   "call CVS before they close at 11" still went out at once.
 
 **Do not change `base44/functions/cronSmartTaskNudge`, `base44/shared/reminderBrief.ts`, the
 "Smart Task Nudge" workflow, or the `smart_nudge_*` fields on User unless Anna explicitly
