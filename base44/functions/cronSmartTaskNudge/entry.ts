@@ -1665,7 +1665,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       ? `, has an old "every ${INTERVAL_WORDS[t.reminder_interval] || t.reminder_interval}" setting that nothing sends — plan it like any other task`
       : '';
     const created = utcMs(t.created_date);
-    const ageInfo = Number.isFinite(created) ? `, added ${daysAgoLabel(created)}` : '';
+    const ageInfo = Number.isFinite(created) ? `, ${addedLabel(t, created)}` : '';
     const h = nudgeHistory.get(t.id);
     let historyInfo = '';
     if (h && h.today.length) {
@@ -1843,7 +1843,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       parts.push(t.life_area === 'work' ? 'work' : 'personal');
       if (t.classification === 'payment') parts.push('a bill/payment');
       const created = utcMs(t.created_date);
-      if (Number.isFinite(created)) parts.push(`added ${daysAgoLabel(created)}`);
+      if (Number.isFinite(created)) parts.push(addedLabel(t, created));
       if ((t.due_date_pushes || 0) > 0) parts.push(`they moved its date later ${t.due_date_pushes}x`);
       const subs = (subtasksByParent[t.id] || []).sort((a: any, b: any) => (a.subtask_order || 0) - (b.subtask_order || 0));
       if (subs.length) parts.push(`steps: ${subs.map((x: any) => `${x.status === 'completed' ? '[x]' : '[ ]'} ${x.title}`).join(', ')}`);
