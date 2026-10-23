@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { initAdMob, showInterstitialAd, resetAdLaunchState } from '@/lib/admob';
 import { anyPopupOpen } from '@/components/onboarding/onboardingSurface';
+import { currentCaptures } from '@/lib/pendingCaptures';
 
 const AD_OPEN_KEY = 'admgr_open_count';
 const LAST_LAUNCH_KEY = 'admgr_last_launch_at';
@@ -52,7 +53,6 @@ const NO_AD_PAGE = /^\/(tasknotification|focustimer|notes|addtask)(\/|$)/i;
 let launchCount = 0;
 let openStartedAt = 0;
 let owedThisOpen = false;
-let signedUpAt = null;     // null until the profile is here
 let lastTapAt = 0;
 let lastPathname = null;
 let pendingTimer = null;
@@ -92,27 +92,42 @@ function isUserBusy() {
   return Date.now() - lastTapAt < RECENT_TAP_MS;
 }
 
-// Which opens get an ad: the 2nd, then every 3rd after that (5th, 8th, …).
+// Which opens get an ad: none of the first 3 (GRACE_OPENS, below), then the
+// 4th and every 3rd open after it (7th, 10th, …): one ad every third open
+// (Anna, Oct 8 2026). It used to be the 2nd, 5th, 8th, …, so once the first 3
+// opens went ad-free the first ad fell on the 5th open, or on the 4th when the
+// 2nd open's ad found no pause and carried over (Anna, Oct 18 2026: "Uh.
+// What?").
 function shouldShowAd(count) {
-  if (count === 2) return true;
-  if (count > 2 && (count - 2) % 3 === 0) return true;
-  return false;
+  return count >= 4 && (count - 4) % 3 === 0;
 }
 
-// No ads for a brand-new account: the first 3 days after signing up or the
-// first 5 opens, whichever ends first. The 2nd open used to get an
+// No ads for the first 3 opens, however many days they're spread over (Anna,
+// Oct 18 2026: "No ads for the first 3 opens"). It used to be the first 3
+// days or the first 5 opens, whichever ended first, so someone coming back
+// for the 2nd time after day 3 got an ad on that 2nd open — and every person
+// whose 2nd open showed an ad stopped using the app (Ciara, Renee and Jess
+// never opened it again after that ad). Before that, the 2nd open got an
 // interstitial 15 seconds in — for one new user that was 8 hours after she
 // signed up, right after a crash, and she never came back.
-const GRACE_DAYS = 3;
-const GRACE_OPENS = 5;
-function inGrace(signedUp, count) {
-  if (count > GRACE_OPENS) return false;
-  // Not known yet (the profile hasn't loaded): treat as new rather than risk
-  // an ad on someone's first day.
-  if (signedUp === null) return true;
-  const t = Date.parse(signedUp || '');
-  if (!Number.isFinite(t)) return false; // an old account with no sign-up date
-  return Date.now() - t < GRACE_DAYS * 24 * 60 * 60 * 1000;
+const GRACE_OPENS = 3;
+function inGrace(count) {
+  return count <= GRACE_OPENS;
+}
+
+// A task they just added is still being set up (sorted, split, parsed, saved).
+// An ad on top of it puts the app behind the ad half-way through (Oct 13 2026:
+// "call propane ... today" had just been sorted when a page-switch ad showed
+// 70 ms later; the task was never made, and that person never opened the app
+// again). Anna's rule: an ad never interrupts someone mid-task.
+function taskBeingSetUp() {
+  try {
+    const now = Date.now();
+    return currentCaptures().some((c) => !c.held && !c.handedOff
+      && (c.started || now - (c.createdAt || 0) < 2 * 60 * 1000));
+  } catch (e) {
+    return false;
+  }
 }
 
 function cancelPending() {
@@ -134,7 +149,8 @@ function registerLaunch() {
   launchCount = count;
   openStartedAt = Date.now();
   const carried = readOwed();
-  owedThisOpen = shouldShowAd(count) || carried;
+  // Nothing is owed during the first 3 opens, carried over or not.
+  owedThisOpen = !inGrace(count) && (shouldShowAd(count) || carried);
   writeOwed(owedThisOpen);
   lastPathname = window.location.pathname;
   resetAdLaunchState();
@@ -149,10 +165,12 @@ async function attempt(source) {
   pendingTimer = null;
   if (!owedThisOpen) return;
   if (document.visibilityState === 'hidden') { note(`${source}: app not on screen`); return; }
-  if (inGrace(signedUpAt, launchCount)) {
+  // Waits for the pause after the task is made (task_added) instead.
+  if (taskBeingSetUp()) { note(`${source}: a task is still being set up`); return; }
+  if (inGrace(launchCount)) {
     owedThisOpen = false;
     writeOwed(false);
-    note(`${source}: new account, no ads yet`);
+    note(`${source}: one of the first ${GRACE_OPENS} opens, no ads yet`);
     return;
   }
   if (Date.now() - openStartedAt < MIN_OPEN_AGE_MS) { note(`${source}: too soon after opening`); return; }
@@ -177,15 +195,8 @@ function atPause(source, delayMs) {
   pendingTimer = setTimeout(() => attempt(source), delayMs);
 }
 
-export default function AdManager({ user }) {
+export default function AdManager() {
   const location = useLocation();
-
-  // When this account signed up (null until the profile is here), read again
-  // at show time: the grace is judged then, because the profile usually
-  // arrives after the launch was counted.
-  useEffect(() => {
-    signedUpAt = user ? (user.signed_up_at || user.created_date || '') : null;
-  }, [user?.signed_up_at, user?.created_date, !!user]);
 
   useEffect(() => {
     if (!isCapacitor()) return;

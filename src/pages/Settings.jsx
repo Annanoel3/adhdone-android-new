@@ -25,7 +25,8 @@ import { Switch } from '@/components/ui/switch';
 import HomeZipCard from '@/components/settings/HomeZipCard';
 import QuickCaptureCard, { AlarmCard } from '@/components/settings/QuickCaptureCard';
 import { voiceCheckInsOn, setVoiceCheckIns, speechAvailable } from '@/components/utils/speak';
-import { refreshAlarms } from '@/components/utils/widgetBridge';
+import { refreshAlarms, alarmPermissionStatus } from '@/components/utils/widgetBridge';
+import { onThisPhone } from '@/lib/phonePlatform';
 import AdDiagnosticsCard from '@/components/settings/AdDiagnosticsCard';
 import { Textarea } from '@/components/ui/textarea';
 import VersionTap from '@/components/settings/VersionTap';
@@ -62,6 +63,8 @@ function AboutYouCard({ user, theme, onSaved }) {
       // The name IS the username (display_name), the same field the welcome
       // chat sets. The handle (@name1234) is left alone — it is minted once.
       await base44.auth.updateMe({ preferred_name: n, display_name: n, about_me: a });
+      // Their quiet hours follow what they just told us, right away (checkQuietHoursFit; Anna, Oct 19 2026).
+      base44.functions.invoke('checkQuietHoursFit', {}).catch(() => {});
       setNote(''); showSaved();
       if (onSaved) await onSaved();
     } catch (e) {
@@ -174,6 +177,17 @@ export default function Settings() {
       await base44.auth.updateMe({ wake_watch: true });
       setWakeWatch({ available: true, hasAccess: true, enabled: true });
       showSaved();
+      // The one other switch it needs: with Android limiting ADHDone in the
+      // background, the check that reports the first unlock is held back and
+      // the morning waits (Rebecca, Oct 16 2026). Asked now, as it's turned on.
+      // Someone on full-screen alarms is asked by the alarm walkthrough.
+      try {
+        const st = await alarmPermissionStatus();
+        if (st && st.ignoringBatteryOptimizations === false && user?.alarm_mode !== 'alarm' && AB?.requestIgnoreBatteryOptimizations) {
+          toast({ title: 'One more switch', description: 'Let ADHDone run in the background so it doesn\'t miss when you wake up.', duration: 5000 });
+          await AB.requestIgnoreBatteryOptimizations();
+        }
+      } catch (e) { /* the wake-up popup asks again later */ }
     } else {
       setWakeWatch((s) => ({ ...s, enabled: false }));
       toast({ title: 'Usage access is still off', description: 'Switch it on for ADHDone, then try again.', duration: 3500 });
@@ -182,7 +196,9 @@ export default function Settings() {
 
   useEffect(() => {
     const AB = alarmBridge();
-    if (!AB?.wakeWatchStatus) return undefined;
+    // Never in the iPhone app, which can't see unlocks (Anna, Oct 22 2026:
+    // "That cant be in the settings for iphone users").
+    if (!AB?.wakeWatchStatus || !onThisPhone('wakeWatch')) return undefined;
     const check = async () => {
       try {
         const st = await AB.wakeWatchStatus();
@@ -209,7 +225,7 @@ export default function Settings() {
 
   const handleWakeWatchToggle = async (on) => {
     const AB = alarmBridge();
-    if (!AB?.wakeWatchStatus) return;
+    if (!AB?.wakeWatchStatus || !onThisPhone('wakeWatch')) return;
     setWakeBusy(true);
     try {
       if (on) {

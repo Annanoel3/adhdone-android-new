@@ -7,8 +7,8 @@ android {
         applicationId "co.median.android.odxqpdy"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 4
-        versionName "1.2.1"
+        versionCode 43
+        versionName "1.3.20"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -21,17 +21,36 @@ android {
     }
     signingConfigs {
         release {
-            storeFile file('release.keystore')
-            storePassword 'password'
-            keyAlias 'release'
-            keyPassword 'password'
+            def keystorePropertiesFile = rootProject.file("../android/key.properties")
+            def keystoreProperties = new Properties()
+            if (keystorePropertiesFile.exists()) {
+                keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+            }
+            keyAlias keystoreProperties['keyAlias'] ?: System.getenv('KEY_ALIAS')
+            keyPassword keystoreProperties['keyPassword'] ?: System.getenv('KEY_PASSWORD')
+            storeFile keystorePropertiesFile.exists() ? file(keystoreProperties['storeFile']) : file(System.getenv('KEYSTORE_FILE') ?: 'release.keystore')
+            storePassword keystoreProperties['storePassword'] ?: System.getenv('STORE_PASSWORD')
         }
     }
     buildTypes {
         release {
             signingConfig signingConfigs.release
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // R8 code shrinking + obfuscation. Keep rules live in proguard-rules.pro;
+            // resource shrinking is guarded by res/raw/keep.xml (the splash drawable is
+            // resolved by name at runtime and is invisible to the shrinker).
+            minifyEnabled true
+            shrinkResources true
+            // -optimize variant: the plain proguard-android.txt contains -dontoptimize,
+            // which disabled R8's optimization pass entirely (Play reported optimization 0%).
+            // The only difference between the two files is -dontoptimize vs
+            // -allowaccessmodification.
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            // Bundle native debug symbols for the .so files that ship with the app
+            // (CameraX JNI), so Play can symbolicate native crashes. Resolves the
+            // "native debug symbols not uploaded" warning.
+            ndk {
+                debugSymbolLevel 'FULL'
+            }
         }
     }
 }
@@ -52,7 +71,20 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
-    implementation 'com.onesignal:OneSignal:[5.0.0, 5.99.99]'
+    // Pinned to the version this build was verified against. The previous dynamic
+    // range [5.0.0, 5.99.99] let Gradle resolve a different SDK at any time, which
+    // made builds non-reproducible and could change push behaviour with no commit.
+    implementation 'com.onesignal:OneSignal:5.9.9'
+    // Google Play's in-app updates: the update popup's Update button opens Play's own
+    // update screen inside the app (InAppUpdate).
+    implementation 'com.google.android.play:app-update:2.1.0'
+    // WorkManager (already on the classpath via OneSignal) exposes Guava's ListenableFuture
+    // in the ListenableWorker signatures, so javac needs it to compile a Worker subclass.
+    // It is already present at runtime via com.google.guava:guava, so compileOnly keeps the
+    // packaged APK byte-for-byte unchanged. (The standalone listenablefuture artifact cannot
+    // be used here: conflict resolution substitutes it with the deliberately empty
+    // 9999.0-empty-to-avoid-conflict-with-guava placeholder, which contains no classes.)
+    compileOnly 'com.google.guava:guava:31.1-android'
 }
 
 apply from: 'capacitor.build.gradle'

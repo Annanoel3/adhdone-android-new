@@ -23,10 +23,11 @@ import {
 import CalendarGrid from '@/components/calendar/CalendarGrid';
 import TaskDetailsModal from '@/components/tasks/TaskDetailsModal';
 import KeepAppOpenNote from '@/components/shared/KeepAppOpenNote';
+import { isIPhoneApp, phoneOs } from '@/lib/phonePlatform';
 import FirstUseDialog, { firstUseSeen, markFirstUseSeen } from '@/components/onboarding/FirstUseDialog';
 import {
   runCalendarSync, maybeAutoSync, getInFlightSync, setCalendarConnected,
-  hasDeviceCalendars, listDeviceCalendars, requestDeviceCalendarPermission, runDeviceCalendarSync,
+  hasDeviceCalendars, listDeviceCalendars, requestDeviceCalendarPermission, runDeviceCalendarSync, handPhoneCalendars,
 } from '@/lib/calendarSync';
 
 const CONNECTOR_ID = '6a04df00e62b57f635e00b0f';
@@ -173,6 +174,9 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
     saveChainRef.current = saveChainRef.current
       .then(() => base44.auth.updateMe({ device_calendar_ids: Array.from(chosenRef.current) }))
       .then(() => {
+        // The phone watches these calendars from now on, app closed too
+        // (none ticked: it stops).
+        handPhoneCalendars(Array.from(chosenRef.current));
         // A newly ticked calendar imports in the background; unticking only
         // stops future syncs — what was already imported stays as tasks.
         if (adding) sync(Array.from(chosenRef.current));
@@ -195,7 +199,7 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
           <div>
             <h2 className={`text-xl font-bold ${textPrimary}`}>Phone calendars</h2>
             <p className={`text-sm ${textSecondary}`}>
-              Google, Samsung, Outlook — any calendar your phone's calendar app shows. Tick the ones to bring in; their events become tasks with reminders.
+              {isIPhoneApp() ? 'iCloud, Google, Outlook' : 'Google, Samsung, Outlook'} — any calendar your phone's calendar app shows. Tick the ones to bring in; their events become tasks with reminders.
             </p>
           </div>
           {granted && chosenIds.length > 0 && (
@@ -211,7 +215,7 @@ function PhoneCalendarsCard({ user, isDark, textPrimary, textSecondary, onSynced
           <div className="space-y-2">
             <p className={`text-sm ${textSecondary}`}>ADHDone needs read-only access to the calendars on this phone. Nothing is read until you pick a calendar below.</p>
             <Button onClick={allow} disabled={busy} className="bg-purple-600 hover:bg-purple-700 text-white">
-              {busy ? 'Waiting for Android…' : 'Allow calendar access'}
+              {busy ? `Waiting for ${phoneOs()}…` : 'Allow calendar access'}
             </Button>
           </div>
         )}

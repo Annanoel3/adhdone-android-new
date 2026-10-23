@@ -1,3 +1,6 @@
+// Re-saved Oct 21 2026 (noon) so the bundled shared/reminderTitle.ts is picked up: alarms at a time they set in the same minute ring in the order alarmOrder.ts judged (alarm_order), each one marked theirTime with the bell.
+// Re-saved Oct 21 2026 so the bundled shared/reminderTitle.ts is picked up: an alarm at a time they set is marked theirTime and headed with the bell, so the phone never moves it.
+// Re-saved Oct 16 2026 so the bundled shared/reminderTitle.ts is picked up: a daily reminder after its first day reads as a reminder, never "slipped past".
 // Re-saved Oct 13 2026 (night) so the bundled shared/reminderTitle.ts is picked up: an appointment's alarm carries "Record notes" as its second button.
 // Re-saved Oct 13 2026 (evening) so the bundled shared/reminderTitle.ts is picked up: an event's alarm is marked `event` for the phone (build 42 on shows "Got it" only).
 // Re-saved Oct 13 2026 so the bundled shared/reminderTitle.ts and eventReminderPlan.ts are picked up (timed events: alarm at the time, heads-ups as pushes; the at-start entry survives the cap).
@@ -93,13 +96,51 @@ Deno.serve(async (req) => {
     // is finished): their recurring reminders come back right away instead of
     // at the next hourly run. Only the recurring pass and the Focus Mode
     // check-ins run in that mode.
-    const onlyEmail = await req.json().then((b: any) => (b && typeof b.onlyEmail === 'string' ? b.onlyEmail.trim() : '')).catch(() => '');
+    const body: any = await req.json().catch(() => ({}));
+    const onlyEmail = body && typeof body.onlyEmail === 'string' ? body.onlyEmail.trim() : '';
     if (!onlyEmail) await ledgerPrune(base44);
 
     // Every profile, once: quiet hours are stored as local "HH:MM" on it, and
     // Focus Mode lives on it. Fetched before the tasks because the pass right
     // below can change tasks.
     const allUsers = await listAll(base44.asServiceRole.entities.User);
+
+    // The two looks below show people's tasks and emails: the owner's
+    // account only (Test Function in the editor).
+    if (body?.previewRepeats === true || body?.previewHealth === true) {
+      const me = await base44.auth.me().catch(() => null);
+      if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
+    }
+
+    // What the owner health check would tell Anna right now, sending nothing
+    // (see ownerHealthCheck).
+    if (body?.previewHealth === true) {
+      const active = await filterAll(base44.asServiceRole.entities.Task, { status: 'active' });
+      const look: any = await ownerHealthCheck(base44, { allUsers, allTasks: active, now: new Date(), dryRun: true });
+      return Response.json({ success: true, ...look });
+    }
+
+    // A look at what the repeating-task rollover would do right now, changing
+    // nothing (see REPEATING TASKS WHOSE DAY IS OVER below).
+    if (body?.previewRepeats === true) {
+      const users: Record<string, any> = {};
+      for (const u of allUsers) if (u && u.email) users[u.email] = u;
+      const active = await filterAll(base44.asServiceRole.entities.Task, { status: 'active' });
+      const nowMs = Date.now();
+      const { rolls, twins } = repeatRollPlan(active, users, nowMs);
+      return Response.json({
+        success: true,
+        rolls: rolls.map(({ task, owner, tz, roll }: any) => {
+          const { moved, cancel } = repeatMove(task, owner, tz, roll, nowMs);
+          return {
+            id: task.id, title: task.title, owner: task.created_by, tz, from: roll.fromKey, to: roll.toKey,
+            next_reminder: moved.next_reminder ?? null, due_date: moved.due_date ?? null, event_time: moved.event_time ?? null,
+            reminders: moved.reminder_schedule.map((e: any) => `${e.send_at} ${e.label || ''}`.trim()), cancel: cancel.length,
+          };
+        }),
+        twins: twins.map(({ task, twin }: any) => ({ id: task.id, title: task.title, owner: task.created_by, twin: twin.id })),
+      });
+    }
 
     // Focus Mode's morning question went unanswered — Anna, Oct 14 2026:
     // "ignored morning ends focus mode". The question goes out at the end of
@@ -301,6 +342,19 @@ Deno.serve(async (req) => {
           batchStart = wanted;
         }
       }
+      // A daily (or every-other-day) rhythm starting over keeps its time of
+      // day: the next slot on its own clock (next_reminder plus whole
+      // intervals), not "a day from now" plus the stagger. Oct 16 2026: a 9 AM
+      // daily reminder rebuilt from scratch at 4:02 PM was booked for 4:46 PM
+      // every day.
+      if (!appending && interval >= 24 * 60 * 60 * 1000 && task.next_reminder) {
+        const anchor = new Date(task.next_reminder).getTime();
+        if (Number.isFinite(anchor)) {
+          let t = anchor;
+          if (t <= now.getTime()) t += Math.ceil((now.getTime() - t + 1) / interval) * interval;
+          batchStart = new Date(t);
+        }
+      }
       // They tapped Later on this task's alarm: the app cancelled the pings
       // inside the break and moved next_reminder to its end. Whatever else is
       // computed above, nothing is booked before the break ends.
@@ -393,7 +447,7 @@ Deno.serve(async (req) => {
         const isFocusTask = !!(focusTaskId && task.id === focusTaskId);
         const { title, body } = isFocusTask
           ? getFocusModeContent(task.title)
-          : getReminderContent(task.title, task.due_date, sendAtISO, timeZone);
+          : getReminderContent(task.title, task.due_date, sendAtISO, timeZone, task.reminder_interval);
         try {
           const res = await base44.asServiceRole.functions.invoke('schedulePush', {
             internalKey: CRON_SECRET, // proves this call comes from the app's own backend
@@ -942,6 +996,56 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ── REPEATING TASKS WHOSE DAY IS OVER: on to the next day ───────────────
+  // Anna, Oct 17 2026: "once a recurring task passes the point of being due,
+  // just erase it and reschedule it for the next day". A repeating task only
+  // moved on when its copy was checked off (the app makes the next copy
+  // then), so a day it wasn't checked off left that copy sitting there with
+  // nothing booked after it: "Clean the litter box" (every day at 9 PM) was
+  // last checked off Wednesday Oct 14, rang Thursday at 9, then had no 9 PM
+  // reminder Friday or Saturday, and Smart Reminders filled in at 9:09.
+  // Repeating events never moved on at all (an event isn't checked off).
+  //
+  // So once a copy's day is over on their clock (4 AM, see
+  // REPEAT_DAY_ENDS_MS), a task that repeats again the very next day (every
+  // day, weekdays Monday to Thursday, Saturday into Sunday) or a repeating
+  // event has that day wiped from it and is put on its next day. A task with
+  // a gap before its next day (weekly, monthly, Friday to Monday) stays until
+  // checked off (see repeatRollFor, Anna's later words). Wiped
+  // means what a fresh copy starts with: that day's snoozes, Laters,
+  // rang-out counts and booked pushes go; the words, notes, pictures and
+  // settings stay. Its reminders move to the same times on the new day (the
+  // promotion pass below books them, in this same run) and the phone gets
+  // the new alarm. The record itself moves on, like the birthday rollover
+  // above: a copy made by the server wouldn't belong to them.
+  let repeatsRolled = 0;
+  {
+    const { rolls, twins } = repeatRollPlan(allTasks, userMap, now.getTime());
+    for (const t of twins) {
+      console.log(`🔁 [REFILL] "${t.task.title}" (${t.task.created_by}) left as is: another copy (${t.twin.id}) is already on that day or later`);
+    }
+    for (const { task, owner, tz, roll } of rolls) {
+      try {
+        // Read again right before the change: checked off or changed since
+        // the run started, it's left for the next run to look at again.
+        const fresh = await base44.asServiceRole.entities.Task.get(task.id).catch(() => null);
+        if (!fresh || fresh.status !== 'active' || fresh.silenced || trackerMs(fresh.updated_date) !== trackerMs(task.updated_date)) {
+          console.log(`🔁 [REFILL] "${task.title}" (${task.created_by}) changed during this run; looked at again next run`);
+          continue;
+        }
+        const { moved, cancel } = repeatMove(fresh, owner, tz, roll, Date.now());
+        await base44.asServiceRole.entities.Task.update(task.id, moved);
+        if (cancel.length) await cancelJustBooked(base44, cancel);
+        Object.assign(task, moved); // so the promotion pass below books its reminders this run
+        await pushPhoneAlarms({ ...fresh, ...moved }, owner, { before: fresh, changedAt: Date.now(), source: 'cronRefillReminders' });
+        repeatsRolled++;
+        console.log(`🔁 [REFILL] "${task.title}" (${task.created_by}): ${roll.fromKey} wasn't checked off, moved on to ${roll.toKey} (${moved.reminder_schedule.length} reminder(s) to book)`);
+      } catch (e) {
+        console.error(`[REFILL] Could not move "${task.title}" (${task.id}) on to its next day:`, e);
+      }
+    }
+  }
+
   // ── Event tasks (📅) — promote planned reminders within OneSignal's window ──
   // Events with classification='event' store a deterministic reminder schedule
   // (night before + 1 hour before) but OneSignal rejects scheduling more than
@@ -1392,6 +1496,49 @@ Deno.serve(async (req) => {
     console.error('[REFILL] Tracker reminder pass failed:', e);
   }
 
+  // Two live pushes booked for the same task at the same minute. Oct 16 2026:
+  // Tabitha's "Trash to the Curb" for Sunday 8 PM was booked twice, 94 ms
+  // apart, the moment last week's copy was checked off, and the task only knew
+  // about one of them, so checking it off early would still have left the
+  // other to go off. The push the task keeps stays and the other is cancelled
+  // (with neither on the task, the first booked stays). Pushes the task itself
+  // lists are never touched, and nothing is done for a push that isn't for a
+  // task (a scheduled text). Lived in Duplicate Watch for an hour, but that
+  // workflow has been switched off since Sep 24 2026; this job runs hourly.
+  try {
+    const ahead = await filterAll(base44.asServiceRole.entities.NotificationLedger, { send_at: { $gt: now.toISOString() } });
+    const byPush: Record<string, any[]> = {};
+    for (const e of ahead || []) {
+      if (!e?.task_id || !e?.notification_id) continue;
+      const k = `${e.user_email}||${e.task_id}||${String(e.send_at).slice(0, 16)}`;
+      (byPush[k] ||= []).push(e);
+    }
+    let secondPushes = 0;
+    for (const group of Object.values(byPush)) {
+      const ids = [...new Set(group
+        .sort((a: any, b: any) => String(a.created_date || '').localeCompare(String(b.created_date || '')))
+        .map((e: any) => e.notification_id))] as string[];
+      if (ids.length < 2) continue;
+      const task = await base44.asServiceRole.entities.Task.get(group[0].task_id).catch(() => null);
+      if (!task) continue;
+      const tracked = new Set<string>([
+        ...(task.onesignal_notification_ids || []),
+        ...((task.reminder_schedule || []).map((s: any) => s?.notification_id)),
+        ...(task.focus_mode_notification_ids || []),
+        task.follow_up_notification_id,
+      ].filter(Boolean));
+      const keep = ids.find((id) => tracked.has(id)) || ids[0];
+      const extra = ids.filter((id) => id !== keep && !tracked.has(id));
+      if (!extra.length) continue;
+      await cancelJustBooked(base44, extra);
+      secondPushes += extra.length;
+      console.log(`🧹 [REFILL] Cancelled ${extra.length} second push(es) for "${task.title}" (${group[0].user_email}) at ${group[0].send_at}`);
+    }
+    if (secondPushes) console.log(`🧹 [REFILL] Second pushes cancelled: ${secondPushes}`);
+  } catch (e) {
+    console.error('[REFILL] Second-push check failed:', e);
+  }
+
   // The owner health check (see ownerHealthCheck below). Never fails the run.
   try {
     await ownerHealthCheck(base44, { allUsers, allTasks, now });
@@ -1399,7 +1546,7 @@ Deno.serve(async (req) => {
     console.error("[HEALTH] check failed:", e);
   }
 
-  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, focusCheckins, focusEnded, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, eventScheduled, scheduledTextReminders, at: now.toISOString() };
+  const result = { success: true, totalRecurringTasks: recurringTasks.length, refilled, skipped, staleStopped, focusCheckins, focusEnded, birthdayScheduled, birthdayRolledOver, birthdayTextReminders, repeatsRolled, eventScheduled, scheduledTextReminders, at: now.toISOString() };
     console.log('✅ [REFILL] Complete:', result);
     return Response.json(result);
   } catch (err) {
@@ -1566,10 +1713,12 @@ async function pushOwner(base44: any, kind: string, title: string, body: string)
   }
 }
 
-async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: any[]; now: Date }) {
+async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: any[]; now: Date; dryRun?: boolean }): Promise<any> {
   const { allUsers, allTasks, now } = ctx;
   const nowMs = now.getTime();
-  const problems: { title: string; body: string }[] = [];
+  // sinceMs: told once since then (checks 9-11, about one person), instead of
+  // again every ALERT_COOLDOWN_MS.
+  const problems: { title: string; body: string; sinceMs?: number }[] = [];
   const realUser = (email: string) => !!email && !OWNER_ACCOUNTS.has(email);
   const activeLately = (u: any) => nowMs - (Date.parse(u?.last_active_at || '') || 0) < 7 * H_DAY;
   const userByEmail: Record<string, any> = {};
@@ -1581,7 +1730,10 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     const res = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Deno.env.get('OPENAI_API_KEY')}` },
-      body: JSON.stringify({ model: 'gpt-4o', max_tokens: 1, messages: [{ role: 'user', content: 'ok' }] }),
+      // gpt-6-luna, the cheaper model: this only proves the key and its credit
+      // work, which is the same for every model (Anna, Oct 18 2026: "switch whatever wont be negatively affected to the cheaper one").
+      // Room for its thinking: a cut-off answer is still a 200.
+      body: JSON.stringify({ model: 'gpt-6-luna', reasoning_effort: 'low', max_completion_tokens: 200, messages: [{ role: 'user', content: 'ok' }] }),
     });
     if (!res.ok) {
       const err: any = await res.json().catch(() => ({}));
@@ -1590,6 +1742,23 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     }
   } catch (e) {
     problems.push({ title: '🚨 ADHDone: AI calls are failing', body: `OpenAI could not be reached: ${String((e as any)?.message || e).slice(0, 120)}` });
+  }
+
+  // 1b. Is Smart Reminders running at all? It runs every 10 minutes and marks
+  //     the owner's editor account when it finishes (smart_nudge_cron_ran_at).
+  //     Oct 16 2026: Base44 failed to start the 9:49 AM run and then started
+  //     none until 12:09 PM, while the workflow read "active" with no failures
+  //     and every other scheduled job kept going. The only alert was check 2
+  //     naming the one person whose plan went stale first. No mark yet (before
+  //     the first run that writes one): nothing to compare.
+  let nudgeStopped = false;
+  {
+    const ranMs = Date.parse(userByEmail['annanoelwenballew@gmail.com']?.smart_nudge_cron_ran_at || '');
+    if (Number.isFinite(ranMs) && nowMs - ranMs > 40 * 60 * 1000) {
+      nudgeStopped = true;
+      const when = new Intl.DateTimeFormat('en-US', { timeZone: OWNER_TZ, hour: 'numeric', minute: '2-digit' }).format(new Date(ranMs));
+      problems.push({ title: '🚨 ADHDone: Smart Reminders stopped running', body: `Its last run finished at ${when} (${Math.round((nowMs - ranMs) / 60000)} minutes ago); it should run every 10 minutes. Nobody is getting Smart Reminders until it runs again.` });
+    }
   }
 
   // 2. Smart Reminders plans marked out of date for over 90 minutes in the
@@ -1612,7 +1781,8 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     const dirtyAt = Date.parse(u.smart_nudge_dirty_at || '') || 0;
     if (u.smart_nudge_schedule_dirty === true && dirtyAt && nowMs - dirtyAt > 90 * 60 * 1000) stuckPlans.push(u.email);
   }
-  if (stuckPlans.length) {
+  // When the whole run has stopped (1b), that is the reason; no second alert.
+  if (stuckPlans.length && !nudgeStopped) {
     problems.push({ title: '⚠️ ADHDone: Smart Reminders not re-planning', body: `${stuckPlans.length} plan(s) have been out of date for over 90 minutes: ${stuckPlans.slice(0, 3).join(', ')}. The planner is failing on them every run.` });
   }
 
@@ -1736,10 +1906,196 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     problems.push({ title: '⚠️ ADHDone: due today, never reminded', body: `${unreminded.length} task(s) due today got no reminder from anything by 7 PM: ${unreminded.slice(0, 3).join('; ')}.` });
   }
 
-  // Send what's new. Each title repeats at most every ALERT_COOLDOWN_MS.
+  // 9-11. The app failing one person, told to Anna by name (Anna, Oct 19
+  //    2026, after Michelle uninstalled: "very sad we lost michelle and that
+  //    the app was not working well for her the whole time. this should have
+  //    been flagged"). Michelle wrote "i work night shift" and kept the
+  //    starting 10 PM to 8 AM quiet hours, so her alarms rang in the day while
+  //    she most likely slept; three rang out unanswered Oct 14-15, and on Oct
+  //    19 OneSignal said her phone no longer takes pushes. Nothing told Anna.
+  //    Each is told once per happening (sinceMs), not every 6 hours. Left out
+  //    with her own accounts: family who only installed it to try it.
+  const notReal = new Set([...OWNER_ACCOUNTS, 'antonio.baird1996@gmail.com', 'aleck.baird@gmail.com']);
+  const people = allUsers.filter((u: any) => u?.email && !notReal.has(u.email));
+  const msOf = (v: any) => {
+    const s = String(v || '');
+    return s ? Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`) : NaN;
+  };
+  const nameOf = (u: any) => String(u?.preferred_name || u?.full_name || u?.email || 'Someone').trim();
+  const clock12 = (hhmm: any) => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
+    if (!m) return String(hhmm || '');
+    const h = Number(m[1]);
+    return `${h % 12 || 12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`;
+  };
+  const theirClock = (u: any, ms: number) => {
+    try {
+      return new Intl.DateTimeFormat('en-US', { timeZone: userTimeZone(u), weekday: 'short', hour: 'numeric', minute: '2-digit' }).format(new Date(ms));
+    } catch (_) {
+      return new Date(ms).toISOString();
+    }
+  };
+  const quietOf = (u: any) => (u?.quiet_hours_enabled === false
+    ? 'turned off'
+    : `${clock12(u?.quiet_hours_start || '22:00')} to ${clock12(u?.quiet_hours_end || '08:00')}`);
+  const theirWords = (u: any) => {
+    const s = String(u?.about_me || '').trim().replace(/\s+/g, ' ');
+    return s ? ` They wrote: "${s.slice(0, 110)}${s.length > 110 ? '...' : ''}"` : '';
+  };
+
+  // 9. Quiet hours and what they told the app (checkQuietHoursFit): moved for
+  //    them, about to be asked to change them, or the model unsure (then they
+  //    are not asked on a guess, and Anna looks instead).
+  for (const u of people) {
+    const f = u.quiet_hours_fit;
+    if (!f || typeof f !== 'object') continue;
+    const appliedMs = msOf(f.applied?.at);
+    const atMs = msOf(f.at);
+    const why = f.why ? ` Why: ${String(f.why).slice(0, 140)}` : '';
+    if (Number.isFinite(appliedMs) && nowMs - appliedMs < 3 * H_DAY) {
+      problems.push({
+        title: `🌙 ADHDone: moved ${nameOf(u)}'s quiet hours`,
+        body: `From 10 PM to 8 AM to ${clock12(f.applied.start)} to ${clock12(f.applied.end)}, going by what they told the app. ${f.applied.told ? 'They have seen the change.' : 'The app tells them the next time they open it.'}${theirWords(u)} ${u.email}`,
+        sinceMs: appliedMs,
+      });
+    } else if (Number.isFinite(atMs) && nowMs - atMs < 3 * H_DAY && f.answered_key !== f.key && f.fits === false) {
+      problems.push({
+        title: `🌙 ADHDone: ${nameOf(u)}'s quiet hours may miss their sleep`,
+        body: `Their quiet hours are ${quietOf(u)}. The app asks them to set ones that fit when they open it${f.start && f.end ? ` (it suggests ${clock12(f.start)} to ${clock12(f.end)})` : ''}.${why}${theirWords(u)} ${u.email}`,
+        sinceMs: atMs,
+      });
+    } else if (Number.isFinite(atMs) && nowMs - atMs < 3 * H_DAY && f.unsure === true) {
+      problems.push({
+        title: `🌙 ADHDone: not sure ${nameOf(u)}'s quiet hours fit`,
+        body: `Their quiet hours are ${quietOf(u)}. The model thinks they may not fit when they sleep but couldn't say when that is, so they weren't asked.${why}${theirWords(u)} ${u.email}`,
+        sinceMs: atMs,
+      });
+    }
+  }
+
+  // 10. Alarms that rang out with no answer, or were left with Home or Back:
+  //     2 or more in 2 days. Counted from every report the phone sends (the
+  //     AppEvent 'alarm_choice' log, cancelTaskNotifications), not only each
+  //     task's last choice, which keeps one ring per task and loses it when
+  //     the task is deleted or its day rolls over (Anna, Oct 19 2026: "make
+  //     it so that we can't undercount missed alarms"). The tasks' last
+  //     choices are read too, for rings reported before the log existed; a
+  //     ring in both is counted once. Two is enough to look: Chad's 6:30 AM
+  //     medication alarm, a time the app picked, rang out on Oct 18 and again
+  //     on Oct 19.
+  let alarmLogRows: number | null = null;
+  try {
+    const sinceIso = new Date(nowMs - 2 * H_DAY).toISOString();
+    const [recent, logged] = await Promise.all([
+      filterAll(base44.asServiceRole.entities.Task, { updated_date: { $gte: sinceIso } }),
+      filterAll(base44.asServiceRole.entities.AppEvent, { event: 'alarm_choice', created_date: { $gte: sinceIso } }),
+    ]);
+    const taskById: Record<string, any> = {};
+    for (const t of [...allTasks, ...recent]) if (t?.id) taskById[t.id] = t;
+    const userByLower: Record<string, any> = {};
+    for (const u of allUsers) if (u?.email) userByLower[String(u.email).toLowerCase()] = u;
+    const seenRing = new Set<string>();
+    const missedBy: Record<string, { taskId: string; ms: number; how: string }[]> = {};
+    const addRing = (email: any, taskId: string, choice: any, ms: number, reportId?: string) => {
+      // Only alarms that rang out with nobody touching them. Home or Back on
+      // a ringing alarm means they saw it and put it away (Sally's "Clean Out
+      // Oil Room", Oct 20 and 21 2026): that's their "not now", still counted
+      // on the task for Smart Reminders, not an alarm that isn't reaching
+      // them. Anna, Oct 21 2026: "Should we even be flagging this?"
+      if (choice !== 'ignored') return;
+      if (!taskId || !Number.isFinite(ms) || ms > nowMs || nowMs - ms > 2 * H_DAY) return;
+      const e = String(email || '').toLowerCase();
+      if (!e || notReal.has(e) || !userByLower[e]) return;
+      // The same ring, from the log and from the task (or sent twice).
+      const key = `${taskId}|${Math.round(ms / 1000)}`;
+      if (seenRing.has(key) || (reportId && seenRing.has(`r|${reportId}`))) return;
+      seenRing.add(key);
+      if (reportId) seenRing.add(`r|${reportId}`);
+      (missedBy[e] ||= []).push({ taskId, ms, how: String(choice) });
+    };
+    alarmLogRows = logged.length;
+    for (const r of logged) {
+      const p = r?.props || {};
+      addRing(r.user_email, String(p.task_id || ''), p.choice, msOf(p.at), p.report_id ? String(p.report_id) : undefined);
+    }
+    for (const t of Object.values(taskById)) {
+      const c = t.last_alarm_choice;
+      if (c) addRing(t.notification_recipient_email || t.created_by, t.id, c.choice, msOf(c.at));
+    }
+    for (const [e, list] of Object.entries(missedBy)) {
+      if (list.length < 2) continue;
+      const u = userByLower[e];
+      list.sort((a, b) => a.ms - b.ms);
+      const shown = list.slice(-4);
+      for (const x of shown) {
+        if (!taskById[x.taskId]) taskById[x.taskId] = (await base44.asServiceRole.entities.Task.get(x.taskId).catch(() => null)) || { title: null };
+      }
+      const rings = shown.map((x) => {
+        const title = taskById[x.taskId]?.title;
+        // Finished later all the same: said, so a missed ring that was
+        // followed by the task getting done reads as that (Oct 21 2026).
+        const t = taskById[x.taskId];
+        const doneMs = t?.status === 'completed' ? msOf(t.completed_at) : NaN;
+        const done = Number.isFinite(doneMs) && doneMs > x.ms ? `, done ${theirClock(u, doneMs)}` : '';
+        return `${title ? `"${String(title).slice(0, 28)}"` : 'a deleted task'} ${theirClock(u, x.ms)}${x.how === 'closed' ? ' (left with Home or Back)' : ''}${done}`;
+      }).join('; ');
+      problems.push({
+        title: `⚠️ ADHDone: ${nameOf(u)}'s alarms are going unanswered`,
+        body: `${list.length} alarms in 2 days rang out with no answer${list.length > shown.length ? `, the last ${shown.length}` : ''}: ${rings} (their time). Quiet hours ${quietOf(u)}. ${u.email}`,
+        // Told again for every ring the last alert didn't have. It used to be
+        // once per 2 days, so Chad's Tuesday misses (8:21 and 9:10 AM) were
+        // held back by Sunday's alert and only came Wednesday at 11:30 AM.
+        sinceMs: list[list.length - 1].ms,
+      });
+    }
+  } catch (e) {
+    console.error('[HEALTH] unanswered-alarm check failed:', e);
+  }
+
+  // 11. Their phone stopped taking ADHDone's notifications: OneSignal answered
+  //     "not subscribed" after their last open (push_unreachable_at: the app
+  //     was uninstalled, or its notifications turned off), or the app saw its
+  //     notifications off when they opened it (alarm_permissions). Only people
+  //     in the app in the last 14 days: an account long gone quiet is not news.
+  for (const u of people) {
+    const lastMs = msOf(u.last_active_at);
+    if (!Number.isFinite(lastMs) || nowMs - lastMs > 14 * H_DAY) continue;
+    const goneMs = msOf(u.push_unreachable_at);
+    if (Number.isFinite(goneMs) && goneMs > lastMs && nowMs - goneMs < 2 * H_DAY) {
+      problems.push({
+        title: `📵 ADHDone: ${nameOf(u)}'s phone stopped taking notifications`,
+        body: `OneSignal said ${theirClock(u, goneMs)} (their time) that their phone no longer takes ADHDone's pushes: the app was uninstalled, or its notifications were turned off. Last in the app ${theirClock(u, lastMs)}. ${u.email}`,
+        sinceMs: lastMs,
+      });
+      continue;
+    }
+    const perm = u.alarm_permissions;
+    const permMs = msOf(perm?.checked_at);
+    if (perm?.notifications === false && Number.isFinite(permMs) && nowMs - permMs < 2 * H_DAY) {
+      problems.push({
+        title: `📵 ADHDone: ${nameOf(u)} has notifications off`,
+        body: `When they opened the app ${theirClock(u, permMs)} (their time), ADHDone's notifications were off on their phone, so no reminder or alarm can reach them. ${u.email}`,
+        sinceMs: nowMs - 7 * H_DAY,
+      });
+    }
+  }
+
+  // A look at what would go out, sending nothing ({ previewHealth: true }).
+  if (ctx.dryRun) {
+    const out: any[] = [];
+    for (const p of problems) {
+      const told = await sentToOwner(base44, 'owner_alert', p.title, p.sinceMs ?? nowMs - ALERT_COOLDOWN_MS).catch(() => null);
+      out.push({ ...p, sinceMs: p.sinceMs ? new Date(p.sinceMs).toISOString() : null, alreadyTold: told });
+    }
+    // alarmLogRows: alarm reports read for check 10 (null: that read failed).
+    return { problems: out, alarmLogRows } as any;
+  }
+
+  // Send what's new. Each title repeats at most every ALERT_COOLDOWN_MS, or
+  // is told once since its sinceMs.
   for (const p of problems) {
     try {
-      if (await sentToOwner(base44, 'owner_alert', p.title, nowMs - ALERT_COOLDOWN_MS)) continue;
+      if (await sentToOwner(base44, 'owner_alert', p.title, p.sinceMs ?? nowMs - ALERT_COOLDOWN_MS)) continue;
       await pushOwner(base44, 'owner_alert', p.title, p.body);
       console.log(`[HEALTH] alerted the owner: ${p.title}`);
     } catch (e) {
@@ -1779,6 +2135,229 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       console.error('[HEALTH] daily note failed:', e);
     }
   }
+}
+
+// ── Repeating tasks whose day is over (Anna, Oct 17 2026) ───────────────────
+// "once a recurring task passes the point of being due, just erase it and
+// reschedule it for the next day". See REPEATING TASKS WHOSE DAY IS OVER in
+// the handler for why. A day ends at 4 AM on their clock, the same line the
+// app's own repeat code draws (taskRecurrence.jsx): until then it's still
+// "last night", and the copy can still be checked off for that day.
+const REPEAT_DAY_ENDS_MS = 4 * 60 * 60 * 1000;
+const REPEAT_DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const REPEAT_KEY_DAY_MS = 24 * 60 * 60 * 1000;
+
+// What a fresh copy starts with: the day's own history goes with the day.
+// The words, notes, pictures and settings stay.
+const REPEAT_FRESH_DAY = {
+  reminder_count: 0,
+  snooze_count: 0,
+  consecutive_snoozes: 0,
+  dismissed_count: 0,
+  ignored_count: 0,
+  closed_count: 0,
+  later_count: 0,
+  later_until: null,
+  last_alarm_choice: null,
+  snoozed_until: null,
+  due_date_pushes: 0,
+  last_scheduled_until: null,
+  reminder_retry_after: null,
+  reminder_scheduling_since: null,
+  follow_up_notification_id: null,
+};
+
+function repeatKeyMs(key: string): number {
+  const [y, m, d] = key.split('-').map(Number);
+  return Date.UTC(y, m - 1, d);
+}
+
+function repeatAddDays(key: string, n: number): string {
+  return new Date(repeatKeyMs(key) + n * REPEAT_KEY_DAY_MS).toISOString().slice(0, 10);
+}
+
+// A wall-clock time on a day, on their clock, as an instant (the same two-pass
+// offset fix as trackerNextAt, so a DST change between is handled).
+function repeatWallMs(key: string, minutes: number, timeZone: string): number {
+  const asUtc = repeatKeyMs(key) + minutes * 60000;
+  let at = asUtc - trackerOffsetMin(asUtc, timeZone) * 60000;
+  at = asUtc - trackerOffsetMin(at, timeZone) * 60000;
+  return at;
+}
+
+function repeatValueKey(v: any, timeZone: string): string | null {
+  if (!v) return null;
+  const s = String(v);
+  if (REPEAT_DATE_ONLY.test(s)) return s;
+  const ms = trackerMs(s);
+  return Number.isFinite(ms) ? localDateKey(new Date(ms), timeZone) : null;
+}
+
+// The day a copy of a repeating task is for, on their clock (the same pick as
+// baseOf in taskRecurrence.jsx: an event's time, an all-day task's date,
+// otherwise its reminder time).
+function repeatDayKey(task: any, timeZone: string): string | null {
+  const v = task.classification === 'event' ? (task.event_time || task.next_reminder || task.due_date)
+    : task.day_only_task ? (task.due_date || task.next_reminder)
+    : (task.next_reminder || task.due_date || task.event_time || task.start_date);
+  return repeatValueKey(v, timeZone);
+}
+
+// The next day the repeat lands on after `key`. Same steps as the app's own
+// (nextDate in taskRecurrence.jsx).
+function repeatStep(key: string, task: any): string | null {
+  const dt = new Date(repeatKeyMs(key));
+  const days = Array.isArray(task.recurrence_days)
+    ? task.recurrence_days.filter((n: any) => Number.isInteger(n) && n >= 0 && n <= 6) : [];
+  switch (task.recurrence_pattern) {
+    case 'daily': dt.setUTCDate(dt.getUTCDate() + 1); break;
+    case 'every_other_day': dt.setUTCDate(dt.getUTCDate() + 2); break;
+    case 'weekdays':
+      do { dt.setUTCDate(dt.getUTCDate() + 1); } while (dt.getUTCDay() === 0 || dt.getUTCDay() === 6);
+      break;
+    case 'weekly':
+      if (days.length > 0) {
+        let i = 0;
+        do { dt.setUTCDate(dt.getUTCDate() + 1); } while (!days.includes(dt.getUTCDay()) && ++i < 7);
+      } else {
+        dt.setUTCDate(dt.getUTCDate() + 7);
+      }
+      break;
+    case 'every_other_week': dt.setUTCDate(dt.getUTCDate() + 14); break;
+    case 'monthly': dt.setUTCMonth(dt.getUTCMonth() + 1); break;
+    case 'yearly': dt.setUTCFullYear(dt.getUTCFullYear() + 1); break;
+    default: return null;
+  }
+  return dt.toISOString().slice(0, 10);
+}
+
+// A date on the task moved by whole days on their clock, keeping its time of
+// day (or `hhmm` when given). A date-only value stays date-only.
+function repeatShift(v: any, days: number, timeZone: string, hhmm: string | null = null): string | null {
+  if (!v) return null;
+  const s = String(v);
+  if (REPEAT_DATE_ONLY.test(s)) return repeatAddDays(s, days);
+  const ms = trackerMs(s);
+  if (!Number.isFinite(ms)) return null;
+  const key = repeatAddDays(localDateKey(new Date(ms), timeZone), days);
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
+  const minutes = m ? Number(m[1]) * 60 + Number(m[2]) : localMinutesOfDay(new Date(ms), timeZone);
+  return new Date(repeatWallMs(key, minutes, timeZone)).toISOString();
+}
+
+// Null while the copy's day isn't over yet, or when it stays where it is.
+// Otherwise the day it moves on to, and how many days that is: for an event,
+// the first day it happens again from today on; for a task, the day right
+// after, as long as the repeat runs on day after day (see below).
+function repeatRollFor(task: any, timeZone: string, nowMs: number): { fromKey: string; toKey: string; days: number } | null {
+  const fromKey = repeatDayKey(task, timeZone);
+  if (!fromKey) return null;
+  // A stated multi-day range (a trip Dec 3–7) is over after its last day. An
+  // event that runs past midnight is still one night (end_date stays empty).
+  let lastKey = fromKey;
+  const endKey = repeatValueKey(task.end_date, timeZone);
+  if (endKey && endKey > lastKey) lastKey = endKey;
+  const todayKey = localDateKey(new Date(nowMs - REPEAT_DAY_ENDS_MS), timeZone);
+  if (lastKey >= todayKey) return null;
+  let toKey = fromKey;
+  if (task.classification === 'event') {
+    // An event is over once it has happened (there is nothing to check off):
+    // on to the next time it happens.
+    for (let i = 0; i < 1000 && toKey < todayKey; i++) {
+      const next = repeatStep(toKey, task);
+      if (!next || next <= toKey) return null;
+      toKey = next;
+    }
+    if (toKey < todayKey) return null;
+  } else {
+    // A task moves on only while its repeat runs from one day straight into
+    // the next: every day, Monday to Friday, a Saturday-and-Sunday chore. That
+    // next day still rings (Anna, Oct 18 2026: "Anything recurring that has
+    // two or more days in succession should be made to still ring the next
+    // day"). Where the repeat has a gap (Friday to Monday, once a week, once a
+    // month, every other day) the copy stays until it's checked off, and the
+    // app makes the next one then, on the right day (Anna, Oct 17 2026:
+    // "weekly things and monthly things will easily get lost ... It stays
+    // until it's checked off"). A copy found a few days late walks the
+    // day-after-day run as far as today, and stops on the last day before a
+    // gap.
+    for (let i = 0; i < 1000 && toKey < todayKey; i++) {
+      const next = repeatStep(toKey, task);
+      if (!next || next !== repeatAddDays(toKey, 1)) break;
+      toKey = next;
+    }
+    if (toKey === fromKey) return null;
+  }
+  return { fromKey, toKey, days: Math.round((repeatKeyMs(toKey) - repeatKeyMs(fromKey)) / REPEAT_KEY_DAY_MS) };
+}
+
+// Every active repeating task or event whose day is over and that moves on
+// (repeatRollFor), and any left alone because another copy of it already sits
+// on that day or later.
+function repeatRollPlan(tasks: any[], userMap: Record<string, any>, nowMs: number): { rolls: any[]; twins: any[] } {
+  const rolls: any[] = [];
+  const twins: any[] = [];
+  for (const task of tasks) {
+    if (!task || task.status !== 'active' || task.silenced || task.parent_task_id) continue;
+    if (!task.recurrence_pattern || task.recurrence_pattern === 'none') continue;
+    // Birthdays roll over to next year in the birthday pass.
+    if (task.birthday_person || task.is_own_birthday || task.classification === 'birthday') continue;
+    // Which ones move on and which stay until checked off: see repeatRollFor.
+    // In Focus Mode: setFocusMode puts it back as it was when the session ends.
+    if (task.focus_mode_original_interval) continue;
+    const owner = userMap[task.created_by] || userMap[task.notification_recipient_email];
+    if (!owner || owner.focus_mode_task_id === task.id) continue;
+    const tz = userTimeZone(owner);
+    const roll = repeatRollFor(task, tz, nowMs);
+    if (!roll) continue;
+    const twin = tasks.find((o: any) => o && o.id !== task.id && o.status === 'active' && !o.parent_task_id
+      && o.created_by === task.created_by && o.title === task.title && o.recurrence_pattern === task.recurrence_pattern
+      && (repeatDayKey(o, tz) || '') >= roll.toKey);
+    if (twin) { twins.push({ task, twin }); continue; }
+    rolls.push({ task, owner, tz, roll });
+  }
+  return { rolls, twins };
+}
+
+// The change that moves a copy on to its new day, and the pushes of the old
+// day still ahead that have to be cancelled.
+function repeatMove(fresh: any, owner: any, timeZone: string, roll: { days: number }, nowMs: number): { moved: any; cancel: string[] } {
+  const days = roll.days;
+  const anchor = /^\d{1,2}:\d{2}$/.test(String(fresh.anchor_time || '')) ? String(fresh.anchor_time) : null;
+  const rhythm = !!fresh.reminder_interval && fresh.reminder_interval !== 'once';
+  const moved: any = { ...REPEAT_FRESH_DAY, prep_questions: [], onesignal_notification_ids: [] };
+  for (const f of ['due_date', 'event_time', 'end_time', 'end_date', 'start_date']) {
+    if (fresh[f]) moved[f] = repeatShift(fresh[f], days, timeZone);
+  }
+  // A rhythm ("every hour until it's done") starts again at the time they gave.
+  if (fresh.next_reminder) moved.next_reminder = repeatShift(fresh.next_reminder, days, timeZone, rhythm ? anchor : null);
+  // The day's reminders move with it: the same times on the new day, the same
+  // words, not booked yet (the promotion pass books them). Ones already past
+  // on the new day are dropped.
+  const old = Array.isArray(fresh.reminder_schedule) ? fresh.reminder_schedule : [];
+  const schedule: any[] = [];
+  old.forEach((e: any, i: number) => {
+    if (!e || !e.send_at) return;
+    const at = repeatShift(e.send_at, days, timeZone);
+    const atMs = at ? Date.parse(at) : NaN;
+    if (!Number.isFinite(atMs) || atMs <= nowMs) return;
+    const { book_error, scheduled, ...rest } = e;
+    schedule.push({ ...rest, send_at: at, notification_id: `planned_${fresh.id}_r${i}_${atMs}` });
+  });
+  // Nothing carried over (an earlier day had its time already past): the one
+  // reminder at the time they set, when they set one.
+  if (schedule.length === 0 && anchor) {
+    const own = atItsOwnTimeEntry({ ...fresh, ...moved }, owner);
+    if (own && Date.parse(own.send_at) > nowMs) schedule.push(own);
+  }
+  moved.reminder_schedule = schedule;
+  const cancel: string[] = old
+    .filter((e: any) => isBookedId(e?.notification_id) && Date.parse(e?.send_at) > nowMs)
+    .map((e: any) => String(e.notification_id));
+  if (rhythm && fresh.last_scheduled_until && Date.parse(fresh.last_scheduled_until) > nowMs) {
+    for (const id of fresh.onesignal_notification_ids || []) if (isBookedId(id)) cancel.push(String(id));
+  }
+  return { moved, cancel: [...new Set(cancel)] };
 }
 
 // ── A task's own time ─────────────────────────────────────────────────────────

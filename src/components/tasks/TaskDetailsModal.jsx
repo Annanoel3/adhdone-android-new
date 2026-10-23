@@ -1082,9 +1082,12 @@ Return JSON:
       return;
     }
 
-    // CRITICAL FIX: Store local date/time, not UTC
-    const now = new Date();
-    const localISOString = new Date(now.getTime() - (now.getTimezoneOffset() * 60000)).toISOString();
+    // When it was finished, in true UTC like every other way a task gets
+    // finished; every reader turns it into the person's own time. Until Oct 16
+    // 2026 this stamped local clock time as UTC (a Nov 11 2025 "store local
+    // date/time" change), so wins, Insights and Smart Reminders read these
+    // completions hours off.
+    const localISOString = new Date().toISOString();
 
     // Optimistic update — user sees the task complete instantly
     onUpdate({
@@ -1096,7 +1099,7 @@ Return JSON:
     onClose();
 
     try {
-      console.log('✅ [COMPLETE] Marking task complete with local time:', localISOString);
+      console.log('✅ [COMPLETE] Marking task complete at', localISOString);
 
       // The saved record, not the card: finished elsewhere (its notification,
       // another screen) already means its next copy exists.
@@ -1397,6 +1400,51 @@ Return JSON:
   // 22:00" became a one-off with no time the moment she tapped this (Oct 8
   // 2026). The planner reads the time as the task's own moment; a repeat still
   // makes its next copy when this one is checked off.
+  // The due day of an all-day task ("get a watch battery sometime this week",
+  // "do X on Friday"), changed or removed from its Due pill. The pill used to
+  // write due_date alone, so the day never actually came off: the card kept
+  // its day anchor (next_reminder) and day_only_task, still read "Oct 18 •
+  // all day" and still sat under Next 7 Days (Anna, Oct 14 2026: the app
+  // "doesn't want to allow tasks to have no day"). Removing the day makes it
+  // a task with no day — Smart Reminders take it from there, like one typed
+  // without a day. Moving it moves the anchor with it. Nothing is booked for
+  // an all-day task (multiReminderScheduler), so only stale ids to clear.
+  const handleDayOnlyDueChange = async (iso) => {
+    if (!task) return;
+    const updates = iso
+      ? (() => {
+          const d = new Date(iso);
+          return {
+            due_date: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 0, 0).toISOString(),
+            next_reminder: new Date(d.getFullYear(), d.getMonth(), d.getDate(), 9, 0, 0, 0).toISOString(),
+          };
+        })()
+      : {
+          due_date: null,
+          next_reminder: null,
+          day_only_task: false,
+          deadline_style: 'on',
+          start_date: null,
+          reminder_interval: null,
+          onesignal_notification_ids: [],
+          reminder_schedule: [],
+        };
+    onUpdate({ ...task, ...updates });
+    try {
+      if (!iso) {
+        const oldIds = Array.from(new Set([
+          ...(task.onesignal_notification_ids || []),
+          ...((task.reminder_schedule || []).map((r) => r.notification_id)),
+        ])).filter((id) => id && !String(id).startsWith('planned_'));
+        if (oldIds.length > 0) await cancelScheduledReminder(oldIds).catch((e) => console.error("Failed to cancel reminders:", e));
+      }
+      await Task.update(task.id, updates);
+      refreshAlarms().catch(() => {});
+    } catch (e) {
+      console.error("Error changing the due day:", e);
+    }
+  };
+
   const handleSetSmartReminders = async () => {
     if (!task) return;
     const updates = {
@@ -1969,7 +2017,7 @@ Return JSON:
                 <SmartDueDatePill
                   task={task}
                   theme={theme}
-                  onSave={(iso) => handleUpdateField('due_date', iso)}
+                  onSave={(iso) => (task.day_only_task ? handleDayOnlyDueChange(iso) : handleUpdateField('due_date', iso))}
                 />
               )}
 

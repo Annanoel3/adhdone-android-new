@@ -489,6 +489,19 @@ export default function TaskCard({
       }
       return { label: evToday ? 'Today' : formatReminderDate(at), overdue: false, isTodayLabel: evToday };
     }
+    // A deadline ("by Friday", "sometime this week") is not the day the task
+    // happens, so the chip says "By Oct 18", not "Oct 18 • all day", and says
+    // Overdue once that day is gone (Anna, Oct 14 2026). The task itself sits
+    // under Today from the day it was said (start_date, see taskSchedule).
+    if (task.deadline_style === 'by' && task.due_date && !(task.recurrence_pattern && task.recurrence_pattern !== 'none')) {
+      const overdue = isPastDue(task.due_date) && task.status !== 'completed';
+      const dueToday = new Date(task.due_date).toDateString() === today.toDateString();
+      return {
+        label: overdue ? formatReminderDate(task.due_date) : dueToday ? 'Today' : `By ${formatReminderDate(task.due_date)}`,
+        overdue,
+        isTodayLabel: dueToday && !overdue,
+      };
+    }
     if (task.reminder_interval === 'once' && task.next_reminder) {
       // Multi-day events show the full span (e.g. "Dec 3 – Dec 7") on the
       // collapsed card instead of just the start date.
@@ -861,6 +874,9 @@ export default function TaskCard({
   // hasn't passed yet (or there's no due_date).
   const isInProgress = (() => {
     if (!task.start_date || task.status === 'completed') return false;
+    // A deadline's window ("by Friday", on Today until then) is not them
+    // having started on it — no badge for that.
+    if (task.deadline_style === 'by' && !(task.reminder_interval && task.reminder_interval !== 'once')) return false;
     if (new Date(task.start_date) > new Date()) return false;
     if (task.due_date && new Date(task.due_date) < new Date()) return false;
     return true;
@@ -924,14 +940,27 @@ export default function TaskCard({
         ? theme === 'dark' ? 'border-green-700 bg-green-900/30 text-green-400' : 'border-green-300 bg-green-50 text-green-700'
         : theme === 'dark' ? 'border-gray-700 bg-gray-800 text-gray-300' : 'border-gray-200 bg-gray-50 text-gray-600'
   }`;
-  // A repeating task's collapsed chip says when it repeats ("Daily at 9 PM")
-  // instead of the day — the section already says the day, and two daily
-  // doses with the same title otherwise read as duplicates (Anna, Oct 2 2026).
-  // Overdue still wins: that's the signal that matters.
-  const chipRepeats = !!(collapsedDate && showRepeatPill && !collapsedDate.overdue && repeatScheduleLabel);
+  // A repeating task's collapsed chip is the repeat circle and the day it's
+  // next due ("Nov 1"), plus the time they set when it has one ("Today 9 PM"),
+  // so two daily doses with the same title don't read as duplicates (Anna,
+  // Oct 2 2026). Until Oct 22 2026 it said how often it repeats ("Monthly");
+  // Anna: "put the date and the circle instead". The open card still says how
+  // often. Overdue still wins: that's the signal that matters.
+  const repeatDateLabel = (() => {
+    if (!task.due_date) return collapsedDate?.label || '';
+    const d = new Date(task.due_date);
+    return d.toDateString() === today.toDateString() ? 'Today' : formatReminderDate(task.due_date);
+  })();
+  const repeatTimeLabel = (() => {
+    const m = /^(\d{1,2}):(\d{2})$/.exec(String(task.anchor_time || ''));
+    if (!m) return '';
+    const h = Number(m[1]);
+    return `${h % 12 || 12}${m[2] === '00' ? '' : `:${m[2]}`} ${h < 12 ? 'AM' : 'PM'}`;
+  })();
+  const chipRepeats = !!(collapsedDate && showRepeatPill && !collapsedDate.overdue && repeatDateLabel);
   const chipText = collapsedDate
     ? chipRepeats
-      ? repeatScheduleLabel
+      ? `${repeatDateLabel}${repeatTimeLabel ? ` ${repeatTimeLabel}` : ''}`
       : `${collapsedDate.overdue ? `Overdue · ${collapsedDate.label}` : collapsedDate.label}${timeRange ? ` · ${timeRange}` : ''}`
     : '';
   const chipIcon = chipRepeats ? <RefreshCw className="w-3 h-3 inline-block mr-1 -mt-0.5" /> : null;
@@ -1399,6 +1428,8 @@ export default function TaskCard({
                         const datePart = task.end_date && new Date(task.next_reminder).toDateString() !== new Date(task.end_date).toDateString()
                           ? formatEventDateRange()
                           : formatReminderDate(task.next_reminder);
+                        // A deadline reads as one: "By Oct 18" (Anna, Oct 14 2026).
+                        if (task.deadline_style === 'by' && !isEvent) return task.day_only_task ? `By ${datePart}` : `By ${datePart} • ${timeRange || formatReminderTime(task.next_reminder)}`;
                         if (task.day_only_task) return `${datePart} • all day`;
                         return `${datePart} • ${timeRange || formatReminderTime(task.next_reminder)}`;
                       })()}

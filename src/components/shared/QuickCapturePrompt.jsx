@@ -33,15 +33,18 @@ import {
   usePopupTurn,
 } from '@/components/onboarding/onboardingSurface';
 import { seenKey } from '@/components/onboarding/tourVersion';
+import { firstUseSeen, markFirstUseSeen } from '@/components/onboarding/FirstUseDialog';
 import {
   setAlarmMode,
   refreshAlarms,
   alarmPermissionStatus,
+  alarmSwitchesOff,
   requestAlarmPermissions,
   alarmQuietChoiceSupported,
   eventQuietSupported,
   readRingLog,
 } from '../utils/widgetBridge';
+import { isIPhoneApp, onThisPhone, phoneOs } from '@/lib/phonePlatform';
 import { AlarmSoundPicker, AlarmQuietChoice, AlarmEventQuietChoice, QuietWhenButtons } from '../settings/QuickCaptureCard';
 import { NAG_INTERVALS } from '../utils/reminderScheduler';
 import { subscribeCaptures } from '@/lib/pendingCaptures';
@@ -64,6 +67,9 @@ export default function QuickCapturePrompt() {
   const [declined, setDeclined] = useState(false);
   const [busy, setBusy] = useState(false);
   const [pinWanted, setPinWanted] = useState(true);
+  // The iPhone app has no pinned notification: the card there only explains
+  // and asks for notifications (Anna, Oct 22 2026).
+  const offerPin = onThisPhone('pinnedCapture');
 
   const settle = () => {
     localStorage.setItem(SEEN_KEY, 'true');
@@ -88,8 +94,10 @@ export default function QuickCapturePrompt() {
     // not mid-typing or mid-tap.
     const start = Date.now();
     const poll = setInterval(() => {
-      const { ShareBridge } = getPlugins();
-      if (ShareBridge?.setQuickCaptureEnabled) {
+      const { ShareBridge, NotifyBridge: NB } = getPlugins();
+      // Android waits for the pinned shortcut's plugin; the iPhone app, which
+      // has no pinned shortcut, for the notifications one.
+      if (onThisPhone('pinnedCapture') ? ShareBridge?.setQuickCaptureEnabled : NB?.requestPermission) {
         clearInterval(poll);
         waitForStep(ONBOARDING_STEPS.homeTour)
           .then(waitForCalm)
@@ -122,7 +130,7 @@ export default function QuickCapturePrompt() {
     setBusy(true);
     try {
       if (NotifyBridge?.requestPermission) await NotifyBridge.requestPermission();
-      if (pinWanted) await getPlugins().ShareBridge?.setQuickCaptureEnabled({ enabled: true });
+      if (offerPin && pinWanted) await getPlugins().ShareBridge?.setQuickCaptureEnabled({ enabled: true });
     } catch (e) {
       // Nothing to recover here — the Settings toggle shows the real error.
     } finally {
@@ -143,11 +151,12 @@ export default function QuickCapturePrompt() {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Bell className="w-5 h-5 text-green-600" />
-            We need to ask for a couple of permissions
+            {offerPin ? 'We need to ask for a couple of permissions' : 'We need to ask for one permission'}
           </DialogTitle>
           <DialogDescription>
-            So you can get the most out of ADHDone. First, Android will ask if it can send
-            you notifications — every reminder and alarm rides on that.
+            {offerPin
+              ? `So you can get the most out of ADHDone. First, ${phoneOs()} will ask if it can send you notifications — every reminder and alarm rides on that.`
+              : `So you can get the most out of ADHDone. ${phoneOs({ capital: true })} will ask if it can send you notifications — every reminder and alarm rides on that.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -169,6 +178,7 @@ export default function QuickCapturePrompt() {
           </div>
         ) : (
           <div className="space-y-4 pt-2">
+            {offerPin && (
             <div className="flex items-start justify-between gap-3 rounded-xl border p-3">
               <div className="flex items-start gap-2">
                 <Zap className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
@@ -182,6 +192,7 @@ export default function QuickCapturePrompt() {
               </div>
               <Switch checked={pinWanted} onCheckedChange={setPinWanted} aria-label="Pin the quick-capture shortcut" />
             </div>
+            )}
             <div className="flex gap-2">
               <Button onClick={handleAllow} disabled={busy} className="flex-1">
                 {busy ? 'One sec...' : 'Allow notifications'}
@@ -313,6 +324,9 @@ export function WaysToAddPopup({ user }) {
     if (!user || started.current) return;
     started.current = true;
     if (isStepDone(WAYS_SEEN)) return;
+    // Its pictures and its first row are Android's (share sheet, pinned
+    // notification): never in the iPhone app.
+    if (!onThisPhone('pinnedCapture')) return;
 
     // A waiting "was that a request for the app?" prompt goes first, and
     // answering it marks this popup seen — so nobody is handed first-run
@@ -545,8 +559,7 @@ export function AlarmPermissionsDialog({ theme }) {
       if (cancelled || u?.alarm_mode !== 'alarm') return;
       const st = await alarmPermissionStatus();
       if (cancelled || !st || !st.notifications) return;
-      const missing = !st.exactAlarms || !st.fullScreen || !st.ignoringBatteryOptimizations || st.overlay === false;
-      if (!missing) return;
+      if (alarmSwitchesOff(st).length === 0) return;
       await waitForStep(ONBOARDING_STEPS.homeTour);
       await waitForCalm();
       if (cancelled) return;
@@ -648,14 +661,27 @@ export function AlarmPermissionsDialog({ theme }) {
     } catch (e) { /* stays on the list */ }
   };
 
-  const rows = [
-    {
-      key: 'notifications',
-      ok: !!status.notifications,
-      label: 'Notifications',
-      why: 'Without this, nothing from ADHDone reaches you: no reminders, no alarms, nothing.',
-      action: () => tryOpen(() => NotifyBridge?.requestPermission?.()),
-    },
+  const notificationsRow = {
+    key: 'notifications',
+    ok: !!status.notifications,
+    label: 'Notifications',
+    why: 'Without this, nothing from ADHDone reaches you: no reminders, no alarms, nothing.',
+    action: () => tryOpen(() => NotifyBridge?.requestPermission?.()),
+  };
+  // The iPhone app has none of Android's switches; the one thing it may ask
+  // for besides notifications is AlarmKit's own permission, when its
+  // getStatus reports one (`alarms`).
+  const rows = !onThisPhone('androidSwitches') ? [
+    notificationsRow,
+    ...(status.alarms === undefined ? [] : [{
+      key: 'alarms',
+      ok: !!status.alarms,
+      label: 'Alarms',
+      why: 'Lets ADHDone ring full screen, even on silent or in a Focus.',
+      action: () => tryOpen(() => AlarmBridge?.requestAlarmAccess?.()),
+    }]),
+  ] : [
+    notificationsRow,
     {
       key: 'exact',
       ok: !!status.exactAlarms,
@@ -705,14 +731,14 @@ export function AlarmPermissionsDialog({ theme }) {
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
             {feature === 'timers'
-              ? "The focus timer and task timers ring when their time is up, so Android needs these switched on. You can say no — they'll still work, just quieter and easier to miss."
+              ? `The focus timer and task timers ring when their time is up, so ${phoneOs()} needs these switched on. You can say no — they'll still work, just quieter and easier to miss.`
               : setup
               ? (allOk
-                ? 'Pick the sound it rings with. Every switch Android needed is already on.'
-                : "Pick the sound it rings with, then let Android know it may ring — tap each one and you'll hop out to a settings screen and straight back.")
+                ? `Pick the sound it rings with. Every switch ${phoneOs()} needed is already on.`
+                : `Pick the sound it rings with, then let ${phoneOs()} know it may ring — tap each one and you'll hop out to a settings screen and straight back.`)
               : allOk
-                ? 'Every switch Android needed is on.'
-                : "Android keeps these off until you say yes. Tap each one — you'll hop out to a settings screen and straight back."}
+                ? `Every switch ${phoneOs()} needed is on.`
+                : `${phoneOs({ capital: true })} keeps these off until you say yes. Tap each one — you'll hop out to a settings screen and straight back.`}
           </DialogDescription>
         </DialogHeader>
 
@@ -811,6 +837,8 @@ const FIRST_WIN_DEMO_KEY = 'first_win_demo_push';
 // the welcome chat fires the other when it plans a demo.
 const PUSH_LINKED_EVENT = 'adhdone:push-linked';
 const FIRST_WIN_PLANNED_EVENT = 'adhdone:first-win-planned';
+// Booked once per account (the welcome chat sets the same flag).
+const FIRST_WIN_KEY = 'onboarding_first_win_push_booked';
 // A demo that still can't be booked this long after its planned time is
 // dropped — arriving much later it would no longer read as a demo.
 const FIRST_WIN_DEMO_STALE_MS = 15 * 60 * 1000;
@@ -875,6 +903,31 @@ if (typeof window !== 'undefined') {
   window.addEventListener(PUSH_LINKED_EVENT, () => { bookFirstWinDemo(); });
   window.addEventListener(FIRST_WIN_PLANNED_EVENT, () => {
     if (window.__adhdonePushLinked) bookFirstWinDemo();
+  });
+  // Everyone new gets the demo reminder after their first task, wherever they
+  // add it (Anna, Oct 22 2026). It used to come only from a task added in the
+  // welcome chat, so someone who skipped that and added one from Home or the
+  // Tasks page (M, Oct 16 2026) heard nothing at all on their first day. Only
+  // an account made in the last 2 days, in the phone app, and only once (the
+  // same flag the chat sets).
+  window.addEventListener('task-created', async (ev) => {
+    try {
+      if (!window.Capacitor?.isNativePlatform?.()) return;
+      if (firstUseSeen(FIRST_WIN_KEY) || readFirstWinDemo()) return;
+      const title = String(ev?.detail?.task?.title || '').trim();
+      if (!title) return;
+      const me = await base44.auth.me().catch(() => null);
+      const made = Date.parse(me?.signed_up_at || me?.created_date || '');
+      if (!(Number.isFinite(made) && Date.now() - made < 2 * 24 * 60 * 60 * 1000)) return;
+      if (firstUseSeen(FIRST_WIN_KEY) || readFirstWinDemo()) return;
+      markFirstUseSeen(FIRST_WIN_KEY);
+      saveFirstWinDemo({
+        title: 'This is what a reminder looks like 👋',
+        body: `"${title}" is on your list. When it's time, we'll nudge you just like this.`,
+        at: new Date(Date.now() + 3 * 60 * 1000).toISOString(),
+      });
+      window.dispatchEvent(new Event(FIRST_WIN_PLANNED_EVENT));
+    } catch (e) { /* no demo, then */ }
   });
 }
 
@@ -1254,9 +1307,47 @@ const hhmmLabel = (hhmm) => {
   return `${h % 12 || 12}:${m[2]} ${h < 12 ? 'AM' : 'PM'}`;
 };
 
+// It also asks anyone whose quiet hours look like they miss when they sleep
+// (Anna, Oct 18 2026: "If someone says they work the night shift, prompt them
+// to make new quiet hours. Next time she opens, lets prompt that by quietly
+// addressing that the app may be sending her notifications at times she does
+// not prefer"). checkQuietHoursFit judges that from what they told the app
+// about themselves, their quiet hours and their work hours, only when one of
+// those has changed since it last looked, and keeps the answer on the profile
+// as quiet_hours_fit. Keep these, Save or closing it marks it answered, so it
+// only comes back if one of those changes and the hours look wrong again.
+// When their quiet hours were still the starting 10 PM to 8 AM and the model
+// was clear about when they sleep, checkQuietHoursFit has already moved them
+// (Anna, Oct 19 2026: what they tell the app has to be acted on); then this
+// says so instead of asking, once, with the new hours ready to change.
+// The same as fitKey in base44/functions/checkQuietHoursFit: change both
+// together.
+const fitKey = (u) => JSON.stringify([
+  String(u?.about_me || '').trim(),
+  u?.quiet_hours_enabled !== false,
+  u?.quiet_hours_start || '22:00',
+  u?.quiet_hours_end || '08:00',
+  u?.work_schedule_mode || 'fixed',
+  (Array.isArray(u?.work_fixed_days) ? u.work_fixed_days : [])
+    .map((d) => [Number(d?.day), d?.arrive_by || '', d?.ends_at || '']),
+]);
+// The Layout (and this popup with it) mounts again on every page, often before
+// the account record catches up: so this open's answer, the key last answered
+// here, and when it last looked are kept outside the component. It looks at
+// most every half hour, so something they type in mid-setup is asked about on
+// a later open, not in the middle of it.
+let fitThisOpen = null;
+let fitAnsweredKey = null;
+let fitLookedAt = 0;
+const FIT_LOOK_GAP_MS = 30 * 60 * 1000;
+
 export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
   const dark = theme === 'dark';
   const [wanted, setWanted] = useState(false);
+  // 'review' (quiet_hours_review_pending) or 'fit' (their hours look wrong).
+  const [mode, setMode] = useState('review');
+  const [fit, setFit] = useState(null);
+  const [enabledWas, setEnabledWas] = useState(true);
   const [start, setStart] = useState('22:00');
   const [end, setEnd] = useState('08:00');
   const [was, setWas] = useState({ start: '22:00', end: '08:00' });
@@ -1277,12 +1368,22 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
     // is refreshed mid-wait (that happens often) — only if this goes away.
     if (!user || checked.current) return;
     checked.current = true;
-    if (user.quiet_hours_review_pending !== true) return;
+    const review = user.quiet_hours_review_pending === true;
+    if (!review) {
+      // Nothing it could judge from, or it looked a moment ago: nothing to ask.
+      const hasWork = (Array.isArray(user.work_fixed_days) && user.work_fixed_days.length > 0) ||
+        user.work_schedule_mode === 'varies';
+      if (!String(user.about_me || '').trim() && !hasWork) return;
+      if (Date.now() - fitLookedAt < FIT_LOOK_GAP_MS) return;
+      fitLookedAt = Date.now();
+    }
     const s = user.quiet_hours_start || '22:00';
     const e = user.quiet_hours_end || '08:00';
     setStart(s);
     setEnd(e);
     setWas({ start: s, end: e });
+    setEnabledWas(user.quiet_hours_enabled !== false);
+    setMode(review ? 'review' : 'fit');
     // The Tasks walkthrough opens on its own the first app open after setup,
     // from Home. Same test it uses; when it's due, wait for it to open (it
     // marks itself seen as it does), and the turn below then waits for it to
@@ -1295,6 +1396,45 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
       (!!user.about_me || isStepDone(ONBOARDING_STEPS.catchUp)) &&
       pageRef.current === 'Home';
     (async () => {
+      if (!review) {
+        const key = fitKey(user);
+        let f = fitThisOpen && fitThisOpen.key === key ? fitThisOpen
+          : (user.quiet_hours_fit && user.quiet_hours_fit.key === key ? user.quiet_hours_fit : null);
+        if (!f) {
+          try {
+            const res = await base44.functions.invoke('checkQuietHoursFit', {});
+            f = res?.data && typeof res.data.fits === 'boolean' ? res.data : null;
+          } catch (err) {
+            f = null;
+          }
+          if (f) fitThisOpen = f;
+        }
+        if (f && f.applied && f.applied.told !== true && fitAnsweredKey !== f.key) {
+          // Already moved to when they sleep: the phone follows now, and the
+          // popup tells them.
+          if (!mounted.current) return;
+          setFit(f);
+          setMode('applied');
+          setStart(f.applied.start);
+          setEnd(f.applied.end);
+          setWas({ start: f.applied.start, end: f.applied.end });
+          setEnabledWas(true);
+          try {
+            localStorage.setItem('quiet_hours_enabled', 'true');
+            localStorage.setItem('quiet_hours_start', f.applied.start);
+            localStorage.setItem('quiet_hours_end', f.applied.end);
+          } catch (err) { /* storage off */ }
+          refreshAlarms().catch(() => {});
+        } else {
+          if (!f || f.fits !== false || f.answered_key === f.key || fitAnsweredKey === f.key) return;
+          if (!mounted.current) return;
+          setFit(f);
+          if (f.start && f.end) {
+            setStart(f.start);
+            setEnd(f.end);
+          }
+        }
+      }
       if (walkthroughDue) {
         const began = Date.now();
         while (mounted.current && !localStorage.getItem(seenKey('Tasks')) && Date.now() - began < 30000) {
@@ -1311,22 +1451,45 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
     setError('');
     try {
       if (save) {
-        const enabled = user?.quiet_hours_enabled !== false;
+        // Picking hours here because theirs looked wrong means they want them on.
+        const enabled = mode === 'fit' || mode === 'applied' ? true : user?.quiet_hours_enabled !== false;
         localStorage.setItem('quiet_hours_enabled', enabled ? 'true' : 'false');
         localStorage.setItem('quiet_hours_start', start);
         localStorage.setItem('quiet_hours_end', end);
-        await base44.auth.updateMe({
+        const changes = {
           quiet_hours_enabled: enabled,
           quiet_hours_start: start,
           quiet_hours_end: end,
           quiet_hours_review_pending: false,
-        });
+        };
+        // Hours they picked themselves: answered, and nothing to judge again
+        // until something else changes.
+        const picked = (mode === 'fit' || mode === 'applied') && fit ? fitKey({ ...user, ...changes }) : null;
+        if (picked) {
+          changes.quiet_hours_fit = {
+            ...fit, key: picked, fits: true, start: null, end: null, by: 'them',
+            at: new Date().toISOString(), answered_key: picked,
+            ...(fit.applied ? { applied: { ...fit.applied, told: true } } : {}),
+          };
+        }
+        await base44.auth.updateMe(changes);
+        if (picked) {
+          fitAnsweredKey = picked;
+          fitThisOpen = changes.quiet_hours_fit;
+        }
         if (enabled) {
           await base44.functions.invoke('applyQuietHours', { quietStart: start, quietEnd: end }).catch(() => {});
         }
         // Same as Settings: nothing booked on the phone may ring inside the
         // new window.
         refreshAlarms().catch(() => {});
+      } else if ((mode === 'fit' || mode === 'applied') && fit) {
+        // Asked (or told) once for these hours and these words; not held open
+        // on a save.
+        fitAnsweredKey = fit.key;
+        base44.auth.updateMe({
+          quiet_hours_fit: { ...fit, answered_key: fit.key, ...(fit.applied ? { applied: { ...fit.applied, told: true } } : {}) },
+        }).catch(() => {});
       } else {
         await base44.auth.updateMe({ quiet_hours_review_pending: false });
       }
@@ -1338,7 +1501,7 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
     }
   };
 
-  const changed = start !== was.start || end !== was.end;
+  const changed = start !== was.start || end !== was.end || (mode === 'fit' && !enabledWas);
 
   return (
     <Dialog open={shown} onOpenChange={(o) => { if (!o && !saving) finish(false); }}>
@@ -1349,10 +1512,34 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
             Your quiet hours
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
-            Reminders and alarms stay silent during your quiet hours, unless you set a
-            time inside them yourself, like a 5 AM flight. Right now yours are{' '}
-            {hhmmLabel(was.start)} to {hhmmLabel(was.end)}, so the app's own reminders can
-            start as early as {hhmmLabel(was.end)}. Want to change them?
+            {mode === 'applied' ? (
+              <>
+                Going by what you told us, we moved your quiet hours to {hhmmLabel(was.start)} to{' '}
+                {hhmmLabel(was.end)}, so reminders and alarms stay silent while you're most likely
+                asleep. If you sleep at other times, change them here.
+              </>
+            ) : mode === 'fit' ? (
+              <>
+                ADHDone might be sending you reminders at times that don't suit you.{' '}
+                {enabledWas ? (
+                  <>
+                    Right now your quiet hours are {hhmmLabel(was.start)} to {hhmmLabel(was.end)},
+                    so reminders and alarms can start at {hhmmLabel(was.end)}.
+                  </>
+                ) : (
+                  <>Right now your quiet hours are off, so reminders and alarms can come at any hour.</>
+                )}{' '}
+                If you sleep at other times, set your quiet hours to match.
+                {fit?.start && fit?.end ? ' We filled in times that might suit you better, so change them if they’re off.' : ''}
+              </>
+            ) : (
+              <>
+                Reminders and alarms stay silent during your quiet hours, unless you set a
+                time inside them yourself, like a 5 AM flight. Right now yours are{' '}
+                {hhmmLabel(was.start)} to {hhmmLabel(was.end)}, so the app's own reminders can
+                start as early as {hhmmLabel(was.end)}. Want to change them?
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -1385,7 +1572,7 @@ export function QuietHoursReviewPrompt({ user, theme, currentPageName }) {
         </p>
         <div className="flex gap-2 pt-1">
           <Button variant="outline" onClick={() => finish(false)} disabled={saving} className="flex-1">
-            Keep these
+            {mode === 'applied' ? 'Looks right' : 'Keep these'}
           </Button>
           <Button onClick={() => finish(true)} disabled={saving || !changed || !start || !end} className="flex-1">
             {saving ? 'Saving…' : 'Save'}
@@ -1459,9 +1646,11 @@ const NOTES_BUILD_ON_PLAY = true;
 // NEWEST_BUILD bumped. The plugin checks stay for builds that report no number.
 // Build 40 (1.3.17: alarm fixes, "Notice when I wake up", Home or Back stops
 // a ringing alarm) is live on Google Play, Oct 12 2026, and build 41 (1.3.18)
-// was accepted the same day.
+// was accepted the same day. Build 42 (1.3.19: per-part capture hand-off,
+// event alarms with event buttons only, wake-time and alarm fixes) was
+// approved on Google Play Oct 14 2026.
 const LATER_BUILD_ON_PLAY = true;
-const NEWEST_BUILD = 41;
+const NEWEST_BUILD = 42;
 const hasQuietHoursBuild = () =>
   typeof window !== 'undefined' &&
   typeof window.Capacitor?.Plugins?.AlarmBridge?.quietFor === 'function';
@@ -1523,6 +1712,10 @@ export function AppUpdatePrompt({ user, theme }) {
     if (!NEWEST_BUILD_ON_PLAY) return;
     checked.current = true;
     if (!window.Capacitor?.isNativePlatform?.()) return;
+    // Android only: it counts Android build numbers and sends people to the
+    // Play Store. The iPhone app has its own numbers and store (Anna, Oct 22
+    // 2026); it gets no update card until one is made for it.
+    if (!onThisPhone('playUpdate')) return;
     // A return to the app after a while away is a new open.
     if (!updateOpenWatcher) {
       updateOpenWatcher = true;
@@ -1751,6 +1944,19 @@ const MORNING_WINDOW_MIN = 120;
 // Checked at most once an hour while the app stays open (it can sit in the
 // background for days), so a third rough morning is noticed the same morning.
 let wakeOfferCheckedAt = 0;
+// Wake-up detection on, but Android not letting ADHDone run in the background
+// (the battery switch): the phone holds back the check that reports the first
+// unlock, so it often never reports and the morning waits (Oct 16 2026:
+// Rebecca's summary went at 12:11 PM; the phones with the switch on reported
+// by 8:30). The same popup then asks for that one switch: right after the
+// setting is turned on, and on a later open at most once a day while it's
+// still off. Not for someone on full-screen alarms, whose own walkthrough
+// already asks for it daily (two asks for one switch would stack).
+const WAKE_BG_ASKED_KEY = 'adhdone_wake_background_asked';
+const backgroundHeldBack = async () => {
+  const st = await alarmPermissionStatus().catch(() => null);
+  return !!st && st.ignoringBatteryOptimizations === false;
+};
 
 const platformMs = (v) => {
   if (!v) return NaN;
@@ -1786,6 +1992,10 @@ export function WakeOfferPrompt({ user, theme }) {
   const [on, setOn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState('');
+  // Asking only for the background switch (wake-up detection is already on).
+  const [bgOnly, setBgOnly] = useState(false);
+  // The background switch is off while wake-up detection is on.
+  const [bgMissing, setBgMissing] = useState(false);
   const shown = usePopupTurn(wanted);
   const pending = useRef(false);
   const AB = () => window.Capacitor?.Plugins?.AlarmBridge;
@@ -1795,6 +2005,16 @@ export function WakeOfferPrompt({ user, theme }) {
 
   useEffect(() => {
     if (!user || wanted || Date.now() - wakeOfferCheckedAt < 60 * 60 * 1000) return;
+    // Never in the iPhone app: it can't see unlocks (Anna, Oct 22 2026: "that
+    // popup cant happen either"). The phone's switch is what counts, the same
+    // as below, so an account switched on from an Android phone goes back to
+    // "never set" here; otherwise Smart Reminders would wait each morning for
+    // a wake-up this phone can't report. Opening the Android phone again
+    // turns it back on from that phone's own switch.
+    if (isIPhoneApp()) {
+      if (user.wake_watch === true) base44.auth.updateMe({ wake_watch: null }).catch(() => {});
+      return;
+    }
     if (!window.Capacitor?.isNativePlatform?.() || typeof AB()?.wakeWatchStatus !== 'function') return;
     wakeOfferCheckedAt = Date.now();
     (async () => {
@@ -1810,6 +2030,16 @@ export function WakeOfferPrompt({ user, theme }) {
         let watch = user.wake_watch;
         if (phoneOn) {
           if (watch !== true) await base44.auth.updateMe({ wake_watch: true }).catch(() => {});
+          if (user.alarm_mode === 'alarm' || typeof AB()?.requestIgnoreBatteryOptimizations !== 'function') return;
+          let asked = 0;
+          try { asked = Number(localStorage.getItem(WAKE_BG_ASKED_KEY)) || 0; } catch (e) { /* fresh */ }
+          if (Date.now() - asked < 24 * 60 * 60 * 1000) return;
+          if (await backgroundHeldBack()) {
+            setOn(true);
+            setBgOnly(true);
+            setBgMissing(true);
+            setWanted(true);
+          }
           return;
         }
         if (watch === true) {
@@ -1837,9 +2067,33 @@ export function WakeOfferPrompt({ user, theme }) {
   // Once it's really on screen it counts as offered, whatever they choose.
   useEffect(() => {
     if (!shown) return;
+    if (bgOnly) {
+      try { localStorage.setItem(WAKE_BG_ASKED_KEY, String(Date.now())); } catch (e) { /* no storage */ }
+      return;
+    }
     try { localStorage.setItem(WAKE_OFFER_KEY, String(Date.now())); } catch (e) { /* no storage */ }
     base44.auth.updateMe({ wake_offer_seen_at: new Date().toISOString() }).catch(() => {});
   }, [shown]);
+
+  // While the background row is up: Android's battery prompt is drawn over
+  // the app (the page never goes hidden), so the switch is re-read every
+  // second rather than on coming back.
+  useEffect(() => {
+    if (!shown || !bgMissing) return undefined;
+    const id = setInterval(async () => {
+      if (!(await backgroundHeldBack())) setBgMissing(false);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [shown, bgMissing]);
+
+  const allowBackground = async () => {
+    setNote('');
+    try {
+      await AB().requestIgnoreBatteryOptimizations();
+    } catch (e) {
+      setNote("Couldn't open that setting. You can allow it in Android's battery settings for ADHDone.");
+    }
+  };
 
   const turnOn = async () => {
     const r = await AB().setWakeWatch({ enabled: true, quietEnd: quietEnd() });
@@ -1847,6 +2101,11 @@ export function WakeOfferPrompt({ user, theme }) {
       await base44.auth.updateMe({ wake_watch: true }).catch(() => {});
       setOn(true);
       setNote('');
+      // The moment it's turned on is when the one other switch it needs is
+      // asked for (the app's rule: each permission when its feature is used).
+      if (user?.alarm_mode !== 'alarm' && typeof AB()?.requestIgnoreBatteryOptimizations === 'function' && await backgroundHeldBack()) {
+        setBgMissing(true);
+      }
     } else {
       setOn(false);
       setNote('Usage access is still off. Switch it on for ADHDone, then try again.');
@@ -1904,26 +2163,48 @@ export function WakeOfferPrompt({ user, theme }) {
         <DialogHeader>
           <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
             <AlarmClock className="w-5 h-5" />
-            {mornings ? "Start reminders when you're up?" : 'New: notice when you wake up'}
+            {bgOnly ? 'One more switch for wake-up detection' : mornings ? "Start reminders when you're up?" : 'New: notice when you wake up'}
           </DialogTitle>
-          <DialogDescription className={dark ? 'text-gray-400' : ''}>
-            {mornings ? 'Your morning reminders seem to be catching you before you\'re up. ' : ''}
-            ADHDone can start your day's reminders the first time you unlock your phone in the
-            morning, instead of at a set time. Anything you set for a specific time still goes
-            off on time. It uses Android's Usage access only to see when your phone was first
-            unlocked each day.
-          </DialogDescription>
+          {bgOnly ? (
+            <DialogDescription className={dark ? 'text-gray-400' : ''}>
+              Your phone is limiting ADHDone in the background, so it can miss the first time you
+              unlock your phone in the morning. When it does, your morning reminders wait longer
+              than they need to. Letting ADHDone run in the background fixes that.
+            </DialogDescription>
+          ) : (
+            <DialogDescription className={dark ? 'text-gray-400' : ''}>
+              {mornings ? 'Your morning reminders seem to be catching you before you\'re up. ' : ''}
+              ADHDone can start your day's reminders the first time you unlock your phone in the
+              morning, instead of at a set time. Anything you set for a specific time still goes
+              off on time. It uses Android's Usage access only to see when your phone was first
+              unlocked each day.
+            </DialogDescription>
+          )}
         </DialogHeader>
-        <div className="flex items-center justify-between gap-3 py-1">
-          <span className={`text-sm font-medium ${dark ? 'text-gray-100' : 'text-gray-900'}`}>Notice when I wake up</span>
-          <Switch checked={on} onCheckedChange={toggle} disabled={busy} />
-        </div>
+        {!bgOnly && (
+          <div className="flex items-center justify-between gap-3 py-1">
+            <span className={`text-sm font-medium ${dark ? 'text-gray-100' : 'text-gray-900'}`}>Notice when I wake up</span>
+            <Switch checked={on} onCheckedChange={toggle} disabled={busy} />
+          </div>
+        )}
+        {on && (bgMissing || bgOnly) && (
+          <div className="flex items-center justify-between gap-3 py-1">
+            <span className={`text-sm font-medium ${dark ? 'text-gray-100' : 'text-gray-900'}`}>
+              {bgMissing ? 'Let ADHDone run in the background' : 'Running in the background'}
+            </span>
+            {bgMissing ? (
+              <Button size="sm" onClick={allowBackground} disabled={busy}>Allow</Button>
+            ) : (
+              <Check className="w-5 h-5 text-green-500" />
+            )}
+          </div>
+        )}
         {note && <p className="text-xs text-red-500">{note}</p>}
         <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
           You can change this any time in Settings.
         </p>
-        <Button variant={on ? 'default' : 'outline'} onClick={() => setWanted(false)} disabled={busy} className="w-full">
-          {on ? 'Done' : 'Not now'}
+        <Button variant={on && !bgMissing ? 'default' : 'outline'} onClick={() => setWanted(false)} disabled={busy} className="w-full">
+          {on && !bgMissing ? 'Done' : 'Not now'}
         </Button>
       </DialogContent>
     </Dialog>

@@ -38,7 +38,7 @@
     "finished_at": {
       "type": "string",
       "format": "date-time",
-      "description": "When the task was finished, by the server's clock (logTaskCompletion). completed_at is written by the phone in more than one format; completion habits are read from this."
+      "description": "When the task was finished, by the server's clock (logTaskCompletion). Completion habits are read from this. completed_at was written by the phone in two formats until Oct 16 2026 (some screens stamped local clock time as UTC); every screen now writes true UTC."
     },
     "typical_minutes": {
       "type": "number",
@@ -110,7 +110,7 @@
     "start_date": {
       "type": "string",
       "format": "date-time",
-      "description": "Optional date the user began actively working on this task. When set alongside due_date, the task acts like a multi-day event: it shows on each day from start_date through due_date and appears in Today's Tasks the entire span, even if the due date is far out."
+      "description": "Optional date the user began actively working on this task. When set alongside due_date, the task acts like a multi-day event: it shows on each day from start_date through due_date and appears in Today's Tasks the entire span, even if the due date is far out. A parsed 'by' deadline ('sometime this week', 'by Friday') is saved with start_date = when it was said, so it sits under Today every day until the deadline (Anna, Oct 14 2026; taskSchedule.deadlineWindowStart / captureToTasks.buildTaskRecord)."
     },
     "end_date": {
       "type": "string",
@@ -320,10 +320,38 @@
       "default": 0,
       "description": "How many times a full-screen alarm for this task was stopped with \"Later\" (put off without picking a snooze time; the task stays active, so smart nudges bring it back once its time has passed)."
     },
+    "alarm_order": {
+      "type": "object",
+      "description": "Where this task's alarm rings among others at a time they set in the same minute, by clock time in the owner's time zone: { \"HH:MM\": { rank, with, why } }. rank 0 rings on the minute; each place after that rings 10 seconds later, so the phone rings it the moment the one before is answered. with: the ids of the tasks in that minute, sorted and joined by |. Set by the model (shared/alarmOrder.ts) when a task with a time they set is made or changed (Anna, Oct 21 2026: a 10 AM call should ring before a 10 AM watch setting)."
+    },
+    "put_off_days": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "The days (YYYY-MM-DD, the owner's own date) on which a reminder or alarm for this task was put off: Later, a snooze, stopped without a snooze (the alarm's Open button, a swipe), closed, or rang out unanswered. Done doesn't count. Put off on 3 different days without being done, it moves to an eased plan (ease_plan). Cleared when they edit the task (its wording, priority or date). shared/easeOff.ts (Anna, Oct 22 2026)."
+    },
+    "ease_plan": {
+      "type": "object",
+      "description": "How Smart Reminders handles a task put off on 3 different days (shared/easeOff.ts, Anna, Oct 22 2026): { plan, level, why, since, at }. plan, judged by the model from what they typed, its priority and who relies on it: 'daily_alarm' (it matters: in the morning summary plus one alarm a day with only Done and Later), 'alarm_then_notice' (an ordinary task: the same, until that alarm is put off on 2 more days, then level 2 = one regular notification a day), 'digest' (low stakes: only the morning summary). since: the day it was eased. Cleared when they edit the task."
+    },
+    "notes_worthy": {
+      "type": "boolean",
+      "description": "For an event with no date or time yet (so no reminders): whether recording it and getting notes would help, judged once when it's made (onTaskUpdate asks generateReminderSchedule notesCheck, the same yes/no its reminders would ask). Its Record notes button shows from this until it has a time; once it has a date and time, its reminders' labels decide. Empty = not judged (Anna, Oct 20 2026)."
+    },
     "later_until": {
       "type": "string",
       "format": "date-time",
-      "description": "A break the person asked for by tapping Later on this task's alarm: nothing about the task (smart nudges, planned reminders, rhythm pings, phone alarms) until this time. The first Later in a day gives three hours; a second Later the same day runs until tomorrow morning. Set by the app when the phone reports the tap; read by the nudge planner, the reminder refill and the alarm sync."
+      "description": "A break the person asked for by saying \"not now\" to this task (Later on its alarm or reminder, or a snooze they picked): nothing about the task (smart nudges, planned reminders, rhythm pings, phone alarms) until this time, except the time they set for it today. How long depends on its priority and how many \"not now\"s it had today (not_now_count; cancelTaskNotifications notNowUntil, Anna's table, Oct 20 2026). Read by the nudge planner, the reminder refill and the alarm sync."
+    },
+    "not_now_day": {
+      "type": "string",
+      "description": "The day (YYYY-MM-DD, in the owner's time zone) that not_now_count counts. A different day means none yet today."
+    },
+    "not_now_count": {
+      "type": "number",
+      "default": 0,
+      "description": "How many times on not_now_day the person said \"not now\" to this task: each Later, and each run of snoozes (snoozed again when it rang back counts once). Sets the length of the next break (later_until): the 3rd for a low or medium task, the 4th for a high or urgent one, ends it for the day."
     },
     "quiet_hours_exempt": {
       "type": "boolean",
@@ -370,7 +398,7 @@
     "completed_at": {
       "type": "string",
       "format": "date-time",
-      "description": "When task was completed"
+      "description": "When task was completed, in true UTC (readers turn it into the person's own time)"
     },
     "pictures": {
       "type": "array",

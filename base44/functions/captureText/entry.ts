@@ -1,3 +1,11 @@
+// Re-saved Oct 21 2026 so the bundled shared/captureToTasks.ts is picked up: something they describe about a tracked thing (no reading) is kept as a note, never charted.
+// Re-saved Oct 19 2026 (night) so the bundled shared/taskParsePrompt.ts and shared/runTaskParse.ts are picked up: a link the task needs (a video-session or meeting link) goes in the task's notes, never its title, and the time zone of a time stays out of the title.
+// Re-saved Oct 19 2026 so the bundled shared/runTaskParse.ts is picked up: a time picked from a part of the day ("morning medication") is never marked as one the person stated, so it can't ring inside their quiet hours.
+// Re-saved Oct 17 2026 (evening) so the bundled shared/taskParsePrompt.ts and shared/runTaskParse.ts are picked up: an event that runs past midnight (7 PM–2 AM) is one night, not a two-day range, and a day counted from the real date instead of the said-at day gets a last look.
+// Re-saved Oct 17 2026 so the bundled shared/runTaskParse.ts, shared/taskParsePrompt.ts and shared/captureToTasks.ts are picked up: the parser and the tracker look run on gpt-6-astra, the parser's calendar beats the real date astra is given, and "tomorrow morning" / "Sunday night" get a time.
+// Re-saved Oct 16 2026 so the bundled shared/captureToTasks.ts is picked up: the tracker look runs on the parser's model and never logs words that aren't about the tracker (or the word "null").
+// Re-saved Oct 14 2026 (night, again after the shared file itself was saved) so the bundled shared/captureToTasks.ts is picked up: a reading for a tracker they already have is logged to it the moment the capture lands, not when the Parking Lot page next opens.
+// Re-saved Oct 14 2026 (afternoon) so the bundled shared/captureToTasks.ts is picked up: a "by" deadline ("sometime this week") gets start_date = now, so it sits under Today every day until the deadline.
 // Re-saved Oct 14 2026 so the bundled shared/taskParsePrompt.ts is picked up: needs_date_pick is always false (the app never asks "when?"; a task with no day is made with no day, as this path always did).
 // Re-saved Oct 13 2026 (night) so the bundled shared/captureToTasks.ts is picked up: a captured event's pushes carry an event's buttons (Snooze only), not a task's.
 // Re-saved Oct 13 2026 (evening) so the bundled shared/captureToTasks.ts is picked up: a heads-up moved off another push's minute is saved at the minute it really goes.
@@ -39,6 +47,7 @@ import {
   scheduleTaskReminders,
   classifyCapture,
   createParkingLotIdeas,
+  foldIdeaIntoTrackers,
   createBirthdayTask,
   queueFeedbackPrompt,
   localToday,
@@ -102,7 +111,7 @@ function duplicateResponse(winner: { tasks: any[]; ideas: any[] }) {
 Deno.serve(async (req) => {
   try {
     const base44 = await createClientFromRequest(req);
-    const { text, timezone, capture_id, said_at } = await req.json();
+    const { text, timezone, capture_id, said_at, foldIdea } = await req.json();
     // When the words were said (ms), for a capture the phone held on to and
     // delivered later (no signal, app killed): "tomorrow" counts from then.
     const saidRaw = Number(said_at);
@@ -115,6 +124,18 @@ Deno.serve(async (req) => {
     const user = await retryBrief(() => base44.auth.me());
     if (!user?.email) {
       return Response.json({ success: false, error: "Unauthorized" }, { status: 401 });
+    }
+
+    // { foldIdea: <id> }: the in-app Add box saved an idea of theirs; give it
+    // the same tracker look a captured idea gets, right now (see
+    // foldIdeaIntoTrackers). Only their own row, and only a plain new one.
+    if (foldIdea) {
+      const row = await base44.entities.ParkingLotIdea.get(String(foldIdea)).catch(() => null);
+      if (!row || row.tracker || row.parent_idea_id || row.converted_to_task) {
+        return Response.json({ success: true, folded: false });
+      }
+      const fold = await foldIdeaIntoTrackers(base44, { id: row.id, title: String(row.idea || "") });
+      return Response.json({ success: true, folded: !!fold?.folded, logged: fold?.logged || [] });
     }
 
     if (!text || !String(text).trim()) {
@@ -173,7 +194,7 @@ Deno.serve(async (req) => {
     // send it to the developer the next time it opens.
     if (category.category === "parking_lot" || category.category === "app_feedback") {
       const feedback = category.category === "app_feedback";
-      const ideas = await createParkingLotIdeas(base44, feedback ? { is_list: false } : category, raw, capture_id);
+      const ideas = await createParkingLotIdeas(base44, feedback ? { is_list: false } : category, raw, capture_id, !feedback);
       if (capture_id && ideas.length) {
         const winner = await lostCaptureRace(base44, capture_id, { entity: "ParkingLotIdea", ids: ideas.map((i: any) => i.id) });
         if (winner) {
@@ -182,7 +203,11 @@ Deno.serve(async (req) => {
         }
       }
       if (feedback) await queueFeedbackPrompt(base44, raw);
-      console.log(`[captureText] ${ideas.length} parking lot idea(s) from ${raw.length} chars`);
+      // A reading for a tracker they already have goes straight onto it, now,
+      // instead of sitting in the Parking Lot as an idea until the page's own
+      // look folds it in (Anna, Oct 14 2026). See foldIdeaIntoTrackers.
+      const fold = !feedback && ideas.length === 1 ? await foldIdeaIntoTrackers(base44, ideas[0]) : null;
+      console.log(`[captureText] ${ideas.length} parking lot idea(s) from ${raw.length} chars${fold?.folded ? " — logged to a tracker" : ""}`);
       return Response.json({
         success: true,
         duplicate: false,
@@ -190,6 +215,7 @@ Deno.serve(async (req) => {
         count: ideas.length,
         tasks: ideas,
         ideas,
+        ...(fold?.folded ? { logged: fold.logged } : {}),
       });
     }
 
@@ -252,13 +278,15 @@ Deno.serve(async (req) => {
 
       if (kind.category === "parking_lot" || kind.category === "app_feedback") {
         const feedback = kind.category === "app_feedback";
-        const ideas = await createParkingLotIdeas(base44, feedback ? { is_list: false } : kind, piece, capture_id);
+        const ideas = await createParkingLotIdeas(base44, feedback ? { is_list: false } : kind, piece, capture_id, !feedback);
         const winner = await claim("ParkingLotIdea", ideas.map((i: any) => i.id));
         if (winner) {
           console.log(`[captureText] ${capture_id} already handled by a parallel delivery; removed this copy`);
           return duplicateResponse(winner);
         }
         if (feedback) await queueFeedbackPrompt(base44, piece);
+        // A reading for a tracker they already have: onto it now (see above).
+        if (!feedback && ideas.length === 1) await foldIdeaIntoTrackers(base44, ideas[0]);
         parked.push(...ideas);
         continue;
       }

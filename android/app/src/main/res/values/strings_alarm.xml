@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="alarm_notification_heading">Time for this</string>
+    <string name="alarm_title_fallback">An important task</string>
+    <string name="alarm_snooze_label">Snooze</string>
+    <string name="alarm_snooze_10">10 min</string>
+    <string name="alarm_snooze_30">30 min</string>
+    <string name="alarm_snooze_60">1 hour</string>
+    <string name="alarm_action_snooze_10">Snooze 10 min</string>
+    <string name="alarm_action_dismiss">Open task</string>
+    <!-- Stops the ring without a set snooze time: the task goes back to its normal
+         reminders, which is smart nudges for anything they handle. -->
+    <string name="alarm_action_later">Later</string>
+    <string name="alarm_action_dismiss_plain">Got it</string>
+    <string name="alarm_action_stop">Stop</string>
+    <!-- Marks the task done from the alarm itself (the app opens to finish it). -->
+    <string name="alarm_action_done">Done ✓</string>
+</resources>

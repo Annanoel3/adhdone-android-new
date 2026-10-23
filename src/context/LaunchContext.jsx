@@ -177,19 +177,18 @@ export function LaunchProvider({ children }) {
     if (!voiceCheckInsOn() || !speechAvailable()) return;
     let voice = null;
     try {
-      const res = await base44.integrations.Core.InvokeLLM({
+      // On the app's own OpenAI key through categorizeIdea (gpt-6-astra). This
+      // used Base44's own AI (InvokeLLM) from Oct 13 2026 until Oct 17 2026,
+      // against RULES.md rule 1 (Base44 credits, and not her model).
+      const reply = await base44.functions.invoke('categorizeIdea', {
         prompt: `Someone with ADHD just started a timer to work on this task: "${String(task?.title || '').trim()}". A friendly voice will check in out loud while they work. Write:
 1. ten_minutes — ONE short sentence for the ten-minute mark that is about this task itself and paints the good outcome of doing it (for laundry: "Your clothes are going to smell great, keep it up."). Encouraging and concrete; no question.
 2. more — six different one-sentence encouragements for every ten minutes after that: warm, tied to this task where it feels natural, otherwise plain cheering on. Never mention time, never ask a question, never pressure.
-Plain spoken words, no emojis, no quotation marks.`,
-        response_json_schema: {
-          type: 'object',
-          properties: {
-            ten_minutes: { type: 'string' },
-            more: { type: 'array', items: { type: 'string' } },
-          },
-        },
+Plain spoken words, no emojis, no quotation marks.
+Answer with JSON only, in this shape: {"ten_minutes": "...", "more": ["...", "..."]}`,
       });
+      const raw = String(reply?.data?.message || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+      const res = JSON.parse(raw);
       if (res && (res.ten_minutes || Array.isArray(res.more))) {
         voice = { tenMin: String(res.ten_minutes || ''), more: Array.isArray(res.more) ? res.more.slice(0, 12) : [] };
       }

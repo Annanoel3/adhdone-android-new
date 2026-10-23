@@ -1,6 +1,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 
-// Duplicate watchdog. Runs on a schedule, across EVERY user, and does two things:
+// Duplicate watchdog. Runs on a schedule, across EVERY user, and does two things
+// (its workflow has been switched off since Sep 24 2026; a second live push for
+// the same task at the same minute is caught by cronRefillReminders instead):
 //   1. Heals: if a calendar event somehow produced two tasks, the extra task is
 //      deleted and its scheduled pushes cancelled before the user ever sees a
 //      double notification.

@@ -293,6 +293,9 @@ export default function NotesPage() {
   const [search, setSearch] = useState("");
   const [linkOpen, setLinkOpen] = useState(false);
   const [linking, setLinking] = useState(false);
+  // The event just tapped in the link popup ("unlink" for Unlink), so the tap
+  // shows at once while it saves.
+  const [linkingId, setLinkingId] = useState(null);
   const [prepTask, setPrepTask] = useState(null);
   const [draft, setDraft] = useState("");
   const [liveQuestions, setLiveQuestions] = useState([]);
@@ -845,27 +848,37 @@ export default function NotesPage() {
   // questions come along so the notes can say which got answered, and the
   // event's dashed "Coming up" card becomes this recording's. Events from the
   // last two months on, the ones closest to the recording's time first.
+  // A tap shows right away: the tapped event lights up and says "Linking…"
+  // while it saves, then the popup closes and the recording's line reads
+  // "For: <event>" without waiting for every recording to reload (Anna, Oct 19
+  // 2026: "me clicking did choose it, but there was no visual confirmation
+  // that anything happened").
   const linkTo = async (task) => {
-    if (!open) return;
+    if (!open || linking) return;
     setLinking(true);
+    setLinkingId(task ? task.id : "unlink");
     try {
       const fields = task
         ? { task_id: task.id, questions: cleanQuestions(task.prep_questions), ...(open.title ? {} : { title: task.title }) }
         : { task_id: "", questions: [] };
       await base44.entities.EnergyLog.update(open.id, fields);
-      await loadRecords();
+      setRecords((rows) => rows.map((r) => (r.id === open.id ? { ...r, ...fields } : r)));
       setLinkOpen(false);
       toast({ title: task ? `Linked to "${task.title}"` : "Unlinked from its event" });
+      loadRecords();
     } catch (e) {
       toast({ title: "Couldn't link it", description: "Check your connection and try again." });
     } finally {
       setLinking(false);
+      setLinkingId(null);
     }
   };
   const linkDialog = (
     <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
       <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto bg-card text-card-foreground border-border">
-        <div className="space-y-3 pt-2">
+        {/* min-w-0: a long event name is cut off with "…" instead of pushing
+            the cards past the popup's right edge. */}
+        <div className="space-y-3 pt-2 min-w-0">
           <h2 className="text-xl font-bold text-foreground">Which event is this recording for?</h2>
           {(() => {
             const at = new Date(open?.started_at || 0).getTime() || Date.now();
@@ -880,15 +893,23 @@ export default function NotesPage() {
                 type="button"
                 disabled={linking}
                 onClick={() => linkTo(t)}
-                className={`w-full text-left rounded-xl border px-3 py-2.5 ${open?.task_id === t.id ? "border-purple-500" : "border-border"}`}
+                className={`w-full text-left rounded-xl border px-3 py-2.5 transition-colors active:bg-purple-500/10 ${linkingId === t.id ? "border-purple-500 bg-purple-500/10" : open?.task_id === t.id ? "border-purple-500" : "border-border"} ${linking && linkingId !== t.id ? "opacity-50" : ""}`}
               >
                 <div className="font-semibold text-foreground truncate">{t.title}</div>
-                <div className="text-sm text-muted-foreground">{whenText(new Date(startOf(t)).toISOString())}{open?.task_id === t.id ? " · linked now" : ""}</div>
+                {linkingId === t.id ? (
+                  <div className={`text-sm flex items-center gap-1.5 ${dark ? "text-purple-300" : "text-purple-700"}`}>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Linking…
+                  </div>
+                ) : (
+                  <div className="text-sm text-muted-foreground">{whenText(new Date(startOf(t)).toISOString())}{open?.task_id === t.id ? " · linked now" : ""}</div>
+                )}
               </button>
             ));
           })()}
           {open?.task_id && (
-            <Button variant="outline" className="w-full" disabled={linking} onClick={() => linkTo(null)}>Unlink from its event</Button>
+            <Button variant="outline" className="w-full" disabled={linking} onClick={() => linkTo(null)}>
+              {linkingId === "unlink" ? <><Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> Unlinking…</> : "Unlink from its event"}
+            </Button>
           )}
           <Button variant="ghost" className="w-full" onClick={() => setLinkOpen(false)}>Cancel</Button>
         </div>

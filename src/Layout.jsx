@@ -120,6 +120,7 @@ import EasterEggVideo from "./components/shared/EasterEggVideo";
 import LongPressBrandTitle from "./components/eastereggs/LongPressBrandTitle";
 import EggBadge from "./components/eastereggs/EggBadge";
 import ChaosModeStyles from "./components/eastereggs/ChaosModeStyles";
+import { onThisPhone } from "@/lib/phonePlatform";
 import {
   Dialog,
   DialogContent,
@@ -311,6 +312,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     return () => window.removeEventListener(ONBOARDING_STEP_EVENT, onStep);
   }, [user?.email, authCheckComplete]);
   const anyDot = newDots.ParkingLot || notesDot || guideDot;
+  // The App Guide button pulses while its dot is on. Anna's account only for
+  // now, to test it first (Oct 16 2026); see the button below.
+  const guidePulse = guideDot && String(user?.email || '').toLowerCase() === 's2kap2chick@gmail.com';
   const getDateBasedMode = () => {
     const now = new Date();
     const month = now.getMonth() + 1; // 1-12
@@ -1192,13 +1196,23 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 </Button>
               )}
 
+              {/* Pulses with the red dot until they tap it (Anna, Oct 16 2026:
+                  "make the app guide button pulsate so the user has to tap it
+                  to get rid of the animation"). Tapping it opens the guide and
+                  marks it seen, which ends both. TESTING ON ANNA'S ACCOUNT
+                  FIRST (her ask): guidePulse is limited to s2kap2chick until
+                  she OKs it; then the email check comes out and it's everyone
+                  with the dot. Phones set to remove animations don't pulse. */}
+              {guidePulse && (
+                <style>{`@keyframes adhd-guide-pulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(239,68,68,.6)}50%{transform:scale(1.04);box-shadow:0 0 0 10px rgba(239,68,68,0)}}.adhd-guide-pulse{animation:adhd-guide-pulse 1.6s ease-in-out infinite}@media (prefers-reduced-motion: reduce){.adhd-guide-pulse{animation:none}}`}</style>
+              )}
               <Button
                 variant="outline"
                 onClick={() => {
                   setShowAppGuide(true);
                   if (guideDot) markStepDone(ONBOARDING_STEPS.guideSeen);
                 }}
-                className={`w-full flex items-center justify-center gap-2 rounded-xl ${
+                className={`w-full flex items-center justify-center gap-2 rounded-xl ${guidePulse ? 'adhd-guide-pulse ' : ''}${
                   isSeasonalTheme()
                     ? 'bg-white/60 hover:bg-white/80 text-gray-800 border-white/40'
                     : theme === 'dark'
@@ -1250,22 +1264,18 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               paddingBottom: '1rem'
             }}>
               <div className="flex items-center gap-4">
-                <SidebarTrigger asChild>
-                  <Button variant="ghost" className={`h-14 w-14 p-0 rounded-xl transition-colors duration-200 flex items-center justify-center pointer-events-auto ${
-                    isSeasonalTheme()
-                      ? 'hover:bg-white/50 text-gray-800'
-                      : theme === 'dark'
-                        ? 'hover:bg-gray-800 text-white'
-                        : theme === 'spicybrains'
-                          ? 'hover:bg-yellow-300 text-gray-900'
-                          : 'hover:bg-gray-100'
-                  }`}>
-                    <span className="relative">
-                      <LayoutDashboard className="w-7 h-7" />
-                      {anyDot && <span className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 border-2 border-white" />}
-                    </span>
-                  </Button>
-                </SidebarTrigger>
+                {/* The menu button and its red dot. SidebarTrigger (ui/sidebar.jsx)
+                    throws away anything put inside it and always draws its own
+                    panel icon, so the button that used to sit in here (a
+                    dashboard icon carrying the red dot) never appeared: the
+                    menu's dot, added Oct 5 2026, never showed for anyone (Anna,
+                    Oct 16 2026: "Just saved something to the parking lot. No
+                    red dot top left"). The icon people know stays exactly as
+                    it is; the dot now sits over its corner instead. */}
+                <span className="relative inline-flex">
+                  <SidebarTrigger asChild />
+                  {anyDot && <span className="pointer-events-none absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 border-2 border-white" />}
+                </span>
                 <LongPressBrandTitle className={`text-xl font-bold ${
                   isSeasonalTheme()
                     ? 'text-gray-900'
@@ -1372,7 +1382,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                     : 'Choose how long notifications should be quiet 🔕'}
                 </DialogTitle>
                 <DialogDescription className="sr-only">
-                  The same quiet as the buttons on the pinned notification and the widget.
+                  {onThisPhone('pinnedCapture')
+                    ? 'The same quiet as the buttons on the pinned notification and the widget.'
+                    : 'Reminders and alarms still arrive, just quietly, until the time you pick.'}
                 </DialogDescription>
               </DialogHeader>
               {quietNotifications.quiet ? (

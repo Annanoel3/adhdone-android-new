@@ -6,9 +6,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Plus, Lightbulb, ArrowRight, Trash2, ChevronsDown, ChevronsUp, Search, Sparkles, Loader2, Filter, Mic, MoreVertical, CheckCircle2, Pencil, Image as ImageIcon, FileText, X, TrendingUp, Bell } from "lucide-react";
-import { LineChart, Line, XAxis, YAxis, Tooltip as ChartTooltip, ResponsiveContainer } from "recharts";
+import { Plus, Lightbulb, ArrowRight, Trash2, ChevronsDown, ChevronsUp, Search, Sparkles, Loader2, Filter, Mic, MoreVertical, CheckCircle2, Pencil, Image as ImageIcon, FileText, X, TrendingUp, Bell, Maximize2 } from "lucide-react";
+import { LineChart, Line, XAxis, YAxis, Tooltip as ChartTooltip, ResponsiveContainer, Legend as ChartLegend } from "recharts";
 import { toast } from "@/components/ui/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { usePopupTurn } from "@/components/onboarding/onboardingSurface";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -287,6 +288,163 @@ function niceTicks(values) {
   return { domain: [start, end], ticks };
 }
 
+// The tracker chart's bottom edge is real time (Anna, Oct 22 2026: it showed
+// times where past days should be). Readings sit where they were taken, and
+// the labels are dates; zoomed in to a day and a half or less they're times
+// of day, with the date at midnight.
+const HOUR_MS = 60 * 60 * 1000;
+function timeTicks(from, to, maxTicks) {
+  const span = to - from;
+  const out = [];
+  if (!(span > 0)) return out;
+  if (span <= 36 * HOUR_MS) {
+    const stepH = [1, 2, 3, 4, 6, 12].find((h) => span / (h * HOUR_MS) <= maxTicks) || 12;
+    const d = new Date(from);
+    d.setMinutes(0, 0, 0);
+    for (let guard = 0; (d.getTime() < from || d.getHours() % stepH !== 0) && guard < 48; guard++) d.setHours(d.getHours() + 1);
+    for (; d.getTime() <= to && out.length < 50; d.setHours(d.getHours() + stepH)) out.push(d.getTime());
+  } else {
+    const days = span / (24 * HOUR_MS);
+    const stepD = [1, 2, 3, 7, 14, 30, 61, 91].find((n) => days / n <= maxTicks) || 91;
+    const d = new Date(from);
+    d.setHours(0, 0, 0, 0);
+    if (d.getTime() < from) d.setDate(d.getDate() + 1);
+    for (; d.getTime() <= to && out.length < 50; d.setDate(d.getDate() + stepD)) out.push(d.getTime());
+  }
+  return out;
+}
+const timeTickLabel = (span) => (ms) => {
+  const d = new Date(ms);
+  const date = d.toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' });
+  if (span > 36 * HOUR_MS || (d.getHours() === 0 && d.getMinutes() === 0)) return date;
+  return d.toLocaleTimeString(undefined, { hour: 'numeric' });
+};
+
+// Tapping a dot shows its numbers and, under them, the note(s) written with
+// that reading (Anna, Oct 22 2026: "click something to see the notes").
+function TrackerNoteTip({ active, payload }) {
+  if (!active || !payload || payload.length === 0) return null;
+  const p = payload[0]?.payload || {};
+  const notes = p.notes || [];
+  return (
+    <div style={{ background: '#fff', border: '1px solid #ccc', padding: '8px 10px', maxWidth: 240, fontSize: 13, lineHeight: 1.35 }}>
+      <p style={{ margin: '0 0 4px', color: '#111' }}>{Number.isFinite(p.ms) ? formatLogTime(new Date(p.ms).toISOString()) : ''}</p>
+      {payload.map((it) => (
+        <p key={it.dataKey} style={{ margin: 0, color: it.color }}>{it.name} : {it.value}</p>
+      ))}
+      {notes.map((nt, i) => (
+        <p key={i} style={{ margin: '6px 0 0', color: '#555', fontStyle: 'italic', whiteSpace: 'normal', overflowWrap: 'anywhere' }}>{nt}</p>
+      ))}
+    </div>
+  );
+}
+
+// The tracker chart, plus an Expand button that opens it full screen, where
+// two fingers zoom in and out and slide along the dates (Anna, Oct 22 2026).
+// One finger still taps a dot for its numbers and note.
+function TrackerChart({ points, lines, title, dark }) {
+  const [expanded, setExpanded] = useState(false);
+  const [view, setView] = useState(null);
+  const pinch = useRef(null);
+  const boxRef = useRef(null);
+  const first = points[0].ms;
+  const last = points[points.length - 1].ms;
+  const pad = Math.max((last - first) * 0.03, 30 * 60 * 1000);
+  const full = [first - pad, last + pad];
+  const cur = view || full;
+  const MIN_SPAN = 2 * HOUR_MS;
+  const clampView = (from, span) => {
+    const s = Math.min(Math.max(span, MIN_SPAN), full[1] - full[0]);
+    const f = Math.max(full[0], Math.min(from, full[1] - s));
+    return [f, f + s];
+  };
+  const zoomBy = (factor) => {
+    const mid = (cur[0] + cur[1]) / 2;
+    const span = (cur[1] - cur[0]) * factor;
+    setView(clampView(mid - span / 2, span));
+  };
+  // Where a finger is along the plotted area, 0 (left) to 1 (right). The
+  // left axis takes about 44px and the right margin 12px.
+  const ratioAt = (x) => {
+    const r = boxRef.current?.getBoundingClientRect();
+    if (!r) return 0.5;
+    const w = r.width - 56;
+    return w > 0 ? Math.min(1, Math.max(0, (x - r.left - 44) / w)) : 0.5;
+  };
+  const onTouchStart = (e) => {
+    if (e.touches.length !== 2) return;
+    const [a, b] = [e.touches[0], e.touches[1]];
+    pinch.current = { d0: Math.max(10, Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY)), r0: ratioAt((a.clientX + b.clientX) / 2), from: cur[0], span: cur[1] - cur[0] };
+  };
+  const onTouchMove = (e) => {
+    const p = pinch.current;
+    if (!p || e.touches.length !== 2) return;
+    const [a, b] = [e.touches[0], e.touches[1]];
+    const d = Math.max(10, Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY));
+    const span = p.span * (p.d0 / d);
+    const anchor = p.from + p.r0 * p.span;
+    const r1 = ratioAt((a.clientX + b.clientX) / 2);
+    setView(clampView(anchor - r1 * span, span));
+  };
+  const onTouchEnd = (e) => { if (e.touches.length < 2) pinch.current = null; };
+
+  const chart = (range, maxTicks, animate) => {
+    const visible = points.filter((p) => p.ms >= range[0] && p.ms <= range[1]);
+    const axis = niceTicks((visible.length ? visible : points).flatMap((r) => lines.map((l) => r[l.key])));
+    return (
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={points} margin={{ top: 8, right: 12, bottom: 0, left: -16 }}>
+          <XAxis dataKey="ms" type="number" scale="time" domain={range} allowDataOverflow ticks={timeTicks(range[0], range[1], maxTicks)} tickFormatter={timeTickLabel(range[1] - range[0])} tick={{ fontSize: 11 }} />
+          <YAxis tick={{ fontSize: 11 }} domain={axis ? axis.domain : ['auto', 'auto']} ticks={axis ? axis.ticks : undefined} allowDataOverflow />
+          <ChartTooltip content={<TrackerNoteTip />} allowEscapeViewBox={{ x: false, y: true }} wrapperStyle={{ zIndex: 20 }} />
+          {lines.length > 1 && <ChartLegend wrapperStyle={{ fontSize: 11 }} />}
+          {lines.map((l) => (
+            <Line key={l.key} type="monotone" dataKey={l.key} name={l.name} stroke={l.color} strokeWidth={2} dot={{ r: 3 }} connectNulls isAnimationActive={animate} />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    );
+  };
+
+  const fmtDay = (ms) => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return (
+    <>
+      <div className="flex justify-end -mb-1">
+        <button onClick={() => setExpanded(true)} className="text-xs text-purple-600 hover:underline flex items-center gap-1" aria-label="Expand the chart">
+          <Maximize2 className="w-3.5 h-3.5" /> Expand
+        </button>
+      </div>
+      <div className="h-44 w-full">{chart(full, 5, true)}</div>
+      <Dialog open={expanded} onOpenChange={(o) => { setExpanded(o); if (!o) { setView(null); pinch.current = null; } }}>
+        <DialogContent className={`max-w-none w-screen h-[100dvh] rounded-none sm:rounded-none p-3 flex flex-col gap-2 ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
+          <DialogHeader>
+            <DialogTitle className="text-base pr-8">{title}</DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button size="sm" variant="outline" onClick={() => zoomBy(1.5)} aria-label="Zoom out">−</Button>
+            <Button size="sm" variant="outline" onClick={() => zoomBy(1 / 1.5)} aria-label="Zoom in">+</Button>
+            {view && <Button size="sm" variant="outline" onClick={() => setView(null)}>Show all</Button>}
+            <span className="text-xs text-gray-500">
+              {fmtDay(cur[0])}{fmtDay(cur[0]) !== fmtDay(cur[1]) ? ` to ${fmtDay(cur[1])}` : ''} · pinch to zoom, tap a dot for its note
+            </span>
+          </div>
+          <div
+            ref={boxRef}
+            className="flex-1 min-h-0 w-full"
+            style={{ touchAction: 'none' }}
+            onTouchStart={onTouchStart}
+            onTouchMove={onTouchMove}
+            onTouchEnd={onTouchEnd}
+            onTouchCancel={onTouchEnd}
+          >
+            {chart(cur, 6, false)}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 export default function ParkingLot() {
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
   const [searchQuery, setSearchQuery] = useState("");
@@ -344,6 +502,13 @@ export default function ParkingLot() {
   const [logText, setLogText] = useState("");
   const [historyFor, setHistoryFor] = useState(null);
   const [remindFor, setRemindFor] = useState(null);
+  // Something they typed that looks like a thing to keep track of: they're
+  // ASKED before any tracker is made (askTrack, the "Keep track of …?" popup).
+  // Anna, Oct 17 2026: "Make a popup asking if they want to create a tracker
+  // rather than just creating it" (a new user's "supplies to buy" had been
+  // turned into a tracker on its own the night before).
+  const [askTrack, setAskTrack] = useState(null);
+  const askTrackShown = usePopupTurn(!!askTrack, { reactive: true });
   const [remindChoice, setRemindChoice] = useState("none");
   const [remindTime, setRemindTime] = useState("09:00");
   const [trackerBusy, setTrackerBusy] = useState(false);
@@ -354,10 +519,85 @@ export default function ParkingLot() {
 
   const refreshIdeas = () => queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
 
-  const addTrackerEntry = async (tracker, text) => {
+  // note: what they said around the reading (when it was taken, what they'd
+  // just done or taken, how they felt) — kept with the entry, shown under it,
+  // never charted (Anna, Oct 14 2026: "blood pressure is 98/70 and heart is
+  // 89 bpm. this is an hour after taking mestinon for the first time and
+  // eating a small snack" → two readings, each with that note).
+  const addTrackerEntry = async (tracker, text, note = '') => {
     const fresh = await base44.entities.ParkingLotIdea.get(tracker.id).catch(() => null);
-    const entries = [...((fresh || tracker).tracker_entries || []), { at: new Date().toISOString(), text }];
+    const clean = String(note || '').trim().slice(0, 300);
+    const at = new Date().toISOString();
+    const entries = [...((fresh || tracker).tracker_entries || []), { at, text, ...(clean ? { note: clean } : {}) }];
     await base44.entities.ParkingLotIdea.update(tracker.id, { tracker_entries: entries });
+    return at; // which entry it was, for Undo
+  };
+
+  // Readings that arrived in one sentence belong together (blood pressure
+  // and heart rate said in the same breath): their trackers are linked, both
+  // ways, and History shows them on one chart. Anna, Oct 14 2026: "I had
+  // hoped to be able to see all bp and hr trends in one glance."
+  const linkTrackers = async (ids) => {
+    const list = Array.from(new Set(ids.filter(Boolean)));
+    if (list.length < 2) return;
+    for (const id of list) {
+      const row = await base44.entities.ParkingLotIdea.get(id).catch(() => null);
+      if (!row) continue;
+      const have = Array.isArray(row.tracker_companions) ? row.tracker_companions : [];
+      const want = Array.from(new Set([...have, ...list.filter((x) => x !== id)]));
+      if (want.length !== have.length) await base44.entities.ParkingLotIdea.update(id, { tracker_companions: want }).catch(() => {});
+    }
+  };
+
+  // Linked trackers show as ONE card (the oldest one's), with every tracker's
+  // latest reading on it, one Log box for all of them and one History chart.
+  // Anna, Oct 14 2026: "I had hoped to be able to see all bp and hr trends
+  // in one glance" — a heart rate card of its own was not that.
+  // Deleted rows still inside their five-second Undo (see handleDelete).
+  const [hiddenIds, setHiddenIds] = useState(() => new Set());
+  const pendingDeletes = useRef(new Set());
+  const groupOf = (t) => {
+    if (!t?.tracker) return [t].filter(Boolean);
+    const mates = (t.tracker_companions || []).map((id) => ideas.find((i) => i.id === id && i.tracker && !i.parent_idea_id && !hiddenIds.has(i.id))).filter(Boolean);
+    return [t, ...mates];
+  };
+  const groupTitle = (t) => groupOf(t).map((x) => x.idea).join(' · ');
+  // Shown inside an older companion's card rather than on its own.
+  // The card belongs to whichever was kept longest: its first reading (or,
+  // with none, when it was made). Made-on dates alone put a tracker re-made
+  // today behind one from yesterday, though its readings go back further.
+  const trackerSince = (t) => {
+    const times = [rowMs(t?.created_date), ...((t?.tracker_entries || []).map((e) => rowMs(e.at)))].filter(Number.isFinite);
+    return times.length ? Math.min(...times) : Infinity;
+  };
+  const isSecondaryTracker = (t) => t?.tracker && groupOf(t).slice(1).some((m) => trackerSince(m) < trackerSince(t) || (trackerSince(m) === trackerSince(t) && String(m.id) < String(t.id)));
+
+  // One Log box for a linked group: the AI splits what was typed into a
+  // reading per tracker (with the note); anything it can't place goes to the
+  // card's own tracker, so nothing typed is ever lost.
+  const splitLogForGroup = async (text, group) => {
+    const list = group.map((t) => ({ id: t.id, name: t.idea }));
+    const prompt = `Someone logged this to the things they keep track of: "${text.slice(0, 500)}"
+Those things: ${JSON.stringify(list)}
+Give one item per reading, in order: {"log_to": "<its id>", "entry": "<the reading, as they said it, without its name>", "note": "<anything else they said that goes with it — when it was taken, what they had just done, eaten or taken, how they felt — in their words, else null>"}. Context that applies to the whole sentence goes on every item. Something they noticed or describe about one of them that isn't a reading they took, numbers and all ("my pulse shot up to like 130 when I stood up", "it's been hovering in the 80s"), is its own item, with "entry": null and their words in "note": "entry" is only ever the reading itself, because entries are drawn on a chart as numbers. Match by meaning, short forms included ("bp" is blood pressure, "hr" or "heart" is heart rate). Answer with JSON only: {"actions": [ ... ]}.`;
+    try {
+      const res = await base44.functions.invoke('categorizeIdea', { prompt });
+      const raw = String(res?.data?.message || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+      const out = JSON.parse(raw);
+      const actions = (Array.isArray(out?.actions) ? out.actions : []).filter((a) => a && typeof a === 'object');
+      const placed = [];
+      for (const a of actions) {
+        const target = group.find((t) => t.id === a.log_to);
+        const said = (v) => { const s = typeof v === 'string' ? v.trim() : ''; return /^(null|undefined)$/i.test(s) ? '' : s; };
+        const entry = said(a.entry);
+        const note = said(a.note);
+        // A note with no reading is kept with no number (never charted).
+        if (target && (entry || note)) placed.push({ target, entry, note });
+      }
+      return placed;
+    } catch (e) {
+      return [];
+    }
   };
 
   // The day a reminder repeats on: the one it already had, else today's.
@@ -374,6 +614,64 @@ export default function ParkingLot() {
     setRemindTime(suggest?.time || tracker.tracker_remind_time
       || `${String(now.getHours()).padStart(2, '0')}:${String(Math.floor(now.getMinutes() / 5) * 5).padStart(2, '0')}`);
     setRemindFor(tracker);
+  };
+
+  // Yes: the first new tracker takes over the row they typed; any other
+  // becomes its own; trackers from the same sentence are linked; then the
+  // "remind you to log?" question for the first one (one popup at a time).
+  const acceptTracker = async () => {
+    const ask = askTrack;
+    if (!ask) return;
+    setAskTrack(null);
+    const { idea, news, together } = ask;
+    try {
+      const [first, ...rest] = news;
+      const entriesOf = (n) => (n.entry ? [{ at: new Date().toISOString(), text: n.entry, ...(n.note ? { note: n.note } : {}) }] : []);
+      await base44.entities.ParkingLotIdea.update(idea.id, {
+        tracker: true,
+        tracker_checked: true,
+        idea: first.name,
+        tracker_entries: entriesOf(first),
+      });
+      const linked = [...together, idea.id];
+      for (const n of rest) {
+        const made = await base44.entities.ParkingLotIdea.create({
+          idea: n.name,
+          tracker: true,
+          tracker_checked: true,
+          tracker_entries: entriesOf(n),
+          converted_to_task: false,
+          parent_idea_id: null,
+        });
+        if (made?.id) linked.push(made.id);
+        toast({ title: `Now keeping track of ${n.name}`, description: n.entry ? `First entry: ${n.entry}. Tap its bell to set a reminder.` : 'Tap its bell to set a reminder.' });
+      }
+      await linkTrackers(linked);
+      const said = /^(\d{1,2}):(\d{2})$/.exec(String(first.time || ''));
+      const time = said && Number(said[1]) < 24 ? `${said[1].padStart(2, '0')}:${said[2]}` : null;
+      openRemind({ ...idea, idea: first.name, tracker: true }, { remind: first.remind, time });
+    } catch (e) {
+      toast({ title: "Couldn't start that", description: 'Try again in a moment.' });
+    } finally {
+      refreshIdeas();
+    }
+  };
+
+  // No (or the popup closed): it stays the idea they typed, word for word,
+  // and it isn't asked about again. Readings from the same sentence that were
+  // logged to trackers they already have stay logged (their own Undo).
+  const declineTracker = async () => {
+    const ask = askTrack;
+    if (!ask) return;
+    setAskTrack(null);
+    try {
+      await base44.entities.ParkingLotIdea.update(ask.idea.id, { tracker_checked: true });
+      await linkTrackers(ask.together);
+    } catch (e) {
+      // Not saved: the look asks again the next time the page opens.
+    } finally {
+      refreshIdeas();
+    }
   };
 
   const saveReminder = async (tracker, choice, time) => {
@@ -426,8 +724,17 @@ export default function ParkingLot() {
     if (!logFor || !text) return;
     setTrackerBusy(true);
     try {
-      await addTrackerEntry(logFor, text);
-      toast({ title: `Logged to ${logFor.idea}` });
+      const group = groupOf(logFor);
+      // Even for one tracker: the AI keeps the reading apart from what they
+      // say about it, so a description is never charted (Oct 21 2026).
+      const placed = await splitLogForGroup(text, group);
+      if (placed.length) {
+        for (const { target, entry, note } of placed) await addTrackerEntry(target, entry, note);
+        toast({ title: `Logged to ${placed.map((x) => x.target.idea).join(' · ')}` });
+      } else {
+        await addTrackerEntry(logFor, text);
+        toast({ title: `Logged to ${logFor.idea}` });
+      }
       setLogFor(null);
       setLogText("");
       refreshIdeas();
@@ -446,7 +753,9 @@ export default function ParkingLot() {
       if (at < 0) return;
       list.splice(at, 1);
       await base44.entities.ParkingLotIdea.update(tracker.id, { tracker_entries: list });
-      setHistoryFor({ ...(fresh || tracker), tracker_entries: list });
+      // A companion's entry (one History for the linked group): the dialog
+      // stays on the card's own tracker and re-reads the companion from the list.
+      if (tracker.id === historyFor?.id) setHistoryFor({ ...(fresh || tracker), tracker_entries: list });
       refreshIdeas();
     } catch (e) {
       toast({ title: "Couldn't remove that", description: 'Try again in a moment.' });
@@ -469,14 +778,17 @@ export default function ParkingLot() {
 Things they already keep track of here (they log entries to these over time): ${trackers.length ? JSON.stringify(trackers) : 'none yet'}
 
 What is it? It can be more than one thing at once ("blood pressure 91 over 57 and heart rate 89" is a reading for blood pressure AND a reading for heart rate) — give one item per part, in order:
-1. An entry for one of those they already keep track of (a reading, a number, a note for it), like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<just this part, as they said it, without its name>"}
-2. They want to keep track of something over time, logging it again and again. It can be anything they choose: a measurement, money spent, a mood, how their day went. A reading for something they don't track yet counts, with that reading as its first entry. {"track": "<a short name for it, in their words>", "entry": "<an entry if they already gave one, else null>", "remind": "<daily, weekly or monthly if they said how often, else null>", "time": "<HH:MM, 24-hour, if they said a time, else null>"}
+1. An entry for one of those they already keep track of, like "weight 181" when they track their weight: {"log_to": "<that one's id>", "entry": "<the reading itself: the value they measured or counted, as they said it, without its name>", "note": "<see below, else null>"}. Something they noticed or describe about it that isn't a reading they took, numbers and all ("my pulse shot up to like 130 when I stood up", "it's been hovering in the 80s"), is a note for it: its own item, with "entry": null and their words in "note". "entry" is never a description: entries are drawn on a chart as numbers. Match by meaning, not spelling: "heartrate", "heart rate", "hr", "pulse" and "bpm" are all the same thing, "bp" is blood pressure. Something they already keep track of is ALWAYS 1 — never start a second one for it under a different spelling.
+2. They want to keep track of something over time, logging it again and again. It can be anything they choose: a measurement, money spent, a mood, how their day went. A reading for something they don't track yet counts, with that reading as its first entry. {"track": "<a short name for it, in their words>", "entry": "<an entry if they already gave one, else null>", "note": "<see below, else null>", "remind": "<daily, weekly or monthly if they said how often, else null>", "time": "<HH:MM, 24-hour, if they said a time, else null>"}
 3. Anything else: an idea, a to-do, a list, a note, a one-time thing. {"none": true}
 
-Judge by what they mean. Only 1 or 2 when they clearly mean logging something over time; a to-do that mentions a number is 3. Answer with JSON only, in this shape: {"actions": [ ... ]} — one object per part, or a single {"none": true}.`;
+note: anything else they said that goes with a reading — when it was taken, what they had just done, eaten or taken, how they felt — in their words, without the reading itself. Context that applies to the whole sentence goes on every part. "blood pressure is 98/70 and heart is 89 bpm. this is an hour after taking mestinon for the first time and eating a small snack." → entry "98/70" and entry "89 bpm", each with the note "an hour after taking mestinon for the first time and eating a small snack".
+
+Judge by what they mean. Only 1 or 2 when they clearly mean logging something over time; a to-do that mentions a number is 3. An entry for one they already track has to actually be about that thing (its value, or a note on it); words about anything else ("this is an idea", "buy milk") are never an entry for it, even when it's the only thing they track. A list of things to get or do ("supplies to buy") is 3, not something to keep track of. When there is no entry or note, give null, never the word "null". Answer with JSON only, in this shape: {"actions": [ ... ]} — one object per part, or a single {"none": true}.`;
     let out = null;
     let answered = false;
     try {
+      // categorizeIdea runs on gpt-6-astra (Oct 17 2026).
       const res = await base44.functions.invoke('categorizeIdea', { prompt });
       const raw = String(res?.data?.message || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
       answered = raw.length > 0;
@@ -498,45 +810,82 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
       const actions = (Array.isArray(out.actions) ? out.actions : [out]).filter((a) => a && typeof a === 'object');
       const logs = [];
       const news = [];
+      // "heartrate", "heart rate", "Heart-Rate", "hr" and "pulse" are one
+      // thing (Oct 14 2026: a third tracker named "heartrate" appeared next to
+      // "heart rate"). Letters only, then the common short forms.
+      const canon = (name) => {
+        const k = String(name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        return ({ hr: 'heartrate', pulse: 'heartrate', heartbeat: 'heartrate', bpm: 'heartrate', bp: 'bloodpressure', pressure: 'bloodpressure', temp: 'temperature', wt: 'weight' })[k] || k;
+      };
+      const sameName = (x, y) => canon(x) !== '' && canon(x) === canon(y);
+      // The word "null" (or "undefined") is an empty answer, not an entry: a
+      // new user's "supplies to buy" became a tracker whose entry read "null"
+      // (Oct 16 2026).
+      const answerText = (v) => {
+        const s = typeof v === 'string' ? v.trim() : '';
+        return /^(null|undefined)$/i.test(s) ? '' : s;
+      };
       for (const a of actions) {
-        const entry = typeof a.entry === 'string' ? a.entry.trim() : '';
-        const target = a.log_to ? all.find((i) => i.id === a.log_to && i.tracker) : null;
-        if (target && entry) logs.push({ target, entry });
-        else if (typeof a.track === 'string' && a.track.trim()) news.push({ name: a.track.trim().slice(0, 120), entry, remind: a.remind, time: a.time });
+        const entry = answerText(a.entry);
+        const note = answerText(a.note).slice(0, 300);
+        const trackName = answerText(a.track).slice(0, 120);
+        // A "new" one with the name of one they already have is an entry for
+        // that one (the AI once started a second "heart rate" for "hr 77").
+        const target = (a.log_to ? all.find((i) => i.id === a.log_to && i.tracker) : null)
+          || (trackName ? all.find((i) => i.tracker && !i.parent_idea_id && i.id !== idea.id && sameName(i.idea, trackName)) : null);
+        // A note with no reading ("entry": null) is kept with no number, so
+        // it never lands on the chart (Oct 21 2026, see captureToTasks.ts).
+        if (target && (entry || note)) logs.push({ target, entry, note });
+        else if (trackName && !target) news.push({ name: trackName, entry, note, remind: a.remind, time: a.time });
       }
-      for (const { target, entry } of logs) {
-        await addTrackerEntry(target, entry);
-        toast({ title: `Logged to ${target.idea}`, description: entry });
+      const together = logs.map((l) => l.target.id); // every tracker this one sentence touched
+      const added = [];
+      for (const { target, entry, note } of logs) {
+        const at = await addTrackerEntry(target, entry, note);
+        added.push({ target, at });
+      }
+      // What they typed is HIDDEN once it's logged, not deleted (the same as a
+      // capture the server folds in), so Undo can put it back. Oct 16 2026:
+      // Anna's "this is an idea" was logged as a heart rate reading and the
+      // idea itself deleted, with no way back.
+      const hidden = news.length === 0 && logs.length > 0;
+      if (logs.length > 0) {
+        let undone = false;
+        const undo = async () => {
+          if (undone) return;
+          undone = true;
+          try {
+            for (const { target, at } of added) {
+              const fresh = await base44.entities.ParkingLotIdea.get(target.id).catch(() => null);
+              if (!fresh) continue;
+              const kept = (fresh.tracker_entries || []).filter((e) => e?.at !== at);
+              await base44.entities.ParkingLotIdea.update(target.id, { tracker_entries: kept });
+            }
+            if (hidden) await base44.entities.ParkingLotIdea.update(idea.id, { converted_to_task: false, tracker_checked: true });
+            toast({ title: hidden ? 'Kept as an idea' : 'Taken back out' });
+          } catch (e) {
+            toast({ title: "Couldn't undo that", description: 'Try again in a moment.' });
+          } finally {
+            refreshIdeas();
+          }
+        };
+        toast({
+          title: `Logged to ${logs.map((l) => l.target.idea).join(' and ')}`,
+          description: logs.map((l) => (l.note ? `${l.entry} — ${l.note}` : l.entry)).join(' · '),
+          duration: 8000,
+          action: <ToastAction altText="Undo" onClick={undo}>Undo</ToastAction>,
+        });
       }
       if (news.length === 0) {
-        if (logs.length > 0) await base44.entities.ParkingLotIdea.delete(idea.id);
+        if (hidden) await base44.entities.ParkingLotIdea.update(idea.id, { converted_to_task: true, tracker_checked: true });
         else await base44.entities.ParkingLotIdea.update(idea.id, { tracker_checked: true });
+        await linkTrackers(together);
       } else {
-        // The first new tracker takes over this row; any other becomes its own.
-        const [first, ...rest] = news;
-        const entriesOf = (n) => (n.entry ? [{ at: new Date().toISOString(), text: n.entry }] : []);
-        await base44.entities.ParkingLotIdea.update(idea.id, {
-          tracker: true,
-          tracker_checked: true,
-          idea: first.name,
-          tracker_entries: entriesOf(first),
-        });
-        for (const n of rest) {
-          await base44.entities.ParkingLotIdea.create({
-            idea: n.name,
-            tracker: true,
-            tracker_checked: true,
-            tracker_entries: entriesOf(n),
-            converted_to_task: false,
-            parent_idea_id: null,
-          });
-          toast({ title: `Now keeping track of ${n.name}`, description: n.entry ? `First entry: ${n.entry}. Tap its bell to set a reminder.` : 'Tap its bell to set a reminder.' });
-        }
-        // The "remind you to log?" question, for the first one only — one
-        // popup at a time; the others' bells are a tap away.
-        const said = /^(\d{1,2}):(\d{2})$/.exec(String(first.time || ''));
-        const time = said && Number(said[1]) < 24 ? `${said[1].padStart(2, '0')}:${said[2]}` : null;
-        openRemind({ ...idea, idea: first.name, tracker: true }, { remind: first.remind, time });
+        // Something new to keep track of: ask first (askTrack). Nothing is
+        // made until they say yes. One question at a time: if another is
+        // already up, this one stays a plain idea for now and is asked the
+        // next time the page opens.
+        setAskTrack((cur) => cur || { idea, news, together: [...together] });
       }
     } catch (e) {
       console.warn('Tracker check failed:', e?.message || e);
@@ -647,13 +996,56 @@ Judge by what they mean. Only 1 or 2 when they clearly mean logging something ov
     },
   });
 
+  // Delete gives five seconds to take it back, like a task's (Anna's rule:
+  // deleting is followed by an Undo). The card goes at once; the row goes
+  // when the five seconds are up. Oct 15 2026: a tap on Delete for a reading
+  // the page was folding into its tracker landed, as that card vanished, on
+  // the tracker card that slid up into its place, and blood pressure and its
+  // eight readings were gone for good with nothing to tap.
   const handleDelete = (id) => {
-    // A tracker's booked reminder goes with it.
     const doomed = ideas.find((i) => i.id === id);
-    if (doomed?.tracker_notification_id) {
-      base44.functions.invoke('cancelScheduled', { notificationId: doomed.tracker_notification_id }).catch(() => {});
-    }
-    deleteIdeaMutation.mutate(id);
+    if (!doomed || pendingDeletes.current.has(id)) return;
+    pendingDeletes.current.add(id);
+    const childIds = ideas.filter((i) => i.parent_idea_id === id).map((i) => i.id);
+    const show = () => setHiddenIds((prev) => { const next = new Set(prev); next.delete(id); return next; });
+    setHiddenIds((prev) => new Set(prev).add(id));
+    let settled = false;
+    let handle = null;
+    const commit = async () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      handle?.dismiss?.();
+      // A tracker's booked reminder goes with it.
+      if (doomed.tracker_notification_id) {
+        base44.functions.invoke('cancelScheduled', { notificationId: doomed.tracker_notification_id }).catch(() => {});
+      }
+      try {
+        for (const childId of childIds) await base44.entities.ParkingLotIdea.delete(childId).catch(() => {});
+        await base44.entities.ParkingLotIdea.delete(id);
+      } catch (e) {
+        // Already gone (the page's own tracker look removes a folded reading).
+      }
+      pendingDeletes.current.delete(id);
+      await queryClient.invalidateQueries({ queryKey: ['parkingLotIdeas'] });
+      show();
+    };
+    const undo = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      handle?.dismiss?.();
+      pendingDeletes.current.delete(id);
+      show();
+    };
+    const timer = setTimeout(commit, 5000);
+    const count = doomed.tracker ? (doomed.tracker_entries || []).length : 0;
+    handle = toast({
+      title: `Deleted "${String(doomed.idea || 'idea').slice(0, 60)}"`,
+      ...(count ? { description: `${count} ${count === 1 ? 'entry goes' : 'entries go'} with it.` } : {}),
+      duration: 5000,
+      action: <ToastAction altText="Undo delete" onClick={undo}>Undo</ToastAction>,
+    });
   };
 
   const editIdeaMutation = useMutation({
@@ -714,8 +1106,10 @@ Return ONLY the category name, nothing else.`;
   const topLevelIdeas = ideas.filter(i => !i.parent_idea_id);
   
   const filteredIdeas = topLevelIdeas.filter(idea => {
+    if (hiddenIds.has(idea.id)) return false; // deleted, Undo still on screen
+    if (isSecondaryTracker(idea)) return false; // shown on its older companion's card
     const matchesSearch = searchQuery === "" || 
-      idea.idea.toLowerCase().includes(searchQuery.toLowerCase());
+      (idea.tracker ? groupTitle(idea) : idea.idea).toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = categoryFilter === "all" || 
       idea.category === categoryFilter;
     return matchesSearch && matchesCategory;
@@ -1130,7 +1524,7 @@ Return ONLY the category name, nothing else.`;
                         specialMode !== 'normal' ? `${specialMode}-title` :
                         theme === 'dark' ? 'text-gray-100' : 'text-gray-900'
                       }`}>
-                        {group.parent.idea}
+                        {group.parent.tracker ? groupTitle(group.parent) : group.parent.idea}
                       </h3>
                     </div>
                     {group.parent.category && (
@@ -1227,13 +1621,26 @@ Return ONLY the category name, nothing else.`;
                   const t = group.parent;
                   const entries = t.tracker_entries || [];
                   const last = entries[entries.length - 1];
+                  // Linked trackers: the latest reading of each. Taken together
+                  // (same minute, same note) they read as one line.
+                  const mates = groupOf(t);
+                  const lasts = mates.map((m) => ({ name: m.idea, last: (m.tracker_entries || []).slice(-1)[0] })).filter((x) => x.last);
+                  const together = lasts.length > 1 && lasts.every((x) => Math.abs(rowMs(x.last.at) - rowMs(lasts[0].last.at)) < 2 * 60 * 1000 && (x.last.note || '') === (lasts[0].last.note || ''));
+                  const line = (text, at, note) => (
+                    <p className={`text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      <span className="font-semibold">{text}</span>
+                      <span className="text-gray-500"> · {formatLogTime(at)}</span>
+                      {note ? <span className="block text-xs text-gray-500 italic">{note}</span> : null}
+                    </p>
+                  );
                   return (
                     <div className={`mt-2 p-3 rounded-lg ${theme === 'dark' ? 'bg-gray-900/50' : 'bg-white/70'}`}>
-                      {last ? (
-                        <p className={`text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                          <span className="font-semibold">{last.text}</span>
-                          <span className="text-gray-500"> · {formatLogTime(last.at)}</span>
-                        </p>
+                      {mates.length > 1 && lasts.length ? (
+                        together
+                          ? line(lasts.map((x) => x.last.text).join(' · '), lasts[0].last.at, lasts[0].last.note)
+                          : <div className="space-y-1">{lasts.map((x) => <React.Fragment key={x.name}>{line(`${x.name} ${x.last.text}`, x.last.at, x.last.note)}</React.Fragment>)}</div>
+                      ) : last ? (
+                        line(last.text, last.at, last.note)
                       ) : (
                         <p className="text-sm text-gray-500">Nothing logged yet.</p>
                       )}
@@ -1590,21 +1997,42 @@ Return ONLY the category name, nothing else.`;
         </DialogContent>
       </Dialog>
 
+      {/* "Keep track of …?" — asked before any tracker is made (askTrack). */}
+      <Dialog open={askTrackShown} onOpenChange={(o) => { if (!o) declineTracker(); }}>
+        <DialogContent className="max-w-sm w-[calc(100vw-2rem)]">
+          <DialogHeader>
+            <DialogTitle>Keep track of {(askTrack?.news || []).map((n) => n.name).join(' and ')}?</DialogTitle>
+          </DialogHeader>
+          <p className={`text-sm ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
+            You'd log it again and again and see how it changes over time.
+            {askTrack?.news?.[0]?.entry ? ` First entry: ${askTrack.news[0].entry}.` : ''}
+          </p>
+          <div className="grid gap-2">
+            <Button type="button" onClick={acceptTracker} className="w-full bg-purple-600 hover:bg-purple-700 text-white">
+              Yes, track it
+            </Button>
+            <Button type="button" variant="outline" onClick={declineTracker} className="w-full">
+              No, keep it as an idea
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!logFor} onOpenChange={(o) => { if (!o) { setLogFor(null); setLogText(""); } }}>
         <DialogContent className="max-w-sm w-[calc(100vw-2rem)]">
           <DialogHeader>
-            <DialogTitle>Log: {logFor?.idea}</DialogTitle>
+            <DialogTitle>Log: {logFor ? groupTitle(logFor) : ''}</DialogTitle>
           </DialogHeader>
           <Textarea
             value={logText}
             onChange={(e) => setLogText(e.target.value)}
-            placeholder="What do you want to log?"
+            placeholder={logFor && groupOf(logFor).length > 1 ? `e.g. ${groupOf(logFor).map((t) => t.idea).join(' and ')}, plus anything about the moment` : "What do you want to log?"}
             className={`min-h-[90px] ${theme === 'dark' ? 'bg-gray-800 text-gray-100 border-gray-700' : ''}`}
             autoFocus
           />
           {(() => {
             const last = (logFor?.tracker_entries || []).slice(-1)[0];
-            return last ? <p className="text-xs text-gray-500">Last time: {last.text} · {formatLogTime(last.at)}</p> : null;
+            return last ? <p className="text-xs text-gray-500">Last time: {last.text}{last.note ? ` — ${last.note}` : ''} · {formatLogTime(last.at)}</p> : null;
           })()}
           <Button onClick={saveLog} disabled={trackerBusy || !logText.trim()} className="w-full bg-purple-600 hover:bg-purple-700 text-white">
             {trackerBusy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
@@ -1616,51 +2044,134 @@ Return ONLY the category name, nothing else.`;
       <Dialog open={!!historyFor} onOpenChange={(o) => { if (!o) setHistoryFor(null); }}>
         <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{historyFor?.idea}</DialogTitle>
+            <DialogTitle>{[historyFor?.idea, ...((historyFor?.tracker_companions || []).map((id) => ideas.find((i) => i.id === id && i.tracker)?.idea).filter(Boolean))].join(' · ')}</DialogTitle>
           </DialogHeader>
           {(() => {
-            const entries = historyFor?.tracker_entries || [];
-            const points = entries
-              .map((e) => {
+            // One chart for this tracker and the ones its readings arrive with
+            // (tracker_companions): every entry is a row in time order, each
+            // line drawn through its own rows (connectNulls bridges the rest).
+            const companions = (historyFor?.tracker_companions || []).map((id) => ideas.find((i) => i.id === id && i.tracker)).filter(Boolean);
+            const series = [historyFor, ...companions].filter(Boolean).map((t, i) => ({ key: `s${i}`, name: t.idea, entries: t.tracker_entries || [] }));
+            const colors = ['#9333ea', '#ec4899', '#0ea5e9', '#f59e0b', '#10b981', '#ef4444', '#6366f1', '#14b8a6'];
+            const rows = [];
+            const lines = [];
+            let color = 0;
+            for (const sr of series) {
+              let hasB = false;
+              for (const e of sr.entries) {
                 const n = trackerNumbers(e.text);
                 const ms = rowMs(e.at);
-                return { label: Number.isFinite(ms) ? new Date(ms).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }) : '', a: n[0], b: n[1] };
-              })
-              .filter((p) => p.a != null);
-            const both = points.length > 0 && points.every((p) => p.b != null);
-            const axis = niceTicks(points.flatMap((p) => (both ? [p.a, p.b] : [p.a])));
+                if (n[0] == null || !Number.isFinite(ms)) continue;
+                const row = { ms, label: new Date(ms).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric' }), [`${sr.key}a`]: n[0] };
+                // Its note rides along, so tapping the dot shows it (Anna,
+                // Oct 22 2026: "click something to see the notes").
+                if (e.note) row.notes = [String(e.note)];
+                if (n[1] != null) { row[`${sr.key}b`] = n[1]; hasB = true; }
+                rows.push(row);
+              }
+              // A pair's two lines get their own names: blood pressure is
+              // systolic and diastolic, not "blood pressure" twice.
+              const isBp = /blood\s*pressure|\bbp\b/i.test(sr.name);
+              const [nameA, nameB] = hasB ? (isBp ? ['systolic', 'diastolic'] : [`${sr.name} · 1st number`, `${sr.name} · 2nd number`]) : [sr.name, ''];
+              lines.push({ key: `${sr.key}a`, name: nameA, color: colors[color++ % colors.length] });
+              if (hasB) lines.push({ key: `${sr.key}b`, name: nameB, color: colors[color++ % colors.length] });
+            }
+            rows.sort((x, y) => x.ms - y.ms);
+            // Readings taken together (one sentence: blood pressure, then
+            // heart rate a second later) share one spot on the time line,
+            // so their dots sit in the same vertical line. Two readings of
+            // the SAME thing never merge, however close.
+            const points = [];
+            for (const r of rows) {
+              const last = points[points.length - 1];
+              const keys = Object.keys(r).filter((k) => k !== 'ms' && k !== 'label' && k !== 'notes');
+              if (last && r.ms - last.ms < 2 * 60 * 1000 && keys.every((k) => !(k in last))) {
+                for (const k of keys) last[k] = r[k];
+                for (const nt of r.notes || []) if (!(last.notes || []).includes(nt)) last.notes = [...(last.notes || []), nt];
+              } else {
+                points.push({ ...r });
+              }
+            }
+            // Several readings on one day: the first carries the date and the
+            // rest the time of day ("10/14", "2:03 PM", "4:07 PM"), so a day of
+            // readings isn't four ticks all saying "10/14" (Anna, Oct 14 2026).
+            const dayKey = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; };
+            const perDay = {};
+            for (const p of points) perDay[dayKey(p.ms)] = (perDay[dayKey(p.ms)] || 0) + 1;
+            const seenDay = {};
+            for (const p of points) {
+              const k = dayKey(p.ms);
+              seenDay[k] = (seenDay[k] || 0) + 1;
+              if (perDay[k] > 1 && seenDay[k] > 1) p.label = new Date(p.ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+            }
+            // A note logged on its own (no numbers, so no dot) belongs to the
+            // reading taken at the same moment: it shows with that dot.
+            for (const sr of series) {
+              for (const e of sr.entries) {
+                if (!e.note || trackerNumbers(e.text)[0] != null) continue;
+                const ms = rowMs(e.at);
+                if (!Number.isFinite(ms)) continue;
+                const near = points.find((p) => Math.abs(p.ms - ms) < 2 * 60 * 1000);
+                if (near && !(near.notes || []).includes(String(e.note))) near.notes = [...(near.notes || []), String(e.note)];
+              }
+            }
             return (
               <>
                 {points.length >= 2 && (
-                  <div className="h-44 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={points} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
-                        <XAxis dataKey="label" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} domain={axis ? axis.domain : ['auto', 'auto']} ticks={axis ? axis.ticks : undefined} />
-                        <ChartTooltip />
-                        <Line type="monotone" dataKey="a" name={historyFor?.idea} stroke="#9333ea" strokeWidth={2} dot={{ r: 3 }} />
-                        {both && <Line type="monotone" dataKey="b" name="2nd number" stroke="#ec4899" strokeWidth={2} dot={{ r: 3 }} />}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
+                  <TrackerChart
+                    points={points}
+                    lines={lines}
+                    title={[historyFor, ...companions].filter(Boolean).map((t) => t.idea).join(' · ')}
+                    dark={theme === 'dark'}
+                  />
                 )}
-                {entries.length === 0 ? (
-                  <p className="text-sm text-gray-500">Nothing logged yet.</p>
-                ) : (
-                  <div className="space-y-2">
-                    {[...entries].reverse().map((e, i) => (
-                      <div key={`${e.at}-${i}`} className={`flex items-start justify-between gap-2 p-2 rounded-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                        <div className="min-w-0">
-                          <p className="text-sm whitespace-pre-wrap break-words">{e.text}</p>
-                          <p className="text-xs text-gray-500">{formatLogTime(e.at)}</p>
-                        </div>
-                        <button onClick={() => removeTrackerEntry(historyFor, e)} className="text-gray-400 hover:text-red-600 p-1 flex-shrink-0" aria-label="Remove this entry">
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {(() => {
+                  // Every tracker in the linked group, newest first. Readings
+                  // taken together (one sentence, so within a couple of
+                  // minutes, one per tracker) show as ONE record — "blood
+                  // pressure 98/70 · heart rate 89 bpm" — the way Anna liked
+                  // the old single entry that held both (Oct 14 2026).
+                  const flat = [historyFor, ...companions].filter(Boolean)
+                    .flatMap((t) => (t.tracker_entries || []).map((e) => ({ e, t })))
+                    .sort((x, y) => rowMs(y.e.at) - rowMs(x.e.at));
+                  const records = [];
+                  for (const item of flat) {
+                    const last = records[records.length - 1];
+                    const close = last && Math.abs(rowMs(last.parts[0].e.at) - rowMs(item.e.at)) < 2 * 60 * 1000;
+                    if (close && !last.parts.some((p) => p.t.id === item.t.id)) last.parts.push(item);
+                    else records.push({ parts: [item] });
+                  }
+                  const removeRecord = async (rec) => { for (const { e, t } of rec.parts) await removeTrackerEntry(t, e); };
+                  return records.length === 0 ? (
+                    <p className="text-sm text-gray-500">Nothing logged yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {records.map((rec, i) => {
+                        const first = rec.parts[0];
+                        const note = rec.parts.map((p) => p.e.note).find(Boolean) || '';
+                        return (
+                          <div key={`${first.t.id}-${first.e.at}-${i}`} className={`flex items-start justify-between gap-2 p-2 rounded-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}>
+                            <div className="min-w-0">
+                              <p className="text-sm whitespace-pre-wrap break-words">
+                                {rec.parts.map((p, j) => (
+                                  <React.Fragment key={p.t.id}>
+                                    {j > 0 ? <span className="text-gray-400"> · </span> : null}
+                                    {companions.length > 0 ? <span className="text-gray-500">{p.t.idea} </span> : null}{p.e.text}
+                                  </React.Fragment>
+                                ))}
+                              </p>
+                              {note ? <p className="text-xs text-gray-500 italic whitespace-pre-wrap break-words">{note}</p> : null}
+                              <p className="text-xs text-gray-500">{formatLogTime(first.e.at)}</p>
+                            </div>
+                            <button onClick={() => removeRecord(rec)} className="text-gray-400 hover:text-red-600 p-1 flex-shrink-0" aria-label="Remove this entry">
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </>
             );
           })()}

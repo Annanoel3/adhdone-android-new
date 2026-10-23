@@ -430,3 +430,30 @@ in `android/app/build.gradle`. Add anything else pending before building.
   app's WebView → Console → `let a = []; for (;;) a.push(new Array(1e7).fill(1));` — the
   renderer runs out of memory; the app must go blank for a second and come back at Home
   instead of closing, and Logcat shows "onRenderProcessGone: crashed=true restarts=1".
+
+### Build 43 (1.3.20) — alarms at a time the person set (Oct 21, 2026)
+
+- An alarm at a time the person set themselves rings at that time, always. Anna's 10 AM call
+  ("Call (210) 621-7099 at 10:00 tomorrow") rang at 10:31 on Oct 21 2026: "Set watch to record
+  continuously" was also at 10:00, rang first, and was snoozed at 10:00 and 10:10 and rang out at
+  10:21; each time the call was moved to 10 minutes after it (`APART_MS`, Oct 10 2026). The call
+  wasn't exempt because the phone only knew a time they set by a 🔔 at the start of the heading,
+  and neither heading had one (the server's list headed the call "📌 …", since it had no
+  saved reminder schedule; the watch's heading was AI-written, atTimeWords, Oct 12 2026).
+- The alarm lists now say so: `theirTime: true` (reminderTitle.phoneAlarmsFor,
+  widgetBridge.alarmSetFor), read into `AlarmStore.Entry.theirTime` by both AlarmScheduler list
+  parsers and by PushFilter.ringOnArrival. `AlarmService.isPinned` = theirTime or the bell.
+- A time they set that comes due while a different task's alarm rings: if the ringing one is a
+  reminder the app picked (or a snooze coming back), it stops and goes back to the front of the
+  line (`AlarmService.makeWay`, logged as `made_way` in "What rang"), and the one at their time
+  rings now; the stopped one rings 10 minutes after it ends. Two at times they set, same minute:
+  the second rings the moment the first is answered or rings out (never moved 10 minutes).
+- Test: two alarm-style tasks at the same minute, one "remind me at 3:00" and one the app
+  picked (a smart reminder), then two both at 3:00 they set. In the first case the one they set
+  rings at 3:00 even if the other started first; in the second, snoozing the first rings the
+  second at once, not 10 minutes later.
+- The eased alarm (Oct 22, 2026): a task put off on 3 different days moves to an eased plan
+  (shared/easeOff.ts). Its one alarm a day comes as a smart-nudge push with `data.eased = true`,
+  read into `AlarmStore.Entry.eased` by PushFilter.ringOnArrival. The alarm screen then shows only
+  Done and Later (no snoozes, no Open), and the ringing banner has Done and Later instead of
+  Snooze 10 and Stop (AlarmService ACTION_LATER). Normal alarms keep every button. Test: a push with `alarm: true, eased: true` and a taskId shows Done and Later only.

@@ -1,3 +1,5 @@
+import { phoneOs } from '@/lib/phonePlatform';
+
 // The first-run conversation, as data. Each beat is one line the app types; a
 // beat with `input` waits for the user before moving on; a beat with `skip`
 // is left out when it returns true. Keeping the script separate from the flow
@@ -61,8 +63,8 @@ const SCRIPT = [
     // app; the browser has nothing to ask (WelcomeChat skips it there).
     text: (name, handle, about, task, when) =>
       task
-        ? `${when ? `Set for ${when}. ` : ''}So it can reach you, Android's about to ask if ADHDone can send notifications.`
-        : "So reminders can reach you, Android's about to ask if ADHDone can send notifications.",
+        ? `${when ? `Set for ${when}. ` : ''}So it can reach you, ${phoneOs()}'s about to ask if ADHDone can send notifications.`
+        : `So reminders can reach you, ${phoneOs()}'s about to ask if ADHDone can send notifications.`,
     input: 'notify',
   },
   {

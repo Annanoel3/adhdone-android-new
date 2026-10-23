@@ -1,3 +1,4 @@
+// Re-saved Oct 17 2026 so the bundled shared/runTaskParse.ts and shared/taskParsePrompt.ts are picked up: the parser and its helpers run on gpt-6-astra (was gpt-5.4), the parser's calendar beats the real date astra is given, and "tomorrow morning" / "Sunday night" get a time.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.46';
 import { listAll, filterAll } from '../../shared/listAll.ts';
 import { judgeAlarmPairs, lastPairRaw } from '../../shared/runTaskParse.ts';
@@ -85,6 +86,61 @@ Deno.serve(async (req) => {
       const made = await svc[entity].create(fields);
       console.log(`[debugTaskReminders] ${me.email} made ${entity} ${made?.id}: ${JSON.stringify(fields).slice(0, 300)}`);
       return Response.json({ ok: true, entity, id: made?.id, record: made });
+    }
+    // Owner-only repair (Oct 16 2026): finishing a task from the Tasks page,
+    // its details card, a parent's subtasks or Focus Mode stamped local clock
+    // time as if it were UTC (a Nov 11 2025 "store local date/time" change),
+    // so those completed_at values sit the owner's UTC offset away from the
+    // truth (5 hours early in Central daylight time). { fixCompletedAt: {
+    // write?: boolean, limit?: number } } finds finished tasks whose
+    // completed_at is exactly that offset away (within 3 minutes) from when the
+    // server saw them finished (finished_at, else the completion save's own
+    // updated_date) and, with write: true, puts the true time back. A task
+    // edited since, or already right, doesn't line up and is left alone; a
+    // fixed one no longer lines up either, so running it twice changes nothing.
+    // Without write it only reports what it would change.
+    if (body?.fixCompletedAt && typeof body.fixCompletedAt === 'object') {
+      const write = body.fixCompletedAt.write === true;
+      const cap = Math.min(2000, Math.max(1, Number(body.fixCompletedAt.limit) || 400));
+      const [people, done] = await Promise.all([listAll(svc.User), filterAll(svc.Task, { status: 'completed' })]);
+      const zoneOf: Record<string, string> = {};
+      for (const u of people) if (u?.email) zoneOf[String(u.email).toLowerCase()] = u.timezone || 'America/Chicago';
+      // The zone's clock minus UTC, in minutes, at that moment (-300 in CDT).
+      const zoneMinutes = (zone: string, at: Date) => {
+        const parts = new Intl.DateTimeFormat('en-US', {
+          timeZone: zone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit',
+        }).formatToParts(at);
+        const g = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+        return Math.round((Date.UTC(g('year'), g('month') - 1, g('day'), g('hour'), g('minute'), g('second')) - at.getTime()) / 60000);
+      };
+      const fixes: any[] = [];
+      let looked = 0;
+      for (const t of done) {
+        const stamped = ms(t.completed_at);
+        const seen = ms(t.finished_at || t.updated_date);
+        if (!Number.isFinite(stamped) || !Number.isFinite(seen)) continue;
+        looked++;
+        let off = 0;
+        try { off = zoneMinutes(zoneOf[String(t.created_by || '').toLowerCase()] || 'America/Chicago', new Date(seen)); } catch (_) { continue; }
+        if (!off) continue;
+        if (Math.abs((stamped - seen) - off * 60000) > 3 * 60000) continue;
+        fixes.push({ id: t.id, who: t.created_by, title: String(t.title || '').slice(0, 40), was: t.completed_at, is: new Date(stamped - off * 60000).toISOString() });
+      }
+      const doing = fixes.slice(0, cap);
+      let written = 0;
+      const failed: string[] = [];
+      if (write) {
+        for (let i = 0; i < doing.length; i += 10) {
+          await Promise.all(doing.slice(i, i + 10).map(async (f) => {
+            try { await svc.Task.update(f.id, { completed_at: f.is }); written++; } catch (e) { failed.push(f.id); }
+          }));
+        }
+        console.log(`[debugTaskReminders] ${me.email} fixed completed_at on ${written} tasks`);
+      }
+      const perPerson: Record<string, number> = {};
+      for (const f of fixes) inc(perPerson, String(f.who || ''));
+      return Response.json({ ok: true, write, looked, lineUp: fixes.length, written, failed, left: Math.max(0, fixes.length - (write ? written : 0)), perPerson, sample: doing.slice(0, 8) });
     }
     // Try the "one alarm or two?" judgment (read only): { pairs: [{ id, a: { title,
     // said?, urgency?, location? }, b: {...} }] } returns the model's answer per pair.

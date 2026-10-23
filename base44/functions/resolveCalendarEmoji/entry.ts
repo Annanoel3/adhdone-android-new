@@ -27,14 +27,17 @@ Rules:
 - Return ONLY a single emoji character.`;
 
     const openai = new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') });
+    // gpt-6-luna, the cheaper model: picking one emoji is a job it does as well
+    // (astra on Oct 17 2026, gpt-4o before). Anna, Oct 18 2026: "switch whatever wont be negatively affected to the cheaper one".
+    // Luna takes no temperature either.
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-6-luna',
+      reasoning_effort: 'low',
       messages: [
         { role: 'system', content: 'You are a helpful assistant that picks the best emoji for a given title. Always respond with valid JSON only.' },
         { role: 'user', content: prompt }
       ],
       response_format: { type: 'json_object' },
-      temperature: 0.3
     });
 
     const result = JSON.parse(completion.choices[0].message.content);

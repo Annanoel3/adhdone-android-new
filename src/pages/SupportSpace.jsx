@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { MessageCircleHeart, Send, Loader2, Info, Mic } from "lucide-react"; // Added Mic icon
 import { APP_FEATURE_GUIDE } from "@/components/utils/appFeatureGuide";
+import { isIPhoneApp } from "@/lib/phonePlatform";
 import SupportEscalationCard from "@/components/support/SupportEscalationCard";
 
 export default function SupportSpace() {
@@ -52,9 +53,8 @@ export default function SupportSpace() {
       const activeTasks = tasks.filter(t => t.status === 'active');
       const completedToday = tasks.filter(t => {
         if (t.status !== 'completed' || !t.completed_at) return false;
-        const today = new Date().toISOString().split('T')[0];
-        const completedDate = new Date(t.completed_at).toISOString().split('T')[0];
-        return completedDate === today;
+        // The person's own calendar day on both sides.
+        return new Date(t.completed_at).toDateString() === new Date().toDateString();
       });
 
       const latestEnergy = energyLogs.length > 0 ? energyLogs[0].energy_level : 'unknown';
@@ -147,7 +147,9 @@ ${context && isFirstMessage ? `This conversation is with ${context.userName}.` :
 
 You are also the in-app helper for ADHDone (the app this chat lives in). If the user asks how something in the app works, where to find a feature, why a reminder behaved a certain way, or what the app can/can't do, answer accurately from this reference — never invent features that aren't listed:
 ${APP_FEATURE_GUIDE}
-
+${isIPhoneApp() ? `
+THIS PERSON IS USING THE IPHONE APP. Parts of the reference above are only in the Android app and aren't in theirs: the Quick Capture pinned notification and its buttons, the Android share sheet, "Notice when I wake up", vibrate-only alarms when the phone is on silent or Do Not Disturb, the spoken "Read it to me" alarm, and Android's alarm switches (exact alarms, full-screen, display over other apps, battery). Don't suggest those to them, and don't mention Android.
+` : ''}
 ${context ? `CONTEXT ABOUT THE USER (use ONLY if genuinely relevant to what they're saying):
 - Active tasks: ${context.activeTasks}
 - Completed today: ${context.completedToday}
