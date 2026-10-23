@@ -201,6 +201,15 @@ If a proposed fix turns out to be something already listed in §4, §5, or the d
 list, STOP. The rule or feature exists; the real question is why it isn't being enforced
 on this path.
 
+When features that were working suddenly act old, check `git log` for a commit that put
+back an old version of the whole app. Oct 22 2026, 2:55 PM CDT: the builder chat logged
+"generation stopped", and 4 seconds later commit "Focus Mode and Tasks" replaced every
+file with the Oct 14 version (168 files, the android folder gone). Background jobs ran the
+Oct 14 code for 8 hours (Smart Reminders lost the unreachable-phone skip and its run mark,
+so the watchdog sent "Smart Reminders stopped running" at 9:45 PM). Fixed at 11:09 PM by
+restoring the checkpoint saved at 2:54 PM. Publishing while that was in place would have put
+the Oct 14 app live.
+
 ### Dead ends — already tried, already rejected. Do not propose again.
 - Aggressive task suppression based on priority
 - Staggering reminders by 1 or 15 minutes
