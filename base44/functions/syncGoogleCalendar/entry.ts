@@ -444,7 +444,13 @@ async function classifyEventWithAI(base44, event, user) {
   // Google Calendar forces a time on everything — people put errands, bills and
   // to-dos in there too. So the event-vs-task call has to come from the wording
   // of the title, never from the fact that a time exists.
-  const calendarNote = '\n(From the user\'s Google Calendar. Every entry there has a date and time, including plain to-dos, errands and bills — so judge from the wording of the title alone whether this is an event they attend or a task they do.)';
+  // A day they mark or attend is an event, every year or not (Julianna, Oct 23
+  // 2026: "Victor and Chelsea Celebration and Birthday", "Sebastian
+  // Anniversary" and "Teddy's anniversary" came in as to-dos, so the day
+  // passed and they stayed open). Self-tested Oct 23 2026 on 19 titles,
+  // occasions and look-alike chores ("Buy anniversary gift", "Plan Mom's
+  // birthday party"): all right, where the old wording got 2 of the 3 wrong.
+  const calendarNote = '\n(From the user\'s calendar. Every entry there has a date and time, including plain to-dos, errands and bills — so judge from the wording of the title alone whether this is an event they attend or a task they do. A day they mark or show up for — a party, a celebration, an anniversary, a graduation, a holiday — is an event, even when it has no time or comes back every year.)';
   const inputText = `${summary}${when}${loc}${details}${calendarNote}`;
 
   const prompt = buildTaskParsePrompt(inputText, user?.timezone);
@@ -1046,9 +1052,12 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         // The AI's own read of the title decides event vs task. It used to be
         // "anything with a single reminder is an event", which turned every
         // dated bill or errand from the calendar into an event.
+        // "birthday" from the parser on an entry that isn't a yearly birthday
+        // (those were routed above) is a party or celebration: an event. It
+        // used to fall through to "task".
         classification: (ai.classification === 'payment' || isPaymentTitle(title))
           ? 'payment'
-          : (isOnce && ai.classification === 'event' ? 'event' : 'task'),
+          : (isOnce && (ai.classification === 'event' || ai.classification === 'birthday') ? 'event' : 'task'),
         // A reminder instruction written into the event ("remind me the night
         // before") — the planners obey it. Usually null.
         reminder_wish: ai?.reminder_wish || null,
