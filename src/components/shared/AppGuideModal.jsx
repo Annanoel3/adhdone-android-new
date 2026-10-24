@@ -27,7 +27,10 @@ import {
   Moon,
   Sparkles,
   LayoutGrid,
-  Target
+  Target,
+  Rocket,
+  AlarmClock,
+  HelpCircle
 } from "lucide-react";
 
 const ADD_PATH_ICONS = { text: Share2, screenshot: Camera, widget: LayoutGrid, pinned: Zap };
@@ -45,8 +48,40 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
   // goes straight to that card (Settings scrolls to the #hash).
   const go = (to) => { (onGo || onClose)(); navigate(to); };
 
+  // Alarms exist on this build (the same check Settings' Alarms card makes).
+  // Where they don't, the alarm-or-notification step says nothing.
+  const hasAlarms = typeof window !== 'undefined' && typeof window.Capacitor?.Plugins?.AlarmBridge?.sync === 'function';
+
   // Wording is Anna's (Oct 13 2026), lightly tidied.
   const guides = [
+    // The three things a new person needs on day one, before the feature
+    // list (Anna, Oct 24 2026, after a tester found the guide "a lot to look
+    // at"): how to add something, alarm vs notification, and how to get back
+    // here. Nothing below is repeated in it.
+    {
+      icon: Rocket,
+      title: "Start here",
+      subItems: [
+        {
+          icon: Plus,
+          title: "Add something",
+          description: "Tap Add on Home, then type it, say it or snap a photo. Say it the way you'd say it to a person: \"call the dentist Tuesday at 2\", \"idea: paint the hallway\", \"Mom's birthday is March 3\". ADHDone sorts it into a task, an event, a birthday or a Parking Lot idea on its own. You never have to pick.",
+        },
+        ...(hasAlarms ? [
+        {
+          icon: AlarmClock,
+          title: "Alarm or notification?",
+          description: "Reminders arrive one of two ways. A notification is the regular kind: it sits in your tray until you look. An alarm rings full screen like an alarm clock, even on silent, until you deal with it. You picked one during setup. That's the default for new tasks, and every task has its own switch on its detail card.",
+          link: { label: "Change the default in Settings", to: "/settings?section=reminders#alarms" },
+        },
+        ] : []),
+        {
+          icon: HelpCircle,
+          title: "Finding this guide again",
+          description: "Tap the menu button in the top left, then App Guide.",
+        },
+      ],
+    },
     {
       icon: LayoutDashboard,
       title: "Home",
