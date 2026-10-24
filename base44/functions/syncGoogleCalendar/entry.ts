@@ -15,6 +15,7 @@ import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 // Oct 3 2026 for the parser's takes_time flag, and before that Sept 27 2026 for the parse fixes (a clock time with no day gets its day,
 // "Grandma" stays in the title, "next Tuesday" is next week's Tuesday).
 import { runTaskParse } from '../../shared/runTaskParse.ts';
+import OpenAI from 'npm:openai';
 import { wallClockToUtc, nextLocalOccurrence, localReminderUtc } from '../../shared/timezoneReminders.ts';
 import { isRecurringInterval, INTERVAL_MS } from '../../shared/reminderIntervalDecision.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
@@ -39,6 +40,50 @@ function isBirthdayEvent(title, recurrenceRule) {
   if (!isYearly) return false;
   const lower = (title || '').toLowerCase();
   return lower.includes('birthday') || lower.includes('bday');
+}
+
+// Which birthdays on a calendar are animals' (Julianna, Oct 23 2026: Jojo,
+// Shiro and Yuki & Haru are her pets, with their vaccines, rabies shots and
+// nail trims on the same calendar, and every one was set to ask her to "write
+// a text" on their birthday). The model reads the names and everything else on
+// the calendar the way a friend would; one it isn't sure about stays a person.
+// One call per sync, only when birthdays are being imported for the first
+// time. Returns { lowercased name: kind }. Never throws: no answer = people.
+export const ANIMAL_BIRTHDAY_PROMPT = `Someone's calendar is being brought into ADHDone, a reminder app for people with ADHD. For each birthday listed, decide whether it is an animal's birthday (a pet) or a person's.
+
+Read it the way a friend looking over their calendar would: the same name showing up on vet visits, vaccines, rabies shots, grooming or nail trims; a name that is plainly a pet's; the birthday entry's own wording. A name with nothing pointing to an animal is a person's, even if it would also suit a pet. Emojis in a name don't make it an animal on their own; people's contact names have them too.
+
+When you can tell what kind of animal it is (dog, cat, rabbit, horse...), give that; otherwise "pet".
+
+Answer with JSON only, listing just the animals, each name exactly as given: {"animals": [{"name": "...", "kind": "..."}]}`;
+async function judgeAnimalBirthdays(names: string[], otherTitles: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  if (!names.length) return out;
+  try {
+    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+    const ask = openai.chat.completions.create({
+      model: 'gpt-6-astra',
+      messages: [
+        { role: 'system', content: ANIMAL_BIRTHDAY_PROMPT },
+        { role: 'user', content: `Birthdays:\n${names.map((n) => `- ${n}`).join('\n')}\n\nEverything else on their calendar:\n${otherTitles.slice(0, 300).map((t) => `- ${t}`).join('\n') || '- (nothing else)'}` },
+      ],
+      response_format: { type: 'json_object' },
+      max_completion_tokens: 3000,
+    });
+    const late = new Promise<null>((resolve) => setTimeout(() => resolve(null), 30000));
+    const res: any = await Promise.race([ask, late]);
+    if (!res) return out;
+    const parsed = JSON.parse(res.choices?.[0]?.message?.content || '{}');
+    const wanted = new Set(names.map((n) => n.toLowerCase()));
+    for (const a of Array.isArray(parsed?.animals) ? parsed.animals : []) {
+      const name = String(a?.name || '').trim().toLowerCase();
+      if (!name || !wanted.has(name)) continue;
+      out[name] = String(a?.kind || 'pet').trim().toLowerCase().slice(0, 40) || 'pet';
+    }
+  } catch (e) {
+    console.log('[syncGoogleCalendar] animal birthday check failed:', (e as any)?.message || e);
+  }
+  return out;
 }
 
 // A birthday's reminders go out at 9 AM on its day, the same as a birthday with
@@ -745,6 +790,18 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     if (k && !twinIndex.has(k)) twinIndex.set(k, r);
   }
 
+  // Which of the birthdays coming in for the first time are animals' (see
+  // judgeAnimalBirthdays). Asked once, before any of them is made.
+  const newBirthdayNames = Array.from(new Set(newEvents
+    .filter((e: any) => isBirthdayEvent(e.summary || '', (e.recurrence || []).join(';')))
+    .map((e: any) => extractBirthdayPerson(e.summary || ''))
+    .filter((n: string) => !!n)));
+  const otherTitles = Array.from(new Set(events
+    .filter((e: any) => !isBirthdayEvent(e.summary || '', (e.recurrence || []).join(';')))
+    .map((e: any) => String(e.summary || '').trim())
+    .filter(Boolean)));
+  const animalBirthdays = await judgeAnimalBirthdays(newBirthdayNames, otherTitles);
+
   let processedNew = 0;
   for (const event of newEvents) {
     if (++processedNew % HEARTBEAT_EVERY === 0) await heartbeat();
@@ -949,6 +1006,8 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         reminder_interval: 'once',
         recurrence_pattern: 'yearly',
         birthday_person: ownBirthday ? null : birthdayPerson,
+        // A pet's birthday: the same reminders, never a word about a text.
+        birthday_animal: ownBirthday ? null : (animalBirthdays[String(birthdayPerson || '').toLowerCase()] || null),
         birthday_remind_week_before: !ownBirthday,
         birthday_remind_day_before: !ownBirthday,
         birthday_remind_day_of: true,
