@@ -320,6 +320,14 @@ export function runDeviceCalendarSync(calendarIds, { background = false, onEvent
     trackFire('device_calendar_synced', {
       props: { background, calendars: ids.length, events: events.length, created: data?.created ?? null },
     });
+    // Double bookings or likely duplicates among what just came in: the
+    // popup, now, while the app is open (the server also books a normal
+    // notification in case it isn't seen).
+    if (data?.conflicts?.flags?.length) {
+      import('@/components/utils/eventConflicts')
+        .then((m) => m.announceConflictFlags(data.conflicts.flags, data.conflicts.items))
+        .catch(() => {});
+    }
     return data;
   })()
     .catch((err) => {
