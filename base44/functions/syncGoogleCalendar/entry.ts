@@ -24,6 +24,7 @@ import { buildEventReminderPlan, isBookableNow, isBookedId } from '../../shared/
 import { withChallengeRetry } from '../../shared/sdkRetry.ts';
 import { resolveQuietHours } from '../../shared/quietHours.ts';
 import { pushPhoneAlarms } from '../../shared/reminderTitle.ts';
+import { flagConflicts } from '../../shared/eventConflicts.ts';
 
 // Payment detection for imported calendar items. Calendar payment entries are
 // usually terse ("Discover payment", "$450 rent", "Pay water bill", "Chase"),
@@ -665,6 +666,8 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
   let created = 0, updated = 0, skipped = 0, cancelledRemoved = 0;
   const budget = { n: MAX_REMINDERS_PER_SYNC };
   const results = [];
+  // Tasks this run made or moved, checked for double bookings at the end.
+  const toCheck: string[] = [];
 
   // --- Cancelled in Google → skip it here too ---
   // A cancelled event is not happening. If it was never imported there's
@@ -1178,6 +1181,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     if (myTwinKey && !twinIndex.has(myTwinKey)) twinIndex.set(myTwinKey, { google_event_id: googleId, adhd_task_id: createdTask.id });
     created++;
     results.push({ googleId, title, routedAs, urgency: ai.urgency });
+    if (!isBirthday) toCheck.push(createdTask.id);
 
     // Whatever gets booked below is committed in ONE write together with
     // clearing the in-progress marker.
@@ -1209,7 +1213,23 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     await pushPhoneAlarms({ ...createdTask, ...finalPatch }, user, { source: 'calendarSync' }).catch(() => {});
   }
 
-  return { created, updated, skipped, cancelledRemoved, total_events: events.length, results, connectedEmail };
+  // Double bookings and likely duplicates among what just came in, against
+  // everything else of theirs (shared/eventConflicts.ts; Anna, Oct 23 2026).
+  // The flags go on their account for the app to show; a normal notification
+  // follows in 15 minutes if the popup isn't seen. Returned too, so an app
+  // that is open shows the popup right away.
+  let conflicts: any = { flags: [], items: {} };
+  if (toCheck.length) {
+    await heartbeat();
+    const fresh = await base44.asServiceRole.entities.Task.filter({ id: { $in: toCheck.slice(0, 200) } }, '-created_date', 200).catch(() => []);
+    conflicts = await flagConflicts(base44, user, fresh, { source: 'calendar', notify: true }).catch((e: any) => {
+      console.log('[syncGoogleCalendar] conflict check failed:', e?.message || e);
+      return { flags: [], items: {} };
+    });
+    if (conflicts.flags?.length) console.log('[syncGoogleCalendar] flagged', conflicts.flags.length, 'overlap/duplicate pair(s)');
+  }
+
+  return { created, updated, skipped, cancelledRemoved, total_events: events.length, results, connectedEmail, conflicts: { flags: conflicts.flags || [], items: conflicts.items || {} } };
 }
 
 Deno.serve(async (req) => {
@@ -1278,6 +1298,7 @@ Deno.serve(async (req) => {
         skipped: dresult.skipped,
         cancelled_removed: dresult.cancelledRemoved,
         results: dresult.results,
+        conflicts: dresult.conflicts || { flags: [], items: {} },
       });
     }
     // Anything else was the Google Calendar sync. Retired: the phone's
