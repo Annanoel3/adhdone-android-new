@@ -1057,6 +1057,11 @@ Return JSON:
       } else {
         onUpdate({ ...task, event_time: eventTime.toISOString(), next_reminder: eventTime.toISOString(), time_stated: true });
       }
+      // Moved onto something else? The same double-booking check as when it
+      // was added (Anna, Oct 23 2026: one feature, however the event got here).
+      import('../utils/eventConflicts')
+        .then((m) => m.announceEventConflict(refreshed[0] || { ...task, event_time: eventTime.toISOString(), next_reminder: eventTime.toISOString() }))
+        .catch(() => {});
       } catch (e) {
         console.error('Error updating event time:', e);
       }
