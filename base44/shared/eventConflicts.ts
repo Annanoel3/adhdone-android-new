@@ -67,11 +67,12 @@ export function isTimedEvent(t: any): boolean {
 }
 
 // Anything that can be a duplicate of something: a dated event or task that is
-// still open. Birthdays have their own list and their own dedupe.
+// still open. A birthday can only be a duplicate of another birthday (two
+// "Anna" birthdays on Sep 28 from two calendars: six reminders for one day).
 function datedItem(t: any): boolean {
-  return !!t && t.status === 'active' && !t.silenced && !t.parent_task_id
-    && t.classification !== 'birthday' && !t.birthday_person && Number.isFinite(startMs(t));
+  return !!t && t.status === 'active' && !t.silenced && !t.parent_task_id && Number.isFinite(startMs(t));
 }
+const isBirthday = (t: any) => t?.classification === 'birthday' || !!t?.birthday_person || !!t?.is_own_birthday;
 
 function isAllDay(t: any): boolean {
   return !t?.event_time && (!!t?.day_only_task || t?.classification === 'event' || !!t?.due_date);
@@ -101,8 +102,10 @@ export function duplicateCandidates(task: any, others: any[], timeZone: string):
   const day = localDay(s, timeZone);
   return others.filter((o) => {
     if (!o || o.id === task.id || !datedItem(o)) return false;
+    if (isBirthday(task) !== isBirthday(o)) return false;
     const os = startMs(o);
     if (localDay(os, timeZone) !== day) return false;
+    if (isBirthday(task)) return true;
     if (isAllDay(task) && isAllDay(o)) return true;
     return Math.abs(os - s) <= DUPLICATE_WINDOW_MS;
   });
@@ -116,12 +119,13 @@ const describe = (t: any, timeZone: string) => {
       : new Date(s).toLocaleString('en-US', { timeZone, weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }))
     : 'no date';
   const notes = [t?.notes, t?.description].map((x: any) => String(x || '').replace(/\s+/g, ' ').trim()).filter(Boolean).join(' / ').slice(0, 200);
-  return `"${t?.title || ''}" (${t?.classification || 'task'}, ${when}${t?.location ? `, at ${t.location}` : ''}${notes ? `; notes: ${notes}` : ''})`;
+  const kind = isBirthday(t) ? `birthday${t?.birthday_person ? ` of ${t.birthday_person}` : ''}` : (t?.classification || 'task');
+  return `"${t?.title || ''}" (${kind}, ${when}${t?.location ? `, at ${t.location}` : ''}${notes ? `; notes: ${notes}` : ''})`;
 };
 
 export const DUPLICATE_PROMPT = `You help ADHDone, a reminder app for people with ADHD, spot the same appointment or plan saved twice. Each pair below is two items on someone's list for the same day, close in time. Decide for each pair whether they are the SAME thing (one appointment written down twice, from two calendars or typed again) or two different things that happen to be near each other.
 
-Judge the way a friend reading their calendar would. The same place or provider at the same time is the same thing even when the words differ ("Dermatologist appointment" and "appointment with Jill Hude, PA-C"). Two people's names or two different purposes at the same time are different things, even at the same clinic (a child's dental check and a parent's cleaning). When it is a real toss-up, say they are different: a wrong "same" would merge two real plans.
+Judge the way a friend reading their calendar would. The same place or provider at the same time is the same thing even when the words differ ("Dermatologist appointment" and "appointment with Jill Hude, PA-C"). Two people's names or two different purposes at the same time are different things, even at the same clinic (a child's dental check and a parent's cleaning). Two birthdays on the same day are the same person when the names plainly match ("Anna" and "Anna B"), and different people when they don't. When it is a real toss-up, say they are different: a wrong "same" would merge two real plans.
 
 Answer with JSON only: {"pairs": [{"n": <pair number>, "same": true|false, "why": "one short plain sentence"}]}`;
 
@@ -175,6 +179,7 @@ export async function flagConflicts(base44: any, owner: any, tasks: any[], opts:
   const tz = userTimeZone(owner);
   const email = owner?.email;
   const checked = (tasks || []).filter((t) => t && t.id && t.status === 'active' && !t.parent_task_id && Number.isFinite(startMs(t)));
+  // (Birthdays are checked too, against other birthdays only.)
   if (!email || !checked.length) return { flags: [], items: {}, notified: false };
 
   // Their open dated items, fetched once. filter() returns 50 by default.
