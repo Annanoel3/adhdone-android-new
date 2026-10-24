@@ -46,7 +46,7 @@ import {
 } from '../utils/widgetBridge';
 import { isIPhoneApp, onThisPhone, phoneOs } from '@/lib/phonePlatform';
 import { AlarmSoundPicker, AlarmQuietChoice, AlarmEventQuietChoice, QuietWhenButtons } from '../settings/QuickCaptureCard';
-import { NAG_INTERVALS, isInQuietHours } from '../utils/reminderScheduler';
+import { NAG_INTERVALS } from '../utils/reminderScheduler';
 import { subscribeCaptures } from '@/lib/pendingCaptures';
 
 const SEEN_KEY = 'quick_capture_prompt_seen';
@@ -873,12 +873,11 @@ function bookFirstWinDemo() {
       const planned = Date.parse(demo.at);
       if (!(planned > Date.now() - FIRST_WIN_DEMO_STALE_MS)) { saveFirstWinDemo(null); return; }
       const sendAt = new Date(Math.max(planned, Date.now() + FIRST_WIN_DEMO_MIN_LEAD_MS)).toISOString();
-      // Not inside their quiet hours: it isn't a time they set (RULES.md §9
-      // Q4). Julianna joined at 10:11 PM on Oct 23 2026 with quiet hours from
-      // 10 PM, and the demo went out at 10:15 PM. Moved to the morning it
-      // would no longer read as a demo, so it's dropped; Smart Reminders still
-      // gives a first task its mention the next day (RULES.md §10 point 7).
-      if (isInQuietHours(sendAt)) { saveFirstWinDemo(null); return; }
+      // Inside their quiet hours too: they are in the app setting it up right
+      // now, and it arrives a few minutes later (never more than 15 minutes
+      // after it was planned, see the stale check above). Anna, Oct 23 2026:
+      // it "should break quiet hours if its actually arriving soon after they
+      // get through that onboarding part of the app" (RULES.md §9 Q4).
       const alarm = demo.alarm === true;
       try {
         const me = await base44.auth.me();
