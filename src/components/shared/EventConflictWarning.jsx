@@ -5,7 +5,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { CalendarClock, Clock, Copy } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { base44 } from '@/api/base44Client';
 import { usePopupTurn } from '@/components/onboarding/onboardingSurface';
 import { CONFLICT_EVENT, resolveConflict, showPendingConflicts } from '@/components/utils/eventConflicts';
 
