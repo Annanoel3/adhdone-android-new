@@ -15,7 +15,7 @@ import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 // Oct 3 2026 for the parser's takes_time flag, and before that Sept 27 2026 for the parse fixes (a clock time with no day gets its day,
 // "Grandma" stays in the title, "next Tuesday" is next week's Tuesday).
 import { runTaskParse } from '../../shared/runTaskParse.ts';
-import { wallClockToUtc, nextLocalOccurrence } from '../../shared/timezoneReminders.ts';
+import { wallClockToUtc, nextLocalOccurrence, localReminderUtc } from '../../shared/timezoneReminders.ts';
 import { isRecurringInterval, INTERVAL_MS } from '../../shared/reminderIntervalDecision.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { filterAll } from '../../shared/listAll.ts';
@@ -39,6 +39,16 @@ function isBirthdayEvent(title, recurrenceRule) {
   if (!isYearly) return false;
   const lower = (title || '').toLowerCase();
   return lower.includes('birthday') || lower.includes('bday');
+}
+
+// A birthday's reminders go out at 9 AM on its day, the same as a birthday with
+// no time. A phone calendar can hold a birthday as an entry at any clock time
+// (Julianna, Oct 23 2026: Athena's at 9 PM, Popo's at 11 PM, Sebastian's at
+// 5 AM), and every reminder took that time: "It's Athena's birthday today!"
+// at 9 PM, and Popo's 11 PM ones moved past quiet hours to the next morning,
+// a day late. Its day is the day the entry is on in their time zone.
+function birthdayMorning(at: Date, timeZone: string | null): Date {
+  return localReminderUtc(at, 0, 9, 0, timeZone);
 }
 
 function extractBirthdayPerson(title) {
@@ -148,6 +158,11 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone,
     }
   }
 
+  // A birthday keeps 9 AM on its day, whatever clock time the calendar entry
+  // has (see birthdayMorning).
+  const isBday = taskRec.classification === 'birthday' || !!taskRec.birthday_person || !!taskRec.is_own_birthday;
+  if (isBday && nextReminderDate) nextReminderDate = birthdayMorning(nextReminderDate, timeZone);
+
   const patch: any = {};
 
   if (needsKeyBackfill) patch.google_event_id = event.id;
@@ -162,9 +177,9 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone,
       patch.due_date = nextReminderDate.toISOString();
       // Timed events also carry the actual event time — this is what the
       // task detail view displays as the event's date & time.
-      if (event.start?.dateTime) patch.event_time = nextReminderDate.toISOString();
+      if (event.start?.dateTime && !isBday) patch.event_time = nextReminderDate.toISOString();
     }
-    if (endRaw) {
+    if (endRaw && !isBday) {
       let endDate: Date;
       if (/^\d{4}-\d{2}-\d{2}$/.test(endRaw)) {
         const [y, m, d] = endRaw.split('-').map(n => parseInt(n, 10));
@@ -930,7 +945,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         birthday_remind_day_before: !ownBirthday,
         birthday_remind_day_of: true,
         classification: 'birthday',
-        next_reminder: nextReminderDate.toISOString(),
+        next_reminder: birthdayMorning(nextReminderDate, userTz).toISOString(),
         notification_recipient_email: user.email
       };
     } else {
