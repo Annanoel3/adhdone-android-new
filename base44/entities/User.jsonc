@@ -424,6 +424,13 @@
       "type": "string",
       "description": "The phone app's version name (1.3.12, ...) as last opened, alongside app_build."
     },
+    "event_flags": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Double bookings and likely duplicates found among their events (shared/eventConflicts.ts, Anna, Oct 23 2026): { id, kind 'overlap' | 'duplicate', task_ids [a, b], why, made_at, source ('app' | 'calendar'), seen_at, resolved ('keep' | 'different' | 'moved' | 'combined' | 'gone'), resolved_at, notification_id, notify_at }. The app shows each unresolved one as a popup (EventConflictWarning); one not seen within 15 minutes goes out as a normal notification (notification_id). A settled pair is kept 30 days so it isn't asked about again."
+    },
     "app_platform": {
       "type": "string",
       "description": "Which phone app they last opened: 'android' or 'ios' (Capacitor's getPlatform). Empty for web-only accounts. Set by WidgetTaskSync alongside app_build."
