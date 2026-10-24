@@ -288,6 +288,8 @@ async function patchExistingTaskDates(base44, syncRec, taskRec, event, timeZone,
     // the empty list as one the person chose.
     patch.reminder_plan_built_at = fresh.reminder_plan_built_at || null;
     if (!fresh.reminder_schedule) console.error('[syncGoogleCalendar] moved event could not be re-planned:', taskRec.id);
+    // Moved onto something else? Checked with the new imports at the end.
+    if (Array.isArray(ctx.toCheck)) ctx.toCheck.push(taskRec.id);
     console.log('[syncGoogleCalendar] event moved in the calendar, reminders moved with it:', taskRec.id, booked.size, 'cancelled,', patch.reminder_schedule.length, 'planned');
   }
 
@@ -756,7 +758,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
       const existing = existingByGoogleId[event.id];
       const existingTask = tasksById[existing.adhd_task_id];
       if (existingTask) {
-        const didUpdate = await patchExistingTaskDates(base44, existing, existingTask, event, userTz, { user, budget });
+        const didUpdate = await patchExistingTaskDates(base44, existing, existingTask, event, userTz, { user, budget, toCheck });
         if (didUpdate) { updated++; } else { skipped++; }
         return;
       }
