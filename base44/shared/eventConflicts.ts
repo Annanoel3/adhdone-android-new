@@ -174,7 +174,7 @@ const fmtTime = (ms: number, tz: string) => new Date(ms).toLocaleTimeString('en-
  * book the fallback notification. Returns the NEW flags (with the two items
  * each refers to) so a caller with the app open can show the popup now.
  */
-export async function flagConflicts(base44: any, owner: any, tasks: any[], opts: { source: string; notify?: boolean; nowMs?: number }): Promise<{ flags: Flag[]; items: Record<string, any>; notified: boolean }> {
+export async function flagConflicts(base44: any, owner: any, tasks: any[], opts: { source: string; notify?: boolean; nowMs?: number; dryRun?: boolean }): Promise<{ flags: Flag[]; items: Record<string, any>; notified: boolean }> {
   const nowMs = opts.nowMs ?? Date.now();
   const tz = userTimeZone(owner);
   const email = owner?.email;
@@ -224,6 +224,8 @@ export async function flagConflicts(base44: any, owner: any, tasks: any[], opts:
     items[t.id] = t; items[o.id] = o;
   }
   if (!made.length) return { flags: [], items: {}, notified: false };
+  // A look only (the owner's dashboard): nothing saved, nothing booked.
+  if (opts.dryRun) return { flags: made, items, notified: false };
 
   // The fallback: one normal notification in 15 minutes, unless the popup is
   // seen first (resolve 'seen' cancels it). Outside their quiet hours like any
