@@ -1183,7 +1183,7 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
     if (myTwinKey && !twinIndex.has(myTwinKey)) twinIndex.set(myTwinKey, { google_event_id: googleId, adhd_task_id: createdTask.id });
     created++;
     results.push({ googleId, title, routedAs, urgency: ai.urgency });
-    if (!isBirthday) toCheck.push(createdTask.id);
+    toCheck.push(createdTask.id);
 
     // Whatever gets booked below is committed in ONE write together with
     // clearing the in-progress marker.
