@@ -501,6 +501,13 @@ export default function ParkingLot() {
   const [logFor, setLogFor] = useState(null);
   const [logText, setLogText] = useState("");
   const [historyFor, setHistoryFor] = useState(null);
+  // A note being added to, or changed on, a reading already in History
+  // (Anna, Oct 24 2026: "add a note to them after they've been recorded too,
+  // or edit the note that was added"): { key, tracker, entry, value }. Edited
+  // in place under the reading, inside the History dialog — never a second
+  // popup on top of it.
+  const [noteEdit, setNoteEdit] = useState(null);
+  const [noteSaving, setNoteSaving] = useState(false);
   const [remindFor, setRemindFor] = useState(null);
   // Something they typed that looks like a thing to keep track of: they're
   // ASKED before any tracker is made (askTrack, the "Keep track of …?" popup).
@@ -742,6 +749,31 @@ Give one item per reading, in order: {"log_to": "<its id>", "entry": "<the readi
       toast({ title: "Couldn't save that", description: 'Try again in a moment.' });
     } finally {
       setTrackerBusy(false);
+    }
+  };
+
+  // Puts a note on a reading after the fact, or replaces the one it has. The
+  // note rides on the entry it was logged with (same {at, text} match as
+  // removeTrackerEntry); an empty note takes the note off.
+  const setTrackerEntryNote = async (tracker, entry, note) => {
+    const clean = String(note || '').trim();
+    try {
+      const fresh = await base44.entities.ParkingLotIdea.get(tracker.id).catch(() => null);
+      const list = [...((fresh || tracker).tracker_entries || [])];
+      const at = list.findIndex((e) => e.at === entry.at && e.text === entry.text);
+      if (at < 0) {
+        toast({ title: "That reading isn't there any more", description: 'Pull down to refresh.' });
+        return false;
+      }
+      const { note: _old, ...rest } = list[at];
+      list[at] = clean ? { ...rest, note: clean } : rest;
+      await base44.entities.ParkingLotIdea.update(tracker.id, { tracker_entries: list });
+      if (tracker.id === historyFor?.id) setHistoryFor({ ...(fresh || tracker), tracker_entries: list });
+      refreshIdeas();
+      return true;
+    } catch (e) {
+      toast({ title: "Couldn't save that note", description: 'Try again in a moment.' });
+      return false;
     }
   };
 
@@ -2041,7 +2073,7 @@ Return ONLY the category name, nothing else.`;
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!historyFor} onOpenChange={(o) => { if (!o) setHistoryFor(null); }}>
+      <Dialog open={!!historyFor} onOpenChange={(o) => { if (!o) { setHistoryFor(null); setNoteEdit(null); } }}>
         <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{[historyFor?.idea, ...((historyFor?.tracker_companions || []).map((id) => ideas.find((i) => i.id === id && i.tracker)?.idea).filter(Boolean))].join(' · ')}</DialogTitle>
@@ -2148,10 +2180,23 @@ Return ONLY the category name, nothing else.`;
                     <div className="space-y-2">
                       {records.map((rec, i) => {
                         const first = rec.parts[0];
-                        const note = rec.parts.map((p) => p.e.note).find(Boolean) || '';
+                        // The note lives on whichever part carries one; a new
+                        // note goes on the first part of the record.
+                        const notePart = rec.parts.find((p) => p.e.note) || first;
+                        const note = notePart.e.note || '';
+                        const recKey = `${first.t.id}-${first.e.at}-${i}`;
+                        const editing = noteEdit?.key === recKey;
+                        const startNote = () => setNoteEdit({ key: recKey, tracker: notePart.t, entry: notePart.e, value: note });
+                        const saveNote = async () => {
+                          if (noteSaving) return;
+                          setNoteSaving(true);
+                          const ok = await setTrackerEntryNote(noteEdit.tracker, noteEdit.entry, noteEdit.value);
+                          setNoteSaving(false);
+                          if (ok) setNoteEdit(null);
+                        };
                         return (
-                          <div key={`${first.t.id}-${first.e.at}-${i}`} className={`flex items-start justify-between gap-2 p-2 rounded-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}>
-                            <div className="min-w-0">
+                          <div key={recKey} className={`flex items-start justify-between gap-2 p-2 rounded-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-gray-50'}`}>
+                            <div className="min-w-0 flex-1">
                               <p className="text-sm whitespace-pre-wrap break-words">
                                 {rec.parts.map((p, j) => (
                                   <React.Fragment key={p.t.id}>
@@ -2160,8 +2205,35 @@ Return ONLY the category name, nothing else.`;
                                   </React.Fragment>
                                 ))}
                               </p>
-                              {note ? <p className="text-xs text-gray-500 italic whitespace-pre-wrap break-words">{note}</p> : null}
-                              <p className="text-xs text-gray-500">{formatLogTime(first.e.at)}</p>
+                              {editing ? (
+                                <div className="mt-1 space-y-2">
+                                  <Textarea
+                                    value={noteEdit.value}
+                                    onChange={(e) => setNoteEdit({ ...noteEdit, value: e.target.value })}
+                                    placeholder="Anything that goes with this reading — when you took it, what you'd just done or taken, how you felt"
+                                    className="text-sm min-h-[64px]"
+                                    autoFocus
+                                  />
+                                  <div className="flex gap-2">
+                                    <Button size="sm" onClick={saveNote} disabled={noteSaving} className="bg-purple-600 hover:bg-purple-700 text-white">
+                                      {noteSaving ? 'Saving…' : 'Save'}
+                                    </Button>
+                                    <Button size="sm" variant="ghost" onClick={() => setNoteEdit(null)} disabled={noteSaving}>Cancel</Button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <>
+                                  {note ? <p className="text-xs text-gray-500 italic whitespace-pre-wrap break-words">{note}</p> : null}
+                                  <p className="text-xs text-gray-500">
+                                    {formatLogTime(first.e.at)}
+                                    <span className="text-gray-400"> · </span>
+                                    <button type="button" onClick={startNote} className={`inline-flex items-center gap-1 underline underline-offset-2 ${theme === 'dark' ? 'text-purple-300' : 'text-purple-600'}`}>
+                                      <Pencil className="w-3 h-3" />
+                                      {note ? 'Edit note' : 'Add a note'}
+                                    </button>
+                                  </p>
+                                </>
+                              )}
                             </div>
                             <button onClick={() => removeRecord(rec)} className="text-gray-400 hover:text-red-600 p-1 flex-shrink-0" aria-label="Remove this entry">
                               <X className="w-4 h-4" />
