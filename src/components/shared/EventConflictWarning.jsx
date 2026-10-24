@@ -4,6 +4,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { CalendarClock, Clock, Copy } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { usePopupTurn } from '@/components/onboarding/onboardingSurface';
 import { CONFLICT_EVENT, resolveConflict, showPendingConflicts } from '@/components/utils/eventConflicts';
@@ -21,11 +22,6 @@ const fmt = (task) => {
   } catch { return ''; }
 };
 
-const asDateValue = (d) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const asTimeValue = (d) =>
-  `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-
 const notesOf = (t) => [t?.notes, t?.description].map((x) => String(x || '').trim()).filter(Boolean).join('\n\n');
 
 // Double bookings and likely duplicates, one popup for both (Sep 14 2026 for
@@ -33,18 +29,18 @@ const notesOf = (t) => [t?.notes, t?.description].map((x) => String(x || '').tri
 // and duplicates with a choice of what to keep). The server flags them
 // (shared/eventConflicts.ts); this shows each flag in turn, tells the server
 // the moment one is on screen (so the 15-minute fallback notification is
-// cancelled), and sends back what the person decided. It warns, it never
-// blocks: overlaps are often real (a call during a commute, two things at the
-// same venue), so the default keeps everything as it is.
+// cancelled), and sends back what the person decided. An overlap is only
+// TOLD, so they can do something about it; the app changes nothing on its
+// own (Anna, Oct 23 2026: "we are just telling them so they can do something
+// about it. We take no action"). The Sep 14 "move it to another time" button
+// went with that. A duplicate is the one case with an action, and only the
+// one they pick: combine, or keep both.
 export default function EventConflictWarning({ user, theme }) {
   const [queue, setQueue] = useState([]);
   const [items, setItems] = useState({});
-  const [picking, setPicking] = useState(false);
   const [combining, setCombining] = useState(false);
   const [keepId, setKeepId] = useState(null);
   const [choice, setChoice] = useState({ title: 'kept', time: 'kept', notes: 'kept', location: 'kept' });
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
   const [saving, setSaving] = useState(false);
   const seenRef = useRef(new Set());
   const current = queue[0] || null;
@@ -52,6 +48,7 @@ export default function EventConflictWarning({ user, theme }) {
   // to something the user just did it shows the moment the screen is free.
   const shown = usePopupTurn(!!current, { reactive: true });
   const dark = theme === 'dark';
+  const navigate = useNavigate();
 
   useEffect(() => {
     const onConflict = (e) => {
@@ -81,11 +78,6 @@ export default function EventConflictWarning({ user, theme }) {
     if (!shown || !current || seenRef.current.has(current.id)) return;
     seenRef.current.add(current.id);
     resolveConflict(current.id, 'seen').catch(() => {});
-    const a = items[current.task_ids[0]];
-    const start = new Date(startOf(a) || Date.now());
-    setDate(asDateValue(start));
-    setTime(asTimeValue(start));
-    setPicking(false);
     setCombining(false);
     setKeepId(current.task_ids[0]);
     setChoice({ title: 'kept', time: 'kept', notes: 'kept', location: 'kept' });
@@ -108,51 +100,6 @@ export default function EventConflictWarning({ user, theme }) {
     seenRef.current.add(`done:${current.id}`);
     setQueue((q) => q.slice(1));
     if (action) resolveConflict(current.id, action, extra).catch(() => {});
-  };
-
-  const reschedule = async () => {
-    const [y, m, d] = date.split('-').map((n) => parseInt(n, 10));
-    const [hh, mm] = time.split(':').map((n) => parseInt(n, 10));
-    const when = new Date(y, m - 1, d, hh, mm, 0, 0);
-    if (isNaN(when.getTime())) return;
-
-    setSaving(true);
-    try {
-      // Old pushes point at the old time — clear them before booking new ones.
-      await base44.functions.invoke('cancelTaskNotifications', { taskId: newer.id }).catch(() => {});
-      await base44.entities.Task.update(newer.id, {
-        next_reminder: when.toISOString(),
-        event_time: when.toISOString(),
-        ...(newer.due_date ? { due_date: when.toISOString() } : {}),
-        day_only_task: false,
-        // The time they just picked: it may go off inside quiet hours (RULES.md §9 Q4).
-        time_stated: true,
-        onesignal_notification_ids: [],
-        reminder_schedule: [],
-      });
-
-      const me = await base44.auth.me();
-      const { scheduleMultiReminders } = await import('@/components/utils/multiReminderScheduler');
-      const ids = await scheduleMultiReminders({
-        email: me.email,
-        title: newer.title,
-        scheduledDateISO: when.toISOString(),
-        taskId: newer.id,
-        urgency: newer.urgency,
-        classification: 'event',
-        timeStated: true,
-      });
-      if (ids) await base44.entities.Task.update(newer.id, { onesignal_notification_ids: ids });
-      // 'tasks-changed' is the event the pages listen for (Home reloads, and
-      // its reload re-sends the phone's alarm set); the alarm set is also
-      // rebuilt directly, for the screens that don't reload.
-      window.dispatchEvent(new CustomEvent('tasks-changed'));
-      import('@/components/utils/widgetBridge').then((m) => m.refreshAlarms()).catch(() => {});
-    } catch (e) {
-      console.error('Failed to reschedule event:', e);
-    }
-    setSaving(false);
-    finish('moved');
   };
 
   const combine = async () => {
@@ -260,32 +207,14 @@ export default function EventConflictWarning({ user, theme }) {
                   They're different, keep both
                 </Button>
               </div>
-            ) : picking ? (
-              <div className="space-y-3 pt-1">
-                <p className="text-sm opacity-80">Move "{newer.title}" to:</p>
-                <div>
-                  <label className="text-sm font-medium block mb-1">New date</label>
-                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full border rounded px-3 py-2 bg-white text-gray-900" />
-                </div>
-                <div>
-                  <label className="text-sm font-medium block mb-1">New time</label>
-                  <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full border rounded px-3 py-2 bg-white text-gray-900" />
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={reschedule} disabled={saving || !date || !time} className="flex-1">
-                    {saving ? 'Moving…' : 'Move it'}
-                  </Button>
-                  <Button variant="outline" onClick={() => setPicking(false)} className="flex-1">Back</Button>
-                </div>
-              </div>
             ) : (
               <div className="flex flex-col gap-2 pt-2">
                 <Button onClick={() => finish('keep')} className="w-full">
-                  Keep both as they are
+                  Got it
                 </Button>
-                <Button variant="outline" onClick={() => setPicking(true)} className="w-full gap-2">
+                <Button variant="outline" onClick={() => { finish('keep'); navigate(`/TaskNotification?taskId=${encodeURIComponent(newer.id)}`); }} className="w-full gap-2">
                   <Clock className="w-4 h-4" />
-                  Move "{newer.title.length > 24 ? `${newer.title.slice(0, 24)}…` : newer.title}"
+                  Open "{newer.title.length > 24 ? `${newer.title.slice(0, 24)}…` : newer.title}"
                 </Button>
               </div>
             )}
