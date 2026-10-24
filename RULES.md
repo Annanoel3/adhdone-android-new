@@ -277,6 +277,10 @@ typed something" and "their phone rang", answer these in writing:
    "before bed" (the parser is told their quiet hours and to pick outside them), every
    heads-up, nudge and repeat ping. An app reminder that lands inside them moves to when they
    end, or is dropped if that's too late (`placeAppReminder`) — never booked as it came.
+   One exception the app picks: the "This is what a reminder looks like" sample, a few
+   minutes after someone's first task while they're in the app setting it up (dropped if it
+   can't go out within 15 minutes). Anna, Oct 23 2026: it "should break quiet hours if its
+   actually arriving soon after they get through that onboarding part of the app".
    Home or Back on one of these night alarms rings it again in 10 minutes (`throughQuiet`).
    A time they set also never moves for another alarm, day or night: the phone's 10-minute
    gap between two tasks' alarms (Anna, Oct 10 2026) is only for reminders the app picked.
