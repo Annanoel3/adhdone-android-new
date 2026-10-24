@@ -429,7 +429,9 @@ async function classifyEventWithAI(base44, event, user) {
   let when = '';
   if (event.start?.dateTime) {
     const d = new Date(event.start.dateTime);
-    when = ` on ${d.toLocaleDateString('en-US')} at ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}`;
+    // On their clock: the server's is UTC, so a 4 PM party read "at 10:00 PM".
+    const zone = user?.timezone ? { timeZone: user.timezone } : {};
+    when = ` on ${d.toLocaleDateString('en-US', zone)} at ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, ...zone })}`;
   } else if (event.start?.date) {
     const [y, m, day] = event.start.date.split('-').map(n => parseInt(n, 10));
     const d = new Date(y, m - 1, day);
