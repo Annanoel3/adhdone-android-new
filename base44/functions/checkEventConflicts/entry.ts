@@ -53,6 +53,18 @@ Deno.serve(async (req) => {
       return Response.json(await pendingFlags(base44, user));
     }
 
+    // The owner, from the dashboard: check everything of one person's, for
+    // items imported before this existed (Julianna, Oct 23 2026). dryRun shows
+    // what would be flagged and saves nothing.
+    if (typeof body?.email === 'string' && body.email) {
+      if (user.role !== 'admin') return Response.json({ error: 'Forbidden' }, { status: 403 });
+      const owner = (await base44.asServiceRole.entities.User.filter({ email: body.email.trim() }))?.[0];
+      if (!owner) return Response.json({ error: 'no such user' }, { status: 404 });
+      const theirs = await base44.asServiceRole.entities.Task.filter({ notification_recipient_email: owner.email, status: 'active' }, '-next_reminder', 500);
+      const result = await flagConflicts(base44, owner, theirs, { source: 'calendar', notify: body?.notify !== false, dryRun: body?.dryRun === true });
+      return Response.json({ ...result, dryRun: body?.dryRun === true, checked: theirs.length });
+    }
+
     const ids = Array.isArray(body?.taskIds) ? body.taskIds.map(String).filter(Boolean).slice(0, 20) : [];
     if (!ids.length) return Response.json({ error: 'taskIds, pending or resolve required' }, { status: 400 });
     // Their own tasks only (the user's client sees only their rows).
