@@ -238,10 +238,14 @@ export default function TaskSections({
         if (section.key === "backburner" && sectionTasks.length === 0) return null;
         // Empty day sections start collapsed too — an expanded empty day is just
         // noise. Tapping the header still expands it to reveal "Add task...".
+        // Birthdays start collapsed as well (Anna, Oct 24 2026): a synced
+        // calendar can bring in dozens at once, and they're not today's work.
+        // The header shows the count, and one tap opens or closes the list.
         const isCollapsed =
           collapsed[section.key] !== undefined
             ? collapsed[section.key]
             : section.key === "backburner" ||
+              section.key === "birthdays" ||
               (viewMode === "days" && sectionTasks.length === 0);
 
         return (
