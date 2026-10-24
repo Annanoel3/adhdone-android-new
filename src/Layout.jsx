@@ -1341,7 +1341,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <WidgetTaskSync user={user} />
         <WidgetOpenReceiver />
         <HomeZipPrompt user={user} theme={theme} />
-        <EventConflictWarning theme={theme} />
+        <EventConflictWarning user={user} theme={theme} />
         <QuickCapturePrompt />
         {/* WaysToAddPopup (the "ways to add tasks outside the app" popup) is
             switched off until it is redesigned. The component still exists in
