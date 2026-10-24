@@ -663,8 +663,9 @@ export default function Settings() {
         {/* Full-screen reminders: the account default, the ring sound and the
             phone permissions. The card renders nothing on a build without the
             AlarmBridge plugin (older installs, the browser), so it is safe for
-            everyone. The one-time popups tell people it lives here. */}
-        <AlarmCard user={user} theme={theme} />
+            everyone. The one-time popups tell people it lives here, and the
+            App Guide's Start-here card links to /settings?section=reminders#alarms. */}
+        <div id="alarms"><AlarmCard user={user} theme={theme} /></div>
 
         {/* "What rang": the phone's own list of every alarm and reminder that
             sounded in the last 2 days (NotificationSettings). That page has
