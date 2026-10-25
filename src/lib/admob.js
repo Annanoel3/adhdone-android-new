@@ -108,6 +108,48 @@ async function isRecordingNotes() {
 // app added in AdMob, its ad unit pasted here). Until then the iPhone app
 // shows no ads rather than Android's (Anna, Oct 22 2026).
 const IOS_AD_UNIT_ID = '';
+const adUnitId = () => (Capacitor.getPlatform() === 'ios' ? IOS_AD_UNIT_ID : AD_UNIT_ID);
+
+// The owed ad is loaded AHEAD of the pause it shows at, so it can show the
+// moment the pause comes (Anna, Oct 24 2026: "Seems like theres an
+// intentional pause between adding a task and an ad. It should be way more
+// immediate." — the ad only started loading once the pause had come, a few
+// more seconds on top of the wait). AdManager calls this as soon as an open
+// is owed an ad. A loaded interstitial goes stale after an hour, so one older
+// than PRELOAD_FRESH_MS is loaded again at show time instead of used.
+const PRELOAD_FRESH_MS = 50 * 60 * 1000;
+let preloadedAt = 0;   // when the ad waiting to be shown finished loading (0 = none)
+let preloading = null; // the load on its way, so it's never requested twice
+
+function takePreloaded() {
+  const fresh = preloadedAt > 0 && Date.now() - preloadedAt < PRELOAD_FRESH_MS;
+  preloadedAt = 0;
+  return fresh;
+}
+
+export function preloadInterstitialAd() {
+  if (Capacitor.getPlatform() === 'ios' && !IOS_AD_UNIT_ID) return Promise.resolve(false);
+  if (preloadedAt > 0 && Date.now() - preloadedAt < PRELOAD_FRESH_MS) return Promise.resolve(true);
+  if (preloading) return preloading;
+  if (adInFlight || shownThisLaunch) return Promise.resolve(false);
+  preloading = (async () => {
+    try {
+      const ready = await initAdMob();               // never request before init+consent
+      if (!ready || !AdMob) return false;
+      await AdMob.prepareInterstitial({ adId: adUnitId(), isTesting: false });
+      preloadedAt = Date.now();
+      return true;
+    } catch (e) {
+      // No fill right now: the pause loads one itself, as it always did.
+      console.warn('[AdMob] preload failed:', e);
+      preloadedAt = 0;
+      return false;
+    } finally {
+      preloading = null;
+    }
+  })();
+  return preloading;
+}
 
 export async function showInterstitialAd(source = 'auto') {
   if (Capacitor.getPlatform() === 'ios' && !IOS_AD_UNIT_ID) {
@@ -139,7 +181,11 @@ export async function showInterstitialAd(source = 'auto') {
 
   adInFlight = true;
   try {
-    await AdMob.prepareInterstitial({ adId: Capacitor.getPlatform() === 'ios' ? IOS_AD_UNIT_ID : AD_UNIT_ID, isTesting: false });
+    // A preload still on its way is waited for rather than requested twice.
+    if (preloading) await preloading;
+    const usePreloaded = takePreloaded();
+    // Only without one loaded ahead does it load now (a few seconds).
+    if (!usePreloaded) await AdMob.prepareInterstitial({ adId: adUnitId(), isTesting: false });
     // Loading takes a few seconds; recording may have started meanwhile, or
     // they may have switched to another app.
     if (await isRecordingNotes()) {
@@ -153,8 +199,21 @@ export async function showInterstitialAd(source = 'auto') {
       return false;
     }
     shownThisLaunch = true;              // set before show so a retry can't double-show
-    await AdMob.showInterstitial();
-    setStatus('shown');
+    try {
+      await AdMob.showInterstitial();
+    } catch (e) {
+      // The ad loaded ahead may have gone stale: one fresh load before giving up.
+      if (!usePreloaded) throw e;
+      await AdMob.prepareInterstitial({ adId: adUnitId(), isTesting: false });
+      if (await isRecordingNotes() || !(await appOnScreen())) {
+        shownThisLaunch = false;
+        setStatus('skipped: recording notes or app not on screen (after reloading a stale ad)');
+        trackFire('ad_skipped', { props: { source, reason: 'busy after stale reload' } });
+        return false;
+      }
+      await AdMob.showInterstitial();
+    }
+    setStatus(usePreloaded ? 'shown (loaded ahead)' : 'shown');
     trackFire('ad_shown', {
       props: {
         source,
