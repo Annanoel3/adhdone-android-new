@@ -121,15 +121,13 @@ const PRELOAD_FRESH_MS = 50 * 60 * 1000;
 let preloadedAt = 0;   // when the ad waiting to be shown finished loading (0 = none)
 let preloading = null; // the load on its way, so it's never requested twice
 
-function takePreloaded() {
-  const fresh = preloadedAt > 0 && Date.now() - preloadedAt < PRELOAD_FRESH_MS;
-  preloadedAt = 0;
-  return fresh;
+function havePreloaded() {
+  return preloadedAt > 0 && Date.now() - preloadedAt < PRELOAD_FRESH_MS;
 }
 
 export function preloadInterstitialAd() {
   if (Capacitor.getPlatform() === 'ios' && !IOS_AD_UNIT_ID) return Promise.resolve(false);
-  if (preloadedAt > 0 && Date.now() - preloadedAt < PRELOAD_FRESH_MS) return Promise.resolve(true);
+  if (havePreloaded()) return Promise.resolve(true);
   if (preloading) return preloading;
   if (adInFlight || shownThisLaunch) return Promise.resolve(false);
   preloading = (async () => {
@@ -183,9 +181,14 @@ export async function showInterstitialAd(source = 'auto') {
   try {
     // A preload still on its way is waited for rather than requested twice.
     if (preloading) await preloading;
-    const usePreloaded = takePreloaded();
+    // Kept loaded if this attempt is let go below, for the next pause.
+    const usePreloaded = havePreloaded();
     // Only without one loaded ahead does it load now (a few seconds).
-    if (!usePreloaded) await AdMob.prepareInterstitial({ adId: adUnitId(), isTesting: false });
+    if (!usePreloaded) {
+      preloadedAt = 0;
+      await AdMob.prepareInterstitial({ adId: adUnitId(), isTesting: false });
+      preloadedAt = Date.now();
+    }
     // Loading takes a few seconds; recording may have started meanwhile, or
     // they may have switched to another app.
     if (await isRecordingNotes()) {
@@ -199,6 +202,7 @@ export async function showInterstitialAd(source = 'auto') {
       return false;
     }
     shownThisLaunch = true;              // set before show so a retry can't double-show
+    preloadedAt = 0;                     // the loaded ad is used up by this show
     try {
       await AdMob.showInterstitial();
     } catch (e) {
@@ -207,6 +211,7 @@ export async function showInterstitialAd(source = 'auto') {
       await AdMob.prepareInterstitial({ adId: adUnitId(), isTesting: false });
       if (await isRecordingNotes() || !(await appOnScreen())) {
         shownThisLaunch = false;
+        preloadedAt = Date.now();        // still loaded for the next pause
         setStatus('skipped: recording notes or app not on screen (after reloading a stale ad)');
         trackFire('ad_skipped', { props: { source, reason: 'busy after stale reload' } });
         return false;
