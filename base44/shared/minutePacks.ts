@@ -19,6 +19,13 @@ export const PACK_SECONDS: Record<string, number> = {
 
 const isBase44Id = (id: unknown) => typeof id === "string" && /^[a-f0-9]{24}$/i.test(id);
 
+// RevenueCat Test Store purchases (debug builds, made with the test_ key) cost
+// nothing, so they only count for Anna's own test accounts. Google Play
+// license-tester purchases are real Play purchases she set up the testers for,
+// so those count for anyone.
+const TEST_STORE_ACCOUNTS = ["s2kap2chick@gmail.com", "annanoelwenballew@outlook.com"];
+export const mayUseTestStore = (email: unknown) => TEST_STORE_ACCOUNTS.includes(String(email || "").toLowerCase());
+
 // What RevenueCat has for this person: { configured, ok, purchases: [{ id, product_id, ... }] }.
 async function readRevenueCat(appUserId: string) {
   const key = (Deno.env.get("REVENUECAT_SECRET_KEY") || "").trim();
@@ -63,9 +70,10 @@ export function leftOf(rows: any[]): number {
 // refunded ones switched off. RevenueCat drops a consumable from
 // non_subscriptions once it's refunded (it sends CANCELLATION at that moment),
 // so a credited pack that's no longer listed was refunded.
-export async function syncPacks(db: any, userId: string) {
+export async function syncPacks(db: any, userId: string, opts: { allowTestStore?: boolean } = {}) {
   if (!isBase44Id(userId)) return { configured: true, added: 0, refunded: 0, left_seconds: 0 };
   const rc = await readRevenueCat(userId);
+  if (!opts.allowTestStore) rc.purchases = rc.purchases.filter((p) => !/test/i.test(String(p.store || "")));
   const rows = await packsOf(db, userId);
   if (!rc.configured) return { configured: false, added: 0, refunded: 0, left_seconds: leftOf(rows) };
 
