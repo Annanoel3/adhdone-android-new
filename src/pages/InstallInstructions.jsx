@@ -545,6 +545,16 @@ export default function NotesPage() {
     let cancelled = false;
     (async () => {
       await refreshUser();
+      // A build that can buy minutes: catch up on anything bought that wasn't
+      // credited yet (the app closed mid-purchase, say).
+      billingAvailable().then(async (ok) => {
+        if (cancelled) return;
+        setCanBuy(ok);
+        if (ok) {
+          const s = await syncPacks();
+          if (!cancelled && s?.added) await refreshUser();
+        }
+      });
       const rows = await loadRecords();
       loadUpcoming();
       const R = recorder();
@@ -852,16 +862,77 @@ export default function NotesPage() {
   const soft = dark ? "text-gray-400" : "text-gray-600";
   const open = records.find((r) => r.id === openId) || null;
 
+  // Buying more minutes (Anna, Oct 25 2026): 1 hour or 5 hours, priced by
+  // Google Play in the person's own currency. The minutes are credited by the
+  // server (recordingMinutes) once RevenueCat has the purchase; a recording
+  // that stopped at the limit is finished right after.
+  const closeBuy = () => { setCapOpen(false); setBuyOpen(false); };
+  useEffect(() => {
+    if (!canBuy || !(capOpen || buyOpen) || packs !== null) return;
+    let gone = false;
+    loadPacks(meRef.current)
+      .then((list) => { if (!gone) setPacks(list); })
+      .catch(() => { if (!gone) setPacks([]); });
+    return () => { gone = true; };
+  }, [canBuy, capOpen, buyOpen, packs]);
+
+  const packLabel = (p) => (p.minutes >= 60
+    ? `${p.minutes / 60} hour${p.minutes > 60 ? "s" : ""} of recording`
+    : `${p.minutes} minutes of recording`);
+
+  const buy = async (pack) => {
+    if (buying) return;
+    setBuying(pack.id);
+    try {
+      const me = meRef.current || await refreshUser();
+      const r = await buyPack(me, pack);
+      if (r.cancelled) return;
+      if (r.pending) {
+        toast({ title: "Your payment is pending", description: "The time shows up here as soon as Google Play finishes it." });
+        closeBuy();
+        return;
+      }
+      await refreshUser();
+      toast(r.added
+        ? { title: `Added ${packLabel(pack).replace(" of recording", "")} of recording time` }
+        : { title: "Payment received", description: "Your time will show up here in a moment." });
+      closeBuy();
+      // A recording that stopped at the limit can be finished now.
+      resumeUnfinished();
+    } catch (e) {
+      toast({ title: "The purchase didn't go through", description: String(e?.message || ""), variant: "destructive" });
+    } finally {
+      setBuying(null);
+    }
+  };
+
   const capDialog = (
-    <Dialog open={capOpen} onOpenChange={setCapOpen}>
+    <Dialog open={capOpen || buyOpen} onOpenChange={(o) => { if (!o) closeBuy(); }}>
       <DialogContent className="max-w-md w-[calc(100vw-2rem)] bg-card text-card-foreground border-border">
         <div className="space-y-4 pt-2">
-          <h2 className="text-xl font-bold text-foreground">You've used this month's free recording time</h2>
+          <h2 className="text-xl font-bold text-foreground">
+            {capOpen ? "You've used this month's free recording time" : "Get more recording time"}
+          </h2>
           <p className="text-[15px] leading-relaxed text-muted-foreground">
-            You get {FREE_MINUTES} free minutes a month, and they come back on {nextMonthStart()}. A paid
-            version with more recording time is coming.
+            {capOpen
+              ? `You get ${FREE_MINUTES} free minutes a month, and they come back on ${nextMonthStart()}.${canBuy ? " Need more before then? You can buy extra time." : " A paid version with more recording time is coming."}`
+              : `You get ${FREE_MINUTES} free minutes a month. Extra time you buy is used after those, and it never expires.`}
           </p>
-          <Button onClick={() => setCapOpen(false)} className="w-full">Got it</Button>
+          {canBuy && (
+            <div className="space-y-2">
+              {packs === null ? (
+                <div className="flex justify-center py-3"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+              ) : packs.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Buying more time isn't available right now. Please try again later.</p>
+              ) : packs.map((p) => (
+                <Button key={p.id} onClick={() => buy(p)} disabled={!!buying} variant="outline" className="w-full h-12 justify-between text-base">
+                  <span>{packLabel(p)}</span>
+                  <span className="font-semibold">{buying === p.id ? <Loader2 className="w-4 h-4 animate-spin" /> : p.price}</span>
+                </Button>
+              ))}
+            </div>
+          )}
+          <Button onClick={closeBuy} variant={canBuy ? "ghost" : "default"} className="w-full">{canBuy ? "Not now" : "Got it"}</Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -1080,9 +1151,13 @@ export default function NotesPage() {
           {open.status === "over_limit" && (
             <div className={card}>
               <p className={soft}>
-                This recording went past this month's free minutes, so the notes only cover the first part. The rest
-                is saved on your phone and can be finished once your minutes come back on {nextMonthStart()}.
+                This recording went past your recording time, so the notes only cover the first part. The rest
+                is saved on your phone and can be finished once your minutes come back on {nextMonthStart()}
+                {canBuy ? ", or as soon as you get more time." : "."}
               </p>
+              {canBuy && (
+                <Button onClick={() => setBuyOpen(true)} variant="outline" className="w-full mt-3">Get more time</Button>
+              )}
             </div>
           )}
 
@@ -1273,7 +1348,7 @@ export default function NotesPage() {
             </Button>
           </div>
           <p className={`text-xs ${soft}`}>
-            {usage.unlimited ? `${minutesText(usage.used_seconds)} used this month, no limit.` : `${minutesText(usage.left_seconds)} of free recording left this month.`}
+            {usageLine(usage)}
           </p>
           <ConsentNote soft={soft} center />
           {liveQuestions.length > 0 && (
@@ -1350,7 +1425,7 @@ export default function NotesPage() {
             Start recording
           </Button>
           <p className={`text-xs ${soft}`}>
-            {usage.unlimited ? `${minutesText(usage.used_seconds)} used this month, no limit.` : `${minutesText(usage.left_seconds)} of ${FREE_MINUTES} free minutes left this month.`} Afterward, this page has
+            {usageLine(usage)} Afterward, this page has
             your notes and the full transcript.
           </p>
           <ConsentNote soft={soft} />
@@ -1385,7 +1460,10 @@ export default function NotesPage() {
             Record
           </Button>
           <p className={`text-xs ${soft}`}>
-            {usage.unlimited ? `${minutesText(usage.used_seconds)} used this month, no limit.` : `${minutesText(usage.left_seconds)} of ${FREE_MINUTES} free minutes left this month.`}
+            {usageLine(usage)}
+            {canBuy && !usage.unlimited && (
+              <> <button type="button" className="underline" onClick={() => setBuyOpen(true)}>Get more</button></>
+            )}
           </p>
           <ConsentNote soft={soft} />
         </div>
