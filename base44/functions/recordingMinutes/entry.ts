@@ -1,5 +1,5 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
-import { syncPacks, packsOf, leftOf, eventUserIds } from "../../shared/minutePacks.ts";
+import { syncPacks, packsOf, leftOf, eventUserIds, mayUseTestStore } from "../../shared/minutePacks.ts";
 
 // Bought recording minutes (see base44/shared/minutePacks.ts).
 //
@@ -28,10 +28,10 @@ Deno.serve(async (req) => {
     try {
       const results = [];
       for (const id of ids) {
-        let exists = false;
-        try { exists = !!(await db.User.filter({ id }))?.[0]; } catch (_) { exists = false; }
-        if (!exists) continue;
-        results.push({ id, ...(await syncPacks(db, id)) });
+        let u: any = null;
+        try { u = (await db.User.filter({ id }))?.[0] || null; } catch (_) { u = null; }
+        if (!u) continue;
+        results.push({ id, ...(await syncPacks(db, id, { allowTestStore: mayUseTestStore(u.email) })) });
       }
       return Response.json({ ok: true, synced: results.length, type: ev.type });
     } catch (e) {
@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const r = await syncPacks(db, me.id);
+    const r = await syncPacks(db, me.id, { allowTestStore: mayUseTestStore(me.email) });
     return Response.json({ ok: true, ...r });
   } catch (e) {
     console.error("[recordingMinutes] sync failed:", (e as Error)?.message || e);
