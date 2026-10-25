@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
-import { initAdMob, showInterstitialAd, resetAdLaunchState } from '@/lib/admob';
+import { initAdMob, showInterstitialAd, resetAdLaunchState, preloadInterstitialAd } from '@/lib/admob';
 import { anyPopupOpen } from '@/components/onboarding/onboardingSurface';
-import { currentCaptures } from '@/lib/pendingCaptures';
+import { currentCaptures, subscribeCaptures } from '@/lib/pendingCaptures';
 
 const AD_OPEN_KEY = 'admgr_open_count';
 const LAST_LAUNCH_KEY = 'admgr_last_launch_at';
@@ -27,7 +27,9 @@ const NEW_LAUNCH_GAP_MS = 30 * 60 * 1000;
 //     and they've had 4 seconds for Undo (Anna, Oct 8 2026: "four seconds is
 //     a long time to press undo"; the toast's last second sits under the ad),
 //     and only if they haven't tapped anything since;
-//   - they added a task — once the capture has settled.
+//   - they added a task — the moment the capture is finished (every part
+//     sorted, parsed and saved), with only half a second for the new task to
+//     land on the list first.
 // If neither happens, the owed ad falls back to the next page switch, but
 // only once they've been in the app a while (so the task pauses get their
 // chance first), and only onto a page where an ad makes sense. An open that
@@ -35,7 +37,15 @@ const NEW_LAUNCH_GAP_MS = 30 * 60 * 1000;
 // Nothing here waits on a timer and retries: a pause that isn't quiet when
 // it comes is simply let go, and the next one is waited for.
 const AFTER_TASK_DONE_MS = 4000;
-const AFTER_TASK_ADDED_MS = 3000;
+// Added a task: no clock after it (Anna, Oct 24 2026: "Seems like theres an
+// intentional pause between adding a task and an ad. It should be way more
+// immediate."). It used to wait a flat 3 seconds after the task was made and
+// only then start loading the ad. Now the ad is loaded ahead (admob.js
+// preloadInterstitialAd) and shows as soon as the capture is done.
+const AFTER_TASK_ADDED_MS = 500;
+// A task-created whose capture still isn't finished after this long stops
+// waiting (a capture stuck retrying never gets an ad on top of it).
+const TASK_ADDED_WAIT_MS = 2 * 60 * 1000;
 // Past the tap that switched the page, so it doesn't read as mid-something.
 const AFTER_PAGE_SWITCH_MS = 2500;
 // No ad inside the first moments of an open, whatever happened.
@@ -56,6 +66,7 @@ let owedThisOpen = false;
 let lastTapAt = 0;
 let lastPathname = null;
 let pendingTimer = null;
+let taskAddedAt = 0; // a task was made and its ad waits for the capture to finish
 
 function isCapacitor() {
   return window.Capacitor?.isNativePlatform?.() ?? false;
@@ -135,6 +146,25 @@ function cancelPending() {
   pendingTimer = null;
 }
 
+// Load the owed ad now, so it can show the instant a pause comes.
+function warmAd() {
+  if (owedThisOpen) preloadInterstitialAd().catch(() => {});
+}
+
+// A task was made: the pause is the moment its capture is finished. Run on
+// task-created and again on every change to the capture list, so a capture
+// that splits into several tasks gets one ad, after its last one.
+function checkTaskAdded() {
+  if (!taskAddedAt) return;
+  if (!owedThisOpen || Date.now() - taskAddedAt > TASK_ADDED_WAIT_MS) {
+    taskAddedAt = 0;
+    return;
+  }
+  if (taskBeingSetUp()) return;
+  taskAddedAt = 0;
+  atPause('task_added', AFTER_TASK_ADDED_MS);
+}
+
 // Counts a launch at most once per gap window, so route changes (which
 // remount this component) never inflate the count.
 // Returns true when this counted as a new launch.
@@ -155,6 +185,7 @@ function registerLaunch() {
   lastPathname = window.location.pathname;
   resetAdLaunchState();
   cancelPending();
+  taskAddedAt = 0;
   note(`open #${count}: ${owedThisOpen ? (carried && !shouldShowAd(count) ? 'an ad carried over from an earlier open, waiting for a pause' : 'an ad is due this open, waiting for a pause') : 'no ad due this open'}`);
   return true;
 }
@@ -202,9 +233,15 @@ export default function AdManager() {
     if (!isCapacitor()) return;
     initAdMob().catch(() => {});
     registerLaunch();
+    warmAd();
 
     const onTaskDone = () => atPause('task_done', AFTER_TASK_DONE_MS);
-    const onTaskAdded = () => atPause('task_added', AFTER_TASK_ADDED_MS);
+    const onTaskAdded = () => {
+      if (!owedThisOpen) return;
+      taskAddedAt = Date.now();
+      checkTaskAdded();
+    };
+    const stopWatchingCaptures = subscribeCaptures(() => checkTaskAdded());
     const onTap = () => { lastTapAt = Date.now(); };
     window.addEventListener('task-done', onTaskDone);
     window.addEventListener('task-created', onTaskAdded);
@@ -222,6 +259,7 @@ export default function AdManager() {
             return;
           }
           registerLaunch();
+          warmAd();
         });
       } catch (e) {}
     })();
@@ -231,6 +269,7 @@ export default function AdManager() {
       window.removeEventListener('task-created', onTaskAdded);
       window.removeEventListener('pointerdown', onTap, true);
       window.removeEventListener('keydown', onTap, true);
+      stopWatchingCaptures();
       handle?.remove?.();
     };
   }, []);
