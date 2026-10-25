@@ -653,7 +653,21 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
 
     const covered = new Set((device.calendarIds || []).map(String));
     const sentIds = new Set(allItems.map(e => String(e.id)));
+    // How many rows each covered calendar sent this time. A covered calendar
+    // that sent NOTHING while the app holds future imports from it is read as
+    // a failed or empty read, not as "every event was deleted": nothing of
+    // its is cancelled this run, and the next read that brings rows settles
+    // it. Without this one blank read from the phone (a provider hiccup, a
+    // calendar switched off for a moment) would delete every imported
+    // future event and its reminders in one go (found Oct 24 2026, when a
+    // tester's second read came back with 0 events).
+    const sentPerCal = new Map<string, number>();
+    for (const e of allItems) {
+      const c = String(e.id).split(':')[1];
+      sentPerCal.set(c, (sentPerCal.get(c) || 0) + 1);
+    }
     const nowMs = Date.now();
+    const emptyKept = new Map<string, number>();
     for (const row of existingSynced) {
       const gid = String(row.google_event_id || '');
       if (!gid.startsWith('device:')) continue;
@@ -661,7 +675,14 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
       if (!covered.has(calId) || sentIds.has(gid)) continue;
       const startMs = row.start_time ? new Date(row.start_time).getTime() : NaN;
       if (!isNaN(startMs) && startMs < nowMs) continue;
+      if (!sentPerCal.get(calId)) {
+        emptyKept.set(calId, (emptyKept.get(calId) || 0) + 1);
+        continue;
+      }
       cancelledItems.push({ id: gid, status: 'cancelled' });
+    }
+    for (const [calId, n] of emptyKept) {
+      console.log('[syncGoogleCalendar] calendar', calId, 'sent no rows this read; keeping its', n, 'imported future events instead of cancelling them');
     }
   }
 
