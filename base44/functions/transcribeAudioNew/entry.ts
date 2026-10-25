@@ -1,5 +1,6 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import OpenAI, { toFile } from "npm:openai";
+import { packsOf, leftOf, spendPacks } from "../../shared/minutePacks.ts";
 
 // Two jobs, both on the app's own OpenAI key (RULES.md rule 1):
 //
@@ -36,6 +37,9 @@ import OpenAI, { toFile } from "npm:openai";
 //
 // Free minutes: NOTES_FREE_MINUTES per calendar month in the person's own time
 // zone, kept on the User record (notes_minutes_month, notes_seconds_used).
+// Bought minutes (Oct 25 2026): packs bought on Google Play, kept in
+// MinutePack (base44/shared/minutePacks.ts). They're spent only on what goes
+// past the month's free minutes, and they never expire.
 
 const NOTES_FREE_MINUTES = 60;
 const NO_CAP_EMAILS = ["s2kap2chick@gmail.com"];
@@ -70,15 +74,30 @@ function monthKey(timeZone?: string): string {
   return new Date().toISOString().slice(0, 7);
 }
 
-function usageOf(user: any) {
+// `bought`: seconds left on bought packs. left_seconds is free + bought, so
+// every caller that checks "is there time left" counts both.
+function usageOf(user: any, bought = 0, usedOverride?: number) {
   const month = monthKey(user?.timezone);
-  const used = user?.notes_minutes_month === month ? Math.max(0, Number(user?.notes_seconds_used) || 0) : 0;
+  const used = usedOverride !== undefined
+    ? usedOverride
+    : (user?.notes_minutes_month === month ? Math.max(0, Number(user?.notes_seconds_used) || 0) : 0);
   const limit = NOTES_FREE_MINUTES * 60;
+  const boughtLeft = Math.max(0, Math.round(Number(bought) || 0));
   // No monthly cap for these accounts; minutes are still counted.
   if (NO_CAP_EMAILS.includes(String(user?.email || "").toLowerCase())) {
-    return { month, used_seconds: used, limit_seconds: 0, left_seconds: 8 * 3600, unlimited: true };
+    return { month, used_seconds: used, limit_seconds: 0, left_seconds: 8 * 3600, free_left_seconds: 8 * 3600, bought_left_seconds: boughtLeft, unlimited: true };
   }
-  return { month, used_seconds: used, limit_seconds: limit, left_seconds: Math.max(0, limit - used) };
+  const freeLeft = Math.max(0, limit - used);
+  return { month, used_seconds: used, limit_seconds: limit, free_left_seconds: freeLeft, bought_left_seconds: boughtLeft, left_seconds: freeLeft + boughtLeft };
+}
+
+async function boughtLeftOf(base44: any, user: any): Promise<number> {
+  try {
+    return leftOf(await packsOf(base44.asServiceRole.entities, user.id));
+  } catch (e) {
+    console.error("[notes] could not read bought minutes:", (e as Error)?.message || e);
+    return 0;
+  }
 }
 
 function decodeBase64(b64: string): Uint8Array {
@@ -121,9 +140,10 @@ async function notesPart(base44: any, user: any, body: any) {
 
   const parts: any[] = Array.isArray(rec.transcript_parts) ? rec.transcript_parts : [];
   const done = parts.find((p) => p?.index === index);
-  if (done) return Response.json({ ok: true, index, already: true, usage: usageOf(user) });
+  const bought = await boughtLeftOf(base44, user);
+  if (done) return Response.json({ ok: true, index, already: true, usage: usageOf(user, bought) });
 
-  const usage = usageOf(user);
+  const usage = usageOf(user, bought);
   if (usage.left_seconds <= 0) {
     return Response.json({ ok: false, over_limit: true, usage });
   }
@@ -171,11 +191,24 @@ async function notesPart(base44: any, user: any, body: any) {
 
   const after = usage.used_seconds + seconds;
   await base44.auth.updateMe({ notes_minutes_month: usage.month, notes_seconds_used: after });
+  // Whatever went past the free minutes comes off the bought packs.
+  let boughtAfter = bought;
+  if (!usage.unlimited) {
+    const over = Math.max(0, seconds - usage.free_left_seconds);
+    if (over > 0 && bought > 0) {
+      try {
+        const spent = await spendPacks(base44.asServiceRole.entities, user.id, Math.min(over, bought));
+        boughtAfter = Math.max(0, bought - spent);
+      } catch (e) {
+        console.error(`[notes] could not spend bought minutes for ${user.id}:`, (e as Error)?.message || e);
+      }
+    }
+  }
   return Response.json({
     ok: true,
     index,
     chars: text.length,
-    usage: { ...usage, used_seconds: after, left_seconds: usage.unlimited ? usage.left_seconds : Math.max(0, usage.limit_seconds - after) },
+    usage: usageOf(user, boughtAfter, after),
   });
 }
 
