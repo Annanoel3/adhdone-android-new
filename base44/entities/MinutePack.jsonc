@@ -1,0 +1,63 @@
+{
+  "name": "MinutePack",
+  "properties": {
+    "product_id": {
+      "description": "notes_1h or notes_5h.",
+      "type": "string"
+    },
+    "purchased_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "rc_transaction_id": {
+      "description": "RevenueCat's id for the purchase (non_subscriptions[].id). One row per purchase; never credited twice.",
+      "type": "string"
+    },
+    "sandbox": {
+      "description": "A test purchase (license tester or RevenueCat Test Store).",
+      "type": "boolean"
+    },
+    "seconds": {
+      "description": "Recording seconds this purchase added.",
+      "type": "number"
+    },
+    "seconds_used": {
+      "description": "How many of those seconds have been spent on transcription. Bought minutes are spent oldest-first, after the month's free minutes.",
+      "type": "number"
+    },
+    "status": {
+      "description": "credited = usable; refunded = Google refunded it, nothing left on it counts.",
+      "enum": [
+        "credited",
+        "refunded"
+      ],
+      "type": "string"
+    },
+    "store": {
+      "type": "string"
+    },
+    "store_transaction_id": {
+      "description": "Google Play's order id, when RevenueCat gives it.",
+      "type": "string"
+    },
+    "user_id": {
+      "description": "The Base44 user id that bought it (also their RevenueCat app user id).",
+      "type": "string"
+    }
+  },
+  "required": [
+    "user_id",
+    "rc_transaction_id",
+    "product_id",
+    "seconds"
+  ],
+  "rls": {
+    "create": false,
+    "delete": false,
+    "read": {
+      "data.user_id": "{{user.id}}"
+    },
+    "update": false
+  },
+  "type": "object"
+}
