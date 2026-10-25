@@ -30,7 +30,12 @@ import {
   Rocket,
   AlarmClock,
   HelpCircle,
-  ChevronDown
+  ChevronDown,
+  Wrench,
+  Shuffle,
+  MapPin,
+  BookLock,
+  Settings as SettingsIcon
 } from "lucide-react";
 
 const ADD_PATH_ICONS = { text: Share2, screenshot: Camera, widget: LayoutGrid, pinned: Zap };
@@ -59,6 +64,9 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
   // Alarms exist on this build (the same check Settings' Alarms card makes).
   // Where they don't, the alarm-or-notification step says nothing.
   const hasAlarms = typeof window !== 'undefined' && typeof window.Capacitor?.Plugins?.AlarmBridge?.sync === 'function';
+  // Record Notes needs the phone's recorder (the menu offers it on the same
+  // check); the guide doesn't describe it where it isn't there.
+  const hasRecorder = typeof window !== 'undefined' && !!window.Capacitor?.Plugins?.RecorderBridge;
 
   // Wording is Anna's (Oct 13 2026), lightly tidied.
   const guides = [
@@ -150,6 +158,12 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
       title: "Task Timer",
       description: "Time tasks to learn how long things really take you. Good for time blindness."
     },
+    // Focus Mode is started from a task, so it sits with Tasks, not in Tools.
+    {
+      icon: Target,
+      title: "Focus Mode",
+      description: "Pick one task. Every hour until it's done, ADHDone reminds you of it, and your other recurring reminders stay quiet (events, due dates and birthdays still come through). Finish it and everything goes back to normal."
+    },
       ],
     },
     {
@@ -162,20 +176,50 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
       title: "Birthdays",
       description: "Birthdays live on their own page and repeat every year. Get reminded a week out, the day before, and the day of — plus help drafting the text so you actually send it."
     },
+    // The same groups as the side menu (Tools, Reflect), so the guide reads
+    // the way the app is laid out (Anna, Oct 24 2026). The entries for Record
+    // Notes, Decision Maker, Places and Diary use each page's own words.
     {
-      icon: Target,
-      title: "Focus Mode",
-      description: "Pick one task. Every hour until it's done, ADHDone reminds you of it, and your other recurring reminders stay quiet (events, due dates and birthdays still come through). Finish it and everything goes back to normal."
-    },
+      icon: Wrench,
+      title: "Tools",
+      children: [
     {
       icon: Timer,
-      title: "Pomodoro",
-      description: "Work-and-break rounds with lengths you pick."
+      title: "Focus Timer",
+      description: "Pomodoro: work-and-break rounds with lengths you pick. Or a plain stopwatch."
     },
     {
       icon: Lightbulb,
       title: "Parking Lot",
       description: "Brain dump ideas without derailing what you're doing. Add to the Parking Lot anywhere you can add a task — just say it's an idea."
+    },
+    ...(hasRecorder ? [
+    {
+      icon: Mic,
+      title: "Record Notes",
+      description: "Record a meeting, appointment or class. ADHDone writes the notes for you, organized for an ADHD brain: to-dos first, the details you'll need to look up, the words that matter highlighted."
+    },
+    ] : []),
+    {
+      icon: Shuffle,
+      title: "Decision Maker",
+      description: "Too many options? Type or say them and let the app pick one for you."
+    },
+    {
+      icon: MapPin,
+      title: "Places",
+      description: "The addresses you go between, and when you need to be there. This is what lets the app say \"leave now\" with an actual drive time behind it."
+    },
+      ],
+    },
+    {
+      icon: Sparkles,
+      title: "Reflect",
+      children: [
+    {
+      icon: MessageCircleHeart,
+      title: "Talk It Out",
+      description: "A judgment-free space for ADHD and executive-function strategy. App questions go here too."
     },
     {
       icon: TrendingUp,
@@ -183,10 +227,16 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
       description: "For the data lovers. Your patterns, streaks, and productivity — what times you're most productive, and proof of how far you've come."
     },
     {
-      icon: MessageCircleHeart,
-      title: "Talk It Out",
-      description: "A judgment-free space for ADHD and executive-function strategy. App questions go here too."
+      icon: BookLock,
+      title: "Diary",
+      description: "Yours alone: no AI reads it, nobody else sees it. If you like, a new entry starts with the tasks you finished that day and a question about how it went."
     },
+      ],
+    },
+    {
+      icon: SettingsIcon,
+      title: "Settings",
+      children: [
     {
       icon: Sparkles,
       title: "Themes",
@@ -197,6 +247,8 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
       title: "Quiet Hours",
       description: "Set the hours you don't want to be bothered.",
       link: { label: "Set them in Settings", to: "/settings?section=reminders#quiet-hours" },
+    },
+      ],
     }
   ];
 
