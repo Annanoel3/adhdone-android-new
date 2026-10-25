@@ -165,8 +165,14 @@ function checkTaskAdded() {
   // A tap a moment ago would get this pause let go as "just tapped", so it
   // waits just until the screen has been quiet for RECENT_TAP_MS instead.
   // Tapping on past that still lets it go (they're doing something).
-  const sinceTap = Date.now() - lastTapAt;
-  atPause('task_added', Math.max(AFTER_TASK_ADDED_MS, RECENT_TAP_MS - sinceTap + 50));
+  // Same for a task finished inside the open's first moments: it waits for
+  // MIN_OPEN_AGE_MS rather than losing the pause as "too soon".
+  const now = Date.now();
+  atPause('task_added', Math.max(
+    AFTER_TASK_ADDED_MS,
+    lastTapAt + RECENT_TAP_MS - now + 50,
+    openStartedAt + MIN_OPEN_AGE_MS - now + 50,
+  ));
 }
 
 // Counts a launch at most once per gap window, so route changes (which
