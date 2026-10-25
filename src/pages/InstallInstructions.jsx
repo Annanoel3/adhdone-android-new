@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { FileDown } from "lucide-react";
 import { downloadNotesPdf } from "@/components/notes/notesPdf";
+import { billingAvailable, boughtLeftSeconds, loadPacks, buyPack, syncPacks } from "@/lib/minutePacks";
 
 // ── Notes: record a meeting, appointment or class; get ADHD-friendly notes ────
 //
@@ -106,12 +107,25 @@ function monthKey(timeZone) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function usageFrom(user) {
+// Same rules as usageOf in transcribeAudioNew. left_seconds is the month's
+// free minutes plus bought ones (refreshUser puts the bought seconds on the
+// user as __bought), so every "is there time left" check counts both.
+function usageFrom(user, bought = user?.__bought || 0) {
   const month = monthKey(user?.timezone);
   const used = user?.notes_minutes_month === month ? Math.max(0, Number(user?.notes_seconds_used) || 0) : 0;
   const limit = FREE_MINUTES * 60;
-  if (String(user?.email || "").toLowerCase() === "s2kap2chick@gmail.com") return { month, used_seconds: used, limit_seconds: 0, left_seconds: 8 * 3600, unlimited: true };
-  return { month, used_seconds: used, limit_seconds: limit, left_seconds: Math.max(0, limit - used) };
+  const boughtLeft = Math.max(0, Number(bought) || 0);
+  if (String(user?.email || "").toLowerCase() === "s2kap2chick@gmail.com") return { month, used_seconds: used, limit_seconds: 0, left_seconds: 8 * 3600, free_left_seconds: 8 * 3600, bought_left_seconds: boughtLeft, unlimited: true };
+  const freeLeft = Math.max(0, limit - used);
+  return { month, used_seconds: used, limit_seconds: limit, free_left_seconds: freeLeft, bought_left_seconds: boughtLeft, left_seconds: freeLeft + boughtLeft };
+}
+
+// "42 of 60 free minutes left this month", plus any bought minutes.
+function usageLine(usage) {
+  if (usage.unlimited) return `${minutesText(usage.used_seconds)} used this month, no limit.`;
+  const free = usage.free_left_seconds ?? usage.left_seconds;
+  const bought = usage.bought_left_seconds || 0;
+  return `${minutesText(free)} of ${FREE_MINUTES} free minutes left this month${bought > 0 ? `, plus ${minutesText(bought)} you bought` : ""}.`;
 }
 
 function nextMonthStart() {
@@ -285,6 +299,14 @@ export default function NotesPage() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(null); // { recordId, step, done, total }
   const [capOpen, setCapOpen] = useState(false);
+  // Buying more minutes (only on builds with BillingBridge). buyOpen is the
+  // "Get more recording time" popup opened by hand; capOpen opens the same
+  // choices when the minutes have run out.
+  const [canBuy, setCanBuy] = useState(false);
+  const [buyOpen, setBuyOpen] = useState(false);
+  const [packs, setPacks] = useState(null); // null = loading, [] = none to show
+  const [buying, setBuying] = useState(null);
+  const meRef = useRef(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [upcoming, setUpcoming] = useState([]);
   // Every event from the last two months on, any status: for "link this
@@ -369,6 +391,8 @@ export default function NotesPage() {
   const refreshUser = useCallback(async () => {
     try {
       const me = await base44.auth.me();
+      me.__bought = await boughtLeftSeconds(me?.id);
+      meRef.current = me;
       setUser(me);
       setUsage(usageFrom(me));
       return me;
