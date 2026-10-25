@@ -204,6 +204,105 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     theme === 'dark' ? 'text-green-400' : 'text-purple-600'
   }`;
 
+  // One section: a header row that toggles it, and when open its text, link,
+  // sub-items and any nested sections (`children`, drawn the same way one
+  // step in, each with its own toggle and closed to start). `path` keys the
+  // open state, so two sections with the same title in different places
+  // can't open together.
+  const renderSection = (guide, path, depth) => {
+    const key = `${path}/${guide.title}`;
+    const open = !!openSections[key];
+    return (
+      <div key={key}>
+        {/* The whole header row is the toggle. The icon sits beside the
+            title only; everything under it runs the row's full width
+            (Anna, Oct 13 2026: the text was squished to the right). */}
+        <button
+          type="button"
+          onClick={() => toggleSection(key)}
+          aria-expanded={open}
+          className="w-full flex items-center gap-3 text-left py-2 px-1 rounded-lg active:bg-black/5 dark:active:bg-white/5"
+        >
+          <div className={`p-1.5 rounded-lg flex-shrink-0 ${
+            theme === 'minimalist' 
+              ? 'bg-green-100' 
+              : theme === 'dark'
+                ? 'bg-green-900/30'
+                : 'bg-gradient-to-br from-purple-100 to-orange-100'
+          }`}>
+            <guide.icon className={`w-4 h-4 ${
+              theme === 'minimalist' 
+                ? 'text-green-600' 
+                : theme === 'dark'
+                  ? 'text-green-400'
+                  : 'text-purple-600'
+            }`} />
+          </div>
+          <h3 className={`${depth > 0 ? 'font-medium' : 'font-semibold'} text-sm flex-1 ${
+            theme === 'dark' ? 'text-white' : 'text-gray-900'
+          }`}>
+            {guide.title}
+          </h3>
+          <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''} ${
+            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+          }`} />
+        </button>
+        {open && (<div className="px-1 pb-3">
+        {guide.description && (
+          <p className={`text-sm ${
+            theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+          }`}>
+            {guide.description}
+          </p>
+        )}
+        {guide.link && (
+          <button type="button" onClick={() => go(guide.link.to)} className={linkClass}>
+            {guide.link.label}
+          </button>
+        )}
+
+        {guide.subItems && (
+          <div className="mt-2 space-y-3">
+            {guide.subItems.map((subItem) => (
+              <div key={subItem.title}>
+                <p className="text-sm">
+                  <subItem.icon className={`inline-block w-4 h-4 mr-1.5 -mt-0.5 ${
+                    theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                  }`} />
+                  <span className={`font-medium ${
+                    theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
+                  }`}>
+                    {subItem.title}:
+                  </span>
+                  <span className={`ml-1 ${
+                    theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
+                  }`}>
+                    {subItem.description}
+                  </span>
+                </p>
+                {subItem.link && (
+                  <button type="button" onClick={() => go(subItem.link.to)} className={linkClass}>
+                    {subItem.link.label}
+                  </button>
+                )}
+                {subItem.video && (
+                  <AutoClip src={subItem.video} className="mt-2 w-full max-h-[50vh] rounded-lg bg-black object-contain" />
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {guide.children && (
+          <div className={`mt-2 ml-4 pl-2 border-l-2 ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+            {guide.children.map((child) => renderSection(child, key, depth + 1))}
+          </div>
+        )}
+        </div>)}
+      </div>
+    );
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className={`max-w-2xl w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto ${
@@ -218,93 +317,7 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
         {/* A table of contents, not a stack of cards: rows are kept short so
             all of them fit on one phone screen with nothing open. */}
         <div className={`divide-y ${theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200'}`}>
-          {guides.map((guide) => {
-            const open = !!openSections[guide.title];
-            return (
-            <div key={guide.title}>
-                {/* The whole header row is the toggle. The icon sits beside
-                    the title only; everything under it runs the row's full
-                    width (Anna, Oct 13 2026: the text was squished to the
-                    right). */}
-                <button
-                  type="button"
-                  onClick={() => toggleSection(guide.title)}
-                  aria-expanded={open}
-                  className="w-full flex items-center gap-3 text-left py-2 px-1 rounded-lg active:bg-black/5 dark:active:bg-white/5"
-                >
-                  <div className={`p-1.5 rounded-lg flex-shrink-0 ${
-                    theme === 'minimalist' 
-                      ? 'bg-green-100' 
-                      : theme === 'dark'
-                        ? 'bg-green-900/30'
-                        : 'bg-gradient-to-br from-purple-100 to-orange-100'
-                  }`}>
-                    <guide.icon className={`w-4 h-4 ${
-                      theme === 'minimalist' 
-                        ? 'text-green-600' 
-                        : theme === 'dark'
-                          ? 'text-green-400'
-                          : 'text-purple-600'
-                    }`} />
-                  </div>
-                  <h3 className={`font-semibold text-sm flex-1 ${
-                    theme === 'dark' ? 'text-white' : 'text-gray-900'
-                  }`}>
-                    {guide.title}
-                  </h3>
-                  <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''} ${
-                    theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                  }`} />
-                </button>
-                {open && (<div className="px-1 pb-3">
-                {guide.description && (
-                  <p className={`text-sm ${
-                    theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
-                  }`}>
-                    {guide.description}
-                  </p>
-                )}
-                {guide.link && (
-                  <button type="button" onClick={() => go(guide.link.to)} className={linkClass}>
-                    {guide.link.label}
-                  </button>
-                )}
-
-                {guide.subItems && (
-                  <div className="mt-2 space-y-3">
-                    {guide.subItems.map((subItem) => (
-                      <div key={subItem.title}>
-                        <p className="text-sm">
-                          <subItem.icon className={`inline-block w-4 h-4 mr-1.5 -mt-0.5 ${
-                            theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
-                          }`} />
-                          <span className={`font-medium ${
-                            theme === 'dark' ? 'text-gray-200' : 'text-gray-700'
-                          }`}>
-                            {subItem.title}:
-                          </span>
-                          <span className={`ml-1 ${
-                            theme === 'dark' ? 'text-gray-400' : 'text-gray-600'
-                          }`}>
-                            {subItem.description}
-                          </span>
-                        </p>
-                        {subItem.link && (
-                          <button type="button" onClick={() => go(subItem.link.to)} className={linkClass}>
-                            {subItem.link.label}
-                          </button>
-                        )}
-                        {subItem.video && (
-                          <AutoClip src={subItem.video} className="mt-2 w-full max-h-[50vh] rounded-lg bg-black object-contain" />
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-                </div>)}
-            </div>
-            );
-          })}
+          {guides.map((guide) => renderSection(guide, '', 0))}
         </div>
       </DialogContent>
     </Dialog>
