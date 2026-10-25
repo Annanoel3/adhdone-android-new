@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from "react-router-dom";
 import { ADD_PATHS } from "@/components/onboarding/pageIntros";
 import { AutoClip } from "@/components/onboarding/PageIntroTour";
@@ -30,7 +30,8 @@ import {
   Target,
   Rocket,
   AlarmClock,
-  HelpCircle
+  HelpCircle,
+  ChevronDown
 } from "lucide-react";
 
 const ADD_PATH_ICONS = { text: Share2, screenshot: Camera, widget: LayoutGrid, pinned: Zap };
@@ -41,6 +42,14 @@ const ALL_ADD_PATH_VIDEOS = Object.fromEntries(ADD_PATHS.map((p) => [p.key, p.vi
 
 export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
   const navigate = useNavigate();
+  // Every section starts closed, so the whole list fits on one screen and the
+  // person sees everything they can open without scrolling (Anna, Oct 24
+  // 2026, after a tester found the open-everything guide "a lot to look at").
+  // A section's videos only load once it is opened. Closing the guide and
+  // opening it again starts closed again.
+  const [openSections, setOpenSections] = useState({});
+  useEffect(() => { if (isOpen) setOpenSections({}); }, [isOpen]);
+  const toggleSection = (title) => setOpenSections((prev) => ({ ...prev, [title]: !prev[title] }));
   // Decided when the guide opens, not when the page first loads.
   const ADD_PATH_VIDEOS = onThisPhone('androidClips') ? ALL_ADD_PATH_VIDEOS : {};
   // "Turn it on in Settings" / "Set them in Settings": the guide closes — and
@@ -203,16 +212,24 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3 py-4">
-          {guides.map((guide) => (
+        <div className="space-y-2 py-2">
+          {guides.map((guide) => {
+            const open = !!openSections[guide.title];
+            return (
             <Card key={guide.title} className={`border-none ${
               theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
             }`}>
               <CardContent className="p-3">
-                {/* The icon sits beside the title only; everything under it
-                    runs the card's full width (Anna, Oct 13 2026: the text
-                    was squished to the right). */}
-                <div className="flex items-center gap-3 mb-1">
+                {/* The whole header row is the toggle. The icon sits beside
+                    the title only; everything under it runs the card's full
+                    width (Anna, Oct 13 2026: the text was squished to the
+                    right). */}
+                <button
+                  type="button"
+                  onClick={() => toggleSection(guide.title)}
+                  aria-expanded={open}
+                  className="w-full flex items-center gap-3 text-left"
+                >
                   <div className={`p-2 rounded-lg flex-shrink-0 ${
                     theme === 'minimalist' 
                       ? 'bg-green-100' 
@@ -228,12 +245,16 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
                           : 'text-purple-600'
                     }`} />
                   </div>
-                  <h3 className={`font-semibold ${
+                  <h3 className={`font-semibold flex-1 ${
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
                   }`}>
                     {guide.title}
                   </h3>
-                </div>
+                  <ChevronDown className={`w-5 h-5 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''} ${
+                    theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+                  }`} />
+                </button>
+                {open && (<div className="mt-2">
                 {guide.description && (
                   <p className={`text-sm ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
@@ -278,9 +299,11 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
                     ))}
                   </div>
                 )}
+                </div>)}
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       </DialogContent>
     </Dialog>
