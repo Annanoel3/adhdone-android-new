@@ -9,7 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   LayoutDashboard,
   ListTodo,
@@ -212,32 +211,31 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-2 py-2">
+        {/* A table of contents, not a stack of cards: rows are kept short so
+            all of them fit on one phone screen with nothing open. */}
+        <div className={`divide-y ${theme === 'dark' ? 'divide-gray-700' : 'divide-gray-200'}`}>
           {guides.map((guide) => {
             const open = !!openSections[guide.title];
             return (
-            <Card key={guide.title} className={`border-none ${
-              theme === 'dark' ? 'bg-gray-900/50' : 'bg-gray-50'
-            }`}>
-              <CardContent className="p-3">
+            <div key={guide.title}>
                 {/* The whole header row is the toggle. The icon sits beside
-                    the title only; everything under it runs the card's full
+                    the title only; everything under it runs the row's full
                     width (Anna, Oct 13 2026: the text was squished to the
                     right). */}
                 <button
                   type="button"
                   onClick={() => toggleSection(guide.title)}
                   aria-expanded={open}
-                  className="w-full flex items-center gap-3 text-left"
+                  className="w-full flex items-center gap-3 text-left py-2 px-1 rounded-lg active:bg-black/5 dark:active:bg-white/5"
                 >
-                  <div className={`p-2 rounded-lg flex-shrink-0 ${
+                  <div className={`p-1.5 rounded-lg flex-shrink-0 ${
                     theme === 'minimalist' 
                       ? 'bg-green-100' 
                       : theme === 'dark'
                         ? 'bg-green-900/30'
                         : 'bg-gradient-to-br from-purple-100 to-orange-100'
                   }`}>
-                    <guide.icon className={`w-5 h-5 ${
+                    <guide.icon className={`w-4 h-4 ${
                       theme === 'minimalist' 
                         ? 'text-green-600' 
                         : theme === 'dark'
@@ -245,16 +243,16 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
                           : 'text-purple-600'
                     }`} />
                   </div>
-                  <h3 className={`font-semibold flex-1 ${
+                  <h3 className={`font-semibold text-sm flex-1 ${
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
                   }`}>
                     {guide.title}
                   </h3>
-                  <ChevronDown className={`w-5 h-5 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''} ${
+                  <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''} ${
                     theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
                   }`} />
                 </button>
-                {open && (<div className="mt-2">
+                {open && (<div className="px-1 pb-3">
                 {guide.description && (
                   <p className={`text-sm ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
@@ -300,8 +298,7 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
                   </div>
                 )}
                 </div>)}
-              </CardContent>
-            </Card>
+            </div>
             );
           })}
         </div>
