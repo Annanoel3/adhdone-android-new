@@ -163,11 +163,6 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
       description: "Birthdays live on their own page and repeat every year. Get reminded a week out, the day before, and the day of — plus help drafting the text so you actually send it."
     },
     {
-      icon: Timer,
-      title: "Task Timer",
-      description: "Time tasks to learn how long things really take you. Good for time blindness."
-    },
-    {
       icon: Target,
       title: "Focus Mode",
       description: "Pick one task. Every hour until it's done, ADHDone reminds you of it, and your other recurring reminders stay quiet (events, due dates and birthdays still come through). Finish it and everything goes back to normal."
