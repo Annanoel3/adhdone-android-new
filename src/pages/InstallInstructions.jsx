@@ -866,7 +866,9 @@ export default function NotesPage() {
   // Google Play in the person's own currency. The minutes are credited by the
   // server (recordingMinutes) once RevenueCat has the purchase; a recording
   // that stopped at the limit is finished right after.
-  const closeBuy = () => { setCapOpen(false); setBuyOpen(false); };
+  // An empty list (Play or the network didn't answer) is asked for again next
+  // time the popup opens, instead of staying "not available" all visit.
+  const closeBuy = () => { setCapOpen(false); setBuyOpen(false); if (packs && packs.length === 0) setPacks(null); };
   useEffect(() => {
     if (!canBuy || !(capOpen || buyOpen) || packs !== null) return;
     let gone = false;
