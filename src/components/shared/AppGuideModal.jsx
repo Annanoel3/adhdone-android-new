@@ -96,6 +96,13 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
       description: "Your command center. Today's tasks, quick actions, a daily tip, and gentle nudges when you need them."
     },
     {
+      icon: ListTodo,
+      title: "Tasks",
+      description: "Everything in one place with urgency, subtasks, and smart reminders. Push a due date, break a task into steps, or drop it on the Back Burner when it's not today's problem.",
+      // Its own dropdowns, under Tasks rather than beside it (Anna, Oct 24
+      // 2026: "Put adding tasks is easy and task timer under tasks dropdown").
+      children: [
+    {
       icon: Plus,
       title: "Adding tasks is easy",
       subItems: [
@@ -139,9 +146,11 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
       ]
     },
     {
-      icon: ListTodo,
-      title: "Tasks",
-      description: "Everything in one place with urgency, subtasks, and smart reminders. Push a due date, break a task into steps, or drop it on the Back Burner when it's not today's problem."
+      icon: Timer,
+      title: "Task Timer",
+      description: "Time tasks to learn how long things really take you. Good for time blindness."
+    },
+      ],
     },
     {
       icon: CalendarDays,
