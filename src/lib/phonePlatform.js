@@ -67,6 +67,9 @@ const NOT_ON_IPHONE = {
   // the iPhone app has them; set to false then.
   shareToApp: true,
   homeWidget: true,
+  // OGG alarm-sound uploads: iPhone can't play or decode OGG (Haris, Oct 23
+  // 2026), so the picker there offers MP3, WAV and M4A only.
+  oggUploads: true,
 };
 
 export function onThisPhone(feature) {
