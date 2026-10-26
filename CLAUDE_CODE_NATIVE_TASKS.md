@@ -457,3 +457,10 @@ in `android/app/build.gradle`. Add anything else pending before building.
   read into `AlarmStore.Entry.eased` by PushFilter.ringOnArrival. The alarm screen then shows only
   Done and Later (no snoozes, no Open), and the ringing banner has Done and Later instead of
   Snooze 10 and Stop (AlarmService ACTION_LATER). Normal alarms keep every button. Test: a push with `alarm: true, eased: true` and a taskId shows Done and Later only.
+- The recording notification (Oct 26, 2026): tapping its body now opens the app on Record Notes
+  (`WidgetBridge.EXTRA_WIDGET_PATH` = "/Notes", the same hand-off the widget and AlarmActivity
+  use), not Home, and its text no longer says "Tap Stop" — the Pause/Stop buttons only show once
+  the notification is expanded, and Anna tapped the body expecting a stop (RecorderService
+  buildNotification). The web side covers build 42 meanwhile: `RecordingBar.jsx` in Layout shows
+  Pause/Stop on every page while a recording runs. Test: start a recording, go Home, collapse the
+  notification and tap it → Record Notes opens with the live controls.
