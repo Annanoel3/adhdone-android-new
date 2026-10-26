@@ -474,8 +474,13 @@ public class RecorderService extends Service {
         NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_stat_adhdone)
                 .setContentTitle(isPaused ? "Recording paused" : "Recording for notes")
-                .setContentText(title.isEmpty() ? "Tap Stop when it's over and ADHDone will make your notes."
-                        : title)
+                // The Pause and Stop buttons only show once the notification is
+                // expanded, so the text can't send people to a Stop they may not
+                // see; a tap on the notification itself opens Record Notes, where
+                // Stop is (Anna, Oct 26 2026: the tap opened the app on Home and
+                // "doesn't actually stop the recording").
+                .setContentText(title.isEmpty() ? "Tap to open the recording. Stop it when it's over and ADHDone makes your notes."
+                        : title + " — tap to open the recording")
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setSilent(true)
@@ -492,6 +497,9 @@ public class RecorderService extends Service {
         Intent open = getPackageManager().getLaunchIntentForPackage(getPackageName());
         if (open != null) {
             open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            // Lands on Record Notes (the same path hand-off the widget and the
+            // alarm screen use), not Home.
+            open.putExtra(WidgetBridge.EXTRA_WIDGET_PATH, "/Notes");
             b.setContentIntent(PendingIntent.getActivity(this, NOTIFICATION_ID, open,
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
         }
