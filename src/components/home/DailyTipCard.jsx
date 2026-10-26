@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Lightbulb, Sparkles, Loader2, RefreshCw } from "lucide-react";
 import { base44 } from "@/api/base44Client";
@@ -39,16 +39,39 @@ export default function DailyTipCard({ theme }) {
     return () => window.removeEventListener('daily-tip-regenerated', handler);
   }, []);
 
-  const loadTodaysTip = async () => {
+  // A new tip every time a task gets finished (Anna, Oct 26 2026: "Can
+  // today's tip update anytime a user finishes a task?"). Every way of
+  // finishing one ends in a 'tasks-changed' event, so the card recounts
+  // today's finished tasks on each and makes a fresh tip when the count went
+  // up (a count going down is an Undo: the tip stays). A short wait lets the
+  // save land and folds a quick run of taps into one tip. Tasks finished on
+  // another page catch up the next time Home opens (loadTodaysTip).
+  const recheck = useRef(null);
+  useEffect(() => {
+    const handler = () => {
+      clearTimeout(recheck.current);
+      recheck.current = setTimeout(() => { loadTodaysTip({ quiet: true }); }, 1500);
+    };
+    window.addEventListener('tasks-changed', handler);
+    return () => {
+      clearTimeout(recheck.current);
+      window.removeEventListener('tasks-changed', handler);
+    };
+  }, []);
+
+  // quiet: a recheck behind the card that is already showing a tip; the tip
+  // on screen stays until the new one is ready (the refresh arrow spins).
+  const loadTodaysTip = async ({ quiet = false } = {}) => {
     const today = getLocalDateString();
     
     // Check if we already have a tip for today
     const existingTips = await base44.entities.DailyTip.filter({ shown_date: today });
     
-    // Get current task completion count using local date comparison
+    // Today's finished tasks, by the phone's own date. Steps of a task aren't
+    // counted: checking off five steps is one task getting done, not five.
     const tasks = await base44.entities.Task.list('-created_date', 50);
     const completedToday = tasks.filter(t => {
-      if (t.status !== 'completed' || !t.completed_at) return false;
+      if (t.status !== 'completed' || !t.completed_at || t.parent_task_id) return false;
       const d = new Date(t.completed_at);
       const localDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
       return localDate === today;
@@ -65,8 +88,10 @@ export default function DailyTipCard({ theme }) {
       
       if (needsRegeneration) {
         console.log('🔄 [DAILY TIP] Regenerating tip (context changed or old version)...');
+        if (quiet) setIsRefreshing(true);
         await base44.entities.DailyTip.delete(tip.id);
         await generateSmartTip(today);
+        if (quiet) setIsRefreshing(false);
       } else {
         setTodaysTip(tip);
         setIsLoading(false);
@@ -78,27 +103,29 @@ export default function DailyTipCard({ theme }) {
   };
 
   const shouldRegenerateForContext = (completedCount) => {
-    // Regenerate at key milestones: 0→1 (first task), 2→3 (crushing it mode)
     const lastCheckKey = 'dailyTip_lastCompletedCount';
-    const lastCount = parseInt(localStorage.getItem(lastCheckKey) || '0', 10);
+    const lastDayKey = 'dailyTip_lastCompletedDay';
+    const today = getLocalDateString();
+    // Yesterday's count means nothing today.
+    const lastCount = localStorage.getItem(lastDayKey) === today
+      ? parseInt(localStorage.getItem(lastCheckKey) || '0', 10)
+      : 0;
     
     // Store current count
     localStorage.setItem(lastCheckKey, completedCount.toString());
+    localStorage.setItem(lastDayKey, today);
 
     // Regenerate when it's evening and we haven't generated an evening tip yet
     const eveningKey = 'dailyTip_eveningGenerated';
     const eveningDate = localStorage.getItem(eveningKey);
-    const today = getLocalDateString();
     if (isEvening() && eveningDate !== today) {
       localStorage.setItem(eveningKey, today);
       return true; // Switch to "Tonight's Tip"
     }
     
-    // Regenerate when crossing thresholds
-    if (lastCount === 0 && completedCount >= 1) return true; // Got started!
-    if (lastCount < 3 && completedCount >= 3) return true; // Crushing it!
-    
-    return false;
+    // One more task finished since the tip was made: a new tip for where
+    // they are now (used to be only the first one and the third).
+    return completedCount > lastCount;
   };
 
   const handleRefresh = async () => {
