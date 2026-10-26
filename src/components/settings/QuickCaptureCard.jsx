@@ -234,9 +234,14 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
       return;
     }
     setSoundBusy(true);
-    setSoundNote('Uploading…');
+    setSoundNote('Getting it to alarm loudness…');
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      // Uploads ring as loud as the presets: the file is re-mastered here
+      // first (alarmSoundMaster.js). One that can't be decoded goes up as is.
+      const { masterAlarmSound } = await import('../utils/alarmSoundMaster');
+      const { file: ready } = await masterAlarmSound(file);
+      setSoundNote('Uploading…');
+      const { file_url } = await base44.integrations.Core.UploadFile({ file: ready });
       if (!file_url) throw new Error('upload returned no url');
       await applySound(file_url, file.name.replace(/\.[a-z0-9]+$/i, ''));
     } catch (err) {
@@ -279,7 +284,9 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
       <input
         ref={fileRef}
         type="file"
-        accept="audio/*,.mp3,.wav,.ogg,.m4a"
+        // iPhone can't play OGG (Haris, Oct 23 2026), so the iPhone app
+        // doesn't offer it; everywhere else the list is unchanged.
+        accept={onThisPhone('oggUploads') ? "audio/*,.mp3,.wav,.ogg,.m4a" : "audio/mpeg,audio/wav,audio/x-wav,audio/mp4,audio/x-m4a,.mp3,.wav,.m4a"}
         className="hidden"
         onChange={handleUpload}
       />
