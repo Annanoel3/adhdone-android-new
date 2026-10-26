@@ -63,6 +63,7 @@ import PokeNotification from "./components/shared/PokeNotification";
 // nudge, and people just tapped No. The only "did you do it?" now is the one a
 // notification tap lands on (the TaskNotification page).
 import AppGuideModal from "./components/shared/AppGuideModal";
+import RecordingBar from "./components/shared/RecordingBar";
 import FocusModePrompt from "./components/shared/FocusModePrompt";
 import ScheduledTextSendPopup from "./components/scheduledtexts/ScheduledTextSendPopup";
 import BirthdayTextPromptPopup from "./components/birthdays/BirthdayTextPromptPopup";
@@ -1287,6 +1288,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                 }`} />
               </div>
             </header>
+
+            {/* While the phone records for notes: Pause and Stop on every page,
+                not only Record Notes (the tray's tap opens the app on Home). */}
+            <RecordingBar currentPageName={currentPageName} theme={theme} />
 
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
               {children}
