@@ -109,8 +109,10 @@ export default function Tasks() {
   useEffect(() => {
     if (location.state?.reload) {
       loadTasks();
-      // Clear the state so it doesn't reload again on every render
-      navigate(location.pathname, { replace: true, state: {} });
+      // Clear the state so it doesn't reload again on every render. The query
+      // string stays: a reload that arrives with ?taskId= (a task just
+      // duplicated, Oct 25 2026) still has to open that task's card.
+      navigate(location.pathname + location.search, { replace: true, state: {} });
     }
   }, [location.state, navigate, location.pathname]);
 
@@ -198,17 +200,19 @@ export default function Tasks() {
 
   // Opened with ?taskId= (e.g. tapping a task on the home-screen widget) —
   // show that task's details card once the tasks are loaded.
-  const openedFromParamRef = React.useRef(false);
+  // Remembers WHICH id was opened, not just that one was: a second ?taskId=
+  // on the same visit (a duplicate made from a card here) opens too.
+  const openedFromParamRef = React.useRef(null);
   useEffect(() => {
-    if (openedFromParamRef.current || allTasks.length === 0) return;
+    if (allTasks.length === 0) return;
     const taskId = new URLSearchParams(window.location.search).get('taskId');
-    if (!taskId) return;
+    if (!taskId || openedFromParamRef.current === taskId) return;
     const found = allTasks.find(t => t.id === taskId);
     if (!found) return;
-    openedFromParamRef.current = true;
+    openedFromParamRef.current = taskId;
     setSelectedTask(found);
     setIsDetailsModalOpen(true);
-  }, [allTasks]);
+  }, [allTasks, location.search]);
 
   const handleTaskUpdate = (updatedTask) => {
     setAllTasks(prev => prev.map(t => t.id === updatedTask.id ? { ...t, ...updatedTask } : t));
