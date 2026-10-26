@@ -47,6 +47,7 @@ export default function DailyTipCard({ theme }) {
   // save land and folds a quick run of taps into one tip. Tasks finished on
   // another page catch up the next time Home opens (loadTodaysTip).
   const recheck = useRef(null);
+  const checking = useRef(false);
   useEffect(() => {
     const handler = () => {
       clearTimeout(recheck.current);
@@ -62,6 +63,18 @@ export default function DailyTipCard({ theme }) {
   // quiet: a recheck behind the card that is already showing a tip; the tip
   // on screen stays until the new one is ready (the refresh arrow spins).
   const loadTodaysTip = async ({ quiet = false } = {}) => {
+    // One check at a time: a recheck that lands while a tip is being made
+    // would delete it and make another.
+    if (checking.current) return;
+    checking.current = true;
+    try {
+    await loadTodaysTipNow({ quiet });
+    } finally {
+      checking.current = false;
+    }
+  };
+
+  const loadTodaysTipNow = async ({ quiet = false } = {}) => {
     const today = getLocalDateString();
     
     // Check if we already have a tip for today
