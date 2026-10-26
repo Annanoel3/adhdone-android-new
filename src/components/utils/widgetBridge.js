@@ -955,6 +955,9 @@ export const LOUD_ALARM_SOUND_FOR = new Map([
   ['https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/JR%20Osaka%20Loop%204.mp3', 'https://base44.app/api/apps/68dd79726fce6eca73056b9b/files/mp/public/68dd79726fce6eca73056b9b/cd9302e06_alarm-jr-osaka-loop-loud.wav'],
   ['https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/JR%20Morning%20Tranquility.mp3', 'https://base44.app/api/apps/68dd79726fce6eca73056b9b/files/mp/public/68dd79726fce6eca73056b9b/5828ed87c_alarm-jr-morning-tranquility-loud.wav'],
   ['https://rbxbrfewaxvhvlntxhuv.supabase.co/storage/v1/object/public/Notifications/JR%20Flower%20Shop.mp3', 'https://base44.app/api/apps/68dd79726fce6eca73056b9b/files/mp/public/68dd79726fce6eca73056b9b/7bae5a00b_alarm-jr-flower-shop-loud.wav'],
+  // An upload made before uploads were re-mastered (alarmSoundMaster.js, Oct
+  // 26 2026), swapped for its loud copy the same way.
+  ['https://base44.app/api/apps/68dd79726fce6eca73056b9b/files/mp/public/68dd79726fce6eca73056b9b/f06bb61af_sailor_moon_theme_song.mp3', 'https://base44.app/api/apps/68dd79726fce6eca73056b9b/files/mp/public/68dd79726fce6eca73056b9b/81d71366b_alarm-sailor-moon-theme-loud.wav'],
 ]);
 
 // Hands native the ring sound the user chose ('' = the phone's default alarm
