@@ -36,7 +36,8 @@ import {
   Bell,
   BellOff,
   AlarmClock,
-  Info
+  Info,
+  Copy
 } from "lucide-react";
 import { Task } from "@/entities/Task";
 import TaskDecompositionModal from "./TaskDecompositionModal";
@@ -1846,6 +1847,28 @@ Return JSON:
   const notesSection = (
     <TaskNotesField key={`${task?.id}-${isOpen}`} startEditing={!(task?.notes || '').trim()} value={taskNotes} onChange={setTaskNotes} onSave={handleNotesUpdate} theme={theme} />
   );
+  // Duplicate (Anna, Oct 25 2026): a copy with everything but the when, opened
+  // on its own card (the Tasks page opens ?taskId=) so the date or time gets
+  // picked there, through the card's usual path. Birthdays have no copy: they
+  // already repeat every year.
+  const handleDuplicate = async () => {
+    try {
+      const { duplicateTask } = await import('../utils/duplicateTask');
+      const copy = await duplicateTask(task);
+      toast({
+        title: 'Copy made',
+        description: isEvent
+          ? 'Set the date and time on the copy.'
+          : 'Pick when the copy is due, or leave it to Smart Reminders.',
+      });
+      onClose();
+      navigate(`/Tasks?taskId=${copy.id}`, { state: { reload: true } });
+    } catch (e) {
+      console.error('Duplicate failed:', e);
+      toast({ title: "Couldn't make a copy", description: 'Try again in a moment.' });
+    }
+  };
+
   const handleToParkingLot = async () => {
     if (!(await appConfirm(`Convert "${task.title}" to a parking lot idea?`, { okText: 'Move it' }))) return;
 
@@ -2533,6 +2556,11 @@ Return JSON:
                   {isEvent && task.status === 'cancelled' && (
                   <button type="button" onClick={handleRestoreEvent} className={`flex items-center gap-1 ${theme === 'dark' ? 'text-amber-300' : 'text-amber-700'}`}>
                     <RotateCcw className="w-4 h-4" /> Back on
+                  </button>
+                  )}
+                  {currentType !== 'birthday' && !task.parent_task_id && (
+                  <button type="button" onClick={handleDuplicate} className={`flex items-center gap-1 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <Copy className="w-4 h-4" /> Duplicate
                   </button>
                   )}
                   <button type="button" onClick={handleDelete} className="flex items-center gap-1 text-red-600">
