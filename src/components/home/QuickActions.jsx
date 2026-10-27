@@ -91,8 +91,11 @@ export default function QuickActions({ theme, user }) {
         key: s.key,
         icon: s.icon,
         label: s.title,
-        onClick: () => navigate(createPageUrl(s.page)),
-        color: tileColor,
+        // A page opens; an event (Focus Mode) asks its prompt to open.
+        onClick: () => (s.event ? window.dispatchEvent(new CustomEvent(s.event)) : navigate(createPageUrl(s.page))),
+        color: s.key === 'focus'
+          ? (theme === 'minimalist' ? 'bg-green-100 text-green-700' : 'bg-gradient-to-br from-green-100 to-emerald-100 text-green-700')
+          : tileColor,
       }),
   ];
 
