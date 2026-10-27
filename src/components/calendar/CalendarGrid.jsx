@@ -32,6 +32,25 @@ const KIND_BADGE = {
   payment: 'bg-emerald-100 text-emerald-700 border-emerald-200',
 };
 
+// Month-cell chips: a filled label like a phone calendar's, so words read
+// at a glance (Anna, Oct 27 2026: her phone's calendar widget "fits more
+// words" and is easier to read). Colours are inline, not Tailwind classes:
+// the night-season glass (HalloweenMode.darkGlassCss) rewrites pale bg-*
+// classes into dark panels, which is how the chips had turned into plain
+// coloured text on Halloween. [background, text].
+const CHIP_COLORS = {
+  light: {
+    event: ['#cdeee3', '#0f3f31'], task: ['#e7e1fb', '#3b2a7a'], payment: ['#fde7b6', '#5a3c00'],
+    birthday: ['#fcd6e6', '#7a1f4a'], overdue: ['#fecaca', '#7f1d1d'], done: ['#e5e7eb', '#6b7280'],
+  },
+  dark: {
+    event: ['#1f6b55', '#e6fff5'], task: ['#4b3b8f', '#ece6ff'], payment: ['#8a5a00', '#fff2cc'],
+    birthday: ['#8a2a55', '#ffe0ec'], overdue: ['#991b1b', '#fee2e2'], done: ['#374151', '#9ca3af'],
+  },
+};
+const chipKind = (it) => (it.overdue ? 'overdue' : it.done ? 'done' : it.kind === 'imported_event' ? 'event'
+  : it.kind === 'imported_task' ? 'task' : (CHIP_COLORS.light[it.kind] ? it.kind : 'task'));
+
 const KIND_LABEL = {
   birthday: 'Birthday',
   imported_event: 'Event',
@@ -321,6 +340,12 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
   const cellMuted = isDark ? 'bg-gray-900/40' : 'bg-gray-50/60';
   const textPrimary = isDark ? 'text-white' : 'text-gray-900';
   const textSecondary = isDark ? 'text-gray-400' : 'text-gray-500';
+  // Chip colours: the dark set on the dark theme and on every seasonal skin
+  // (their cards are dark glass whatever the base theme).
+  let seasonal = false;
+  try { seasonal = (localStorage.getItem('special_mode') || 'normal') !== 'normal'; } catch (e) { /* no storage */ }
+  const chips = CHIP_COLORS[isDark || seasonal ? 'dark' : 'light'];
+  const chipStyle = (it) => { const [bg, fg] = chips[chipKind(it)]; return { backgroundColor: bg, color: fg }; };
 
   return (
     <div className="space-y-4">
@@ -420,9 +445,11 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           textSecondary={textSecondary}
         />
       ) : (
-      <div className="grid grid-cols-7 gap-px">
+      {/* Tight cells, like a phone calendar: no cell borders or inner padding,
+          hairline gaps, small filled chips (Anna, Oct 27 2026). */}
+      <div className={`grid grid-cols-7 gap-px rounded-md overflow-hidden ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>
         {cells.map((cell, idx) => {
-          if (!cell) return <div key={`b-${idx}`} className={`min-h-[80px] rounded-md border ${cellMuted}`} />;
+          if (!cell) return <div key={`b-${idx}`} className={`min-h-[76px] ${cellMuted}`} />;
           const k = dateKey(cell);
           const dayItems = itemsByDate.get(k) || [];
           const isToday = sameDayKey(cell, today);
@@ -435,7 +462,8 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           const liveItems = dayItems.filter((it) => !it.silenced && !it.done);
           // Separate multi-day span bars from regular items for cleaner rendering.
           const spanItems = liveItems.filter((it) => it.spanPos);
-          const regularItems = liveItems.filter((it) => !it.spanPos);
+          // Cancelled ones last, so a live item never loses its line to one.
+          const regularItems = liveItems.filter((it) => !it.spanPos).sort((a, b) => (a.cancelled ? 1 : 0) - (b.cancelled ? 1 : 0));
           const regularShown = regularItems.slice(0, 4);
           const spanShown = spanItems.slice(0, 3);
           const totalOverflow = liveItems.length - spanShown.length - regularShown.length;
@@ -445,17 +473,15 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
             <button
               key={k}
               onClick={() => setSelected(cell)}
-              className={`min-h-[80px] rounded-md border px-0.5 pt-0.5 pb-1 text-left transition-all overflow-hidden ${
-                isSelected
-                  ? 'ring-2 ring-blue-400 ' + cellBase
-                  : cellBase + ' hover:border-blue-300'
-              }`}
+              className={`min-h-[76px] px-px pt-0.5 pb-0.5 text-left transition-all overflow-hidden ${
+                isSelected ? 'ring-2 ring-inset ring-blue-400 ' : ''
+              }${isDark ? 'bg-gray-800/60' : 'bg-white'}`}
             >
               {/* Just the day number: the item count took a whole line's
                   width on a phone, and the rows below say it anyway. */}
               <div className="flex items-center">
                 <span
-                  className={`text-[11px] font-semibold w-5 h-5 flex items-center justify-center rounded-full ${
+                  className={`text-[10px] font-semibold w-4 h-4 ml-0.5 flex items-center justify-center rounded-full ${
                     isToday ? 'bg-blue-500 text-white' : textSecondary
                   }`}
                 >
@@ -506,9 +532,14 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
                         ))}
                       </div>
                     ) : (
-                      <div className="space-y-0.5">
+                      <div className="space-y-px">
                         {regularShown.map((it, i) => (
-                          <div key={i} className={`text-[11px] leading-[1.25] overflow-hidden whitespace-nowrap rounded px-1 ${it.overdue ? 'bg-red-100 text-red-700 font-medium' : it.done ? (isDark ? 'bg-gray-700/60 text-gray-400' : 'bg-gray-100 text-gray-500') : (KIND_BADGE[it.kind] || (isDark ? 'bg-gray-700 text-gray-200' : 'bg-gray-100 text-gray-700'))} ${it.cancelled ? 'line-through opacity-60' : ''}`} title={it.cancelled ? `${it.title} (cancelled)` : it.done ? `${it.title} (done)` : it.title}>
+                          <div
+                            key={i}
+                            className={`text-[10px] leading-[1.35] tracking-tight overflow-hidden whitespace-nowrap rounded-[3px] px-[3px] ${it.overdue ? 'font-medium' : ''} ${it.cancelled ? 'line-through opacity-50' : ''}`}
+                            style={chipStyle(it)}
+                            title={it.cancelled ? `${it.title} (cancelled)` : it.done ? `${it.title} (done)` : it.title}
+                          >
                             {it.done ? `✓ ${it.title}` : it.title}
                           </div>
                         ))}
