@@ -817,11 +817,12 @@ They asked: "${question}"
 
 Read the whole transcript before answering; the answer may be spread over several places, and the
 last mention can change the first ("actually, make that twice a day").
-- answer: what was said about it, in plain words, two to six short sentences, every exact detail
-  as said (doses, numbers, dates, names, what to do and when). Say who said it when the
-  transcript makes that clear ("the doctor", "Dr. Patel", "your boss"). Talk to them as "you".
-  If it never came up, say so plainly in one sentence. Never guess, never add general knowledge,
-  never soften or interpret what was said.
+- answer: what was said about it, told in your own plain words (no quotation marks here; the
+  exact words go in "quotes" below), two to six short sentences, every exact detail as said
+  (doses, numbers, dates, names, what to do and when). Say who said it when the transcript
+  makes that clear ("the doctor", "Dr. Patel", "your boss"). Talk to them as "you". If it never
+  came up, say so plainly in one sentence. Never guess, never add general knowledge, never
+  soften or interpret what was said.
 - quotes: the exact words from the transcript the answer rests on, copied character for
   character from the transcript (no cleaning up, no paraphrase, no "..."), each one a single
   continuous stretch of 5 to 60 words, with "at" = the [time] mark of the stretch it sits in.
