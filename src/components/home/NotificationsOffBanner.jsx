@@ -140,8 +140,8 @@ export default function NotificationsOffBanner({ theme, specialMode }) {
             <h2 className="text-xl font-bold text-foreground">Your reminders can't reach you</h2>
           </div>
           <p className="text-[15px] leading-relaxed text-muted-foreground">
-            Notifications are off for ADHDone on this phone, so none of your reminders, alarms or check-ins
-            ever show up. Turn them on and they'll start coming through.
+            Notifications are off for ADHDone on this phone, so no reminders or alarms can reach you.
+            Turn them on and they start coming through.
           </p>
           <div className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={closeReask}>Not now</Button>
