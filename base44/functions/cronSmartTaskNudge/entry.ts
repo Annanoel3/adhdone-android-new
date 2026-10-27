@@ -860,12 +860,29 @@ Deno.serve(async (req) => {
 
         // An urgent task keeps 5 minutes from other pushes, not 20 (sendLedger).
         const gateUrgent = !!entry.task_id && taskById.get(entry.task_id)?.urgency === 'urgent';
+        // A nudge is written for a moment. Held past that moment by the
+        // spacing rules, its words go stale: Anna's "reschedule Peach's
+        // appointment this morning, before Mom's discharge at 10" was planned
+        // for 9:15 AM and held by the 9:00 and 10:00 discharge reminders (and
+        // the owner's own health note) until 10:29 (Oct 27 2026: "It's 10:30").
+        // So a nudge held more than 30 minutes past its time is dropped
+        // instead, and the planner looks again with the clock as it is now.
+        const heldPast = nowMs - utcMs(entry.send_at);
+        const dropStale = (why: string) => {
+          entry.sent = true;
+          entry.sent_at = now.toISOString();
+          entry.skipped_reason = 'held_too_long';
+          newLog.push({ k: entryKey(entry), at: entry.sent_at, skip: 'held_too_long' });
+          console.log(`[SMART NUDGE] Dropped "${entry.title}" for ${email}: held ${Math.round(heldPast / 60000)} min past its time (${why}); planning again`);
+        };
         if (holdForDigest && !gateUrgent) {
+          if (heldPast > HELD_STALE_MS) { dropStale('morning summary first'); continue; }
           console.log(`[SMART NUDGE] Held nudge for ${email}: the morning summary goes first this hour`);
           continue;
         }
         const gate = await ledgerCheck(base44, { email, taskId: entry.task_id, kind: 'smart_nudge', urgent: gateUrgent });
         if (!gate.allowed) {
+          if (heldPast > HELD_STALE_MS) { dropStale(String(gate.reason || 'held')); continue; }
           console.log(`[SMART NUDGE] Held nudge for ${email} (${gate.reason}) — will retry next run`);
           break;
         }
