@@ -43,10 +43,9 @@ const SCRIPT = [
     // inside the first minute, before a bio, a tour or a permission — so there
     // is a reminder to arrive, and a reason to come back. (The about-you
     // question waits until their first task is checked off; see catchUpScript.)
-    text: (name, handle) =>
-      handle
-        ? `Nice to meet you, ${name}! What's one thing you keep forgetting? Type it in and it's on your list.`
-        : `Nice to meet you, ${name}! What's one thing you keep forgetting? Type it in and it's on your list.`,
+    // (The @handle line that used to sit here promised sharing with friends,
+    // which the app doesn't have; Anna, Oct 27 2026: no advertising what isn't there.)
+    text: (name) => `Nice to meet you, ${name}! What's one thing you keep forgetting? Type it in and it's on your list.`,
     input: 'task',
   },
   {

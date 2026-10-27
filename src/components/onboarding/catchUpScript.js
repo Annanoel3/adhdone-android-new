@@ -24,10 +24,7 @@ const CATCH_UP_SCRIPT = [
     input: 'name',
   },
   {
-    text: (name, handle) =>
-      handle
-        ? `Thanks, ${name}!`
-        : `Thanks, ${name}!`,
+    text: (name) => `Thanks, ${name}!`,
   },
   {
     text: () =>
@@ -75,10 +72,7 @@ export const FIRST_DONE_SCRIPT = [
     input: 'name',
   },
   {
-    text: (name, handle) =>
-      handle
-        ? `Thanks, ${name}!`
-        : `Thanks, ${name}!`,
+    text: (name) => `Thanks, ${name}!`,
   },
   {
     text: () =>
