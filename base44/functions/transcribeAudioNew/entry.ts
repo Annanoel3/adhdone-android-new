@@ -762,6 +762,90 @@ Return JSON: { "answer": "...", "sources": [the RECORDING numbers the answer cam
   return Response.json({ ok: true, answer, sources });
 }
 
+// ── A question about ONE recording, answered in the speaker's own words ─────
+// "What did my doctor say about the dose?" on that recording's page (Anna,
+// Oct 27 2026: "comprehensive enough to just be able to ask... and then using
+// actual quotes from the transcript"). The whole transcript is read, the
+// answer comes with the exact stretches it rests on, and every quote is
+// checked against the transcript before it's shown: one the model reworded
+// or made up is dropped, never shown as the speaker's words.
+function quoteKey(s: string): string {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/[‘’“”"'`]/g, "")
+    .replace(/[–—]/g, "-")
+    .replace(/[^a-z0-9%$.,:;!?\-\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+async function notesAskOne(base44: any, user: any, body: any) {
+  const recordId = String(body?.record_id || "");
+  const question = String(body?.question || "").replace(/\s+/g, " ").trim().slice(0, 500);
+  if (!question) return Response.json({ ok: false, error: "No question" }, { status: 400 });
+  const rec = await getRecording(base44, recordId);
+  if (!rec) return Response.json({ ok: false, error: "No such recording" }, { status: 404 });
+  // A follow-up recorded onto this one ("Record more") is part of the same
+  // conversation: its transcript is read too, after this one's.
+  let followUps: any[] = [];
+  try {
+    followUps = ((await base44.entities.EnergyLog.filter({ kind: "note_recording", parent_record_id: rec.id }, "started_at", 20)) || [])
+      .filter((r: any) => r?.id !== rec.id);
+  } catch (_) { followUps = []; }
+  const tz = user?.timezone || undefined;
+  const pieces = [rec, ...followUps].map((r, i) => {
+    const t = transcriptOf(r, 120000);
+    return t ? `${i === 0 ? "" : `\n[Recorded again ${whenAdded(r.started_at, tz)}]\n`}${t}` : "";
+  }).filter(Boolean);
+  const transcript = pieces.join("\n\n");
+  if (transcript.replace(/\[[^\]]*\]/g, "").trim().length < 20) {
+    return Response.json({ ok: true, answer: "This recording didn't pick up any speech, so there's nothing to look in.", quotes: [] });
+  }
+  const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
+  const SYSTEM = "You help someone with ADHD find what was said in a recording they made of an appointment, meeting, class or conversation. You answer only from the transcript, and you quote it exactly. Answer with JSON only.";
+  let out: any;
+  try {
+    out = await askJson(openai, SYSTEM, `The recording: "${String(rec.title || rec.notes?.title || "Recording")}", made ${whenRecorded(rec.started_at, tz)}.${user?.about_me ? `\nAbout the person who made it: ${String(user.about_me).slice(0, 300)}` : ""}
+
+The full transcript, with [time] marks where each stretch starts:
+"""
+${transcript}
+"""
+
+They asked: "${question}"
+
+Read the whole transcript before answering; the answer may be spread over several places, and the
+last mention can change the first ("actually, make that twice a day").
+- answer: what was said about it, in plain words, two to six short sentences, every exact detail
+  as said (doses, numbers, dates, names, what to do and when). Say who said it when the
+  transcript makes that clear ("the doctor", "Dr. Patel", "your boss"). Talk to them as "you".
+  If it never came up, say so plainly in one sentence. Never guess, never add general knowledge,
+  never soften or interpret what was said.
+- quotes: the exact words from the transcript the answer rests on, copied character for
+  character from the transcript (no cleaning up, no paraphrase, no "..."), each one a single
+  continuous stretch of 5 to 60 words, with "at" = the [time] mark of the stretch it sits in.
+  Up to 6, the most telling first. Empty if it never came up.
+
+Return JSON: { "answer": "...", "quotes": [{ "text": "...", "at": "0:00" }] }`, 6000);
+  } catch (_) {
+    return Response.json({ ok: false, error: "ask_failed" }, { status: 502 });
+  }
+  const answer = String(out?.answer || "").replace(/\s+/g, " ").trim().slice(0, 1500) || "I couldn't find that in this recording.";
+  const haystack = quoteKey(transcript);
+  const quotes: any[] = [];
+  let dropped = 0;
+  for (const q of (Array.isArray(out?.quotes) ? out.quotes : []).slice(0, 10)) {
+    const text = String(q?.text || "").replace(/\s+/g, " ").trim().slice(0, 400);
+    const key = quoteKey(text);
+    if (!text || key.length < 12) continue;
+    if (!haystack.includes(key)) { dropped++; continue; }
+    quotes.push({ text, at: String(q?.at || "").trim().slice(0, 12) });
+    if (quotes.length >= 6) break;
+  }
+  if (dropped) console.log(`[notes] ask_one: dropped ${dropped} quote${dropped === 1 ? "" : "s"} not found word for word in ${recordId}`);
+  return Response.json({ ok: true, answer, quotes });
+}
+
 async function notesTry(user: any, body: any) {
   if (user?.role !== "admin") return Response.json({ error: "Forbidden" }, { status: 403 });
   const transcript = String(body?.transcript || "");
@@ -786,6 +870,7 @@ Deno.serve(async (req) => {
     if (body?.mode === "notes_make") return await notesMake(base44, user, body);
     if (body?.mode === "notes_change") return await notesChange(base44, user, body);
     if (body?.mode === "notes_ask") return await notesAsk(base44, user, body);
+    if (body?.mode === "notes_ask_one") return await notesAskOne(base44, user, body);
     if (body?.mode === "notes_try") return await notesTry(user, body);
 
     // Voice typing (Parking Lot), as before.
