@@ -651,8 +651,7 @@ export function AlarmCard({ user, theme }) {
               {convertTo === 'alarm' ? 'Switch your existing tasks to alarms too?' : 'Switch your existing tasks to regular notifications too?'}
             </DialogTitle>
             <DialogDescription className={dark ? 'text-gray-400' : ''}>
-              New tasks will use your new choice either way. This changes only how the tasks you already
-              have get your attention — their reminder times don't move.
+              New tasks use your new choice either way. Reminder times don't move.
             </DialogDescription>
           </DialogHeader>
           <div className="flex gap-2 pt-1">
@@ -749,7 +748,7 @@ export function AlarmCard({ user, theme }) {
               <Row
                 ok={status.overlay}
                 label="Display over other apps"
-                detail="Lets the alarm take over the screen while you're using the phone. Without it Android only shows a banner."
+                detail="Without it, an alarm while you're using the phone is only a banner."
                 action="Allow"
                 onAction={() => AlarmBridge.openOverlaySettings()}
               />
@@ -757,7 +756,7 @@ export function AlarmCard({ user, theme }) {
             <Row
               ok={status.ignoringBatteryOptimizations}
               label="Battery"
-              detail="Samsung puts apps it thinks you don't use to sleep, and a sleeping app's reminders and alarms can come late or not at all."
+              detail="Without it, the phone can put ADHDone to sleep and reminders come late or not at all."
               action="Fix"
               onAction={() => AlarmBridge.requestIgnoreBatteryOptimizations()}
             />
