@@ -403,6 +403,10 @@ export default function NotificationFollowupModal({ user, theme }) {
               </div>
             ) : (
               <div className="space-y-2 mt-2">
+                {/* A 5-minute start only makes sense on a task that takes a
+                    stretch of work (takes_time) — not vitamins or the litter
+                    box (Anna, Oct 27 2026). */}
+                {currentTask?.takes_time !== false && (
                 <Button
                   onClick={handleJustFiveMinutes}
                   disabled={!!processing}
@@ -422,6 +426,7 @@ export default function NotificationFollowupModal({ user, theme }) {
                     low-pressure start
                   </span>
                 </Button>
+                )}
 
                 {SNOOZE_OPTIONS.map((option) => (
                   <Button
