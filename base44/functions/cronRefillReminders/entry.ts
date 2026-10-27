@@ -1720,7 +1720,22 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   // again every ALERT_COOLDOWN_MS.
   const problems: { title: string; body: string; sinceMs?: number }[] = [];
   const realUser = (email: string) => !!email && !OWNER_ACCOUNTS.has(email);
-  const activeLately = (u: any) => nowMs - (Date.parse(u?.last_active_at || '') || 0) < 7 * H_DAY;
+  const msOf = (v: any) => {
+    const s = String(v || '');
+    return s ? Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`) : NaN;
+  };
+  // Someone whose phone stopped taking pushes after their last open has
+  // uninstalled (or shut the app's notifications off). They're told about
+  // ONCE, in check 11, and left out of everything else here: their alarms
+  // can't ring, their plans can't be stuck and their quiet hours don't matter
+  // until they're back (Anna, Oct 27 2026: "if we know someone uninstalled, I
+  // don't want to keep getting reminders about it").
+  const gone = (u: any) => {
+    const lastMs = msOf(u?.last_active_at);
+    const goneMs = msOf(u?.push_unreachable_at);
+    return Number.isFinite(goneMs) && (!Number.isFinite(lastMs) || goneMs > lastMs);
+  };
+  const activeLately = (u: any) => !gone(u) && nowMs - (Date.parse(u?.last_active_at || '') || 0) < 7 * H_DAY;
   const userByEmail: Record<string, any> = {};
   for (const u of allUsers) if (u?.email) userByEmail[u.email] = u;
 
@@ -1916,21 +1931,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   //    Each is told once per happening (sinceMs), not every 6 hours. Left out
   //    with her own accounts: family who only installed it to try it.
   const notReal = new Set([...OWNER_ACCOUNTS, 'antonio.baird1996@gmail.com', 'aleck.baird@gmail.com']);
-  const msOf = (v: any) => {
-    const s = String(v || '');
-    return s ? Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`) : NaN;
-  };
-  // Someone whose phone stopped taking pushes after their last open has
-  // uninstalled (or shut the app's notifications off). They're told about
-  // ONCE, in check 11, and left out of everything else here: their alarms
-  // can't ring and their quiet hours don't matter until they're back (Anna,
-  // Oct 27 2026: "if we know someone uninstalled, I don't want to keep getting
-  // reminders about it").
-  const gone = (u: any) => {
-    const lastMs = msOf(u?.last_active_at);
-    const goneMs = msOf(u?.push_unreachable_at);
-    return Number.isFinite(goneMs) && (!Number.isFinite(lastMs) || goneMs > lastMs);
-  };
+  // Checks 9 and 10 skip anyone known to be gone (see `gone` above).
   const people = allUsers.filter((u: any) => u?.email && !notReal.has(u.email) && !gone(u));
   const nameOf = (u: any) => String(u?.preferred_name || u?.full_name || u?.email || 'Someone').trim();
   const clock12 = (hhmm: any) => {
