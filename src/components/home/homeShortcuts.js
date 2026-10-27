@@ -67,6 +67,29 @@ export function readHomeTiles(user) {
   return [...DEFAULT_TILES];
 }
 
+// Tiles per row, 2 (the default), 3 or 4: a tiny switch beside Edit
+// shortcuts cycles it (Anna, Oct 27 2026). Same phone-first rule.
+const COLS_KEY = "home_tile_cols";
+export const TILE_COLS = [2, 3, 4];
+export const HOME_COLS_EVENT = "home-tile-cols-changed";
+const validCols = (n) => (TILE_COLS.includes(Number(n)) ? Number(n) : null);
+
+export function readTileCols(user) {
+  try {
+    const v = validCols(localStorage.getItem(COLS_KEY));
+    if (v) return v;
+  } catch { /* no storage */ }
+  return validCols(user?.home_tile_cols) || 2;
+}
+
+export function saveTileCols(n) {
+  const v = validCols(n) || 2;
+  try { localStorage.setItem(COLS_KEY, String(v)); } catch { /* no storage */ }
+  base44.auth.updateMe({ home_tile_cols: v }).catch(() => {});
+  try { window.dispatchEvent(new CustomEvent(HOME_COLS_EVENT, { detail: v })); } catch { /* ignore */ }
+  return v;
+}
+
 export function saveHomeTiles(keys) {
   const clean = known(keys);
   const stored = clean.includes("timer") ? clean : [...clean, TIMER_OFF];
