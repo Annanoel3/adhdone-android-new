@@ -411,6 +411,10 @@
       },
       "description": "The Home row after Add, in order (keys from src/components/home/homeShortcuts.js: timer, notes, calendar, parkinglot, ...). \"-timer\" means Timer was taken off on purpose; a list with neither timer nor -timer was saved by the first version (Oct 27 2026) and means Timer first, then these. Same rule as task_sort: the phone's own copy wins while it exists."
     },
+    "home_tile_cols": {
+      "type": "number",
+      "description": "How many Home shortcut tiles sit in a row: 2 (default), 3 or 4, from the tiny switch beside Edit shortcuts. Same rule as task_sort: the phone's own copy wins while it exists."
+    },
     "notes_minutes_month": {
       "type": "string",
       "description": "Recorded notes: the month (YYYY-MM, in the person's own time zone) that notes_seconds_used counts. A different month means nothing has been used yet this month."
