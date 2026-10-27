@@ -32,10 +32,10 @@ export function saysWhen(text) {
 
 const SCRIPT = [
   {
-    text: () => "Hey — welcome to ADHDone. Built by Anna, a girl who just wants to stop missing doctors appointments and got tired of apps that just don't work.",
+    text: () => "Hey, welcome to ADHDone. Built by Anna, who got tired of missing doctor's appointments and of apps that don't work.",
   },
   {
-    text: () => "First things first: what should we call you? This becomes your username — you can change it in Settings anytime.",
+    text: () => "First things first: what should we call you? You can change it in Settings anytime.",
     input: 'name',
   },
   {
@@ -45,7 +45,7 @@ const SCRIPT = [
     // question waits until their first task is checked off; see catchUpScript.)
     text: (name, handle) =>
       handle
-        ? `Nice to meet you, ${name}! Your handle is @${handle} — that's how friends will find you once sharing goes live. Now: what's one thing you keep forgetting? Type it in and it's on your list.`
+        ? `Nice to meet you, ${name}! What's one thing you keep forgetting? Type it in and it's on your list.`
         : `Nice to meet you, ${name}! What's one thing you keep forgetting? Type it in and it's on your list.`,
     input: 'task',
   },

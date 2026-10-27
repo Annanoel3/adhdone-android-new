@@ -6,7 +6,7 @@
 // The line after the about-you question: an answer is thanked, a skip isn't.
 const afterAbout = (back) => (name, handle, about) =>
   String(about || '').trim()
-    ? `Got it. That'll shape what counts as urgent and how hard this app nudges you about it. That's everything — back to your ${back}.`
+    ? `Got it. That shapes what counts as urgent and how hard the app nudges you. Back to your ${back}.`
     : `That's ok — you can always revisit this in Settings. Back to your ${back}.`;
 
 const CATCH_UP_SCRIPT = [
@@ -16,22 +16,22 @@ const CATCH_UP_SCRIPT = [
   },
   {
     text: () =>
-      "There's a new bit of setup that makes this app a lot better at helping *you* specifically. Two quick questions — that's it.",
+      "Two quick questions that make this app a lot better at helping *you*.",
   },
   {
     text: () =>
-      "First: what should we call you? This becomes your username — you can change it in Settings anytime.",
+      "First: what should we call you? You can change it in Settings anytime.",
     input: 'name',
   },
   {
     text: (name, handle) =>
       handle
-        ? `Thanks, ${name}! Your handle is @${handle} — that's how friends will find you once sharing goes live.`
+        ? `Thanks, ${name}!`
         : `Thanks, ${name}!`,
   },
   {
     text: () =>
-      "Second: tell us a little about yourself — anything that helps ADHDone judge what actually matters to you. Stuff like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
+      "Second: tell us a little about yourself, so ADHDone knows what matters to you. Like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
     input: 'about',
   },
   {
@@ -50,11 +50,11 @@ export const CATCH_UP_ABOUT_ONLY_SCRIPT = [
   },
   {
     text: (name) =>
-      `There's a new bit of setup that makes this app a lot better at helping *you* specifically, ${name}. One quick question — that's it.`,
+      `One quick question that makes this app a lot better at helping *you*, ${name}.`,
   },
   {
     text: () =>
-      "Tell us a little about yourself — anything that helps ADHDone judge what actually matters to you. Stuff like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
+      "Tell us a little about yourself, so ADHDone knows what matters to you. Like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
     input: 'about',
   },
   {
@@ -71,18 +71,18 @@ export const FIRST_DONE_SCRIPT = [
     text: () => "First one done — nice. Two quick questions now that you've seen how this works.",
   },
   {
-    text: () => "What should we call you? This becomes your username — you can change it in Settings anytime.",
+    text: () => "What should we call you? You can change it in Settings anytime.",
     input: 'name',
   },
   {
     text: (name, handle) =>
       handle
-        ? `Thanks, ${name}! Your handle is @${handle} — that's how friends will find you once sharing goes live.`
+        ? `Thanks, ${name}!`
         : `Thanks, ${name}!`,
   },
   {
     text: () =>
-      "And tell us a little about yourself — anything that helps ADHDone judge what actually matters to you. Stuff like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
+      "And tell us a little about yourself, so ADHDone knows what matters to you. Like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
     input: 'about',
   },
   {
@@ -99,7 +99,7 @@ export const FIRST_DONE_ABOUT_ONLY_SCRIPT = [
   },
   {
     text: () =>
-      "Tell us a little about yourself — anything that helps ADHDone judge what actually matters to you. Stuff like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
+      "Tell us a little about yourself, so ADHDone knows what matters to you. Like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
     input: 'about',
   },
   {
@@ -114,7 +114,7 @@ export const FIRST_DONE_ABOUT_ONLY_SCRIPT = [
 export const NAME_ONLY_SCRIPT = [
   {
     text: () =>
-      "Quick one — we never caught your name. What should we call you? This becomes your username; you can change it in Settings anytime.",
+      "Quick one: we never caught your name. What should we call you?",
     input: 'name',
   },
   {
