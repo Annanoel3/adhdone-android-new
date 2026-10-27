@@ -28,8 +28,7 @@ export default function Places() {
       <div className={headCard}>
         <h1 className={`text-2xl font-bold ${dark ? 'text-white' : 'text-gray-900'}`}>Places</h1>
         <p className={`text-sm mt-1 ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-          The addresses you go between, and when you need to be there. This is what lets me say
-          "leave now" with an actual drive time behind it.
+          Home area, work address and work hours, so "leave now" comes with a real drive time.
         </p>
       </div>
 
