@@ -128,7 +128,20 @@ export default function TaskSections({
   specialMode,
   viewMode = "sections",
 }) {
-  const [collapsed, setCollapsed] = useState({});
+  // Which sections the person opened or closed, remembered on this phone
+  // (Anna, Oct 27 2026: "if someone has upcoming and other things collapsed
+  // or expanded on their tasks page, make sure it stays that way"). It used
+  // to reset to the defaults on every visit. Day sections in the Days view
+  // have keys that change daily (day_0, day_1...), so those still start from
+  // the defaults; the named sections (today, upcoming, later, birthdays,
+  // backburner...) keep their state.
+  const COLLAPSED_KEY = "tasks_sections_collapsed";
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(COLLAPSED_KEY) || "{}");
+      return saved && typeof saved === "object" ? saved : {};
+    } catch (e) { return {}; }
+  });
 
   const { sections, grouped } = useMemo(() => {
     if (viewMode === "days") {
@@ -180,7 +193,14 @@ export default function TaskSections({
       });
 
   const toggleSection = (key) =>
-    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
+    setCollapsed((prev) => {
+      // The first tap on a section with no saved state flips its DEFAULT
+      // (Back Burner, empty days and Birthdays start closed; the rest open).
+      const current = prev[key] !== undefined ? prev[key] : defaultCollapsed(key);
+      const next = { ...prev, [key]: !current };
+      try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next)); } catch (e) { /* no storage */ }
+      return next;
+    });
 
   const getSectionDate = (sectionKey) => {
     const now = new Date();
