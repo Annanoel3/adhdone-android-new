@@ -27,9 +27,8 @@ export default function WorkQuietCard({ user, theme }) {
             Don't send me notifications at work
           </p>
           <p className={`text-xs mt-1 ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-            Nudges, check-ins and daily summaries stay quiet while you're on shift. Reminders tied to
-            a specific time still come through — add an end time to each work day so I know when
-            you're off.
+            Nudges stay quiet while you're on shift; anything set for a specific time still comes
+            through. Add an end time to each work day so I know when you're off.
           </p>
         </div>
         <Switch checked={on} onCheckedChange={toggle} />
