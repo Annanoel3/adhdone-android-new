@@ -198,38 +198,38 @@ export default function ReminderTypeSelector({ task, theme, onChangeType }) {
               <Brain className="w-4 h-4 flex-shrink-0 mt-0.5 text-purple-500" />
               <div>
                 <p className={`text-xs font-medium ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>Smart Reminders</p>
-                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>AI decides when and how often to nudge you — a few well-timed reminders per day instead of constant pinging. Best for tasks with no hard deadline.</p>
+                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>The app decides when and how often to nudge you. Best for tasks with no set time.</p>
               </div>
             </div>
             <div className="flex gap-2">
               <Timer className="w-4 h-4 flex-shrink-0 mt-0.5 text-purple-500" />
               <div>
                 <p className={`text-xs font-medium ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>Interval Reminders</p>
-                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>A reminder fires on a fixed schedule (every 10 min, every 2 hours, daily…). Pick this only when you specifically want frequent, repeating nudges.</p>
+                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>A fixed schedule (every 10 min, every 2 hours, daily…). Only when you want the same nudge over and over.</p>
               </div>
             </div>
             <div className="flex gap-2">
               <Repeat className="w-4 h-4 flex-shrink-0 mt-0.5 text-purple-500" />
               <div>
                 <p className={`text-xs font-medium ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>Repeat on Completion</p>
-                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>When you complete the task, a fresh copy is auto-created for the next cycle (daily, weekly, monthly, or yearly). Great for habits and recurring chores.</p>
+                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>Finish it and a fresh copy appears for the next day, week, month or year.</p>
               </div>
             </div>
             <div className="flex gap-2">
               <CalendarClock className="w-4 h-4 flex-shrink-0 mt-0.5 text-purple-500" />
               <div>
                 <p className={`text-xs font-medium ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>One-Time Reminder</p>
-                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>A single reminder at one specific date and time. It fires once, then it is done — no repeats.</p>
+                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>One reminder at one date and time, then done.</p>
               </div>
             </div>
             <div className="flex gap-2">
               <CalendarDays className="w-4 h-4 flex-shrink-0 mt-0.5 text-purple-500" />
               <div>
                 <p className={`text-xs font-medium ${isDark ? 'text-gray-200' : 'text-gray-900'}`}>Event</p>
-                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>A scheduled occasion with a fixed date and time (meetings, appointments). You get lead-time reminders before it starts.</p>
+                <p className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>A meeting or appointment at a set time, with heads-up reminders before it.</p>
               </div>
             </div>
-            <p className={`text-xs italic pt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Birthdays are detected automatically from your calendar or quick-add — you don't choose them here.</p>
+            <p className={`text-xs italic pt-1 ${isDark ? 'text-gray-500' : 'text-gray-400'}`}>Birthdays are spotted on their own; you don't choose them here.</p>
           </div>
         </PopoverContent>
       </Popover>
