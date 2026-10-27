@@ -101,7 +101,7 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     {
       icon: LayoutDashboard,
       title: "Home",
-      description: "Today's tasks, a daily tip, and tiles for what you use most. Add a shortcut sits under them; Timer can go too."
+      description: "Today's tasks, a daily tip, and tiles for what you use most. Edit shortcuts (under the tiles) adds, removes and reorders them."
     },
     {
       icon: ListTodo,
