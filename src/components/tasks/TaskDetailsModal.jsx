@@ -2497,8 +2497,11 @@ Return JSON:
               </div>
             )}
 
-            {/* v2: the timer sits with the task, not in the footer. */}
-            {v2 && task.status !== 'completed' && !isEventOrBirthday && (
+            {/* v2: the timer sits with the task, not in the footer. Only for
+                tasks the parser judged worth timing (takes_time) — nobody
+                times taking a pill (Anna, Oct 27 2026); unjudged old tasks
+                keep it. */}
+            {v2 && task.status !== 'completed' && !isEventOrBirthday && task.takes_time !== false && (
               <div className={v2Group}>
                 <div className={v2Label}>Timer</div>
                 <LaunchButtons task={task} theme={theme} />
@@ -2518,7 +2521,7 @@ Return JSON:
                 See all birthdays
               </Button>
             )}
-            {!v2 && task.status !== 'completed' && !isEventOrBirthday && (
+            {!v2 && task.status !== 'completed' && !isEventOrBirthday && task.takes_time !== false && (
               <div className="w-full mb-1">
                 <LaunchButtons task={task} theme={theme} />
               </div>
