@@ -38,8 +38,7 @@ export default function DiaryFirstRunDialog({ open, onChoose }) {
                 Give me a head start
               </Label>
               <p className="text-xs text-gray-600">
-                When you open a new entry, we'll list the tasks you finished that day
-                and ask how your day went. Your answer becomes the first line.
+                A new entry starts with the tasks you finished that day and "how did it go?"
               </p>
             </div>
             <Switch
