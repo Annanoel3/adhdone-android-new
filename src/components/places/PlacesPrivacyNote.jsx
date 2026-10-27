@@ -17,14 +17,11 @@ export default function PlacesPrivacyNote({ theme }) {
             Your places stay yours
           </p>
           <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-            Nothing here tracks your phone. Your home circle and work address are saved to your own
-            account. The map and map search run on OpenStreetMap, but your saved info never goes
-            there. The only place it's sent is Google Maps, which gets your work address to suggest
-            matches as you type and the spot you saved to time the drive, so "leave now" is a real
-            time instead of a guess. When you first set your home circle, the app may ask for your
-            general location so the map opens on your area, but where you actually are isn't stored
-            nor tracked, only the spot where you drag the circle and press Save. No one else can see
-            this info, it's never sold or shared, and you can change or clear it here any time.
+            Nothing here tracks your phone. Your home circle and work address are saved to your
+            account only. They go to Google Maps just to suggest addresses and time the drive;
+            the map itself (OpenStreetMap) never sees them. If the app asks for your location,
+            that's only to open the map near you; where you are is never stored. Nobody else can
+            see this, it's never sold or shared, and you can change or clear it any time.
           </p>
         </div>
       </CardContent>
