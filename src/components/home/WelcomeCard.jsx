@@ -3,8 +3,6 @@ import { createPortal } from 'react-dom';
 import { motion } from 'framer-motion';
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
-import FocusModeButton from "./FocusModeButton";
-import QuickToolButtons from "./QuickToolButtons";
 import { timeGreeting } from "../utils/reminderCopy";
 
 // What flies out of the sparkle button when it's tapped. Stars for the Light,
@@ -136,10 +134,10 @@ export default function WelcomeCard({ userName, theme, user }) {
             }`} />
           </button>
         </div>
-        <div className="mt-5 -mx-2 flex flex-nowrap items-start justify-between">
-          <FocusModeButton user={user} theme={theme} />
-          <QuickToolButtons theme={theme} />
-        </div>
+        {/* The row of small circles (Focus Mode, Pomodoro, Decisions, Parking
+            Lot) that sat here came off Oct 27 2026: they're Home shortcut
+            tiles now (QuickActions), and an active Focus Mode shows its own
+            bar (FocusModePrompt). */}
       </CardContent>
       {bursts.length > 0 && typeof document !== 'undefined' && createPortal(
         <div className="pointer-events-none fixed inset-0 z-[60]" aria-hidden="true">
