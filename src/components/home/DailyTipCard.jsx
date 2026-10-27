@@ -21,6 +21,8 @@ const getLocalDateString = () => {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 };
 
+import HomeSecretLink from "./HomeSecretLink";
+
 export default function DailyTipCard({ theme }) {
   const [todaysTip, setTodaysTip] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -238,6 +240,7 @@ export default function DailyTipCard({ theme }) {
         <p className={`leading-relaxed ${theme === 'dark' ? 'text-gray-200' : 'text-gray-700'}`}>
           {todaysTip.tip_text}
         </p>
+        <HomeSecretLink theme={theme} spot="tip" className="mt-2 text-right" />
       </CardContent>
     </Card>
   );

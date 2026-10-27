@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles } from "lucide-react";
 import { timeGreeting } from "../utils/reminderCopy";
+import HomeSecretLink from "./HomeSecretLink";
 
 // What flies out of the sparkle button when it's tapped. Stars for the Light,
 // Colorful and Spicy Brains themes; black and purple stars for Dark; and each
@@ -137,7 +138,9 @@ export default function WelcomeCard({ userName, theme, user }) {
         {/* The row of small circles (Focus Mode, Pomodoro, Decisions, Parking
             Lot) that sat here came off Oct 27 2026: they're Home shortcut
             tiles now (QuickActions), and an active Focus Mode shows its own
-            bar (FocusModePrompt). */}
+            bar (FocusModePrompt). One day in five the seasonal secret sits
+            here instead. */}
+        <HomeSecretLink theme={theme} spot="welcome" className="mt-3 text-right" />
       </CardContent>
       {bursts.length > 0 && typeof document !== 'undefined' && createPortal(
         <div className="pointer-events-none fixed inset-0 z-[60]" aria-hidden="true">

@@ -9,6 +9,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { usePluginPresent } from "@/components/shared/WidgetTaskSync";
+import HomeSecretLink from "./HomeSecretLink";
 import {
   HOME_SHORTCUTS, HOME_TILES_EVENT, readHomeTiles, saveHomeTiles,
   TILE_COLS, HOME_COLS_EVENT, readTileCols, saveTileCols,
@@ -174,6 +175,7 @@ export default function QuickActions({ theme, user }) {
           person's, this is the door to them. Beside it, the tiny per-row
           switch: tap to go 2 → 3 → 4 → 2. */}
       <div className="flex justify-end items-center gap-1 mt-1.5">
+        <HomeSecretLink theme={theme} spot="tiles" className="mr-auto pl-1" />
         <button
           type="button"
           onClick={nextCols}

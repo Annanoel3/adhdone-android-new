@@ -499,7 +499,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
           titles clipped at two lines (Anna, Oct 3 2026). */}
       <CardContent className="p-3 sm:p-6">
         <div className="space-y-3">
-          <HomeSecretLink theme={theme} />
+          <HomeSecretLink theme={theme} spot="focus" />
           <PendingTaskCards theme={theme} captures={pending} />
           {activeTasks.length === 0 && pending.length === 0 && loadFailed ? (
             <div className="text-center py-10">
