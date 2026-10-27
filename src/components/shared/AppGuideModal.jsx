@@ -113,7 +113,9 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     {
       icon: Plus,
       title: "Adding tasks is easy",
-      subItems: [
+      // Each way is its own dropdown (Anna, Oct 27 2026: "make each task adding
+      // method a dropdown too"), so one video shows at a time.
+      children: [
         {
           icon: Mic,
           title: "Say it",
@@ -311,6 +313,9 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
           <button type="button" onClick={() => go(guide.link.to)} className={linkClass}>
             {guide.link.label}
           </button>
+        )}
+        {guide.video && (
+          <AutoClip src={guide.video} className="mt-2 w-full max-h-[50vh] rounded-lg bg-black object-contain" />
         )}
 
         {guide.subItems && (
