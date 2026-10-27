@@ -811,6 +811,26 @@ export default function NotesPage() {
     }
   };
 
+  // The second read on demand, for notes made before it ran automatically:
+  // adds what the notes missed and touches nothing already there.
+  const [filling, setFilling] = useState(false);
+  const fillNotes = async (record) => {
+    if (!record || filling) return;
+    setFilling(true);
+    setChangeSaid("");
+    try {
+      const res = await base44.functions.invoke("transcribeAudioNew", { mode: "notes_fill", record_id: record.id });
+      const data = res?.data || res || {};
+      if (!data.ok) throw new Error(data.error || "fill_failed");
+      if (data.added > 0) setRecords((rows) => rows.map((r) => (r.id === record.id ? { ...r, notes: data.notes } : r)));
+      setChangeSaid(data.said || "");
+    } catch (e) {
+      toast({ title: "Couldn't check the notes just now", description: "Check your connection and try again." });
+    } finally {
+      setFilling(false);
+    }
+  };
+
   const askAboutThis = async (record) => {
     const question = askOneText.trim();
     if (question.length < 3 || askOne?.loading || !record) return;
@@ -1248,6 +1268,9 @@ export default function NotesPage() {
                   </Button>
                 </div>
                 {changeSaid && <p className={`text-sm ${soft}`}>{changeSaid}</p>}
+                <button type="button" onClick={() => fillNotes(open)} disabled={filling || changing} className={`text-sm underline underline-offset-2 ${soft}`}>
+                  {filling ? "Reading the transcript again…" : "Check the transcript for anything these notes missed"}
+                </button>
               </div>
               <Button variant="outline" onClick={() => downloadNotesPdf(open, whenText(open.started_at)).catch(() => {})} className="w-full rounded-xl">
                 <FileDown className="w-4 h-4 mr-2" /> Download PDF
