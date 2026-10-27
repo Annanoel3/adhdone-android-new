@@ -55,6 +55,9 @@ import { easeNow } from '../../shared/easeOff.ts';
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+// A planned nudge held (by the spacing rules or the morning summary) this
+// long past its send time is dropped and planned again, not sent stale.
+const HELD_STALE_MS = 30 * 60 * 1000;
 // Smart Reminders pause for someone who hasn't opened the app in this long
 // (Anna, Oct 18 2026); see PAUSED AFTER 19 DAYS AWAY in the main loop.
 const SMART_PAUSE_AFTER_MS = 19 * DAY_MS;
