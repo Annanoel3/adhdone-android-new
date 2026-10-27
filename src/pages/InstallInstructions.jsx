@@ -331,6 +331,11 @@ export default function NotesPage() {
   // A question asked in the search box ("when did my boss say the report was
   // due?"), answered from their recordings: { question, loading, answer, sources }.
   const [asked, setAsked] = useState(null);
+  // A question about the ONE recording that's open ("what did my doctor say
+  // about the dose?"), answered from its whole transcript with the speaker's
+  // exact words quoted (Anna, Oct 27 2026): { question, loading, answer, quotes }.
+  const [askOneText, setAskOneText] = useState("");
+  const [askOne, setAskOne] = useState(null);
   const [, setTick] = useState(0);
   const recordsRef = useRef([]);
   recordsRef.current = records;
@@ -806,6 +811,20 @@ export default function NotesPage() {
     }
   };
 
+  const askAboutThis = async (record) => {
+    const question = askOneText.trim();
+    if (question.length < 3 || askOne?.loading || !record) return;
+    setAskOne({ question, loading: true, answer: "", quotes: [] });
+    try {
+      const res = await base44.functions.invoke("transcribeAudioNew", { mode: "notes_ask_one", record_id: record.id, question });
+      const data = res?.data || res || {};
+      if (!data.ok) throw new Error(data.error || "ask_failed");
+      setAskOne({ question, loading: false, answer: data.answer || "", quotes: Array.isArray(data.quotes) ? data.quotes : [] });
+    } catch (e) {
+      setAskOne({ question, loading: false, answer: "Couldn't get an answer just now. Try again in a moment.", quotes: [] });
+    }
+  };
+
   const askNotes = async () => {
     const question = search.trim();
     if (question.length < 3 || asked?.loading) return;
@@ -1140,6 +1159,46 @@ export default function NotesPage() {
               </button>
             ))}
           </div>
+
+          {/* Ask this recording. The answer is drawn from the whole transcript
+              and comes with the exact words it rests on; a quote the model
+              didn't copy word for word is dropped before it gets here. */}
+          {(notes || (open.transcript_parts || []).length > 0) && !working && (
+            <div className={`${card} space-y-2`}>
+              <div className="flex gap-2">
+                <input
+                  value={askOneText}
+                  onChange={(e) => setAskOneText(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") askAboutThis(open); }}
+                  placeholder='Ask this recording, like "what did my doctor say about the dose?"'
+                  disabled={!!askOne?.loading}
+                  className={inputCls}
+                />
+                <Button onClick={() => askAboutThis(open)} disabled={!!askOne?.loading || askOneText.trim().length < 3} className="shrink-0">
+                  {askOne?.loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Ask"}
+                </Button>
+              </div>
+              {askOne && !askOne.loading && (
+                <div className="space-y-2 pt-1">
+                  <p className={heading}>{askOne.answer}</p>
+                  {askOne.quotes.length > 0 && (
+                    <ul className="space-y-2">
+                      {askOne.quotes.map((q, i) => (
+                        <li key={i} className={`border-l-2 pl-3 ${dark ? "border-gray-600" : "border-gray-300"}`}>
+                          <p className={`italic ${heading}`}>“{q.text}”</p>
+                          {q.at && (
+                            <button type="button" onClick={() => setTab("transcript")} className={`text-xs ${soft} underline underline-offset-2`}>
+                              at {q.at} in the transcript
+                            </button>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {working && (
             <div className={`${card} flex items-center gap-2`}>
@@ -1536,7 +1595,7 @@ export default function NotesPage() {
                           <button
                             key={src.id}
                             type="button"
-                            onClick={() => { setOpenId(src.id); setTab("notes"); setChangeText(""); setChangeSaid(""); }}
+                            onClick={() => { setOpenId(src.id); setTab("notes"); setChangeText(""); setChangeSaid(""); setAskOne(null); setAskOneText(""); }}
                             className={`text-sm font-semibold ${dark ? "text-purple-300" : "text-purple-700"}`}
                           >
                             From: {src.title} · {whenText(src.started_at)} ›
@@ -1562,7 +1621,7 @@ export default function NotesPage() {
               <button
                 key={r.id}
                 type="button"
-                onClick={() => { setOpenId(r.id); setTab("notes"); setChangeText(""); setChangeSaid(""); }}
+                onClick={() => { setOpenId(r.id); setTab("notes"); setChangeText(""); setChangeSaid(""); setAskOne(null); setAskOneText(""); }}
                 className={`${card} w-full text-left flex items-center gap-3`}
               >
                 <div className="flex-1 min-w-0">
