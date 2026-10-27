@@ -110,7 +110,12 @@ These are absolutes. There is no clever exception, no "but in this case."
    OneSignal API for that specific ID.** A cron logging a failure is not proof of
    user-facing breakage. Check before claiming.
 7. **Never productivity-shame the user in app copy**, and never advertise a capability
-   the app doesn't actually have.
+   the app doesn't actually have. **Keep app copy short** (Anna, Oct 27 2026: "the sheer
+   length of some instructions can be overwhelming"): a description or help line says the
+   one thing the person needs, in about 20 words or fewer; no second sentence restating the
+   first, no "actually", no selling. The Oct 27 2026 sweep shortened the App Guide, the
+   first-sitting popups, Settings, Focus Mode, Places, Calendar, Notes and the reminder-type
+   help; new copy follows the same bar.
 8. **Never state anything about a real user, their data, or app behavior as fact unless
    it was actually looked up THIS session** — the entity queried, the log read, the
    OneSignal API called, the file opened. No inferring "she must have", "this was her
