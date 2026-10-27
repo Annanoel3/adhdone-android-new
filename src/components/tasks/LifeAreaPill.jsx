@@ -16,20 +16,30 @@ export const TAG_MAX = 24;
 export const normalizeTag = (t) => String(t || '').trim().replace(/\s+/g, ' ').slice(0, TAG_MAX);
 export const tagKey = (t) => normalizeTag(t).toLowerCase();
 
+// `dark` is a SOLID fill with white text, used on the dark theme and on every
+// seasonal skin (Anna, Oct 27 2026: on dark themes the tag read as coloured
+// text, not a highlighted label; the light pills already had the fill). The
+// shades (600) are ones the night-season glass leaves alone: it rewrites
+// only pale bg-*-50/100/200 classes and tints text-<colour>-* classes, and
+// text-white isn't one of those.
 export const TAG_PALETTE = [
-  { name: 'rose', light: 'bg-rose-100 text-rose-800 border-rose-200', dark: 'bg-rose-900/40 text-rose-200 border-rose-800', swatch: 'bg-rose-300' },
-  { name: 'orange', light: 'bg-orange-100 text-orange-800 border-orange-200', dark: 'bg-orange-900/40 text-orange-200 border-orange-800', swatch: 'bg-orange-300' },
-  { name: 'amber', light: 'bg-amber-100 text-amber-800 border-amber-200', dark: 'bg-amber-900/40 text-amber-200 border-amber-800', swatch: 'bg-amber-300' },
-  { name: 'lime', light: 'bg-lime-100 text-lime-800 border-lime-200', dark: 'bg-lime-900/40 text-lime-200 border-lime-800', swatch: 'bg-lime-300' },
-  { name: 'emerald', light: 'bg-emerald-100 text-emerald-800 border-emerald-200', dark: 'bg-emerald-900/40 text-emerald-200 border-emerald-800', swatch: 'bg-emerald-300' },
-  { name: 'teal', light: 'bg-teal-100 text-teal-800 border-teal-200', dark: 'bg-teal-900/40 text-teal-200 border-teal-800', swatch: 'bg-teal-300' },
-  { name: 'sky', light: 'bg-sky-100 text-sky-800 border-sky-200', dark: 'bg-sky-900/40 text-sky-200 border-sky-800', swatch: 'bg-sky-300' },
-  { name: 'indigo', light: 'bg-indigo-100 text-indigo-800 border-indigo-200', dark: 'bg-indigo-900/40 text-indigo-200 border-indigo-800', swatch: 'bg-indigo-300' },
-  { name: 'violet', light: 'bg-violet-100 text-violet-800 border-violet-200', dark: 'bg-violet-900/40 text-violet-200 border-violet-800', swatch: 'bg-violet-300' },
-  { name: 'fuchsia', light: 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200', dark: 'bg-fuchsia-900/40 text-fuchsia-200 border-fuchsia-800', swatch: 'bg-fuchsia-300' },
-  { name: 'pink', light: 'bg-pink-100 text-pink-800 border-pink-200', dark: 'bg-pink-900/40 text-pink-200 border-pink-800', swatch: 'bg-pink-300' },
-  { name: 'cyan', light: 'bg-cyan-100 text-cyan-800 border-cyan-200', dark: 'bg-cyan-900/40 text-cyan-200 border-cyan-800', swatch: 'bg-cyan-300' },
+  { name: 'rose', light: 'bg-rose-100 text-rose-800 border-rose-200', dark: 'bg-rose-600 text-white border-rose-500', swatch: 'bg-rose-300' },
+  { name: 'orange', light: 'bg-orange-100 text-orange-800 border-orange-200', dark: 'bg-orange-600 text-white border-orange-500', swatch: 'bg-orange-300' },
+  { name: 'amber', light: 'bg-amber-100 text-amber-800 border-amber-200', dark: 'bg-amber-600 text-white border-amber-500', swatch: 'bg-amber-300' },
+  { name: 'lime', light: 'bg-lime-100 text-lime-800 border-lime-200', dark: 'bg-lime-600 text-white border-lime-500', swatch: 'bg-lime-300' },
+  { name: 'emerald', light: 'bg-emerald-100 text-emerald-800 border-emerald-200', dark: 'bg-emerald-600 text-white border-emerald-500', swatch: 'bg-emerald-300' },
+  { name: 'teal', light: 'bg-teal-100 text-teal-800 border-teal-200', dark: 'bg-teal-600 text-white border-teal-500', swatch: 'bg-teal-300' },
+  { name: 'sky', light: 'bg-sky-100 text-sky-800 border-sky-200', dark: 'bg-sky-600 text-white border-sky-500', swatch: 'bg-sky-300' },
+  { name: 'indigo', light: 'bg-indigo-100 text-indigo-800 border-indigo-200', dark: 'bg-indigo-600 text-white border-indigo-500', swatch: 'bg-indigo-300' },
+  { name: 'violet', light: 'bg-violet-100 text-violet-800 border-violet-200', dark: 'bg-violet-600 text-white border-violet-500', swatch: 'bg-violet-300' },
+  { name: 'fuchsia', light: 'bg-fuchsia-100 text-fuchsia-800 border-fuchsia-200', dark: 'bg-fuchsia-600 text-white border-fuchsia-500', swatch: 'bg-fuchsia-300' },
+  { name: 'pink', light: 'bg-pink-100 text-pink-800 border-pink-200', dark: 'bg-pink-600 text-white border-pink-500', swatch: 'bg-pink-300' },
+  { name: 'cyan', light: 'bg-cyan-100 text-cyan-800 border-cyan-200', dark: 'bg-cyan-600 text-white border-cyan-500', swatch: 'bg-cyan-300' },
 ];
+
+const seasonalSkin = () => {
+  try { return (localStorage.getItem('special_mode') || 'normal') !== 'normal'; } catch (e) { return false; }
+};
 
 // The account's picked colours, kept here so every card shares one copy:
 // a cache on this phone for the first paint, the account record behind it.
@@ -64,7 +74,7 @@ export function tagColorName(tag) {
 
 export function tagPillClass(tag, theme) {
   const c = TAG_PALETTE.find((x) => x.name === tagColorName(tag)) || TAG_PALETTE[0];
-  return theme === 'dark' ? c.dark : c.light;
+  return theme === 'dark' || seasonalSkin() ? c.dark : c.light;
 }
 
 // The user's pick for a tag: every card with that tag changes at once, and
