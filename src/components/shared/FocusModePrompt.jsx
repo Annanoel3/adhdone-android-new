@@ -516,8 +516,8 @@ export default function FocusModePrompt({ user, theme }) {
                   <Target className="w-5 h-5 text-green-500" /> Focus Mode
                 </DialogTitle>
                 <DialogDescription>
-                  You're focused on one task — hourly check-ins, everything else quiet. Close this
-                  and the Focus Mode bar stays at the top; tap it to come back.
+                  One task, hourly check-ins, everything else quiet. The Focus Mode bar stays at
+                  the top; tap it to come back.
                 </DialogDescription>
               </DialogHeader>
               <div className="py-4">
@@ -557,9 +557,8 @@ export default function FocusModePrompt({ user, theme }) {
                   <Target className="w-5 h-5 text-green-500" /> Focus Mode
                 </DialogTitle>
                 <DialogDescription>
-                  Pick one task to focus on — it'll switch to hourly check-ins until completion or
-                  exit while your other recurring reminders go quiet. Time-specific reminders
-                  (events, due dates, birthdays) are never affected.
+                  Pick one task. It gets an hourly check-in until it's done and your other nudges go
+                  quiet. Events, due dates and birthdays still come through.
                 </DialogDescription>
               </DialogHeader>
               {pickableTasks.length >= 2 && (
@@ -607,7 +606,7 @@ export default function FocusModePrompt({ user, theme }) {
       <ConfirmDialog
         open={confirmExit}
         title="Exit Focus Mode?"
-        description="You'll go back to your normal reminders and this task stops getting hourly check-ins. You can start Focus Mode again anytime."
+        description="Your normal reminders come back. You can start Focus Mode again anytime."
         confirmLabel="Yes, exit Focus Mode"
         cancelLabel="No, keep focusing"
         onConfirm={() => { setConfirmExit(false); handleExit(); }}
@@ -620,11 +619,9 @@ export default function FocusModePrompt({ user, theme }) {
           <DialogHeader>
             <DialogTitle>What is Focus Mode?</DialogTitle>
             <DialogDescription>
-              Focus Mode is for when you want to get a specific task done without distractions from
-              your other recurring reminders. When you pick a task, it switches to hourly
-              "how's it going?" check-ins and everything else goes quiet. You can exit Focus Mode
-              at any time, and time-specific reminders (events, due dates, birthdays) are never
-              affected.
+              For getting one task done. Pick it and it gets an hourly "how's it going?" while
+              your other nudges go quiet. Events, due dates and birthdays still come through.
+              Exit any time.
             </DialogDescription>
           </DialogHeader>
           <Button onClick={() => setShowInfo(false)} className="w-full">
