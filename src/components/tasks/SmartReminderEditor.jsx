@@ -165,8 +165,8 @@ export default function SmartReminderEditor({ task, theme, onUpdate, isEvent = f
       {schedule.length === 0 && !task.reminder_schedule_summary && (
         <p className={`text-xs ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>
           {isEvent
-            ? 'No reminders yet — set the event date & time below and you\'ll get the night-before, morning-of, and leave-by heads-ups.'
-            : 'No reminders scheduled yet. Add one below, or save a new date & time above to let the AI build a full schedule.'}
+            ? 'No reminders yet. Set the date and time below and the heads-ups get booked.'
+            : 'No reminders yet. Add one below, or save a date and time above and the app books them.'}
         </p>
       )}
 
@@ -268,8 +268,8 @@ export default function SmartReminderEditor({ task, theme, onUpdate, isEvent = f
 
       <p className={`text-xs italic ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>
         {isEvent
-          ? 'Tap × to turn off a reminder. Changing the event date & time rebuilds them all.'
-          : 'Tap × to turn off a reminder. Save a new date & time above to regenerate the full schedule.'}
+          ? 'Tap × to turn one off. A new date and time rebuilds them all.'
+          : 'Tap × to turn one off. A new date and time rebuilds them all.'}
       </p>
     </div>
   );
