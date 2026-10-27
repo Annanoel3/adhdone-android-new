@@ -727,7 +727,7 @@ Return JSON:
         if (iv && iv !== 'once' && intervalMsGuard[iv]) {
           nextReminder = new Date(guardNowSync.getTime() + intervalMsGuard[iv]);
         } else {
-          alert("⚠️ The date and time you picked is in the past.\n\nPlease choose a future date and time, then tap Save again.");
+          alert("⚠️ That date and time has already passed. Pick a future one and tap Save again.");
           return;
         }
       }
@@ -2100,8 +2100,8 @@ Return JSON:
                         />
                         <p className="text-xs text-gray-500 mt-1">
                           {reminderTime
-                            ? 'Set a time: you get a heads-up an hour before, then a reminder at that exact time.'
-                            : 'No time? Then it just needs to be done that day — smart reminders nudge you the night before and that day.'}
+                            ? 'A heads-up an hour before, then a reminder at that time.'
+                            : 'No time means done that day. Smart Reminders nudge you the night before and that day.'}
                         </p>
                       </div>
                       <p className="text-xs text-gray-500">Saves automatically when you close this.</p>
