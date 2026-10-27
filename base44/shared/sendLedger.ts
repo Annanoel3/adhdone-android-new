@@ -159,8 +159,13 @@ export async function ledgerCheck(
     // Oct 12 2026): it doesn't wait behind softer pushes or the owner's own
     // health notes (those wait for it), and keeps only 5 minutes from a
     // reminder tied to a real moment.
-    const softer = PROACTIVE_KINDS.has(entry.kind) || String(entry.kind || '').startsWith('owner_');
-    const stacked = proactive && !(opts.firstClaim && softer)
+    const ownerNote = String(entry.kind || '').startsWith('owner_');
+    const softer = PROACTIVE_KINDS.has(entry.kind) || ownerNote;
+    // The owner's own health notes (owner_daily, owner_alert) are developer
+    // mail to Anna's phone, not reminders: a nudge doesn't wait behind them.
+    // On Oct 27 2026 her 9:21 AM "yesterday: something was off" note held her
+    // 9:15 nudge through 9:39, which then ran into the 10:00 reminder's window.
+    const stacked = proactive && !ownerNote && !(opts.firstClaim && softer)
       && diff < (opts.urgent || opts.firstClaim ? URGENT_STACK_GAP_MS : STACK_GAP_MS);
     // A time-critical push wins its slot: a pending proactive push already
     // booked there is cancelled rather than letting the two land together.
