@@ -17,7 +17,7 @@ const NAME_RETRY_HOLD = 'onboarding_name_retry_hold';
 // The full welcome again, for someone who skipped it entirely, with its first
 // line swapped for a "you missed this" one.
 const REWELCOME_SCRIPT = [
-  { text: () => "Hey, I think you missed this the first time! No worries, it takes about a minute and it's how ADHDone gets set up to actually remind you." },
+  { text: () => "Looks like you missed this the first time. It takes a minute and it's how ADHDone gets set up to remind you." },
   ...WELCOME_SCRIPT.slice(1),
 ];
 
