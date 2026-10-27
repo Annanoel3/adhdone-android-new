@@ -1916,11 +1916,22 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   //    Each is told once per happening (sinceMs), not every 6 hours. Left out
   //    with her own accounts: family who only installed it to try it.
   const notReal = new Set([...OWNER_ACCOUNTS, 'antonio.baird1996@gmail.com', 'aleck.baird@gmail.com']);
-  const people = allUsers.filter((u: any) => u?.email && !notReal.has(u.email));
   const msOf = (v: any) => {
     const s = String(v || '');
     return s ? Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`) : NaN;
   };
+  // Someone whose phone stopped taking pushes after their last open has
+  // uninstalled (or shut the app's notifications off). They're told about
+  // ONCE, in check 11, and left out of everything else here: their alarms
+  // can't ring and their quiet hours don't matter until they're back (Anna,
+  // Oct 27 2026: "if we know someone uninstalled, I don't want to keep getting
+  // reminders about it").
+  const gone = (u: any) => {
+    const lastMs = msOf(u?.last_active_at);
+    const goneMs = msOf(u?.push_unreachable_at);
+    return Number.isFinite(goneMs) && (!Number.isFinite(lastMs) || goneMs > lastMs);
+  };
+  const people = allUsers.filter((u: any) => u?.email && !notReal.has(u.email) && !gone(u));
   const nameOf = (u: any) => String(u?.preferred_name || u?.full_name || u?.email || 'Someone').trim();
   const clock12 = (hhmm: any) => {
     const m = /^(\d{1,2}):(\d{2})$/.exec(String(hhmm || ''));
@@ -1994,7 +2005,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     const taskById: Record<string, any> = {};
     for (const t of [...allTasks, ...recent]) if (t?.id) taskById[t.id] = t;
     const userByLower: Record<string, any> = {};
-    for (const u of allUsers) if (u?.email) userByLower[String(u.email).toLowerCase()] = u;
+    for (const u of people) if (u?.email) userByLower[String(u.email).toLowerCase()] = u;
     const seenRing = new Set<string>();
     const missedBy: Record<string, { taskId: string; ms: number; how: string }[]> = {};
     const addRing = (email: any, taskId: string, choice: any, ms: number, reportId?: string) => {
@@ -2068,12 +2079,16 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   //     was uninstalled, or its notifications turned off), or the app saw its
   //     notifications off when they opened it (alarm_permissions). Only people
   //     in the app in the last 14 days: an account long gone quiet is not news.
-  for (const u of people) {
+  //     Told once per departure: once since their last open, however many
+  //     times OneSignal repeats the answer afterwards (push_unreachable_at
+  //     moves with every nudge it turns away).
+  for (const u of allUsers) {
+    if (!u?.email || notReal.has(u.email)) continue;
     const lastMs = msOf(u.last_active_at);
     if (!Number.isFinite(lastMs) || nowMs - lastMs > 14 * H_DAY) continue;
     const goneMs = msOf(u.push_unreachable_at);
-    if (Number.isFinite(goneMs) && goneMs > lastMs && nowMs - goneMs < 2 * H_DAY) {
-      problems.push({
+    if (gone(u)) {
+      if (Number.isFinite(goneMs) && nowMs - goneMs < 2 * H_DAY) problems.push({
         title: `📵 ADHDone: ${nameOf(u)}'s phone stopped taking notifications`,
         body: `OneSignal said ${theirClock(u, goneMs)} (their time) that their phone no longer takes ADHDone's pushes: the app was uninstalled, or its notifications were turned off. Last in the app ${theirClock(u, lastMs)}. ${u.email}`,
         sinceMs: lastMs,
@@ -2126,8 +2141,14 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   if (ownerUp != null && nowMs >= ownerUp + H_HOUR && ownerHour >= 8 && ownerHour < 20
     && !(await sentToOwner(base44, 'owner_daily', null, nowMs - 20 * H_HOUR))) {
     try {
+      // Only alerts since the previous note: a flat 24 hours put Michelle's
+      // uninstall (alerted Sat 11:45 AM) in both Saturday's and Sunday's note.
+      const prevNotes = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
+        user_email: OWNER_ALERT_EMAIL, kind: 'owner_daily', send_at: { $gte: new Date(nowMs - 3 * H_DAY).toISOString() },
+      });
+      const prevNoteMs = Math.max(nowMs - H_DAY, ...prevNotes.map((n: any) => msOf(n.send_at)).filter((x: number) => Number.isFinite(x)));
       const alerts = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
-        user_email: OWNER_ALERT_EMAIL, kind: 'owner_alert', send_at: { $gte: new Date(nowMs - H_DAY).toISOString() },
+        user_email: OWNER_ALERT_EMAIL, kind: 'owner_alert', send_at: { $gte: new Date(prevNoteMs).toISOString() },
       });
       const byTitle: Record<string, number> = {};
       for (const a of alerts) byTitle[String(a.title || '').replace(/^[^A-Za-z]*ADHDone: /, '')] = (byTitle[String(a.title || '').replace(/^[^A-Za-z]*ADHDone: /, '')] || 0) + 1;
