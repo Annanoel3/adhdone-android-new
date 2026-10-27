@@ -1081,8 +1081,7 @@ export default function NotesPage() {
           <h1 className={`text-3xl font-bold ${heading}`}>Notes</h1>
           <div className={card}>
             <p className={soft}>
-              Recording notes works in the ADHDone app on your phone. If you have it, update it to the newest
-              version from the Play Store.
+              Recording works in the ADHDone phone app. Update it from the Play Store if you have it.
             </p>
           </div>
         </div>
@@ -1492,8 +1491,8 @@ export default function NotesPage() {
           <div className={`${card} space-y-3`}>
             <h2 className={`text-lg font-bold ${heading}`}>Agenda</h2>
             <p className={`text-sm ${soft}`}>
-              Add anything you don't want to forget to mention. It will be on screen while you record, and your notes
-              will say which ones got covered.
+              Things you don't want to forget to bring up. They stay on screen while you record, and your
+              notes say which got covered.
             </p>
             <PrepPointsList points={qs} onChange={(next) => saveQuestions(prepTask, next)} dark={dark} soft={soft} />
             <form onSubmit={(e) => { e.preventDefault(); addQuestion(); }} className="flex gap-2">
@@ -1533,7 +1532,7 @@ export default function NotesPage() {
       <div className="max-w-2xl mx-auto space-y-5">
         <div className={headCard}>
           <h1 className={`text-3xl font-bold ${heading}`}>Notes</h1>
-          <p className={soft}>Record a meeting, appointment or class. ADHDone writes the notes for you, organized for an ADHD brain: to-dos first, the details you'll need to look up, the words that matter highlighted — short lines you can take in at a glance, nothing to wade through.</p>
+          <p className={soft}>Record a meeting, appointment or class. ADHDone writes short, clear notes: to-dos first, then the details you'll need.</p>
         </div>
 
         <div className={`${card} space-y-3`}>
