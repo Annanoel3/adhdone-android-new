@@ -31,25 +31,41 @@ export const HOME_SHORTCUTS = [
 const STORAGE_KEY = "home_tiles";
 export const HOME_TILES_EVENT = "home-tiles-changed";
 export const DEFAULT_TILES = ["timer"];
+// Saved when Timer was taken off on purpose. A list with neither "timer" nor
+// this was saved by the first version (published Oct 27 2026), when the list
+// held only the ADDED tiles and Timer was fixed: Anna's own account had
+// ["notes", "calendar"], and reading that as the whole row made Timer vanish
+// from her Home. Such a list still means "Timer first, then these".
+const TIMER_OFF = "-timer";
 
 const known = (keys) =>
   (Array.isArray(keys) ? keys : []).filter((k) => HOME_SHORTCUTS.some((s) => s.key === k));
+
+// Saved list → the row as shown (Timer in its place, or absent only when it
+// was taken off on purpose).
+const fromSaved = (saved) => {
+  const list = Array.isArray(saved) ? saved : [];
+  const explicit = list.includes("timer") || list.includes(TIMER_OFF);
+  const shown = known(list);
+  return explicit ? shown : ["timer", ...shown.filter((k) => k !== "timer")];
+};
 
 // The phone's copy, or the account's when the phone has none yet, or the
 // default (just Timer) when neither has chosen anything.
 export function readHomeTiles(user) {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw != null) return known(JSON.parse(raw));
+    if (raw != null) return fromSaved(JSON.parse(raw));
   } catch { /* no storage */ }
-  if (Array.isArray(user?.home_tiles)) return known(user.home_tiles);
+  if (Array.isArray(user?.home_tiles)) return fromSaved(user.home_tiles);
   return [...DEFAULT_TILES];
 }
 
 export function saveHomeTiles(keys) {
   const clean = known(keys);
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(clean)); } catch { /* no storage */ }
-  base44.auth.updateMe({ home_tiles: clean }).catch(() => {});
+  const stored = clean.includes("timer") ? clean : [...clean, TIMER_OFF];
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(stored)); } catch { /* no storage */ }
+  base44.auth.updateMe({ home_tiles: stored }).catch(() => {});
   try { window.dispatchEvent(new CustomEvent(HOME_TILES_EVENT, { detail: clean })); } catch { /* ignore */ }
   return clean;
 }
