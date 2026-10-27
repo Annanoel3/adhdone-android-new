@@ -9,8 +9,11 @@ import { base44 } from "@/api/base44Client";
 // often, they can add a tile"). Every page from the menu can be a tile; the
 // person picks which from the "Add a shortcut" link under the two fixed ones.
 // Saved on the account (User.home_tiles) and on the phone, same rule as the
-// task sort: the phone's own copy wins while it exists.
+// task sort: the phone's own copy wins while it exists. The list is the whole
+// row after Add: Timer is in it by default and can be taken out like any
+// other tile (Anna, Oct 27 2026: "give them the ability to get rid of timer").
 export const HOME_SHORTCUTS = [
+  { key: "timer", title: "Timer", icon: Timer, builtin: true },
   { key: "notes", title: "Record Notes", icon: Mic, page: "Notes", needsRecorder: true },
   { key: "tasks", title: "My Tasks", icon: ListTodo, page: "Tasks" },
   { key: "calendar", title: "Calendar", icon: CalendarDays, page: "Calendar" },
@@ -27,17 +30,20 @@ export const HOME_SHORTCUTS = [
 
 const STORAGE_KEY = "home_tiles";
 export const HOME_TILES_EVENT = "home-tiles-changed";
+export const DEFAULT_TILES = ["timer"];
 
 const known = (keys) =>
   (Array.isArray(keys) ? keys : []).filter((k) => HOME_SHORTCUTS.some((s) => s.key === k));
 
-// The phone's copy, or the account's when the phone has none yet.
+// The phone's copy, or the account's when the phone has none yet, or the
+// default (just Timer) when neither has chosen anything.
 export function readHomeTiles(user) {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw != null) return known(JSON.parse(raw));
   } catch { /* no storage */ }
-  return known(user?.home_tiles);
+  if (Array.isArray(user?.home_tiles)) return known(user.home_tiles);
+  return [...DEFAULT_TILES];
 }
 
 export function saveHomeTiles(keys) {
