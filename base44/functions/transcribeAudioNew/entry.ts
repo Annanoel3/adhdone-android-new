@@ -26,6 +26,11 @@ import { packsOf, leftOf, spendPacks } from "../../shared/minutePacks.ts";
 //    { mode: "notes_ask", question }
 //        a question about their recordings ("when did my boss say the report
 //        was due?"), answered from their own notes and transcripts. Nothing saved.
+//    { mode: "notes_ask_one", record_id, question }
+//        a question about ONE recording ("what did my doctor say about the
+//        dose?"), answered from its full transcript with the speaker's exact
+//        words quoted, each quote checked against the transcript (Anna, Oct 27
+//        2026). Nothing saved.
 //    Admin only, nothing saved: { mode: "notes_try", transcript, started_at?, model? }
 //        shows the notes a transcript would get.
 //
@@ -44,13 +49,15 @@ import { packsOf, leftOf, spendPacks } from "../../shared/minutePacks.ts";
 const NOTES_FREE_MINUTES = 60;
 const NO_CAP_EMAILS = ["s2kap2chick@gmail.com"];
 const TRANSCRIBE_MODEL = "gpt-transcribe";
-// Luna (the cheaper one) writes the notes, and Astra steps in if Luna fails.
-// Luna wrote notes as good as Astra's in side-by-side tests (Sept 27 2026).
-// Anna, Oct 18 2026: "switch whatever wont be negatively affected to the cheaper one"
-// (for one day, Oct 17 2026, it was Astra only).
-const NOTES_MODEL = "gpt-6-luna";
-const NOTES_BACKUP_MODEL = "gpt-6-astra";
-const NOTES_EFFORT = "low";
+// Astra writes the notes, with Luna stepping in only if Astra fails. Luna had
+// the job from Oct 18 2026 ("switch whatever wont be negatively affected to
+// the cheaper one"), but by Oct 27 the notes were leaving things out (Anna:
+// "it seems like it might be leaving out some things"), and notes are written
+// FOR the person, which her model rule keeps on Astra. Medium effort: the
+// transcript of an hour-long visit deserves a careful read, not a skim.
+const NOTES_MODEL = "gpt-6-astra";
+const NOTES_BACKUP_MODEL = "gpt-6-luna";
+const NOTES_EFFORT = "medium";
 const TRY_MODELS = ["gpt-6-astra", "gpt-6-luna"];
 
 // The platform's calls occasionally fail once and pass a moment later.
@@ -251,7 +258,17 @@ makes clear something is theirs (the doctor telling them to take a pill, a task 
 When it isn't clear who said something, state the point with no person at all.
 
 Put what matters most first, in short plain lines they can take in at a glance. No paragraphs:
-one idea per line, and keep lines short. Skip small talk and anything that doesn't matter later.
+one idea per line, and keep lines short.
+
+Leave nothing out. These notes stand in for the recording: someone who reads only the notes must
+not know less than someone who heard the whole thing. Every fact, instruction, number, name,
+reason, warning, option that was weighed, question that was asked and answer that was given goes
+in, each as its own line. Only greetings, filler and talk about nothing (the weather, finding a
+parking spot) stay out. Short is about the LINES, never about how many of them there are: a long
+recording gets more sections and more points, not fewer. When you're unsure whether something
+matters, keep it. If a point is only half clear in the transcript, keep it and say it was unclear.
+An explanation the speaker gave (why a medicine, how a process works, what a term means) is
+information too: put it in, in their words.
 
 Highlight the words that matter most on a line by wrapping them in ==double equals==, so an eye
 skimming the page lands on them first. Be generous with these: nearly every line in good notes
@@ -312,21 +329,24 @@ function cleanNotes(r: any, asked: string[] = []) {
   return {
     title: str(r?.title, 120),
     gist: list(r?.gist).map((x) => str(x)).filter(Boolean).slice(0, 3),
+    // The caps are a guard against a runaway answer, not a target: a long
+    // recording fills them (they were 30/40/12x8/20 until Oct 27 2026, low
+    // enough to drop the end of a long visit).
     todos: list(r?.todos)
       .map((t) => ({ text: str(t?.text), who: str(t?.who, 60) || "you", at: str(t?.at, 12) }))
-      .filter((t) => t.text).slice(0, 30),
+      .filter((t) => t.text).slice(0, 60),
     details: list(r?.details)
       .map((d) => ({ label: str(d?.label, 80), value: str(d?.value), at: str(d?.at, 12) }))
-      .filter((d) => d.label || d.value).slice(0, 40),
+      .filter((d) => d.label || d.value).slice(0, 100),
     sections: list(r?.sections)
       .map((s) => ({
         heading: str(s?.heading, 80),
-        points: list(s?.points).map((p) => str(p)).filter(Boolean).slice(0, 8),
+        points: list(s?.points).map((p) => str(p)).filter(Boolean).slice(0, 25),
         at: str(s?.at, 12),
       }))
-      .filter((s) => s.heading && s.points.length).slice(0, 12),
-    decisions: items(r?.decisions).slice(0, 20),
-    questions: items(r?.questions).slice(0, 20),
+      .filter((s) => s.heading && s.points.length).slice(0, 40),
+    decisions: items(r?.decisions).slice(0, 40),
+    questions: items(r?.questions).slice(0, 40),
     // The questions themselves come from what they wrote, never from the model.
     asked: asked.map((q, i) => {
       const got = list(r?.asked);
@@ -375,9 +395,88 @@ async function writeNotes(openai: OpenAI, transcript: string, when: string, leng
     ],
     response_format: { type: "json_object" },
     reasoning_effort: NOTES_EFFORT as any,
-    max_completion_tokens: 16000,
+    max_completion_tokens: 32000,
   } as any);
   return cleanNotes(JSON.parse(completion.choices[0]?.message?.content || "{}"), asked);
+}
+
+// A second read of the transcript against the notes just written: anything
+// said that carries information and isn't in the notes comes back as
+// additions, in the notes' own shape, and is merged in. One model never
+// catches everything in one pass over an hour of talk (Anna, Oct 27 2026:
+// "make sure the adhd recording notes dont leave out information"). On any
+// failure the first notes stand.
+async function fillGaps(openai: OpenAI, transcript: string, notes: any, model: string) {
+  const completion = await openai.chat.completions.create({
+    model,
+    messages: [
+      { role: "system", content: NOTES_SYSTEM },
+      { role: "user", content: `The transcript, with [time] marks where each stretch starts:
+"""
+${transcript}
+"""
+
+The notes written from it so far, as JSON:
+${JSON.stringify({ todos: notes.todos, details: notes.details, sections: notes.sections, decisions: notes.decisions, questions: notes.questions })}
+
+Read the transcript again, start to finish, and find everything that was said and carries
+information but is NOT in these notes: a fact, an instruction, a number, a name, a date, a reason
+or explanation the speaker gave, a warning, an option that was weighed, a question asked, an
+answer given, a thing someone has to do. Compare meaning, not wording: something already in the
+notes in other words is not missing. Greetings, filler and small talk are not missing either.
+
+Return only the additions, each written like the notes (one short plain line, key words marked
+with ==double equals==, exact details copied as said, "at" = the [time] mark of its stretch):
+- todos, details, decisions, questions: new items for those lists.
+- sections: a point that belongs under a heading the notes already have goes under that same
+  heading, copied exactly; a topic the notes don't cover gets a new short heading.
+Never repeat what the notes already say. Never invent. Empty lists when nothing is missing.
+
+Return JSON:
+{
+  "todos": [{ "text": "...", "who": "you", "at": "0:00" }],
+  "details": [{ "label": "...", "value": "...", "at": "0:00" }],
+  "sections": [{ "heading": "...", "points": ["..."], "at": "0:00" }],
+  "decisions": [{ "text": "...", "at": "0:00" }],
+  "questions": [{ "text": "...", "at": "0:00" }]
+}` },
+    ],
+    response_format: { type: "json_object" },
+    reasoning_effort: NOTES_EFFORT as any,
+    max_completion_tokens: 32000,
+  } as any);
+  const extra = cleanNotes(JSON.parse(completion.choices[0]?.message?.content || "{}"));
+  const norm = (s: string) => String(s || "").replace(/==/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+  const seen = new Set<string>();
+  const take = (list: any[], key: (x: any) => string) => list.filter((x) => {
+    const k = norm(key(x));
+    if (!k || seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+  for (const t of notes.todos) seen.add(norm(t.text));
+  for (const d of notes.details) seen.add(norm(`${d.label} ${d.value}`));
+  for (const s of notes.sections) for (const p of s.points) seen.add(norm(p));
+  for (const d of notes.decisions) seen.add(norm(d.text));
+  for (const q of notes.questions) seen.add(norm(q.text));
+  const merged = { ...notes };
+  merged.todos = [...notes.todos, ...take(extra.todos, (t) => t.text)].slice(0, 60);
+  merged.details = [...notes.details, ...take(extra.details, (d) => `${d.label} ${d.value}`)].slice(0, 100);
+  merged.decisions = [...notes.decisions, ...take(extra.decisions, (d) => d.text)].slice(0, 40);
+  merged.questions = [...notes.questions, ...take(extra.questions, (q) => q.text)].slice(0, 40);
+  const sections = notes.sections.map((s: any) => ({ ...s, points: [...s.points] }));
+  for (const s of extra.sections) {
+    const points = take(s.points, (p) => p);
+    if (!points.length) continue;
+    const same = sections.find((x: any) => norm(x.heading) === norm(s.heading));
+    if (same) same.points = [...same.points, ...points].slice(0, 25);
+    else sections.push({ heading: s.heading, points: points.slice(0, 25), at: s.at });
+  }
+  merged.sections = sections.slice(0, 40);
+  const added = (merged.todos.length - notes.todos.length) + (merged.details.length - notes.details.length)
+    + (merged.decisions.length - notes.decisions.length) + (merged.questions.length - notes.questions.length)
+    + merged.sections.reduce((n: number, s: any) => n + s.points.length, 0) - notes.sections.reduce((n: number, s: any) => n + s.points.length, 0);
+  return { notes: merged, added };
 }
 
 async function notesMake(base44: any, user: any, body: any) {
@@ -400,16 +499,29 @@ async function notesMake(base44: any, user: any, body: any) {
     const when = whenRecorded(rec.started_at, user?.timezone);
     const length = lengthOf(rec.duration_ms);
     const aboutMe = String(user?.about_me || "").slice(0, 400);
+    let wroteWith = NOTES_MODEL;
     try {
       notes = await writeNotes(openai, transcript, when, length, aboutMe, NOTES_MODEL, asked);
     } catch (e) {
       console.error(`[notes] ${NOTES_MODEL} failed for ${recordId}, trying ${NOTES_BACKUP_MODEL}:`, e?.message || e);
       try {
         notes = await writeNotes(openai, transcript, when, length, aboutMe, NOTES_BACKUP_MODEL, asked);
+        wroteWith = NOTES_BACKUP_MODEL;
       } catch (e2) {
         console.error(`[notes] notes failed for ${recordId}:`, e2?.message || e2);
         await base44.entities.EnergyLog.update(recordId, { status: "notes_failed" });
         return Response.json({ ok: false, error: "notes_failed" }, { status: 502 });
+      }
+    }
+    // The second read, for anything the first pass left out. Skipped for a
+    // recording with barely anything in it.
+    if (transcript.length > 1200) {
+      try {
+        const { notes: fuller, added } = await fillGaps(openai, transcript, notes, wroteWith);
+        if (added > 0) console.log(`[notes] second read added ${added} line${added === 1 ? "" : "s"} to ${recordId}`);
+        notes = fuller;
+      } catch (e) {
+        console.error(`[notes] second read failed for ${recordId}, keeping the first notes:`, e?.message || e);
       }
     }
   }
