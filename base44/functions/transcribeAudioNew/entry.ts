@@ -783,7 +783,8 @@ async function notesAskOne(base44: any, user: any, body: any) {
   const recordId = String(body?.record_id || "");
   const question = String(body?.question || "").replace(/\s+/g, " ").trim().slice(0, 500);
   if (!question) return Response.json({ ok: false, error: "No question" }, { status: 400 });
-  const rec = await getRecording(base44, recordId);
+  // __try: a transcript handed in by the admin self-test (notesTry), no record.
+  const rec = base44?.__try && recordId === "try" ? base44.__try : await getRecording(base44, recordId);
   if (!rec) return Response.json({ ok: false, error: "No such recording" }, { status: 404 });
   // A follow-up recorded onto this one ("Record more") is part of the same
   // conversation: its transcript is read too, after this one's.
@@ -852,9 +853,29 @@ async function notesTry(user: any, body: any) {
   const model = TRY_MODELS.includes(body?.model) ? body.model : NOTES_MODEL;
   const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
   const started = Date.now();
-  const notes = await writeNotes(openai, transcript, whenRecorded(body?.started_at, user?.timezone),
+  // { question } instead: the one-recording ask (notes_ask_one) run on this
+  // transcript, quotes checked the same way, nothing saved.
+  if (body?.question) {
+    const fake = { id: "try", title: String(body?.title || "Test recording"), started_at: body?.started_at || new Date().toISOString(),
+      transcript_parts: [{ index: 0, start_ms: 0, text: transcript }] };
+    const stub = { entities: { EnergyLog: { filter: async () => [] } } };
+    const res = await notesAskOne({ ...stub, __try: fake }, user, { record_id: "try", question: body.question });
+    const out = await res.json();
+    return Response.json({ model: NOTES_MODEL, seconds: Math.round((Date.now() - started) / 100) / 10, ...out });
+  }
+  const first = await writeNotes(openai, transcript, whenRecorded(body?.started_at, user?.timezone),
     lengthOf(Number(body?.duration_ms) || 30 * 60000), String(body?.about_me || ""), model, questionsOf(body));
-  return Response.json({ model, seconds: Math.round((Date.now() - started) / 100) / 10, notes });
+  // The second read too, so a test shows what ships.
+  let notes = first, added = 0;
+  if (transcript.length > 1200 && body?.second_read !== false) {
+    try {
+      const r = await fillGaps(openai, transcript, first, model);
+      notes = r.notes; added = r.added;
+    } catch (e) {
+      console.error("[notes] try: second read failed:", (e as any)?.message || e);
+    }
+  }
+  return Response.json({ model, seconds: Math.round((Date.now() - started) / 100) / 10, second_read_added: added, notes });
 }
 
 // ── Entry ──────────────────────────────────────────────────────────────────
