@@ -81,13 +81,13 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
         {
           icon: Plus,
           title: "Add something",
-          description: "Tap Add on Home, then type it, say it or snap a photo. Say it the way you'd say it to a person: \"call the dentist Tuesday at 2\", \"idea: paint the hallway\", \"Mom's birthday is March 3\". ADHDone sorts it into a task, an event, a birthday or a Parking Lot idea on its own. You never have to pick.",
+          description: "Tap Add on Home. Type it, say it or snap a photo, the way you'd tell a person: \"call the dentist Tuesday at 2\", \"idea: paint the hallway\", \"Mom's birthday is March 3\". ADHDone works out whether it's a task, an event, a birthday or an idea.",
         },
         ...(hasAlarms ? [
         {
           icon: AlarmClock,
           title: "Alarm or notification?",
-          description: "Reminders arrive one of two ways. A notification is the regular kind: it sits in your tray until you look. An alarm rings full screen like an alarm clock, even on silent, until you deal with it. You picked one during setup. That's the default for new tasks, and every task has its own switch on its detail card.",
+          description: "A notification sits in your tray until you look. An alarm rings full screen, even on silent, until you deal with it. You picked one during setup; each task also has its own switch on its card.",
           link: { label: "Change the default in Settings", to: "/settings?section=reminders#alarms" },
         },
         ] : []),
@@ -101,12 +101,12 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     {
       icon: LayoutDashboard,
       title: "Home",
-      description: "Your command center. Today's tasks, quick actions, a daily tip, and gentle nudges when you need them."
+      description: "Today's tasks, a daily tip, and shortcuts to what you use most (Add a shortcut sits under Add and Timer)."
     },
     {
       icon: ListTodo,
       title: "Tasks",
-      description: "Everything in one place with urgency, subtasks, and smart reminders. Push a due date, break a task into steps, or drop it on the Back Burner when it's not today's problem.",
+      description: "Everything you've added. Push a due date, break a task into steps, or put it on the Back Burner when it's not today's problem.",
       // Its own dropdowns, under Tasks rather than beside it (Anna, Oct 24
       // 2026: "Put adding tasks is easy and task timer under tasks dropdown").
       children: [
@@ -117,7 +117,7 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
         {
           icon: Mic,
           title: "Say it",
-          description: "Tap the mic in the app and just say your task or idea. You can even say features you wish the app had, to put in a request."
+          description: "Tap the mic and say your task or idea. Wishes for the app count too."
         },
         // The rest only where this phone app has them (phonePlatform.js): the
         // iPhone app doesn't offer what it can't do (Anna, Oct 22 2026).
@@ -131,7 +131,7 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
         {
           icon: ADD_PATH_ICONS.screenshot,
           title: "Share a screenshot",
-          description: "Screenshot an invite, a flyer, a receipt, then share it to ADHDone. It reads the information from the picture and turns it into a task.",
+          description: "Screenshot an invite, a flyer or a receipt and share it to ADHDone. It reads the picture and makes the task.",
           video: ADD_PATH_VIDEOS.screenshot,
         },
         ] : []),
@@ -147,7 +147,7 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
         {
           icon: ADD_PATH_ICONS.pinned,
           title: "The pinned notification",
-          description: "With quick capture on, pull down your notification tray and tap the permanent notification to add a task.",
+          description: "Pull down your notification tray and tap the ADHDone notification to add a task.",
           link: { label: "Turn it on in Settings", to: "/settings#quick-capture" },
         },
         ] : []),
@@ -162,7 +162,7 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     {
       icon: Target,
       title: "Focus Mode",
-      description: "Pick one task. Every hour until it's done, ADHDone reminds you of it, and your other recurring reminders stay quiet (events, due dates and birthdays still come through). Finish it and everything goes back to normal."
+      description: "Pick one task. ADHDone reminds you of it every hour until it's done and keeps your other nudges quiet. Events, due dates and birthdays still come through."
     },
       ],
     },
@@ -174,7 +174,7 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     {
       icon: Cake,
       title: "Birthdays",
-      description: "Birthdays live on their own page and repeat every year. Get reminded a week out, the day before, and the day of — plus help drafting the text so you actually send it."
+      description: "Their own page, repeating every year. Reminders a week out, the day before and the day of, plus help writing the text."
     },
     // The same groups as the side menu (Tools, Reflect), so the guide reads
     // the way the app is laid out (Anna, Oct 24 2026). The entries for Record
@@ -191,13 +191,13 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     {
       icon: Lightbulb,
       title: "Parking Lot",
-      description: "Brain dump ideas without derailing what you're doing. Add to the Parking Lot anywhere you can add a task — just say it's an idea."
+      description: "Ideas for later. Add one anywhere you can add a task; just say it's an idea."
     },
     ...(hasRecorder ? [
     {
       icon: Mic,
       title: "Record Notes",
-      description: "Record a meeting, appointment or class. ADHDone writes the notes for you, organized for an ADHD brain: to-dos first, the details you'll need to look up, the words that matter highlighted."
+      description: "Record a meeting, appointment or class. ADHDone writes short, clear notes: to-dos first, then the details you'll need."
     },
     ] : []),
     {
@@ -208,7 +208,7 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     {
       icon: MapPin,
       title: "Places",
-      description: "The addresses you go between, and when you need to be there. This is what lets the app say \"leave now\" with an actual drive time behind it."
+      description: "Your home area and work address, so \"leave now\" comes with a real drive time."
     },
       ],
     },
@@ -224,12 +224,12 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     {
       icon: TrendingUp,
       title: "Insights",
-      description: "For the data lovers. Your patterns, streaks, and productivity — what times you're most productive, and proof of how far you've come."
+      description: "Your patterns and streaks, and proof of how far you've come."
     },
     {
       icon: BookLock,
       title: "Diary",
-      description: "Yours alone: no AI reads it, nobody else sees it. If you like, a new entry starts with the tasks you finished that day and a question about how it went."
+      description: "Yours alone: no AI reads it, nobody else sees it. A new entry can start with the tasks you finished that day."
     },
       ],
     },
@@ -240,7 +240,7 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     {
       icon: Sparkles,
       title: "Themes",
-      description: "Light, dark, colorful, or Spicy Brains — plus seasonal themes, unlocked when you find a special something in the app. Keep an eye out 👀"
+      description: "Light, dark, colorful or Spicy Brains. Seasonal themes unlock when you find a special something. Keep an eye out 👀"
     },
     {
       icon: Moon,
