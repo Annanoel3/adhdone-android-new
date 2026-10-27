@@ -54,6 +54,8 @@ export default function QuickActions({ theme, user }) {
     ? 'bg-green-100 text-green-700'
     : 'bg-gradient-to-br from-purple-100 to-orange-100 text-purple-700';
 
+  // Add is always first; everything after it is the person's list (Timer
+  // included, on by default).
   const actions = [
     {
       key: 'add',
@@ -64,21 +66,22 @@ export default function QuickActions({ theme, user }) {
       onClick: () => navigate(createPageUrl("AddTask")),
       color: tileColor
     },
-    {
-      key: 'timer',
-      icon: Timer,
-      label: "Timer",
-      tour: 'timer',
-      onClick: () => setShowTimer(true),
-      color: theme === 'minimalist' ? 'bg-indigo-100 text-indigo-700' : 'bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-700'
-    },
-    ...chosen.map((s) => ({
-      key: s.key,
-      icon: s.icon,
-      label: s.title,
-      onClick: () => navigate(createPageUrl(s.page)),
-      color: tileColor,
-    })),
+    ...chosen.map((s) => s.key === 'timer'
+      ? {
+        key: 'timer',
+        icon: Timer,
+        label: "Timer",
+        tour: 'timer',
+        onClick: () => setShowTimer(true),
+        color: theme === 'minimalist' ? 'bg-indigo-100 text-indigo-700' : 'bg-gradient-to-br from-indigo-100 to-purple-100 text-indigo-700'
+      }
+      : {
+        key: s.key,
+        icon: s.icon,
+        label: s.title,
+        onClick: () => navigate(createPageUrl(s.page)),
+        color: tileColor,
+      }),
   ];
 
   const dark = theme === 'dark';
@@ -95,7 +98,7 @@ export default function QuickActions({ theme, user }) {
         <Card
           key={action.key}
           data-tour={action.tour}
-          className={`${specialMode !== 'normal' ? `${specialMode}-card` : ''} cursor-pointer border-none shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 ${
+          className={`${specialMode !== 'normal' ? `${specialMode}-card` : ''} ${actions.length === 1 ? 'col-span-2' : ''} cursor-pointer border-none shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 ${
             specialMode === 'normal' ? (
               theme === 'dark' ? 'bg-gray-800' : 'bg-white/80 backdrop-blur-sm'
             ) : ''
@@ -143,7 +146,7 @@ export default function QuickActions({ theme, user }) {
           }`}
         >
           <LayoutGrid className="w-3.5 h-3.5" />
-          {chosen.length ? 'Edit shortcuts' : 'Add a shortcut'}
+          {chosen.some((s) => s.key !== 'timer') ? 'Edit shortcuts' : 'Add a shortcut'}
         </button>
       </div>
 
@@ -154,7 +157,7 @@ export default function QuickActions({ theme, user }) {
               <LayoutGrid className="w-5 h-5 text-purple-500" /> Home shortcuts
             </DialogTitle>
             <DialogDescription>
-              Tap what you use most. It gets a tile under Add and Timer.
+              Tap what you use most. Each one gets a tile next to Add.
             </DialogDescription>
           </DialogHeader>
           <div className="py-1 max-h-[60vh] overflow-y-auto grid grid-cols-2 gap-2">
