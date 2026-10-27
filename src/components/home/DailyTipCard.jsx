@@ -5,6 +5,7 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { generateSmartTipForUser, CURRENT_PROMPT_VERSION } from "../utils/dailyTipGenerator";
 import { isTheirTipEvening, tipEveningLabel } from "../utils/reminderCopy";
+import HomeSecretLink from "./HomeSecretLink";
 
 // Their evening, from their quiet hours, not 5 PM on the clock: 5 PM is the
 // start of the day for someone who sleeps days (Oct 12 2026).
@@ -20,8 +21,6 @@ const getLocalDateString = () => {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 };
-
-import HomeSecretLink from "./HomeSecretLink";
 
 export default function DailyTipCard({ theme }) {
   const [todaysTip, setTodaysTip] = useState(null);
