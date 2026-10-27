@@ -86,7 +86,7 @@ import { ONBOARDING_STEPS, ONBOARDING_STEP_EVENT, isStepDone, markStepDone } fro
 import { trackFire } from "@/lib/appTrack";
 import { seedTaskSortFromProfile } from "@/hooks/useTaskSort";
 import useNewBadges from "@/hooks/useNewBadges";
-import { secretPinnedToHome } from "./components/home/HomeSecretLink";
+import HomeSecretLink from "./components/home/HomeSecretLink";
 import TaskCaptureProcessor from "./components/shared/TaskCaptureProcessor";
 import { AppDialogHost } from "@/components/ui/alert-dialog";
 import UsageTracker from "./components/shared/UsageTracker";
@@ -362,14 +362,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   // moves overnight. Found once, it stops wandering: the seasonal theme AND
   // kawaii both join the theme rotation (light → dark → colorful → spicy →
   // seasonal → kawaii → light).
-  const SECRET_PAGES = ['Home', 'Tasks', 'Calendar', 'Progress', 'ParkingLot', 'Notes', 'FocusTimer'];
-  const secretPageToday = (() => {
-    const d = new Date();
-    const dayIndex = Math.floor((d.getTime() - d.getTimezoneOffset() * 60000) / 86400000);
-    return SECRET_PAGES[dayIndex % SECRET_PAGES.length];
-  })();
-  // While it's pinned to Today's Focus (HomeSecretLink), it isn't anywhere else.
-  const secretHere = !seasonalUnlocked && !secretPinnedToHome() && currentPageName === secretPageToday;
+  // Since Oct 27 2026 it stays on Home and moves between spots there each
+  // day (HomeSecretLink.SECRET_SPOTS); the page-to-page wander is over. The
+  // "bottom" spot is the one rendered here, under the page.
   const [secretFound, setSecretFound] = useState(false);
   const findSecret = () => {
     const seasonal = getDateBasedMode();
@@ -1295,16 +1290,12 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
               {children}
-              {secretHere && (
-                <div className="text-center pt-2" style={{ paddingBottom: 'max(2rem, calc(2rem + env(safe-area-inset-bottom)))' }}>
-                  <button
-                    type="button"
-                    onClick={findSecret}
-                    className={`text-base opacity-80 hover:opacity-100 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}
-                  >
-                    what's this? 👀
-                  </button>
-                </div>
+              {currentPageName === 'Home' && !seasonalUnlocked && (
+                <HomeSecretLink
+                  spot="bottom"
+                  theme={theme}
+                  className="text-center pt-2 pb-8"
+                />
               )}
             </div>
 
