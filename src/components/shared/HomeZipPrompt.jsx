@@ -70,9 +70,8 @@ export default function HomeZipPrompt({ user, theme }) {
               Got it. Do you commute to a job?
             </DialogTitle>
             <DialogDescription className={theme === 'dark' ? 'text-gray-400' : ''}>
-              If you add your work address and what time you need to be there, I can watch the
-              actual traffic on that drive and tell you when to head out. Schedules that change
-              every week are fine — you can enter them a week at a time.
+              Add your work address and start time, and I'll watch the traffic and tell you when
+              to head out. Changing schedules are fine; enter them a week at a time.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -95,9 +94,9 @@ export default function HomeZipPrompt({ user, theme }) {
             Where's home base?
           </DialogTitle>
           <DialogDescription className={theme === 'dark' ? 'text-gray-400' : ''}>
-            Drop a circle over your general area and I can tell you when to actually leave for
-            things — real drive time, real traffic — and group errands near each other into one
-            trip. No exact address, no tracking.
+            Drop a circle over your general area and I can tell you when to leave for things,
+            with real traffic, and group nearby errands into one trip. No exact address, no
+            tracking.
           </DialogDescription>
         </DialogHeader>
 
