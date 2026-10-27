@@ -226,8 +226,7 @@ export default function DiaryEditor({ entry, dateKey, initialContent = "", onSav
         </div>
       </div>
       <p className="px-4 pb-4 text-xs text-gray-400">
-        Drag a sticker anywhere on the page — tap a second finger down while dragging to resize it,
-        or tap it to show the ✕ and remove it.
+        Drag a sticker anywhere. A second finger while dragging resizes it; a tap shows ✕ to remove it.
       </p>
     </div>
   );
