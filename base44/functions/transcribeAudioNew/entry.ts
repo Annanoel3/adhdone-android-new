@@ -26,6 +26,10 @@ import { packsOf, leftOf, spendPacks } from "../../shared/minutePacks.ts";
 //    { mode: "notes_ask", question }
 //        a question about their recordings ("when did my boss say the report
 //        was due?"), answered from their own notes and transcripts. Nothing saved.
+//    { mode: "notes_fill", record_id }
+//        the second read on its own, for notes made before it existed: reads
+//        the transcript against the saved notes and adds what's missing, never
+//        touching a line already there (edits and checked-off to-dos included).
 //    { mode: "notes_ask_one", record_id, question }
 //        a question about ONE recording ("what did my doctor say about the
 //        dose?"), answered from its full transcript with the speaker's exact
@@ -762,6 +766,36 @@ Return JSON: { "answer": "...", "sources": [the RECORDING numbers the answer cam
   return Response.json({ ok: true, answer, sources });
 }
 
+// ── The second read, on request ─────────────────────────────────────────────────
+async function notesFill(base44: any, user: any, body: any) {
+  const recordId = String(body?.record_id || "");
+  const rec = await getRecording(base44, recordId);
+  if (!rec || !rec.notes) return Response.json({ ok: false, error: "No such notes" }, { status: 404 });
+  const transcript = transcriptOf(rec, 200000);
+  if (transcript.replace(/\[[^\]]*\]/g, "").trim().length < 20) {
+    return Response.json({ ok: true, added: 0, notes: rec.notes, said: "There's no transcript to check against." });
+  }
+  const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
+  // Taken as saved (cleanNotes would re-cap lists and drop the edited flag).
+  const list = (v: any) => (Array.isArray(v) ? v : []);
+  const saved = { ...rec.notes, todos: list(rec.notes.todos), details: list(rec.notes.details), sections: list(rec.notes.sections), decisions: list(rec.notes.decisions), questions: list(rec.notes.questions) };
+  let result;
+  try {
+    result = await fillGaps(openai, transcript, saved, NOTES_MODEL);
+  } catch (e) {
+    try {
+      result = await fillGaps(openai, transcript, saved, NOTES_BACKUP_MODEL);
+    } catch (e2) {
+      console.error(`[notes] fill failed for ${recordId}:`, (e2 as any)?.message || e2);
+      return Response.json({ ok: false, error: "fill_failed" }, { status: 502 });
+    }
+  }
+  const { notes, added } = result;
+  if (added > 0) await base44.entities.EnergyLog.update(recordId, { notes });
+  return Response.json({ ok: true, added, notes: added > 0 ? notes : rec.notes,
+    said: added > 0 ? `Added ${added} line${added === 1 ? "" : "s"} the notes had missed.` : "Nothing was missing. The notes already cover everything that was said." });
+}
+
 // ── A question about ONE recording, answered in the speaker's own words ─────
 // "What did my doctor say about the dose?" on that recording's page (Anna,
 // Oct 27 2026: "comprehensive enough to just be able to ask... and then using
@@ -893,6 +927,7 @@ Deno.serve(async (req) => {
     if (body?.mode === "notes_change") return await notesChange(base44, user, body);
     if (body?.mode === "notes_ask") return await notesAsk(base44, user, body);
     if (body?.mode === "notes_ask_one") return await notesAskOne(base44, user, body);
+    if (body?.mode === "notes_fill") return await notesFill(base44, user, body);
     if (body?.mode === "notes_try") return await notesTry(user, body);
 
     // Voice typing (Parking Lot), as before.
