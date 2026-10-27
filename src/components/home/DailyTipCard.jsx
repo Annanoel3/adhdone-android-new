@@ -68,7 +68,15 @@ export default function DailyTipCard({ theme }) {
     if (checking.current) return;
     checking.current = true;
     try {
-    await loadTodaysTipNow({ quiet });
+      await loadTodaysTipNow({ quiet });
+    } catch (error) {
+      // A read that failed (phone offline, server hiccup) must not leave the
+      // card spinning forever: keep the tip already on screen, or show the
+      // fallback for this visit. The next open tries again.
+      console.error("Error loading tip:", error);
+      setTodaysTip(prev => prev || { tip_text: FALLBACK_TIP_TEXT, category: "focus", shown_date: getLocalDateString() });
+      setIsRefreshing(false);
+      setIsLoading(false);
     } finally {
       checking.current = false;
     }
