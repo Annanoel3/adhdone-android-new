@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
-import { Plus, Timer, LayoutGrid, ChevronUp, ChevronDown, X } from "lucide-react";
+import { Plus, Timer, LayoutGrid, ChevronUp, ChevronDown, X, Columns2, Columns3, Columns4 } from "lucide-react";
 import LaunchPicker from "../launch/LaunchPicker";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -9,7 +9,19 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { usePluginPresent } from "@/components/shared/WidgetTaskSync";
-import { HOME_SHORTCUTS, HOME_TILES_EVENT, readHomeTiles, saveHomeTiles } from "./homeShortcuts";
+import {
+  HOME_SHORTCUTS, HOME_TILES_EVENT, readHomeTiles, saveHomeTiles,
+  TILE_COLS, HOME_COLS_EVENT, readTileCols, saveTileCols,
+} from "./homeShortcuts";
+
+// Tiles per row (Anna, Oct 27 2026: "a tiny icon that allows a user to switch
+// the shortcuts to rows of 2, 3, or 4"). Tailwind needs the whole class
+// written out, so each count has its own set.
+const COLS = {
+  2: { grid: 'grid-cols-2', pad: 'p-4 md:p-6', box: 'p-3 md:p-4 rounded-2xl', icon: 'w-5 h-5 md:w-6 md:h-6', label: 'text-sm md:text-base', gap: 'gap-3', Icon: Columns2 },
+  3: { grid: 'grid-cols-3', pad: 'p-3', box: 'p-2.5 rounded-xl', icon: 'w-5 h-5', label: 'text-xs', gap: 'gap-2', Icon: Columns3 },
+  4: { grid: 'grid-cols-4', pad: 'p-2', box: 'p-2 rounded-xl', icon: 'w-4 h-4', label: 'text-[11px]', gap: 'gap-1.5', Icon: Columns4 },
+};
 
 export default function QuickActions({ theme, user }) {
   const navigate = useNavigate();
@@ -21,8 +33,11 @@ export default function QuickActions({ theme, user }) {
 
   // The person's own shortcut tiles (homeShortcuts.js).
   const [tiles, setTiles] = useState(() => readHomeTiles(user));
+  const [cols, setCols] = useState(() => readTileCols(user));
   const [picking, setPicking] = useState(false);
   const canRecordNotes = usePluginPresent('RecorderBridge');
+  const L = COLS[cols] || COLS[2];
+  const nextCols = () => setCols(saveTileCols(TILE_COLS[(TILE_COLS.indexOf(cols) + 1) % TILE_COLS.length]));
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -33,11 +48,16 @@ export default function QuickActions({ theme, user }) {
 
   // The account's copy arrives after the first paint; another copy of this
   // component (or another tab) may change the list.
-  useEffect(() => { setTiles(readHomeTiles(user)); }, [user?.home_tiles]);
+  useEffect(() => { setTiles(readHomeTiles(user)); setCols(readTileCols(user)); }, [user?.home_tiles, user?.home_tile_cols]);
   useEffect(() => {
     const onChange = (e) => setTiles(Array.isArray(e.detail) ? e.detail : readHomeTiles(user));
+    const onCols = () => setCols(readTileCols(user));
     window.addEventListener(HOME_TILES_EVENT, onChange);
-    return () => window.removeEventListener(HOME_TILES_EVENT, onChange);
+    window.addEventListener(HOME_COLS_EVENT, onCols);
+    return () => {
+      window.removeEventListener(HOME_TILES_EVENT, onChange);
+      window.removeEventListener(HOME_COLS_EVENT, onCols);
+    };
   }, [user]);
 
   const addTile = (key) => { if (!tiles.includes(key)) setTiles(saveHomeTiles([...tiles, key])); };
@@ -108,23 +128,23 @@ export default function QuickActions({ theme, user }) {
 
   return (
     <div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className={`grid ${L.grid} ${L.gap}`}>
       {actions.map((action) => (
         <Card
           key={action.key}
           data-tour={action.tour}
-          className={`${specialMode !== 'normal' ? `${specialMode}-card` : ''} ${actions.length === 1 ? 'col-span-2' : ''} cursor-pointer border-none shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 ${
+          className={`${specialMode !== 'normal' ? `${specialMode}-card` : ''} ${actions.length === 1 ? 'col-span-full' : ''} cursor-pointer border-none shadow-md hover:shadow-lg transition-all duration-300 hover:scale-105 ${
             specialMode === 'normal' ? (
               theme === 'dark' ? 'bg-gray-800' : 'bg-white/80 backdrop-blur-sm'
             ) : ''
           }`}
           onClick={() => action.onClick()}
         >
-          <div className="p-4 md:p-6 flex flex-col items-center text-center gap-3">
-            <div className={`p-3 md:p-4 rounded-2xl ${specialMode === 'normal' ? action.color : ''}`}>
-              <action.icon className="w-5 h-5 md:w-6 md:h-6" />
+          <div className={`${L.pad} flex flex-col items-center text-center ${cols === 2 ? 'gap-3' : 'gap-1.5'}`}>
+            <div className={`${L.box} ${specialMode === 'normal' ? action.color : ''}`}>
+              <action.icon className={L.icon} />
             </div>
-            <div className={`font-medium text-sm md:text-base ${specialMode === 'normal' ? (theme === 'dark' ? 'text-white' : 'text-gray-900') : ''}`}>
+            <div className={`font-medium leading-tight ${L.label} ${specialMode === 'normal' ? (theme === 'dark' ? 'text-white' : 'text-gray-900') : ''}`}>
               {action.rotatingLabel ? (
                 <div className="flex items-center justify-center gap-1">
                   <span>{action.label}</span>
@@ -151,8 +171,21 @@ export default function QuickActions({ theme, user }) {
       </div>
 
       {/* Pick more tiles. A quiet text link, not a tile: the tiles are the
-          person's, this is the door to them. */}
-      <div className="flex justify-end mt-1.5">
+          person's, this is the door to them. Beside it, the tiny per-row
+          switch: tap to go 2 → 3 → 4 → 2. */}
+      <div className="flex justify-end items-center gap-1 mt-1.5">
+        <button
+          type="button"
+          onClick={nextCols}
+          aria-label={`Tiles per row: ${cols}. Tap to change`}
+          title={`${cols} per row`}
+          className={`flex items-center gap-0.5 text-xs px-2 py-1 rounded-md ${
+            specialMode !== 'normal' ? '' : dark ? 'text-gray-400 hover:text-gray-200' : 'text-gray-500 hover:text-gray-800'
+          }`}
+        >
+          <L.Icon className="w-3.5 h-3.5" />
+          <span className="tabular-nums">{cols}</span>
+        </button>
         <button
           type="button"
           onClick={() => setPicking(true)}
