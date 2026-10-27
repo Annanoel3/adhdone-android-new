@@ -45,9 +45,14 @@ export function darkGlassCss({ mode, text, muted, title, base }) {
   const TEXT = text, MUTED = muted, TITLE = title;
   // Cards and pale panels share one dark glass (Anna, Oct 3 2026: the lighter,
   // unblurred panels — the Add Task card — read as washed out next to Home's).
-  const GLASS = `rgba(${base}, 0.72)`;
+  // Darker and blurrier since Oct 27 2026 (was 0.72 / 14px): on the Halloween
+  // wallpaper the bright pumpkin and cream patches showed through the tiles
+  // as blotches, so the contrast behind the text changed card to card
+  // (Anna: "lets make those darker"). Still glass, the scene still shows.
+  const GLASS = `rgba(${base}, 0.84)`;
   const PANEL = GLASS;
-  const CHROME = `rgba(${base}, 0.78)`;
+  const CHROME = `rgba(${base}, 0.88)`;
+  const BLUR = '20px';
   // A card that passes its own bg class (bg-white, bg-white/80) loses bg-card
   // to tailwind-merge, so those count as cards too.
   const CARDS = [`.${mode}-card`, '[class~="bg-card"]', '[class~="bg-white"]', '[class*="bg-white/"]'];
