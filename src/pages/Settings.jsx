@@ -106,11 +106,11 @@ function AboutYouCard({ user, theme, onSaved }) {
             onBlur={() => { if (dirty && !saving) save(); }}
             rows={3}
             maxLength={500}
-            placeholder='Your work, your schedule, what you juggle — e.g. "I play violin at weddings" or "I&apos;m a nurse on night shifts."'
+            placeholder='Like "I play violin at weddings" or "I&apos;m a nurse on night shifts."'
             className={dark ? 'bg-gray-700 border-gray-600 text-white' : ''}
           />
           <p className={`text-xs ${dark ? 'text-gray-400' : 'text-gray-500'}`}>
-            ADHDone reads this every time it sorts a task, breaks one down, nudges you, or writes your notes — so the more real it is, the better it fits your life.
+            ADHDone reads this whenever it sorts a task, nudges you or writes your notes. The more real, the better it fits.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -566,7 +566,7 @@ export default function Settings() {
             {quietHoursEnabled && (
               <>
                 <p className={`text-sm mb-4 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                  No reminders go off between these times (for example, 10 PM to 8 AM), except at a time you set yourself, like a 5 AM flight.
+                  Nothing goes off between these times, except at a time you set yourself (a 5 AM flight).
                 </p>
                 <div className="grid grid-cols-2 gap-4 mb-4">
                   <div>
@@ -622,7 +622,7 @@ export default function Settings() {
                 </div>
                 {wakeInfoOpen && (
                   <p className={`text-xs mt-2 rounded-md p-2 ${theme === 'dark' ? 'bg-gray-700 text-gray-200' : 'bg-gray-50 text-gray-700'}`}>
-                    A good option if you wake up at different times through the week. ADHDone notices the first time you unlock your phone each morning and starts your reminders from then, instead of at a set time. Reminders you set for a specific time still go off at that time. This needs Android's "Usage access" permission, which ADHDone uses only for this: to see when your phone was first unlocked each day, and nothing else.
+                    Good if you wake at different times. Your reminders start when you first unlock your phone instead of at a set time; anything set for a specific time still goes off then. Android's "Usage access" is used only to see that first unlock.
                   </p>
                 )}
               </div>
@@ -648,7 +648,7 @@ export default function Settings() {
                     Spoken check-ins while you time a task
                   </p>
                   <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                    A voice that cheers you on while a timer runs — "let's get started", "that's 5 minutes, look at you go", a word about the task itself, and a line every ten minutes after — so you notice if you drifted off. Keep your volume up. Only while the app is open.
+                    A voice that cheers you on while a timer runs ("that's 5 minutes, look at you go"), so you notice if you drift off. Volume up, app open.
                   </p>
                 </div>
                 <Switch
