@@ -2100,8 +2100,8 @@ Return JSON:
                         />
                         <p className="text-xs text-gray-500 mt-1">
                           {reminderTime
-                            ? 'A heads-up an hour before, then a reminder at that time.'
-                            : 'No time means done that day. Smart Reminders nudge you the night before and that day.'}
+                            ? 'A reminder at that time, plus a heads-up before when it earns one.'
+                            : 'No time means done that day. Smart Reminders pick when to nudge.'}
                         </p>
                       </div>
                       <p className="text-xs text-gray-500">Saves automatically when you close this.</p>
