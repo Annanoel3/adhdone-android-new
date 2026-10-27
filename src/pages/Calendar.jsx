@@ -469,7 +469,7 @@ export default function Calendar() {
                 </div>
               </div>
               <p className={`text-sm ${textSecondary}`}>
-                Open ADHDone on your phone and pick which of its calendars to bring in — Google, Samsung, Outlook, whatever the phone has. Their events become tasks with reminders, and they show up here too.
+                Open ADHDone on your phone and tick the calendars to bring in (Google, Samsung, Outlook, any it has). Their events get reminders and show up here.
               </p>
             </CardContent>
           </Card>
@@ -500,7 +500,7 @@ export default function Calendar() {
           <div className="text-center py-12">
             <CalendarDays className={`w-12 h-12 mx-auto mb-4 ${textSecondary}`} />
             <p className={`font-medium ${textPrimary}`}>Nothing on the calendar yet</p>
-            <p className={`text-sm mt-1 ${textSecondary}`}>Add a task, or bring in your phone's calendars from the ADHDone app, and it shows up here.</p>
+            <p className={`text-sm mt-1 ${textSecondary}`}>Add a task, or bring in your phone's calendars, and it shows up here.</p>
           </div>
         )}
 
@@ -525,7 +525,7 @@ export default function Calendar() {
           open={switchNote}
           theme={theme}
           title="New calendar integration now in use!"
-          body="No Google sign-in needed anymore. ADHDone now reads calendars straight from your phone. Tick the calendar(s) you want in the Phone calendars list — your Google calendar is in there — and everything keeps working the way it did. Events already brought in stay where they are."
+          body="ADHDone now reads calendars straight from your phone, no Google sign-in needed. Tick the ones you want under Phone calendars (your Google calendar is there too). Events already brought in stay put."
           onConfirm={() => { markFirstUseSeen(CALENDAR_SWITCH_KEY); setSwitchNote(false); }}
         />
       </div>
