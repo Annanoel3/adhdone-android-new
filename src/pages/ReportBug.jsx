@@ -120,7 +120,7 @@ ${tasks.length > 0 ? tasks.map(t => `- ${t.title} (${t.status})`).join('\n') : '
           Share bugs, suggestions, or thoughts about ADHDone
         </p>
         <p className={`text-sm ${theme === 'dark' ? 'text-gray-500' : 'text-gray-500'}`}>
-          ADHDone is in open beta right now — your feedback is one of the most important things you can give, and it'd be very appreciated if you could be a part of our early days. As a solo developer, I personally review and address every piece of feedback. Your input helps make ADHDone better for everyone.
+          I'm a solo developer and I read every piece of feedback myself. It's what makes ADHDone better.
         </p>
       </div>
 
