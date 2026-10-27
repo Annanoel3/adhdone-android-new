@@ -49,7 +49,7 @@ export default function SupportEscalationCard({ message, transcript, theme, onDi
             Would you like to send this to customer support?
           </p>
           <p className={`text-xs mt-1 ${theme === 'dark' ? 'text-blue-200' : 'text-blue-700'}`}>
-            Your message, this conversation, and your name and email would be emailed to the developer. Nothing is sent unless you tap Send. Support replies are usually fast.
+            Your message, this conversation, and your name and email go to the developer by email. Nothing is sent until you tap Send.
           </p>
         </div>
       </div>
@@ -373,17 +373,16 @@ export function FeedbackPrompt({ user }) {
               <>
                 <h2 className="text-xl font-bold text-foreground">I think this was a feature request</h2>
                 <p className="text-[15px] leading-relaxed text-muted-foreground">
-                  It turned into a task, but it sounds like something you'd like ADHDone to do. Want
-                  to send it to the developer? You can change the wording first.
+                  This became a task, but it sounds like something you'd like ADHDone to do. Send it to
+                  the developer? You can change the wording first.
                 </p>
               </>
             ) : (
               <>
                 <h2 className="text-xl font-bold text-foreground">Want to send this to the developer?</h2>
                 <p className="text-[15px] leading-relaxed text-muted-foreground">
-                  This sounds like it's about ADHDone itself, like a feature you'd like or something
-                  that isn't working right. I saved it in your Parking Lot. Want to send it to the
-                  developer too? You can change the wording first.
+                  This sounds like it's about ADHDone itself. It's saved in your Parking Lot. Send it
+                  to the developer too? You can change the wording first.
                 </p>
               </>
             )}
