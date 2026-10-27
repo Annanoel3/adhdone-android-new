@@ -62,8 +62,8 @@ export function darkGlassCss({ mode, text, muted, title, base }) {
   /* Cards: dark glass */
   ${CARDS.map(inShell).join(', ')} {
     background: ${GLASS} !important;
-    backdrop-filter: blur(14px) !important;
-    -webkit-backdrop-filter: blur(14px) !important;
+    backdrop-filter: blur(${BLUR}) !important;
+    -webkit-backdrop-filter: blur(${BLUR}) !important;
     border: 1px solid ${LINE} !important;
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35) !important;
     color: ${TEXT} !important;
@@ -79,11 +79,11 @@ export function darkGlassCss({ mode, text, muted, title, base }) {
   ${list(PALE_BG, (c) => inShell(`[class~="bg-${c}"]`))},
   ${inShell('[class*="bg-white/"]')} {
     background-color: ${PANEL} !important; border-color: ${LINE} !important;
-    backdrop-filter: blur(14px) !important; -webkit-backdrop-filter: blur(14px) !important;
+    backdrop-filter: blur(${BLUR}) !important; -webkit-backdrop-filter: blur(${BLUR}) !important;
   }
   ${list(PALE_BG, (c) => inShell(`[class~="from-${c}"]`))} {
     background-image: none !important; background-color: ${PANEL} !important;
-    backdrop-filter: blur(14px) !important; -webkit-backdrop-filter: blur(14px) !important;
+    backdrop-filter: blur(${BLUR}) !important; -webkit-backdrop-filter: blur(${BLUR}) !important;
   }
   ${list(PALE_BG, (c) => inCards(`[class~="bg-${c}"]`))},
   ${inCards('[class*="bg-white/"]')} { background-color: ${RAISED} !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
