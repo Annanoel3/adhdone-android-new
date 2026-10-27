@@ -65,7 +65,7 @@ export default function LaunchPicker({ open, onOpenChange, theme }) {
             <Timer className="w-5 h-5 text-emerald-500" /> Start a timer
           </DialogTitle>
           <DialogDescription>
-            Pick a task. The timer counts up on screen until you stop it, so you can see how long things really take.
+            Pick a task. The timer counts up until you stop it, so you see how long it really takes.
           </DialogDescription>
         </DialogHeader>
         <div className="py-2 max-h-80 overflow-y-auto space-y-2">
