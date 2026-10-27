@@ -46,12 +46,15 @@ export default function QuickActions({ theme, user }) {
   // Arrows rather than drag: they work the same on every phone and never
   // fight the dialog's scroll.
   const moveTile = (key, dir) => {
-    const i = tiles.indexOf(key);
+    // Move within the tiles this phone shows; a saved key this phone can't
+    // show (Record Notes without the recorder) keeps its place at the end.
+    const shown = tiles.filter((k) => offered.some((s) => s.key === k));
+    const hidden = tiles.filter((k) => !offered.some((s) => s.key === k));
+    const i = shown.indexOf(key);
     const j = i + dir;
-    if (i < 0 || j < 0 || j >= tiles.length) return;
-    const next = [...tiles];
-    [next[i], next[j]] = [next[j], next[i]];
-    setTiles(saveHomeTiles(next));
+    if (i < 0 || j < 0 || j >= shown.length) return;
+    [shown[i], shown[j]] = [shown[j], shown[i]];
+    setTiles(saveHomeTiles([...shown, ...hidden]));
   };
 
   const offered = HOME_SHORTCUTS.filter((s) => !s.needsRecorder || canRecordNotes);
