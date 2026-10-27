@@ -445,8 +445,8 @@ export default function CalendarGrid({ tasks = [], events = [], isDark, onItemOp
           textSecondary={textSecondary}
         />
       ) : (
-      {/* Tight cells, like a phone calendar: no cell borders or inner padding,
-          hairline gaps, small filled chips (Anna, Oct 27 2026). */}
+      // Tight cells, like a phone calendar: no cell borders or inner padding,
+      // hairline gaps, small filled chips (Anna, Oct 27 2026).
       <div className={`grid grid-cols-7 gap-px rounded-md overflow-hidden ${isDark ? 'bg-gray-700' : 'bg-gray-200'}`}>
         {cells.map((cell, idx) => {
           if (!cell) return <div key={`b-${idx}`} className={`min-h-[76px] ${cellMuted}`} />;
