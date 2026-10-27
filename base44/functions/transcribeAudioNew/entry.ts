@@ -458,17 +458,18 @@ Return JSON:
     seen.add(k);
     return true;
   });
-  for (const t of notes.todos) seen.add(norm(t.text));
-  for (const d of notes.details) seen.add(norm(`${d.label} ${d.value}`));
-  for (const s of notes.sections) for (const p of s.points) seen.add(norm(p));
-  for (const d of notes.decisions) seen.add(norm(d.text));
-  for (const q of notes.questions) seen.add(norm(q.text));
+  const arr = (v: any) => (Array.isArray(v) ? v : []);
+  for (const t of arr(notes.todos)) seen.add(norm(t?.text));
+  for (const d of arr(notes.details)) seen.add(norm(`${d?.label} ${d?.value}`));
+  for (const s of arr(notes.sections)) for (const p of arr(s?.points)) seen.add(norm(p));
+  for (const d of arr(notes.decisions)) seen.add(norm(d?.text));
+  for (const q of arr(notes.questions)) seen.add(norm(q?.text));
   const merged = { ...notes };
-  merged.todos = [...notes.todos, ...take(extra.todos, (t) => t.text)].slice(0, 60);
-  merged.details = [...notes.details, ...take(extra.details, (d) => `${d.label} ${d.value}`)].slice(0, 100);
-  merged.decisions = [...notes.decisions, ...take(extra.decisions, (d) => d.text)].slice(0, 40);
-  merged.questions = [...notes.questions, ...take(extra.questions, (q) => q.text)].slice(0, 40);
-  const sections = notes.sections.map((s: any) => ({ ...s, points: [...s.points] }));
+  merged.todos = [...arr(notes.todos), ...take(extra.todos, (t) => t.text)].slice(0, 60);
+  merged.details = [...arr(notes.details), ...take(extra.details, (d) => `${d.label} ${d.value}`)].slice(0, 100);
+  merged.decisions = [...arr(notes.decisions), ...take(extra.decisions, (d) => d.text)].slice(0, 40);
+  merged.questions = [...arr(notes.questions), ...take(extra.questions, (q) => q.text)].slice(0, 40);
+  const sections = arr(notes.sections).map((s: any) => ({ ...s, points: [...arr(s?.points)] }));
   for (const s of extra.sections) {
     const points = take(s.points, (p) => p);
     if (!points.length) continue;
@@ -477,9 +478,9 @@ Return JSON:
     else sections.push({ heading: s.heading, points: points.slice(0, 25), at: s.at });
   }
   merged.sections = sections.slice(0, 40);
-  const added = (merged.todos.length - notes.todos.length) + (merged.details.length - notes.details.length)
-    + (merged.decisions.length - notes.decisions.length) + (merged.questions.length - notes.questions.length)
-    + merged.sections.reduce((n: number, s: any) => n + s.points.length, 0) - notes.sections.reduce((n: number, s: any) => n + s.points.length, 0);
+  const added = (merged.todos.length - arr(notes.todos).length) + (merged.details.length - arr(notes.details).length)
+    + (merged.decisions.length - arr(notes.decisions).length) + (merged.questions.length - arr(notes.questions).length)
+    + merged.sections.reduce((n: number, s: any) => n + s.points.length, 0) - arr(notes.sections).reduce((n: number, s: any) => n + arr(s?.points).length, 0);
   return { notes: merged, added };
 }
 
