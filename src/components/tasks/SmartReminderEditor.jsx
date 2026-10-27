@@ -267,9 +267,7 @@ export default function SmartReminderEditor({ task, theme, onUpdate, isEvent = f
       )}
 
       <p className={`text-xs italic ${isDark ? 'text-purple-300' : 'text-purple-600'}`}>
-        {isEvent
-          ? 'Tap × to turn one off. A new date and time rebuilds them all.'
-          : 'Tap × to turn one off. A new date and time rebuilds them all.'}
+        Tap × to turn one off. A new date and time rebuilds them all.
       </p>
     </div>
   );
