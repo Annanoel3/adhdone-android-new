@@ -192,6 +192,10 @@ export default function TaskSections({
         return new Date(a.created_date || 0) - new Date(b.created_date || 0);
       });
 
+  // Back Burner, Birthdays and an empty day start closed; the rest open.
+  const defaultCollapsed = (key) =>
+    key === "backburner" || key === "birthdays" || (viewMode === "days" && (grouped[key] || []).length === 0);
+
   const toggleSection = (key) =>
     setCollapsed((prev) => {
       // The first tap on a section with no saved state flips its DEFAULT
@@ -261,12 +265,12 @@ export default function TaskSections({
         // Birthdays start collapsed as well (Anna, Oct 24 2026): a synced
         // calendar can bring in dozens at once, and they're not today's work.
         // The header shows the count, and one tap opens or closes the list.
+        // (Before Oct 27 2026 the first tap on a closed-by-default section
+        // wrote `true` and it took a second tap to open it.)
         const isCollapsed =
           collapsed[section.key] !== undefined
             ? collapsed[section.key]
-            : section.key === "backburner" ||
-              section.key === "birthdays" ||
-              (viewMode === "days" && sectionTasks.length === 0);
+            : defaultCollapsed(section.key);
 
         return (
           <div
