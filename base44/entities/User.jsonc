@@ -404,6 +404,13 @@
       "type": "string",
       "description": "Calendar layout, month or week, saved from the Month/Week switch. Same rule as task_sort."
     },
+    "home_tiles": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Shortcut tiles the person added to Home under Add and Timer (keys from src/components/home/homeShortcuts.js, e.g. notes, calendar, parkinglot), in the order they were added. Same rule as task_sort: the phone's own copy wins while it exists."
+    },
     "notes_minutes_month": {
       "type": "string",
       "description": "Recorded notes: the month (YYYY-MM, in the person's own time zone) that notes_seconds_used counts. A different month means nothing has been used yet this month."
