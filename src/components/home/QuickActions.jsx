@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card } from "@/components/ui/card";
-import { Plus, Timer, LayoutGrid, Check } from "lucide-react";
+import { Plus, Timer, LayoutGrid, ChevronUp, ChevronDown, X } from "lucide-react";
 import LaunchPicker from "../launch/LaunchPicker";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
@@ -40,8 +40,17 @@ export default function QuickActions({ theme, user }) {
     return () => window.removeEventListener(HOME_TILES_EVENT, onChange);
   }, [user]);
 
-  const toggleTile = (key) => {
-    const next = tiles.includes(key) ? tiles.filter((k) => k !== key) : [...tiles, key];
+  const addTile = (key) => { if (!tiles.includes(key)) setTiles(saveHomeTiles([...tiles, key])); };
+  const removeTile = (key) => setTiles(saveHomeTiles(tiles.filter((k) => k !== key)));
+  // Reorder with arrows (Anna, Oct 27 2026: "let users reorder them around").
+  // Arrows rather than drag: they work the same on every phone and never
+  // fight the dialog's scroll.
+  const moveTile = (key, dir) => {
+    const i = tiles.indexOf(key);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= tiles.length) return;
+    const next = [...tiles];
+    [next[i], next[j]] = [next[j], next[i]];
     setTiles(saveHomeTiles(next));
   };
 
@@ -157,30 +166,53 @@ export default function QuickActions({ theme, user }) {
               <LayoutGrid className="w-5 h-5 text-purple-500" /> Home shortcuts
             </DialogTitle>
             <DialogDescription>
-              Tap what you use most. Each one gets a tile next to Add.
+              Tiles sit next to Add in this order. Arrows move one; × takes it off.
             </DialogDescription>
           </DialogHeader>
-          <div className="py-1 max-h-[60vh] overflow-y-auto grid grid-cols-2 gap-2">
-            {offered.map((s) => {
-              const on = tiles.includes(s.key);
-              return (
-                <button
-                  key={s.key}
-                  type="button"
-                  onClick={() => toggleTile(s.key)}
-                  aria-pressed={on}
-                  className={`flex items-center gap-2 p-2.5 rounded-lg border text-left text-sm transition-colors ${
-                    on
-                      ? dark ? 'border-purple-500 bg-purple-900/40 text-white' : 'border-purple-400 bg-purple-50 text-purple-900'
-                      : dark ? 'border-gray-700 bg-gray-800 text-gray-200' : 'border-gray-200 bg-gray-50 text-gray-800'
-                  }`}
-                >
-                  <s.icon className="w-4 h-4 flex-shrink-0" />
-                  <span className="flex-1 leading-tight">{s.title}</span>
-                  {on && <Check className="w-4 h-4 flex-shrink-0 text-purple-500" />}
-                </button>
-              );
-            })}
+          <div className="py-1 max-h-[60vh] overflow-y-auto space-y-3">
+            {chosen.length > 0 && (
+              <div className={`rounded-lg border divide-y ${dark ? 'border-gray-700 divide-gray-700' : 'border-gray-200 divide-gray-200'}`}>
+                {chosen.map((s, i) => (
+                  <div key={s.key} className={`flex items-center gap-2 px-2 py-1.5 text-sm ${dark ? 'text-gray-100' : 'text-gray-900'}`}>
+                    <s.icon className="w-4 h-4 flex-shrink-0 text-purple-500" />
+                    <span className="flex-1 leading-tight">{s.title}</span>
+                    <button type="button" onClick={() => moveTile(s.key, -1)} disabled={i === 0} aria-label={`Move ${s.title} up`}
+                      className={`p-1.5 rounded-md disabled:opacity-25 ${dark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}>
+                      <ChevronUp className="w-4 h-4" />
+                    </button>
+                    <button type="button" onClick={() => moveTile(s.key, 1)} disabled={i === chosen.length - 1} aria-label={`Move ${s.title} down`}
+                      className={`p-1.5 rounded-md disabled:opacity-25 ${dark ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}>
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                    <button type="button" onClick={() => removeTile(s.key)} aria-label={`Remove ${s.title}`}
+                      className={`p-1.5 rounded-md ${dark ? 'text-gray-400 hover:bg-gray-700' : 'text-gray-500 hover:bg-gray-100'}`}>
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {offered.some((s) => !tiles.includes(s.key)) && (
+              <div>
+                <p className={`text-xs font-medium mb-1.5 ${dark ? 'text-gray-400' : 'text-gray-500'}`}>Add a tile</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {offered.filter((s) => !tiles.includes(s.key)).map((s) => (
+                    <button
+                      key={s.key}
+                      type="button"
+                      onClick={() => addTile(s.key)}
+                      className={`flex items-center gap-2 p-2.5 rounded-lg border text-left text-sm transition-colors ${
+                        dark ? 'border-gray-700 bg-gray-800 text-gray-200 hover:bg-gray-700' : 'border-gray-200 bg-gray-50 text-gray-800 hover:bg-gray-100'
+                      }`}
+                    >
+                      <Plus className="w-3.5 h-3.5 flex-shrink-0 opacity-60" />
+                      <s.icon className="w-4 h-4 flex-shrink-0" />
+                      <span className="flex-1 leading-tight">{s.title}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
