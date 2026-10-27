@@ -1984,6 +1984,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   //     medication alarm, a time the app picked, rang out on Oct 18 and again
   //     on Oct 19.
   let alarmLogRows: number | null = null;
+  const ANSWERED_MS = 3 * 3600e3;
   try {
     const sinceIso = new Date(nowMs - 2 * H_DAY).toISOString();
     const [recent, logged] = await Promise.all([
@@ -2006,6 +2007,16 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       if (!taskId || !Number.isFinite(ms) || ms > nowMs || nowMs - ms > 2 * H_DAY) return;
       const e = String(email || '').toLowerCase();
       if (!e || notReal.has(e) || !userByLower[e]) return;
+      // A ring the person acted on soon after is answered, just not on the
+      // alarm screen: Chad lets his 8:00 AM medication alarm ring out and
+      // checks the task off from the notification 40 minutes later, every
+      // day (Oct 24-27 2026), and the alert called that "going unanswered"
+      // (Anna, Oct 27 2026: "Did we lose someone"). A ring younger than the
+      // same window with the task still open is too soon to tell.
+      const rt = taskById[taskId];
+      const rtDone = rt?.status === 'completed' ? msOf(rt.completed_at) : NaN;
+      if (Number.isFinite(rtDone) && rtDone >= ms - 60e3 && rtDone - ms <= ANSWERED_MS) return;
+      if (!Number.isFinite(rtDone) && nowMs - ms < ANSWERED_MS) return;
       // The same ring, from the log and from the task (or sent twice).
       const key = `${taskId}|${Math.round(ms / 1000)}`;
       if (seenRing.has(key) || (reportId && seenRing.has(`r|${reportId}`))) return;
