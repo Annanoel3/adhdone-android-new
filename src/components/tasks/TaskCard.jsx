@@ -1096,10 +1096,38 @@ export default function TaskCard({
           <TimeItButton task={task} theme={theme} />
           <RecordNotesButton task={task} theme={theme} compact />
 
+          {/* The priority pill is the picker, right on the collapsed card
+              (Anna, Oct 27 2026: "change the priority by just clicking on
+              it"); it used to need the card opened first. */}
           {!task.silenced && !isCancelled && (
-            <span className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap ${getUrgencyColor(task.urgency)}`}>
-              {task.urgency === 'medium' ? 'med' : task.urgency}
-            </span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  onClick={(e) => e.stopPropagation()}
+                  aria-label={`Priority: ${task.urgency}. Tap to change it`}
+                  title="Change the priority"
+                  className={`flex-shrink-0 text-xs px-2 py-1 rounded border whitespace-nowrap cursor-pointer hover:opacity-80 transition-opacity ${getUrgencyColor(task.urgency)}`}
+                >
+                  {task.urgency === 'medium' ? 'med' : task.urgency}
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className={`w-40 p-2 ${theme === 'dark' ? 'bg-gray-800 border-gray-700' : ''}`} onClick={(e) => e.stopPropagation()}>
+                <div className="space-y-1">
+                  {[['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['urgent', 'Urgent']].map(([v, label]) => (
+                    <PopoverClose asChild key={v}>
+                      <button
+                        type="button"
+                        onClick={() => handleUrgencyChange(v)}
+                        className={`w-full text-left px-3 py-2 text-sm rounded ${task.urgency === v ? 'font-semibold' : ''} ${theme === 'dark' ? 'hover:bg-gray-700 text-gray-200' : 'hover:bg-gray-100'}`}
+                      >
+                        {label}
+                      </button>
+                    </PopoverClose>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           )}
 
 
