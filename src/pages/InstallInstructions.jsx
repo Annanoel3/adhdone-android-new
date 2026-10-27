@@ -1190,7 +1190,7 @@ export default function NotesPage() {
                   value={askOneText}
                   onChange={(e) => setAskOneText(e.target.value)}
                   onKeyDown={(e) => { if (e.key === "Enter") askAboutThis(open); }}
-                  placeholder='Ask this recording, like "what did my doctor say about the dose?"'
+                  placeholder="Ask this recording"
                   disabled={!!askOne?.loading}
                   className={inputCls}
                 />
@@ -1198,6 +1198,9 @@ export default function NotesPage() {
                   {askOne?.loading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Ask"}
                 </Button>
               </div>
+              {/* The example lives under the box, not in it: a placeholder
+                  gets cut to its first words on a phone (Anna, Oct 26 2026). */}
+              {!askOne && <p className={`text-xs ${soft}`}>Like “what did my doctor say about the dose?” — the answer comes with their exact words.</p>}
               {askOne && !askOne.loading && (
                 <div className="space-y-2 pt-1">
                   <p className={heading}>{askOne.answer}</p>
@@ -1259,7 +1262,7 @@ export default function NotesPage() {
                     value={changeText}
                     onChange={(e) => setChangeText(e.target.value)}
                     onKeyDown={(e) => { if (e.key === "Enter") submitChange(open); }}
-                    placeholder='Change your notes, like "add that the copay is $40"'
+                    placeholder="Change your notes"
                     disabled={changing}
                     className={inputCls}
                   />
@@ -1267,6 +1270,7 @@ export default function NotesPage() {
                     {changing ? <Loader2 className="w-4 h-4 animate-spin" /> : "Update"}
                   </Button>
                 </div>
+                {!changeSaid && <p className={`text-xs ${soft}`}>Like “add that the copay is $40” or “take out the line about parking”.</p>}
                 {changeSaid && <p className={`text-sm ${soft}`}>{changeSaid}</p>}
                 <button type="button" onClick={() => fillNotes(open)} disabled={filling || changing} className={`text-sm underline underline-offset-2 ${soft}`}>
                   {filling ? "Reading the transcript again…" : "Check the transcript for anything these notes missed"}
@@ -1496,7 +1500,7 @@ export default function NotesPage() {
               <input
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
-                placeholder="Like “ask about the side effects” or “knee hurts at night”"
+                placeholder="A question to bring up"
                 className={`flex-1 min-w-0 h-12 rounded-xl border px-3 text-[15px] outline-none ${dark ? "bg-gray-900 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900"}`}
               />
               <Button type="submit" disabled={!draft.trim()} className="h-12 px-4 rounded-xl shrink-0 bg-red-600 hover:bg-red-700 text-white">
@@ -1536,7 +1540,7 @@ export default function NotesPage() {
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="What is it? (optional, like “Dr. Patel, knee”)"
+            placeholder="What is it? (optional)"
             className={`w-full rounded-xl border px-3 py-2.5 text-[15px] outline-none ${dark ? "bg-gray-900 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900"}`}
           />
           <Button onClick={() => startRecording()} disabled={busy || !!progress} className="w-full h-14 rounded-2xl text-base bg-red-600 hover:bg-red-700 text-white">
@@ -1596,7 +1600,7 @@ export default function NotesPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") askNotes(); }}
-                placeholder="Search, or ask a question about your notes"
+                placeholder="Search or ask your notes"
                 className={`w-full rounded-xl border px-3 py-2.5 text-[15px] outline-none ${dark ? "bg-gray-900 border-gray-700 text-white placeholder-gray-500" : "bg-white border-gray-300 text-gray-900"}`}
               />
               {search.trim().length >= 3 && (
