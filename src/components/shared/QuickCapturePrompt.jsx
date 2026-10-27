@@ -410,8 +410,7 @@ export function WaysToAddPopup({ user }) {
               You don't even have to open the app
             </h2>
             <p className="text-[15px] leading-relaxed text-muted-foreground">
-              Four ways to get a task or an idea in from wherever you already are. It sorts out the
-              date and the reminders itself.
+              Four ways to add a task or idea from wherever you are.
             </p>
           </div>
 
@@ -515,7 +514,7 @@ export function AlertStyleInfo({ dark = false }) {
         <AlarmClock className="w-4 h-4 mt-0.5 flex-shrink-0" />
         <div>
           <p className="font-medium">Full-screen alarm</p>
-          <p className={`text-xs ${sub}`}>Rings out loud like an alarm clock, takes over the screen even when it's locked, and keeps going until you snooze or dismiss it.</p>
+          <p className={`text-xs ${sub}`}>Rings out loud and takes over the screen, even locked, until you snooze or dismiss it.</p>
         </div>
       </div>
       <p className={`text-xs ${sub}`}>Same reminder times either way — only how they reach you changes.</p>
@@ -701,14 +700,14 @@ export function AlarmPermissionsDialog({ theme }) {
       key: 'overlay',
       ok: !!status.overlay,
       label: 'Display over other apps',
-      why: "Lets the alarm take over the screen while you're using the phone. Without it Android only shows a banner.",
+      why: "Without it, an alarm while you're using the phone is only a banner.",
       action: () => tryOpen(() => AlarmBridge?.openOverlaySettings?.()),
     }]),
     {
       key: 'battery',
       ok: !!status.ignoringBatteryOptimizations,
       label: 'Battery: unrestricted',
-      why: "Samsung puts apps it thinks you don't use to sleep, and a sleeping app's reminders and alarms can come late or not at all.",
+      why: "Without it, the phone can put ADHDone to sleep and reminders come late or not at all.",
       action: () => tryOpen(() => AlarmBridge?.requestIgnoreBatteryOptimizations?.()),
     },
   ];
@@ -762,8 +761,7 @@ export function AlarmPermissionsDialog({ theme }) {
 
         {!allOk && (
           <p className={`text-xs rounded-md p-2 ${dark ? 'bg-amber-900/40 text-amber-200' : 'bg-amber-50 text-amber-800'}`}>
-            Please turn on every one. Any switch left off can make your reminders and alarms
-            late, easy to miss, or not show up at all. Without Notifications, nothing gets through.
+            Turn on every switch. Any left off can make reminders late or missing.
           </p>
         )}
 
@@ -1138,17 +1136,17 @@ export function AlertStylePrompt({ user, theme }) {
               <AlarmClock className="w-5 h-5" /> New: full-screen reminders
             </DialogTitle>
             <DialogDescription className={dark ? 'text-gray-400' : ''}>
-              A reminder can now ring like an alarm clock — full screen, out loud, even with your phone locked — until you snooze or dismiss it. Same reminders, same times. Just harder to miss.
+              A reminder can now ring like an alarm clock, full screen and out loud, until you snooze or dismiss it. Same reminders, same times. Harder to miss.
             </DialogDescription>
           </DialogHeader>
 
           <p className={`text-sm font-medium ${dark ? 'text-amber-300' : 'text-amber-700'}`}>
-            Heads up: it rings out loud even when your phone is on silent, vibrate or Do Not Disturb.
-            {alarmQuietChoiceSupported() ? " If you try it, you'll get to choose whether it only vibrates then." : ''}
+            It rings even on silent, vibrate or Do Not Disturb.
+            {alarmQuietChoiceSupported() ? " You can choose to have it only vibrate then." : ''}
           </p>
 
           <p className={`text-sm ${dark ? 'text-gray-300' : 'text-gray-700'}`}>
-            Try it and your tasks switch to full-screen reminders. After the first one rings, we'll ask if you want to keep it that way.
+            Try it and your tasks switch over. After the first one rings, we'll ask if you want to keep it.
           </p>
 
           <div className="flex flex-col gap-2 pt-1">
@@ -1188,7 +1186,7 @@ export function AlertStylePrompt({ user, theme }) {
           <button type="button" className={card} onClick={() => choose('alarm')} disabled={busy}>
             <div className="flex items-center gap-2 font-medium"><AlarmClock className="w-4 h-4" /> Full-screen alarm</div>
             <p className={`text-xs mt-1 ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-              Rings out loud like an alarm clock, takes over the screen even when it's locked, and keeps going until you snooze or dismiss it. It rings even when your phone is on silent, vibrate or Do Not Disturb{alarmQuietChoiceSupported() ? " (next, you can choose to have it only vibrate then)" : ''}.
+              Rings out loud and takes over the screen, even locked, until you snooze or dismiss it. Rings even on silent or Do Not Disturb{alarmQuietChoiceSupported() ? " (next, you can choose to have it only vibrate then)" : ''}.
             </p>
           </button>
         </div>
@@ -1278,7 +1276,7 @@ export function AlarmKeepPrompt({ user, theme }) {
             <AlarmClock className="w-5 h-5" /> Keep full-screen reminders?
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
-            Your first full-screen reminder has rung. Would you like to keep your tasks as full-screen reminders, or go back to regular notifications?
+            Your first one has rung. Keep full-screen reminders, or go back to regular notifications?
           </DialogDescription>
         </DialogHeader>
 
@@ -2172,17 +2170,15 @@ export function WakeOfferPrompt({ user, theme }) {
           </DialogTitle>
           {bgOnly ? (
             <DialogDescription className={dark ? 'text-gray-400' : ''}>
-              Your phone is limiting ADHDone in the background, so it can miss the first time you
-              unlock your phone in the morning. When it does, your morning reminders wait longer
-              than they need to. Letting ADHDone run in the background fixes that.
+              Your phone limits ADHDone in the background, so it can miss your first unlock of the
+              morning and your reminders start late. Letting it run in the background fixes that.
             </DialogDescription>
           ) : (
             <DialogDescription className={dark ? 'text-gray-400' : ''}>
               {mornings ? 'Your morning reminders seem to be catching you before you\'re up. ' : ''}
-              ADHDone can start your day's reminders the first time you unlock your phone in the
-              morning, instead of at a set time. Anything you set for a specific time still goes
-              off on time. It uses Android's Usage access only to see when your phone was first
-              unlocked each day.
+              ADHDone can start your day's reminders when you first unlock your phone, instead of
+              at a set time. Anything set for a specific time still goes off on time. Android's
+              Usage access is used only to see that first unlock.
             </DialogDescription>
           )}
         </DialogHeader>
