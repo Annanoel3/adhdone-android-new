@@ -305,7 +305,7 @@ Return JSON with this structure:
                 This one doesn't need steps.
               </p>
               <p className={`mt-1 text-sm ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
-                It's a single sitting — there's no point in between where you'd walk away and forget to come back. The first motion is the whole task, so just start it. You can still add your own steps from the task.
+                It's one sitting, so just start it. You can still add your own steps from the task.
               </p>
             </div>
           ) : null}
