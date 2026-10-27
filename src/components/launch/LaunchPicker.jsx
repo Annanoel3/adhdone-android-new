@@ -13,12 +13,19 @@ import LaunchButtons from "./LaunchButtons";
 
 // Home's "Timer": pick one of today's tasks and start its stopwatch, without
 // digging into the task itself. (See LaunchButtons for the timer.)
+// Only the tasks the parser judged worth timing are offered (takes_time:
+// laundry, cleaning, a workout — not vitamins, the litter box or new
+// batteries; Anna, Oct 27 2026: "Timer is really only good for certain work
+// things, school things, chores that take at least 5 minutes"). The rest sit
+// behind "Time something else" for the person who wants to anyway.
 export default function LaunchPicker({ open, onOpenChange, theme }) {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showRest, setShowRest] = useState(false);
 
   useEffect(() => {
     if (!open) return;
+    setShowRest(false);
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -68,8 +75,10 @@ export default function LaunchPicker({ open, onOpenChange, theme }) {
             <p className="text-sm opacity-60 text-center py-4">
               No active tasks for today yet. Add one and come back to time it.
             </p>
-          ) : (
-            tasks.map((t) => (
+          ) : (() => {
+            const worth = tasks.filter((t) => t.takes_time === true);
+            const rest = tasks.filter((t) => t.takes_time !== true);
+            const row = (t) => (
               <div
                 key={t.id}
                 className={`p-3 rounded-lg border ${
@@ -91,8 +100,28 @@ export default function LaunchPicker({ open, onOpenChange, theme }) {
                   onStarted={() => onOpenChange(false)}
                 />
               </div>
-            ))
-          )}
+            );
+            return (
+              <>
+                {worth.length === 0 && (
+                  <p className="text-sm opacity-60 text-center py-3">
+                    Nothing on today's list looks like a timer job.
+                  </p>
+                )}
+                {worth.map(row)}
+                {rest.length > 0 && !showRest && (
+                  <button
+                    type="button"
+                    onClick={() => setShowRest(true)}
+                    className="w-full text-sm underline opacity-70 py-2"
+                  >
+                    Time something else
+                  </button>
+                )}
+                {showRest && rest.map(row)}
+              </>
+            );
+          })()}
         </div>
       </DialogContent>
     </Dialog>
