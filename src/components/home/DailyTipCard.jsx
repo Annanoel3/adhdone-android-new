@@ -102,7 +102,10 @@ export default function DailyTipCard({ theme }) {
       if (needsRegeneration) {
         console.log('🔄 [DAILY TIP] Regenerating tip (context changed or old version)...');
         if (quiet) setIsRefreshing(true);
-        await base44.entities.DailyTip.delete(tip.id);
+        // The tip may already be gone (another open copy of the app got here
+        // first). Seen on a real phone Oct 19 as "Entity DailyTip ... not found"
+        // and it left the card stuck on loading. An already-gone tip is fine.
+        await base44.entities.DailyTip.delete(tip.id).catch(() => {});
         await generateSmartTip(today);
         if (quiet) setIsRefreshing(false);
       } else {
@@ -148,7 +151,7 @@ export default function DailyTipCard({ theme }) {
     // Delete today's tip
     const existingTips = await base44.entities.DailyTip.filter({ shown_date: today });
     for (const tip of existingTips) {
-      await base44.entities.DailyTip.delete(tip.id);
+      await base44.entities.DailyTip.delete(tip.id).catch(() => {});
     }
     
     // Generate new one
