@@ -516,7 +516,7 @@ export default function Progress() {
               <div className="flex items-start gap-3">
                 <div className="w-2 h-2 rounded-full bg-amber-500 mt-2 flex-shrink-0" />
                 <p className="text-gray-700">
-                  You've pushed deadlines <strong>{insights.totalDueDatePushes}</strong> times. The tasks you keep postponing might need to be broken into smaller steps — or they might not actually matter to you, and that's okay too.
+                  You've pushed deadlines <strong>{insights.totalDueDatePushes}</strong> times. The ones you keep postponing might need smaller steps, or might not matter to you, and that's okay too.
                 </p>
               </div>
             )}
