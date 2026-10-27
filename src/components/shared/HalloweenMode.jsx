@@ -77,6 +77,7 @@ export function darkGlassCss({ mode, text, muted, title, base }) {
   /* White and pale surfaces (panels, chips, rows, outline buttons): dark glass;
      inside a card a lighter translucent lift so they still read as raised. */
   ${list(PALE_BG, (c) => inShell(`[class~="bg-${c}"]`))},
+  ${list(PALE_BG, (c) => inShell(`[class*="bg-${c}/"]`))},
   ${inShell('[class*="bg-white/"]')} {
     background-color: ${PANEL} !important; border-color: ${LINE} !important;
     backdrop-filter: blur(${BLUR}) !important; -webkit-backdrop-filter: blur(${BLUR}) !important;
@@ -86,6 +87,7 @@ export function darkGlassCss({ mode, text, muted, title, base }) {
     backdrop-filter: blur(${BLUR}) !important; -webkit-backdrop-filter: blur(${BLUR}) !important;
   }
   ${list(PALE_BG, (c) => inCards(`[class~="bg-${c}"]`))},
+  ${list(PALE_BG, (c) => inCards(`[class*="bg-${c}/"]`))},
   ${inCards('[class*="bg-white/"]')} { background-color: ${RAISED} !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; box-shadow: none !important; }
   ${list(PALE_BG, (c) => inCards(`[class~="from-${c}"]`))} { background-image: none !important; background-color: ${RAISED} !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
   ${list(['[class*="border-gray-"]', '[class*="border-stone-"]', '[class*="border-slate-"]', '[class*="border-zinc-"]', '[class*="border-purple-1"]',
