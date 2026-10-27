@@ -1,6 +1,6 @@
 import {
   Mic, ListTodo, CalendarDays, Cake, Lightbulb, Timer, Shuffle, MapPin,
-  MessageCircleHeart, TrendingUp, BookLock, Settings,
+  MessageCircleHeart, TrendingUp, BookLock, Settings, Target,
 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 
@@ -12,8 +12,14 @@ import { base44 } from "@/api/base44Client";
 // task sort: the phone's own copy wins while it exists. The list is the whole
 // row after Add: Timer is in it by default and can be taken out like any
 // other tile (Anna, Oct 27 2026: "give them the ability to get rid of timer").
+// The welcome card's row of small circles (Focus Mode, Pomodoro, Decisions,
+// Parking Lot) came off Oct 27 2026 (Anna: "now that I have made shortcuts,
+// we don't really need the spot"); those four are tiles here instead, and
+// Focus Mode (an event, not a page: it opens the Focus Mode prompt) sits in
+// the default row with Timer so it stays one tap away.
 export const HOME_SHORTCUTS = [
   { key: "timer", title: "Timer", icon: Timer, builtin: true },
+  { key: "focus", title: "Focus Mode", icon: Target, event: "open-focus-prompt" },
   { key: "notes", title: "Record Notes", icon: Mic, page: "Notes", needsRecorder: true },
   { key: "tasks", title: "My Tasks", icon: ListTodo, page: "Tasks" },
   { key: "calendar", title: "Calendar", icon: CalendarDays, page: "Calendar" },
@@ -30,7 +36,7 @@ export const HOME_SHORTCUTS = [
 
 const STORAGE_KEY = "home_tiles";
 export const HOME_TILES_EVENT = "home-tiles-changed";
-export const DEFAULT_TILES = ["timer"];
+export const DEFAULT_TILES = ["timer", "focus"];
 // Saved when Timer was taken off on purpose. A list with neither "timer" nor
 // this was saved by the first version (published Oct 27 2026), when the list
 // held only the ADDED tiles and Timer was fixed: Anna's own account had
