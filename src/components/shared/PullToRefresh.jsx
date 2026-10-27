@@ -3,7 +3,13 @@ import { RefreshCw } from "lucide-react";
 import { showEggBadge } from "../eastereggs/eggBadge";
 
 const THRESHOLD = 70;   // pull this far to refresh
-const EGG = 115;        // pull well past it and something else happens
+// The over-pull egg. It used to fire at 115 of the scaled pull (230 px of
+// finger), which an ordinary thumb-flick on a tall phone passes every time:
+// Tabitha saw it six times in two weeks, and Anna (Oct 27 2026) "even when
+// doing a normal refresh". Now it takes a real drag, most of the screen's
+// height of finger travel, and shows at most once a day.
+const EGG_FINGER_PX = 520;
+const EGG_DAY_KEY = 'egg_overpull_day';
 
 function findScroller(el) {
   let node = el;
@@ -21,6 +27,7 @@ export default function PullToRefresh({ onRefresh, children }) {
   const wrapRef = useRef(null);
   const scroller = useRef(null);
   const startY = useRef(null);
+  const farthest = useRef(0);
   const [pull, setPull] = useState(0);
   const [busy, setBusy] = useState(false);
 
@@ -32,6 +39,7 @@ export default function PullToRefresh({ onRefresh, children }) {
       return;
     }
     startY.current = e.touches[0].clientY;
+    farthest.current = 0;
   };
 
   const handleMove = (e) => {
@@ -42,16 +50,28 @@ export default function PullToRefresh({ onRefresh, children }) {
       return;
     }
     const dy = e.touches[0].clientY - startY.current;
+    if (dy > farthest.current) farthest.current = dy;
     setPull(dy > 0 ? Math.min(dy * 0.5, 180) : 0);
+  };
+
+  const eggToday = () => {
+    const today = new Date().toDateString();
+    try {
+      if (localStorage.getItem(EGG_DAY_KEY) === today) return false;
+      localStorage.setItem(EGG_DAY_KEY, today);
+    } catch { /* no storage: show it */ }
+    return true;
   };
 
   const handleEnd = async () => {
     const distance = pull;
+    const dragged = farthest.current;
     startY.current = null;
+    farthest.current = 0;
     setPull(0);
     if (distance < THRESHOLD) return;
 
-    if (distance >= EGG) {
+    if (dragged >= EGG_FINGER_PX && eggToday()) {
       showEggBadge({
         emoji: '🫗',
         title: "That's plenty. It's refreshed.",
@@ -83,7 +103,7 @@ export default function PullToRefresh({ onRefresh, children }) {
       >
         {showing && (
           <RefreshCw
-            className={`w-5 h-5 text-gray-400 ${busy ? 'animate-spin' : ''}`}
+            className={`w-5 h-5 ${busy ? 'animate-spin text-gray-400' : pull >= THRESHOLD ? 'text-emerald-500' : 'text-gray-400'}`}
             style={{ transform: busy ? undefined : `rotate(${pull * 3}deg)` }}
           />
         )}
