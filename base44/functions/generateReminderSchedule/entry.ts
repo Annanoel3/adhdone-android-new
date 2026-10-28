@@ -8,14 +8,15 @@
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
+import { lean } from '../../shared/aiCost.ts';
 import { getTravelLead } from '../../shared/travelLead.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { atTimeWords } from '../../shared/reminderTitle.ts';
 // (Re-saved Oct 13 2026 after shared/captureToTasks.ts: the reminder at a task's own time saves the words schedulePush sent it with.)
 
-const openai = new OpenAI({
+const openai = lean(new OpenAI({
   apiKey: Deno.env.get('OPENAI_API_KEY')
-});
+}), { name: 'generateReminderSchedule' });
 
 // ── Deterministic EVENT schedule ───────────────────────────────────────────
 // Events get a fixed, reliable ladder — night before, an hour before, at the
@@ -92,7 +93,7 @@ const NOTES_LABELS = {
 // or any doubt, means the plain reminders.
 async function notesWouldHelp(title, location) {
   try {
-    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+    const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'generateReminderSchedule' });
     // gpt-6-luna, the cheaper model: a yes/no on whether notes would help
     // (astra on Oct 17 2026). Anna, Oct 18 2026: "switch whatever wont be negatively affected to the cheaper one".
     const ask = openai.chat.completions.create({

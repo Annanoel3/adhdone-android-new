@@ -27,6 +27,7 @@
 // The days are the owner's own dates (YYYY-MM-DD) in their time zone.
 
 import OpenAI from 'npm:openai';
+import { lean } from './aiCost.ts';
 
 export const PUT_OFF_CHOICES = ['later', 'snooze', 'dismiss', 'closed', 'ignored'];
 export const EASE_AFTER_DAYS = 3;
@@ -122,7 +123,7 @@ export function easeFacts(task: any, owner: any, dayCount: number): string {
 
 export async function judgeEasePlan(task: any, owner: any, dayCount: number, timeoutMs = 25000): Promise<{ plan: EasePlanName; why: string } | null> {
   try {
-    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+    const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'easeOff' });
     const ask = openai.chat.completions.create({
       model: 'gpt-6-astra',
       messages: [

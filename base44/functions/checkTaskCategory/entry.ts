@@ -1,5 +1,6 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import OpenAI from "npm:openai";
+import { lean } from '../../shared/aiCost.ts';
 
 // THE one place that decides what kind of thing a capture is: a task, an idea
 // (Parking Lot), a birthday, something meant for ADHDone itself, or a mix.
@@ -245,7 +246,7 @@ Deno.serve(async (req) => {
       ? body.today
       : todayIn(user?.timezone);
     const aboutMe = typeof body?.about_me === "string" ? body.about_me : user?.about_me;
-    const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
+    const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: 'checkTaskCategory' });
 
     // Admin check of several captures at once; nothing is saved.
     if (Array.isArray(body?.texts)) {

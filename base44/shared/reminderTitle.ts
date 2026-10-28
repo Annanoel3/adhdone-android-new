@@ -10,6 +10,7 @@
 // tomorrow" and named the wrong weekday for US users.
 import { DEFAULT_TIME_ZONE, localDateKey, localMinutesOfDay, resolveQuietHours, isInQuietHours, isTimeTheySet } from './quietHours.ts';
 import OpenAI from 'npm:openai';
+import { lean } from './aiCost.ts';
 import { REMINDER_BRIEF } from './reminderBrief.ts';
 
 // The words of the one reminder a task gets AT the time they set for it,
@@ -44,7 +45,7 @@ export async function atTimeWords(task: any, atMs: number, timeZone: string, tim
       `The time they set for it: ${when}${repeats ? ` (it repeats ${repeats})` : ''}`,
       task?.location ? `Location they typed: ${String(task.location).slice(0, 200)}` : '',
     ].filter(Boolean).join('\n');
-    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+    const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'reminderTitle' });
     // gpt-6-astra (was gpt-6-luna, the cheaper one, from Sept 27 2026). Anna, Oct 17 2026: "Move them to astra like I already asked weeks ago" (she asked for the newest model everywhere on Sept 17 2026).
     const ask = openai.chat.completions.create({
       model: 'gpt-6-astra',

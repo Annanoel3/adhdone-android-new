@@ -13,6 +13,7 @@
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
+import { lean } from '../../shared/aiCost.ts';
 // localDateKey is this file's own (below). Importing it too, as on Oct 12 2026 at
 // 05:28 UTC, is a duplicate declaration and the function failed to start.
 import { localMinutesOfDay, userTimeZone, theirDayKeyFor, wakeStartMs } from '../../shared/quietHours.ts';
@@ -20,9 +21,9 @@ import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
 import { easeNow } from '../../shared/easeOff.ts';
 
-const openai = new OpenAI({
+const openai = lean(new OpenAI({
   apiKey: Deno.env.get('OPENAI_API_KEY')
-});
+}), { name: 'cronDailyDigest', flex: true });
 
 Deno.serve(async (req) => {
   try {

@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
+import { lean } from '../../shared/aiCost.ts';
 import { secrets } from 'base44:runtime';
 
 export default async function(req) {
@@ -48,7 +49,7 @@ Only return "is_birthday": true when you are confident this is a birthday remind
 
 Return JSON: { "is_birthday": boolean, "person": string|null, "date": "YYYY-MM-DD"|"null" }`;
 
-    const openai = new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') });
+    const openai = lean(new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') }), { name: 'detectBirthday' });
     const completion = await openai.chat.completions.create({
       model: 'gpt-6-astra',
       messages: [

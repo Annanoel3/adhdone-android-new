@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import OpenAI from 'npm:openai';
+import { lean } from '../../shared/aiCost.ts';
 
 // Turns a PHOTO (event flyer, appointment card, invitation, handwritten note,
 // screenshot) into the same kind of plain sentence a user would have typed.
@@ -42,7 +43,7 @@ export default async function (req: Request): Promise<Response> {
 
     // OpenAI on the app's own key (RULES.md rule 1). A public URL is fetched by
     // the model itself; a data URL carries the bytes inline.
-    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+    const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'readImageCapture' });
     // gpt-6-astra (was gpt-5.4 from Sept 18 2026). Anna, Oct 17 2026: "Move them to astra like I already asked weeks ago" (she asked for the newest model everywhere on Sept 17 2026).
     const completion = await openai.chat.completions.create({
       model: 'gpt-6-astra',

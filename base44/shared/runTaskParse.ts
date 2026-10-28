@@ -1,4 +1,5 @@
 import OpenAI from "npm:openai";
+import { lean } from './aiCost.ts';
 import { TASK_PARSE_SYSTEM_PROMPT, buildTaskParsePrompt, nowInTimezone } from "./taskParsePrompt.ts";
 import { fixParsedTaskTitles } from "./fixMisheardVerbs.ts";
 import { resolveParsedDates } from "./resolveDateWords.ts";
@@ -136,7 +137,7 @@ export async function runTaskParse(_base44: any, prompt: string, tz?: string, ab
     ? `\n\nTHE WORDS WERE SAID ON ${saidDay[2]} ${saidDay[1]} AT ${saidDay[3].trim()}. For this task that is today and now: count "today", "tomorrow", "tonight" and every day name from it, even if you were told a different date anywhere else.`
     : '';
 
-  const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+  const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'runTaskParse' });
   const ask = async (nudge = '') => {
     const completion = await openai.chat.completions.create({
       model: MODEL,
@@ -338,7 +339,7 @@ export async function assignTaskFamilies(
   const out: Record<string, string> = {};
   const list = (tasks || []).filter((t) => t?.id && String(t.title || "").trim()).slice(0, 25);
   if (!list.length) return out;
-  const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
+  const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: 'runTaskParse' });
   const completion = await openai.chat.completions.create({
     model: MODEL,
     reasoning_effort: "low",
@@ -390,7 +391,7 @@ export async function judgeCompletionHabit(input: {
   finished: string[];
   minutes: number | null;
 }): Promise<{ habit: boolean; time: string | null; why: string | null }> {
-  const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
+  const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: 'runTaskParse' });
   const completion = await openai.chat.completions.create({
     model: MODEL,
     reasoning_effort: "low",
@@ -465,7 +466,7 @@ export async function judgeAlarmPairs(
     if (t.kind) bits.push(String(t.kind));
     return bits.join(", ");
   };
-  const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
+  const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: 'runTaskParse' });
   const completion = await openai.chat.completions.create({
     model: MODEL,
     reasoning_effort: "low",

@@ -30,6 +30,7 @@
 // (checkEventConflicts, mode resolve).
 
 import OpenAI from 'npm:openai';
+import { lean } from './aiCost.ts';
 import { placeAppReminder, resolveQuietHours, userTimeZone } from './quietHours.ts';
 import { ledgerCancel } from './sendLedger.ts';
 
@@ -133,7 +134,7 @@ Answer with JSON only: {"pairs": [{"n": <pair number>, "same": true|false, "why"
 export async function judgeDuplicates(pairs: Array<[any, any]>, timeZone: string, timeoutMs = 30000): Promise<Array<[any, any, string]>> {
   if (!pairs.length) return [];
   try {
-    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+    const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'eventConflicts' });
     const list = pairs.map(([a, b], i) => `${i + 1}. A: ${describe(a, timeZone)}\n   B: ${describe(b, timeZone)}`).join('\n');
     const ask = openai.chat.completions.create({
       model: 'gpt-6-astra',

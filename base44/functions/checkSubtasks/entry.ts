@@ -1,5 +1,6 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import OpenAI from "npm:openai";
+import { lean } from '../../shared/aiCost.ts';
 
 // THE one place that decides whether a new task should get a checklist of
 // steps under it ("pay my bills: electric, rent, insurance" → "Pay bills" with
@@ -103,7 +104,7 @@ Deno.serve(async (req) => {
     const user = await whoIsAsking(base44);
     if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
     const body = await req.json().catch(() => ({}));
-    const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
+    const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: 'checkSubtasks' });
 
     // Admin checks; nothing is saved.
     if (Array.isArray(body?.texts) || Array.isArray(body?.prompts)) {

@@ -16,6 +16,7 @@ import { buildTaskParsePrompt } from '../../shared/taskParsePrompt.ts';
 // "Grandma" stays in the title, "next Tuesday" is next week's Tuesday).
 import { runTaskParse } from '../../shared/runTaskParse.ts';
 import OpenAI from 'npm:openai';
+import { lean } from '../../shared/aiCost.ts';
 import { wallClockToUtc, nextLocalOccurrence, localReminderUtc } from '../../shared/timezoneReminders.ts';
 import { isRecurringInterval, INTERVAL_MS } from '../../shared/reminderIntervalDecision.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
@@ -61,7 +62,7 @@ async function judgeAnimalBirthdays(names: string[], otherTitles: string[]): Pro
   const out: Record<string, string> = {};
   if (!names.length) return out;
   try {
-    const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+    const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'syncGoogleCalendar' });
     const ask = openai.chat.completions.create({
       model: 'gpt-6-astra',
       messages: [

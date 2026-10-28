@@ -19,6 +19,7 @@
 // otherwise: every one still rings within its minute unless the first is left
 // ringing.
 import OpenAI from 'npm:openai';
+import { lean } from './aiCost.ts';
 import { phoneAlarmsFor, pushPhoneAlarms, clockKey } from './reminderTitle.ts';
 import { DEFAULT_TIME_ZONE } from './quietHours.ts';
 
@@ -70,7 +71,7 @@ export async function judgeAlarmOrder(
   const out: Record<string, { order: string[]; why: string }> = {};
   const list = (groups || []).filter((g) => g?.id && Array.isArray(g.items) && g.items.length > 1).slice(0, MAX_GROUPS);
   if (!list.length) return out;
-  const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+  const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'alarmOrder' });
   const ask = openai.chat.completions.create({
     model: MODEL,
     reasoning_effort: 'low',

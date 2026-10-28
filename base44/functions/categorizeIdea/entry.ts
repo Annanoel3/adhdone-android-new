@@ -1,5 +1,6 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import OpenAI from "npm:openai";
+import { lean } from '../../shared/aiCost.ts';
 
 // The platform's calls occasionally fail once and pass a moment later.
 async function whoIsAsking(base44: any) {
@@ -19,7 +20,7 @@ Deno.serve(async (req) => {
   const base44 = await createClientFromRequest(req);
   if (!(await whoIsAsking(base44))) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const { prompt, file_url } = await req.json();
-  const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+  const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'categorizeIdea' });
   // Every call here runs on gpt-6-astra. It ran on gpt-4o-mini from May 12
   // 2026 (Base44's AI) until Oct 17 2026, although Anna had told it on Aug 26
   // not to use Mini; on it, the Parking Lot's tracker look logged "this is an

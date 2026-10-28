@@ -3,6 +3,7 @@
 // Re-saved Oct 13 2026 so the bundled captureToTasks.ts is picked up (the reminder at a task's own time saves the words schedulePush sent it with).
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.46";
 import OpenAI from "npm:openai";
+import { lean } from '../../shared/aiCost.ts';
 
 // THE one place that decides whether a capture is one task or several.
 //
@@ -117,7 +118,7 @@ Deno.serve(async (req) => {
     if (!isInternal && !user) {
       return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const openai = new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") });
+    const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: 'detectMultipleTasks' });
 
     // Admin checks; nothing is saved.
     if (Array.isArray(body?.texts) || Array.isArray(body?.prompts)) {

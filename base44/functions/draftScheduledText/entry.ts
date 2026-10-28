@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
+import { lean } from '../../shared/aiCost.ts';
 import { secrets } from 'base44:runtime';
 
 // General-purpose text message drafter. Powers the "Schedule a Text" flow the
@@ -39,7 +40,7 @@ Rules:
 - You may include 1-2 emojis if they fit naturally. Don't overdo it.
 - Do NOT include quotes, labels, or explanations — return ONLY the message text.`;
 
-    const openai = new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') });
+    const openai = lean(new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') }), { name: 'draftScheduledText' });
     const completion = await openai.chat.completions.create({
       model: 'gpt-6-astra',
       messages: [

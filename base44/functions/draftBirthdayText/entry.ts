@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
+import { lean } from '../../shared/aiCost.ts';
 import { secrets } from 'base44:runtime';
 
 export default async function(req) {
@@ -36,7 +37,7 @@ Rules:
 - You may include 1-2 festive emojis (🎂🎉🎈) if they fit naturally. Don't overdo it.
 - Do NOT include quotes, labels, or explanations — return ONLY the message text.`;
 
-    const openai = new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') });
+    const openai = lean(new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') }), { name: 'draftBirthdayText' });
 
     // What they typed in "Who is X to you?" may say X is an animal ("my
     // hamster", "our horse"). A pet's birthday gets no text (Anna, Oct 12

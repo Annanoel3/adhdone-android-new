@@ -29,6 +29,7 @@
 // fresh and saves nothing.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
 import OpenAI from 'npm:openai';
+import { lean } from '../../shared/aiCost.ts';
 import { secrets } from 'base44:runtime';
 
 // The same as fitKey in src/components/shared/QuickCapturePrompt.jsx: change
@@ -82,7 +83,7 @@ If it doesn't fit, and what they said or their work hours make their sleep reaso
 
 Answer in JSON only: {"fits": true or false, "why": "one short sentence on what you went by", "suggest_start": "HH:MM" in 24-hour time or null, "suggest_end": "HH:MM" or null}`;
 
-  const openai = new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') });
+  const openai = lean(new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') }), { name: 'checkQuietHoursFit' });
   const completion = await openai.chat.completions.create({
     model: 'gpt-6-astra',
     messages: [

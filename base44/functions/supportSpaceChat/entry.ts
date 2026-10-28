@@ -1,5 +1,6 @@
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.44";
 import OpenAI from "npm:openai";
+import { lean } from '../../shared/aiCost.ts';
 import { secrets, waitUntil } from "base44:runtime";
 
 export default async function (req) {
@@ -9,7 +10,7 @@ export default async function (req) {
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const { prompt, userMessage } = await req.json();
-    const openai = new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') });
+    const openai = lean(new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') }), { name: 'supportSpaceChat' });
 
     const sourcingRules = `
 
