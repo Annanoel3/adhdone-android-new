@@ -25,7 +25,11 @@ All LLM/AI calls must use the OpenAI SDK directly with the app's `OPENAI_API_KEY
 **Backend (Deno) pattern:**
 ```ts
 import OpenAI from 'npm:openai';
-const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+import { lean } from '../../shared/aiCost.ts';
+// lean(): explicit prompt caching (Oct 28 2026). Without it OpenAI bills every GPT-6
+// call's whole prompt as a cache write at 1.25x and never reuses it. Same model,
+// effort, words and answers; re-sends the call as written if OpenAI refuses.
+const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'yourFunction' });
 const completion = await openai.chat.completions.create({
   model: 'gpt-6-astra',   // the app's model (Anna asked for the newest model on Sept 17 2026; "Move them to astra like I already asked weeks ago", Oct 17 2026). gpt-6-luna (about 100x cheaper) ONLY where Anna OK'd it on Oct 18 2026 as not hurt by it: the calendar emoji, the daily tip, the AI-key check, voice-note notes (astra as backup) and the notes-would-help yes/no. Nothing else cheaper or older (no gpt-4o-mini, gpt-4o, gpt-5.4) without her say-so
   reasoning_effort: 'low',
