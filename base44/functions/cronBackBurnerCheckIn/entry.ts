@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
     }
 
     const base44 = createClientFromRequest(req);
-    const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'cronBackBurnerCheckIn', flex: true });
+    const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'cronBackBurnerCheckIn' });
     const now = new Date();
 
     const allUsers = await listAll(base44.asServiceRole.entities.User);

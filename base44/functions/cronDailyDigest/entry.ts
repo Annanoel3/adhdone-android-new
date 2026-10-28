@@ -23,7 +23,7 @@ import { easeNow } from '../../shared/easeOff.ts';
 
 const openai = lean(new OpenAI({
   apiKey: Deno.env.get('OPENAI_API_KEY')
-}), { name: 'cronDailyDigest', flex: true });
+}), { name: 'cronDailyDigest' });
 
 Deno.serve(async (req) => {
   try {
