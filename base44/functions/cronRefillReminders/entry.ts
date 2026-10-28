@@ -1718,7 +1718,8 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   const nowMs = now.getTime();
   // sinceMs: told once since then (checks 9-11, about one person), instead of
   // again every ALERT_COOLDOWN_MS.
-  const problems: { title: string; body: string; sinceMs?: number }[] = [];
+  // mark: written to owner_alert_marks once this alert has gone out.
+  const problems: { title: string; body: string; sinceMs?: number; mark?: { key: string; value: string } }[] = [];
   const realUser = (email: string) => !!email && !OWNER_ACCOUNTS.has(email);
   const msOf = (v: any) => {
     const s = String(v || '');
@@ -2059,6 +2060,11 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     for (const [e, list] of Object.entries(missedBy)) {
       if (list.length < 2) continue;
       const u = userByLower[e];
+      // Told about this person's alarms within the last 7 days: enough. Chad
+      // lets his medication alarm ring out most mornings and does it later;
+      // one alert a week about that is information, one a day is noise.
+      const lastTold = msOf(marks[`alarms:${e}`]);
+      if (Number.isFinite(lastTold) && nowMs - lastTold < ALARM_ALERT_REST_MS) continue;
       list.sort((a, b) => a.ms - b.ms);
       const shown = list.slice(-4);
       for (const x of shown) {
@@ -2079,7 +2085,9 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
         // Told again for every ring the last alert didn't have. It used to be
         // once per 2 days, so Chad's Tuesday misses (8:21 and 9:10 AM) were
         // held back by Sunday's alert and only came Wednesday at 11:30 AM.
+        // (And since Oct 28 2026 at most once a week per person: the mark.)
         sinceMs: list[list.length - 1].ms,
+        mark: { key: `alarms:${e}`, value: new Date(nowMs).toISOString() },
       });
     }
   } catch (e) {
@@ -2100,10 +2108,14 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     if (!Number.isFinite(lastMs) || nowMs - lastMs > 14 * H_DAY) continue;
     const goneMs = msOf(u.push_unreachable_at);
     if (gone(u)) {
-      if (Number.isFinite(goneMs) && nowMs - goneMs < 2 * H_DAY) problems.push({
+      // Once per departure, remembered on the owner record (the ledger forgets).
+      const toldFor = String(marks[`gone:${String(u.email).toLowerCase()}`] || '');
+      const alreadyTold = toldFor && msOf(toldFor) === lastMs;
+      if (!alreadyTold && Number.isFinite(goneMs) && nowMs - goneMs < 2 * H_DAY) problems.push({
         title: `📵 ADHDone: ${nameOf(u)}'s phone stopped taking notifications`,
         body: `OneSignal said ${theirClock(u, goneMs)} (their time) that their phone no longer takes ADHDone's pushes: the app was uninstalled, or its notifications were turned off. Last in the app ${theirClock(u, lastMs)}. ${u.email}`,
         sinceMs: lastMs,
+        mark: { key: `gone:${String(u.email).toLowerCase()}`, value: new Date(lastMs).toISOString() },
       });
       continue;
     }
@@ -2130,15 +2142,22 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   }
 
   // Send what's new. Each title repeats at most every ALERT_COOLDOWN_MS, or
-  // is told once since its sinceMs.
+  // is told once since its sinceMs; a per-person alert also leaves its mark.
+  let marksChanged = false;
+  const sentTitles = new Set<string>();
   for (const p of problems) {
     try {
       if (await sentToOwner(base44, 'owner_alert', p.title, p.sinceMs ?? nowMs - ALERT_COOLDOWN_MS)) continue;
       await pushOwner(base44, 'owner_alert', p.title, p.body);
+      sentTitles.add(p.title);
+      if (p.mark) { marks[p.mark.key] = p.mark.value; marksChanged = true; }
       console.log(`[HEALTH] alerted the owner: ${p.title}`);
     } catch (e) {
       console.error('[HEALTH] alert failed:', e);
     }
+  }
+  if (marksChanged && ownerRec?.id) {
+    try { await base44.asServiceRole.entities.User.update(ownerRec.id, { owner_alert_marks: marks }); } catch (e) { console.error('[HEALTH] could not save alert marks:', e); }
   }
   if (!problems.length) console.log('[HEALTH] all clear');
 
