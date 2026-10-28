@@ -2181,13 +2181,15 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       const alerts = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
         user_email: OWNER_ALERT_EMAIL, kind: 'owner_alert', send_at: { $gte: new Date(prevNoteMs).toISOString() },
       });
-      const byTitle: Record<string, number> = {};
-      for (const a of alerts) byTitle[String(a.title || '').replace(/^[^A-Za-z]*ADHDone: /, '')] = (byTitle[String(a.title || '').replace(/^[^A-Za-z]*ADHDone: /, '')] || 0) + 1;
+      // Alerts she already got as their own push are NOT repeated here: the
+      // note said "Chad's alarms are going unanswered (1x)" minutes after
+      // the alert did (Anna, Oct 28 2026). The note carries only what had no
+      // push of its own: captures that never finished, and new signups.
+      void alerts;
       const dayStalled = (await stalledCaptures(base44, nowMs - H_DAY, nowMs)).filter((s) => realUser(s.email));
       const newPeople = allUsers.filter((u: any) => realUser(u?.email) && nowMs - (Date.parse(u.created_date || '') || 0) < H_DAY).map((u: any) => u.email);
-      if (alerts.length || dayStalled.length) {
+      if (dayStalled.length) {
         const parts: string[] = [];
-        for (const [k, n] of Object.entries(byTitle)) parts.push(`${k} (${n}x)`);
         if (dayStalled.length) parts.push(`${dayStalled.length} capture(s) never finished: ${dayStalled.slice(0, 2).map((s) => s.email).join(', ')}`);
         // New signups are not a problem: their own labelled line, after the problems.
         let body = `Problems: ${parts.join(' · ')}`;
