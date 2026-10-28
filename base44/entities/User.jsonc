@@ -411,6 +411,11 @@
       },
       "description": "The Home row after Add, in order (keys from src/components/home/homeShortcuts.js: timer, notes, calendar, parkinglot, ...). \"-timer\" means Timer was taken off on purpose; a list with neither timer nor -timer was saved by the first version (Oct 27 2026) and means Timer first, then these. Same rule as task_sort: the phone's own copy wins while it exists."
     },
+    "owner_alert_marks": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Owner account only (s2kap2chick): what the owner health check (cronRefillReminders) has already told Anna about one person, so it isn't told again. 'gone:<email>' = the last_active_at the uninstall alert was sent for (once per departure); 'alarms:<email>' = when the unanswered-alarms alert last went out (at most once a week per person). Kept here because NotificationLedger rows are pruned after a few days and the alerts came back."
+    },
     "home_tile_cols": {
       "type": "number",
       "description": "How many Home shortcut tiles sit in a row: 2 (default), 3 or 4, from the tiny switch beside Edit shortcuts. Same rule as task_sort: the phone's own copy wins while it exists."
