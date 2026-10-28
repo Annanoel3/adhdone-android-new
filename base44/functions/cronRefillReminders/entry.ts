@@ -1738,6 +1738,17 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   const activeLately = (u: any) => !gone(u) && nowMs - (Date.parse(u?.last_active_at || '') || 0) < 7 * H_DAY;
   const userByEmail: Record<string, any> = {};
   for (const u of allUsers) if (u?.email) userByEmail[u.email] = u;
+  // What Anna has already been told about one person, kept on her own owner
+  // record (User.owner_alert_marks) rather than worked out from the send
+  // ledger: ledger rows are pruned after a few days, which is how Michelle's
+  // uninstall (alerted Sat Oct 25) came again Wed Oct 28 at noon, and why
+  // Chad's alarms came Mon, Tue twice and Wed (Anna, Oct 28 2026: "I don't
+  // know what to pay attention to since you're constantly sending me these").
+  //   gone:<email>   = the last_active_at the uninstall alert was sent for
+  //   alarms:<email> = when the unanswered-alarms alert last went out (7 days)
+  const ownerRec = userByEmail[OWNER_ALERT_EMAIL];
+  const marks: Record<string, string> = { ...((ownerRec?.owner_alert_marks && typeof ownerRec.owner_alert_marks === 'object') ? ownerRec.owner_alert_marks : {}) };
+  const ALARM_ALERT_REST_MS = 7 * H_DAY;
 
   // 1. Can the app reach OpenAI? One tiny completion. A 429 here is the "no
   //    credits" that silently broke every AI feature on Oct 8 2026.
