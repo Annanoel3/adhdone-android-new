@@ -2172,20 +2172,10 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   if (ownerUp != null && nowMs >= ownerUp + H_HOUR && ownerHour >= 8 && ownerHour < 20
     && !(await sentToOwner(base44, 'owner_daily', null, nowMs - 20 * H_HOUR))) {
     try {
-      // Only alerts since the previous note: a flat 24 hours put Michelle's
-      // uninstall (alerted Sat 11:45 AM) in both Saturday's and Sunday's note.
-      const prevNotes = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
-        user_email: OWNER_ALERT_EMAIL, kind: 'owner_daily', send_at: { $gte: new Date(nowMs - 3 * H_DAY).toISOString() },
-      });
-      const prevNoteMs = Math.max(nowMs - H_DAY, ...prevNotes.map((n: any) => msOf(n.send_at)).filter((x: number) => Number.isFinite(x)));
-      const alerts = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
-        user_email: OWNER_ALERT_EMAIL, kind: 'owner_alert', send_at: { $gte: new Date(prevNoteMs).toISOString() },
-      });
       // Alerts she already got as their own push are NOT repeated here: the
       // note said "Chad's alarms are going unanswered (1x)" minutes after
       // the alert did (Anna, Oct 28 2026). The note carries only what had no
       // push of its own: captures that never finished, and new signups.
-      void alerts;
       const dayStalled = (await stalledCaptures(base44, nowMs - H_DAY, nowMs)).filter((s) => realUser(s.email));
       const newPeople = allUsers.filter((u: any) => realUser(u?.email) && nowMs - (Date.parse(u.created_date || '') || 0) < H_DAY).map((u: any) => u.email);
       if (dayStalled.length) {
