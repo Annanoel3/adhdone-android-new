@@ -46,9 +46,12 @@ function withCaching(params: any) {
   return { ...params, messages, prompt_cache_options: { mode: 'explicit' } };
 }
 
+// Any "bad request" answer to a call this file changed is treated as OpenAI
+// refusing the settings: the caller's own version is sent instead. A request
+// that was bad to begin with fails again the same way it always would have
+// (OpenAI doesn't bill a refused request).
 function rejectedSettings(e: any) {
-  const msg = String(e?.message || e?.error?.message || '');
-  return e?.status === 400 && /prompt_cache|cache_breakpoint|service_tier|flex/i.test(msg);
+  return e?.status === 400 || e?.status === 422;
 }
 
 function logUsage(fn: string, res: any) {
