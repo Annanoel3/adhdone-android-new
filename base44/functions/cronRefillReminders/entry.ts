@@ -107,9 +107,21 @@ Deno.serve(async (req) => {
 
     // The two looks below show people's tasks and emails: the owner's
     // account only (Test Function in the editor).
-    if (body?.previewRepeats === true || body?.previewHealth === true) {
+    if (body?.previewRepeats === true || body?.previewHealth === true || Array.isArray(body?.markTold)) {
       const me = await base44.auth.me().catch(() => null);
       if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
+    }
+
+    // "I've seen this one": write owner_alert_marks on the owner record by hand
+    // (Test Function, owner only). { markTold: [{ key: "alarms:<email>",
+    // value: "<iso>" }, { key: "gone:<email>", value: "<their last_active_at>" }] }
+    if (Array.isArray(body.markTold)) {
+      const owner = allUsers.find((u: any) => u?.email === OWNER_ALERT_EMAIL);
+      if (!owner?.id) return Response.json({ error: 'owner record not found' }, { status: 404 });
+      const marks: Record<string, string> = { ...((owner.owner_alert_marks && typeof owner.owner_alert_marks === 'object') ? owner.owner_alert_marks : {}) };
+      for (const m of body.markTold) if (m?.key && m?.value) marks[String(m.key)] = String(m.value);
+      await base44.asServiceRole.entities.User.update(owner.id, { owner_alert_marks: marks });
+      return Response.json({ success: true, owner_alert_marks: marks });
     }
 
     // What the owner health check would tell Anna right now, sending nothing
