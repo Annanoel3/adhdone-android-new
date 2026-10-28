@@ -2144,12 +2144,10 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   // Send what's new. Each title repeats at most every ALERT_COOLDOWN_MS, or
   // is told once since its sinceMs; a per-person alert also leaves its mark.
   let marksChanged = false;
-  const sentTitles = new Set<string>();
   for (const p of problems) {
     try {
       if (await sentToOwner(base44, 'owner_alert', p.title, p.sinceMs ?? nowMs - ALERT_COOLDOWN_MS)) continue;
       await pushOwner(base44, 'owner_alert', p.title, p.body);
-      sentTitles.add(p.title);
       if (p.mark) { marks[p.mark.key] = p.mark.value; marksChanged = true; }
       console.log(`[HEALTH] alerted the owner: ${p.title}`);
     } catch (e) {
