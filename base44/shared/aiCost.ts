@@ -18,17 +18,14 @@
 //   CACHE_MIN_CHARS or more gets one cache mark at its end. A caller that splits
 //   its system message into parts (fixed part first, marked by cachePart) keeps
 //   its own marks.
-// lean(openai, { flex: true }) — background jobs only (nobody is waiting on the
-//   answer): same model at half price on OpenAI's flex tier, slower. If flex has
-//   no room (429, which OpenAI doesn't charge for) or is slow, the call is sent
-//   again at the normal tier.
+// No flex tier, anywhere (Anna, Oct 28 2026: its slower answers worry her, and
+//   Smart Reminders is not to be touched). Every call keeps the normal speed.
 //
 // Fail-safe: if OpenAI ever rejects these settings, the call is re-sent exactly
 // as the caller wrote it, so nothing can break because of this file.
 
 // OpenAI only caches a prefix of 1,024 tokens or more (about 4 characters each).
 const CACHE_MIN_CHARS = 3500;
-const FLEX_TIMEOUT_MS = 120_000;
 
 export function cachePart(text: string) {
   return { type: 'text', text, prompt_cache_breakpoint: { mode: 'explicit' } };
@@ -62,7 +59,7 @@ function logUsage(fn: string, res: any) {
   } catch (_) { /* logging never matters more than the answer */ }
 }
 
-export function lean(openai: any, opts: { flex?: boolean; name?: string } = {}) {
+export function lean(openai: any, opts: { name?: string } = {}) {
   const completions = openai?.chat?.completions;
   if (!completions || completions.__lean) return openai;
   const original = completions.create.bind(completions);
@@ -80,17 +77,7 @@ export function lean(openai: any, opts: { flex?: boolean; name?: string } = {}) 
         throw e;
       }
     };
-    let res: any;
-    if (opts.flex && !params?.service_tier) {
-      try {
-        res = await sendAt({ ...cached, service_tier: 'flex' }, { ...(options || {}), timeout: FLEX_TIMEOUT_MS, maxRetries: 0 });
-      } catch (e) {
-        console.log(`[ai] ${fn}: flex unavailable (${(e as any)?.status || (e as any)?.name || 'error'}), sending at the normal tier`);
-        res = await sendAt(cached, options);
-      }
-    } else {
-      res = await sendAt(cached, options);
-    }
+    const res = await sendAt(cached, options);
     logUsage(fn, res);
     return res;
   };
