@@ -100,8 +100,15 @@ export async function scheduleBirthdayReminders(task) {
     { key: "day_of", kind: "day_of", label: "Day of" },
   ];
 
+  // On the day, "Write a text for X" comes every 3 hours until it's sent
+  // (cronRefillReminders), so the plain "It's X's birthday today!" is left out
+  // for a person's birthday (Anna, Oct 29 2026). Kept for a pet, your own
+  // birthday, and a text already sent. Same rule as textCoversTheDay there.
+  const textCoversTheDay = !!task.birthday_person && !task.is_own_birthday && !task.birthday_animal && task.birthday_text_sent !== true;
+
   for (const { key, kind, label } of kinds) {
     if (!toggles[key]) continue;
+    if (key === "day_of" && textCoversTheDay) continue;
     const content = reminderContent(person, kind, birthdayIso, task.birthday_animal);
     const sendAt = new Date(birthdayDate);
     sendAt.setDate(sendAt.getDate() + content.offsetDays);
