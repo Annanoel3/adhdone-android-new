@@ -47,7 +47,7 @@ import ReminderTypeSelector, { getCurrentReminderType } from "./ReminderTypeSele
 import { supportsAlarms, alertStyleFor, refreshAlarms, requestAlarmPermissions } from "../utils/widgetBridge";
 import { AlertStyleInfo } from "../shared/QuickCapturePrompt";
 import VoiceTaskInput from "./VoiceTaskInput";
-import { scheduleReminder, cancelScheduledReminder } from "../utils/reminderScheduler"; import { moveTaskToParkingLot } from "../utils/taskToParkingLot";
+import { scheduleReminder, cancelScheduledReminder, bookedIdsForTask } from "../utils/reminderScheduler"; import { moveTaskToParkingLot } from "../utils/taskToParkingLot";
 import { deleteTaskWithUndo, cancelEventWithUndo, restoreEvent } from "../utils/snoozeTask";
 import { ToastAction } from "@/components/ui/toast";
 import { User } from "@/entities/User";
@@ -782,11 +782,10 @@ Return JSON:
       // Cancel existing reminders — include every notification ID we know about
       // (both onesignal_notification_ids and any IDs stored on individual
       // reminder_schedule entries) so no stale reminder survives a date/time
-      // change and fires with outdated "in about 30 minutes" wording.
-      const allOldNotificationIds = Array.from(new Set([
-        ...(task.onesignal_notification_ids || []),
-        ...((task.reminder_schedule || []).map(r => r.notification_id).filter(Boolean)),
-      ]));
+      // change and fires with outdated "in about 30 minutes" wording. Plus any
+      // the server booked that this copy doesn't know about yet (a new task's
+      // reminder is saved on it a few seconds to a minute after it appears).
+      const allOldNotificationIds = await bookedIdsForTask(task);
       if (allOldNotificationIds.length > 0) {
         try {
           await cancelScheduledReminder(allOldNotificationIds);
