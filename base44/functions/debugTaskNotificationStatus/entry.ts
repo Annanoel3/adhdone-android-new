@@ -27,7 +27,14 @@ Deno.serve(async (req) => {
       return Response.json({ success: false, error: 'OneSignal credentials missing' }, { status: 500 });
     }
 
-    const ids = Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : [];
+    // { taskId, ids: [...] } (owner only): these pushes instead, e.g. ones the
+    // task no longer lists (a reminder for a time it was moved from).
+    let ids = Array.isArray(task.onesignal_notification_ids) ? task.onesignal_notification_ids : [];
+    if (Array.isArray(body.ids) && body.ids.length) {
+      const me = await base44.auth.me().catch(() => null);
+      if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
+      ids = body.ids.map(String).slice(0, 20);
+    }
     const statuses = [];
 
     for (const id of ids) {
@@ -44,6 +51,10 @@ Deno.serve(async (req) => {
           remaining: json.remaining,
           successful: json.successful,
           failed: json.failed,
+          // Delivered to the phone (confirmed) and opened from the tray.
+          received: json.received,
+          converted: json.converted,
+          completed_at: json.completed_at,
           queued: json.queued,
           send_after: json.send_after,
           errors: json.errors
