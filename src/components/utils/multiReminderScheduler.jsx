@@ -105,16 +105,21 @@ function resolveReminderTimes(reminders, scheduledDateISO, title = '', classific
   return reminders
     .map(r => {
       let reminderTime;
+      // A timed event's "It's time" rings one minute before the start (Anna,
+      // Oct 29 2026). Plans cached here from before then still say 0.
+      const eventAtTime = classification === 'event' && !dayOnly
+        && (r.relative_minutes_before === 0 || r.relative_minutes_before === 1);
       if (r.relative_minutes_before != null) {
         // RELATIVE: minutes before the event time
-        reminderTime = new Date(scheduled.getTime() - r.relative_minutes_before * 60 * 1000);
+        const minutesBefore = eventAtTime ? 1 : r.relative_minutes_before;
+        reminderTime = new Date(scheduled.getTime() - minutesBefore * 60 * 1000);
       } else {
         // ABSOLUTE: specific clock time on a specific day
         reminderTime = new Date(scheduled);
         reminderTime.setDate(reminderTime.getDate() - (r.days_before || 0));
         reminderTime.setHours(r.hour || 0, r.minute || 0, 0, 0);
       }
-      const atTime = r.relative_minutes_before === 0;
+      const atTime = r.relative_minutes_before === 0 || eventAtTime;
       // Quiet hours are applied HERE, before the "never after the time" check
       // below, so a heads-up pushed past the time by quiet hours is dropped
       // instead of arriving after it (an hour-before for a 5 AM flight used to
@@ -274,7 +279,8 @@ export async function scheduleMultiReminders({
     // that exact time. Cached or LLM schedules sometimes omit it. (Not a "by"
     // deadline — see above.)
     if (!dayOnly && !clockDeadline && new Date(scheduledDateISO).getTime() > Date.now()
-        && !reminders.some(r => r.relative_minutes_before === 0)) {
+        && !reminders.some(r => r.relative_minutes_before === 0
+          || (classification === 'event' && r.relative_minutes_before === 1))) {
       const t = title.length > 40 ? `${title.slice(0, 37)}...` : title;
       reminders.push({
         days_before: null, hour: null, minute: null, relative_minutes_before: 0,
