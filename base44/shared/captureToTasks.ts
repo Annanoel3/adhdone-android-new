@@ -319,8 +319,13 @@ async function bookedForAMovedTask(base44: any, task: any, ids: string[]): Promi
   } catch (_) {
     return false; // Can't tell: keep what was booked.
   }
-  const was = Date.parse(String(task.next_reminder || ""));
-  const nowAt = Date.parse(String(fresh?.next_reminder || ""));
+  // Stored times can come back with or without the Z; both are UTC.
+  const msOf = (v: any) => {
+    const s = String(v || "");
+    return s ? Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`) : NaN;
+  };
+  const was = msOf(task.next_reminder);
+  const nowAt = msOf(fresh?.next_reminder);
   const moved = !fresh
     || fresh.status === "completed"
     || (Number.isFinite(was) && Number.isFinite(nowAt) && was !== nowAt)
