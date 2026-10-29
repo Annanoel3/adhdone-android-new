@@ -600,10 +600,9 @@ export default function TaskCard({
         // already booked kept going off at the old time.
         (async () => {
           try {
-            const oldIds = Array.from(new Set([
-              ...(task.onesignal_notification_ids || []),
-              ...((task.reminder_schedule || []).map(r => r.notification_id)),
-            ])).filter(id => id && !String(id).startsWith('planned_'));
+            // Including any the server booked that this copy doesn't know about yet.
+            const { bookedIdsForTask } = await import('../utils/reminderScheduler');
+            const oldIds = await bookedIdsForTask(task);
             if (oldIds.length > 0) {
               const { cancelScheduledReminder } = await import('../utils/reminderScheduler');
               await cancelScheduledReminder(oldIds).catch(e => console.error("Cancel failed:", e));
@@ -664,10 +663,10 @@ export default function TaskCard({
             // Oct 12 2026: Bike Night kept its old 9 AM and all-day after she
             // set 6 PM, but got 6 PM reminders).
             await Task.update(task.id, { next_reminder: nextReminder.toISOString(), ...namedTime });
-            const oldIds = Array.from(new Set([
-              ...(task.onesignal_notification_ids || []),
-              ...((task.reminder_schedule || []).map((r) => r.notification_id)),
-            ])).filter((id) => id && !String(id).startsWith('planned_'));
+            // Including any the server booked that this copy doesn't know about
+            // yet (Tricia, Oct 28 2026: a new task moved a minute after adding it).
+            const { bookedIdsForTask } = await import('../utils/reminderScheduler');
+            const oldIds = await bookedIdsForTask(task);
             if (oldIds.length > 0) {
               const { cancelScheduledReminder } = await import('../utils/reminderScheduler');
               await cancelScheduledReminder(oldIds).catch(e => console.error("Cancel failed:", e));
