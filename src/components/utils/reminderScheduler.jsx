@@ -45,7 +45,9 @@ export function isTimeTheySet(task, ms) {
   if (!task || task.time_stated !== true || !Number.isFinite(ms)) return false;
   const when = (v) => (v ? new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(String(v)) ? v : `${v}Z`).getTime() : NaN);
   const ev = when(task.event_time);
-  if (Number.isFinite(ev) && Math.abs(ev - ms) < 60 * 1000) return true;
+  // The start, or the "It's time" a minute before it (an event's rings one
+  // minute early since Oct 29 2026, Anna: "exactly one minute before").
+  if (Number.isFinite(ev) && Math.abs(ev - ms) <= 90 * 1000) return true;
   const m = /^(\d{1,2}):(\d{2})$/.exec(String(task.anchor_time || ''));
   if (!m) return false;
   const d = new Date(ms);
