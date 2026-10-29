@@ -228,6 +228,41 @@ export async function scheduleReminder({
  * Cancels scheduled push notification(s) by OneSignal notification ID(s)
  * Accepts either a single ID string or an array of IDs
  */
+/**
+ * Every reminder booked for this task that hasn't gone yet: the ids on the
+ * copy of the task this screen holds, plus the server's own record of what it
+ * booked (NotificationLedger, readable for one's own rows). The copy on screen
+ * can be missing a booking: a new task's reminder is booked on the server a
+ * few seconds to a minute after the task appears, and saved on the task only
+ * when that's done. Tricia (Oct 28 2026) said "remind me tomorrow at 9am",
+ * moved it to 7 AM on the card a minute later, and got both: the 9 AM one was
+ * booked but not on the task yet, so the card had nothing to cancel.
+ * Only the kinds a time change rebooks (the reminder at the time, its
+ * heads-ups and check-ins); Focus Mode, birthday and Smart Reminders pushes
+ * have their own owners.
+ */
+const REBOOKED_KINDS = new Set(['task_reminder', 'task_checkin', 'event_reminder']);
+export async function bookedIdsForTask(task) {
+  const ids = new Set([
+    ...(task?.onesignal_notification_ids || []),
+    ...((task?.reminder_schedule || []).map((r) => r?.notification_id)),
+  ]);
+  if (task?.id) {
+    try {
+      const rows = await base44.entities.NotificationLedger.filter({ task_id: task.id });
+      const now = Date.now();
+      for (const r of rows || []) {
+        if (r?.notification_id && REBOOKED_KINDS.has(r.kind || 'task_reminder') && Date.parse(r.send_at) > now) {
+          ids.add(r.notification_id);
+        }
+      }
+    } catch (e) {
+      // The copy's own ids still go.
+    }
+  }
+  return Array.from(ids).filter((id) => id && !String(id).startsWith('planned_'));
+}
+
 export async function cancelScheduledReminder(notificationIds) {
   if (!notificationIds) {
     console.log('[cancelScheduledReminder] No notification ID provided, skipping');
