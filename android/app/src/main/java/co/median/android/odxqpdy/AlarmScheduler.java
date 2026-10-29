@@ -158,6 +158,51 @@ final class AlarmScheduler {
         return false;
     }
 
+    /**
+     * Without the "Alarms & reminders" access (Android 14 doesn't give it to a
+     * fresh install), this phone's own alarm is booked inexactly and can go off
+     * up to ~10 minutes late, while the push for the same reminder arrives on
+     * time. A push used to stay quiet whenever the phone held an alarm for that
+     * moment, so the reminder was only heard when the late alarm went off (Anna,
+     * Oct 29 2026: "You better make them exact"). Now, if this task's alarm for
+     * this moment hasn't rung yet, it is retired and the push rings instead:
+     * on time, and once.
+     *
+     * Returns true when it retired the alarm (the push should ring). False when
+     * the phone has the exact access (its alarm is on time), or when the alarm
+     * already rang, was snoozed, is ringing, or is on a break (the push stays quiet).
+     */
+    static boolean takeOverLateAlarm(Context context, String taskId, long moment, long windowMs) {
+        if (taskId == null || taskId.isEmpty() || canScheduleExact(context)) {
+            return false;
+        }
+        String ringing = AlarmService.currentRingingId();
+        synchronized (AlarmStore.LOCK) {
+            List<AlarmStore.Entry> all = AlarmStore.load(context);
+            List<AlarmStore.Entry> pending = new java.util.ArrayList<>();
+            for (AlarmStore.Entry e : all) {
+                if (e.missed || isPhoneOwned(e.id) || !taskId.equals(e.taskId)
+                        || Math.abs(e.originalAt - moment) > windowMs) {
+                    continue;
+                }
+                if (e.done || e.snoozes > 0 || e.id.equals(ringing)) {
+                    return false;
+                }
+                pending.add(e);
+            }
+            if (pending.isEmpty()) {
+                return false;
+            }
+            for (AlarmStore.Entry e : pending) {
+                cancel(context, e.id);
+                e.done = true;
+                Log.d(TAG, "AlarmScheduler: no exact access, the on-time push rings instead of late alarm " + e.id);
+            }
+            AlarmStore.save(context, all);
+            return true;
+        }
+    }
+
     static void cancel(Context context, String id) {
         AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (am == null || id == null) {
