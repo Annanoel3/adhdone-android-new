@@ -4,7 +4,7 @@
 // any task. Results are cached by title in localStorage (24h TTL) since the
 // minutes_before values are title-dependent, not date-dependent.
 
-import { scheduleReminder, resolveSendTime, cancelScheduledReminder, isInQuietHours } from './reminderScheduler';
+import { scheduleReminder, resolveSendTime, cancelScheduledReminder, isInQuietHours, bookedIdsForTask } from './reminderScheduler';
 import { getReminderCopy } from './reminderCopy';
 import { commitNotificationIds } from './notificationOwnership';
 import { base44 } from '@/api/base44Client';
@@ -378,10 +378,8 @@ export async function scheduleMultiReminders({
  * old day.) Returns the ids now booked.
  */
 export async function moveRemindersToDate(task, whenISO, updates = {}) {
-  const oldIds = Array.from(new Set([
-    ...(task.onesignal_notification_ids || []),
-    ...((task.reminder_schedule || []).map((r) => r?.notification_id)),
-  ])).filter((id) => id && !String(id).startsWith('planned_'));
+  // Including any the server booked that this copy doesn't know about yet.
+  const oldIds = await bookedIdsForTask(task);
   if (oldIds.length > 0) {
     await cancelScheduledReminder(oldIds);
   }
