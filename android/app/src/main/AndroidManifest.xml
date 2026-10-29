@@ -211,6 +211,14 @@
          Android 14+ the user has to grant it too. The foreground-service pair is for the
          ringing service. Battery-optimisation exemption keeps One UI from killing alarms. -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Android 13+: exact alarms granted at install, no toggle for the user to find.
+         Android 14 gives a fresh install no SCHEDULE_EXACT_ALARM, so most new users'
+         alarms were booked inexactly, up to ~10 minutes late (Anna, Oct 29 2026:
+         "Why can't the phone book an exact alarm... that's not ok"). Google Play
+         limits this to alarm and calendar apps and asks for a declaration in Play
+         Console (App content > Exact alarm permission): ADHDone rings full-screen
+         alarms for reminders and shows calendar event notifications. -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
