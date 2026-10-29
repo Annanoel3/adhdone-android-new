@@ -209,7 +209,9 @@ export function placeRepeatingSlot(
 export function isTimeTheySet(task: any, ms: number, timeZone: string): boolean {
   if (!task || task.time_stated !== true || !Number.isFinite(ms)) return false;
   const ev = platformMs(task.event_time);
-  if (Number.isFinite(ev) && Math.abs(ev - ms) < 60 * 1000) return true;
+  // The start, or the "It's time" a minute before it (an event's rings one
+  // minute early since Oct 29 2026, Anna: "exactly one minute before").
+  if (Number.isFinite(ev) && Math.abs(ev - ms) <= 90 * 1000) return true;
   // Otherwise: the clock time they named (anchor_time)...
   const m = /^(\d{1,2}):(\d{2})$/.exec(String(task.anchor_time || ''));
   if (!m) return false;
