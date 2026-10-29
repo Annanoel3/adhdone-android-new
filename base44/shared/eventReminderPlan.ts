@@ -80,17 +80,23 @@ export function buildEventReminderPlan(opts: {
   const startMs = start.getTime();
   const earliest = nowMs + 2 * 60 * 1000;
   // Where a moment goes under quiet hours (null = dropped). See above.
+  // A timed event's "It's time" rings one minute before the start (Anna, Oct
+  // 29 2026: "exactly one minute before an event"); "at the start" below
+  // means that minute.
+  const timedEvent = isEvent && !isAllDay;
+  const AT_START_MS = 90 * 1000;
   const place = (atMs: number): number | null => {
     if (!opts.quiet) return atMs;
-    if (opts.startIsTheirs && Math.abs(atMs - startMs) < 60 * 1000) return atMs;
+    if (opts.startIsTheirs && Math.abs(atMs - startMs) <= AT_START_MS) return atMs;
     return placeAppReminder(atMs, isAllDay ? null : startMs, opts.quiet, timeZone || DEFAULT_TIME_ZONE);
   };
 
   let entries = (rawReminders || [])
     .map((r: any) => {
       const isRelative = r.relative_minutes_before != null;
+      const minutesBefore = timedEvent && Number(r.relative_minutes_before) === 0 ? 1 : r.relative_minutes_before;
       const at = isRelative
-        ? new Date(startMs - r.relative_minutes_before * 60 * 1000)
+        ? new Date(startMs - minutesBefore * 60 * 1000)
         // A local wall-clock time ("night before at 8 PM") in the USER's zone.
         : localReminderUtc(start, r.days_before || 0, r.hour || 0, r.minute || 0, timeZone);
       return {
@@ -118,13 +124,13 @@ export function buildEventReminderPlan(opts: {
   // cap of two used to drop it for every calendar event, since it sorts last:
   // Anna's Functional Medicine appointment (Oct 13 2026) had the night before
   // and "in about an hour", and nothing at 11:15.
-  const atStart = entries.filter((r) => Math.abs(r.atMs - startMs) < 60 * 1000);
+  const atStart = entries.filter((r) => Math.abs(r.atMs - startMs) <= AT_START_MS);
   const headsUps = entries.filter((r) => !atStart.includes(r)).slice(0, MAX_REMINDERS_PER_EVENT);
   entries = [...headsUps, ...atStart].sort((a, b) => a.atMs - b.atMs);
 
   // Never leave a dated item with no plan at all: fall back to one reminder at
   // the start itself.
-  const fallbackMs = place(startMs);
+  const fallbackMs = place(timedEvent ? startMs - 60 * 1000 : startMs);
   if (entries.length === 0 && fallbackMs != null && fallbackMs > earliest) {
     entries.push({
       atMs: fallbackMs,
