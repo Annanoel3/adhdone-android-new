@@ -591,7 +591,8 @@ async function handleTaskEvent(req: Request): Promise<Response> {
       ] : isEvent && eventMs > now ? [
         { at: eventMs - 24 * 60 * 60 * 1000, label: 'night before', title: `🎉 ${t}`, body: `Heads up! Your "${t}" is tomorrow. Don't forget to prep! ✨` },
         { at: eventMs - 60 * 60 * 1000, label: '1 hour before', title: `⏰ ${t}`, body: `Almost time! Your "${t}" is in about an hour. Time to head out! 🚗` },
-        { at: eventMs, label: 'at the time', title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` },
+        // One minute before the start (Anna, Oct 29 2026: "exactly one minute before an event").
+        { at: eventMs - 60 * 1000, label: 'at the time', title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` },
       ] : timed && data.deadline_style !== 'by' && clockMs > now ? [
         { at: clockMs, label: 'at the time', title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` },
       ] : [];
