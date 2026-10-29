@@ -225,10 +225,6 @@ export async function scheduleReminder({
 }
 
 /**
- * Cancels scheduled push notification(s) by OneSignal notification ID(s)
- * Accepts either a single ID string or an array of IDs
- */
-/**
  * Every reminder booked for this task that hasn't gone yet: the ids on the
  * copy of the task this screen holds, plus the server's own record of what it
  * booked (NotificationLedger, readable for one's own rows). The copy on screen
@@ -263,6 +259,10 @@ export async function bookedIdsForTask(task) {
   return Array.from(ids).filter((id) => id && !String(id).startsWith('planned_'));
 }
 
+/**
+ * Cancels scheduled push notification(s) by OneSignal notification ID(s)
+ * Accepts either a single ID string or an array of IDs
+ */
 export async function cancelScheduledReminder(notificationIds) {
   if (!notificationIds) {
     console.log('[cancelScheduledReminder] No notification ID provided, skipping');
