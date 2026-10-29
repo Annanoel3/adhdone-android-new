@@ -2133,11 +2133,24 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     }
     const perm = u.alarm_permissions;
     const permMs = msOf(perm?.checked_at);
-    if (perm?.notifications === false && Number.isFinite(permMs) && nowMs - permMs < 2 * H_DAY) {
+    // A brand-new account is still in the welcome steps, which ask for
+    // notifications a few screens in, so its first open always reads "off".
+    // Bri signed up Oct 29 2026 at 6:57 AM, was reported at 7:00 AM as
+    // having notifications off, and had them on by 7:05. A day's grace; if
+    // they are still off after that, it's real.
+    const createdMs = msOf(u.created_date);
+    const settingUp = Number.isFinite(createdMs) && nowMs - createdMs < H_DAY;
+    // Told within the last 7 days: enough (the ledger forgets after 3 days,
+    // so this is remembered with the other marks).
+    const offKey = `notifoff:${String(u.email).toLowerCase()}`;
+    const offTold = msOf(marks[offKey]);
+    const offRested = !(Number.isFinite(offTold) && nowMs - offTold < ALARM_ALERT_REST_MS);
+    if (perm?.notifications === false && !settingUp && offRested && Number.isFinite(permMs) && nowMs - permMs < 2 * H_DAY) {
       problems.push({
         title: `📵 ADHDone: ${nameOf(u)} has notifications off`,
         body: `When they opened the app ${theirClock(u, permMs)} (their time), ADHDone's notifications were off on their phone, so no reminder or alarm can reach them. ${u.email}`,
         sinceMs: nowMs - 7 * H_DAY,
+        mark: { key: offKey, value: new Date(nowMs).toISOString() },
       });
     }
   }
