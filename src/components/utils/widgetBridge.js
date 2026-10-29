@@ -287,7 +287,8 @@ function ringsOutLoud(task, momentMs, label = '') {
   // heads-ups (see above). A day-only event keeps its morning-of.
   if (task.classification === 'event' && task.event_time && !task.day_only_task) {
     const eventMs = new Date(task.event_time).getTime();
-    return Math.abs(momentMs - eventMs) < 60 * 1000 || /leave now/i.test(String(label || ''));
+    // Its "It's time" rings one minute before the start (Oct 29 2026).
+    return Math.abs(momentMs - eventMs) <= 90 * 1000 || /leave now/i.test(String(label || ''));
   }
   if (sameLocalDay(momentMs, anchor)) return true;
   if (isEvent) return false;
