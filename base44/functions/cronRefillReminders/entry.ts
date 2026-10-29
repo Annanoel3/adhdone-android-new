@@ -1216,13 +1216,17 @@ Deno.serve(async (req) => {
     const words = task.day_only_task
       ? getReminderContent(task.title, task.due_date, task.next_reminder, timeZone)
       : { title: `🔔 ${short}`, body: `It's time — "${short}". You've got this! 💪` };
+    // A timed event's "It's time" rings one minute before the start (Anna, Oct 29 2026).
+    const rescueAtISO = task.classification === 'event' && !task.day_only_task
+      ? new Date(atMs - 60 * 1000).toISOString()
+      : task.next_reminder;
     try {
       const res = await base44.asServiceRole.functions.invoke('schedulePush', {
         internalKey: CRON_SECRET,
         toUserExternalId: task.notification_recipient_email,
         title: words.title,
         body: words.body,
-        sendAtISO: task.next_reminder,
+        sendAtISO: rescueAtISO,
         data: { screen: '/TaskNotification', taskId: task.id, urgency: task.urgency || 'medium', type: 'task_reminder' },
         buttons: [
           { id: 'snooze_15', text: 'Snooze 15 min' },
@@ -1235,7 +1239,7 @@ Deno.serve(async (req) => {
         // schedulePush rewrites the plain words in the brief's voice
         // (shared/reminderTitle.ts, atTimeWords); the ones that went out are the ones saved.
         const said = result.words?.title && result.words?.body ? result.words : words;
-        const entry = { notification_id: result.notificationId, send_at: task.next_reminder, label: 'at the time', notification_title: said.title, notification_body: said.body };
+        const entry = { notification_id: result.notificationId, send_at: rescueAtISO, label: 'at the time', notification_title: said.title, notification_body: said.body };
         await base44.asServiceRole.entities.Task.update(task.id, {
           onesignal_notification_ids: [result.notificationId],
           reminder_schedule: [entry],
