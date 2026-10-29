@@ -174,7 +174,11 @@ public class PushFilter implements INotificationServiceExtension {
                 if (moment <= 0L) {
                     moment = System.currentTimeMillis();
                 }
-                if (!taskId.isEmpty() && AlarmScheduler.bookedAlarmNear(ctx, taskId, moment, SAME_MOMENT_MS)) {
+                // Unless that alarm can't be exact and hasn't rung yet: then it
+                // could go off minutes late, so the push rings now and the alarm
+                // is retired (AlarmScheduler.takeOverLateAlarm, Oct 29 2026).
+                if (!taskId.isEmpty() && AlarmScheduler.bookedAlarmNear(ctx, taskId, moment, SAME_MOMENT_MS)
+                        && !AlarmScheduler.takeOverLateAlarm(ctx, taskId, moment, SAME_MOMENT_MS)) {
                     // That alarm already rang, nobody answered, and it put its one
                     // copy back in the tray: this push arriving late is the same
                     // reminder a second time, so it isn't shown (Oct 17 2026).
@@ -214,6 +218,16 @@ public class PushFilter implements INotificationServiceExtension {
                     && !AlarmScheduler.bookedAlarmNear(ctx, taskId, sentAt, COVER_WINDOW_MS)) {
                 // Shown as usual, sound and all, with the task's Done / Snooze buttons.
                 loudWithButtons(ctx, notification, data);
+                return;
+            }
+            // The alarm that covers it can't be exact (no "Alarms & reminders"
+            // access) and hasn't rung yet: it could go off minutes late. The push
+            // is on time, so it rings now as that alarm would have, and the late
+            // one is retired (Anna, Oct 29 2026: "You better make them exact").
+            if (AlarmScheduler.takeOverLateAlarm(ctx, taskId, sentAt, COVER_WINDOW_MS)) {
+                Log.d(TAG, "PushFilter: no exact alarm access, ringing the on-time push for task " + taskId);
+                ringOnArrival(ctx, notification, data);
+                event.preventDefault();
                 return;
             }
             // Its alarm already rang for this reminder and, unanswered, put its
