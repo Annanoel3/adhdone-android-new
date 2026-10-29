@@ -708,6 +708,20 @@ Deno.serve(async (req) => {
     return c;
   }
 
+  // On the day, the "Write a text for X" / "Text X!" reminder (below) comes
+  // every 3 hours until they send it, so the plain "It's X's birthday today!"
+  // is left out. Oct 29 2026, Tricia: "Write a text for Twins" at 8:00, "It's
+  // Twins's birthday today!" at 9:00, "Write a text" again at 9:15 (Anna: "The
+  // regular thing just saying its their birthday should go away because they
+  // are already getting reminded by the text thing"). Kept for a pet (no
+  // text), for your own birthday, and when the text was already sent.
+  // Same rule in the client's birthdayScheduler.
+  function textCoversTheDay(task: any): boolean {
+    return !!task.birthday_person && !task.is_own_birthday && !task.birthday_animal && task.birthday_text_sent !== true;
+  }
+  // `kind` isn't kept on saved entries; the label is.
+  const isDayOfEntry = (e: any) => e?.kind === 'day_of' || (String(e?.label || '').toLowerCase() === 'day of' && e?.kind !== 'own_day_of');
+
   // Build the 3 planned reminder entries for a birthday (mirrors the client scheduler).
   function buildBirthdaySchedule(task: any, birthdayIso: string, ownerName?: string): any[] {
     const person = task.birthday_person || 'Someone';
@@ -743,6 +757,7 @@ Deno.serve(async (req) => {
     const entries: any[] = [];
     for (const { key, kind, label } of kinds) {
       if (!toggles[key]) continue;
+      if (key === 'day_of' && textCoversTheDay(task)) continue;
       const content = birthdayReminderContent(person, kind, birthdayIso, task.birthday_animal);
       if (!content) continue;
       const sendAt = new Date(birthdayDate.getTime() + content.offsetDays * DAY_MS);
@@ -811,9 +826,15 @@ Deno.serve(async (req) => {
       birthdayRolledOver++;
       console.log(`🎂 [REFILL] Rolled over "${task.title}" → ${nextDate.toLocaleDateString()}`);
     } else if (schedule.length === 0 && ids.length === 0) {
-      // 2. Legacy/orphaned birthday with no plan at all — rebuild it
-      schedule = buildBirthdaySchedule(task, nextReminderIso, ownerName);
-      dirty = true;
+      // 2. Legacy/orphaned birthday with no plan at all — rebuild it. Only
+      // saved when there is something to save: a birthday whose only entry
+      // left was the day-of (taken off below) would otherwise be rewritten,
+      // empty, every run.
+      const rebuilt = buildBirthdaySchedule(task, nextReminderIso, ownerName);
+      if (rebuilt.length) {
+        schedule = rebuilt;
+        dirty = true;
+      }
     } else if (isOwn && !schedule.every((e: any) => String(e.notification_title || '').includes('Happy Birthday'))) {
       // Own birthday that was previously planned as a generic event ("night
       // before" / "1 hour before" with no name) — replace with the greeting.
@@ -824,6 +845,16 @@ Deno.serve(async (req) => {
       // filling OneSignal with hundreds of cancelled notifications.
       schedule = buildBirthdaySchedule(task, nextReminderIso, ownerName);
       dirty = true;
+    }
+
+    // The plain day-of reminder goes when the day's text reminders cover it
+    // (textCoversTheDay); one already booked is cancelled by the reconcile below.
+    if (textCoversTheDay(task)) {
+      const kept = schedule.filter((e: any) => !isDayOfEntry(e));
+      if (kept.length !== schedule.length) {
+        schedule = kept;
+        dirty = true;
+      }
     }
 
     // 3. Promote planned entries within the scheduling window
@@ -933,9 +964,10 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Birthday text reminder — hourly on day-of until the user sends the text.
-    // Only fires during waking hours, respects quiet hours, and dedupes via
-    // birthday_text_last_reminded_at so the user gets ~1/hour, not 1/cron-run.
+    // Birthday text reminder — every 3 hours on the day until the user sends
+    // the text (Anna, Oct 29 2026: "The write a text thing should be once
+    // every 3 hours"; it was hourly). Only fires during waking hours, respects
+    // quiet hours, and dedupes via birthday_text_last_reminded_at.
     // "Is it the birthday today?" is asked on the owner's calendar. It used to
     // compare dates on the server's UTC clock, where a US evening is already
     // the next day — so the "text them today" pushes started the evening
@@ -956,7 +988,8 @@ Deno.serve(async (req) => {
       const inDefaultSleep = isInQuietHours(now, qStart, qEnd, timeZone);
       const lastRemindedMs = task.birthday_text_last_reminded_at
         ? new Date(task.birthday_text_last_reminded_at).getTime() : 0;
-      const dedupMs = 50 * 60 * 1000;
+      // 3 hours less a few minutes, so a run that starts a little early still counts.
+      const dedupMs = 3 * 60 * 60 * 1000 - 5 * 60 * 1000;
       const bdayGate = (!inQuiet && !inDefaultSleep && (now.getTime() - lastRemindedMs) > dedupMs)
         ? await ledgerCheck(base44, { email: task.notification_recipient_email, taskId: task.id, kind: 'birthday_text_reminder' })
         : { allowed: false };
