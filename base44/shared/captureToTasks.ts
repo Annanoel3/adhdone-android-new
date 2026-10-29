@@ -304,6 +304,44 @@ export async function foldIdeaIntoTrackers(base44: any, idea: { id: string; titl
 }
 
 // ── Reminders ──────────────────────────────────────────────────────────────
+// The task moved while its reminders were being booked here: the person
+// changed its time (or finished or deleted it) before these ids were saved on
+// it, so the card had nothing of ours to cancel. What was booked is for a time
+// that no longer stands: it's cancelled, and nothing is saved over the plan the
+// card made. Tricia, Oct 28 2026: "Remind me tomorrow at 9am", moved to 7 AM
+// on the card within a minute; both went off, the 9 AM one on top of a
+// birthday. Returns true when that happened.
+async function bookedForAMovedTask(base44: any, task: any, ids: string[]): Promise<boolean> {
+  let fresh: any;
+  try {
+    const rows = await base44.asServiceRole.entities.Task.filter({ id: task.id });
+    fresh = rows?.[0] || null;
+  } catch (_) {
+    return false; // Can't tell: keep what was booked.
+  }
+  const was = Date.parse(String(task.next_reminder || ""));
+  const nowAt = Date.parse(String(fresh?.next_reminder || ""));
+  const moved = !fresh
+    || fresh.status === "completed"
+    || (Number.isFinite(was) && Number.isFinite(nowAt) && was !== nowAt)
+    || (Number.isFinite(was) && !fresh.next_reminder);
+  if (!moved) return false;
+  for (const id of ids) {
+    try {
+      await callFunction(base44, "cancelScheduled", { notificationId: id });
+    } catch (e) {
+      console.error("[captureToTasks] could not cancel a booking for the old time:", e);
+    }
+  }
+  if (fresh) {
+    try {
+      await base44.asServiceRole.entities.Task.update(task.id, { reminder_scheduling_since: null });
+    } catch (_) { /* the cron clears a stale marker */ }
+  }
+  console.log(`[captureToTasks] ${task.id} moved while its reminders were booked; cancelled ${ids.length} for the old time`);
+  return true;
+}
+
 // Turns the reminder PLAN (relative offsets) into real scheduled pushes, then
 // records the OneSignal ids on the task so they can be cancelled later.
 export async function scheduleTaskReminders(
@@ -351,6 +389,7 @@ export async function scheduleTaskReminders(
       });
       if (res?.notificationId) ids.push(res.notificationId);
     }
+    if (ids.length && await bookedForAMovedTask(base44, task, ids)) return { planned: 1, scheduled: 0, moved: true };
     await base44.asServiceRole.entities.Task.update(task.id, {
       reminder_scheduling_since: null,
       ...(ids.length ? { onesignal_notification_ids: ids, last_scheduled_until: firstAt.toISOString() } : {}),
@@ -403,6 +442,7 @@ export async function scheduleTaskReminders(
         notification_body: words.body,
       });
     }
+    if (ids.length && await bookedForAMovedTask(base44, task, ids)) return { planned: entries.length, scheduled: 0, moved: true };
     await base44.asServiceRole.entities.Task.update(task.id, {
       reminder_scheduling_since: null,
       ...(entries.length ? { reminder_schedule: entries, onesignal_notification_ids: ids } : {}),
@@ -528,6 +568,9 @@ export async function scheduleTaskReminders(
     }
   }
 
+  if (ids.length && await bookedForAMovedTask(base44, task, ids)) {
+    return { planned: (plan?.reminders || []).length, scheduled: 0, moved: true };
+  }
   // One write: the ids (if any) land together with clearing the in-progress
   // marker, so the cron can never see "scheduling" without the ids, or vice versa.
   await base44.asServiceRole.entities.Task.update(task.id, {
