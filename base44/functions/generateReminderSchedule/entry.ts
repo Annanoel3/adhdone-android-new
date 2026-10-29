@@ -597,6 +597,13 @@ Examples:
       }
     }
 
+    // A timed event's "It's time" rings one minute before the start (Anna, Oct
+    // 29 2026: "The 'it's time!' notification and alarm should be changed to
+    // ring exactly one minute before an event"). Tasks keep their own minute.
+    if (classification === 'event' && !timelessEvent) {
+      reminders = reminders.map((r) => (r.relative_minutes_before === 0 ? { ...r, relative_minutes_before: 1 } : r));
+    }
+
     console.log(`[generateReminderSchedule] Generated ${reminders.length} reminders for "${title}"`);
 
     return Response.json({ reminders });
