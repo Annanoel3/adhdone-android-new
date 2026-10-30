@@ -9,6 +9,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
 import FacebookIcon from "@/components/FacebookIcon";
+import AppleSignInButton from "@/components/AppleSignIn";
 import { toast } from "@/components/ui/use-toast";
 import { safeReturnTo } from "@/lib/authReturnTo";
 
@@ -144,6 +145,7 @@ export default function Register() {
       }
     >
       <div className="space-y-3 mb-6">
+        <AppleSignInButton returnTo={safeReturnTo()} />
         <Button
           variant="outline"
           className="w-full h-12 text-sm font-medium"
