@@ -6,9 +6,14 @@
 #   1. Codemagic: add the GitHub repo Annanoel3/adhdone-android-new as an application.
 #   2. The App Store Connect API key is already in Codemagic (Teams > Integrations),
 #      named "GenCare"; one key works for every app on the account.
-#   3. The application's Environment variables, group "adhdone":
-#        RC_APPLE_KEY            RevenueCat public iOS key (appl_...), secret
-#        ADHDONE_APP_STORE_ID    the numeric Apple ID of the app in App Store Connect (optional)
+#   3. Later, for recording-minute packs: the application's Environment variables,
+#      group "adhdone", with RC_APPLE_KEY (RevenueCat public iOS key, appl_...,
+#      secret). Then un-comment the two "groups" lines below. Codemagic stops a
+#      build that names a group that doesn't exist yet, so they stay off until then.
+#
+# App Store Connect: "ADHDone App" (Apple ID 6828975743), bundle
+# com.mediocreatbest.adhdone, profile "ADHDone App Store" (Codemagic reference
+# adhdone_app_store), created Oct 30 2026.
 #
 # Starting a build: the "Start new build" button, or a git tag that starts with
 # "ios-" (e.g. ios-1). Base44's own pushes to main never start a build.
@@ -23,13 +28,14 @@ workflows:
       ios_signing:
         distribution_type: app_store
         bundle_identifier: com.mediocreatbest.adhdone
-      groups:
-        - adhdone
+      # groups:
+      #   - adhdone
       node: 22
       xcode: latest
       vars:
         XCODE_PROJECT: ios/App/App.xcodeproj
         XCODE_SCHEME: App
+        ADHDONE_APP_STORE_ID: "6828975743"
     triggering:
       events:
         - tag
