@@ -8,6 +8,7 @@ import { LogIn, Mail, Lock, Loader2 } from "lucide-react";
 import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
 import FacebookIcon from "@/components/FacebookIcon";
+import AppleSignInButton from "@/components/AppleSignIn";
 import { safeReturnTo } from "@/lib/authReturnTo";
 
 export default function Login() {
@@ -55,6 +56,7 @@ export default function Login() {
       }
     >
       <div className="space-y-3 mb-6">
+        <AppleSignInButton returnTo={returnTo} />
         <Button
           variant="outline"
           className="w-full h-12 text-sm font-medium"
