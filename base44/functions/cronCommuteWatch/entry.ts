@@ -133,7 +133,15 @@ async function sendPush(
     // Accounts that chose full-screen reminders get this as an alarm: the app
     // build that can ring (its PushFilter) rings it the moment it arrives, with
     // these same words. Older builds and everyone else see the push as before.
-    if (user?.alarm_mode === 'alarm') payload.data.alarm = true;
+    if (user?.alarm_mode === 'alarm') {
+      payload.data.alarm = true;
+      // The event screen: "Got it" only, and it only stops the ring. Without
+      // this the phone's plain "Got it" opened the app on Places (Anna, Oct 30
+      // 2026: "I just pressed got it on the leave now alarm and it opened the
+      // app"). Leaving for work happens whether or not they tap anything, the
+      // same as an event. Build 42 already reads this flag (PushFilter).
+      payload.data.event = true;
+    }
   }
 
   try {
