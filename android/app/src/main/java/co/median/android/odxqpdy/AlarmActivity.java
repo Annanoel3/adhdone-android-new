@@ -580,6 +580,15 @@ public class AlarmActivity extends Activity {
             finish();
             return;
         }
+        // A pushed alarm about a moment, not a task (the commute "time to
+        // leave"): "Got it" only stops it too. It used to open the app on the
+        // push's screen (Anna, Oct 30 2026: "I just pressed got it on the leave
+        // now alarm and it opened the app"). The server also marks that push as
+        // an event now; this covers any other task-less alarm.
+        if (!openList && (taskId == null || taskId.isEmpty())) {
+            finish();
+            return;
+        }
         // Straight to the task, the same way a widget row opens one.
         Intent open = new Intent(this, MainActivity.class)
                 .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
