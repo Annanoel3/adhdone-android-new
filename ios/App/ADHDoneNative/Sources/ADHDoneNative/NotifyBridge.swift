@@ -33,7 +33,8 @@ public class NotifyBridge: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "openPlayStore", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "startAppUpdate", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getPlayerId", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "openUrl", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "openUrl", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openExternal", returnType: CAPPluginReturnPromise)
     ]
 
     /// ADHDone's OneSignal app (the same one the Android app uses).
@@ -137,6 +138,21 @@ public class NotifyBridge: CAPPlugin, CAPBridgedPlugin {
         DispatchQueue.main.async {
             UIApplication.shared.open(url)
             call.resolve()
+        }
+    }
+
+    /// Hands a link to another app: Apple Maps (openMapsApp.js) and Messages with the
+    /// text filled in (openSmsApp.js, sms:). Rejects when nothing opened it, so the
+    /// web falls back to its own way.
+    @objc func openExternal(_ call: CAPPluginCall) {
+        guard let link = call.getString("url"), let url = URL(string: link) else {
+            call.reject("url is required")
+            return
+        }
+        DispatchQueue.main.async {
+            UIApplication.shared.open(url, options: [:]) { opened in
+                if opened { call.resolve() } else { call.reject("Nothing on this phone opens that link") }
+            }
         }
     }
 
