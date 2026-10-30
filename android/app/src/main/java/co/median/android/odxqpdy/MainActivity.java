@@ -51,6 +51,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(AlarmBridge.class);
         registerPlugin(CalendarBridge.class);
         registerPlugin(RecorderBridge.class);
+        registerPlugin(BillingBridge.class); // recording-minute packs (RevenueCat)
         super.onCreate(savedInstanceState);
         setupInAppNavigation();
         // Cold start: the app may have been launched by a share or a quick-capture reply
