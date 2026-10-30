@@ -233,7 +233,7 @@ export const BUSINESS_HOURS_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 // Google gives the business's offset from UTC as it was on the day it was
 // looked up, and hours are kept up to 30 days. Across a clock change (Nov 1
-// and Mar 8 2026-27) that offset is an hour off, so a 5 PM close would read as
+// 2026, Mar 14 2027) that offset is an hour off, so a 5 PM close would read as
 // closed at 4. US places move their clocks on the same nights, so the change
 // since the lookup is measured on New York's clock; Arizona (outside the
 // Navajo Nation) and Hawaii don't change, and places outside the US keep the
