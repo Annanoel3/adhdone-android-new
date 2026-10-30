@@ -53,13 +53,24 @@ Phase 1 = in the first TestFlight build. Later phases follow in order.
 - Sign in with Apple must sit next to Google sign-in (App Store guideline 4.8),
   through Base44's built-in Apple sign-in, like GenCare. Done Oct 30 2026:
   `src/components/AppleSignIn.jsx` on Login and Register, iPhone app only. Needs
-  Apple switched on in Base44's authentication settings (off as of Oct 30).
+  Apple switched on in Base44's authentication settings (switched on Oct 30 2026,
+  Anna's yes).
 - Until alarms come (phase 2) reminders arrive as ordinary push notifications; the
   Alarms card and alarm popups stay hidden because they only show when the phone
   has AlarmBridge.
 - Links to other apps: NotifyBridge.openExternal (Apple Maps, Messages with the
   birthday text filled in), the same name the web already calls.
 - Ads: iOS ad unit ids once AdMob has the iOS app.
+
+## Set up so far (Oct 30 2026)
+
+- Apple Developer: identifier `com.mediocreatbest.adhdone` (Push Notifications on)
+  and the App Store profile "ADHDone App Store" (same distribution certificate as
+  GenCare). Codemagic has the profile under reference `adhdone_app_store`.
+- Codemagic: application adhdone-android-new added (reads codemagic.yaml).
+- GitHub: the compile check runs on every ios/ change; first runs BUILD SUCCEEDED.
+- The App Store name "ADHDone" belongs to another developer's app (first released
+  Feb 6 2024), so the store name needs a variant; the home-screen name stays ADHDone.
 
 ## What only Anna can do
 
