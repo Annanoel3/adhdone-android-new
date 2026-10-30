@@ -1,0 +1,72 @@
+# ADHDone iPhone build on Codemagic (https://codemagic.io): compiles the iOS app
+# on Apple hardware in the cloud, signs it with Anna's Apple Developer account and
+# uploads it to TestFlight. No Mac needed. Android builds stay on Anna's PC.
+#
+# One-time setup (IOS_PLAN.md, "What only Anna can do"):
+#   1. Codemagic: add the GitHub repo Annanoel3/adhdone-android-new as an application.
+#   2. The App Store Connect API key is already in Codemagic (Teams > Integrations),
+#      named "GenCare"; one key works for every app on the account.
+#   3. The application's Environment variables, group "adhdone":
+#        RC_APPLE_KEY            RevenueCat public iOS key (appl_...), secret
+#        ADHDONE_APP_STORE_ID    the numeric Apple ID of the app in App Store Connect (optional)
+#
+# Starting a build: the "Start new build" button, or a git tag that starts with
+# "ios-" (e.g. ios-1). Base44's own pushes to main never start a build.
+workflows:
+  ios-testflight:
+    name: ADHDone iPhone -> TestFlight
+    max_build_duration: 60
+    instance_type: mac_mini_m2   # the free plan only covers the M2 Mac
+    integrations:
+      app_store_connect: GenCare
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.mediocreatbest.adhdone
+      groups:
+        - adhdone
+      node: 22
+      xcode: latest
+      vars:
+        XCODE_PROJECT: ios/App/App.xcodeproj
+        XCODE_SCHEME: App
+    triggering:
+      events:
+        - tag
+      tag_patterns:
+        - pattern: 'ios-*'
+          include: true
+      cancel_previous_builds: true
+    scripts:
+      - name: Install web dependencies
+        script: npm ci --no-audit --no-fund
+      - name: Sync Capacitor (iOS)
+        script: |
+          mkdir -p dist
+          [ -f dist/index.html ] || echo '<!doctype html><title>ADHDone</title>' > dist/index.html
+          npx cap sync ios
+      - name: Put the secrets into Info.plist
+        script: |
+          plutil -replace RCAppleApiKey -string "${RC_APPLE_KEY:-}" ios/App/App/Info.plist
+          plutil -replace ADHDoneAppStoreId -string "${ADHDONE_APP_STORE_ID:-}" ios/App/App/Info.plist
+      - name: Build number
+        script: |
+          cd ios/App
+          agvtool new-version -all "$BUILD_NUMBER"
+      - name: Code signing
+        script: xcode-project use-profiles --project "$XCODE_PROJECT"
+      - name: Build the IPA
+        script: xcode-project build-ipa --project "$XCODE_PROJECT" --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+      email:
+        recipients:
+          - annanoelwenballew@gmail.com
+        notify:
+          success: true
+          failure: true
