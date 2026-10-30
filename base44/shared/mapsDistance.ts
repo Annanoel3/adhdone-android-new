@@ -177,6 +177,21 @@ export interface BusinessHours {
   checked_at: string;
 }
 
+// A match farther than this from home is not the person's business (Oct 30
+// 2026: "Optum" for someone in Texarkana, AR came back as an Optum office in
+// Coral Springs, FL, and "credit bureaus" as a credit-repair shop 100 miles
+// away). Google's text search only leans toward home; with no match nearby it
+// returns the best one anywhere. Those count as not found, so the planner is
+// never told a far-away office's hours as if they were theirs.
+export const BUSINESS_NEAR_HOME_KM = 80;
+
+function kmBetween(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const dLat = rad(bLat - aLat), dLng = rad(bLng - aLng);
+  const x = Math.sin(dLat / 2) ** 2 + Math.cos(rad(aLat)) * Math.cos(rad(bLat)) * Math.sin(dLng / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
 export async function lookupBusinessHours(name: string, homeOrigin = ''): Promise<BusinessHours | null> {
   const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY')?.trim();
   const query = String(name || '').trim();
@@ -189,6 +204,11 @@ export async function lookupBusinessHours(name: string, homeOrigin = ''): Promis
     const sj: any = await sr.json().catch(() => ({}));
     const first = sj?.results?.[0];
     if (!first?.place_id) return { name: query, not_found: true, checked_at };
+    const [hLat, hLng] = homeOrigin.split(',').map(Number);
+    const pLat = Number(first?.geometry?.location?.lat), pLng = Number(first?.geometry?.location?.lng);
+    if ([hLat, hLng, pLat, pLng].every(Number.isFinite) && kmBetween(hLat, hLng, pLat, pLng) > BUSINESS_NEAR_HOME_KM) {
+      return { name: query, not_found: true, checked_at };
+    }
     const details = new URLSearchParams({ place_id: first.place_id, fields: 'name,formatted_address,opening_hours,utc_offset', key: apiKey });
     const dr = await fetch(`https://maps.googleapis.com/maps/api/place/details/json?${details.toString()}`);
     const dj: any = await dr.json().catch(() => ({}));
@@ -211,11 +231,40 @@ export async function lookupBusinessHours(name: string, homeOrigin = ''): Promis
 // Hours older than this are looked up again (businesses change them).
 export const BUSINESS_HOURS_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
+// Google gives the business's offset from UTC as it was on the day it was
+// looked up, and hours are kept up to 30 days. Across a clock change (Nov 1
+// and Mar 8 2026-27) that offset is an hour off, so a 5 PM close would read as
+// closed at 4. US places move their clocks on the same nights, so the change
+// since the lookup is measured on New York's clock; Arizona (outside the
+// Navajo Nation) and Hawaii don't change, and places outside the US keep the
+// offset as looked up.
+function nyOffsetMinutes(ms: number): number {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/New_York', hourCycle: 'h23',
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  }).formatToParts(new Date(ms));
+  const v = (t: string) => Number(parts.find((p) => p.type === t)?.value);
+  const asUtc = Date.UTC(v('year'), v('month') - 1, v('day'), v('hour'), v('minute'), v('second'));
+  return Math.round((asUtc - Math.floor(ms / 1000) * 1000) / 60000);
+}
+
+function dstShiftSince(h: BusinessHours, nowMs: number): number {
+  const checkedMs = Date.parse(h.checked_at || '');
+  const address = String(h.address || '');
+  if (!Number.isFinite(checkedMs) || !/\bUSA$/.test(address.trim())) return 0;
+  if (/,\s*(AZ|HI)\s+\d{5}/.test(address)) return 0;
+  try {
+    return nyOffsetMinutes(nowMs) - nyOffsetMinutes(checkedMs);
+  } catch (e) {
+    return 0;
+  }
+}
+
 // One line for the planner: open or closed right now, today's hours, tomorrow's.
 export function businessHoursLine(h: BusinessHours | null | undefined, nowMs: number): string {
   if (!h || !h.name) return '';
   if (h.not_found || (!h.periods && !h.weekday_text)) return `${h.name}: a business; its hours could not be found`;
-  const offset = Number.isFinite(h.utc_offset as number) ? (h.utc_offset as number) : 0;
+  const offset = (Number.isFinite(h.utc_offset as number) ? (h.utc_offset as number) : 0) + dstShiftSince(h, nowMs);
   const local = new Date(nowMs + offset * 60 * 1000);
   const day = local.getUTCDay();
   const hhmm = local.getUTCHours() * 100 + local.getUTCMinutes();
