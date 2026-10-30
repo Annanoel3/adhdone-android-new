@@ -51,7 +51,14 @@ Phase 1 = in the first TestFlight build. Later phases follow in order.
 - Every Android-only setting, popup and App Guide line must not show on iPhone
   (`Capacitor.getPlatform()` checks; Anna, Oct 22 2026).
 - Sign in with Apple must sit next to Google sign-in (App Store guideline 4.8),
-  through Base44's built-in Apple sign-in, like GenCare.
+  through Base44's built-in Apple sign-in, like GenCare. Done Oct 30 2026:
+  `src/components/AppleSignIn.jsx` on Login and Register, iPhone app only. Needs
+  Apple switched on in Base44's authentication settings (off as of Oct 30).
+- Until alarms come (phase 2) reminders arrive as ordinary push notifications; the
+  Alarms card and alarm popups stay hidden because they only show when the phone
+  has AlarmBridge.
+- Links to other apps: NotifyBridge.openExternal (Apple Maps, Messages with the
+  birthday text filled in), the same name the web already calls.
 - Ads: iOS ad unit ids once AdMob has the iOS app.
 
 ## What only Anna can do
