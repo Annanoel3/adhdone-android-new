@@ -1937,7 +1937,12 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       const task = r.task_id ? taskById[r.task_id] : null;
       if (r.kind === 'smart_nudge' && task?.business_hours) {
         const line = businessHoursLine(task.business_hours, ms);
-        if (/CLOSED right now/.test(line)) closedNudges.push(`${r.user_email}: "${String(r.title || '').slice(0, 30)}" — ${line.slice(0, 70)}`);
+        // Where the matched place is (city, state), so a far-away match shows
+        // at a glance, and today's hours whole (Oct 30 2026: cut at 70
+        // characters, "7:00 PM" read "7:00 .").
+        const where = String(task.business_hours.address || '').split(',').slice(-3, -1).map((s: string) => s.trim()).join(', ');
+        const shortLine = line.split('; tomorrow')[0].replace(/^([^:]+):/, where ? `$1 (${where}):` : '$1:');
+        if (/CLOSED right now/.test(line)) closedNudges.push(`${r.user_email}: "${String(r.title || '').slice(0, 30)}" — ${shortLine}`);
       }
     }
     for (const [k, list] of Object.entries(byMinute)) {
