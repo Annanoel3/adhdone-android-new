@@ -188,12 +188,15 @@ async function syncGoal(goal, user, today) {
       return true;
     }
     if (t.status !== "completed") return changed;
+    // Checked off when the goal was marked done (no longer this step's): the
+    // goal was reopened, so the step gets a fresh task.
+    const closedOut = t.goal_step_id !== current.id;
     // A plain step's task finished: the step is marked done above or by
     // onTaskUpdate. A habit's copy finished without its next copy: wait two
     // minutes (the copy may be on its way), then make a fresh one.
-    if (!habit) return changed;
+    if (!habit && !closedOut) return changed;
     const doneMs = Date.parse(t.completed_at || t.updated_date || "");
-    if (Number.isFinite(doneMs) && Date.now() - doneMs < 2 * 60 * 1000) return changed;
+    if (!closedOut && Number.isFinite(doneMs) && Date.now() - doneMs < 2 * 60 * 1000) return changed;
     await base44.entities.GoalStep.update(current.id, { task_id: null });
     current.task_id = null;
   }
