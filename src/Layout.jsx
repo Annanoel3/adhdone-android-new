@@ -127,6 +127,7 @@ import IPhoneNotificationTidy from "./components/shared/IPhoneNotificationTidy";
 import { WinAskFromLink } from "./components/wins/WinBox";
 import WinsSlumpPopup from "./components/wins/WinsSlumpPopup";
 import NewInsightsPopup from "./components/shared/NewInsightsPopup";
+import RemindersHelpingPopup from "./components/shared/RemindersHelpingPopup";
 import {
   Dialog,
   DialogContent,
@@ -1386,6 +1387,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <WinAskFromLink theme={theme} specialMode={specialMode} />
         <WinsSlumpPopup user={user} theme={theme} specialMode={specialMode} />
         <NewInsightsPopup user={user} theme={theme} specialMode={specialMode} currentPageName={currentPageName} />
+        {/* "Are your reminders helping?" when the push itself was tapped (see RemindersHelpingPopup). */}
+        <RemindersHelpingPopup theme={theme} specialMode={specialMode} />
         <TaskCaptureProcessor userEmail={user?.email} />
         <AppDialogHost />
         <UsageTracker user={user} />
