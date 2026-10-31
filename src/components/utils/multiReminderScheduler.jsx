@@ -6,7 +6,7 @@
 
 import { scheduleReminder, resolveSendTime, cancelScheduledReminder, isInQuietHours, bookedIdsForTask } from './reminderScheduler';
 import { getReminderCopy } from './reminderCopy';
-import { commitNotificationIds } from './notificationOwnership';
+import { commitNotificationIds, noteTaskTimeChanged, taskTimeChangedSince } from './notificationOwnership';
 import { base44 } from '@/api/base44Client';
 
 // ── localStorage cache (24h TTL) ─────────────────────────────────────────────
@@ -186,6 +186,11 @@ export async function scheduleMultiReminders({
   reminderWish,
   timeStated,
 }) {
+  // A plan from a booking the person overtook by changing the time (a new
+  // task's first booking, still waiting on the push link) must not be saved
+  // over the plan for the time they picked.
+  const startedAt = Date.now();
+  const overtaken = () => !!taskId && taskTimeChangedSince(taskId, startedAt);
   try {
     // Every caller passes taskId, so the location is looked up here rather than
     // threaded through a dozen call sites — the backend needs it to turn the
@@ -269,7 +274,7 @@ export async function scheduleMultiReminders({
         notification_title: words.title,
         notification_body: words.body,
       };
-      base44.entities.Task.update(taskId, { reminder_schedule: [entry] }).catch(() => {});
+      if (!overtaken()) base44.entities.Task.update(taskId, { reminder_schedule: [entry] }).catch(() => {});
       return id ? [id] : [];
     }
     const reminders = await fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, taskLocation, reminderWish);
@@ -349,7 +354,7 @@ export async function scheduleMultiReminders({
         notification_title: r.notification_title,
         notification_body: r.notification_body,
       }));
-      base44.entities.Task.update(taskId, { reminder_schedule: structured }).catch(() => {});
+      if (!overtaken()) base44.entities.Task.update(taskId, { reminder_schedule: structured }).catch(() => {});
     } else {
       // Nothing could be booked (this phone isn't subscribed for pushes yet —
       // notifications were declined, or the link isn't there). The plan is
@@ -363,7 +368,7 @@ export async function scheduleMultiReminders({
         notification_title: r.notification_title,
         notification_body: r.notification_body,
       }));
-      base44.entities.Task.update(taskId, { reminder_schedule: planned }).catch(() => {});
+      if (!overtaken()) base44.entities.Task.update(taskId, { reminder_schedule: planned }).catch(() => {});
     }
 
     return notificationIds.length > 0 ? notificationIds : (clockDeadline ? [] : null);
@@ -384,6 +389,7 @@ export async function scheduleMultiReminders({
  * old day.) Returns the ids now booked.
  */
 export async function moveRemindersToDate(task, whenISO, updates = {}) {
+  noteTaskTimeChanged(task?.id);
   // Including any the server booked that this copy doesn't know about yet.
   const oldIds = await bookedIdsForTask(task);
   if (oldIds.length > 0) {
