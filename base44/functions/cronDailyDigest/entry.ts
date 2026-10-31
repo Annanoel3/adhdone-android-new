@@ -158,12 +158,14 @@ Deno.serve(async (req) => {
 
     console.log(`[DIGEST] Sent ${digestsSent.length} digest(s) at ${now.toISOString()}`);
 
-    // 5. The evening "What's one win from today?" (Anna, Oct 30 2026: the
-    // evening card AND a notification). Once a day, in the hour before their
-    // quiet hours start (9 PM with quiet hours off), a plain push that opens
-    // the win box (data.type 'win_ask', OneSignalInit). Not on someone's first
-    // day, not for anyone away a week or paused, not when they already saved
-    // a win today, and never stacked on another push (send ledger).
+    // 5. The evening check-in push (Anna, Oct 30 2026: the evening card AND a
+    // notification; Oct 31 2026: it asks "How did you feel today?" too). Once
+    // a day, in the hour before their quiet hours start (9 PM with quiet hours
+    // off), a plain push that opens the box with the mood faces and the win
+    // (data.type 'win_ask', OneSignalInit). Not on someone's first day, not
+    // for anyone away a week or paused, not when they already saved a win OR
+    // a mood today (they already checked in; don't nag), and never stacked on
+    // another push (send ledger).
     let winAsks = 0;
     try {
       winAsks = await sendEveningWinAsks(base44, allUsers, now);
@@ -194,8 +196,23 @@ function pausedForAway(user: any): boolean {
   return !(Number.isFinite(back) && back > paused);
 }
 
-const WIN_ASK_TITLE = "What's one win from today?";
-const WIN_ASK_BODY = 'Big or small, it counts. Tap to save it.';
+const WIN_ASK_TITLE = 'How did you feel today?';
+const WIN_ASK_BODY = 'Tap to check in and save one win, big or small.';
+
+// The day the evening card and the box stamp a win or a mood with
+// (winsStore.eveningWindow on the phone): their calendar day, except that an
+// evening window that runs past midnight (quiet hours starting after
+// midnight) belongs to the day it started on.
+function eveningDayKey(user: any, now: Date, timeZone: string): string {
+  const today = localDateKey(now, timeZone);
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(user?.quiet_hours_start || ''));
+  const end = m && Number(m[1]) <= 23 && Number(m[2]) <= 59 ? Number(m[1]) * 60 + Number(m[2]) : 22 * 60;
+  const start = end > 17 * 60 ? 17 * 60 : (end - 240 + 1440) % 1440;
+  if (start < end) return today;
+  if (localMinutesOfDay(now, timeZone) >= end) return today;
+  const [y, mo, d] = today.split('-').map(Number);
+  return new Date(Date.UTC(y, mo - 1, d - 1)).toISOString().slice(0, 10);
+}
 
 async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Promise<number> {
   const DAY = 24 * 60 * 60 * 1000;
@@ -222,15 +239,32 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Prom
     const dayKey = theirDayKeyFor(user, now, timeZone);
     if (user.win_ask_date === dayKey) continue;
 
-    // Already saved one today (their calendar day, as the app stamps it).
+    // Already checked in today: a win or a mood saved for today, as the app
+    // stamps it (their calendar day, or the evening it belongs to when their
+    // evening runs past midnight; both are checked).
     const localDay = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+    const days = [...new Set([localDay, eveningDayKey(user, now, timeZone)])];
     let haveOne = true;
     try {
-      const wins = await base44.asServiceRole.entities.Win.filter({ created_by: email, win_date: localDay }, '-created_date', 1);
-      haveOne = Array.isArray(wins) && wins.length > 0;
+      haveOne = false;
+      for (const day of days) {
+        const wins = await base44.asServiceRole.entities.Win.filter({ created_by: email, win_date: day }, '-created_date', 1);
+        if (Array.isArray(wins) && wins.length > 0) { haveOne = true; break; }
+      }
     } catch (e) {
       // Can't check (the Win table isn't there yet): don't ask.
       console.error(`[DIGEST] Win check failed for ${email}:`, (e as any)?.message || e);
+      continue;
+    }
+    if (haveOne) continue;
+    try {
+      for (const day of days) {
+        const moods = await base44.asServiceRole.entities.DayMood.filter({ created_by: email, day }, '-updated_date', 1);
+        if (Array.isArray(moods) && moods.length > 0) { haveOne = true; break; }
+      }
+    } catch (e) {
+      // Can't check the mood either: don't ask (same as the win check).
+      console.error(`[DIGEST] Mood check failed for ${email}:`, (e as any)?.message || e);
       continue;
     }
     if (haveOne) continue;
