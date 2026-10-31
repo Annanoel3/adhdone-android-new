@@ -1,0 +1,47 @@
+{
+  "name": "DayMood",
+  "type": "object",
+  "properties": {
+    "day": {
+      "type": "string",
+      "format": "date",
+      "description": "The person's own day this mood is about (YYYY-MM-DD), the same day key the evening card stamps a win with (winsStore.eveningWindow): their phone's date, except that an evening that runs past midnight belongs to the day it started on. One row per person per day: saving again that day updates this row."
+    },
+    "mood": {
+      "type": "number",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "How they felt that day, the answer to \"How did you feel today?\": 1 Rough, 2 Low, 3 Okay, 4 Good, 5 Great. About how they FELT, not how productive the day was."
+    },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "slept_badly",
+          "sick_or_hurting",
+          "stressed",
+          "lots_going_on",
+          "low_energy"
+        ]
+      },
+      "description": "Optional answers to \"Anything going on?\" (chips): slept_badly = Slept badly, sick_or_hurting = Sick or hurting, stressed = Stressed, lots_going_on = Lots going on, low_energy = Low energy."
+    },
+    "note": {
+      "type": "string",
+      "description": "Optional short note in their own words about the day. Never rewritten."
+    }
+  },
+  "required": [
+    "day",
+    "mood"
+  ],
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}
