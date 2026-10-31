@@ -241,7 +241,7 @@ final class ShareViewController: UIViewController {
                 }
                 let text = (body["text"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                 if text.isEmpty || (body["nothing_found"] as? Bool) == true {
-                    self.done("Couldn't find a task in that image", needsOK: true)
+                    self.done("Couldn't find a task in that image.", needsOK: true)
                     return
                 }
                 self.sendText(session, text: text)
