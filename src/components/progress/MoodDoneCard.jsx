@@ -70,40 +70,25 @@ function median(nums) {
   return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
 }
 
-async function loadMoodDone(days) {
-  const [user, moods, email] = await Promise.all([
-    base44.auth.me().catch(() => null),
-    listDayMoods(1000),
-    myEmail(),
-  ]);
-  const now = new Date();
+// The check-ins inside the window (the last `days` of their days, today
+// included), oldest first.
+export function moodsInRange(moods, user, days, now = new Date()) {
   const todayKey = dayOfMoment(user, now);
   const startKey = days == null ? "" : shiftKey(todayKey, -(days - 1));
-  const inRange = moods
+  const inRange = (moods || [])
     .filter((m) => m.day <= todayKey && (!startKey || m.day >= startKey))
     .sort((a, b) => a.day.localeCompare(b.day));
+  return { todayKey, inRange };
+}
 
-  const base = { total: moods.length, todayKey, days: [], rough: null, slower: null };
-  if (moods.length < MIN_CHECKINS || inRange.length === 0) return base;
-
-  // Finished tasks from a little before the first day in view (a day can
-  // start the evening before on the calendar).
-  const first = keyToDate(inRange[0].day);
-  const sinceIso = new Date(first.getFullYear(), first.getMonth(), first.getDate() - 2).toISOString();
-  let tasks;
-  try {
-    tasks = await base44.entities.Task.filter(
-      { created_by: email, status: "completed", completed_at: { $gte: sinceIso } }, "-completed_at", 2000
-    );
-  } catch (e) {
-    // The date filter refused: the newest 2000 finished, counted the same way.
-    console.warn("[Insights] Mood card: date filter refused, reading the newest finished tasks:", e);
-    tasks = await base44.entities.Task.filter({ created_by: email, status: "completed" }, "-completed_at", 2000);
-  }
-  tasks = tasks || [];
+// Everything the card shows, from the check-ins and the finished tasks.
+export function summarizeMoodDone(moods, tasks, user, days, now = new Date()) {
+  const { todayKey, inRange } = moodsInRange(moods, user, days, now);
+  const base = { total: (moods || []).length, todayKey, days: [], rough: null, slower: null };
+  if (base.total < MIN_CHECKINS || inRange.length === 0) return base;
 
   const byDay = new Map(inRange.map((m) => [m.day, { ...m, done: 0, titles: [] }]));
-  for (const t of tasks) {
+  for (const t of tasks || []) {
     if (!t?.completed_at || t.parent_task_id || t.birthday_person) continue;
     const day = dayOfMoment(user, t.completed_at);
     const entry = byDay.get(day);
@@ -137,6 +122,33 @@ async function loadMoodDone(days) {
   }
 
   return { ...base, days: list, rough, slower };
+}
+
+async function loadMoodDone(days) {
+  const [user, moods, email] = await Promise.all([
+    base44.auth.me().catch(() => null),
+    listDayMoods(1000),
+    myEmail(),
+  ]);
+  const now = new Date();
+  const { inRange } = moodsInRange(moods, user, days, now);
+  if (moods.length < MIN_CHECKINS || inRange.length === 0) return summarizeMoodDone(moods, [], user, days, now);
+
+  // Finished tasks from a little before the first day in view (a day can
+  // start the evening before on the calendar).
+  const first = keyToDate(inRange[0].day);
+  const sinceIso = new Date(first.getFullYear(), first.getMonth(), first.getDate() - 2).toISOString();
+  let tasks;
+  try {
+    tasks = await base44.entities.Task.filter(
+      { created_by: email, status: "completed", completed_at: { $gte: sinceIso } }, "-completed_at", 2000
+    );
+  } catch (e) {
+    // The date filter refused: the newest 2000 finished, counted the same way.
+    console.warn("[Insights] Mood card: date filter refused, reading the newest finished tasks:", e);
+    tasks = await base44.entities.Task.filter({ created_by: email, status: "completed" }, "-completed_at", 2000);
+  }
+  return summarizeMoodDone(moods, tasks || [], user, days, now);
 }
 
 export default function MoodDoneCard({ days = null, theme = "minimalist" }) {
