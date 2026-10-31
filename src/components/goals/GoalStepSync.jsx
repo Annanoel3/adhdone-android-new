@@ -80,8 +80,10 @@ async function makeTaskForStep(goal, step, steps, user, habit) {
   // Two phones (or tabs) that both got through: keep the first one made.
   const after = (await openGoalTasks(goal.id)).sort(byCreated);
   if (after.length > 1 && after[0].id !== task.id) {
-    await deleteLinkedTask(task);
+    // The step points at the kept one first, so removing this one isn't read
+    // as the person deleting their step's task (onTaskUpdate).
     await base44.entities.GoalStep.update(step.id, { task_id: after[0].id });
+    await deleteLinkedTask(task);
   }
   return true;
 }
@@ -151,8 +153,8 @@ async function syncGoal(goal, user, today) {
     if (!keep || extra.id === keep.id) continue;
     const itsStep = steps.find((s) => s.id === extra.goal_step_id) || null;
     if (untouched(extra, itsStep)) {
-      await deleteLinkedTask(extra);
       if (itsStep && itsStep.task_id === extra.id) await base44.entities.GoalStep.update(itsStep.id, { task_id: null });
+      await deleteLinkedTask(extra);
       changed = true;
     } else {
       console.warn(`[GoalStepSync] goal ${goal.id} has a second open task (${extra.id}) the person changed; left as is`);
