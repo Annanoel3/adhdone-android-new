@@ -123,7 +123,7 @@ export default function EveningWinCard({ user, theme, specialMode }) {
             }`} />
           </div>
           <div className="min-w-0">
-            <p className={`font-semibold ${dark ? "text-white" : "text-gray-900"}`}>What's one win from today?</p>
+            <p className={`font-semibold ${dark ? "text-white" : "text-gray-900"}`}>{"What's one win from today?"}</p>
             <p className={`text-sm ${dark ? "text-gray-400" : "text-gray-600"}`}>Big or small, it counts.</p>
           </div>
         </div>
