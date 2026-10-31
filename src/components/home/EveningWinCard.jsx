@@ -221,8 +221,9 @@ export default function EveningWinCard({ user, theme, specialMode }) {
             </form>
           </>
         ) : (
-          // The win is saved; only the mood is left. Mid-answer, Done closes it.
-          !need.mood && !moodEditing && <div>{notTodayButton}</div>
+          // The win is saved; only the mood is left. Once a face is saved,
+          // Done closes it instead.
+          !need.mood && <div>{notTodayButton}</div>
         )}
       </CardContent>
     </Card>
