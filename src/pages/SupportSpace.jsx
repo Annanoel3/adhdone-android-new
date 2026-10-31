@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { MessageCircleHeart, Send, Loader2, Info, Mic } from "lucide-react"; // Added Mic icon
 import { APP_FEATURE_GUIDE } from "@/components/utils/appFeatureGuide";
-import { isIPhoneApp } from "@/lib/phonePlatform";
+import { isIPhoneApp, onThisPhone } from "@/lib/phonePlatform";
 import SupportEscalationCard from "@/components/support/SupportEscalationCard";
 
 export default function SupportSpace() {
