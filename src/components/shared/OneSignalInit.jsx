@@ -65,6 +65,13 @@ function handleNotificationData(data, navigate) {
     if (navigate) navigate(target); else window.location.href = target;
     return;
   }
+  // The evening "what's one win from today?" push opens the win box on Home
+  // (WinAskFromLink in the Layout reads win=1).
+  if (data.type === 'win_ask') {
+    const target = '/Home?win=1';
+    if (navigate) navigate(target); else window.location.href = target;
+    return;
+  }
   const taskId = data.taskId || data.task_id;
   if (!taskId) return;
 
