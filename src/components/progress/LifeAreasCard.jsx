@@ -38,6 +38,11 @@ const AREA_KEYS = Object.keys(AREAS);
 const DAY_MS = 24 * 60 * 60 * 1000;
 const SORT_MAX_DAYS = 90; // the most sortLifeAreas looks back
 const MIN_ITEMS = 3;
+// Bubble labels: under 6% (or too small to read) shows only its icon, and its
+// name and % go in the line under the bubbles instead.
+const SMALL_SHARE = 0.06;
+const NAME_MIN_PX = 70;
+const PCT_MIN_PX = 44;
 const FIELDS = ["id", "status", "completed_at", "classification", "event_time", "birthday_person", "next_reminder", "due_date", "life_category"];
 
 const ms = (iso) => {
@@ -183,7 +188,9 @@ function layoutBubbles(byArea, width) {
   const maxX = Math.max(...placed.map((p) => p.x + p.r));
   const minY = Math.min(...placed.map((p) => p.y - p.r));
   const maxY = Math.max(...placed.map((p) => p.y + p.r));
-  const s = Math.min(width / (maxX - minX), maxH / (maxY - minY));
+  // The biggest bubble tops out around 210px, so one or two areas don't fill
+  // the whole card.
+  const s = Math.min(width / (maxX - minX), maxH / (maxY - minY), 1.05);
   const offX = (width - (maxX - minX) * s) / 2;
   const bubbles = items.map((it, i) => {
     const p = placed[i];
@@ -274,7 +281,7 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
   const areaCount = layout.bubbles.length;
   const muted = dark ? "text-gray-300" : "text-gray-600";
   const neutral = dark ? "bg-white/10 border border-white/10" : "bg-gray-100 border border-gray-200";
-  const unnamed = layout.bubbles.filter((b) => b.share < 0.06 || b.size < 84);
+  const unnamed = layout.bubbles.filter((b) => b.share < SMALL_SHARE || b.size < NAME_MIN_PX);
 
   return (
     <Card className="border-none shadow-lg">
@@ -308,8 +315,8 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
               {layout.bubbles.map((b, i) => {
                 const { label, Icon } = AREAS[b.key];
                 const biggest = i === 0;
-                const showName = b.share >= 0.06 && b.size >= 84;
-                const showPct = b.share >= 0.06 && b.size >= 44;
+                const showName = b.share >= SMALL_SHARE && b.size >= NAME_MIN_PX;
+                const showPct = b.share >= SMALL_SHARE && b.size >= PCT_MIN_PX;
                 const iconPx = clamp(b.size * (showName ? 0.2 : showPct ? 0.3 : 0.45), 12, 28);
                 return (
                   <div
@@ -330,7 +337,7 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
                     {showName && (
                       <span
                         className={`font-medium leading-tight mt-0.5 px-1 ${biggest ? "text-white" : dark ? "text-gray-200" : "text-gray-700"}`}
-                        style={{ fontSize: clamp(b.size * 0.11, 10, 14), maxWidth: b.size * 0.8 }}
+                        style={{ fontSize: clamp(b.size * 0.12, 10, 14), maxWidth: b.size * 0.8 }}
                       >
                         {label}
                       </span>
