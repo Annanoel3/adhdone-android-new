@@ -113,14 +113,18 @@ async function writeDayMood(day, fields) {
 
 // Saves for one day go one after another, each sending the whole answer as it
 // stands (face, chips, note), so quick taps land in order and the last one
-// wins. Each save looks the row up first, so a save that timed out but did
-// land is updated next time instead of written twice.
+// wins. Each save looks the row up first, so a save that was slow but did
+// land is updated next time instead of written twice. The person hears
+// "couldn't save" after 20 seconds; the next save still waits for the slow
+// one to finish (up to a minute) so the two can't both create the day's row.
 const queues = new Map();
+const QUEUE_WAIT_MS = 60000;
 export function saveDayMood(day, fields) {
   if (!day) return Promise.reject(new Error("No day"));
   const before = queues.get(day) || Promise.resolve();
-  const run = before.catch(() => {}).then(() => withTimeout(writeDayMood(day, fields)));
-  queues.set(day, run);
-  run.finally(() => { if (queues.get(day) === run) queues.delete(day); }).catch(() => {});
-  return run;
+  const write = before.then(() => writeDayMood(day, fields));
+  const link = Promise.race([write, new Promise((resolve) => setTimeout(resolve, QUEUE_WAIT_MS))]).catch(() => {});
+  queues.set(day, link);
+  link.then(() => { if (queues.get(day) === link) queues.delete(day); });
+  return withTimeout(write);
 }
