@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, Search, Mail, MessageCircle, Info, ArrowLeft } from "lucide-react";
+import { Users, Search, Mail, Info, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import {
@@ -14,8 +14,12 @@ import { base44 } from "@/api/base44Client";
 import AccountabilityPartners from "../components/accountability/AccountabilityPartners";
 import FindPartners from "../components/accountability/FindPartners";
 import ConnectionRequests from "../components/accountability/ConnectionRequests";
-import PartnerMoodFeed from "../components/accountability/PartnerMoodFeed";
-import MoodCheckInCard from "../components/accountability/MoodCheckInCard";
+
+// The Feed tab (the partner mood check-in card and partners' mood feed) came
+// off Oct 31 2026: no one ever saved a check-in there (Anna: a waste of
+// space). The evening "How did you feel today?" (DayMood) is private and is
+// never shown to partners. The MoodCheckIn table and its rows are left alone.
+const TABS = ["partners", "find", "requests"];
 
 export default function Accountability() {
   const navigate = useNavigate();
@@ -31,7 +35,7 @@ export default function Accountability() {
 
     const urlParams = new URLSearchParams(window.location.search);
     const tab = urlParams.get('tab');
-    if (tab) {
+    if (tab && TABS.includes(tab)) {
       setActiveTab(tab);
     }
 
@@ -164,7 +168,7 @@ export default function Accountability() {
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           {/* Modified TabsList className to keep existing styles but also include dark theme specific background from prompt */}
-          <TabsList className={`grid w-full grid-cols-4 mb-6 ${
+          <TabsList className={`grid w-full grid-cols-3 mb-6 ${
             specialMode !== 'normal' ? `bg-white/70 backdrop-blur-sm border` :
             theme === 'minimalist'
               ? 'bg-white/70 backdrop-blur-sm border border-gray-200'
@@ -196,12 +200,6 @@ export default function Accountability() {
                 )}
               </div>
             </TabsTrigger>
-            <TabsTrigger value="feed" className={theme === 'dark' ? 'data-[state=active]:bg-gray-700' : ''}>
-              <div className="flex items-center gap-2">
-                <MessageCircle className="w-4 h-4" />
-                <span className="hidden sm:inline">Feed</span>
-              </div>
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="partners">
@@ -214,13 +212,6 @@ export default function Accountability() {
 
           <TabsContent value="requests">
             <ConnectionRequests theme={theme} user={user} onUpdate={handleUpdate} />
-          </TabsContent>
-
-          <TabsContent value="feed">
-            <div className="space-y-6">
-              <MoodCheckInCard theme={theme} user={user} />
-              <PartnerMoodFeed theme={theme} user={user} />
-            </div>
           </TabsContent>
         </Tabs>
       </div>
