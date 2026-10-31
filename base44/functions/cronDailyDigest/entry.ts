@@ -263,7 +263,7 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Prom
         if (Array.isArray(moods) && moods.length > 0) { haveOne = true; break; }
       }
     } catch (e) {
-      // Can't check the mood either: don't ask (same as the win check).
+      // Can't check the mood: don't ask (same as the win check).
       console.error(`[DIGEST] Mood check failed for ${email}:`, (e as any)?.message || e);
       continue;
     }
