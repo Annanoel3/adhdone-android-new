@@ -1,0 +1,140 @@
+{
+  "name": "Goal",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "The goal title, e.g. 'Learn Spanish'"
+    },
+    "description": {
+      "type": "string",
+      "description": "Full goal description and context from the user"
+    },
+    "plan_summary": {
+      "type": "string",
+      "description": "The AI-generated plan summary text"
+    },
+    "timeline": {
+      "type": "string",
+      "description": "Timeline description, e.g. '5 months', '1 year'"
+    },
+    "start_date": {
+      "type": "string",
+      "format": "date",
+      "description": "The user's chosen start date for the plan (YYYY-MM-DD). No step goes on their task list before this day (src/components/goals/goalLogic.js)."
+    },
+    "target_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Target completion date"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "completed",
+        "paused"
+      ],
+      "default": "active",
+      "description": "active = its current step is on their task list; paused = that task is on the Back Burner (silenced) until the goal resumes; completed = no open step task."
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "learning",
+        "health",
+        "career",
+        "finance",
+        "relationships",
+        "personal",
+        "creative",
+        "other"
+      ],
+      "default": "personal",
+      "description": "Goal category"
+    },
+    "preferred_time": {
+      "type": "string",
+      "description": "For a daily-action goal: the time of day (HH:MM, 24h) the person said they want to do it, in the planner. Their habit becomes one repeating task at this time (a time they set). Empty = no set time: the repeating task has no time and Smart Reminders handles it."
+    },
+    "requires_daily_action": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this goal is a daily habit (AI-determined during plan creation). A habit goal has ONE repeating task for its current step."
+    },
+    "weekdays_only": {
+      "type": "boolean",
+      "default": false,
+      "description": "If true, the daily habit repeats on weekdays (Mon-Fri) only"
+    },
+    "include_weekend_reminders": {
+      "type": "boolean",
+      "default": true,
+      "description": "Kept name from the Goals app. For a daily habit: false = the person said weekdays only / not on weekends, so the habit's repeating task skips weekends."
+    },
+    "habit_days_of_week": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 6
+      },
+      "description": "Specific days for the habit (0=Sun, 1=Mon, ... 6=Sat). If empty, follows weekdays_only / include_weekend_reminders.",
+      "default": []
+    },
+    "notes": {
+      "type": "string",
+      "description": "Personal notes about this goal"
+    },
+    "pictures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Array of image URLs attached to this goal",
+      "default": []
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the goal was marked done"
+    },
+    "paused_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the goal was paused (cleared on resume)"
+    },
+    "paused_task_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "The goal's open task(s) that pausing put on the Back Burner. Resuming takes exactly these off it again, so a task the person parked by hand stays parked."
+    },
+    "conversation_history": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "The planning conversation history",
+      "default": []
+    },
+    "month_titles": {
+      "type": "object",
+      "description": "Map of month numbers to their descriptive titles (e.g. {1: 'Book Title', 2: 'Next Book Title'} for reading goals)",
+      "default": {}
+    }
+  },
+  "required": [
+    "title"
+  ],
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}
