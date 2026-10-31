@@ -34,6 +34,7 @@ import {
   BookLock,
   MapPin,
   BellOff,
+  Target,
 } from "lucide-react";
 import {
   Sidebar,
@@ -88,6 +89,8 @@ import { seedTaskSortFromProfile } from "@/hooks/useTaskSort";
 import useNewBadges from "@/hooks/useNewBadges";
 import HomeSecretLink from "./components/home/HomeSecretLink";
 import TaskCaptureProcessor from "./components/shared/TaskCaptureProcessor";
+import GoalStepSync from "./components/goals/GoalStepSync";
+import { goalsEnabled } from "./components/goals/goalsAccess";
 import { AppDialogHost } from "@/components/ui/alert-dialog";
 import UsageTracker from "./components/shared/UsageTracker";
 import { base44 } from "@/api/base44Client";
@@ -754,6 +757,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           url: createPageUrl("Places"),
           icon: MapPin,
         },
+        // Goals (GOALS_PORT.md): only for the accounts goalsAccess.js lets in.
+        ...(goalsEnabled(user) ? [{ title: "Goals", url: createPageUrl("Goals"), icon: Target }] : []),
       ],
     },
     {
@@ -1334,7 +1339,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               <WebAddressFooter theme={theme} seasonal={isSeasonalTheme()} currentPageName={currentPageName} />
             </div>
 
-            {currentPageName !== "Home" && currentPageName !== "ParkingLot" && currentPageName !== "SupportSpace" && currentPageName !== "AddTask" && currentPageName !== "Tasks" && currentPageName !== "Diary" && currentPageName !== "Notes" && (
+            {currentPageName !== "Home" && currentPageName !== "ParkingLot" && currentPageName !== "SupportSpace" && currentPageName !== "AddTask" && currentPageName !== "Tasks" && currentPageName !== "Diary" && currentPageName !== "Notes" && currentPageName !== "Planner" && (
               <Button
                 onClick={() => {
                   const event = new CustomEvent('open-voice-assistant');
@@ -1398,6 +1403,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         {/* "Are your reminders helping?" when the push itself was tapped (see RemindersHelpingPopup). */}
         <RemindersHelpingPopup theme={theme} specialMode={specialMode} />
         <TaskCaptureProcessor userEmail={user?.email} />
+        {/* Keeps each active goal's current step on the task list (GOALS_PORT.md). */}
+        <GoalStepSync user={user} />
         <AppDialogHost />
         <UsageTracker user={user} />
         <WelcomeDialog user={user} />
