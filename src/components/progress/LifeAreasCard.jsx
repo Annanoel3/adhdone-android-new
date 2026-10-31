@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { base44 } from "@/api/base44Client";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { winLook } from "@/components/wins/winsTheme";
 import {
   Briefcase,
   Home,
@@ -159,6 +161,19 @@ function layoutBubbles(byArea, width) {
   return { bubbles, height: (maxY - minY) * s };
 }
 
+// "Today", "Yesterday", "Tuesday" (this week), "Oct 27", "Oct 27, 2025".
+function whenLabel(iso) {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const day = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((day(new Date()) - day(d)) / 86400000);
+  if (diff <= 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  if (diff < 7) return d.toLocaleDateString("en-US", { weekday: "long" });
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString("en-US", sameYear ? { month: "short", day: "numeric" } : { month: "short", day: "numeric", year: "numeric" });
+}
+
 function titleFor(days, n) {
   const what = `${n} ${n === 1 ? "area" : "areas"} of life`;
   if (days == null) return `So far, your time went to ${what}`;
@@ -172,7 +187,10 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
   const [answer, setAnswer] = useState({ key: null, data: null, error: false });
   const boxRef = useRef(null);
   const [width, setWidth] = useState(300);
+  // The area whose newest tasks are open (tapping a bubble), or null.
+  const [openArea, setOpenArea] = useState(null);
   const dark = theme === "dark";
+  const look = winLook(theme);
   const key = windowKey(days);
 
   useEffect(() => {
@@ -255,12 +273,14 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
                 const showPct = b.share >= SMALL_SHARE && b.size >= PCT_MIN_PX;
                 const iconPx = clamp(b.size * (showName ? 0.2 : showPct ? 0.3 : 0.45), 12, 28);
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={b.key}
                     role="listitem"
-                    aria-label={`${label}, ${b.pctLabel}`}
+                    onClick={() => setOpenArea(b.key)}
+                    aria-label={`${label}, ${b.pctLabel}. Show recent tasks`}
                     title={`${label} ${b.pctLabel}`}
-                    className={`absolute rounded-full flex flex-col items-center justify-center text-center overflow-hidden transition-all duration-500 motion-reduce:transition-none ${
+                    className={`absolute rounded-full flex flex-col items-center justify-center text-center overflow-hidden transition-all duration-500 motion-reduce:transition-none cursor-pointer active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-purple-400 ${
                       biggest ? "bg-purple-600 text-white shadow-md" : neutral
                     }`}
                     style={{ left: b.left, top: b.top, width: b.size, height: b.size }}
@@ -286,7 +306,7 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
                         {b.pctLabel}
                       </span>
                     )}
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -298,10 +318,15 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
             {unnamed.map((b) => {
               const { label, Icon } = AREAS[b.key];
               return (
-                <span key={b.key} className="inline-flex items-center gap-1">
+                <button
+                  type="button"
+                  key={b.key}
+                  onClick={() => setOpenArea(b.key)}
+                  className="inline-flex items-center gap-1 underline-offset-2 hover:underline"
+                >
                   <Icon className="w-3 h-3" aria-hidden="true" />
                   {label} {b.pctLabel}
-                </span>
+                </button>
               );
             })}
           </div>
@@ -310,7 +335,52 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
         {showBubbles && data.remaining > 0 && (
           <p className={`text-xs ${muted}`}>Sorted {data.total} of {happened} so far.</p>
         )}
+        {showBubbles && (
+          <p className={`text-xs ${muted}`}>Tap a bubble to see what went there.</p>
+        )}
       </CardContent>
+
+      <AreaRecentDialog
+        area={openArea}
+        data={data}
+        look={look}
+        onClose={() => setOpenArea(null)}
+      />
     </Card>
+  );
+}
+
+// The newest tasks in one area, opened by tapping its bubble.
+function AreaRecentDialog({ area, data, look, onClose }) {
+  const info = area ? AREAS[area] : null;
+  const count = area && data?.counts ? data.counts[area] || 0 : 0;
+  const items = area && data?.recent && Array.isArray(data.recent[area]) ? data.recent[area] : [];
+  const Icon = info?.Icon;
+  return (
+    <Dialog open={!!area} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className={`max-w-sm w-[calc(100vw-2rem)] ${look.surface}`}>
+        <DialogHeader className="text-left">
+          <DialogTitle className="flex items-center gap-2">
+            {Icon && <Icon className="w-5 h-5" aria-hidden="true" />}
+            {info?.label}
+          </DialogTitle>
+          <DialogDescription className={look.muted}>
+            {count} {count === 1 ? "thing" : "things"} in this window{items.length ? ". The most recent:" : "."}
+          </DialogDescription>
+        </DialogHeader>
+        {items.length > 0 ? (
+          <ul className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
+            {items.map((it, i) => (
+              <li key={`${it.at}-${i}`} className="flex items-baseline justify-between gap-3">
+                <span className="text-sm font-medium break-words min-w-0">{it.title}</span>
+                <span className={`text-xs flex-shrink-0 ${look.muted}`}>{whenLabel(it.at)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className={`text-sm ${look.muted}`}>Nothing to show here yet.</p>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
