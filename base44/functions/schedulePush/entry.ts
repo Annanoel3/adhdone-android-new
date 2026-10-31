@@ -201,6 +201,13 @@ Deno.serve(async (req) => {
             }
         }
 
+        // No alarms on iPhone yet (reminderTitle.phoneCanRing): a push asking
+        // to ring is shown as a normal one there anyway, and the short life a
+        // ring-now push gets below would only lose it on a phone that's off.
+        if (owner?.app_platform === 'ios' && data && data.alarm === true) {
+            delete data.alarm;
+        }
+
         const notificationPayload = {
             app_id: appId,
             include_external_user_ids: [String(toUserExternalId)],
