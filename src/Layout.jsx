@@ -126,6 +126,7 @@ import { ChevronLeft as IPhoneBackIcon } from "lucide-react";
 import IPhoneNotificationTidy from "./components/shared/IPhoneNotificationTidy";
 import { WinAskFromLink } from "./components/wins/WinBox";
 import WinsSlumpPopup from "./components/wins/WinsSlumpPopup";
+import NewInsightsPopup from "./components/shared/NewInsightsPopup";
 import {
   Dialog,
   DialogContent,
@@ -1384,6 +1385,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
             once-a-week "Rough week?" nudge to the wins list. */}
         <WinAskFromLink theme={theme} specialMode={specialMode} />
         <WinsSlumpPopup user={user} theme={theme} specialMode={specialMode} />
+        <NewInsightsPopup user={user} theme={theme} specialMode={specialMode} currentPageName={currentPageName} />
         <TaskCaptureProcessor userEmail={user?.email} />
         <AppDialogHost />
         <UsageTracker user={user} />
