@@ -75,11 +75,16 @@ final class ShareViewController: UIViewController {
         statusLabel.text = text
         spinner.startAnimating()
         button.isHidden = true
+        // Can't be swiped away while it's saving: a picture closed halfway
+        // through "Reading image…" would be lost (only text is kept to send
+        // later).
+        isModalInPresentation = true
     }
 
     /// The end: a line, then the sheet closes by itself (or with OK when the
     /// person should read it).
     private func done(_ text: String, needsOK: Bool = false) {
+        isModalInPresentation = false
         spinner.stopAnimating()
         statusLabel.text = text
         if needsOK {
