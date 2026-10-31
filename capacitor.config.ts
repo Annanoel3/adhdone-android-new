@@ -6,6 +6,10 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     url: 'https://adhdone.space',
+    // The page the iPhone app shows when adhdone.space can't load (no signal):
+    // public/offline.html, copied into the app by the Codemagic build. Android
+    // shows its own page (MainActivity) and doesn't use this.
+    errorPath: 'offline.html',
     cleartext: false,
     androidScheme: 'https',
     allowNavigation: [

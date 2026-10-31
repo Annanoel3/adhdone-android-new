@@ -50,6 +50,7 @@ workflows:
         script: |
           mkdir -p dist
           [ -f dist/index.html ] || echo '<!doctype html><title>ADHDone</title>' > dist/index.html
+          cp public/offline.html dist/offline.html
           npx cap sync ios
       - name: Put the secrets into Info.plist
         script: |
