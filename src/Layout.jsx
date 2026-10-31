@@ -771,11 +771,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           url: createPageUrl("Progress"),
           icon: TrendingUp,
         },
-        {
-          title: "Diary",
-          url: createPageUrl("Diary"),
-          icon: BookLock,
-        },
+        // Diary came out of the menu Oct 31 2026 (Anna: "I am kind of thinking
+        // we get rid of diary"): 3 entries ever, all from her own accounts. The
+        // page and its entries are kept; /Diary still opens it.
       ],
     },
   ];
