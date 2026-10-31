@@ -737,11 +737,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
           icon: Lightbulb,
           dot: newDots.ParkingLot,
         },
-        // Recording notes needs the phone's recorder (app build 36+), so the
-        // menu only offers it where it works.
-        ...(canRecordNotes
-          ? [{ title: "Record Notes", url: createPageUrl("Notes"), icon: Mic, dot: notesDot }]
-          : []),
+        // Everywhere (Anna, Oct 31 2026): recording needs the phone's recorder,
+        // but the website still opens the recordings and their notes.
+        { title: "Record Notes", url: createPageUrl("Notes"), icon: Mic, dot: notesDot },
         {
           title: "Decision Maker",
           url: createPageUrl("DecisionMaker"),

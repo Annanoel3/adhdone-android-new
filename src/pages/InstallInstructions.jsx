@@ -1074,20 +1074,14 @@ export default function NotesPage() {
 
   const pagePad = { paddingBottom: "max(8rem, calc(8rem + env(safe-area-inset-bottom)))" };
 
-  if (!supported) {
-    return (
-      <div className="p-4 md:p-8 w-full" style={pagePad}>
-        <div className="max-w-2xl mx-auto space-y-4">
-          <h1 className={`text-3xl font-bold ${heading}`}>Notes</h1>
-          <div className={card}>
-            <p className={soft}>
-              Recording works in the ADHDone phone app. Update it from the Play Store if you have it.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Without the phone's recorder (the website, Anna Oct 31 2026: "on desktop,
+  // it's not there"), the page still lists the recordings and opens their
+  // notes, transcript, search and Ask; only recording itself needs the app.
+  const phoneOnly = (
+    <p className={`text-sm ${soft}`}>
+      Recording works in the ADHDone app on your phone. Your recordings and their notes show up here.
+    </p>
+  );
 
   // ── One recording's notes and transcript ──
   if (open) {
@@ -1507,10 +1501,12 @@ export default function NotesPage() {
               </Button>
             </form>
           </div>
+          {supported ? (
           <Button onClick={() => startRecording({ task: prepTask })} disabled={busy || !!progress} className="w-full h-14 rounded-2xl text-base bg-red-600 hover:bg-red-700 text-white">
             {busy ? <Loader2 className="w-5 h-5 mr-2 animate-spin" /> : <Mic className="w-5 h-5 mr-2" />}
             Start recording
           </Button>
+          ) : phoneOnly}
           <p className={`text-xs ${soft}`}>
             {usageLine(usage)} Afterward, this page has
             your notes and the full transcript.
@@ -1535,6 +1531,7 @@ export default function NotesPage() {
           <p className={soft}>Record a meeting, appointment or class. ADHDone writes short, clear notes: to-dos first, then the details you'll need.</p>
         </div>
 
+        {!supported ? <div className={card}>{phoneOnly}</div> : (
         <div className={`${card} space-y-3`}>
           <input
             value={title}
@@ -1554,6 +1551,7 @@ export default function NotesPage() {
           </p>
           <ConsentNote soft={soft} />
         </div>
+        )}
 
         {upcomingCards.length > 0 && (
           <div className="space-y-2">

@@ -18,7 +18,16 @@ export default function useNewBadges(currentPageName, enabled) {
 
   const check = useCallback(async () => {
     if (!enabled) return;
-    const ideas = await base44.entities.ParkingLotIdea.count({ created_date: { $gt: seenAt("ParkingLot") } }).catch(() => 0);
+    // Only ideas that stay in the Parking Lot. Every capture is saved here
+    // first and turned into tasks a few seconds later (converted_to_task), so
+    // counting those lit the dot with nothing new to see (Anna, Oct 31 2026).
+    // The last 20 seconds wait for the next check, so a capture still being
+    // sorted doesn't flash it either.
+    const settled = new Date(Date.now() - 20000).toISOString();
+    const ideas = await base44.entities.ParkingLotIdea.count({
+      created_date: { $gt: seenAt("ParkingLot"), $lt: settled },
+      converted_to_task: false,
+    }).catch(() => 0);
     const page = await base44.entities.Task.filter(
       { classification: "event", status: "active", created_date: { $gt: seenAt("Notes") } },
       { limit: 50, fields: ["reminder_schedule", "prep_questions"] }
@@ -38,11 +47,14 @@ export default function useNewBadges(currentPageName, enabled) {
 
   useEffect(() => {
     const later = () => setTimeout(check, 8000); // reminder plan lands a moment after creation
+    const settle = () => setTimeout(check, 25000); // past the 20-second wait above
     window.addEventListener("parking-lot-changed", check);
+    window.addEventListener("parking-lot-changed", settle);
     window.addEventListener("task-created", later);
     const every = setInterval(check, 60000);
     return () => {
       window.removeEventListener("parking-lot-changed", check);
+      window.removeEventListener("parking-lot-changed", settle);
       window.removeEventListener("task-created", later);
       clearInterval(every);
     };

@@ -20,7 +20,9 @@ import { base44 } from "@/api/base44Client";
 export const HOME_SHORTCUTS = [
   { key: "timer", title: "Timer", icon: Timer, builtin: true },
   { key: "focus", title: "Focus Mode", icon: Target, event: "open-focus-prompt" },
-  { key: "notes", title: "Record Notes", icon: Mic, page: "Notes", needsRecorder: true },
+  // On every device (Anna, Oct 31 2026): without the recorder (the website)
+  // the page still opens the recordings and their notes.
+  { key: "notes", title: "Record Notes", icon: Mic, page: "Notes" },
   { key: "tasks", title: "My Tasks", icon: ListTodo, page: "Tasks" },
   { key: "calendar", title: "Calendar", icon: CalendarDays, page: "Calendar" },
   { key: "birthdays", title: "Birthdays", icon: Cake, page: "Birthdays" },
