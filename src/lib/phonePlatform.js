@@ -62,18 +62,32 @@ const NOT_ON_IPHONE = {
   // Waiting on Haris: the spoken alarm ("Read it to me"). Hidden until he
   // confirms AlarmKit can ring a spoken sound file the app makes ahead of time.
   spokenAlarm: true,
-  // Waiting on Haris: sharing text or a screenshot into ADHDone (a share
-  // extension) and the home-screen widget. The App Guide only offers them once
-  // the iPhone app has them; set to false then.
-  shareToApp: true,
+  // Waiting on Haris: the home-screen widget. The App Guide only offers it
+  // once the iPhone app has it; set to false then.
   homeWidget: true,
   // OGG alarm-sound uploads: iPhone can't play or decode OGG (Haris, Oct 23
   // 2026), so the picker there offers MP3, WAV and M4A only.
   oggUploads: true,
 };
 
+// On iPhone only from the build that has them. The iPhone app says so itself
+// (ADHDoneViewController sets window.ADHDoneIPhone), so someone still on an
+// older iPhone build doesn't get told about something their app can't do.
+//   shareToApp: "ADHDone" in the share sheet (the share extension, Oct 31 2026).
+const IPHONE_BUILD_HAS = {
+  shareToApp: 'shareExtension',
+};
+
 export function onThisPhone(feature) {
-  return !(isIPhoneApp() && NOT_ON_IPHONE[feature]);
+  if (!isIPhoneApp()) return true;
+  if (IPHONE_BUILD_HAS[feature]) {
+    try {
+      return window.ADHDoneIPhone?.[IPHONE_BUILD_HAS[feature]] === true;
+    } catch (e) {
+      return false;
+    }
+  }
+  return !NOT_ON_IPHONE[feature];
 }
 
 // Waiting on Haris: does the iPhone app space close alarms 10 minutes apart the
