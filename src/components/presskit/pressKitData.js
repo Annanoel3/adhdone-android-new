@@ -61,7 +61,7 @@ export const FEATURE_GROUPS = [
     group: "Making it feel good",
     items: [
       { name: "Insights", what: "When you get things done, what keeps getting pushed, what actually sticks. Never a guilt trip." },
-      { name: "Diary", what: "A private, sealed daily entry with photos and draggable stickers. Never read by AI, never shared." },
+      { name: "Wins and mood", what: "Save one win a day and how you felt, then see your rough days you still got things done on. Private to you." },
       { name: "Talk It Out", what: "An AI chat that knows the app and knows executive function. For when you're stuck before you're started." },
       { name: "Themes & seasonal modes", what: "Four core themes plus a dozen date-driven seasonal skins that rotate through the year." },
       { name: "Hidden easter eggs", what: "Small rewards for genuinely ADHD behaviour — the 10-item Parking Lot, the task pushed one too many times. Never a punishment." },
@@ -129,7 +129,7 @@ export const FACTS = [
   { k: "Account", v: "Email/password or Google sign-in." },
   { k: "AI", v: "Used for parsing tasks, wording reminders, drafting texts, and breaking tasks into steps." },
   { k: "Calendar", v: "Google Calendar sync is optional and read-only. The app never writes to a calendar." },
-  { k: "Privacy", v: "Diary entries are sealed and never read by AI. Diary photos are stored privately, not on public URLs." },
+  { k: "Privacy", v: "Wins and mood check-ins are visible only to you, never to accountability partners." },
   { k: "Maker", v: "Mediocre at Best Dev — a one-person studio." },
   { k: "Live app", v: "https://adhdone-73056b9b.base44.app" },
 ];
