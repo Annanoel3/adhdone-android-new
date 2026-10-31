@@ -127,12 +127,27 @@ export function dismissEveningCard(day = localDateKey()) {
 }
 
 // What they were typing, kept on this phone until it's saved, so closing the
-// box (on purpose or by a stray back press) never loses it.
+// box (on purpose or by a stray back press) never loses it. A draft left
+// unsaved is kept through the next day, then dropped, so last week's
+// half-written win doesn't sit in tonight's box.
 export function readWinDraft() {
-  return readFlag(KEYS.draft);
+  try {
+    const saved = JSON.parse(readFlag(KEYS.draft) || "null");
+    if (!saved?.t) return "";
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    if (saved.d && saved.d < localDateKey(yesterday)) {
+      writeFlag(KEYS.draft, "");
+      return "";
+    }
+    return String(saved.t);
+  } catch {
+    return "";
+  }
 }
 export function saveWinDraft(text) {
-  writeFlag(KEYS.draft, String(text || "").trim() ? String(text) : "");
+  const value = String(text || "");
+  writeFlag(KEYS.draft, value.trim() ? JSON.stringify({ t: value, d: localDateKey() }) : "");
 }
 export function clearWinDraft() {
   writeFlag(KEYS.draft, "");
