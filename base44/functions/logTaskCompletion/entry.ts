@@ -84,7 +84,7 @@ export default async function (req: Request): Promise<Response> {
         // own switch wins ("notification" = never an alarm), else the account
         // default.
         const data: Record<string, unknown> = { type: 'follow_up', taskId };
-        if (task.alert_style === 'alarm' || (task.alert_style !== 'notification' && owner?.alarm_mode === 'alarm')) data.alarm = true;
+        if (owner?.app_platform !== 'ios' && (task.alert_style === 'alarm' || (task.alert_style !== 'notification' && owner?.alarm_mode === 'alarm'))) data.alarm = true; // no alarms on iPhone yet (reminderTitle.phoneCanRing)
         const res = await base44.asServiceRole.functions.invoke('schedulePush', {
           internalKey: Deno.env.get('CRON_SECRET'),
           toUserExternalId: email,

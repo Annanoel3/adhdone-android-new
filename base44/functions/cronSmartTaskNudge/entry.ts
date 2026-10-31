@@ -902,7 +902,9 @@ Deno.serve(async (req) => {
         // stays a regular notification. Same idea as the app's own alarm list
         // (widgetBridge.ringsOutLoud).
         const nudgedTask = entry.task_id ? taskById.get(entry.task_id) : null;
-        const alarmStyle = nudgedTask
+        // No alarms on iPhone yet: there a nudge is the push itself, with its
+        // normal life (reminderTitle.phoneCanRing).
+        const alarmStyle = nudgedTask && user.app_platform !== 'ios'
           ? (nudgedTask.alert_style === 'alarm' || (nudgedTask.alert_style !== 'notification' && user.alarm_mode === 'alarm'))
           : false;
         let ringsOutLoud = false;

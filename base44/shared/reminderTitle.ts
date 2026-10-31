@@ -164,8 +164,20 @@ function alertStyleOf(task: any, owner: any): 'alarm' | 'notification' {
   return owner?.alarm_mode === 'alarm' ? 'alarm' : 'notification';
 }
 
+// The iPhone app has no alarms yet (IOS_PLAN.md, phase 2): there every
+// reminder is the push itself. A ring-on-arrival push gets a 10-minute life
+// for Android's sake (OneSignal's restore rang it again on every app open); on
+// an iPhone that short life only loses the reminder when the phone is off or
+// out of signal for a while. So an account last opened on an iPhone
+// (User.app_platform, saved by WidgetTaskSync) gets nothing sent as an alarm.
+// Opening the Android app sets it back. (Oct 30 2026, Anna: lots of small
+// Android fixes added up, "make sure that's not the case with iphone".)
+export function phoneCanRing(owner: any): boolean {
+  return owner?.app_platform !== 'ios';
+}
+
 export function taskRingsAsAlarm(task: any, owner: any): boolean {
-  return alertStyleOf(task, owner) === 'alarm';
+  return phoneCanRing(owner) && alertStyleOf(task, owner) === 'alarm';
 }
 
 function whenMs(v: any): number {

@@ -9,7 +9,7 @@
 // Re-saved Oct 6 2026 so the bundled shared/reminderTitle.ts (Later break: no alarm inside later_until) is picked up.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 // Reminder wording: every body names the task (the spoken alarm reads it).
-import { getReminderContent, pushPhoneAlarms, platformTimeMs } from '../../shared/reminderTitle.ts';
+import { getReminderContent, pushPhoneAlarms, platformTimeMs, phoneCanRing } from '../../shared/reminderTitle.ts';
 import { orderSameMinuteAlarms } from '../../shared/alarmOrder.ts';
 import { adjustForQuietHours, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, placeAppReminder } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
@@ -56,7 +56,7 @@ function nagsThroughNight(t: any): boolean {
   return t?.quiet_hours_exempt === true;
 }
 function ringsEachPing(t: any, user: any): boolean {
-  return nagsThroughNight(t) && (t.alert_style === 'alarm' || (t.alert_style !== 'notification' && user?.alarm_mode === 'alarm'));
+  return nagsThroughNight(t) && phoneCanRing(user) && (t.alert_style === 'alarm' || (t.alert_style !== 'notification' && user?.alarm_mode === 'alarm'));
 }
 
 async function scheduleOneSignalNotification(email, title, body, sendAfterIsoString, taskId, alarm = false) {

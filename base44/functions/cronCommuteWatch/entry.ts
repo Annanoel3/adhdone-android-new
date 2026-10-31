@@ -64,7 +64,7 @@ import { getProximity } from '../../shared/mapsDistance.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
 import { resolveQuietHours, isInQuietHours, adjustForQuietHours } from '../../shared/quietHours.ts';
 import { listAll } from '../../shared/listAll.ts';
-import { taskRingsAsAlarm, pushPhoneAlarms } from '../../shared/reminderTitle.ts';
+import { taskRingsAsAlarm, pushPhoneAlarms, phoneCanRing } from '../../shared/reminderTitle.ts';
 
 const CUSHION_MINUTES = 10;       // finding keys / shoes / getting in the car
 // OneSignal "Android notification channel" for the leave-now push, created in
@@ -133,7 +133,7 @@ async function sendPush(
     // Accounts that chose full-screen reminders get this as an alarm: the app
     // build that can ring (its PushFilter) rings it the moment it arrives, with
     // these same words. Older builds and everyone else see the push as before.
-    if (user?.alarm_mode === 'alarm') {
+    if (user?.alarm_mode === 'alarm' && phoneCanRing(user)) {
       payload.data.alarm = true;
       // The event screen: "Got it" only, and it only stops the ring. Without
       // this the phone's plain "Got it" opened the app on Places (Anna, Oct 30
