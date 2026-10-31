@@ -79,7 +79,7 @@ export default function WinBox({ open, onClose, source = "other", winDate, theme
     <Dialog open={!!open} onOpenChange={(o) => { if (!o) onClose?.("dismissed"); }}>
       <DialogContent className={`max-w-sm w-[calc(100vw-2rem)] ${look.surface}`}>
         <DialogHeader className="text-left">
-          <DialogTitle>What's one win from today?</DialogTitle>
+          <DialogTitle>{"What's one win from today?"}</DialogTitle>
           <DialogDescription className={look.muted}>Big or small, it counts.</DialogDescription>
         </DialogHeader>
         <form
