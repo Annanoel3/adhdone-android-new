@@ -124,6 +124,8 @@ import ChaosModeStyles from "./components/eastereggs/ChaosModeStyles";
 import { onThisPhone, isIPhoneApp } from "@/lib/phonePlatform";
 import { ChevronLeft as IPhoneBackIcon } from "lucide-react";
 import IPhoneNotificationTidy from "./components/shared/IPhoneNotificationTidy";
+import { WinAskFromLink } from "./components/wins/WinBox";
+import WinsSlumpPopup from "./components/wins/WinsSlumpPopup";
 import {
   Dialog,
   DialogContent,
@@ -1378,6 +1380,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <AppUpdatePrompt user={user} theme={theme} />
         {/* "Notice when I wake up", offered once (see WakeOfferPrompt). */}
         <WakeOfferPrompt user={user} theme={theme} />
+        {/* Wins: the box the evening "one win from today" push opens, and the
+            once-a-week "Rough week?" nudge to the wins list. */}
+        <WinAskFromLink theme={theme} specialMode={specialMode} />
+        <WinsSlumpPopup user={user} theme={theme} specialMode={specialMode} />
         <TaskCaptureProcessor userEmail={user?.email} />
         <AppDialogHost />
         <UsageTracker user={user} />
