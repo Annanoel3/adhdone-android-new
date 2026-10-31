@@ -237,10 +237,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Track completed/silenced IDs BEFORE the email guard — onTaskUpdate clears
-    // notification_recipient_email on completion, so a completed task has no email
-    // and would be skipped here, leaving completedTaskIds empty and letting
-    // pre-scheduled smart nudges fire for tasks the user already finished.
     // The last time each person did anything with ADHDone, opened or not (for
     // PAUSED AFTER A WEEK AWAY below; Anna, Oct 31 2026: "if they check a task
     // off in an alarm, that counts etc. Things that interact with the app
@@ -276,6 +272,10 @@ Deno.serve(async (req) => {
       console.error('[SMART NUDGE] Parking Lot captures unavailable for the away check:', e);
     }
 
+    // Track completed/silenced IDs BEFORE the email guard — onTaskUpdate clears
+    // notification_recipient_email on completion, so a completed task has no email
+    // and would be skipped here, leaving completedTaskIds empty and letting
+    // pre-scheduled smart nudges fire for tasks the user already finished.
     for (const task of allTasks) {
       if (task.status === 'completed') {
         completedTaskIds.add(task.id);
