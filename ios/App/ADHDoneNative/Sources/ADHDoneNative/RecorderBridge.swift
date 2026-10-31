@@ -174,7 +174,7 @@ public class RecorderBridge: CAPPlugin, CAPBridgedPlugin, AVAudioRecorderDelegat
         RecorderStore.write(s)
         session = nil
         activeId = nil
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        RecorderBridge.releaseAudioSession()
         emit("error", s, problem)
     }
 
@@ -313,8 +313,19 @@ public class RecorderBridge: CAPPlugin, CAPBridgedPlugin, AVAudioRecorderDelegat
         RecorderStore.write(done)
         session = nil
         activeId = nil
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        RecorderBridge.releaseAudioSession()
         emit("stopped", done, reason)
+    }
+
+    /// Hands the audio back once a recording is over. Recording switches the app's
+    /// audio to record-only, and left that way every sound the app plays after it
+    /// (the timer's alert, a chime) is silent until the app is restarted. Back to
+    /// the app's normal audio (the iPhone default, which follows the silent
+    /// switch), then let other apps' audio resume.
+    static func releaseAudioSession() {
+        let audio = AVAudioSession.sharedInstance()
+        try? audio.setActive(false, options: .notifyOthersOnDeactivation)
+        try? audio.setCategory(.soloAmbient, mode: .default, options: [])
     }
 
     private func releaseRecorder(stop: Bool) -> Bool {
