@@ -14,7 +14,12 @@ import { winLook } from "@/components/wins/winsTheme";
 // itself, or a phone that doesn't pass the button on (an older build, the
 // iPhone), opens the app at /Home?remindersHelping=1, and this asks the same
 // question. No = one Smart Reminder a day; Yes changes nothing.
+// On full-screen alarms (build 44 on) the question rings, and its Yes / No
+// open the app at /Home?remindersHelping=yes|no: saved here, no popup.
 export const HELPING_PARAM = "remindersHelping";
+
+// One save per tap, even if the page is rebuilt around it while it saves.
+let lastDirect = "";
 
 // What happens now, said once the answer is saved.
 function sayWhatHappens(r, answer) {
@@ -52,7 +57,9 @@ export default function RemindersHelpingPopup({ theme, specialMode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const look = winLook(theme, specialMode);
-  const asked = new URLSearchParams(location.search).get(HELPING_PARAM) === "1";
+  const param = new URLSearchParams(location.search).get(HELPING_PARAM);
+  const asked = param === "1";
+  const direct = param === "yes" || param === "no" ? param : "";
   const [eligible, setEligible] = useState(false);
   const [busy, setBusy] = useState(false);
   const checkedKey = useRef(null);
@@ -83,6 +90,22 @@ export default function RemindersHelpingPopup({ theme, specialMode }) {
       .catch(() => dropParam());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [asked, location.key]);
+
+  // Yes / No tapped on the alarm screen: saved straight away. Not saved: the
+  // popup asks again.
+  useEffect(() => {
+    if (!direct) return;
+    const key = `${direct}|${location.key}`;
+    if (lastDirect === key) return;
+    lastDirect = key;
+    answerRemindersHelping(direct).then((ok) => {
+      if (ok) { dropParam(); return; }
+      const params = new URLSearchParams(window.location.search);
+      params.set(HELPING_PARAM, "1");
+      navigate(`${window.location.pathname}?${params.toString()}`, { replace: true, state: location.state });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [direct, location.key]);
 
   // It's the answer to a push they just tapped: up as soon as the screen is free.
   const shown = usePopupTurn(eligible, { reactive: true });
