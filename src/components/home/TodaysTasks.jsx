@@ -10,6 +10,7 @@ import { awardPoints, getPointsForAction } from "../utils/gamification";
 import { base44 } from "@/api/base44Client";
 import { motion } from "framer-motion";
 import { updateTodaysSummary } from "../utils/dailySummaryHelper";
+import { currentStreak as readStreak } from "../utils/completionStreak";
 import { isTodayTask, isUpcomingTask, firstDateMakesDeadline } from "../utils/todayTasks";
 import { isBirthdayTask, passesBirthdayDayFilter } from "../utils/birthdayHelpers";
 import { isSmartReminderTask } from "../utils/smartReminderTask";
@@ -132,8 +133,7 @@ export default function TodaysTasks({ tasks, theme, onTaskAction, onViewDetails,
     
     base44.entities.Task.list('-updated_date', 500).then(allTasks => {
       const completedTasks = allTasks.filter(t => t.status === 'completed');
-      base44.entities.DailySummary.list('-date', 1).then(summaries => {
-        const currentStreak = summaries[0]?.streak_days || 0;
+      readStreak().then(currentStreak => {
         checkAndAwardAchievements({
           totalTasksCompleted: completedTasks.length,
           streakDays: currentStreak,
