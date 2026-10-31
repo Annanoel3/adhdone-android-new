@@ -18,6 +18,7 @@ import { snoozeTask, deleteTaskWithUndo, offerCompletionUndo } from "../componen
 import { updateTodaysSummary } from "../components/utils/dailySummaryHelper";
 import { trackFire } from "@/lib/appTrack";
 import BirthdayStrip from "../components/home/BirthdayStrip";
+import GoalHomeCard from "../components/goals/GoalHomeCard";
 import NotificationsOffBanner, { CalendarOffBanner, AlarmSetupBanner } from "../components/home/NotificationsOffBanner";
 import { countCompletionForGif } from "../components/utils/completionMilestone";
 import PullToRefresh from "../components/shared/PullToRefresh";
@@ -398,6 +399,9 @@ export default function Home() {
                   onRetry={loadTasks}
                 />
               </div>
+
+              {/* The step each active goal is on (GOALS_PORT.md); nothing without one. */}
+              <GoalHomeCard user={user} theme={theme} specialMode={specialMode} />
 
               {/* Birthdays get their own compact spot right under Today's Focus */}
               <BirthdayStrip
