@@ -108,14 +108,16 @@ export default function DayMoodRow({ day, row = null, onSaved, onEditingChange, 
       setMode("detail");
     }
     setChosen(value);
-    save(whole({ chosen: value }));
+    current.current = { ...current.current, chosen: value };
+    save(whole());
   };
 
   const toggleReason = (key) => {
     const list = current.current.reasons;
     const next = list.includes(key) ? list.filter((k) => k !== key) : [...list, key];
     setReasons(next);
-    if (current.current.chosen != null) save(whole({ reasons: next }));
+    current.current = { ...current.current, reasons: next };
+    if (current.current.chosen != null) save(whole());
   };
 
   const noteChanged = note.trim() !== String(lastNote.current || "").trim();
