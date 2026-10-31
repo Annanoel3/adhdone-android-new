@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import HabitPatterns from "@/components/progress/HabitPatterns";
+import LifeAreasCard from "@/components/progress/LifeAreasCard";
+import WinsSpot from "@/components/wins/WinsSpot";
 
 // The window the numbers cover. Everything that is a count of things that
 // happened (completions, rescues, focus sessions, deadline pushes) recounts for
@@ -49,7 +51,22 @@ export default function Progress() {
     loadInsights(range);
   }, [range]);
 
+  // A failed read used to leave the page spinning for good, and the wins
+  // (the one place to go on a hard day) never showed. Now it says so and the
+  // wins still show.
+  const [loadError, setLoadError] = useState(false);
   const loadInsights = async (rangeKey = 'all') => {
+    try {
+      setLoadError(false);
+      await countInsights(rangeKey);
+    } catch (e) {
+      console.error('[Insights] could not load:', e);
+      setLoadError(true);
+      setIsLoading(false);
+    }
+  };
+
+  const countInsights = async (rangeKey = 'all') => {
     setIsLoading(true);
     const rangeDays = (RANGES.find(r => r.key === rangeKey) || RANGES[3]).days;
     const since = rangeDays ? Date.now() - rangeDays * 24 * 60 * 60 * 1000 : null;
@@ -209,6 +226,17 @@ export default function Progress() {
   };
 
   // Full-page spinner only the first time; switching the window recounts in place.
+  if (!insights && loadError) {
+    return (
+      <div className="p-4 md:p-8 max-w-5xl mx-auto">
+        <p className="text-center py-6 text-gray-600">Couldn't load your Insights right now. Try again in a minute.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <WinsSpot theme={theme} />
+        </div>
+      </div>
+    );
+  }
+
   if (!insights) {
     return (
       <div className="p-4 md:p-8 max-w-5xl mx-auto">
@@ -275,6 +303,9 @@ export default function Progress() {
           screen. minmax(0, 1fr) lets the cards stay screen-wide and the title
           truncate instead. */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Wins first: the place to go on a hard day (Anna, Oct 30 2026). */}
+        <WinsSpot theme={theme} />
+
         {/* Task Completion Times */}
         <Card className="border-none shadow-lg">
           <CardHeader>
@@ -342,6 +373,9 @@ export default function Progress() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Which areas of life the window went to (sortLifeAreas). */}
+        <LifeAreasCard days={(RANGES.find(r => r.key === range) || RANGES[3]).days} theme={theme} />
 
         {/* Overall Stats */}
         <Card className="border-none shadow-lg md:col-span-2">
