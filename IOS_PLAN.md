@@ -88,6 +88,18 @@ Check on a device: keyboard covering inputs (no @capacitor/keyboard yet).
 - GitHub: the compile check runs on every ios/ change; first runs BUILD SUCCEEDED.
 - The App Store name "ADHDone" belongs to another developer's app (first released
   Feb 6 2024), so the store name needs a variant; the home-screen name stays ADHDone.
+- Share extension (Oct 31 2026): target `ADHDoneShare` (ios/App/ADHDoneShare), bundle
+  `com.mediocreatbest.adhdone.share`, its own App ID and App Store profile "ADHDone
+  Share App Store" (Codemagic reference `adhdone_share_app_store`). No App Group:
+  the app copies the sign-in (the same three localStorage keys Android reads) into
+  the keychain group `C6T8GPVSJ3.com.mediocreatbest.adhdone.shared`, which both
+  targets list under keychain-access-groups (ios/App/Shared/SharedSession.swift).
+  Text or a link goes to captureText; a picture to readImageCapture, then
+  captureText. A text that can't be sent (no signal, signed out) waits in the same
+  keychain group and the app sends it when it opens, with the same capture_id.
+  The app sets `window.ADHDoneIPhone.shareExtension`, and phonePlatform.js only
+  offers sharing on iPhone builds that set it. When the version number changes,
+  change MARKETING_VERSION on both targets (Apple wants them equal).
 
 ## What only Anna can do
 
