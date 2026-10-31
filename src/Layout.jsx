@@ -660,10 +660,14 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
   }, [specialMode]);
 
   const getSeasonalBackgroundStyle = () => {
+    // Phone (narrow) picture first, computer (wide) picture second.
+    const OLD = 'https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/';
+    const B44 = 'https://media.base44.com/images/public/68dd79726fce6eca73056b9b/';
+    const pickBg = (phone, computer) => `url('${typeof window !== 'undefined' && window.innerWidth < 768 ? phone : computer}')`;
     const backgrounds = {
       kawaii: null,
-      halloween: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/ba3d7eb0b_c9c617da-1d0c-4fed-9830-7f692c5bac3d.png')",
-      fall: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/01f77998a_ChatGPTImageOct15202504_16_28PM.png')",
+      halloween: pickBg('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/ba3d7eb0b_c9c617da-1d0c-4fed-9830-7f692c5bac3d.png', `${B44}c819ab80d_generated_image.png`),
+      fall: pickBg('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/01f77998a_ChatGPTImageOct15202504_16_28PM.png', `${B44}1aa9372a0_generated_image.png`),
       // Phones (tall screens) get a version with everything down the middle;
       // computers (wide screens) get one with everything across the middle.
       harvest: typeof window !== 'undefined' && window.innerWidth < 768
@@ -672,13 +676,13 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       winter: typeof window !== 'undefined' && window.innerWidth < 768
         ? "url('https://media.base44.com/images/public/68dd79726fce6eca73056b9b/fc560f750_generated_image.png')"
         : "url('https://media.base44.com/images/public/68dd79726fce6eca73056b9b/7fd4e35ff_generated_image.png')",
-      christmas: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/8e296b8ab_1ChatGPTImageOct15202504_16_05PM.png')",
-      valentines: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/c990d460e_2ChatGPTImageOct15202504_16_09PM.png')",
-      newyears: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/829d2e43c_3ChatGPTImageOct15202504_11_12PM.png')",
-      stpatricks: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/4e394e799_4ChatGPTImageOct15202504_14_19PM.png')",
-      fourthjuly: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/b2551ae2b_5ChatGPTImageOct15202504_16_16PM.png')",
-      summer: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/3db9fd982_ChatGPTImageOct15202504_16_19PM.png')",
-      spring: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/7005cb267_ChatGPTImageOct15202504_16_23PM.png')",
+      christmas: pickBg(`${OLD}8e296b8ab_1ChatGPTImageOct15202504_16_05PM.png`, `${B44}73052e585_generated_image.png`),
+      valentines: pickBg(`${OLD}c990d460e_2ChatGPTImageOct15202504_16_09PM.png`, `${B44}e0b360a00_generated_image.png`),
+      newyears: pickBg(`${OLD}829d2e43c_3ChatGPTImageOct15202504_11_12PM.png`, `${B44}5c1230878_generated_image.png`),
+      stpatricks: pickBg(`${OLD}4e394e799_4ChatGPTImageOct15202504_14_19PM.png`, `${B44}cba16f929_generated_image.png`),
+      fourthjuly: pickBg(`${OLD}b2551ae2b_5ChatGPTImageOct15202504_16_16PM.png`, `${B44}a9aa265ca_generated_image.png`),
+      summer: pickBg(`${OLD}3db9fd982_ChatGPTImageOct15202504_16_19PM.png`, `${B44}f38b2b059_generated_image.png`),
+      spring: pickBg(`${OLD}7005cb267_ChatGPTImageOct15202504_16_23PM.png`, `${B44}dbe4dd94d_generated_image.png`),
     };
 
     if (specialMode === 'kawaii') {
