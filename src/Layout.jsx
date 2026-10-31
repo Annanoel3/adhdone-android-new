@@ -667,10 +667,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       // Phones (tall screens) get a version with everything down the middle;
       // computers (wide screens) get one with everything across the middle.
       harvest: typeof window !== 'undefined' && window.innerWidth < 768
-        ? "url('https://media.base44.com/images/public/68dd79726fce6eca73056b9b/db13ef295_generated_image.png')"
+        ? "url('https://media.base44.com/images/public/68dd79726fce6eca73056b9b/e4a122664_generated_image.png')"
         : "url('https://media.base44.com/images/public/68dd79726fce6eca73056b9b/4eb786440_generated_image.png')",
       winter: typeof window !== 'undefined' && window.innerWidth < 768
-        ? "url('https://media.base44.com/images/public/68dd79726fce6eca73056b9b/9ea3db1e1_generated_image.png')"
+        ? "url('https://media.base44.com/images/public/68dd79726fce6eca73056b9b/fc560f750_generated_image.png')"
         : "url('https://media.base44.com/images/public/68dd79726fce6eca73056b9b/3cbbe2c00_generated_image.png')",
       christmas: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/8e296b8ab_1ChatGPTImageOct15202504_16_05PM.png')",
       valentines: "url('https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/68dd79726fce6eca73056b9b/c990d460e_2ChatGPTImageOct15202504_16_09PM.png')",
