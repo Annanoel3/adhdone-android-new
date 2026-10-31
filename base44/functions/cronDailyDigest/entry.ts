@@ -16,7 +16,7 @@ import OpenAI from 'npm:openai';
 import { lean } from '../../shared/aiCost.ts';
 // localDateKey is this file's own (below). Importing it too, as on Oct 12 2026 at
 // 05:28 UTC, is a duplicate declaration and the function failed to start.
-import { localMinutesOfDay, userTimeZone, theirDayKeyFor, wakeStartMs } from '../../shared/quietHours.ts';
+import { localMinutesOfDay, userTimeZone, theirDayKeyFor, wakeStartMs, resolveQuietHours } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { listAll, filterAll } from '../../shared/listAll.ts';
 import { easeNow } from '../../shared/easeOff.ts';
@@ -72,6 +72,10 @@ Deno.serve(async (req) => {
     for (const email of digestEmails) {
       const user = userMap[email];
       if (!user) continue;
+
+      // Smart Reminders paused them after a week away (cronSmartTaskNudge,
+      // Anna, Oct 30 2026): the summary stops with them until they're back.
+      if (pausedForAway(user)) continue;
 
       const timeZone = userTimeZone(user);
 
@@ -153,10 +157,25 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[DIGEST] Sent ${digestsSent.length} digest(s) at ${now.toISOString()}`);
+
+    // 5. The evening "What's one win from today?" (Anna, Oct 30 2026: the
+    // evening card AND a notification). Once a day, in the hour before their
+    // quiet hours start (9 PM with quiet hours off), a plain push that opens
+    // the win box (data.type 'win_ask', OneSignalInit). Not on someone's first
+    // day, not for anyone away a week or paused, not when they already saved
+    // a win today, and never stacked on another push (send ledger).
+    let winAsks = 0;
+    try {
+      winAsks = await sendEveningWinAsks(base44, allUsers, now);
+    } catch (e) {
+      console.error('[DIGEST] Evening win asks failed:', e);
+    }
+
     return Response.json({
       success: true,
       digestsSent,
       count: digestsSent.length,
+      winAsks,
       at: now.toISOString()
     });
   } catch (err) {
@@ -164,6 +183,110 @@ Deno.serve(async (req) => {
     return Response.json({ success: false, error: String(err) }, { status: 500 });
   }
 });
+
+// Paused by Smart Reminders after a week away and not back since (opening the
+// app moves last_active_at past it; cronSmartTaskNudge clears it when any
+// other sign of them shows up).
+function pausedForAway(user: any): boolean {
+  const paused = Date.parse(user?.smart_nudge_paused_at || '');
+  if (!Number.isFinite(paused)) return false;
+  const back = Date.parse(user?.last_active_at || '');
+  return !(Number.isFinite(back) && back > paused);
+}
+
+const WIN_ASK_TITLE = "What's one win from today?";
+const WIN_ASK_BODY = 'Big or small, it counts. Tap to save it.';
+
+async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Promise<number> {
+  const DAY = 24 * 60 * 60 * 1000;
+  let sent = 0;
+  for (const user of allUsers) {
+    const email = user?.email;
+    if (!email) continue;
+    // Phone app accounts only (that's where pushes go).
+    if (!user.app_platform && !user.app_build) continue;
+    if (user.alarm_permissions?.notifications === false) continue;
+    const lastActive = Date.parse(user.last_active_at || '');
+    if (!Number.isFinite(lastActive) || now.getTime() - lastActive >= 7 * DAY) continue;
+    if (pausedForAway(user)) continue;
+    const joined = Date.parse(user.signed_up_at || user.created_date || '');
+    if (!Number.isFinite(joined) || now.getTime() - joined < DAY) continue;
+
+    const timeZone = userTimeZone(user);
+    const quiet = resolveQuietHours(user);
+    const startMin = quiet.enabled ? quiet.startMin : 21 * 60;
+    const nowMin = localMinutesOfDay(now, timeZone);
+    const minutesBefore = (startMin - nowMin + 1440) % 1440;
+    if (!(minutesBefore > 0 && minutesBefore <= 60)) continue;
+
+    const dayKey = theirDayKeyFor(user, now, timeZone);
+    if (user.win_ask_date === dayKey) continue;
+
+    // Already saved one today (their calendar day, as the app stamps it).
+    const localDay = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+    let haveOne = true;
+    try {
+      const wins = await base44.asServiceRole.entities.Win.filter({ created_by: email, win_date: localDay }, '-created_date', 1);
+      haveOne = Array.isArray(wins) && wins.length > 0;
+    } catch (e) {
+      // Can't check (the Win table isn't there yet): don't ask.
+      console.error(`[DIGEST] Win check failed for ${email}:`, (e as any)?.message || e);
+      continue;
+    }
+    if (haveOne) continue;
+
+    const gate = await ledgerCheck(base44, { email, kind: 'motivation' });
+    if (!gate.allowed) continue;
+
+    // Claim the day before sending, so a second run in the hour can't repeat it.
+    try {
+      await base44.asServiceRole.entities.User.update(user.id, { win_ask_date: dayKey });
+    } catch (e) {
+      console.error(`[DIGEST] Could not claim the win ask for ${email}:`, e);
+      continue;
+    }
+    const id = await sendWinAsk(email);
+    if (id) {
+      await ledgerRecord(base44, { email, kind: 'motivation', source: 'cronDailyDigest', notificationId: id, title: WIN_ASK_TITLE });
+      sent += 1;
+    } else {
+      try { await base44.asServiceRole.entities.User.update(user.id, { win_ask_date: user.win_ask_date || null }); } catch {}
+    }
+  }
+  console.log(`[DIGEST] Evening win asks sent: ${sent}`);
+  return sent;
+}
+
+async function sendWinAsk(email: string): Promise<string | false> {
+  const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+  const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+  if (!appId || !restApiKey) return false;
+  try {
+    const response = await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${restApiKey}` },
+      body: JSON.stringify({
+        app_id: appId,
+        include_external_user_ids: [email],
+        channel_for_external_user_ids: 'push',
+        headings: { en: WIN_ASK_TITLE },
+        contents: { en: WIN_ASK_BODY },
+        data: { type: 'win_ask', screen: '/Home?win=1' },
+        // An evening question: gone by the time it would be stale.
+        ttl: 2 * 60 * 60,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok || result.errors) {
+      console.error(`[DIGEST] Win ask: OneSignal error for ${email}:`, result);
+      return false;
+    }
+    return result.id || 'sent';
+  } catch (e) {
+    console.error(`[DIGEST] Win ask: failed to send to ${email}:`, e);
+    return false;
+  }
+}
 
 // ── Helper: exactly what the Tasks page shows under "Today" ──────────────────
 // Every active top-level task that isn't on the back burner and isn't a
