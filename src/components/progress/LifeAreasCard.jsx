@@ -342,6 +342,7 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
 
       <AreaRecentDialog
         area={openArea}
+        days={days}
         data={data}
         look={look}
         onClose={() => setOpenArea(null)}
@@ -351,7 +352,12 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
 }
 
 // The newest tasks in one area, opened by tapping its bubble.
-function AreaRecentDialog({ area, data, look, onClose }) {
+function AreaRecentDialog({ area, days, data, look, onClose }) {
+  const span = days == null ? "so far"
+    : days === 7 ? "in your last week"
+    : days === 30 ? "in your last month"
+    : days === 365 ? "in your last year"
+    : `in your last ${days} days`;
   const info = area ? AREAS[area] : null;
   const count = area && data?.counts ? data.counts[area] || 0 : 0;
   const items = area && data?.recent && Array.isArray(data.recent[area]) ? data.recent[area] : [];
@@ -365,7 +371,7 @@ function AreaRecentDialog({ area, data, look, onClose }) {
             {info?.label}
           </DialogTitle>
           <DialogDescription className={look.muted}>
-            {count} {count === 1 ? "thing" : "things"} in this window{items.length ? ". The most recent:" : "."}
+            {count} {count === 1 ? "thing" : "things"} {span}{items.length ? ". The most recent:" : "."}
           </DialogDescription>
         </DialogHeader>
         {items.length > 0 ? (
