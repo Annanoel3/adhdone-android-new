@@ -120,7 +120,7 @@ export default function WinsSlumpPopup({ user, theme, specialMode }) {
         <DialogHeader className="text-left">
           <DialogTitle>Rough week?</DialogTitle>
           <DialogDescription className={look.muted}>
-            You've got {count >= 500 ? "500+" : count} wins saved. Take a look at what you can do.
+            {`You've got ${count >= 500 ? "500+" : count} wins saved. Take a look at what you can do.`}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2 pt-1">
