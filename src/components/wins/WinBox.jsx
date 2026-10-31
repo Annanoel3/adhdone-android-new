@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { base44 } from "@/api/base44Client";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -7,19 +8,26 @@ import { Loader2 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import VoiceTaskInput from "@/components/tasks/VoiceTaskInput";
 import { usePopupTurn } from "@/components/onboarding/onboardingSurface";
-import { addWin, readWinDraft, saveWinDraft, clearWinDraft } from "./winsStore";
+import { addWin, readWinDraft, saveWinDraft, clearWinDraft, eveningWindow } from "./winsStore";
 import { winLook } from "./winsTheme";
+import { getDayMood } from "./moodStore";
+import DayMoodRow from "./DayMoodRow";
 
 // The "What's one win from today?" box. Whatever they type is kept on the
 // phone (the draft) until it has actually saved: closing the box, a stray
 // back press, or a save that fails never loses it, and the next time the box
 // opens it's still there. A save keeps going if the box is closed mid-save,
 // and still says when it landed (or didn't).
-export default function WinBox({ open, onClose, source = "other", winDate, theme, specialMode, onSaved }) {
+//
+// withMood (the evening notification's box only): "How did you feel today?"
+// with the same faces, chips and note as the evening card, above the win, for
+// moodDay (the evening card's day key).
+export default function WinBox({ open, onClose, source = "other", winDate, theme, specialMode, onSaved, withMood = false, moodDay }) {
   const look = winLook(theme, specialMode);
   const [text, setText] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [moodRow, setMoodRow] = useState(null);
   const textRef = useRef(text);
   textRef.current = text;
   const openRef = useRef(open);
@@ -30,6 +38,19 @@ export default function WinBox({ open, onClose, source = "other", winDate, theme
     setText(readWinDraft());
     setError("");
   }, [open]);
+
+  // Already answered today (here or on another phone): the face shows small
+  // with Change. Until this comes back (or if it can't), the faces show, and
+  // a tap still updates the day's row rather than adding a second one.
+  useEffect(() => {
+    if (!open || !withMood || !moodDay) return undefined;
+    let gone = false;
+    setMoodRow(null);
+    getDayMood(moodDay)
+      .then((row) => { if (!gone) setMoodRow(row || null); })
+      .catch((e) => console.error("[Mood] Could not load today's mood:", e));
+    return () => { gone = true; };
+  }, [open, withMood, moodDay]);
 
   const change = (value) => {
     setText(value);
@@ -74,14 +95,34 @@ export default function WinBox({ open, onClose, source = "other", winDate, theme
   };
 
   const errorText = look.night || theme === "dark" ? "text-rose-300" : "text-rose-600";
+  const askMood = withMood && !!moodDay;
 
   return (
     <Dialog open={!!open} onOpenChange={(o) => { if (!o) onClose?.("dismissed"); }}>
-      <DialogContent className={`max-w-sm w-[calc(100vw-2rem)] ${look.surface}`}>
+      <DialogContent className={`max-w-sm w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto ${look.surface}`}>
         <DialogHeader className="text-left">
-          <DialogTitle>{"What's one win from today?"}</DialogTitle>
-          <DialogDescription className={look.muted}>Big or small, it counts.</DialogDescription>
+          <DialogTitle>{askMood ? "How did you feel today?" : "What's one win from today?"}</DialogTitle>
+          <DialogDescription className={askMood ? "sr-only" : look.muted}>
+            {askMood ? "Check in on today and save one win." : "Big or small, it counts."}
+          </DialogDescription>
         </DialogHeader>
+        {askMood && (
+          <>
+            <DayMoodRow
+              key={moodDay}
+              day={moodDay}
+              row={moodRow}
+              onSaved={setMoodRow}
+              look={look}
+              showQuestion={false}
+            />
+            <div className={`border-t ${look.night ? "border-white/15" : theme === "dark" ? "border-gray-700" : "border-gray-200"}`} aria-hidden="true" />
+            <div>
+              <p className="font-semibold">{"What's one win from today?"}</p>
+              <p className={`text-sm ${look.muted}`}>Big or small, it counts.</p>
+            </div>
+          </>
+        )}
         <form
           className="space-y-3"
           onSubmit={(e) => { e.preventDefault(); submit(); }}
@@ -130,13 +171,27 @@ export function WinAskFromLink({ theme, specialMode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [wanted, setWanted] = useState(false);
+  const [me, setMe] = useState(null);
   const asked = new URLSearchParams(location.search).get("win") === "1";
 
   useEffect(() => {
     if (asked) setWanted(true);
   }, [asked, location.key]);
 
+  // Their quiet hours decide which evening it is (eveningWindow): read only
+  // when the box is wanted. Not loaded (yet, or at all): the defaults.
+  useEffect(() => {
+    if (!wanted || me) return undefined;
+    let gone = false;
+    base44.auth.me().then((u) => { if (!gone && u) setMe(u); }).catch(() => {});
+    return () => { gone = true; };
+  }, [wanted, me]);
+
   const shown = usePopupTurn(wanted, { reactive: true });
+
+  // The same day key the evening card uses, for the mood and the win alike,
+  // so an answer at 12:30 AM in a 9 PM-1 AM evening is the evening before's.
+  const day = useMemo(() => eveningWindow(me, new Date()).dayKey, [me, shown]);
 
   // win=1 comes off the address when the box closes, not while it's up: a
   // navigation while it's open could remount the page around it and close it
@@ -155,6 +210,9 @@ export function WinAskFromLink({ theme, specialMode }) {
       open={shown}
       onClose={close}
       source="evening_push"
+      winDate={day}
+      withMood
+      moodDay={day}
       theme={theme}
       specialMode={specialMode}
     />
