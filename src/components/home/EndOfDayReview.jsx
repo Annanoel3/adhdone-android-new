@@ -18,6 +18,7 @@ import { Task } from "@/entities/Task"; // Keep Task import as it might be used 
 import { DailySummary } from "@/entities/DailySummary";
 import { EnergyLog } from "@/entities/EnergyLog";
 import { base44 } from "@/api/base44Client";
+import { currentStreak } from "@/components/utils/completionStreak";
 import { isTodayTask, isUpcomingTask, isCompletedToday } from "../utils/todayTasks";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
@@ -117,17 +118,11 @@ export default function EndOfDayReview({ isOpen, onClose, theme }) {
       ? Math.round((completed.length / todayTasks.length) * 100)
       : 0;
 
-    // Streak from the previous summaries (read above)
-    let streakDays = 0;
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-
-    // Check if yesterday's summary exists and had tasks completed to continue streak
-    const yesterdaySummary = previousSummaries.find(s => s.date === yesterday);
-    if (yesterdaySummary && yesterdaySummary.tasks_completed > 0) {
-      streakDays = (yesterdaySummary.streak_days || 0) + 1;
-    } else if (completed.length > 0) { // Start a new streak if no previous streak and tasks completed today
-      streakDays = 1;
-    }
+    // The same streak Insights shows (completionStreak.js), counted from the
+    // finished tasks on their own calendar days. It used to chain yesterday's
+    // summary (UTC dates) + 1 and overcounted (Oct 31 2026: 21 vs 3).
+    void previousSummaries;
+    const streakDays = await currentStreak();
 
 
     // Get energy logs
