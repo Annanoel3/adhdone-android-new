@@ -383,6 +383,33 @@
       "default": false,
       "description": "Set to true when a task is marked urgent (or other significant change) to trigger schedule regeneration on the next cron run."
     },
+    "smart_nudge_paused_reason": {
+      "type": "string",
+      "description": "Why Smart Reminders are paused (smart_nudge_paused_at, cronSmartTaskNudge). 'away' = a week with no sign of them; any sign of them (opening the app, a Done, answering an alarm) starts them again. 'not_helping' = they said the reminders weren't helping and a week of one a day still got nothing finished the same day; only opening the app starts them again (still one a day). Empty on a pause from before Oct 31 2026 = away."
+    },
+    "smart_nudge_help_asked_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When Smart Reminders last asked 'Are your reminders helping?' (a push with Yes / No, cronSmartTaskNudge ARE THEY HELPING?). Not asked again within 30 days of this or of their answer."
+    },
+    "smart_nudge_help_answer": {
+      "type": "string",
+      "description": "Their answer to 'Are your reminders helping?' (remindersHelping): 'yes' = nothing changes; 'no' = one Smart Reminder a day (smart_nudge_one_a_day). The first answer to a question counts."
+    },
+    "smart_nudge_help_answered_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When they answered 'Are your reminders helping?'. On or after smart_nudge_help_asked_at = the question isn't waiting any more."
+    },
+    "smart_nudge_one_a_day": {
+      "type": "boolean",
+      "description": "They answered No to 'Are your reminders helping?': at most one Smart Reminder a day, enforced in cronSmartTaskNudge (the planner is told and picks the one). Times they set, events and birthdays aren't touched. Turned off by 'Back to normal' in Settings > Reminders."
+    },
+    "smart_nudge_one_a_day_since": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the current week of one a day started: their No, or opening the app after a not-helping pause. Once a week of it has gone by, 3 or more Smart Reminders went out in the last 7 days and none of their tasks got finished the same day, Smart Reminders pause (smart_nudge_paused_reason 'not_helping')."
+    },
     "tag_colors": {
       "type": "object",
       "additionalProperties": true,
