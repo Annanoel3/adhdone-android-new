@@ -113,7 +113,14 @@ function Planner() {
       const lastMsg = d?.messages?.[d.messages.length - 1];
       const lastContent = lastMsg?.content || "";
       const looksLikePlan = lastContent.includes("Month 1") && (lastContent.includes("Month 2") || lastContent.includes("Week 1"));
-      if (looksLikePlan && lastMsg?.role === "assistant") setPendingAction("plan_proposed");
+      // A conversation about changing a saved goal stays about that goal (the
+      // Goals app restored it as a new plan, and approving it made a second goal).
+      const editGoal = d?.editGoalId ? all.find((g) => g.id === d.editGoalId) : null;
+      if (editGoal && d?.messages?.length) setEditingGoal(editGoal);
+      if (editGoal && lastMsg?.role === "assistant" && (d?.pendingAction === "edit_approved" || lastContent.includes("EDIT_APPROVED"))) {
+        setPendingAction("edit_approved");
+        setPendingGoalId(editGoal.id);
+      } else if (looksLikePlan && lastMsg?.role === "assistant") setPendingAction("plan_proposed");
       // Closed while the planner was answering: the question is saved, the
       // answer never came. Offer to ask again.
       if (lastMsg?.role === "user") setChatError(true);
@@ -198,7 +205,7 @@ function Planner() {
         : (editingGoal?.month_titles || {});
       const updatedMessages = [...convo, { role: "assistant", content: message, goalMonthTitles: newMonthTitles }];
       setMessages(updatedMessages);
-      writeSession({ startedAt: new Date().toISOString(), messages: updatedMessages, pendingAction: action || null, completed: false });
+      writeSession({ startedAt: new Date().toISOString(), messages: updatedMessages, pendingAction: action || null, completed: false, editGoalId: editingGoal?.id || null });
 
       const looksLikeFullPlan = message.includes("Month 1") && (message.includes("Month 2") || message.includes("Week 1") || message.includes("Week 2"));
       if (action === "edit_approved" || message.includes("EDIT_APPROVED")) {
@@ -233,9 +240,9 @@ function Planner() {
     setMessages(newMessages);
     setInput("");
     // Saved before the planner answers: closing the app mid-answer keeps it.
-    writeSession({ startedAt: new Date().toISOString(), messages: newMessages, pendingAction, completed: false });
+    writeSession({ startedAt: new Date().toISOString(), messages: newMessages, pendingAction, completed: false, editGoalId: editingGoal?.id || null });
     await askPlanner(newMessages, content);
-  }, [isChatLoading, pendingAction, askPlanner]);
+  }, [isChatLoading, pendingAction, askPlanner, editingGoal]);
 
   const retryLast = () => {
     const convo = messagesRef.current;
