@@ -77,7 +77,7 @@ Do not describe, revive, or reference removed crons. The live senders are:
 |---|---|---|
 | `cronRefillReminders` | hourly | Books recurring-task pushes, writes the reminder plan for one-time tasks dated more than ~30 days out, promotes planned event/birthday reminders into OneSignal's ~30-day window, yearly birthday rollover, repeating-task rollover (a task not checked off by 4 AM their time moves on to the next day, with its reminders, when it repeats again the very next day: every day, weekdays Mon–Thu, Saturday into Sunday; one with a gap before its next day (weekly, monthly, Friday to Monday) stays until checked off and the app makes the next copy then; a repeating event moves on to its next date once it has happened; Anna, Oct 17–18 2026), day-of birthday text follow-ups ("Write a text for X" / "Text X!") every 3 hours until the text is sent or the birthday is checked done (Anna, Oct 29 2026: "once every 3 hours"; they were hourly). Those follow-ups replace the plain "It's X's birthday today!" for a person's birthday (`textCoversTheDay`, same rule in the client's birthdayScheduler; one already booked is cancelled by the cron): Tricia got "Write a text for Twins" at 8:00, the birthday at 9:00 and "Write a text" again at 9:15. A pet's birthday, your own, and a text already sent keep the day-of reminder |
 | `cronSmartTaskNudge` | every 10 min | Smart Reminders, which covers nearly every task. The AI picks only each person's NEXT nudge, the run sends it when due, then the AI looks again. Never a day booked ahead: see §10 before touching it |
-| `cronDailyDigest` | every 30 min | One morning summary per user after quiet hours end |
+| `cronDailyDigest` | every 30 min | One morning summary per user after quiet hours end (none while Smart Reminders has them paused for a week away). Also the evening "What's one win from today?" (Anna, Oct 30 2026): once a day in the hour before their quiet hours start (9 PM with quiet hours off), phone accounts only, not on their first day, not when away a week or paused, not when a win is already saved today (`Win`), claimed per day with `win_ask_date`, never stacked (ledger kind `motivation`). Data `{ type: 'win_ask' }` opens the win box |
 | `cronCommuteWatch` | every 5 min (since Oct 17 2026; was 15) | Work: "Time to leave" + traffic heads-up. Events: re-checks each booked "leave now" on live traffic for its last 3 hours (every 15 min, then every run for the last 30), moves it earlier (never later) when traffic is worse, and updates its drive-time words before it goes (Anna, Oct 17 2026: live traffic, not a one-time forecast). Both: for 30 min after a "leave now", one plain "traffic got worse, you may get there around X" push if they would now be 5+ min late. Google measurements stay every 15 min when nothing is close, since Google bills each one |
 | `onTaskUpdate` | Task entity events | Cancels / re-books on complete, delete, back-burner, un-complete, reminder-field edits. Leaves a snoozed task and a task in Focus Mode alone |
 | `cronDuplicateWatch` | hourly | Cleans duplicates, emails the owner — sends no user pushes |
@@ -405,6 +405,16 @@ How it works, and how it must keep working:
    she typed it (10:49 PM Oct 22), the acupuncture call 10 minutes after (Oct 20). Tested
    on the 10:49 PM look: old wording sent it at once, new wording held it for the morning;
    "call CVS before they close at 11" still went out at once.
+
+9. **Paused after a week away, with a heads-up (Anna, Oct 30 2026, replacing the Oct 18
+   19-day pause).** "Around" = opening the app, finishing a task (a notification's Done counts)
+   or answering an alarm (anything but rang out). On day 6 one heads-up names the tasks Smart
+   Reminders has been mentioning ("Reminders for "Take pills" will pause tomorrow. No worries,
+   just open ADHDone anytime and they'll pick right back up."); none mentioned = no heads-up.
+   From day 7, and at least 20 hours after the heads-up, Smart Reminders and the morning
+   summary stop (`smart_nudge_paused_at`; heads-up `smart_nudge_pause_warned_at`). Any sign of
+   them resumes both. Times they set, events and birthdays keep ringing. Why: Angel's one-time
+   "pills, remind me tomorrow at 9" was asked about every day for two weeks after he left.
 
 **Do not change `base44/functions/cronSmartTaskNudge`, `base44/shared/reminderBrief.ts`, the
 "Smart Task Nudge" workflow, or the `smart_nudge_*` fields on User unless Anna explicitly
