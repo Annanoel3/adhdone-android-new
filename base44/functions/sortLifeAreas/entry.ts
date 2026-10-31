@@ -1,39 +1,43 @@
 // Sorts what a person finished (and the events and birthdays that happened)
-// into areas of life, for the "areas of life" bubbles on the Insights page
-// (src/components/progress/LifeAreasCard.jsx). The answer is saved on each
-// task as Task.life_category.
+// into areas of life, and counts them, for the "areas of life" bubbles on the
+// Insights page (src/components/progress/LifeAreasCard.jsx).
+//
+// The answer is kept in its own table, TaskLifeArea (one row per task:
+// task_id, user_email, area, happened_at), written and read only here, through
+// the service role. It NEVER writes to Task: any Task write bumps updated_date,
+// and Smart Reminders (cronSmartTaskNudge, completionsByUser) dates finished
+// tasks by updated_date, so sorting old tasks would look like a pile of tasks
+// finished today.
 //
 // The model judges, the way a human assistant who knows the person would: no
 // keyword lists (Anna's rule for every prompt in this app), on gpt-6-astra like
 // every judgment made for users. What the person wrote about themselves
 // (User.about_me) goes with every call, so a nurse's "chart notes" is work.
 //
-// Which tasks count ("happened" in the last `days` days), the same rule as the
-// card: finished tasks (completed_at in range, steps included), events whose
-// time is in range and already past (not cancelled), and birthdays whose day
-// fell in range (Task.next_reminder is the birthday; once it has rolled over
-// to next year, a year back is this year's). Only ones with no life_category
-// yet: running it twice never re-sorts anything.
-//
-// Writes ONLY life_category, one task at a time. That field is not in the
-// "Reschedule OneSignal on Task Edit" trigger list, so these writes set off no
-// reminder work (onTaskUpdate never runs for them). Keep it out of that list.
+// Which tasks count ("happened" in the window): finished tasks (completed_at in
+// range, steps included), events whose time is in range and already past (not
+// cancelled), and birthdays whose day fell in range (Task.next_reminder is the
+// birthday; once it has rolled over to next year, a year back is this year's).
+// A task that already has a row is never sent again; a deleted task's row is
+// never counted (counts come from the tasks found now, joined to the rows).
 //
 // Body:
-//   { days?: 1..90 (default 30) }                → sorts the caller's tasks
-//                                                   → { sorted, remaining }
-//   { days?, dry_run: true }                      → same model call, nothing
-//                                                   written; the would-be
-//                                                   changes with titles
-//   { dry_run: true, samples: ["title", ...] }    → admin only: sorts the
-//                                                   strings as task titles
-//                                                   (self-test), max 80
-//   { all_users: true, days?, skip?, dry_run? }   → admin only: everyone active
-//                                                   in the last `days` days, one
-//                                                   person at a time, stops after
-//                                                   ~4 minutes → { done: false,
-//                                                   users_done, next_skip }; call
-//                                                   again with skip: next_skip
+//   { days? }   days = 1..3650, null = all time, left out = 30. Sorts up to
+//               300 of the caller's unsorted tasks in the window (most recent
+//               first) and counts the window
+//               → { counts: { work, home, health, family_friends, money,
+//                   errands, self_care, pets }, total, sorted, remaining }
+//               counts/total = tasks in the window that have an area;
+//               sorted = newly sorted by this call; remaining = in the window,
+//               still without an area.
+//   { days?, dry_run: true }  → same model call, nothing written; also the
+//               rows it would create, with titles (counts include them)
+//   { dry_run: true, samples: ["title", ...], about? }  → admin only: sorts
+//               the strings as task titles (self-test), max 80
+//   { all_users: true, days? (1..90, default 30), skip?, dry_run? } → admin
+//               only: everyone active in the last `days` days, one person at a
+//               time, stops after ~4 minutes → { done: false, users_done,
+//               next_skip }; call again with skip: next_skip
 //
 // Logs counts only, never titles.
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.44";
@@ -45,12 +49,14 @@ const AREAS = ['work', 'home', 'health', 'family_friends', 'money', 'errands', '
 const AREA_SET = new Set<string>(AREAS);
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_DAYS = 30;
-const MAX_DAYS = 90;
+const MAX_DAYS = 3650;           // a normal call (the card's Year and All time)
+const MAX_DAYS_ALL_USERS = 90;   // the admin backfill
 const BATCH = 80;                // items per model call
 const MODEL_CALLS_AT_ONCE = 4;
 const CAP_PER_CALL = 300;        // tasks sorted per person on a normal call
 const CAP_PER_PERSON_ALL = 2000; // per person on an all_users run (time-bounded)
-const WRITES_AT_ONCE = 5;
+const LOOKUP_CHUNK = 100;        // task ids per TaskLifeArea lookup
+const CREATE_CHUNK = 100;        // rows per bulkCreate
 // all_users: no new person or model call starts after this, so a run that
 // started one just before it still wraps up at about 4 minutes.
 const ALL_USERS_BUDGET_MS = 200 * 1000;
@@ -86,6 +92,8 @@ const ms = (iso: any) => {
   return Number.isFinite(t) ? t : NaN;
 };
 
+const emailKey = (email: any) => String(email || '').trim().toLowerCase();
+
 function chunk<T>(arr: T[], n: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
@@ -103,11 +111,16 @@ async function pool<T>(items: T[], n: number, fn: (x: T) => Promise<void>) {
   await Promise.all(workers);
 }
 
-function clampDays(v: any): number {
+// The window in days: null = all time (a normal call only).
+function windowDays(v: any, max: number, allowAllTime: boolean): number | null {
+  if (v === undefined) return DEFAULT_DAYS;
+  if (allowAllTime && (v === null || v === 'all')) return null;
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return DEFAULT_DAYS;
-  return Math.min(Math.max(1, Math.round(n)), MAX_DAYS);
+  return Math.min(Math.max(1, Math.round(n)), max);
 }
+
+const emptyCounts = () => Object.fromEntries(AREAS.map((a) => [a, 0])) as Record<string, number>;
 
 // When a birthday's day was, for the year it last came round: next_reminder is
 // the birthday itself, and it rolls over to next year once the day is past.
@@ -120,7 +133,6 @@ function birthdayDayMs(t: any, nowMs: number): number {
 }
 
 // When the task "happened" inside [sinceMs, nowMs], or NaN when it didn't.
-// The same rule as happenedAt in LifeAreasCard.jsx: change both together.
 function happenedAt(t: any, sinceMs: number, nowMs: number): number {
   if (!t || t.status === 'cancelled') return NaN;
   const inRange = (x: number) => Number.isFinite(x) && x >= sinceMs && x <= nowMs;
@@ -139,14 +151,14 @@ function happenedAt(t: any, sinceMs: number, nowMs: number): number {
   return NaN;
 }
 
-// Every task of this person's that happened in the window and isn't sorted
-// yet, most recent first.
-async function unsortedTasks(entity: any, email: string, sinceMs: number, nowMs: number): Promise<any[]> {
-  const sinceIso = new Date(sinceMs).toISOString();
+// Every task of this person's that happened in the window, most recent first,
+// with when it happened. sinceMs = -Infinity for all time.
+async function windowTasks(entity: any, email: string, sinceMs: number, nowMs: number): Promise<{ t: any; at: number }[]> {
   const nowIso = new Date(nowMs).toISOString();
+  const range = Number.isFinite(sinceMs) ? { $gte: new Date(sinceMs).toISOString(), $lte: nowIso } : { $lte: nowIso };
   const [done, events, birthdays] = await Promise.all([
-    entity.filter({ created_by: email, status: 'completed', completed_at: { $gte: sinceIso } }, '-completed_at', 2000),
-    entity.filter({ created_by: email, classification: 'event', event_time: { $gte: sinceIso, $lte: nowIso } }, '-event_time', 1000),
+    entity.filter({ created_by: email, status: 'completed', completed_at: range }, '-completed_at', 2000),
+    entity.filter({ created_by: email, classification: 'event', event_time: range }, '-event_time', 1000),
     entity.filter({ created_by: email, birthday_person: { $nin: [null, ''] } }, '-created_date', 1000),
   ]);
   const byId = new Map<string, any>();
@@ -155,9 +167,21 @@ async function unsortedTasks(entity: any, email: string, sinceMs: number, nowMs:
   }
   return [...byId.values()]
     .map((t) => ({ t, at: happenedAt(t, sinceMs, nowMs) }))
-    .filter(({ t, at }) => Number.isFinite(at) && !AREA_SET.has(String(t.life_category || '')))
-    .sort((a, b) => b.at - a.at)
-    .map(({ t }) => t);
+    .filter(({ at }) => Number.isFinite(at))
+    .sort((a, b) => b.at - a.at);
+}
+
+// task id -> area, from this person's TaskLifeArea rows for these tasks.
+async function savedAreas(rowsEntity: any, ownerKey: string, taskIds: string[]): Promise<Map<string, string>> {
+  const found = new Map<string, string>();
+  await pool(chunk(taskIds, LOOKUP_CHUNK), 4, async (ids) => {
+    const rows = await rowsEntity.filter({ user_email: ownerKey, task_id: { $in: ids } }, '-created_date', ids.length * 3);
+    for (const r of rows || []) {
+      // Newest first: two calls that raced can leave two rows; the newer wins.
+      if (r?.task_id && AREA_SET.has(String(r.area)) && !found.has(r.task_id)) found.set(r.task_id, r.area);
+    }
+  });
+  return found;
 }
 
 // What the model sees about one task: facts only.
@@ -225,45 +249,70 @@ async function judge(openai: any, about: string, tasks: any[], deadline: number)
   return { picked, cut };
 }
 
-// The whole job for one person. Writes through `entity` (the caller's own
-// client, or the service role on an all_users run).
-async function sortPerson(openai: any, entity: any, email: string, about: string, opts: {
+// New TaskLifeArea rows, a chunk at a time. A chunk the bulk call refuses is
+// tried one row at a time. Returns the task ids that were saved.
+async function saveRows(rowsEntity: any, rows: any[]): Promise<Set<string>> {
+  const saved = new Set<string>();
+  for (const part of chunk(rows, CREATE_CHUNK)) {
+    try {
+      await rowsEntity.bulkCreate(part);
+      part.forEach((r) => saved.add(r.task_id));
+    } catch (e) {
+      console.error(`[sortLifeAreas] bulk save of ${part.length} failed, saving one by one:`, (e as any)?.message || e);
+      await pool(part, 5, async (r) => {
+        try {
+          await rowsEntity.create(r);
+          saved.add(r.task_id);
+        } catch (err) {
+          console.error('[sortLifeAreas] save failed:', (err as any)?.message || err);
+        }
+      });
+    }
+  }
+  return saved;
+}
+
+// The whole job for one person: find the window's tasks (through `taskEntity`:
+// the caller's own client, or the service role on an all_users run), sort the
+// ones with no row yet, save the new rows (service role), count.
+async function sortPerson(openai: any, taskEntity: any, rowsEntity: any, email: string, about: string, opts: {
   sinceMs: number; nowMs: number; dryRun: boolean; cap: number; deadline: number;
 }) {
-  const unsorted = await unsortedTasks(entity, email, opts.sinceMs, opts.nowMs);
+  const owner = emailKey(email);
+  const tasks = await windowTasks(taskEntity, email, opts.sinceMs, opts.nowMs);
+  const known = tasks.length ? await savedAreas(rowsEntity, owner, tasks.map((x) => x.t.id)) : new Map<string, string>();
+  const unsorted = tasks.filter((x) => !known.has(x.t.id));
   const todo = unsorted.slice(0, opts.cap);
-  const { picked, cut } = todo.length ? await judge(openai, about, todo, opts.deadline) : { picked: new Map<string, string>(), cut: false };
+  const { picked, cut } = todo.length
+    ? await judge(openai, about, todo.map((x) => x.t), opts.deadline)
+    : { picked: new Map<string, string>(), cut: false };
 
-  let written = 0;
-  let failed = 0;
-  if (!opts.dryRun && picked.size) {
-    await pool([...picked.entries()], WRITES_AT_ONCE, async ([id, area]) => {
-      try {
-        await entity.update(id, { life_category: area });
-        written++;
-      } catch (e) {
-        failed++;
-        console.error('[sortLifeAreas] write failed:', (e as any)?.message || e);
-      }
-    });
+  const newRows = todo
+    .filter((x) => picked.has(x.t.id))
+    .map((x) => ({ task_id: x.t.id, user_email: owner, area: picked.get(x.t.id), happened_at: new Date(x.at).toISOString() }));
+  let saved = new Set<string>();
+  if (!opts.dryRun && newRows.length) saved = await saveRows(rowsEntity, newRows);
+  const fresh = opts.dryRun ? new Set(newRows.map((r) => r.task_id)) : saved;
+
+  const counts = emptyCounts();
+  let total = 0;
+  for (const { t } of tasks) {
+    const area = known.get(t.id) ?? (fresh.has(t.id) ? picked.get(t.id) : undefined);
+    if (area && AREA_SET.has(area)) {
+      counts[area]++;
+      total++;
+    }
   }
-  const sorted = opts.dryRun ? picked.size : written;
-  const changes = opts.dryRun
-    ? todo.filter((t) => picked.has(t.id)).map((t) => ({
-      id: t.id,
-      title: t.title || '',
-      field: 'life_category',
-      from: t.life_category ?? null,
-      to: picked.get(t.id),
-    }))
-    : [];
+  const titles = new Map(todo.map((x) => [x.t.id, x.t.title || '']));
   return {
+    counts,
+    total,
     found: unsorted.length,
-    sorted,
-    failed,
-    remaining: Math.max(0, unsorted.length - sorted),
+    sorted: fresh.size,
+    failed: opts.dryRun ? 0 : newRows.length - saved.size,
+    remaining: tasks.length - total,
     cut: cut || unsorted.length > opts.cap,
-    changes,
+    changes: opts.dryRun ? newRows.map((r) => ({ task_id: r.task_id, title: titles.get(r.task_id) || '', area: r.area, happened_at: r.happened_at })) : [],
   };
 }
 
@@ -280,11 +329,10 @@ export default async function (req: Request) {
 
     const body: any = await req.json().catch(() => ({}));
     const dryRun = body?.dry_run === true;
-    const days = clampDays(body?.days);
     const nowMs = Date.now();
-    const sinceMs = nowMs - days * DAY_MS;
     const isAdmin = user.role === 'admin';
     const openai = lean(new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') }), { name: 'sortLifeAreas' });
+    const rowsEntity = base44.asServiceRole.entities.TaskLifeArea;
 
     // Self-test: strings sorted as if they were task titles. Nothing is read or written.
     if (body?.samples !== undefined) {
@@ -305,8 +353,9 @@ export default async function (req: Request) {
     // Everyone active in the window, one person at a time.
     if (body?.all_users === true) {
       if (!isAdmin) return Response.json({ error: 'Forbidden' }, { status: 403 });
-      const started = Date.now();
-      const deadline = started + ALL_USERS_BUDGET_MS;
+      const days = windowDays(body?.days, MAX_DAYS_ALL_USERS, false) as number;
+      const sinceMs = nowMs - days * DAY_MS;
+      const deadline = Date.now() + ALL_USERS_BUDGET_MS;
       const skip = Math.max(0, Math.floor(Number(body?.skip) || 0));
       // Oldest account first: a stable order, so `skip` means the same people
       // from one call to the next.
@@ -323,7 +372,7 @@ export default async function (req: Request) {
       for (let i = skip; i < people.length; i++) {
         if (Date.now() > deadline) { stopped = true; break; }
         const u = people[i];
-        const r = await sortPerson(openai, base44.asServiceRole.entities.Task, u.email, clip(u.about_me, 600), {
+        const r = await sortPerson(openai, base44.asServiceRole.entities.Task, rowsEntity, u.email, clip(u.about_me, 600), {
           sinceMs, nowMs, dryRun, cap: CAP_PER_PERSON_ALL, deadline,
         });
         sorted += r.sorted;
@@ -345,7 +394,7 @@ export default async function (req: Request) {
       }
       const nextSkip = skip + usersDone;
       const done = !stopped && nextSkip >= people.length;
-      console.log(`[sortLifeAreas] all_users${dryRun ? ' (dry run)' : ''}: ${usersDone} people, ${sorted} sorted, ${remaining} left, ${failed} writes failed, ${done ? 'done' : `next_skip ${nextSkip}`}`);
+      console.log(`[sortLifeAreas] all_users${dryRun ? ' (dry run)' : ''}: ${usersDone} people, ${sorted} sorted, ${remaining} left, ${failed} saves failed, ${done ? 'done' : `next_skip ${nextSkip}`}`);
       return Response.json({
         done,
         users_done: usersDone,
@@ -353,19 +402,22 @@ export default async function (req: Request) {
         users_total: people.length,
         sorted,
         remaining,
-        ...(failed ? { write_failures: failed } : {}),
+        ...(failed ? { save_failures: failed } : {}),
         ...(dryRun ? { dry_run: true, per_user: perUser } : {}),
       });
     }
 
-    // The caller's own tasks.
+    // The caller's own tasks: sort what's new, count the window.
+    const days = windowDays(body?.days, MAX_DAYS, true);
+    const sinceMs = days === null ? -Infinity : nowMs - days * DAY_MS;
     // CAP_PER_CALL is 4 batches, all sent at once, so no deadline is needed.
-    const r = await sortPerson(openai, base44.entities.Task, user.email, clip(user.about_me, 600), {
+    const r = await sortPerson(openai, base44.entities.Task, rowsEntity, user.email, clip(user.about_me, 600), {
       sinceMs, nowMs, dryRun, cap: CAP_PER_CALL, deadline: Infinity,
     });
-    console.log(`[sortLifeAreas] ${dryRun ? 'dry run: ' : ''}${r.found} unsorted, ${r.sorted} sorted, ${r.remaining} left${r.failed ? `, ${r.failed} writes failed` : ''}`);
-    if (dryRun) return Response.json({ dry_run: true, days, sorted: r.sorted, remaining: r.remaining, changes: r.changes });
-    return Response.json({ sorted: r.sorted, remaining: r.remaining });
+    console.log(`[sortLifeAreas] ${dryRun ? 'dry run: ' : ''}${r.found} unsorted, ${r.sorted} sorted, ${r.total} counted, ${r.remaining} left${r.failed ? `, ${r.failed} saves failed` : ''}`);
+    const answer = { counts: r.counts, total: r.total, sorted: r.sorted, remaining: r.remaining };
+    if (dryRun) return Response.json({ dry_run: true, days, ...answer, changes: r.changes });
+    return Response.json(answer);
   } catch (error) {
     console.error('[sortLifeAreas] Error:', (error as any)?.message || error);
     return Response.json({ error: String((error as any)?.message || error) }, { status: 500 });
