@@ -518,6 +518,18 @@
         "payment"
       ],
       "description": "Calendar/type classification. 'payment' = a bill or financial obligation (pay rent, pay credit card, transfer money) \u2014 behaves like a task everywhere but is visually tagged and filterable so users can review all their bills in one place. When set, overrides auto-detection in the calendar view."
+    },
+    "goal_id": {
+      "type": "string",
+      "description": "Set when this task is a Goal's step on the task list (src/components/goals, GoalStepSync). Each active goal has exactly ONE open task: its current step, or for a daily-habit goal one repeating task (every copy carries this). Made only from the app (never by a backend function). Empty for every other task."
+    },
+    "goal_step_id": {
+      "type": "string",
+      "description": "The GoalStep this task is for. Finishing the task marks that step completed (onTaskUpdate, and GoalStepSync on the next open); un-finishing marks it back. A repeating habit task's finished copies keep the step they were done for (the goal page's week tracker reads them). Empty when the goal was marked done with the task still open."
+    },
+    "goal_context": {
+      "type": "string",
+      "description": "One factual line about the goal this task belongs to (e.g. 'step 3 of 8 of their goal \"Run a 5K\"'), kept current by GoalStepSync. Smart Reminders sees it on the task's line; nothing else reads it."
     }
   },
   "required": [
