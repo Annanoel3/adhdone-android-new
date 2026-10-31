@@ -167,42 +167,23 @@ function titleFor(days, n) {
 }
 
 export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
-  const [counts, setCounts] = useState(null);
-  const [sorting, setSorting] = useState(false);
+  // The answer for the window on screen: { key, data } once it's in, error
+  // when the call failed.
+  const [answer, setAnswer] = useState({ key: null, data: null, error: false });
   const boxRef = useRef(null);
   const [width, setWidth] = useState(300);
   const dark = theme === "dark";
+  const key = windowKey(days);
 
   useEffect(() => {
     let alive = true;
-    setSorting(false);
-    (async () => {
-      let c;
-      try {
-        c = await loadCounts(days);
-      } catch (e) {
-        return; // keeps whatever was showing; nothing shows if it never loaded
-      }
-      if (!alive) return;
-      setCounts(c);
-      if (c.unsorted === 0 || c.total < MIN_ITEMS) return;
-      const sortDays = days == null ? SORT_MAX_DAYS : Math.min(days, SORT_MAX_DAYS);
-      if (!sortPending(sortDays)) return;
-      setSorting(true);
-      try {
-        await sortOnce(sortDays);
-      } catch (e) { /* a failed sort shows what's sorted so far */ }
-      if (!alive) return;
-      try {
-        const again = await loadCounts(days);
-        if (alive) setCounts(again);
-      } catch (e) { /* keep the first count */ }
-      if (alive) setSorting(false);
-    })();
+    areasFor(days).then(
+      (data) => { if (alive) setAnswer({ key, data, error: false }); },
+      () => { if (alive) setAnswer({ key, data: null, error: true }); }
+    );
     return () => { alive = false; };
-  }, [days]);
+  }, [days, key]);
 
-  const loaded = counts !== null;
   useEffect(() => {
     const el = boxRef.current;
     if (!el) return undefined;
@@ -218,17 +199,22 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, [loaded]);
+  }, []);
 
+  // Only an answer for the window on screen counts; while the next one loads,
+  // the card says it's sorting rather than showing the last window's bubbles.
+  const current = answer.key === key ? answer : { data: null, error: false };
+  const data = current.data;
   const layout = useMemo(
-    () => (counts ? layoutBubbles(counts.byArea, width) : { bubbles: [], height: 0 }),
-    [counts, width]
+    () => (data ? layoutBubbles(data.counts, width) : { bubbles: [], height: 0 }),
+    [data, width]
   );
 
-  if (!counts) return null;
-
-  const enough = counts.total >= MIN_ITEMS;
-  const showBubbles = enough && counts.sorted >= MIN_ITEMS;
+  const loading = !data && !current.error;
+  // Everything that happened in the window, sorted or not.
+  const happened = data ? data.total + (data.remaining || 0) : 0;
+  const enough = happened >= MIN_ITEMS;
+  const showBubbles = !!data && enough && data.total >= MIN_ITEMS;
   const areaCount = layout.bubbles.length;
   const muted = dark ? "text-gray-300" : "text-gray-600";
   const neutral = dark ? "bg-white/10 border border-white/10" : "bg-gray-100 border border-gray-200";
@@ -239,25 +225,24 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
       <CardHeader>
         <CardTitle className="flex items-start gap-2 leading-snug">
           <Shapes className="w-5 h-5 flex-shrink-0 mt-0.5" />
-          {showBubbles ? titleFor(counts.days, areaCount) : "Areas of life"}
+          {showBubbles ? titleFor(days, areaCount) : "Areas of life"}
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <div ref={boxRef} className="w-full">
-          {!enough && (
-            <p className={`text-sm ${muted}`}>Check off a few things to see where your time goes.</p>
-          )}
-
-          {enough && !showBubbles && sorting && (
+          {loading && (
             <p className={`text-sm flex items-center gap-2 ${muted}`}>
               <Loader2 className="w-4 h-4 animate-spin" />
               Sorting your tasks…
             </p>
           )}
 
-          {/* Enough happened but under 3 are sorted: the sort failed or ran
-              earlier this session. */}
-          {enough && !showBubbles && !sorting && (
+          {data && !enough && (
+            <p className={`text-sm ${muted}`}>Check off a few things to see where your time goes.</p>
+          )}
+
+          {/* The call failed, or enough happened but under 3 got an area. */}
+          {(current.error || (data && enough && !showBubbles)) && (
             <p className={`text-sm ${muted}`}>Couldn&apos;t sort your tasks yet. Check back later.</p>
           )}
 
@@ -322,15 +307,8 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
           </div>
         )}
 
-        {showBubbles && sorting && (
-          <p className={`text-xs flex items-center gap-1.5 ${muted}`}>
-            <Loader2 className="w-3 h-3 animate-spin" />
-            Sorting your tasks…
-          </p>
-        )}
-
-        {showBubbles && !sorting && counts.unsorted > 0 && (
-          <p className={`text-xs ${muted}`}>Sorted {counts.sorted} of {counts.total} so far.</p>
+        {showBubbles && data.remaining > 0 && (
+          <p className={`text-xs ${muted}`}>Sorted {data.total} of {happened} so far.</p>
         )}
       </CardContent>
     </Card>
