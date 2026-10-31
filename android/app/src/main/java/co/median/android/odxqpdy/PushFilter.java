@@ -418,6 +418,11 @@ public class PushFilter implements INotificationServiceExtension {
         e.event = data.optBoolean("event", false) || "event_reminder".equals(data.optString("type", ""));
         e.theirTime = data.optBoolean("theirTime", false);
         e.eased = data.optBoolean("eased", false);
+        // The push's own choices (Smart Reminders' "Are your reminders helping?"
+        // Yes / No, Oct 31 2026), JSON text or an array: shown in the snooze
+        // buttons' places, as an app-booked alarm's are (AlarmActivity.parseActions).
+        Object actions = data.opt("actions");
+        e.actionsJson = actions instanceof JSONArray || actions instanceof String ? String.valueOf(actions) : "";
         String title = notification.getTitle() != null ? notification.getTitle() : "";
         String body = notification.getBody() != null ? notification.getBody() : "";
         e.title = title.isEmpty() ? "ADHDone" : title;
