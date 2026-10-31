@@ -68,6 +68,23 @@ const SMART_PAUSE_AFTER_MS = 7 * DAY_MS;
 // always a real "tomorrow".
 const PAUSE_AFTER_WARNING_MS = 20 * 60 * 60 * 1000;
 const PAUSE_TITLE = 'Your reminders pause tomorrow';
+// ARE THEY HELPING? (Anna, Oct 31 2026; see the main loop). Presses on Smart
+// Reminders are looked at over the last week; asked at most once in 30 days;
+// after a No, one a day, and a week of that with nothing finished pauses them.
+const HELP_LOOKBACK_MS = 7 * DAY_MS;
+const HELP_ASK_REST_MS = 30 * DAY_MS;
+const HELP_TRIAL_MS = 7 * DAY_MS;
+// A Later, snooze or Home/Back this soon after a Smart Reminder about the same
+// task, with none of the task's own reminders in between, was a press on it.
+const HELP_PRESS_WINDOW_MS = 3 * 60 * 60 * 1000;
+const HELP_ASK_TITLE = 'Are your reminders helping?';
+const HELP_ASK_BODY = "Tap No and you'll only get one a day.";
+const HELP_PAUSE_TITLE = 'Reminders paused';
+const HELP_PAUSE_BODY = "Your reminders are paused for now. Just open ADHDone anytime and they'll start back up.";
+// Nobody is asked before this: the app's side (the Yes / No buttons, the popup,
+// recording the answer) only reaches phones once it's published, and an answer
+// tapped before then would be lost with the question counted as asked.
+const HELP_ASK_FROM = Date.parse('2026-10-31T18:00:00Z');
 // Sent nudges are kept this long (for "last nudged 3 days ago"), then dropped.
 const HISTORY_KEEP_MS = 7 * DAY_MS;
 // A nudge already queued to go out this soon survives a re-plan. Edits can
@@ -154,12 +171,22 @@ Deno.serve(async (req) => {
     // as_new: true (preview only) = plan as if they joined today, to check
     // the NEW HERE rule on a test account without making a new one.
     let previewAsNew = false;
+    // helping_preview: true (with an email; owner only) = what ARE THEY
+    // HELPING? (main loop) sees for that person right now: the presses it
+    // counts, what got finished, whether it would ask or pause. Saves and
+    // sends nothing, and makes no AI call.
+    let helpingPreview = false;
     try {
       const body = await req.json();
       if (body && typeof body.email === 'string') onlyEmail = body.email.trim();
       previewOnly = !!onlyEmail && body?.preview === true;
       previewAsNew = previewOnly && body?.as_new === true;
+      helpingPreview = !!onlyEmail && body?.helping_preview === true;
     } catch { /* scheduled run: no body */ }
+    if (helpingPreview) {
+      const me = await base44.auth.me().catch(() => null);
+      if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
+    }
 
     // 1. Users
     const allUsers = onlyEmail
@@ -337,6 +364,33 @@ Deno.serve(async (req) => {
       return last - first >= 7 * DAY_MS;
     };
 
+    // Every choice made on a reminder this past week, from the phone's own
+    // reports (AppEvent 'alarm_choice', one row per Later, snooze, Home/Back or
+    // ring-out: cancelTaskNotifications). Read once a run, only when someone
+    // could be asked (ARE THEY HELPING? below). A failed read counts as no
+    // presses: nobody is asked from missing data.
+    let choiceRows: Map<string, any[]> | null = null;
+    const choicesFor = async (who: string): Promise<any[]> => {
+      if (!choiceRows) {
+        choiceRows = new Map();
+        try {
+          const since = new Date(nowMs - HELP_LOOKBACK_MS - DAY_MS).toISOString();
+          const rows = await filterAll(base44.asServiceRole.entities.AppEvent, onlyEmail
+            ? { event: 'alarm_choice', user_email: onlyEmail.toLowerCase(), created_date: { $gte: since } }
+            : { event: 'alarm_choice', created_date: { $gte: since } });
+          for (const r of rows) {
+            const k = String(r?.user_email || '').toLowerCase();
+            if (!k) continue;
+            if (!choiceRows.has(k)) choiceRows.set(k, []);
+            choiceRows.get(k)!.push(r);
+          }
+        } catch (e) {
+          console.error('[SMART NUDGE] Reminder choices unavailable for ARE THEY HELPING?:', e);
+        }
+      }
+      return choiceRows.get(String(who || '').toLowerCase()) || [];
+    };
+
     for (const email of Object.keys(tasksByUser)) {
       const user = userMap[email];
       if (!user) continue;
@@ -356,6 +410,25 @@ Deno.serve(async (req) => {
       const quietEnabled = quiet.enabled;
       const startMin = quietEnabled ? quiet.startMin : 0;
       const endMin = quietEnabled ? quiet.endMin : 0;
+      if (helpingPreview) {
+        const dayOfP = (ms: number) => theirDayKey(new Date(ms), timeZone, startMin, endMin);
+        const logP = pruneSentLog(user.smart_nudge_sent_log || [], nowMs);
+        results.push({
+          email,
+          ...helpingLook({
+            user,
+            schedule: applySentLog(pruneHistory(user.smart_nudge_schedule || [], nowMs), logP),
+            sentLog: logP,
+            rows: await choicesFor(email),
+            taskById,
+            timeZone,
+            dayOf: dayOfP,
+            nowMs,
+          }),
+          note: 'Preview only: nothing was saved or sent.',
+        });
+        continue;
+      }
       if (isInQuietHours(now, startMin, endMin, timeZone)) continue;
 
       // Notifications are off for ADHDone on their phone (as the app saw it the
@@ -370,6 +443,35 @@ Deno.serve(async (req) => {
       // the app (opening it signs the phone up again), or a day has gone by.
       const unreachableAt = utcMs(user.push_unreachable_at);
       if (Number.isFinite(unreachableAt) && nowMs - unreachableAt < DAY_MS && !(utcMs(user.last_active_at) > unreachableAt)) continue;
+
+      // PAUSED BECAUSE THEY WEREN'T HELPING (ARE THEY HELPING? below; Anna,
+      // Oct 31 2026). Unlike the week-away pause, only opening the app ends
+      // it: a Later or a snooze is a sign of them, but it's the very thing that
+      // said the reminders weren't helping. Opened since the pause: Smart
+      // Reminders start again, still one a day (their answer was still No),
+      // with a fresh week to see whether that helps. Not yet: nothing is
+      // planned or sent, and no week-away heads-up goes on top of it.
+      if (user.smart_nudge_paused_reason === 'not_helping' && Number.isFinite(utcMs(user.smart_nudge_paused_at))) {
+        const openedMs = utcMs(user.last_active_at);
+        if (!(Number.isFinite(openedMs) && openedMs > utcMs(user.smart_nudge_paused_at))) continue;
+        if (!previewOnly) {
+          const restart = {
+            smart_nudge_paused_at: null,
+            smart_nudge_paused_reason: null,
+            smart_nudge_one_a_day_since: now.toISOString(),
+            smart_nudge_schedule_dirty: true,
+          };
+          try {
+            await base44.asServiceRole.entities.User.update(user.id, restart);
+            Object.assign(user, restart);
+            console.log(`[SMART NUDGE] ${email}: opened the app after a not-helping pause, Smart Reminders back on (one a day)`);
+          } catch (e: any) {
+            // Tried again next run; nothing goes out until it's recorded.
+            console.error(`[SMART NUDGE] Could not restart ${email} after the not-helping pause:`, e?.message || e);
+            continue;
+          }
+        }
+      }
 
       // PAUSED AFTER A WEEK AWAY (Anna, Oct 30 2026, replacing the Oct 18
       // 19-day pause): someone who hasn't been around for a week stops getting
@@ -390,8 +492,9 @@ Deno.serve(async (req) => {
       // Back after a pause (even just a Done on a notification): the morning
       // summary goes back on too (cronDailyDigest reads this field).
       if (Number.isFinite(pausedAtMs) && !pausedNow && !previewOnly) {
-        await base44.asServiceRole.entities.User.update(user.id, { smart_nudge_paused_at: null })
+        await base44.asServiceRole.entities.User.update(user.id, { smart_nudge_paused_at: null, smart_nudge_paused_reason: null })
           .catch((e: any) => console.error(`[SMART NUDGE] Could not clear the pause for ${email}:`, e?.message || e));
+        user.smart_nudge_paused_at = null;
       }
       if (Number.isFinite(awayFromMs) && nowMs - awayFromMs >= SMART_WARN_AFTER_MS) {
         if (pausedNow) continue;
@@ -422,6 +525,8 @@ Deno.serve(async (req) => {
           if (!previewOnly) {
             await base44.asServiceRole.entities.User.update(user.id, {
               smart_nudge_paused_at: now.toISOString(),
+              // Any sign of them ends this one (a not-helping pause waits for an app open).
+              smart_nudge_paused_reason: 'away',
               // A fresh plan when they're back, never a week-old one.
               smart_nudge_schedule_dirty: true,
             }).catch((e: any) => console.error(`[SMART NUDGE] Could not record the pause for ${email}:`, e?.message || e));
@@ -459,6 +564,100 @@ Deno.serve(async (req) => {
         schedule = schedule.filter((e: any) => e.sent);
         console.log(`[SMART NUDGE] ${email}: plan was not made with the current brief — dropped ${dropped} waiting nudge(s), re-planning`);
       }
+
+      // ARE THEY HELPING? (Anna, Oct 31 2026: some people keep pressing Later
+      // or snooze on Smart Reminders without ever finishing, and never open
+      // the app, so nobody could tell whether the reminders help them or are
+      // just noise; "helping" = the task got finished that same day.) Someone
+      // with a week of Smart Reminders who, in the last 7 days, put them off
+      // (Later, a snooze, Home/Back) on 4 or more different days and finished
+      // fewer than a quarter of those tasks the day they put them off, is asked
+      // once: "Are your reminders helping?" Yes / No, a plain push with two
+      // buttons (the app records the answer: remindersHelping). Not within 30
+      // days of the last ask or answer, not on one a day, not while paused.
+      // Yes changes nothing. No = ONE A DAY (below). If a week of one a day
+      // still gets none of the reminded tasks finished the same day (3 or more
+      // went out), one plain push says they're paused and opening the app
+      // starts them again (PAUSED BECAUSE THEY WEREN'T HELPING, above).
+      // Scheduled runs only, never during a week away (that has its own
+      // heads-up), never in the morning summary's hour, through the send
+      // ledger's spacing. Either push is this run's one push for them.
+      const oneADay = user.smart_nudge_one_a_day === true;
+      const awayNow = Number.isFinite(awayFromMs) && nowMs - awayFromMs >= SMART_WARN_AFTER_MS;
+      if (!onlyEmail && !previewOnly && !awayNow) {
+        const askedOrAnswered = Math.max(utcMs(user.smart_nudge_help_asked_at) || 0, utcMs(user.smart_nudge_help_answered_at) || 0);
+        const sentDays = new Set(sentLog.filter((l: any) => l && !l.skip).map((l: any) => dayOf(utcMs(l.at))));
+        const mayAsk = !oneADay && nowMs >= HELP_ASK_FROM && nowMs - askedOrAnswered >= HELP_ASK_REST_MS && sentDays.size >= 4;
+        const trialMs = utcMs(user.smart_nudge_one_a_day_since);
+        const mayPause = oneADay && Number.isFinite(trialMs) && nowMs - trialMs >= HELP_TRIAL_MS;
+        if (mayAsk || mayPause) {
+          const look = helpingLook({
+            user, schedule, sentLog, rows: mayAsk ? await choicesFor(email) : [],
+            taskById, timeZone, dayOf, nowMs,
+          });
+          const which: 'ask' | 'pause' | '' = mayAsk && look.would_ask ? 'ask' : mayPause && look.trial?.would_pause ? 'pause' : '';
+          const wokeAtMs = wakeStartMs(user, now, timeZone);
+          const morningHold = waitingForWake(user, now, timeZone, todayStr, quiet.endMin, dayOf) ||
+            (wokeAtMs != null && nowMs >= wokeAtMs && nowMs < wokeAtMs + 60 * 60 * 1000 && user.last_digest_date !== todayStr);
+          if (which && !morningHold) {
+            // As it is now, not as the run read it: answered, asked, put back
+            // to normal or opened the app in the meantime.
+            const fresh = await freshUser(base44, user);
+            const openedMs = utcMs(fresh?.last_active_at);
+            const inAppNow = Number.isFinite(openedMs) && nowMs - openedMs < 30 * 60 * 1000;
+            const stillSo = !!fresh && (which === 'ask'
+              ? fresh.smart_nudge_one_a_day !== true &&
+                nowMs - Math.max(utcMs(fresh.smart_nudge_help_asked_at) || 0, utcMs(fresh.smart_nudge_help_answered_at) || 0) >= HELP_ASK_REST_MS
+              : fresh.smart_nudge_one_a_day === true && !Number.isFinite(utcMs(fresh.smart_nudge_paused_at)) && !inAppNow);
+            const gate = stillSo ? await ledgerCheck(base44, { email, kind: 'general' }) : { allowed: false };
+            if (stillSo && gate.allowed) {
+              const nowIso = now.toISOString();
+              // Recorded BEFORE the push goes, so a save that fails can never
+              // send the same question or pause notice again on the next run;
+              // undone if the push doesn't go.
+              const mark: any = which === 'ask'
+                ? { smart_nudge_help_asked_at: nowIso }
+                : { smart_nudge_paused_at: nowIso, smart_nudge_paused_reason: 'not_helping', smart_nudge_schedule_dirty: true };
+              const undo: any = which === 'ask'
+                ? { smart_nudge_help_asked_at: fresh.smart_nudge_help_asked_at || null }
+                : { smart_nudge_paused_at: null, smart_nudge_paused_reason: null };
+              let marked = false;
+              try {
+                await base44.asServiceRole.entities.User.update(user.id, mark);
+                marked = true;
+              } catch (e: any) {
+                console.error(`[SMART NUDGE] Could not record ${which === 'ask' ? 'the helping question' : 'the not-helping pause'} for ${email}, not sending it:`, e?.message || e);
+              }
+              const outcome = marked ? await sendHelpPush(email, which, nowIso) : false;
+              if (outcome) {
+                if (outcome === UNSUBSCRIBED) {
+                  // Nothing reaches this phone: the account rests until they're
+                  // back (push_unreachable_at). The question waits for then (it
+                  // wasn't seen); the pause stays.
+                  await base44.asServiceRole.entities.User.update(user.id, { push_unreachable_at: nowIso, ...(which === 'ask' ? undo : {}) })
+                    .catch((e: any) => console.error(`[SMART NUDGE] Could not mark ${email} unreachable:`, e?.message || e));
+                } else {
+                  await ledgerRecord(base44, { email, kind: 'general', source: 'smart_helping', notificationId: outcome, title: which === 'ask' ? HELP_ASK_TITLE : HELP_PAUSE_TITLE });
+                }
+                console.log(`[SMART NUDGE] ${email}: ${which === 'ask' ? `asked "${HELP_ASK_TITLE}" (put off on ${look.press_days} days, ${look.finished_pairs} of ${look.pairs} finished that day)` : `paused, not helping (${look.trial?.reminders_in_window} sent this week, none finished that day)`}${outcome === UNSUBSCRIBED ? ' — phone not reachable' : ''}`);
+                continue;
+              }
+              // OneSignal failed for a passing reason: undone, tried again next run.
+              if (marked) {
+                await base44.asServiceRole.entities.User.update(user.id, undo)
+                  .catch((e: any) => console.error(`[SMART NUDGE] Could not undo ${which} for ${email}:`, e?.message || e));
+              }
+            }
+          }
+        }
+      }
+      // ONE A DAY (they answered No to ARE THEY HELPING?): one Smart Reminder a
+      // day, in all, enforced here and again right before a send, not left to
+      // the planner (it's told, and picks the single most worthwhile one).
+      // Once today's has gone out, nothing more is planned or sent until their
+      // next day. Times they set, events and birthdays aren't Smart Reminders
+      // and aren't touched.
+      if (oneADay && !previewOnly && sentLog.some((l: any) => l && !l.skip && dayOf(utcMs(l.at)) === todayStr)) continue;
 
       // Is the plan out of date? Something the planner reads changed after it
       // was made: onTaskUpdate marked it (the flag, or a newer mark time), a
@@ -740,6 +939,7 @@ Deno.serve(async (req) => {
             return Number.isFinite(made) && nowMs - made < DAY_MS && !sentLog.some((l: any) => l && !l.skip);
           })(),
           sentSinceSeen,
+          oneADay,
           seenCountIsFloor: Number.isFinite(seenMs) && seenMs < nowMs - 3 * DAY_MS,
           laterLook: todaysEntries.some((e: any) => e.sent && !e.skipped_reason),
           // When the parked-list roundup last went out (the sent log keeps a week).
@@ -753,6 +953,7 @@ Deno.serve(async (req) => {
           results.push({
             email,
             planner: useBrief ? REMINDER_BRIEF_VERSION : 'old prompt',
+            one_a_day: oneADay,
             shown: lastPrompt,
             nudges: newEntries,
             passed: lastPassed,
@@ -1089,6 +1290,16 @@ Deno.serve(async (req) => {
           console.log(`[SMART NUDGE] Last look: "${entry.title}" for ${email} not sent (${lastLookSkip} since the run started)`);
           continue;
         }
+        // ONE A DAY: another run may have sent today's one since this run read
+        // the log (the ledger has every Smart Reminder the moment it goes).
+        if (oneADay && await sentTodayInLedger(base44, email, dayOf, todayStr, nowMs)) {
+          entry.sent = true;
+          entry.sent_at = now.toISOString();
+          entry.skipped_reason = 'one_a_day';
+          newLog.push({ k: entryKey(entry), at: entry.sent_at, skip: 'one_a_day' });
+          console.log(`[SMART NUDGE] "${entry.title}" for ${email} not sent: one a day, today's already went out`);
+          break;
+        }
         const outcome = await sendNudgeNotification(email, entry.title, entry.body, entry.task_id, ringsOutLoud, entry.type === 'roundup' ? 'roundup' : 'smart_nudge', !!(easedNow && ringsOutLoud));
         if (outcome === UNSUBSCRIBED) {
           // Nothing can reach this phone: this nudge is done with (not tried
@@ -1141,6 +1352,9 @@ Deno.serve(async (req) => {
           console.error(`[SMART NUDGE] Failed to record sent nudges for ${email}:`, e);
         }
       }
+    }
+    if (helpingPreview && results.length === 0) {
+      results.push({ email: onlyEmail, note: 'No open Smart Reminders task (or no such account): Smart Reminders is not looking at this person right now, so nothing would be asked or paused.' });
     }
     console.log(`[SMART NUDGE] Done — ${nudgesSent} nudge(s) sent, ${schedulesGenerated} schedule(s) generated at ${now.toISOString()}`);
     // "Last ran at", for the owner health check (cronRefillReminders). Only a
@@ -1527,6 +1741,8 @@ interface PlanContext {
   dayStart?: string;
   // Joined in the last day, nothing from Smart Reminders yet.
   newAccount?: boolean;
+  // They answered No to "Are your reminders helping?": one a day (ONE A DAY).
+  oneADay?: boolean;
   lastSeenMs: number;
   sentSinceSeen: number;
   seenCountIsFloor: boolean;
@@ -2019,6 +2235,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     out.push(`Quiet hours: ${noQuietHours ? 'none (turned off)' : `${quietStartStr} to ${quietEndStr}`}. Time left before ${noQuietHours ? 'midnight' : 'bedtime (when their quiet hours start)'}: ${hoursLeftStr}.`);
     if (Number.isFinite(lastSeenMs)) out.push(`Last opened the app: ${whenLabel(lastSeenMs)} (${daysAgoLabel(lastSeenMs)}).`);
     if (ctx.dayStart) out.push(ctx.dayStart);
+    if (ctx.oneADay) out.push("ONE A DAY: the app asked whether your reminders were helping and they said no, so they get ONE from you a day now, in all, and today's hasn't gone out yet. Of everything here, pick the single mention most worth their attention today, at the moment it's most likely to get done; if that moment isn't now, wait for it. Nothing more from you reaches them today after it.");
     if (ctx.newAccount) out.push('NEW HERE: they joined ADHDone today, and nothing from you has reached them yet. These are their first tasks. Make sure at least one of them gets a mention today, at a waking hour, even one with no date or a low priority, so they see the app actually work. Not tomorrow.');
     if (aboutMe.trim()) out.push(`What they told you about themselves, in their own words: ${aboutMe.trim()}`);
     if (work.lines.length) out.push(`Work schedule (${work.remote ? 'works from home' : 'goes in to work'}${work.quietAtWork ? '; they turned on "don\'t notify me at work", so nothing goes out during those hours' : ''}):\n${work.lines.map((l) => `- ${l}`).join('\n')}`);
@@ -2287,6 +2504,258 @@ Return ONLY valid JSON:
   } catch (e) {
     console.error('[SMART NUDGE] LLM error:', e);
     return null;
+  }
+}
+
+// ── ARE THEY HELPING? (main loop) ────────────────────────────────────────────
+
+// Presses that say "not now" (a ring-out, or the alarm's Open, isn't one).
+const HELP_CHOICES = new Set(['later', 'snooze', 'closed']);
+
+// The instant a wall-clock time falls on, on the local date of `ms`.
+function zoneClock(ms: number, timeZone: string, hour: number, minute: number): number {
+  try {
+    const parts = (at: number) => {
+      const g: Record<string, number> = {};
+      for (const x of new Intl.DateTimeFormat('en-US', {
+        timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+      }).formatToParts(new Date(at))) if (x.type !== 'literal') g[x.type] = Number(x.value);
+      return g;
+    };
+    const d = parts(ms);
+    const want = Date.UTC(d.year, d.month - 1, d.day, hour, minute, 0);
+    let guess = want;
+    for (let i = 0; i < 2; i++) {
+      const z = parts(guess);
+      guess += want - Date.UTC(z.year, z.month - 1, z.day, z.hour, z.minute, z.second);
+    }
+    return guess;
+  } catch {
+    return NaN;
+  }
+}
+
+// When the task's OWN reminders (the ones the app books, not Smart Reminders)
+// went off around a stretch of time: its booked reminders, its set moment, and
+// for a repeating task with a time they named, that time on each day ("Take
+// Vitamins" at 11 every day: Anna's Later at 11:00:01 on Oct 30 2026 was on
+// that reminder, not on the Smart Reminder 50 minutes before it).
+function ownReminderMoments(t: any, timeZone: string, fromMs: number, toMs: number): number[] {
+  const out: number[] = [];
+  for (const e of Array.isArray(t?.reminder_schedule) ? t.reminder_schedule : []) {
+    const ms = utcMs(e?.send_at);
+    if (Number.isFinite(ms)) out.push(ms);
+  }
+  const pin = pinnedMoment(t);
+  if (Number.isFinite(pin)) out.push(pin);
+  const hm = /^(\d{1,2}):(\d{2})$/.exec(String(t?.anchor_time || ''));
+  const repeats = !!t?.recurrence_pattern && t.recurrence_pattern !== 'none';
+  if (hm && repeats && t?.deadline_style !== 'by') {
+    for (let ms = fromMs - DAY_MS; ms <= toMs + DAY_MS; ms += DAY_MS) {
+      const at = zoneClock(ms, timeZone, Number(hm[1]), Number(hm[2]));
+      if (Number.isFinite(at)) out.push(at);
+    }
+  }
+  return out;
+}
+
+// Anna's measure of a reminder that helped (Oct 31 2026): the task got
+// finished that same day (their day), or within 3 hours when the day turned
+// over in between.
+function finishedThatDay(t: any, atMs: number, dayOf: (ms: number) => string): boolean {
+  if (!t || t.status !== 'completed') return false;
+  const done = utcMs(t.completed_at);
+  const doneMs = Number.isFinite(done) ? done : utcMs(t.updated_date);
+  if (!Number.isFinite(doneMs)) return false;
+  return dayOf(doneMs) === dayOf(atMs) || (doneMs >= atMs && doneMs - atMs <= HELP_PRESS_WINDOW_MS);
+}
+
+// What ARE THEY HELPING? sees for one person: the presses on Smart Reminders
+// it counts, how many of those tasks got finished that day, and whether it
+// would ask or (on one a day) pause. Also what helping_preview returns.
+function helpingLook(p: {
+  user: any; schedule: any[]; sentLog: any[]; rows: any[]; taskById: Map<string, any>;
+  timeZone: string; dayOf: (ms: number) => string; nowMs: number;
+}): any {
+  const { user, schedule, sentLog, rows, taskById, timeZone, dayOf, nowMs } = p;
+  const iso = (ms: number) => (Number.isFinite(ms) ? new Date(ms).toISOString() : null);
+  const oneADay = user?.smart_nudge_one_a_day === true;
+  const pausedMs = utcMs(user?.smart_nudge_paused_at);
+  const lastAskMs = Math.max(utcMs(user?.smart_nudge_help_asked_at) || 0, utcMs(user?.smart_nudge_help_answered_at) || 0);
+
+  // A week of Smart Reminders: the account is a week old and the first one
+  // still in the week's log went out 6+ days ago (the log keeps 7).
+  const sentMs = (sentLog || []).filter((l: any) => l && !l.skip).map((l: any) => utcMs(l.at)).filter((ms: number) => Number.isFinite(ms));
+  const firstSentMs = sentMs.length ? Math.min(...sentMs) : NaN;
+  const joinedMs = utcMs(user?.signed_up_at || user?.created_date);
+  const weekOfReminders = Number.isFinite(firstSentMs) && nowMs - firstSentMs >= 6 * DAY_MS &&
+    Number.isFinite(joinedMs) && nowMs - joinedMs >= 7 * DAY_MS;
+
+  // When each task's Smart Reminders went out this past week: the plan keeps
+  // the sent ones with every task they named, and the sent log (written by
+  // the run that sent it) has each one's task even if a re-plan written at the
+  // same moment left it out of the plan. A roundup has no buttons, so nothing
+  // is pressed on it.
+  const wentByKey = new Map<string, { at: number; ids: string[] }>();
+  for (const e of schedule || []) {
+    if (!e?.sent || e.skipped_reason || e.type === 'roundup') continue;
+    const at = utcMs(e.sent_at || e.send_at);
+    const ids = entryTaskIds(e);
+    if (Number.isFinite(at) && ids.length) wentByKey.set(entryKey(e), { at, ids });
+  }
+  for (const l of sentLog || []) {
+    if (!l?.k || l.skip || !l.task_id || l.type === 'roundup' || wentByKey.has(l.k)) continue;
+    const at = utcMs(l.at);
+    if (Number.isFinite(at)) wentByKey.set(l.k, { at, ids: [String(l.task_id)] });
+  }
+  const went = [...wentByKey.values()];
+  const smartByTask = new Map<string, number[]>();
+  for (const w of went) {
+    for (const id of w.ids) {
+      if (!smartByTask.has(id)) smartByTask.set(id, []);
+      smartByTask.get(id)!.push(w.at);
+    }
+  }
+
+  // Presses on Smart Reminders in the last week: the latest reminder about
+  // the task before the press was a Smart Reminder, at most 3 hours before.
+  const fromMs = nowMs - HELP_LOOKBACK_MS;
+  const presses: { at: number; task_id: string; title: string; choice: string; day: string }[] = [];
+  const seen = new Set<string>();
+  for (const r of rows || []) {
+    const pr = r?.props || {};
+    const choice = String(pr.choice || '');
+    if (!HELP_CHOICES.has(choice)) continue;
+    const at = utcMs(pr.at || r?.created_date);
+    if (!Number.isFinite(at) || at < fromMs || at > nowMs + 60 * 1000) continue;
+    const taskId = String(pr.task_id || '');
+    const key = pr.report_id ? `r:${pr.report_id}` : `${taskId}|${choice}|${at}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const t = taskById.get(taskId);
+    if (!t) continue;
+    const before = (smartByTask.get(taskId) || []).filter((ms) => ms <= at + 60 * 1000 && at - ms <= HELP_PRESS_WINDOW_MS);
+    if (!before.length) continue;
+    const lastSmart = Math.max(...before);
+    if (ownReminderMoments(t, timeZone, lastSmart, at).some((ms) => ms > lastSmart && ms <= at + 60 * 1000)) continue;
+    presses.push({ at, task_id: taskId, title: String(t.title || '').slice(0, 60), choice, day: dayOf(at) });
+  }
+  presses.sort((a, b) => a.at - b.at);
+  const days = new Set(presses.map((x) => x.day));
+  // One per task per day: was it finished that day?
+  const pairs = new Map<string, { task_id: string; day: string; at: number; finished: boolean }>();
+  for (const x of presses) {
+    const k = `${x.task_id}|${x.day}`;
+    if (!pairs.has(k)) pairs.set(k, { task_id: x.task_id, day: x.day, at: x.at, finished: finishedThatDay(taskById.get(x.task_id), x.at, dayOf) });
+  }
+  const finishedPairs = [...pairs.values()].filter((x) => x.finished).length;
+  const pattern = days.size >= 4 && pairs.size > 0 && finishedPairs / pairs.size < 0.25;
+  const rested = nowMs - lastAskMs >= HELP_ASK_REST_MS;
+  const paused = Number.isFinite(pausedMs);
+
+  // One a day: the last 7 days of it (a week since it started, or since the
+  // app was opened after a not-helping pause).
+  let trial: any = null;
+  if (oneADay) {
+    const sinceMs = utcMs(user?.smart_nudge_one_a_day_since);
+    const weekIn = Number.isFinite(sinceMs) && nowMs - sinceMs >= HELP_TRIAL_MS;
+    const windowFrom = Math.max(nowMs - HELP_TRIAL_MS, Number.isFinite(sinceMs) ? sinceMs : nowMs);
+    const inWindow = went.filter((w) => w.at >= windowFrom && w.at <= nowMs);
+    const helped = inWindow.filter((w) => w.ids.some((id) => finishedThatDay(taskById.get(id), w.at, dayOf)));
+    trial = {
+      since: iso(sinceMs),
+      week_in: weekIn,
+      reminders_in_window: inWindow.length,
+      finished_same_day: helped.length,
+      would_pause: !paused && weekIn && inWindow.length >= 3 && helped.length === 0,
+    };
+  }
+
+  return {
+    asked_at: user?.smart_nudge_help_asked_at || null,
+    answer: user?.smart_nudge_help_answer || null,
+    answered_at: user?.smart_nudge_help_answered_at || null,
+    one_a_day: oneADay,
+    paused_at: user?.smart_nudge_paused_at || null,
+    paused_reason: user?.smart_nudge_paused_reason || null,
+    week_of_reminders: weekOfReminders,
+    rested_30_days: rested,
+    press_days: days.size,
+    pairs: pairs.size,
+    finished_pairs: finishedPairs,
+    pattern,
+    would_ask: !oneADay && !paused && rested && weekOfReminders && pattern,
+    trial,
+    presses: presses.slice(-40).map((x) => ({ ...x, at: iso(x.at) })),
+    tasks_by_day: [...pairs.values()].map((x) => ({ ...x, at: iso(x.at), title: String(taskById.get(x.task_id)?.title || '').slice(0, 60) })),
+  };
+}
+
+// ONE A DAY, checked against the send ledger right before a send: a Smart
+// Reminder already went out today (their day). A failed lookup doesn't hold
+// the nudge (the week's log was already checked).
+async function sentTodayInLedger(base44: any, email: string, dayOf: (ms: number) => string, todayStr: string, nowMs: number): Promise<boolean> {
+  try {
+    const rows = await base44.asServiceRole.entities.NotificationLedger.filter({
+      user_email: email,
+      kind: 'smart_nudge',
+      send_at: { $gte: new Date(nowMs - 30 * 60 * 60 * 1000).toISOString() },
+    }, '-send_at', 50);
+    return (rows || []).some((r: any) => {
+      const at = utcMs(r?.send_at);
+      return Number.isFinite(at) && at <= nowMs + 60 * 1000 && dayOf(at) === todayStr;
+    });
+  } catch {
+    return false;
+  }
+}
+
+// The two ARE THEY HELPING? pushes. Both plain: never an alarm (the alarm
+// screen can't show Yes / No from a push yet), no task buttons (no taskId).
+// The question carries OneSignal's own two buttons; the app reads which one
+// was tapped (OneSignalInit, actionId helping_yes / helping_no) and records it
+// (remindersHelping). A tap on the body, or a phone that doesn't pass the
+// button on, opens the app on the same question as a popup
+// (RemindersHelpingPopup). Twelve hours' lifetime so OneSignal doesn't put
+// either back on the screen days later.
+async function sendHelpPush(email: string, which: 'ask' | 'pause', atIso: string): Promise<string | false> {
+  const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+  const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+  if (!appId || !restApiKey) return false;
+  const payload: any = which === 'ask'
+    ? {
+      headings: { en: HELP_ASK_TITLE },
+      contents: { en: HELP_ASK_BODY },
+      data: { type: 'reminders_helping', screen: '/Home', asked_at: atIso },
+      buttons: [{ id: 'helping_yes', text: 'Yes' }, { id: 'helping_no', text: 'No' }],
+    }
+    : {
+      headings: { en: HELP_PAUSE_TITLE },
+      contents: { en: HELP_PAUSE_BODY },
+      data: { type: 'reminders_paused', screen: '/Home' },
+    };
+  try {
+    const response = await fetch('https://onesignal.com/api/v1/notifications', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Basic ${restApiKey}` },
+      body: JSON.stringify({
+        app_id: appId,
+        ...payload,
+        include_external_user_ids: [email],
+        channel_for_external_user_ids: 'push',
+        ttl: 12 * 60 * 60,
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok || result.errors) {
+      console.error(`[SMART NUDGE] Helping ${which}: OneSignal error for ${email}:`, result);
+      const errs = Array.isArray(result?.errors) ? result.errors.map(String) : [];
+      return errs.some((e: string) => /not subscribed/i.test(e)) ? UNSUBSCRIBED : false;
+    }
+    return result.id || 'sent';
+  } catch (e) {
+    console.error(`[SMART NUDGE] Helping ${which}: failed to send to ${email}:`, e);
+    return false;
   }
 }
 
