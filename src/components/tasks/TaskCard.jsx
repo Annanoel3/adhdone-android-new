@@ -41,6 +41,7 @@ import { TimeItButton } from "../launch/LaunchButtons";
 import RecordNotesButton from "./RecordNotesButton";
 
 import SubtaskProgressBar from "@/components/tasks/SubtaskProgressBar";
+import { noteTaskTimeChanged } from "../utils/notificationOwnership";
 
 export default function TaskCard({
   task,
