@@ -94,6 +94,9 @@ const ms = (iso: any) => {
 
 const emailKey = (email: any) => String(email || '').trim().toLowerCase();
 
+// How many of an area's newest tasks a tapped bubble lists.
+const RECENT_PER_AREA = 6;
+
 function chunk<T>(arr: T[], n: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
@@ -296,16 +299,30 @@ async function sortPerson(openai: any, taskEntity: any, rowsEntity: any, email: 
 
   const counts = emptyCounts();
   let total = 0;
-  for (const { t } of tasks) {
+  // The newest few per area, for the list a bubble opens when tapped (Anna,
+  // Oct 30 2026: "click the areas of life and see some of the most recent
+  // tasks"). Only ever sent back to the person whose tasks they are.
+  const recentAll: Record<string, { title: string; at: number }[]> = {};
+  for (const { t, at } of tasks) {
     const area = known.get(t.id) ?? (fresh.has(t.id) ? picked.get(t.id) : undefined);
     if (area && AREA_SET.has(area)) {
       counts[area]++;
       total++;
+      (recentAll[area] ||= []).push({ title: String(t.title || '').trim().slice(0, 140), at });
     }
+  }
+  const recent: Record<string, { title: string; at: string }[]> = {};
+  for (const [area, list] of Object.entries(recentAll)) {
+    recent[area] = list
+      .filter((x) => x.title)
+      .sort((a, b) => b.at - a.at)
+      .slice(0, RECENT_PER_AREA)
+      .map((x) => ({ title: x.title, at: new Date(x.at).toISOString() }));
   }
   const titles = new Map(todo.map((x) => [x.t.id, x.t.title || '']));
   return {
     counts,
+    recent,
     total,
     found: unsorted.length,
     sorted: fresh.size,
@@ -415,7 +432,7 @@ export default async function (req: Request) {
       sinceMs, nowMs, dryRun, cap: CAP_PER_CALL, deadline: Infinity,
     });
     console.log(`[sortLifeAreas] ${dryRun ? 'dry run: ' : ''}${r.found} unsorted, ${r.sorted} sorted, ${r.total} counted, ${r.remaining} left${r.failed ? `, ${r.failed} saves failed` : ''}`);
-    const answer = { counts: r.counts, total: r.total, sorted: r.sorted, remaining: r.remaining };
+    const answer = { counts: r.counts, recent: r.recent, total: r.total, sorted: r.sorted, remaining: r.remaining };
     if (dryRun) return Response.json({ dry_run: true, days, ...answer, changes: r.changes });
     return Response.json(answer);
   } catch (error) {
