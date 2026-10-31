@@ -464,6 +464,7 @@ export default function DeleteAccount() {
             <div className="flex justify-center pt-4">
               <Button
                 onClick={() => (me?.email && !requestedAt) ? askToDelete() : (window.location.href = 'mailto:adhdone.space@gmail.com?subject=Account%20Deletion%20Request&body=Hello%20MediocreAtBestDev%2C%0A%0AI%20would%20like%20to%20request%20the%20deletion%20of%20my%20ADHDone%20account.%0A%0AAccount%20Email%3A%20%5Byour%20email%5D%0AFull%20Name%3A%20%5Byour%20name%5D%0A%0AI%20understand%20that%20this%20action%20is%20permanent%20and%20cannot%20be%20undone.%0A%0AThank%20you.')}
+                disabled={!!(me?.email && requestedAt)}
                 size="lg"
                 className={`${
                   theme === 'minimalist'
