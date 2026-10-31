@@ -34,7 +34,9 @@ public class NotifyBridge: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "startAppUpdate", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "getPlayerId", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openUrl", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "openExternal", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "openExternal", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "deliveredTaskIds", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "clearTask", returnType: CAPPluginReturnPromise)
     ]
 
     /// ADHDone's OneSignal app (the same one the Android app uses).
@@ -153,6 +155,46 @@ public class NotifyBridge: CAPPlugin, CAPBridgedPlugin {
             UIApplication.shared.open(url, options: [:]) { opened in
                 if opened { call.resolve() } else { call.reject("Nothing on this phone opens that link") }
             }
+        }
+    }
+
+    // MARK: - Reminders for finished tasks
+
+    /// On Android a finished task's reminders are cleared off the phone by a silent
+    /// push (TaskPushes.finished). iPhone has no such filter yet (phase 2: a
+    /// Notification Service Extension), so the web app tidies Notification Center
+    /// itself: on every open it asks which tasks the reminders still showing are
+    /// about, looks those tasks up, and clears the ones that are done or gone
+    /// (src/components/utils/iphoneNotificationTidy.js).
+    private static func taskId(of info: [AnyHashable: Any]) -> String? {
+        var extra: [String: Any] = [:]
+        if let custom = info["custom"] as? [String: Any], let a = custom["a"] as? [String: Any] { extra = a }
+        else if let a = info["a"] as? [String: Any] { extra = a }
+        let id = (extra["taskId"] as? String) ?? (extra["task_id"] as? String) ?? (info["taskId"] as? String)
+        return (id?.isEmpty == false) ? id : nil
+    }
+
+    @objc func deliveredTaskIds(_ call: CAPPluginCall) {
+        UNUserNotificationCenter.current().getDeliveredNotifications { list in
+            var ids = Set<String>()
+            for n in list {
+                if let id = NotifyBridge.taskId(of: n.request.content.userInfo) { ids.insert(id) }
+            }
+            call.resolve(["taskIds": Array(ids)])
+        }
+    }
+
+    @objc func clearTask(_ call: CAPPluginCall) {
+        guard let target = call.getString("taskId"), !target.isEmpty else {
+            call.reject("taskId is required")
+            return
+        }
+        let center = UNUserNotificationCenter.current()
+        center.getDeliveredNotifications { list in
+            let gone = list.filter { NotifyBridge.taskId(of: $0.request.content.userInfo) == target }
+                .map { $0.request.identifier }
+            if !gone.isEmpty { center.removeDeliveredNotifications(withIdentifiers: gone) }
+            call.resolve(["cleared": gone.count])
         }
     }
 
