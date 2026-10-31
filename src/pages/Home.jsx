@@ -408,7 +408,7 @@ export default function Home() {
                 onRefresh={loadTasks}
               />
 
-              {/* "What's one win from today?" — evenings only (EveningWinCard). */}
+              {/* "How did you feel today?" + "What's one win from today?" — evenings only (EveningWinCard). */}
               <EveningWinCard user={user} theme={theme} specialMode={specialMode} />
             </div>
             
