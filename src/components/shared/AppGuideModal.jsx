@@ -180,7 +180,8 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     },
     // The same groups as the side menu (Tools, Reflect), so the guide reads
     // the way the app is laid out (Anna, Oct 24 2026). The entries for Record
-    // Notes, Decision Maker, Places and Diary use each page's own words.
+    // Notes, Decision Maker and Places use each page's own words. (Diary left
+    // the menu and the guide Oct 31 2026.)
     {
       icon: Wrench,
       title: "Tools",
@@ -227,11 +228,6 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
       icon: TrendingUp,
       title: "Insights",
       description: "Your patterns and streaks, and proof of how far you've come."
-    },
-    {
-      icon: BookLock,
-      title: "Diary",
-      description: "Yours alone: no AI reads it, nobody else sees it. A new entry can start with the tasks you finished that day."
     },
       ],
     },
