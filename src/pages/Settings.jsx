@@ -414,6 +414,25 @@ export default function Settings() {
     await persistQuietHours(enabled, quietHoursStart, quietHoursEnd);
   };
 
+  // One a day (Anna, Oct 31 2026): they answered No to "Are your reminders
+  // helping?" (remindersHelping). The way back to normal.
+  const [oneADayBusy, setOneADayBusy] = useState(false);
+  const backToNormal = async () => {
+    setOneADayBusy(true);
+    try {
+      const res = await base44.functions.invoke('remindersHelping', { mode: 'normal' });
+      const r = res?.data || res;
+      if (!r?.success) throw new Error(r?.error || 'not saved');
+      setUser((u) => (u ? { ...u, smart_nudge_one_a_day: false } : u));
+      toast({ title: 'Back to normal', description: 'Smart Reminders are back to their usual pace.', duration: 3000 });
+    } catch (e) {
+      console.error('Back to normal reminders failed:', e);
+      toast({ title: "Couldn't save that", description: 'Check your connection and try again.', variant: 'destructive' });
+    } finally {
+      setOneADayBusy(false);
+    }
+  };
+
   const handleQuietHoursSave = async () => {
     // "Saved" only when it did save (the failure has its own message).
     if (await persistQuietHours(quietHoursEnabled, quietHoursStart, quietHoursEnd)) showSaved();
@@ -537,6 +556,24 @@ export default function Settings() {
         </>)}
 
         {section === 'reminders' && (<>
+        {/* Only while they're on one a day; nothing else about it lives here. */}
+        {user?.smart_nudge_one_a_day === true && (
+          <Card className={`mb-6 border-none shadow-lg ${theme === 'dark' ? 'bg-gray-800' : 'bg-white'}`}>
+            <CardContent className="pt-6 flex items-center justify-between gap-4">
+              <p className={`text-sm ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
+                You asked for fewer reminders: one a day.
+              </p>
+              <Button
+                onClick={backToNormal}
+                disabled={oneADayBusy}
+                variant="outline"
+                className={`flex-shrink-0 ${theme === 'dark' ? 'bg-gray-700 border-gray-600 hover:bg-gray-600 text-white' : ''}`}
+              >
+                Back to normal
+              </Button>
+            </CardContent>
+          </Card>
+        )}
         {/* Quiet Hours Section */}
         <Card id="quiet-hours" className={`mb-6 border-none shadow-lg ${
           theme === 'dark' ? 'bg-gray-800' : 'bg-white'
