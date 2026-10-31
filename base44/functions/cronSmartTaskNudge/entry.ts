@@ -58,11 +58,16 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 // A planned nudge held (by the spacing rules or the morning summary) this
 // long past its send time is dropped and planned again, not sent stale.
 const HELD_STALE_MS = 30 * 60 * 1000;
-// Smart Reminders pause for someone who hasn't opened the app in this long
-// (Anna, Oct 18 2026); see PAUSED AFTER 19 DAYS AWAY in the main loop.
-const SMART_PAUSE_AFTER_MS = 19 * DAY_MS;
-const PAUSE_TITLE = 'Your Smart Reminders are paused';
-const PAUSE_BODY = "You haven't opened ADHDone in a while, so we paused them. Just open the app anytime to start them again.";
+// Smart Reminders pause for someone who hasn't been around in a week, after a
+// heads-up the day before (Anna, Oct 30 2026: "ease off after a week. But give
+// warnings at the end of the week"; it was 19 days with a notice at the pause,
+// Oct 18 2026). See PAUSED AFTER A WEEK AWAY in the main loop.
+const SMART_WARN_AFTER_MS = 6 * DAY_MS;
+const SMART_PAUSE_AFTER_MS = 7 * DAY_MS;
+// The pause comes at least this long after the heads-up, so the heads-up is
+// always a real "tomorrow".
+const PAUSE_AFTER_WARNING_MS = 20 * 60 * 60 * 1000;
+const PAUSE_TITLE = 'Your reminders pause tomorrow';
 // Sent nudges are kept this long (for "last nudged 3 days ago"), then dropped.
 const HISTORY_KEEP_MS = 7 * DAY_MS;
 // A nudge already queued to go out this soon survives a re-plan. Edits can
@@ -330,36 +335,61 @@ Deno.serve(async (req) => {
       const unreachableAt = utcMs(user.push_unreachable_at);
       if (Number.isFinite(unreachableAt) && nowMs - unreachableAt < DAY_MS && !(utcMs(user.last_active_at) > unreachableAt)) continue;
 
-      // PAUSED AFTER 19 DAYS AWAY (Anna, Oct 18 2026: "turn off smart reminders
-      // for people not active after 19 days ... But send them one last
-      // notification telling them their reminders will be paused and to simply
-      // open the app to restart them"). Every look is an AI call, and people
-      // who had stopped opening the app were still planned for and nudged (one
-      // account: 15 nudges in 3 days, a month after its last open). One notice
-      // per absence, at a waking hour (quiet hours are checked above); after
-      // it nothing is planned or sent for them. Opening the app moves
-      // last_active_at past the pause and the next run plans for them again.
-      // Only Smart Reminders stop: times they set, events and birthdays still
-      // come.
-      const awayFromMs = utcMs(user.last_active_at || user.signed_up_at || user.created_date);
-      if (Number.isFinite(awayFromMs) && nowMs - awayFromMs >= SMART_PAUSE_AFTER_MS) {
-        const pausedAtMs = utcMs(user.smart_nudge_paused_at);
-        if (!(Number.isFinite(pausedAtMs) && pausedAtMs > awayFromMs) && !previewOnly) {
-          const notice = await sendPauseNotice(email);
-          // Not sent for a passing reason (OneSignal down): tried again next run.
-          if (notice) {
+      // PAUSED AFTER A WEEK AWAY (Anna, Oct 30 2026, replacing the Oct 18
+      // 19-day pause): someone who hasn't been around for a week stops getting
+      // Smart Reminders and the morning summary. A one-time task they never
+      // came back to ("pills, remind me tomorrow at 9") had been asking "did
+      // you take your pills?" every day for two weeks. "Around" is opening the
+      // app, finishing a task (a notification's Done counts) or answering an
+      // alarm (snooze, Later, closing it; one that just rang out doesn't). On
+      // day 6 they get one heads-up naming what will pause; at least 20 hours
+      // later, from day 7, nothing is planned or sent for them. Any sign of
+      // them moves past the pause and the next run plans again. Only Smart
+      // Reminders and the summary stop: times they set, events and birthdays
+      // still come.
+      let awayFromMs = utcMs(user.last_active_at || user.signed_up_at || user.created_date);
+      for (const c of completionsByUser[email] || []) if (c.at > awayFromMs) awayFromMs = c.at;
+      for (const t of tasksByUser[email] || []) {
+        const choice = t?.last_alarm_choice;
+        const at = utcMs(choice?.at);
+        if (choice && choice.choice !== 'ignored' && Number.isFinite(at) && at > awayFromMs) awayFromMs = at;
+      }
+      const pausedAtMs = utcMs(user.smart_nudge_paused_at);
+      const pausedNow = Number.isFinite(pausedAtMs) && Number.isFinite(awayFromMs) && pausedAtMs > awayFromMs;
+      if (Number.isFinite(awayFromMs) && nowMs - awayFromMs >= SMART_WARN_AFTER_MS) {
+        if (pausedNow) continue;
+        const warnedAtMs = utcMs(user.smart_nudge_pause_warned_at);
+        const warned = Number.isFinite(warnedAtMs) && warnedAtMs > awayFromMs;
+        if (!warned) {
+          if (!previewOnly) {
+            const notice = await sendPauseNotice(email, pauseNoticeBody(user, tasksByUser[email] || []));
+            // Not sent for a passing reason (OneSignal down): tried again next run.
+            if (notice) {
+              await base44.asServiceRole.entities.User.update(user.id, {
+                smart_nudge_pause_warned_at: now.toISOString(),
+              }).catch((e: any) => console.error(`[SMART NUDGE] Could not record the pause heads-up for ${email}:`, e?.message || e));
+              if (notice !== UNSUBSCRIBED) {
+                await ledgerRecord(base44, { email, kind: 'general', source: 'smart_pause', notificationId: notice, title: PAUSE_TITLE });
+              }
+            }
+            console.log(`[SMART NUDGE] ${email}: ${Math.round((nowMs - awayFromMs) / DAY_MS)} days away, pause heads-up ${notice ? 'sent' : 'not sent, will retry'}`);
+          }
+          // The heads-up is this run's one push for them.
+          continue;
+        }
+        if (nowMs - awayFromMs >= SMART_PAUSE_AFTER_MS && nowMs - warnedAtMs >= PAUSE_AFTER_WARNING_MS) {
+          if (!previewOnly) {
             await base44.asServiceRole.entities.User.update(user.id, {
               smart_nudge_paused_at: now.toISOString(),
-              // A fresh plan when they're back, never a weeks-old one.
+              // A fresh plan when they're back, never a week-old one.
               smart_nudge_schedule_dirty: true,
             }).catch((e: any) => console.error(`[SMART NUDGE] Could not record the pause for ${email}:`, e?.message || e));
-            if (notice !== UNSUBSCRIBED) {
-              await ledgerRecord(base44, { email, kind: 'general', source: 'smart_pause', notificationId: notice, title: PAUSE_TITLE });
-            }
+            console.log(`[SMART NUDGE] ${email}: ${Math.round((nowMs - awayFromMs) / DAY_MS)} days away, Smart Reminders paused`);
           }
-          console.log(`[SMART NUDGE] ${email}: ${Math.round((nowMs - awayFromMs) / DAY_MS)} days since the app was opened, Smart Reminders paused (notice: ${notice || 'not sent, will retry'})`);
+          continue;
         }
-        continue;
+        // Day 6 after the heads-up: planned as usual until the pause.
+      }
       }
 
       // Their day, not the calendar's: it turns over in the middle of their
@@ -2224,7 +2254,31 @@ Return ONLY valid JSON:
 // A plain push, never an alarm and with no task buttons (no taskId), that
 // opens the task list. Normal priority and a 2-hour lifetime like the
 // come-back pushes, so OneSignal never puts it back on the screen days later.
-async function sendPauseNotice(email: string): Promise<string | false> {
+// The heads-up names what will go quiet, in her words' spirit: "Your pills
+// tasks will be paused, but no worries, come back..." The tasks Smart
+// Reminders mentioned most recently come first.
+function pauseNoticeBody(user: any, openTasks: any[]): string {
+  const byId: Record<string, any> = {};
+  for (const t of openTasks) if (t?.id && !t.parent_task_id) byId[t.id] = t;
+  const names: string[] = [];
+  const log = Array.isArray(user?.smart_nudge_sent_log) ? [...user.smart_nudge_sent_log].reverse() : [];
+  for (const entry of log) {
+    const title = String(byId[entry?.task_id]?.title || '').trim();
+    if (title && !names.includes(title)) names.push(title);
+  }
+  for (const t of Object.values(byId)) {
+    const title = String(t?.title || '').trim();
+    if (title && !names.includes(title)) names.push(title);
+  }
+  const shown = names.slice(0, 2).map((n) => `"${n.length > 40 ? `${n.slice(0, 37)}...` : n}"`);
+  const what = names.length === 0 ? 'Your reminders'
+    : names.length === 1 ? `Reminders for ${shown[0]}`
+    : names.length === 2 ? `Reminders for ${shown[0]} and ${shown[1]}`
+    : `Reminders for ${shown[0]} and ${names.length - 1} more`;
+  return `${what} will pause tomorrow. No worries, just open ADHDone anytime and they'll pick right back up.`;
+}
+
+async function sendPauseNotice(email: string, body: string): Promise<string | false> {
   const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
   const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
   if (!appId || !restApiKey) return false;
@@ -2235,7 +2289,7 @@ async function sendPauseNotice(email: string): Promise<string | false> {
       body: JSON.stringify({
         app_id: appId,
         headings: { en: PAUSE_TITLE },
-        contents: { en: PAUSE_BODY },
+        contents: { en: body },
         data: { type: 'smart_pause', screen: '/Tasks' },
         include_external_user_ids: [email],
         channel_for_external_user_ids: 'push',
