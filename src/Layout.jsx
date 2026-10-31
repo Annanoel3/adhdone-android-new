@@ -121,7 +121,9 @@ import EasterEggVideo from "./components/shared/EasterEggVideo";
 import LongPressBrandTitle from "./components/eastereggs/LongPressBrandTitle";
 import EggBadge from "./components/eastereggs/EggBadge";
 import ChaosModeStyles from "./components/eastereggs/ChaosModeStyles";
-import { onThisPhone } from "@/lib/phonePlatform";
+import { onThisPhone, isIPhoneApp } from "@/lib/phonePlatform";
+import { ChevronLeft as IPhoneBackIcon } from "lucide-react";
+import IPhoneNotificationTidy from "./components/shared/IPhoneNotificationTidy";
 import {
   Dialog,
   DialogContent,
@@ -299,6 +301,13 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       try { await sb.setBackgroundColor({ color: dark ? '#111827' : '#ffffff' }); } catch (e) { /* ignored on 15+ */ }
       try { await sb.setStyle({ style: dark ? 'DARK' : 'LIGHT' }); } catch (e) { /* ignored */ }
     })();
+    // iPhone: the two calls above are Android-only, and the strips behind the
+    // clock and the home bar show the page's own background, which stayed white
+    // in the Dark theme while the clock turned white: white on white. Match
+    // the header there instead (Oct 30 2026, before the first iPhone build).
+    if (isIPhoneApp()) {
+      try { document.body.style.backgroundColor = dark ? '#111827' : ''; } catch (e) { /* ignored */ }
+    }
   }, [theme]);
   // After the first-run chat, a red dot on the menu button and on "App Guide"
   // until the guide has been opened once (onboardingGate: guideNudge/guideSeen).
@@ -1268,6 +1277,20 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                     Oct 16 2026: "Just saved something to the parking lot. No
                     red dot top left"). The icon people know stays exactly as
                     it is; the dot now sits over its corner instead. */}
+                {/* iPhone has no back button of its own (Android's hardware back
+                    is handled above), and most pages have no back link, so a
+                    page opened from the menu or a notification was a dead end.
+                    Shown only when there's a page in this app to go back to. */}
+                {isIPhoneApp() && currentPageName !== 'Home' && (window.history.state?.idx || 0) > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(-1)}
+                    aria-label="Back"
+                    className={`-ml-2 p-1 rounded-lg ${theme === 'dark' && !isSeasonalTheme() ? 'text-white' : 'text-gray-900'}`}
+                  >
+                    <IPhoneBackIcon className="w-6 h-6" />
+                  </button>
+                )}
                 <span className="relative inline-flex">
                   <SidebarTrigger asChild />
                   {anyDot && <span className="pointer-events-none absolute -top-1 -right-1 w-3 h-3 rounded-full bg-red-500 border-2 border-white" />}
@@ -1335,6 +1358,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <SharedTextReceiver />
         <SharedImageReceiver />
         <WidgetTaskSync user={user} />
+        <IPhoneNotificationTidy />
         <WidgetOpenReceiver />
         <HomeZipPrompt user={user} theme={theme} />
         <EventConflictWarning user={user} theme={theme} />
