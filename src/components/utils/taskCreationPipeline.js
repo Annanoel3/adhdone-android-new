@@ -922,7 +922,7 @@ export async function createTaskFromFields(fields, booking) {
   const bookable = !!nextReminder && once && nextReminder.getTime() > Date.now() + 2 * 60 * 1000;
   const createdTask = await base44.entities.Task.create({
     ...fields,
-    next_reminder: nextReminder && (bookable || !once) ? nextReminder.toISOString() : (fields.next_reminder || null),
+    next_reminder: nextReminder ? nextReminder.toISOString() : null,
     status: 'active',
     notification_recipient_email: booking.email,
     reminder_scheduling_since: bookable ? new Date().toISOString() : null,
