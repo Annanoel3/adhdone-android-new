@@ -374,7 +374,7 @@ export default function DeleteAccount() {
                   <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
-                    Energy logs, daily summaries, achievements, streaks, weekly challenges, and all progress tracking data.
+                    Energy logs, daily summaries, evening mood check-ins, achievements, streaks, weekly challenges, and all progress tracking data.
                   </p>
                 </div>
 
