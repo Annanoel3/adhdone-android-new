@@ -24,7 +24,6 @@
 	<dict>
 		<key>NSExtensionAttributes</key>
 		<dict>
-			<!-- Shows for text, one link, or one picture (Android: text/plain and image/*). -->
 			<key>NSExtensionActivationRule</key>
 			<dict>
 				<key>NSExtensionActivationSupportsText</key>
