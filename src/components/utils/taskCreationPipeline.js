@@ -8,7 +8,7 @@ import { createBirthdayFromKind } from "./birthdayScheduler";
 import { toast } from "@/components/ui/use-toast";
 import { INTERVAL_MS, stripGuessedRecurrence, deriveSchedule, deadlineWindowStart, anchorToDaytime, wantsRhythmFromTime } from "./taskSchedule";
 import { announceEventConflict } from "./eventConflicts";
-import { commitNotificationIds } from "./notificationOwnership";
+import { commitNotificationIds, dropBookingIfMoved } from "./notificationOwnership";
 import { trackFire } from "@/lib/appTrack";
 
 // Every step of turning raw user input (typed, spoken, or shared) into task
@@ -626,6 +626,15 @@ export async function processAndCreateTask(inputText, opts = {}) {
     }
 
     if (nextReminder) {
+      // If they change the time (or finish the task) before this booking
+      // lands, the booking cancels itself rather than ringing the old time
+      // (notificationOwnership.js dropBookingIfMoved).
+      const bookingStartedAt = Date.now();
+      const bookedFor = createdTask.next_reminder || null;
+      const commitUnlessMoved = async (ids, extra) => {
+        if (await dropBookingIfMoved(createdTask.id, ids, bookedFor, bookingStartedAt)) return null;
+        return commitNotificationIds(createdTask.id, ids, extra);
+      };
       if (actualReminderInterval === 'once') {
         import('./multiReminderScheduler')
           .then(module => module.scheduleMultiReminders({
@@ -642,7 +651,7 @@ export async function processAndCreateTask(inputText, opts = {}) {
           }))
           .then(multiIds => {
             if (multiIds) {
-              return commitNotificationIds(createdTask.id, multiIds);
+              return commitUnlessMoved(multiIds);
             }
             // A "by 5 PM" deadline never gets a lone reminder AT the deadline
             // (too late by then) — smart nudges own it.
@@ -663,7 +672,7 @@ export async function processAndCreateTask(inputText, opts = {}) {
                 { id: "complete", text: "✅ Done" }
               ]
             }).then(notificationId => {
-              return commitNotificationIds(createdTask.id, notificationId ? [notificationId] : []);
+              return commitUnlessMoved(notificationId ? [notificationId] : []);
             });
           })
           .catch(error => console.error("Failed to schedule reminder:", error));
@@ -684,7 +693,7 @@ export async function processAndCreateTask(inputText, opts = {}) {
             { id: "complete", text: "✅ Done" }
           ]
         }))).then(({ notificationIds, lastScheduledUntil }) => {
-          return commitNotificationIds(createdTask.id, notificationIds || [],
+          return commitUnlessMoved(notificationIds || [],
             lastScheduledUntil ? { last_scheduled_until: lastScheduledUntil } : {});
         }).catch(error => console.error("Failed to schedule recurring reminders:", error));
       }
