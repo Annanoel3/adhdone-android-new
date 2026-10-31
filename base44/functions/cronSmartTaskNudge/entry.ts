@@ -390,7 +390,6 @@ Deno.serve(async (req) => {
         }
         // Day 6 after the heads-up: planned as usual until the pause.
       }
-      }
 
       // Their day, not the calendar's: it turns over in the middle of their
       // quiet hours (Oct 12 2026), so a night-shift worker is still on Monday
