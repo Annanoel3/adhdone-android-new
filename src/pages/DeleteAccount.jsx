@@ -4,10 +4,52 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Mail, AlertTriangle, Database, Shield, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { base44 } from "@/api/base44Client";
 
 export default function DeleteAccount() {
   const navigate = useNavigate();
   const [theme, setTheme] = useState(() => localStorage.getItem('adhd_theme') || 'minimalist');
+
+  // Signed in: the request is made right here (Oct 30 2026). Apple doesn't
+  // allow an app to make people send an email to delete their account (App
+  // Review 5.1.1(v)); a request that's carried out by hand within a stated
+  // time is fine. The email steps below stay for people who can't sign in.
+  const [me, setMe] = useState(null);
+  const [requestedAt, setRequestedAt] = useState(null);
+  const [confirming, setConfirming] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [requestError, setRequestError] = useState('');
+
+  useEffect(() => {
+    base44.auth.me().then((u) => {
+      setMe(u || null);
+      if (u?.account_deletion_requested_at) setRequestedAt(u.account_deletion_requested_at);
+    }).catch(() => setMe(null));
+  }, []);
+
+  const askToDelete = () => {
+    setConfirming(true);
+    setTimeout(() => document.getElementById('delete-in-app')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+  };
+
+  const confirmDelete = async () => {
+    setSending(true);
+    setRequestError('');
+    try {
+      const at = new Date().toISOString();
+      await base44.auth.updateMe({ account_deletion_requested_at: at });
+      setRequestedAt(at);
+      setConfirming(false);
+    } catch (e) {
+      setRequestError("That didn't go through. Check your connection and try again.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const requestedOn = requestedAt
+    ? new Date(requestedAt).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })
+    : '';
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -72,6 +114,45 @@ export default function DeleteAccount() {
               </div>
             </div>
 
+            {me?.email && (
+              <div id="delete-in-app" className={`p-6 rounded-xl border-2 ${
+                theme === 'dark' ? 'bg-gray-900/40 border-red-800' : 'bg-white border-red-200'
+              }`}>
+                <h2 className={`text-2xl font-bold mb-2 break-words ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
+                  Delete my account
+                </h2>
+                {requestedAt ? (
+                  <p className={`break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    You asked to delete your account on {requestedOn}. It will be deleted within <strong>30 days</strong>, and you'll get an email at <strong className="break-all">{me.email}</strong> when it's done.
+                  </p>
+                ) : confirming ? (
+                  <div className="space-y-3">
+                    <p className={`break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      This deletes your account ({me.email}) and everything in it for good. Are you sure?
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      <Button onClick={confirmDelete} disabled={sending} className="bg-red-600 hover:bg-red-700 text-white">
+                        {sending ? 'Sending…' : 'Yes, delete my account'}
+                      </Button>
+                      <Button variant="outline" onClick={() => setConfirming(false)} disabled={sending}>
+                        Cancel
+                      </Button>
+                    </div>
+                    {requestError && <p className="text-sm text-red-600">{requestError}</p>}
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className={`break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                      Ask for your account to be deleted right here. It's deleted within 30 days, and you'll get an email when it's done.
+                    </p>
+                    <Button onClick={() => setConfirming(true)} className="bg-red-600 hover:bg-red-700 text-white">
+                      Delete my account
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Prominent Steps Section */}
             <div className={`p-6 rounded-xl border-2 ${
               theme === 'dark' 
@@ -82,11 +163,13 @@ export default function DeleteAccount() {
                 theme === 'dark' ? 'text-white' : 'text-gray-900'
               }`}>
                 <Database className="w-6 h-6 flex-shrink-0" />
-                How to Delete Your Account
+                {me?.email ? "Can't sign in? Ask by email" : 'How to Delete Your Account'}
               </h2>
 
               <p className={`mb-4 break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                Follow these simple steps to request account deletion:
+                {me?.email
+                  ? "If you can't get into the app, you can also ask by email:"
+                  : 'Follow these simple steps to request account deletion:'}
               </p>
 
               <div className="space-y-4">
@@ -380,7 +463,7 @@ export default function DeleteAccount() {
             {/* CTA Button */}
             <div className="flex justify-center pt-4">
               <Button
-                onClick={() => window.location.href = 'mailto:adhdone.space@gmail.com?subject=Account%20Deletion%20Request&body=Hello%20MediocreAtBestDev%2C%0A%0AI%20would%20like%20to%20request%20the%20deletion%20of%20my%20ADHDone%20account.%0A%0AAccount%20Email%3A%20%5Byour%20email%5D%0AFull%20Name%3A%20%5Byour%20name%5D%0A%0AI%20understand%20that%20this%20action%20is%20permanent%20and%20cannot%20be%20undone.%0A%0AThank%20you.'}
+                onClick={() => (me?.email && !requestedAt) ? askToDelete() : (window.location.href = 'mailto:adhdone.space@gmail.com?subject=Account%20Deletion%20Request&body=Hello%20MediocreAtBestDev%2C%0A%0AI%20would%20like%20to%20request%20the%20deletion%20of%20my%20ADHDone%20account.%0A%0AAccount%20Email%3A%20%5Byour%20email%5D%0AFull%20Name%3A%20%5Byour%20name%5D%0A%0AI%20understand%20that%20this%20action%20is%20permanent%20and%20cannot%20be%20undone.%0A%0AThank%20you.')}
                 size="lg"
                 className={`${
                   theme === 'minimalist'
@@ -390,8 +473,8 @@ export default function DeleteAccount() {
                       : 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800'
                 } text-white`}
               >
-                <Mail className="w-5 h-5 mr-2" />
-                Request Account Deletion
+                {!me?.email && <Mail className="w-5 h-5 mr-2" />}
+                {me?.email ? (requestedAt ? 'Deletion requested' : 'Delete my account') : 'Request Account Deletion'}
               </Button>
             </div>
           </CardContent>
