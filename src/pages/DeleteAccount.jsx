@@ -369,6 +369,23 @@ export default function DeleteAccount() {
                   <h4 className={`font-semibold mb-2 flex items-center gap-2 break-words ${
                     theme === 'dark' ? 'text-red-400' : 'text-red-900'
                   }`}>
+                    ❌ Goals
+                  </h4>
+                  <p className={`text-sm break-words ${
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    Every goal you've planned and its steps, including step notes, photos, habit check-ins, and your conversations with the goal planner.
+                  </p>
+                </div>
+
+                <div className={`p-4 rounded-lg border ${
+                  theme === 'dark' 
+                    ? 'bg-gray-900/50 border-gray-700' 
+                    : 'bg-red-50 border-red-200'
+                }`}>
+                  <h4 className={`font-semibold mb-2 flex items-center gap-2 break-words ${
+                    theme === 'dark' ? 'text-red-400' : 'text-red-900'
+                  }`}>
                     ❌ Progress & Activity Data
                   </h4>
                   <p className={`text-sm break-words ${
