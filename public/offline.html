@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ADHDone</title>
+<!-- Shown by the iPhone app when adhdone.space can't load (no signal, Wi-Fi
+     down). Capacitor's server.errorPath (capacitor.config.ts). Before this the
+     app opened to a blank white screen that never recovered; Android has had
+     its own "No internet" page since it shipped (MainActivity). Oct 30 2026. -->
+<style>
+  :root { color-scheme: light dark; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #fdf6f3; color: #1f2937;
+    display: flex; align-items: center; justify-content: center;
+    padding: env(safe-area-inset-top) 24px env(safe-area-inset-bottom);
+    box-sizing: border-box; text-align: center;
+  }
+  @media (prefers-color-scheme: dark) { body { background: #111827; color: #f9fafb; } p { color: #d1d5db !important; } }
+  h1 { font-size: 22px; margin: 0 0 8px; }
+  p { font-size: 16px; line-height: 1.45; color: #4b5563; margin: 0 0 24px; }
+  button {
+    font-size: 17px; font-weight: 600; color: #fff; border: 0; border-radius: 14px;
+    padding: 14px 28px; background: linear-gradient(90deg, #8b5cf6, #ec4899);
+  }
+</style>
+</head>
+<body>
+  <main>
+    <h1>No internet connection</h1>
+    <p>ADHDone needs the internet to load your tasks.<br>It will open by itself when you're back online.</p>
+    <button type="button" id="retry">Try again</button>
+  </main>
+<script>
+  var APP = 'https://adhdone.space';
+  function go() { window.location.replace(APP); }
+  document.getElementById('retry').addEventListener('click', go);
+  window.addEventListener('online', go);
+  setInterval(function () { if (navigator.onLine) go(); }, 15000);
+</script>
+</body>
+</html>
