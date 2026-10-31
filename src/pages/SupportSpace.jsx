@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { base44 } from "@/api/base44Client";
+import { currentStreak as readStreak } from "@/components/utils/completionStreak";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -48,7 +49,7 @@ export default function SupportSpace() {
       const tasks = await base44.entities.Task.list('-created_date', 20);
       // Recorded notes share this table (kind: "note_recording"); only old energy check-ins count here.
       const energyLogs = (await base44.entities.EnergyLog.list('-logged_at', 5)).filter(log => !log.kind && log.logged_at);
-      const summaries = await base44.entities.DailySummary.list('-date', 7);
+      const streakNow = await readStreak();
 
       const activeTasks = tasks.filter(t => t.status === 'active');
       const completedToday = tasks.filter(t => {
@@ -58,7 +59,7 @@ export default function SupportSpace() {
       });
 
       const latestEnergy = energyLogs.length > 0 ? energyLogs[0].energy_level : 'unknown';
-      const currentStreak = summaries.length > 0 ? summaries[0].streak_days || 0 : 0;
+      const currentStreak = streakNow;
 
       // Detailed task list (top-level tasks only) with timing, so the AI can
       // actually reason about the user's day ("I have an event tonight...").
