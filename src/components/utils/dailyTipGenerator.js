@@ -1,4 +1,5 @@
 import { base44 } from "@/api/base44Client";
+import { currentStreak as readStreak } from "./completionStreak";
 import { isTodayTask, isUpcomingTask } from "./todayTasks";
 import { isTheirTipEvening } from "./reminderCopy";
 
@@ -41,7 +42,7 @@ export async function generateSmartTipForUser(today) {
     return localDate === today;
   });
 
-  const currentStreak = summaries.length > 0 ? summaries[0].streak_days || 0 : 0;
+  const currentStreak = await readStreak();
 
   const todayDate = getLocalDateString();
   const moodDate = localStorage.getItem('today_mood_date');
