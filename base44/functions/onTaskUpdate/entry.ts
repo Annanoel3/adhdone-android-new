@@ -289,6 +289,55 @@ async function kickPlanner(base44: any, ownerEmail: string | null) {
   }
 }
 
+// A goal's step follows its task (GOALS_PORT.md). Only UPDATES a GoalStep the
+// task's owner owns; never creates one, never touches any other task.
+// - A plain (non-repeating) step's task finished: the step is done; taken
+//   back: the step is open again. (A habit's repeating task is counted from
+//   the finished copies themselves, so nothing is saved for those.)
+// - The step's open task deleted by the person: the step is marked
+//   task_dismissed, so the app doesn't make it again (the goal page offers
+//   "Add this step to my tasks"). The app points the step elsewhere before it
+//   removes a duplicate of its own, so those don't count.
+async function goalStepFollows(base44: any, eventType: string, taskId: string, oldData: any, data: any) {
+  try {
+    const before = oldData || {};
+    const after = data || {};
+    const stepId = eventType === 'delete' ? before.goal_step_id : (after.goal_step_id || null);
+    if (!stepId) return;
+    const owner = (eventType === 'delete' ? before.created_by : after.created_by) || null;
+    const step = (await base44.asServiceRole.entities.GoalStep.filter({ id: stepId }))?.[0];
+    if (!step || !owner || step.created_by !== owner) return;
+    const stepOpen = step.status !== 'completed' && step.status !== 'skipped';
+
+    if (eventType === 'delete') {
+      if (before.status !== 'active' || !stepOpen || step.task_dismissed) return;
+      let dismissed = step.task_id === taskId;
+      if (!dismissed && step.task_id && before.recurrence_pattern && before.recurrence_pattern !== 'none') {
+        // A habit's live copy, deleted before the step was pointed at it (the
+        // step still names the copy finished before it).
+        const linked = (await base44.asServiceRole.entities.Task.filter({ id: step.task_id }))?.[0];
+        dismissed = !linked || linked.status !== 'active';
+      }
+      if (dismissed) {
+        await base44.asServiceRole.entities.GoalStep.update(step.id, { task_dismissed: true, task_id: null, task_claim: null });
+        console.log(`[onTaskUpdate] goal step ${step.id}: its task was deleted, marked task_dismissed`);
+      }
+      return;
+    }
+
+    if (after.recurrence_pattern && after.recurrence_pattern !== 'none') return;
+    if (before.status !== 'completed' && after.status === 'completed' && stepOpen) {
+      await base44.asServiceRole.entities.GoalStep.update(step.id, { status: 'completed', completed_at: after.completed_at || new Date().toISOString() });
+      console.log(`[onTaskUpdate] goal step ${step.id} done with its task`);
+    } else if (before.status === 'completed' && after.status === 'active' && step.status === 'completed') {
+      await base44.asServiceRole.entities.GoalStep.update(step.id, { status: 'pending', completed_at: null });
+      console.log(`[onTaskUpdate] goal step ${step.id} open again with its task`);
+    }
+  } catch (e) {
+    console.error('[onTaskUpdate] goal step follow-up failed (the app fixes it on next open):', e?.message || e);
+  }
+}
+
 async function handleTaskEvent(req: Request): Promise<Response> {
   try {
     console.log('[onTaskUpdate] ========== FUNCTION START ==========');
@@ -349,6 +398,7 @@ async function handleTaskEvent(req: Request): Promise<Response> {
         }
       }
       await dropPhoneAlarms(base44, old_data, event.entity_id);
+      await goalStepFollows(base44, 'delete', event.entity_id, old_data, null);
       // A deleted task can still be in today's smart-nudge plan; mark the plan
       // out of date so it is planned without it (the nudge cron also refuses
       // to send a nudge about a task that no longer exists).
@@ -384,6 +434,8 @@ async function handleTaskEvent(req: Request): Promise<Response> {
       console.log('[onTaskUpdate] Not an update or delete event, skipping');
       return Response.json({ success: true, skipped: true });
     }
+
+    await goalStepFollows(base44, 'update', event.entity_id, old_data, data);
 
     // Focus session logging is handled client-side in FocusModePrompt's
     // handleComplete (which holds the authoritative local enteredAt and avoids
