@@ -62,12 +62,29 @@ Phase 1 = in the first TestFlight build. Later phases follow in order.
   birthday text filled in), the same name the web already calls.
 - Ads: iOS ad unit ids once AdMob has the iOS app.
 
+## Android fixes carried over before launch (Oct 30 2026)
+
+Anna: the Android app needed many small fixes after launch; make sure the iPhone app
+doesn't. Done: on-screen back arrow (iPhone has no back button; Layout.jsx), Facebook
+sign-in hidden on iPhone (it finished in Safari), offline page (public/offline.html,
+server.errorPath; was a blank screen), finished tasks' reminders cleared from
+Notification Center (NotifyBridge.deliveredTaskIds/clearTask +
+IPhoneNotificationTidy.jsx; Android does it with a silent push), no ring-on-arrival
+pushes with a 10-minute life for accounts last opened on iPhone
+(reminderTitle.phoneCanRing), voice files named .mp4 on iPhone, sounds work again
+after a recording (RecorderBridge.releaseAudioSession), Dark theme status bar, ads
+not started on iPhone, Parking Lot input no longer zooms. Still to do before App
+Review: in-app account deletion (guideline 5.1.1(v); DeleteAccount.jsx is email-only).
+Check on a device: keyboard covering inputs (no @capacitor/keyboard yet).
+
 ## Set up so far (Oct 30 2026)
 
 - Apple Developer: identifier `com.mediocreatbest.adhdone` (Push Notifications on)
   and the App Store profile "ADHDone App Store" (same distribution certificate as
   GenCare). Codemagic has the profile under reference `adhdone_app_store`.
-- Codemagic: application adhdone-android-new added (reads codemagic.yaml).
+- Codemagic: application adhdone-android-new added (reads codemagic.yaml). Build 1
+  (1.3.20) is in TestFlight; the version page (text, 6 screenshots from the Play
+  listing minus the two share-to-app ones, review contact, notes) is filled in.
 - GitHub: the compile check runs on every ios/ change; first runs BUILD SUCCEEDED.
 - The App Store name "ADHDone" belongs to another developer's app (first released
   Feb 6 2024), so the store name needs a variant; the home-screen name stays ADHDone.
