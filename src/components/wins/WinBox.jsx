@@ -99,7 +99,7 @@ export default function WinBox({ open, onClose, source = "other", winDate, theme
 
   return (
     <Dialog open={!!open} onOpenChange={(o) => { if (!o) onClose?.("dismissed"); }}>
-      <DialogContent className={`max-w-sm w-[calc(100vw-2rem)] max-h-[90vh] overflow-y-auto ${look.surface}`}>
+      <DialogContent className={`max-w-sm w-[calc(100vw-2rem)] ${askMood ? "max-h-[90vh] overflow-y-auto" : ""} ${look.surface}`}>
         <DialogHeader className="text-left">
           <DialogTitle>{askMood ? "How did you feel today?" : "What's one win from today?"}</DialogTitle>
           <DialogDescription className={askMood ? "sr-only" : look.muted}>
