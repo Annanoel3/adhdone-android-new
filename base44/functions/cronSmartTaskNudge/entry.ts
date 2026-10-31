@@ -86,6 +86,13 @@ const HELP_PAUSE_BODY = "Your reminders are paused for now. Just open ADHDone an
 // recording the answer) only reaches phones once it's published, and an answer
 // tapped before then would be lost with the question counted as asked.
 const HELP_ASK_FROM = Date.parse('2026-10-31T18:00:00Z');
+// Nobody who opened the app in the last 2 days is paused: their next open
+// would only start them again, so all they'd get is a weekly "paused" push.
+const HELP_PAUSE_IF_AWAY_MS = 2 * DAY_MS;
+// The question rings as a full-screen alarm with Yes / No for people on
+// alarms whose phone runs this build or later (PushFilter.ringOnArrival reads
+// the push's own buttons from build 44); everyone else gets the push.
+const HELP_ALARM_FROM_BUILD = 44;
 // Sent nudges are kept this long (for "last nudged 3 days ago"), then dropped.
 const HISTORY_KEEP_MS = 7 * DAY_MS;
 // A nudge already queued to go out this soon survives a re-plan. Edits can
@@ -573,13 +580,15 @@ Deno.serve(async (req) => {
       // with a week of Smart Reminders who, in the last 7 days, put them off
       // (Later, a snooze, Home/Back) on 4 or more different days and finished
       // fewer than a quarter of those tasks the day they put them off, is asked
-      // once: "Are your reminders helping?" Yes / No, a plain push with two
-      // buttons (the app records the answer: remindersHelping). Not within 30
+      // once: "Are your reminders helping?" Yes / No, a push with two buttons,
+      // or on full-screen alarms from build 44 an alarm with Yes / No (the app
+      // records the answer: remindersHelping). Not within 30
       // days of the last ask or answer, not on one a day, not while paused.
       // Yes changes nothing. No = ONE A DAY (below). If a week of one a day
       // still gets none of the reminded tasks finished the same day (3 or more
       // went out), one plain push says they're paused and opening the app
-      // starts them again (PAUSED BECAUSE THEY WEREN'T HELPING, above).
+      // starts them again (PAUSED BECAUSE THEY WEREN'T HELPING, above). Not
+      // anyone who opened the app in the last 2 days: they stay on one a day.
       // Scheduled runs only, never during a week away (that has its own
       // heads-up), never in the morning summary's hour, through the send
       // ledger's spacing. Either push is this run's one push for them.
@@ -605,11 +614,11 @@ Deno.serve(async (req) => {
             // to normal or opened the app in the meantime.
             const fresh = await freshUser(base44, user);
             const openedMs = utcMs(fresh?.last_active_at);
-            const inAppNow = Number.isFinite(openedMs) && nowMs - openedMs < 30 * 60 * 1000;
+            const openedLately = Number.isFinite(openedMs) && nowMs - openedMs < HELP_PAUSE_IF_AWAY_MS;
             const stillSo = !!fresh && (which === 'ask'
               ? fresh.smart_nudge_one_a_day !== true &&
                 nowMs - Math.max(utcMs(fresh.smart_nudge_help_asked_at) || 0, utcMs(fresh.smart_nudge_help_answered_at) || 0) >= HELP_ASK_REST_MS
-              : fresh.smart_nudge_one_a_day === true && !Number.isFinite(utcMs(fresh.smart_nudge_paused_at)) && !inAppNow);
+              : fresh.smart_nudge_one_a_day === true && !Number.isFinite(utcMs(fresh.smart_nudge_paused_at)) && !openedLately);
             const gate = stillSo ? await ledgerCheck(base44, { email, kind: 'general' }) : { allowed: false };
             if (stillSo && gate.allowed) {
               const nowIso = now.toISOString();
@@ -629,7 +638,11 @@ Deno.serve(async (req) => {
               } catch (e: any) {
                 console.error(`[SMART NUDGE] Could not record ${which === 'ask' ? 'the helping question' : 'the not-helping pause'} for ${email}, not sending it:`, e?.message || e);
               }
-              const outcome = marked ? await sendHelpPush(email, which, nowIso) : false;
+              // On full-screen alarms, on a build whose alarm screen shows the
+              // push's Yes / No: the question rings. Everyone else: the push.
+              const ringIt = which === 'ask' && fresh.alarm_mode === 'alarm' && fresh.app_platform === 'android' &&
+                Number(fresh.app_build) >= HELP_ALARM_FROM_BUILD;
+              const outcome = marked ? await sendHelpPush(email, which, nowIso, ringIt) : false;
               if (outcome) {
                 if (outcome === UNSUBSCRIBED) {
                   // Nothing reaches this phone: the account rests until they're
@@ -2663,12 +2676,17 @@ function helpingLook(p: {
     const windowFrom = Math.max(nowMs - HELP_TRIAL_MS, Number.isFinite(sinceMs) ? sinceMs : nowMs);
     const inWindow = went.filter((w) => w.at >= windowFrom && w.at <= nowMs);
     const helped = inWindow.filter((w) => w.ids.some((id) => finishedThatDay(taskById.get(id), w.at, dayOf)));
+    // Opened the app in the last 2 days: never paused (their next open would
+    // only start them again).
+    const openedMs = utcMs(user?.last_active_at);
+    const openedLately = Number.isFinite(openedMs) && nowMs - openedMs < HELP_PAUSE_IF_AWAY_MS;
     trial = {
       since: iso(sinceMs),
       week_in: weekIn,
       reminders_in_window: inWindow.length,
       finished_same_day: helped.length,
-      would_pause: !paused && weekIn && inWindow.length >= 3 && helped.length === 0,
+      opened_app_in_last_2_days: openedLately,
+      would_pause: !paused && weekIn && inWindow.length >= 3 && helped.length === 0 && !openedLately,
     };
   }
 
@@ -2711,15 +2729,20 @@ async function sentTodayInLedger(base44: any, email: string, dayOf: (ms: number)
   }
 }
 
-// The two ARE THEY HELPING? pushes. Both plain: never an alarm (the alarm
-// screen can't show Yes / No from a push yet), no task buttons (no taskId).
-// The question carries OneSignal's own two buttons; the app reads which one
+// The two ARE THEY HELPING? pushes, with no task buttons (no taskId). The
+// pause notice is always a plain push. The question rings as a full-screen
+// alarm only with `ring` (alarm users on build 44+): its Yes / No take the
+// snooze buttons' places on the alarm screen (AlarmActivity.parseActions) and
+// open the app on that answer (/Home?remindersHelping=yes|no). Otherwise it's
+// a plain push. Either way it carries OneSignal's own two buttons (a ringing
+// push that lands late, or quietly, shows as a push); the app reads which one
 // was tapped (OneSignalInit, actionId helping_yes / helping_no) and records it
 // (remindersHelping). A tap on the body, or a phone that doesn't pass the
 // button on, opens the app on the same question as a popup
 // (RemindersHelpingPopup). Twelve hours' lifetime so OneSignal doesn't put
-// either back on the screen days later.
-async function sendHelpPush(email: string, which: 'ask' | 'pause', atIso: string): Promise<string | false> {
+// either back on the screen days later; half an hour for the alarm, like a
+// nudge's.
+async function sendHelpPush(email: string, which: 'ask' | 'pause', atIso: string, ring = false): Promise<string | false> {
   const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
   const restApiKey = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
   if (!appId || !restApiKey) return false;
@@ -2735,6 +2758,18 @@ async function sendHelpPush(email: string, which: 'ask' | 'pause', atIso: string
       contents: { en: HELP_PAUSE_BODY },
       data: { type: 'reminders_paused', screen: '/Home' },
     };
+  const rings = which === 'ask' && ring;
+  if (rings) {
+    payload.data.alarm = true;
+    // JSON text, like the alarm lists the server sends (PushFilter reads either).
+    payload.data.actions = JSON.stringify([
+      { label: 'Yes', path: '/Home?remindersHelping=yes' },
+      { label: 'No', path: '/Home?remindersHelping=no' },
+    ]);
+    // Opened any other way (the banner while the phone is in use): the question as a popup.
+    payload.data.screen = '/Home?remindersHelping=1';
+    payload.priority = 10;
+  }
   try {
     const response = await fetch('https://onesignal.com/api/v1/notifications', {
       method: 'POST',
@@ -2744,7 +2779,7 @@ async function sendHelpPush(email: string, which: 'ask' | 'pause', atIso: string
         ...payload,
         include_external_user_ids: [email],
         channel_for_external_user_ids: 'push',
-        ttl: 12 * 60 * 60,
+        ttl: rings ? 30 * 60 : 12 * 60 * 60,
       }),
     });
     const result = await response.json();
