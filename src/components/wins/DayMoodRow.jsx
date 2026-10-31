@@ -67,12 +67,10 @@ export default function DayMoodRow({ day, row = null, onSaved, onEditingChange, 
     lastNote.current = row?.note || "";
     sentNote.current = String(row?.note || "").trim();
     setMode(row ? "small" : "ask");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row]);
 
   useEffect(() => {
     onEditingChange?.(mode === "detail");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
   const save = async (fields) => {
