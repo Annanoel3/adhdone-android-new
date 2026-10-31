@@ -552,6 +552,10 @@ export default function TaskCard({
         return;
       }
 
+      // A new task's first booking still on its way cancels itself now
+      // instead of ringing the old time (notificationOwnership.js).
+      noteTaskTimeChanged(task.id);
+
       const interval = task.reminder_interval;
 
       // A one-time task's date IS its deadline — moving it later is a push.
