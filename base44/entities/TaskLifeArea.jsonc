@@ -1,0 +1,44 @@
+{
+  "name": "TaskLifeArea",
+  "type": "object",
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "description": "The Task this sort is about. One row per task; a task that is later deleted leaves its row behind, and it is simply never counted again (counts come from the tasks that exist now, joined to these rows)."
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Whose task it is (the task's created_by), lowercased. The Insights 'areas of life' counts are read by this plus task_id."
+    },
+    "area": {
+      "type": "string",
+      "enum": [
+        "work",
+        "home",
+        "health",
+        "family_friends",
+        "money",
+        "errands",
+        "self_care",
+        "pets"
+      ],
+      "description": "Which area of life the task belonged to, judged by the model (gpt-6-astra, using the person's about_me) in the sortLifeAreas function. Drawn as the bubbles on the Insights page (LifeAreasCard)."
+    },
+    "happened_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the task happened, as of the sort: when it was finished, or when the event or birthday took place. For reference only: the counts use the task's own time as it is now."
+    }
+  },
+  "required": [
+    "task_id",
+    "user_email",
+    "area"
+  ],
+  "rls": {
+    "read": false,
+    "create": false,
+    "update": false,
+    "delete": false
+  }
+}
