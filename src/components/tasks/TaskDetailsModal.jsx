@@ -47,7 +47,7 @@ import ReminderTypeSelector, { getCurrentReminderType } from "./ReminderTypeSele
 import { supportsAlarms, alertStyleFor, refreshAlarms, requestAlarmPermissions } from "../utils/widgetBridge";
 import { AlertStyleInfo } from "../shared/QuickCapturePrompt";
 import VoiceTaskInput from "./VoiceTaskInput";
-import { scheduleReminder, cancelScheduledReminder, bookedIdsForTask } from "../utils/reminderScheduler"; import { moveTaskToParkingLot } from "../utils/taskToParkingLot";
+import { scheduleReminder, cancelScheduledReminder, bookedIdsForTask } from "../utils/reminderScheduler"; import { noteTaskTimeChanged } from "../utils/notificationOwnership"; import { moveTaskToParkingLot } from "../utils/taskToParkingLot";
 import { deleteTaskWithUndo, cancelEventWithUndo, restoreEvent } from "../utils/snoozeTask";
 import { ToastAction } from "@/components/ui/toast";
 import { User } from "@/entities/User";
@@ -760,6 +760,9 @@ Return JSON:
       // A time picked here is one they set themselves: it may go off inside
       // their quiet hours (RULES.md §9 Q4).
       const timeStated = !dayOnly;
+      // A new task's first booking still on its way cancels itself now
+      // instead of ringing the old time (notificationOwnership.js).
+      noteTaskTimeChanged(task.id);
       onUpdate({ ...task, next_reminder: nextReminder.toISOString(), due_date: nextReminder.toISOString(), day_only_task: dayOnly, anchor_time: namedTime, time_stated: timeStated, ...styleFix });
       const savedRdNow = `${nextReminder.getFullYear()}-${String(nextReminder.getMonth()+1).padStart(2,'0')}-${String(nextReminder.getDate()).padStart(2,'0')}`;
       const savedRtNow = `${String(nextReminder.getHours()).padStart(2,'0')}:${String(nextReminder.getMinutes()).padStart(2,'0')}`;
