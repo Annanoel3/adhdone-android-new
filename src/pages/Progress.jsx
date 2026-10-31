@@ -178,15 +178,29 @@ export default function Progress() {
     [...tasks, ...allCompleted].forEach(t => { byId[t.id] = t; });
     // A push is a counter on the task, not a dated event, so the window is
     // judged by when the task last changed — close, not exact.
+    // What the card says (Anna, Oct 31 2026: "Postponed and pushed seem like
+    // the same thing... It might be helpful if the metric was more about how
+    // often you finish something after pushing it back"): of the things you
+    // pushed back, how many you still finished, and which ones are still
+    // waiting. Events are left out: moving an appointment isn't putting it
+    // off, and an event is never "finished". A repeating task's copies are one
+    // line in the waiting list, not one line per copy.
+    const isEvent = (t) => !!(t.event_time || t.google_event_id);
     const tasksWithPushes = Object.values(byId).filter(t =>
       (t.due_date_pushes || 0) > 0 && !t.parent_task_id && !t.birthday_person &&
+      !isEvent(t) && t.status !== 'cancelled' &&
       inRange(t.updated_date || t.completed_at || t.created_date)
     );
-    const totalPushes = tasksWithPushes.reduce((sum, t) => sum + (t.due_date_pushes || 0), 0);
-    const mostPushed = tasksWithPushes
-      .sort((a, b) => (b.due_date_pushes || 0) - (a.due_date_pushes || 0))
-      .slice(0, 5)
-      .map(t => ({ title: t.title, pushes: t.due_date_pushes, status: t.status }));
+    const pushedThenDone = tasksWithPushes.filter(t => t.status === 'completed').length;
+    const waitingByTitle = {};
+    tasksWithPushes.filter(t => t.status !== 'completed').forEach(t => {
+      const key = String(t.title || '').trim().toLowerCase();
+      const row = waitingByTitle[key] || (waitingByTitle[key] = { title: t.title, pushes: 0 });
+      row.pushes = Math.max(row.pushes, t.due_date_pushes || 0);
+    });
+    const stillPushed = Object.values(waitingByTitle)
+      .sort((a, b) => b.pushes - a.pushes)
+      .slice(0, 5);
 
     // Rescued from the back burner: tasks that were parked at some point and
     // still got finished — whether finished while parked (silenced survives
@@ -218,9 +232,9 @@ export default function Progress() {
       mostProductiveDay,
       totalTasksCompleted: completedTasks.length,
       currentStreak,
-      totalDueDatePushes: totalPushes,
       tasksPushed: tasksWithPushes.length,
-      mostPushedTasks: mostPushed,
+      pushedThenDone,
+      stillPushed,
     });
 
     setIsLoading(false);
@@ -487,40 +501,51 @@ export default function Progress() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className={`p-4 rounded-xl text-center ${
+            {insights.tasksPushed > 0 && (
+              <div className={`p-4 rounded-xl ${
                 theme === 'minimalist' ? 'bg-amber-50' : 'bg-gradient-to-br from-amber-100 to-orange-100'
               }`}>
-                <div className="text-2xl font-bold text-gray-900">{insights.totalDueDatePushes}</div>
-                <p className="text-xs text-gray-600 mt-1">Total Due Date Pushes</p>
+                <p className="text-gray-900">
+                  You finished <strong className="text-2xl">{insights.pushedThenDone}</strong> of the{' '}
+                  <strong>{insights.tasksPushed}</strong> thing{insights.tasksPushed === 1 ? '' : 's'} you pushed back.
+                </p>
+                <div className="mt-3 h-2 rounded-full bg-white/70 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-amber-400 to-green-500"
+                    style={{ width: `${Math.round((insights.pushedThenDone / insights.tasksPushed) * 100)}%` }}
+                  />
+                </div>
+                <p className="text-xs text-gray-600 mt-2">
+                  {insights.pushedThenDone === 0
+                    ? 'Pushing something back gives it another shot. None of these are done yet.'
+                    : 'Pushing something back gave it another shot, and you followed through.'}
+                </p>
               </div>
-              <div className={`p-4 rounded-xl text-center ${
-                theme === 'minimalist' ? 'bg-purple-50' : 'bg-gradient-to-br from-purple-100 to-pink-100'
-              }`}>
-                <div className="text-2xl font-bold text-gray-900">{insights.tasksPushed}</div>
-                <p className="text-xs text-gray-600 mt-1">Tasks Postponed</p>
-              </div>
-            </div>
+            )}
 
-            {insights.mostPushedTasks && insights.mostPushedTasks.length > 0 && (
+            {insights.stillPushed && insights.stillPushed.length > 0 && (
               <div className="space-y-2">
-                <p className="text-sm font-medium text-gray-700">Most postponed:</p>
-                {insights.mostPushedTasks.map((t, i) => (
+                <p className="text-sm font-medium text-gray-700">Still waiting:</p>
+                {insights.stillPushed.map((t, i) => (
                   <div key={i} className={`flex items-center justify-between p-3 rounded-lg ${
                     theme === 'minimalist' ? 'bg-gray-50' : 'bg-white/60'
                   }`}>
-                    <span className={`text-sm flex-1 min-w-0 truncate ${t.status === 'completed' ? 'line-through text-gray-400' : 'text-gray-800'}`}>
+                    <span className="text-sm flex-1 min-w-0 truncate text-gray-800">
                       {t.title}
                     </span>
                     <Badge className="bg-amber-100 text-amber-700 ml-2 flex-shrink-0">
-                      Pushed {t.pushes}x
+                      Pushed back {t.pushes}x
                     </Badge>
                   </div>
                 ))}
               </div>
             )}
 
-            {(!insights.mostPushedTasks || insights.mostPushedTasks.length === 0) && (
+            {insights.tasksPushed > 0 && (!insights.stillPushed || insights.stillPushed.length === 0) && (
+              <p className="text-sm text-gray-700">Nothing you pushed back is still waiting. 🎯</p>
+            )}
+
+            {!insights.tasksPushed && (
               <div className={`p-4 rounded-xl text-center ${
                 theme === 'minimalist' ? 'bg-green-50' : 'bg-gradient-to-r from-green-100 to-teal-100'
               }`}>
@@ -551,11 +576,11 @@ export default function Progress() {
                 Schedule your most important tasks during your <strong>{insights.bestTime.toLowerCase()}</strong> hours when you're most productive.
               </p>
             </div>
-            {insights.totalDueDatePushes >= 3 && (
+            {(insights.stillPushed || []).some(t => t.pushes >= 2) && (
               <div className="flex items-start gap-3">
                 <div className="w-2 h-2 rounded-full bg-amber-500 mt-2 flex-shrink-0" />
                 <p className="text-gray-700">
-                  You've pushed deadlines <strong>{insights.totalDueDatePushes}</strong> times. The ones you keep postponing might need smaller steps, or might not matter to you, and that's okay too.
+                  The ones you keep pushing back might need a smaller first step, or might not matter to you, and that's okay too.
                 </p>
               </div>
             )}
