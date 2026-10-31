@@ -356,6 +356,12 @@ Deno.serve(async (req) => {
       }
       const pausedAtMs = utcMs(user.smart_nudge_paused_at);
       const pausedNow = Number.isFinite(pausedAtMs) && Number.isFinite(awayFromMs) && pausedAtMs > awayFromMs;
+      // Back after a pause (even just a Done on a notification): the morning
+      // summary goes back on too (cronDailyDigest reads this field).
+      if (Number.isFinite(pausedAtMs) && !pausedNow && !previewOnly) {
+        await base44.asServiceRole.entities.User.update(user.id, { smart_nudge_paused_at: null })
+          .catch((e: any) => console.error(`[SMART NUDGE] Could not clear the pause for ${email}:`, e?.message || e));
+      }
       if (Number.isFinite(awayFromMs) && nowMs - awayFromMs >= SMART_WARN_AFTER_MS) {
         if (pausedNow) continue;
         const warnedAtMs = utcMs(user.smart_nudge_pause_warned_at);
