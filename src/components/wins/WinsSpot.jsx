@@ -36,14 +36,19 @@ export default function WinsSpot({ theme, specialMode, openOnMount = false, clas
 
   const autoShown = usePopupTurn(autoWanted, { reactive: true });
 
-  useEffect(() => {
-    if (!autoShown) return;
+  // wins=1 comes off the address when the list closes, not while it's up: a
+  // navigation while it's open could remount the page and close it in the
+  // same instant it appeared (the same flash as the first "new Insights"
+  // popup, Oct 30 2026).
+  const closeList = () => {
+    setListOpen(false);
+    setAutoWanted(false);
     const params = new URLSearchParams(location.search);
     if (params.get("wins") !== "1") return;
     params.delete("wins");
     const rest = params.toString();
     navigate(`${location.pathname}${rest ? `?${rest}` : ""}`, { replace: true, state: location.state });
-  }, [autoShown, location.search, location.pathname, location.state, navigate]);
+  };
 
   useEffect(() => {
     let gone = false;
@@ -115,7 +120,7 @@ export default function WinsSpot({ theme, specialMode, openOnMount = false, clas
 
       <WinsList
         open={listOpen || autoShown}
-        onClose={() => { setListOpen(false); setAutoWanted(false); }}
+        onClose={closeList}
         theme={theme}
         specialMode={specialMode}
       />
