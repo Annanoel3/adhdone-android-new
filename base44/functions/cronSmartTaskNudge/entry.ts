@@ -93,6 +93,8 @@ const HELP_PAUSE_IF_AWAY_MS = 2 * DAY_MS;
 // alarms whose phone runs this build or later (PushFilter.ringOnArrival reads
 // the push's own buttons from build 44); everyone else gets the push.
 const HELP_ALARM_FROM_BUILD = 44;
+// No answer this long after the question: asked once more (a plain push).
+const HELP_ASK_AGAIN_MS = 3 * DAY_MS;
 // Sent nudges are kept this long (for "last nudged 3 days ago"), then dropped.
 const HISTORY_KEEP_MS = 7 * DAY_MS;
 // A nudge already queued to go out this soon survives a re-plan. Edits can
@@ -584,6 +586,9 @@ Deno.serve(async (req) => {
       // or on full-screen alarms from build 44 an alarm with Yes / No (the app
       // records the answer: remindersHelping). Not within 30
       // days of the last ask or answer, not on one a day, not while paused.
+      // No answer 3 days after it (a ring-out, a swipe, anything): asked once
+      // more, always as a plain push, if all of the above still holds; no
+      // answer to that either, and the 30 days count from the second ask.
       // Yes changes nothing. No = ONE A DAY (below). If a week of one a day
       // still gets none of the reminded tasks finished the same day (3 or more
       // went out), one plain push says they're paused and opening the app
@@ -595,9 +600,9 @@ Deno.serve(async (req) => {
       const oneADay = user.smart_nudge_one_a_day === true;
       const awayNow = Number.isFinite(awayFromMs) && nowMs - awayFromMs >= SMART_WARN_AFTER_MS;
       if (!onlyEmail && !previewOnly && !awayNow) {
-        const askedOrAnswered = Math.max(utcMs(user.smart_nudge_help_asked_at) || 0, utcMs(user.smart_nudge_help_answered_at) || 0);
+        const askStage = helpAskStage(user, nowMs);
         const sentDays = new Set(sentLog.filter((l: any) => l && !l.skip).map((l: any) => dayOf(utcMs(l.at))));
-        const mayAsk = !oneADay && nowMs >= HELP_ASK_FROM && nowMs - askedOrAnswered >= HELP_ASK_REST_MS && sentDays.size >= 4;
+        const mayAsk = !oneADay && nowMs >= HELP_ASK_FROM && !!askStage && sentDays.size >= 4;
         const trialMs = utcMs(user.smart_nudge_one_a_day_since);
         const mayPause = oneADay && Number.isFinite(trialMs) && nowMs - trialMs >= HELP_TRIAL_MS;
         if (mayAsk || mayPause) {
@@ -616,8 +621,7 @@ Deno.serve(async (req) => {
             const openedMs = utcMs(fresh?.last_active_at);
             const openedLately = Number.isFinite(openedMs) && nowMs - openedMs < HELP_PAUSE_IF_AWAY_MS;
             const stillSo = !!fresh && (which === 'ask'
-              ? fresh.smart_nudge_one_a_day !== true &&
-                nowMs - Math.max(utcMs(fresh.smart_nudge_help_asked_at) || 0, utcMs(fresh.smart_nudge_help_answered_at) || 0) >= HELP_ASK_REST_MS
+              ? fresh.smart_nudge_one_a_day !== true && helpAskStage(fresh, nowMs) === askStage
               : fresh.smart_nudge_one_a_day === true && !Number.isFinite(utcMs(fresh.smart_nudge_paused_at)) && !openedLately);
             const gate = stillSo ? await ledgerCheck(base44, { email, kind: 'general' }) : { allowed: false };
             if (stillSo && gate.allowed) {
@@ -625,11 +629,16 @@ Deno.serve(async (req) => {
               // Recorded BEFORE the push goes, so a save that fails can never
               // send the same question or pause notice again on the next run;
               // undone if the push doesn't go.
+              // The second ask (no answer to the first) keeps the first's time and
+              // stamps its own; a new first ask starts the pair over.
+              const again = which === 'ask' && askStage === 'again';
               const mark: any = which === 'ask'
-                ? { smart_nudge_help_asked_at: nowIso }
+                ? (again ? { smart_nudge_help_reasked_at: nowIso } : { smart_nudge_help_asked_at: nowIso, smart_nudge_help_reasked_at: null })
                 : { smart_nudge_paused_at: nowIso, smart_nudge_paused_reason: 'not_helping', smart_nudge_schedule_dirty: true };
               const undo: any = which === 'ask'
-                ? { smart_nudge_help_asked_at: fresh.smart_nudge_help_asked_at || null }
+                ? (again
+                  ? { smart_nudge_help_reasked_at: fresh.smart_nudge_help_reasked_at || null }
+                  : { smart_nudge_help_asked_at: fresh.smart_nudge_help_asked_at || null, smart_nudge_help_reasked_at: fresh.smart_nudge_help_reasked_at || null })
                 : { smart_nudge_paused_at: null, smart_nudge_paused_reason: null };
               let marked = false;
               try {
@@ -639,8 +648,9 @@ Deno.serve(async (req) => {
                 console.error(`[SMART NUDGE] Could not record ${which === 'ask' ? 'the helping question' : 'the not-helping pause'} for ${email}, not sending it:`, e?.message || e);
               }
               // On full-screen alarms, on a build whose alarm screen shows the
-              // push's Yes / No: the question rings. Everyone else: the push.
-              const ringIt = which === 'ask' && fresh.alarm_mode === 'alarm' && fresh.app_platform === 'android' &&
+              // push's Yes / No: the first ask rings. Everyone else, and the
+              // second ask always: the push.
+              const ringIt = which === 'ask' && !again && fresh.alarm_mode === 'alarm' && fresh.app_platform === 'android' &&
                 Number(fresh.app_build) >= HELP_ALARM_FROM_BUILD;
               const outcome = marked ? await sendHelpPush(email, which, nowIso, ringIt) : false;
               if (outcome) {
@@ -653,7 +663,7 @@ Deno.serve(async (req) => {
                 } else {
                   await ledgerRecord(base44, { email, kind: 'general', source: 'smart_helping', notificationId: outcome, title: which === 'ask' ? HELP_ASK_TITLE : HELP_PAUSE_TITLE });
                 }
-                console.log(`[SMART NUDGE] ${email}: ${which === 'ask' ? `asked "${HELP_ASK_TITLE}" (put off on ${look.press_days} days, ${look.finished_pairs} of ${look.pairs} finished that day)` : `paused, not helping (${look.trial?.reminders_in_window} sent this week, none finished that day)`}${outcome === UNSUBSCRIBED ? ' — phone not reachable' : ''}`);
+                console.log(`[SMART NUDGE] ${email}: ${which === 'ask' ? `asked "${HELP_ASK_TITLE}"${again ? ' again (no answer to the first)' : ''} (put off on ${look.press_days} days, ${look.finished_pairs} of ${look.pairs} finished that day)` : `paused, not helping (${look.trial?.reminders_in_window} sent this week, none finished that day)`}${outcome === UNSUBSCRIBED ? ' — phone not reachable' : ''}`);
                 continue;
               }
               // OneSignal failed for a passing reason: undone, tried again next run.
@@ -2584,6 +2594,21 @@ function finishedThatDay(t: any, atMs: number, dayOf: (ms: number) => string): b
   return dayOf(doneMs) === dayOf(atMs) || (doneMs >= atMs && doneMs - atMs <= HELP_PRESS_WINDOW_MS);
 }
 
+// Which ask the calendar allows (ARE THEY HELPING?): 'first' = 30 days since
+// the last ask, second ask or answer; 'again' = the last ask is 3+ days old,
+// unanswered, and hasn't been asked again (Oct 31 2026: a ring-out or a
+// swiped-away push mustn't lock someone out for 30 days); '' = neither.
+function helpAskStage(u: any, nowMs: number): 'first' | 'again' | '' {
+  const asked = utcMs(u?.smart_nudge_help_asked_at);
+  const answered = utcMs(u?.smart_nudge_help_answered_at);
+  const reasked = utcMs(u?.smart_nudge_help_reasked_at);
+  const last = Math.max(asked || 0, answered || 0, reasked || 0);
+  if (nowMs - last >= HELP_ASK_REST_MS) return 'first';
+  const unanswered = Number.isFinite(asked) && !(Number.isFinite(answered) && answered >= asked);
+  const askedAgain = Number.isFinite(reasked) && Number.isFinite(asked) && reasked >= asked;
+  return unanswered && !askedAgain && nowMs - asked >= HELP_ASK_AGAIN_MS ? 'again' : '';
+}
+
 // What ARE THEY HELPING? sees for one person: the presses on Smart Reminders
 // it counts, how many of those tasks got finished that day, and whether it
 // would ask or (on one a day) pause. Also what helping_preview returns.
@@ -2595,7 +2620,7 @@ function helpingLook(p: {
   const iso = (ms: number) => (Number.isFinite(ms) ? new Date(ms).toISOString() : null);
   const oneADay = user?.smart_nudge_one_a_day === true;
   const pausedMs = utcMs(user?.smart_nudge_paused_at);
-  const lastAskMs = Math.max(utcMs(user?.smart_nudge_help_asked_at) || 0, utcMs(user?.smart_nudge_help_answered_at) || 0);
+  const askStage = helpAskStage(user, nowMs);
 
   // A week of Smart Reminders: the account is a week old and the first one
   // still in the week's log went out 6+ days ago (the log keeps 7).
@@ -2664,7 +2689,7 @@ function helpingLook(p: {
   }
   const finishedPairs = [...pairs.values()].filter((x) => x.finished).length;
   const pattern = days.size >= 4 && pairs.size > 0 && finishedPairs / pairs.size < 0.25;
-  const rested = nowMs - lastAskMs >= HELP_ASK_REST_MS;
+  const rested = askStage === 'first';
   const paused = Number.isFinite(pausedMs);
 
   // One a day: the last 7 days of it (a week since it started, or since the
@@ -2694,6 +2719,7 @@ function helpingLook(p: {
     asked_at: user?.smart_nudge_help_asked_at || null,
     answer: user?.smart_nudge_help_answer || null,
     answered_at: user?.smart_nudge_help_answered_at || null,
+    asked_again_at: user?.smart_nudge_help_reasked_at || null,
     one_a_day: oneADay,
     paused_at: user?.smart_nudge_paused_at || null,
     paused_reason: user?.smart_nudge_paused_reason || null,
@@ -2703,7 +2729,10 @@ function helpingLook(p: {
     pairs: pairs.size,
     finished_pairs: finishedPairs,
     pattern,
-    would_ask: !oneADay && !paused && rested && weekOfReminders && pattern,
+    // 'first' (30 days since the last ask or answer), 'again' (the last ask is
+    // 3+ days old, unanswered, not asked again yet), or '' (not by the calendar).
+    ask_stage: askStage,
+    would_ask: !oneADay && !paused && !!askStage && weekOfReminders && pattern,
     trial,
     presses: presses.slice(-40).map((x) => ({ ...x, at: iso(x.at) })),
     tasks_by_day: [...pairs.values()].map((x) => ({ ...x, at: iso(x.at), title: String(taskById.get(x.task_id)?.title || '').slice(0, 60) })),
