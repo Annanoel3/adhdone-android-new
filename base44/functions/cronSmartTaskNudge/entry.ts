@@ -247,7 +247,8 @@ Deno.serve(async (req) => {
     // box: captures carry capture_id). Calendar imports don't count. A finish
     // is dated by completed_at, not updated_date: a later bulk edit of old
     // finished tasks (one on Oct 16 2026 touched every one) would make
-    // everyone look active.
+    // everyone look active. The pinned notification's silence buttons and
+    // wake-up detection aren't counted: they don't say the reminders helped.
     const lastSignByUser: Record<string, number> = {};
     const noteSign = (email: string | undefined, ms: number) => {
       if (!email || !Number.isFinite(ms) || ms > nowMs + 60 * 60 * 1000) return;
