@@ -362,13 +362,17 @@ Deno.serve(async (req) => {
         const warned = Number.isFinite(warnedAtMs) && warnedAtMs > awayFromMs;
         if (!warned) {
           if (!previewOnly) {
-            const notice = await sendPauseNotice(email, pauseNoticeBody(user, tasksByUser[email] || []));
+            // Nothing Smart Reminders has been mentioning: nothing they'd
+            // notice goes quiet (times they set keep ringing), so no heads-up,
+            // just the pause on schedule.
+            const body = pauseNoticeBody(user, tasksByUser[email] || []);
+            const notice = body ? await sendPauseNotice(email, body) : 'none needed';
             // Not sent for a passing reason (OneSignal down): tried again next run.
             if (notice) {
               await base44.asServiceRole.entities.User.update(user.id, {
                 smart_nudge_pause_warned_at: now.toISOString(),
               }).catch((e: any) => console.error(`[SMART NUDGE] Could not record the pause heads-up for ${email}:`, e?.message || e));
-              if (notice !== UNSUBSCRIBED) {
+              if (body && notice !== UNSUBSCRIBED) {
                 await ledgerRecord(base44, { email, kind: 'general', source: 'smart_pause', notificationId: notice, title: PAUSE_TITLE });
               }
             }
@@ -2256,7 +2260,9 @@ Return ONLY valid JSON:
 // The heads-up names what will go quiet, in her words' spirit: "Your pills
 // tasks will be paused, but no worries, come back..." The tasks Smart
 // Reminders mentioned most recently come first.
-function pauseNoticeBody(user: any, openTasks: any[]): string {
+// Only tasks Smart Reminders has actually been mentioning (still open), since
+// those are what go quiet; null when there are none.
+function pauseNoticeBody(user: any, openTasks: any[]): string | null {
   const byId: Record<string, any> = {};
   for (const t of openTasks) if (t?.id && !t.parent_task_id) byId[t.id] = t;
   const names: string[] = [];
@@ -2265,13 +2271,9 @@ function pauseNoticeBody(user: any, openTasks: any[]): string {
     const title = String(byId[entry?.task_id]?.title || '').trim();
     if (title && !names.includes(title)) names.push(title);
   }
-  for (const t of Object.values(byId)) {
-    const title = String(t?.title || '').trim();
-    if (title && !names.includes(title)) names.push(title);
-  }
+  if (names.length === 0) return null;
   const shown = names.slice(0, 2).map((n) => `"${n.length > 40 ? `${n.slice(0, 37)}...` : n}"`);
-  const what = names.length === 0 ? 'Your reminders'
-    : names.length === 1 ? `Reminders for ${shown[0]}`
+  const what = names.length === 1 ? `Reminders for ${shown[0]}`
     : names.length === 2 ? `Reminders for ${shown[0]} and ${shown[1]}`
     : `Reminders for ${shown[0]} and ${names.length - 1} more`;
   return `${what} will pause tomorrow. No worries, just open ADHDone anytime and they'll pick right back up.`;
