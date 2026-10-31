@@ -309,7 +309,7 @@ export default function DeleteData() {
                   <p className={`text-sm break-words ${
                     theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
                   }`}>
-                    All mood check-in records (including your evening "How did you feel today?" answers) and reactions from your accountability partners.
+                    All mood check-in records (including your evening &ldquo;How did you feel today?&rdquo; answers) and reactions from your accountability partners.
                   </p>
                 </div>
 
