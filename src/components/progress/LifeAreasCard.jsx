@@ -211,7 +211,6 @@ function titleFor(days, n) {
 export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
   const [counts, setCounts] = useState(null);
   const [sorting, setSorting] = useState(false);
-  const [failed, setFailed] = useState(false);
   const boxRef = useRef(null);
   const [width, setWidth] = useState(300);
   const dark = theme === "dark";
@@ -219,7 +218,6 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
   useEffect(() => {
     let alive = true;
     setSorting(false);
-    setFailed(false);
     (async () => {
       let c;
       try {
@@ -233,20 +231,15 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
       const sortDays = days == null ? SORT_MAX_DAYS : Math.min(days, SORT_MAX_DAYS);
       if (!sortPending(sortDays)) return;
       setSorting(true);
-      let ok = true;
       try {
         await sortOnce(sortDays);
-      } catch (e) {
-        ok = false;
-      }
+      } catch (e) { /* a failed sort shows what's sorted so far */ }
       if (!alive) return;
       try {
         const again = await loadCounts(days);
         if (alive) setCounts(again);
       } catch (e) { /* keep the first count */ }
-      if (!alive) return;
-      setSorting(false);
-      setFailed(!ok);
+      if (alive) setSorting(false);
     })();
     return () => { alive = false; };
   }, [days]);
@@ -304,10 +297,10 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
             </p>
           )}
 
+          {/* Enough happened but under 3 are sorted: the sort failed or ran
+              earlier this session. */}
           {enough && !showBubbles && !sorting && (
-            <p className={`text-sm ${muted}`}>
-              {failed || counts.unsorted > 0 ? "Couldn't sort your tasks yet. Check back later." : "Check off a few things to see where your time goes."}
-            </p>
+            <p className={`text-sm ${muted}`}>Couldn&apos;t sort your tasks yet. Check back later.</p>
           )}
 
           {showBubbles && (
@@ -379,7 +372,7 @@ export default function LifeAreasCard({ days = null, theme = "minimalist" }) {
         )}
 
         {showBubbles && !sorting && counts.unsorted > 0 && (
-          <p className={`text-xs ${muted}`}>Based on {counts.sorted} of {counts.total} so far.</p>
+          <p className={`text-xs ${muted}`}>Sorted {counts.sorted} of {counts.total} so far.</p>
         )}
       </CardContent>
     </Card>
