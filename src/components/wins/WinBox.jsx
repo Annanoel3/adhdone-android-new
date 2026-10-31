@@ -138,19 +138,22 @@ export function WinAskFromLink({ theme, specialMode }) {
 
   const shown = usePopupTurn(wanted, { reactive: true });
 
-  useEffect(() => {
-    if (!shown) return;
+  // win=1 comes off the address when the box closes, not while it's up: a
+  // navigation while it's open could remount the page around it and close it
+  // in the same instant it appeared.
+  const close = () => {
+    setWanted(false);
     const params = new URLSearchParams(location.search);
     if (params.get("win") !== "1") return;
     params.delete("win");
     const rest = params.toString();
     navigate(`${location.pathname}${rest ? `?${rest}` : ""}`, { replace: true, state: location.state });
-  }, [shown, location.search, location.pathname, location.state, navigate]);
+  };
 
   return (
     <WinBox
       open={shown}
-      onClose={() => setWanted(false)}
+      onClose={close}
       source="evening_push"
       theme={theme}
       specialMode={specialMode}
