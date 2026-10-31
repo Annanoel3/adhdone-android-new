@@ -1,0 +1,42 @@
+{
+  "name": "Win",
+  "type": "object",
+  "properties": {
+    "text": {
+      "type": "string",
+      "description": "The win, exactly as the user wrote it (the answer to \"What's one win from today?\"). Their own words; never rewritten."
+    },
+    "win_date": {
+      "type": "string",
+      "format": "date",
+      "description": "The user's local calendar day the win belongs to (YYYY-MM-DD, the phone's own date when it was saved). Used to tell whether today already has a win, and shown in the wins list as a plain-words date."
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "evening_card",
+        "evening_push",
+        "wins_list",
+        "other"
+      ],
+      "description": "Where the win was written: evening_card = the evening card on Home; evening_push = the box opened by tapping the evening \"one win from today\" notification; wins_list = \"+ Add a win\" in the wins list on Insights; other = anywhere else."
+    }
+  },
+  "required": [
+    "text"
+  ],
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "create": {
+      "created_by": "{{user.email}}"
+    },
+    "update": {
+      "created_by": "{{user.email}}"
+    },
+    "delete": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}
