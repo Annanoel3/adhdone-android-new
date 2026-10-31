@@ -6,6 +6,7 @@ import DailyTipCard from "../components/home/DailyTipCard";
 import QuickActions from "../components/home/QuickActions";
 import TodaysTasks from "../components/home/TodaysTasks";
 import EndOfDayReview from "../components/home/EndOfDayReview";
+import EveningWinCard from "../components/home/EveningWinCard";
 import BirthdayTextDialog from "../components/birthdays/BirthdayTextDialog";
 import TaskDetailsModal from "../components/tasks/TaskDetailsModal";
 import MomentumCelebration from "../components/shared/MomentumCelebration";
@@ -406,6 +407,9 @@ export default function Home() {
                 onWriteText={setBirthdayTextTask}
                 onRefresh={loadTasks}
               />
+
+              {/* "What's one win from today?" — evenings only (EveningWinCard). */}
+              <EveningWinCard user={user} theme={theme} specialMode={specialMode} />
             </div>
             
             <div className="min-w-0">
