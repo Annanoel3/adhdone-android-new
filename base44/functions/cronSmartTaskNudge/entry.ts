@@ -2150,6 +2150,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
       if (said && said.toLowerCase() !== String(t.title || '').trim().toLowerCase()) parts.push(`their words when they added it: "${said.slice(0, 400)}"`);
       const notesText = [t.description, t.notes].map((x) => String(x || '').trim()).filter(Boolean).join(' / ').replace(/\s+/g, ' ');
       if (notesText) parts.push(`notes: ${notesText.slice(0, 400)}`);
+      if (t.goal_context) parts.push(`this is ${String(t.goal_context).slice(0, 200)}`);
       const pin = pinnedMoment(t);
       if (isClockDeadline(t) && Number.isFinite(pin)) {
         parts.push(pin <= nowMs ? `due by ${whenLabel(pin)} — that time has passed and it isn't done` : `due by ${whenLabel(pin)}`);
