@@ -392,6 +392,11 @@
       "format": "date-time",
       "description": "When Smart Reminders last asked 'Are your reminders helping?' (a push with Yes / No, cronSmartTaskNudge ARE THEY HELPING?). Not asked again within 30 days of this or of their answer."
     },
+    "smart_nudge_help_reasked_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When 'Are your reminders helping?' was asked a second time because the first ask (smart_nudge_help_asked_at) got no answer in 3 days. Always a plain push. Once this is set and still unanswered, the 30-day wait counts from it. Cleared when a new first ask goes out."
+    },
     "smart_nudge_help_answer": {
       "type": "string",
       "description": "Their answer to 'Are your reminders helping?' (remindersHelping): 'yes' = nothing changes; 'no' = one Smart Reminder a day (smart_nudge_one_a_day). The first answer to a question counts."
