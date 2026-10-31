@@ -128,6 +128,7 @@ import { WinAskFromLink } from "./components/wins/WinBox";
 import WinsSlumpPopup from "./components/wins/WinsSlumpPopup";
 import NewInsightsPopup from "./components/shared/NewInsightsPopup";
 import RemindersHelpingPopup from "./components/shared/RemindersHelpingPopup";
+import WebAddressFooter from "./components/shared/WebAddressFooter";
 import {
   Dialog,
   DialogContent,
@@ -971,7 +972,13 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         `}</style>
 
       <TooltipProvider>
-          <Sidebar className={`border-r relative z-10 ${
+          {/* On a computer (768px and wider) the menu is a fixed panel down the
+              left with a gap held open for it. "relative" used to sit in this
+              list and beat the panel's "fixed", so the panel dropped below the
+              screen: an empty strip on the left and a menu button that seemed
+              to do nothing (Anna, Oct 31 2026). Phones use the slide-out
+              sheet and never see this className. */}
+          <Sidebar className={`border-r z-10 ${
             isSeasonalTheme()
               ? 'bg-white/70 backdrop-blur-md border-white/30'
               : theme === 'dark'
@@ -1324,6 +1331,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
                   className="text-center pt-2 pb-8"
                 />
               )}
+              <WebAddressFooter theme={theme} seasonal={isSeasonalTheme()} currentPageName={currentPageName} />
             </div>
 
             {currentPageName !== "Home" && currentPageName !== "ParkingLot" && currentPageName !== "SupportSpace" && currentPageName !== "AddTask" && currentPageName !== "Tasks" && currentPageName !== "Diary" && currentPageName !== "Notes" && (
