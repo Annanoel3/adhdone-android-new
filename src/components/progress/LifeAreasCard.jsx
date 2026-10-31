@@ -42,27 +42,30 @@ const SMALL_SHARE = 0.06;
 const NAME_MIN_PX = 70;
 const PCT_MIN_PX = 44;
 
-// One sortLifeAreas call per window per app session: it sorts what's new and
-// counts the window, and its answer (or its failure) is kept until the app is
-// reopened, so the card can never loop. Calls go one at a time, so two
+// One sortLifeAreas call per window: it sorts what's new and counts the
+// window. Its answer (or its failure) is reused for ANSWER_KEEP_MS, so
+// switching windows or coming back to the page never calls again and nothing
+// can loop; after that the next visit asks again, since the phone app can stay
+// open for days and the counts would go stale. Calls go one at a time, so two
 // windows never send the same tasks to the model at once.
+const ANSWER_KEEP_MS = 15 * 60 * 1000;
 const answers = new Map();
 let queue = Promise.resolve();
 const windowKey = (days) => (days == null ? "all" : String(days));
 function areasFor(days) {
   const key = windowKey(days);
-  if (!answers.has(key)) {
-    const run = queue
-      .then(() => base44.functions.invoke("sortLifeAreas", { days: days == null ? null : days }))
-      .then((res) => {
-        const data = res?.data ?? res;
-        if (!data || !data.counts || typeof data.total !== "number") throw new Error("No counts");
-        return data;
-      });
-    queue = run.catch(() => {});
-    answers.set(key, run);
-  }
-  return answers.get(key);
+  const kept = answers.get(key);
+  if (kept && Date.now() - kept.at < ANSWER_KEEP_MS) return kept.run;
+  const run = queue
+    .then(() => base44.functions.invoke("sortLifeAreas", { days: days == null ? null : days }))
+    .then((res) => {
+      const data = res?.data ?? res;
+      if (!data || !data.counts || typeof data.total !== "number") throw new Error("No counts");
+      return data;
+    });
+  queue = run.catch(() => {});
+  answers.set(key, { at: Date.now(), run });
+  return run;
 }
 
 // Circles packed around the biggest, largest first: each one goes to the free
