@@ -13,7 +13,10 @@
 #
 # App Store Connect: "ADHDone App" (Apple ID 6828975743), bundle
 # com.mediocreatbest.adhdone, profile "ADHDone App Store" (Codemagic reference
-# adhdone_app_store), created Oct 30 2026.
+# adhdone_app_store), created Oct 30 2026. The share extension
+# (com.mediocreatbest.adhdone.share) has its own profile "ADHDone Share App Store"
+# (reference adhdone_share_app_store), created Oct 31 2026; ios_signing below
+# fetches it too because its bundle id starts with the app's.
 #
 # Starting a build: the "Start new build" button, or a git tag that starts with
 # "ios-" (e.g. ios-1). Base44's own pushes to main never start a build.
