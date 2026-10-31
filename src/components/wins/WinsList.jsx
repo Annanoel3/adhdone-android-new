@@ -87,7 +87,7 @@ export default function WinsList({ open, onClose, theme, specialMode }) {
               </div>
             ) : failed ? (
               <div className="py-10 text-center space-y-3">
-                <p className={`text-sm ${look.muted}`}>Couldn't load your wins.</p>
+                <p className={`text-sm ${look.muted}`}>{"Couldn't load your wins."}</p>
                 <Button type="button" variant="ghost" size="sm" onClick={load} className={look.outline}>
                   Try again
                 </Button>
