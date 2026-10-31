@@ -193,8 +193,11 @@ export default function FocusTimer() {
     return classes;
   };
 
+  // On a computer the cards stretched the full width of the screen (Anna, Oct
+  // 31 2026: "looks weird all wide like this on desktop"); each card is now
+  // capped at a phone-friendly width and centred. The background still fills.
   return (
-    <div className={`min-h-screen p-3 md:p-8 ${
+    <div className={`min-h-screen p-3 md:p-8 [&>*]:max-w-2xl [&>*]:mx-auto ${
       theme === 'spicybrains'
         ? 'bg-gradient-to-br from-blue-300 via-blue-400 to-blue-500'
         : theme === 'dark'
