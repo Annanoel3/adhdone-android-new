@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { base44 } from "@/api/base44Client";
 
 // The seasonal-theme secret ("what's this? 👀"). It lives on Home and moves
 // to a different spot each day (Anna, Oct 27 2026: "put the seasonal easter
@@ -21,9 +22,17 @@ const unlocked = () => {
 };
 
 // Mount one per spot on Home; only today's spot shows anything.
+// Anna's account always sees today's spot, even after it's found, so she can
+// check where it is (Oct 31 2026).
+const OWNER_EMAIL = "s2kap2chick@gmail.com";
+
 export default function HomeSecretLink({ theme, spot, className = "" }) {
   const [gone, setGone] = useState(unlocked);
-  if (gone || spot !== secretSpotToday()) return null;
+  const [isOwner, setIsOwner] = useState(false);
+  useEffect(() => {
+    base44.auth.me().then((u) => setIsOwner(String(u?.email || "").toLowerCase() === OWNER_EMAIL)).catch(() => {});
+  }, []);
+  if ((gone && !isOwner) || spot !== secretSpotToday()) return null;
   return (
     <div className={className || "text-center"}>
       <button

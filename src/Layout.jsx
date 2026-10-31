@@ -335,6 +335,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     const month = now.getMonth() + 1; // 1-12
     const day = now.getDate();
 
+    // TEMPORARY (Oct 31 2026): Anna's account previews the next season, fall.
+    // Remove this line to put her back on the real date-based season.
+    if (String(user?.email || '').toLowerCase() === 's2kap2chick@gmail.com') return 'fall';
+
     // Christmas: Dec 20 - Dec 26
     if (month === 12 && day >= 20 && day <= 26) return 'christmas';
     // New Years: Dec 27 - Jan 5
@@ -1320,7 +1324,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 
             <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
               {children}
-              {currentPageName === 'Home' && !seasonalUnlocked && (
+              {currentPageName === 'Home' && (!seasonalUnlocked || String(user?.email || '').toLowerCase() === 's2kap2chick@gmail.com') && (
                 <HomeSecretLink
                   spot="bottom"
                   theme={theme}
