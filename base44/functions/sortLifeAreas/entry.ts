@@ -51,7 +51,9 @@ const MODEL_CALLS_AT_ONCE = 4;
 const CAP_PER_CALL = 300;        // tasks sorted per person on a normal call
 const CAP_PER_PERSON_ALL = 2000; // per person on an all_users run (time-bounded)
 const WRITES_AT_ONCE = 5;
-const ALL_USERS_BUDGET_MS = 4 * 60 * 1000;
+// all_users: no new person or model call starts after this, so a run that
+// started one just before it still wraps up at about 4 minutes.
+const ALL_USERS_BUDGET_MS = 200 * 1000;
 const MAX_SAMPLES = 80;
 const DRY_RUN_ROWS_PER_PERSON = 200;
 
@@ -357,8 +359,9 @@ export default async function (req: Request) {
     }
 
     // The caller's own tasks.
+    // CAP_PER_CALL is 4 batches, all sent at once, so no deadline is needed.
     const r = await sortPerson(openai, base44.entities.Task, user.email, clip(user.about_me, 600), {
-      sinceMs, nowMs, dryRun, cap: CAP_PER_CALL, deadline: nowMs + ALL_USERS_BUDGET_MS,
+      sinceMs, nowMs, dryRun, cap: CAP_PER_CALL, deadline: Infinity,
     });
     console.log(`[sortLifeAreas] ${dryRun ? 'dry run: ' : ''}${r.found} unsorted, ${r.sorted} sorted, ${r.remaining} left${r.failed ? `, ${r.failed} writes failed` : ''}`);
     if (dryRun) return Response.json({ dry_run: true, days, sorted: r.sorted, remaining: r.remaining, changes: r.changes });
