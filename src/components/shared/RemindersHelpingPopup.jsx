@@ -69,7 +69,7 @@ export default function RemindersHelpingPopup({ theme, specialMode }) {
   // around it and close it in the same instant).
   const dropParam = () => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get(HELPING_PARAM) !== "1") return;
+    if (!params.has(HELPING_PARAM)) return;
     params.delete(HELPING_PARAM);
     const rest = params.toString();
     navigate(`${window.location.pathname}${rest ? `?${rest}` : ""}`, { replace: true, state: location.state });
