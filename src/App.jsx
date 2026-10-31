@@ -33,6 +33,9 @@ import Birthdays from '@/pages/Birthdays';
 import DecisionMaker from '@/pages/DecisionMaker';
 import Diary from '@/pages/Diary';
 import Places from '@/pages/Places';
+import Goals from '@/pages/Goals';
+import Planner from '@/pages/Planner';
+import GoalDetail from '@/pages/GoalDetail';
 // The Notes page lives in the old InstallInstructions file (new files can't be
 // added from the code editor); it opens at /Notes.
 import NotesPage from '@/pages/InstallInstructions';
@@ -132,6 +135,10 @@ const AuthenticatedApp = () => {
         <Route path="/Diary" element={<LayoutWrapper currentPageName="Diary"><Diary /></LayoutWrapper>} />
         <Route path="/Places" element={<LayoutWrapper currentPageName="Places"><Places /></LayoutWrapper>} />
         <Route path="/Notes" element={<LayoutWrapper currentPageName="Notes"><NotesPage /></LayoutWrapper>} />
+        {/* Goals (GOALS_PORT.md): each page sends an account Goals isn't open to back Home (goalsAccess.js). */}
+        <Route path="/Goals" element={<LayoutWrapper currentPageName="Goals"><Goals /></LayoutWrapper>} />
+        <Route path="/Planner" element={<LayoutWrapper currentPageName="Planner"><Planner /></LayoutWrapper>} />
+        <Route path="/goal/:id" element={<LayoutWrapper currentPageName="GoalDetail"><GoalDetail /></LayoutWrapper>} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>
