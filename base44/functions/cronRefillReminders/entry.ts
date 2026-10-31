@@ -2197,6 +2197,25 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     }
   }
 
+  // 12. Someone asked, inside the app, to delete their account (Settings >
+  //     My Account > Delete Account; User.account_deletion_requested_at).
+  //     Apple doesn't allow making people send an email for this (App
+  //     Review 5.1.1(v)), so the request is made in the app and Anna does
+  //     the deletion herself within 30 days, as the page promises. Told once
+  //     per request, whoever it is.
+  for (const u of allUsers) {
+    const askedMs = msOf(u?.account_deletion_requested_at);
+    if (!u?.email || !Number.isFinite(askedMs)) continue;
+    const delKey = `deletion:${String(u.email).toLowerCase()}`;
+    if (msOf(marks[delKey]) === askedMs) continue;
+    problems.push({
+      title: `🗑️ ADHDone: ${nameOf(u)} asked to delete their account`,
+      body: `Requested in the app ${theirClock(u, askedMs)} (their time). The page told them it will be done within 30 days and that they'll get an email when it is. ${u.email}`,
+      sinceMs: askedMs,
+      mark: { key: delKey, value: new Date(askedMs).toISOString() },
+    });
+  }
+
   // A look at what would go out, sending nothing ({ previewHealth: true }).
   if (ctx.dryRun) {
     const out: any[] = [];

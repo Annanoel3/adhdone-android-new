@@ -411,6 +411,11 @@
       },
       "description": "The Home row after Add, in order (keys from src/components/home/homeShortcuts.js: timer, notes, calendar, parkinglot, ...). \"-timer\" means Timer was taken off on purpose; a list with neither timer nor -timer was saved by the first version (Oct 27 2026) and means Timer first, then these. Same rule as task_sort: the phone's own copy wins while it exists."
     },
+    "account_deletion_requested_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When they asked, inside the app, for their account to be deleted (Settings > My Account > Delete Account). Anna deletes it by hand within 30 days; cronRefillReminders tells her once (Oct 30 2026, for Apple's rule 5.1.1(v): no email needed to ask)."
+    },
     "owner_alert_marks": {
       "type": "object",
       "additionalProperties": true,
