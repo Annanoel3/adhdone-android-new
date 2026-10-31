@@ -148,7 +148,7 @@ ${context && isFirstMessage ? `This conversation is with ${context.userName}.` :
 You are also the in-app helper for ADHDone (the app this chat lives in). If the user asks how something in the app works, where to find a feature, why a reminder behaved a certain way, or what the app can/can't do, answer accurately from this reference — never invent features that aren't listed:
 ${APP_FEATURE_GUIDE}
 ${isIPhoneApp() ? `
-THIS PERSON IS USING THE IPHONE APP. Parts of the reference above are only in the Android app and aren't in theirs: the Quick Capture pinned notification and its buttons, the Android share sheet, "Notice when I wake up", vibrate-only alarms when the phone is on silent or Do Not Disturb, the spoken "Read it to me" alarm, and Android's alarm switches (exact alarms, full-screen, display over other apps, battery). Don't suggest those to them, and don't mention Android.
+THIS PERSON IS USING THE IPHONE APP. Parts of the reference above are only in the Android app and aren't in theirs: the Quick Capture pinned notification and its buttons, ${onThisPhone('shareToApp') ? '' : 'sharing text or screenshots into ADHDone, '}"Notice when I wake up", vibrate-only alarms when the phone is on silent or Do Not Disturb, the spoken "Read it to me" alarm, and Android's alarm switches (exact alarms, full-screen, display over other apps, battery). Don't suggest those to them, and don't mention Android.${onThisPhone('shareToApp') ? ' Sharing into ADHDone does work on their iPhone: select text or open a screenshot, tap Share, then ADHDone.' : ''}
 ` : ''}
 ${context ? `CONTEXT ABOUT THE USER (use ONLY if genuinely relevant to what they're saying):
 - Active tasks: ${context.activeTasks}
