@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import HabitPatterns from "@/components/progress/HabitPatterns";
 import LifeAreasCard from "@/components/progress/LifeAreasCard";
+import MoodDoneCard from "@/components/progress/MoodDoneCard";
 import WinsSpot from "@/components/wins/WinsSpot";
 
 // The window the numbers cover. Everything that is a count of things that
@@ -376,6 +377,10 @@ export default function Progress() {
 
         {/* Which areas of life the window went to (sortLifeAreas). */}
         <LifeAreasCard days={(RANGES.find(r => r.key === range) || RANGES[3]).days} theme={theme} />
+
+        {/* How they felt each evening next to what they finished that day
+            (DayMood; loads on its own and never takes the page down). */}
+        <MoodDoneCard days={(RANGES.find(r => r.key === range) || RANGES[3]).days} theme={theme} />
 
         {/* Overall Stats */}
         <Card className="border-none shadow-lg md:col-span-2">
