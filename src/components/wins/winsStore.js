@@ -43,7 +43,7 @@ function announce() {
 // entity's own created_by rule, so an account with wider read access still
 // only ever sees its own.
 let emailPromise = null;
-async function myEmail() {
+export async function myEmail() {
   if (!emailPromise) {
     emailPromise = base44.auth.me().then((me) => {
       if (!me?.email) throw new Error("not signed in");
@@ -193,6 +193,33 @@ export function eveningWindow(user, now = new Date()) {
     return { open: true, dayKey: localDateKey(yesterday) };
   }
   return { open: false, dayKey: localDateKey(now) };
+}
+
+// Which of their days a moment belongs to, named the way eveningWindow names
+// it, so a task finished at 12:30 AM lands on the same day as the mood they
+// gave that evening (Insights, "Mood and what got done"). Their day turns over
+// in the middle of their quiet hours, the same turnover as todayTasks'
+// theirDayKey (3 AM for 10 PM-8 AM, noon for someone who sleeps 8 AM-4 PM),
+// never at a fixed clock hour. It's named for the day its evening window
+// starts on: for the 8 AM-4 PM sleeper, the 4-8 AM window and the shift
+// before it carry that morning's date, as the evening card stamps them.
+// Checked against eveningWindow for every quiet-hours pair on the half hour:
+// every moment the window is open gets the window's dayKey.
+export function dayOfMoment(user, at) {
+  const t = new Date(at);
+  if (Number.isNaN(t.getTime())) return "";
+  const FIVE_PM = 17 * 60;
+  const qs = toMinutes(user?.quiet_hours_start, 22 * 60);
+  const qe = toMinutes(user?.quiet_hours_end, 8 * 60);
+  const eveningStart = qs > FIVE_PM ? FIVE_PM : (qs - 240 + 1440) % 1440;
+  // Same start and end (no quiet hours): midnight, unless their evening runs
+  // past midnight, then when it ends.
+  const turn = qs !== qe
+    ? (qs + Math.round(((qe - qs + 1440) % 1440) / 2)) % 1440
+    : (eveningStart > qs ? qs : 0);
+  const m = t.getHours() * 60 + t.getMinutes();
+  const shift = (m < turn ? -1 : 0) + (eveningStart < turn ? 1 : 0);
+  return localDateKey(new Date(t.getFullYear(), t.getMonth(), t.getDate() + shift));
 }
 
 // A win's day in plain words: Today, Yesterday, Tuesday, Oct 27, Oct 27, 2025.
