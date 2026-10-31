@@ -17,6 +17,7 @@ import HabitPatterns from "@/components/progress/HabitPatterns";
 import LifeAreasCard from "@/components/progress/LifeAreasCard";
 import MoodDoneCard from "@/components/progress/MoodDoneCard";
 import WinsSpot from "@/components/wins/WinsSpot";
+import { streakFromTasks } from "@/components/utils/completionStreak";
 
 // The window the numbers cover. Everything that is a count of things that
 // happened (completions, rescues, focus sessions, deadline pushes) recounts for
