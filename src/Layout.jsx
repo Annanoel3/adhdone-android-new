@@ -338,9 +338,9 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
     const month = now.getMonth() + 1; // 1-12
     const day = now.getDate();
 
-    // TEMPORARY (Oct 31 2026): Anna's account previews the next season, fall.
+    // TEMPORARY (Oct 31 2026): Anna's account previews a season, now winter.
     // Remove this line to put her back on the real date-based season.
-    if (String(user?.email || '').toLowerCase() === 's2kap2chick@gmail.com') return 'fall';
+    if (String(user?.email || '').toLowerCase() === 's2kap2chick@gmail.com') return 'winter';
 
     // Christmas: Dec 20 - Dec 26
     if (month === 12 && day >= 20 && day <= 26) return 'christmas';
