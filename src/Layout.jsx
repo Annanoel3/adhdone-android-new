@@ -681,7 +681,7 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       newyears: pickBg(`${OLD}829d2e43c_3ChatGPTImageOct15202504_11_12PM.png`, `${B44}5c1230878_generated_image.png`),
       stpatricks: pickBg(`${OLD}4e394e799_4ChatGPTImageOct15202504_14_19PM.png`, `${B44}cba16f929_generated_image.png`),
       fourthjuly: pickBg(`${OLD}b2551ae2b_5ChatGPTImageOct15202504_16_16PM.png`, `${B44}a9aa265ca_generated_image.png`),
-      summer: pickBg(`${OLD}3db9fd982_ChatGPTImageOct15202504_16_19PM.png`, `${B44}f38b2b059_generated_image.png`),
+      summer: pickBg(`${OLD}3db9fd982_ChatGPTImageOct15202504_16_19PM.png`, `${B44}bb9ddca19_generated_image.png`),
       spring: pickBg(`${OLD}7005cb267_ChatGPTImageOct15202504_16_23PM.png`, `${B44}dbe4dd94d_generated_image.png`),
     };
 
