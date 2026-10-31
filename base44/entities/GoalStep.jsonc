@@ -1,0 +1,168 @@
+{
+  "name": "GoalStep",
+  "type": "object",
+  "properties": {
+    "goal_id": {
+      "type": "string",
+      "description": "The parent goal ID"
+    },
+    "title": {
+      "type": "string",
+      "description": "Step title, e.g. 'Week 1: Learn basic greetings'"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of this step (the week's bullets: action, focus, reflect, activity, resource)"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "critical"
+      ],
+      "default": "medium",
+      "description": "Priority level of this step. Its task's priority: critical = urgent."
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "in_progress",
+        "completed",
+        "skipped"
+      ],
+      "default": "pending"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date",
+      "description": "As in the Goals app: the day this step's week starts (Week 1 = the goal's start date, later weeks = that calendar week's Monday). Its task's 'by' date is the end of that week (goalLogic.stepDeadline)."
+    },
+    "phase": {
+      "type": "string",
+      "description": "Which month/week this step belongs to, e.g. 'Month 1, Week 2'"
+    },
+    "order_index": {
+      "type": "number",
+      "description": "Order within the goal plan. The current step is the first one, in this order, that isn't completed or skipped.",
+      "default": 0
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Personal notes specific to this step (also where habit check-in notes are added)"
+    },
+    "step_resources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "video",
+              "book",
+              "article",
+              "tool",
+              "course",
+              "website",
+              "other"
+            ],
+            "description": "Type of resource"
+          },
+          "title": {
+            "type": "string",
+            "description": "Name of the resource"
+          },
+          "url": {
+            "type": "string",
+            "description": "Link to the resource"
+          },
+          "description": {
+            "type": "string",
+            "description": "Brief description or how to use it"
+          },
+          "specific_details": {
+            "type": "string",
+            "description": "Specific sections, times, pages, etc."
+          }
+        },
+        "required": [
+          "type",
+          "title"
+        ]
+      },
+      "default": [],
+      "description": "Resources needed for this specific step"
+    },
+    "success_criteria": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": [],
+      "description": "Measurable indicators of completion"
+    },
+    "tips_and_guidance": {
+      "type": "string",
+      "description": "Specific advice, best practices, or common pitfalls to avoid"
+    },
+    "pictures": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Array of image URLs attached to this step (uploaded the same way task pictures are)",
+      "default": []
+    },
+    "is_daily_habit": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this step is a daily habit (reading, practice, exercise...)"
+    },
+    "last_habit_checkin_date": {
+      "type": "string",
+      "format": "date",
+      "description": "The last date the user did a habit check-in on the goal page"
+    },
+    "habit_completions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "format": "date"
+      },
+      "default": [],
+      "description": "Days (YYYY-MM-DD) marked done on the goal page's week tracker or check-in. The tracker also counts the days this step's habit task was finished (Task.goal_step_id)."
+    },
+    "task_id": {
+      "type": "string",
+      "description": "The ADHDone Task that is this step on their task list (one open task per goal). Set by GoalStepSync when it makes or retargets that task; it is also the marker that stops a second task being made for the step."
+    },
+    "task_dismissed": {
+      "type": "boolean",
+      "default": false,
+      "description": "True when the person deleted this step's task. It is not made again on the next sync; the goal page offers 'Add this step to my tasks'."
+    },
+    "task_claim": {
+      "type": "string",
+      "description": "'<device>:<ms>' written by a GoalStepSync run that is about to make this step's task, so two phones or tabs never make two. Cleared once task_id is saved; a claim older than 90 seconds is ignored."
+    }
+  },
+  "required": [
+    "goal_id",
+    "title"
+  ],
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}
