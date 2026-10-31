@@ -270,6 +270,23 @@ export default function DeleteData() {
                   <h4 className={`font-semibold mb-2 break-words ${
                     theme === 'dark' ? 'text-blue-400' : 'text-blue-900'
                   }`}>
+                    ✓ Goals
+                  </h4>
+                  <p className={`text-sm break-words ${
+                    theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
+                  }`}>
+                    Your goals and their steps, including step notes, photos, habit check-ins, and your conversations with the goal planner. You can delete all goals or specific ones.
+                  </p>
+                </div>
+
+                <div className={`p-4 rounded-lg border ${
+                  theme === 'dark' 
+                    ? 'bg-gray-900/50 border-gray-700' 
+                    : 'bg-blue-50 border-blue-200'
+                }`}>
+                  <h4 className={`font-semibold mb-2 break-words ${
+                    theme === 'dark' ? 'text-blue-400' : 'text-blue-900'
+                  }`}>
                     ✓ Progress Data
                   </h4>
                   <p className={`text-sm break-words ${
