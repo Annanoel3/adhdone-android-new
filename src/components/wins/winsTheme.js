@@ -28,6 +28,13 @@ export function winLook(theme, specialMode = readSpecialMode()) {
       outline: "border border-white/20 bg-white/10 hover:bg-white/20 text-gray-100",
       // The shared mic button is an outline button (white on these seasons).
       mic: "[&_button.bg-background]:!bg-white/10 [&_button.bg-background]:!border-white/20 [&_button.bg-background]:!text-white",
+      // The mood faces, chips and tags (DayMoodRow, WinsList, Insights).
+      chip: "bg-black/30 border-white/20 text-gray-100",
+      chipOn: "bg-purple-600 border-purple-600 text-white",
+      faceOn: "bg-white/15 ring-2 ring-purple-300",
+      tag: "bg-white/10 text-gray-200",
+      error: "text-rose-300",
+      accent: "text-purple-300",
       night: true,
     };
   }
@@ -42,6 +49,12 @@ export function winLook(theme, specialMode = readSpecialMode()) {
     row: dark ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200",
     outline: outlineButton(theme, specialMode),
     mic: "",
+    chip: dark ? "bg-gray-800 border-gray-700 text-gray-200" : "bg-white border-gray-300 text-gray-700",
+    chipOn: "bg-purple-600 border-purple-600 text-white",
+    faceOn: dark ? "bg-purple-900/40 ring-2 ring-purple-400" : "bg-purple-100 ring-2 ring-purple-500",
+    tag: dark ? "bg-purple-900/40 text-purple-200" : "bg-purple-100 text-purple-700",
+    error: dark ? "text-rose-300" : "text-rose-600",
+    accent: dark ? "text-purple-300" : "text-purple-700",
     night: false,
   };
 }
