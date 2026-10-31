@@ -47,7 +47,10 @@ export default function DayMoodRow({ day, row = null, onSaved, onEditingChange, 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const pending = useRef(0);
+  // The note as last saved, and as last sent (a blur and the Save button can
+  // both fire for the same words; only one save goes).
   const lastNote = useRef(row?.note || "");
+  const sentNote = useRef(String(row?.note || "").trim());
   // The answer as it stands, for saves started from callbacks.
   const current = useRef({ chosen, reasons, note });
   current.current = { chosen, reasons, note };
@@ -62,6 +65,7 @@ export default function DayMoodRow({ day, row = null, onSaved, onEditingChange, 
     setReasons(Array.isArray(row?.reasons) ? row.reasons : []);
     setNote(row?.note || "");
     lastNote.current = row?.note || "";
+    sentNote.current = String(row?.note || "").trim();
     setMode(row ? "small" : "ask");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [row]);
@@ -75,6 +79,7 @@ export default function DayMoodRow({ day, row = null, onSaved, onEditingChange, 
     pending.current += 1;
     setSaving(true);
     setError("");
+    sentNote.current = String(fields.note || "").trim();
     try {
       const next = await saveDayMood(day, fields);
       lastNote.current = next?.note ?? fields.note ?? lastNote.current;
@@ -83,6 +88,7 @@ export default function DayMoodRow({ day, row = null, onSaved, onEditingChange, 
       return next;
     } catch (e) {
       console.error("[Mood] Could not save:", e);
+      sentNote.current = String(lastNote.current || "").trim();
       setError(SAVE_ERROR);
       return null;
     } finally {
@@ -117,7 +123,8 @@ export default function DayMoodRow({ day, row = null, onSaved, onEditingChange, 
   const noteChanged = note.trim() !== String(lastNote.current || "").trim();
 
   const saveNote = () => {
-    if (current.current.chosen == null || !noteChanged) return null;
+    if (current.current.chosen == null) return null;
+    if (String(current.current.note || "").trim() === sentNote.current) return null;
     return save(whole());
   };
 
