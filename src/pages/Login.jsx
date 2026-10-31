@@ -9,6 +9,7 @@ import AuthLayout from "@/components/AuthLayout";
 import GoogleIcon from "@/components/GoogleIcon";
 import FacebookIcon from "@/components/FacebookIcon";
 import AppleSignInButton from "@/components/AppleSignIn";
+import { isIPhoneApp } from "@/lib/phonePlatform";
 import { safeReturnTo } from "@/lib/authReturnTo";
 
 export default function Login() {
@@ -65,14 +66,18 @@ export default function Login() {
           <GoogleIcon className="w-5 h-5 mr-2" />
           Continue with Google
         </Button>
-        <Button
-          variant="outline"
-          className="w-full h-12 text-sm font-medium"
-          onClick={() => base44.auth.loginWithProvider("facebook", returnTo)}
-        >
-          <FacebookIcon className="w-5 h-5 mr-2" />
-          Continue with Facebook
-        </Button>
+        {/* Not in the iPhone app: Facebook's page opens in Safari there and the
+            app never hears back, so the person stays signed out (Oct 30 2026). */}
+        {!isIPhoneApp() && (
+          <Button
+            variant="outline"
+            className="w-full h-12 text-sm font-medium"
+            onClick={() => base44.auth.loginWithProvider("facebook", returnTo)}
+          >
+            <FacebookIcon className="w-5 h-5 mr-2" />
+            Continue with Facebook
+          </Button>
+        )}
       </div>
 
       <div className="relative mb-6">
