@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,10 @@ import { winLook } from "@/components/wins/winsTheme";
 // open, for people who already had the app when the areas-of-life bubbles and
 // wins arrived. Someone new finds Insights on their own; this is not part of
 // their setup. Waits its turn like every popup that opens on its own.
-const FLAG = "new_insights_seen_v1";
+// v2: v1 marked itself seen the moment it appeared, which closed it again in
+// the same instant (Anna, Oct 30 2026: "a popup flashed for like .00001
+// seconds"), so everyone who got the flash gets it properly once.
+const FLAG = "new_insights_seen_v2";
 const RELEASED = Date.parse("2026-10-31T12:00:00Z");
 
 function seenHere() {
@@ -20,17 +23,22 @@ function seenHere() {
 export default function NewInsightsPopup({ user, theme, specialMode, currentPageName }) {
   const navigate = useNavigate();
   const look = winLook(theme, specialMode);
-  const [dismissed, setDismissed] = useState(false);
+  // Decided once, when the account loads, and then held: marking it seen
+  // (below) must not make it close itself, which is what the flash was.
+  const [eligible, setEligible] = useState(false);
+  const decided = useRef(false);
+  useEffect(() => {
+    if (decided.current || !user?.email) return;
+    decided.current = true;
+    const joined = Date.parse(user?.signed_up_at || user?.created_date || "");
+    const flags = Array.isArray(user?.onboarding_flags) ? user.onboarding_flags : [];
+    if (Number.isFinite(joined) && joined < RELEASED && !flags.includes(FLAG) && !seenHere()) {
+      setEligible(true);
+    }
+  }, [user]);
 
-  const joined = Date.parse(user?.signed_up_at || user?.created_date || "");
-  const flags = Array.isArray(user?.onboarding_flags) ? user.onboarding_flags : [];
-  const wanted = !!user?.email
-    && !dismissed
-    && Number.isFinite(joined) && joined < RELEASED
-    && !flags.includes(FLAG)
-    && !seenHere()
-    // Already on Insights: nothing to point at.
-    && currentPageName !== "Progress";
+  // Already on Insights: nothing to point at (it waits for another page).
+  const wanted = eligible && currentPageName !== "Progress";
 
   const shown = usePopupTurn(wanted);
 
@@ -41,9 +49,9 @@ export default function NewInsightsPopup({ user, theme, specialMode, currentPage
     persistOnboardingFlag(FLAG);
   }, [shown]);
 
-  const close = () => setDismissed(true);
+  const close = () => setEligible(false);
   const go = () => {
-    setDismissed(true);
+    setEligible(false);
     navigate("/Progress");
   };
 
