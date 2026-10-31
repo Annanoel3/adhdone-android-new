@@ -158,18 +158,10 @@ export default function Progress() {
     // record (which only exists for days the app happened to write one). A day
     // counts if at least one task was finished; the streak is still alive if the
     // most recent completion day is today or yesterday.
-    const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
     // Always from every completion, whatever window is showing — a streak is
     // "up to today" by definition, and a 7-day window would cap it at 7.
-    const streakDays = {};
-    allCompletedTasks.forEach(t => { streakDays[dayKey(new Date(t.completed_at))] = true; });
-    let currentStreak = 0;
-    const cursor = new Date();
-    if (!streakDays[dayKey(cursor)]) cursor.setDate(cursor.getDate() - 1);
-    while (streakDays[dayKey(cursor)]) {
-      currentStreak++;
-      cursor.setDate(cursor.getDate() - 1);
-    }
+    // The rule lives in completionStreak.js so every streak in the app agrees.
+    const currentStreak = streakFromTasks(allCompletedTasks);
 
     // Due date push tracking — how many times the user postponed deadlines.
     // Completed tasks are merged in: a task you finally finished after pushing
