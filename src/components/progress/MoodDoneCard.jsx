@@ -90,8 +90,17 @@ async function loadMoodDone(days) {
   // start the evening before on the calendar).
   const first = keyToDate(inRange[0].day);
   const sinceIso = new Date(first.getFullYear(), first.getMonth(), first.getDate() - 2).toISOString();
-  const query = { created_by: email, status: "completed", completed_at: { $gte: sinceIso } };
-  const tasks = (await base44.entities.Task.filter(query, "-completed_at", 2000)) || [];
+  let tasks;
+  try {
+    tasks = await base44.entities.Task.filter(
+      { created_by: email, status: "completed", completed_at: { $gte: sinceIso } }, "-completed_at", 2000
+    );
+  } catch (e) {
+    // The date filter refused: the newest 2000 finished, counted the same way.
+    console.warn("[Insights] Mood card: date filter refused, reading the newest finished tasks:", e);
+    tasks = await base44.entities.Task.filter({ created_by: email, status: "completed" }, "-completed_at", 2000);
+  }
+  tasks = tasks || [];
 
   const byDay = new Map(inRange.map((m) => [m.day, { ...m, done: 0, titles: [] }]));
   for (const t of tasks) {
@@ -183,7 +192,7 @@ export default function MoodDoneCard({ days = null, theme = "minimalist" }) {
   } else if (data.total < MIN_CHECKINS) {
     body = <p className={`text-sm ${muted}`}>{data.total} of 5 so far. Keep answering &ldquo;How did you feel today?&rdquo; in the evening.</p>;
   } else if (data.days.length === 0) {
-    body = <p className={`text-sm ${muted}`}>No check-ins in this stretch yet.</p>;
+    body = <p className={`text-sm ${muted}`}>No check-ins in this range yet.</p>;
   } else {
     const reasonsText = data.slower
       ? data.slower.tally.map(([k, n]) => `${reasonLabel(k).toLowerCase()} (${n})`).join(", ")
