@@ -5,11 +5,14 @@ import { Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import WinBox from "./WinBox";
 import { listWins, deleteWin, winDateLabel } from "./winsStore";
+import { listDayMoods, isRoughMood } from "./moodStore";
 import { winLook } from "./winsTheme";
 
 // Every win they've saved, newest first — the place to land on a hard day.
 // "+ Add a win" opens the win box on top; deleting asks first, right in the
-// row.
+// row. A win from a day they said felt Rough or Low gets a small "on a rough
+// day" tag (Anna, Oct 31 2026: getting something done in a crappy mood is
+// something to be proud of).
 export default function WinsList({ open, onClose, theme, specialMode }) {
   const look = winLook(theme, specialMode);
   const [wins, setWins] = useState([]);
@@ -18,10 +21,16 @@ export default function WinsList({ open, onClose, theme, specialMode }) {
   const [confirmId, setConfirmId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [adding, setAdding] = useState(false);
+  // Days they said felt Rough or Low. The tags are extra: if the moods can't
+  // load, the wins still show, untagged.
+  const [roughDays, setRoughDays] = useState(() => new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
     setFailed(false);
+    listDayMoods()
+      .then((moods) => setRoughDays(new Set(moods.filter((m) => isRoughMood(m.mood)).map((m) => m.day))))
+      .catch((e) => console.error("[Wins] Could not load moods for the tags:", e));
     try {
       setWins(await listWins(500));
     } catch (e) {
@@ -101,7 +110,12 @@ export default function WinsList({ open, onClose, theme, specialMode }) {
                 <div key={win.id} className={`rounded-xl border p-3 ${look.row}`}>
                   <div className="flex items-start gap-2">
                     <div className="flex-1 min-w-0">
-                      <p className={`text-xs font-medium ${look.subtle}`}>{winDateLabel(win.win_date || win.created_date?.slice(0, 10))}</p>
+                      <p className={`text-xs font-medium flex flex-wrap items-center gap-x-2 gap-y-1 ${look.subtle}`}>
+                        <span>{winDateLabel(win.win_date || win.created_date?.slice(0, 10))}</span>
+                        {win.win_date && roughDays.has(win.win_date) && (
+                          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${look.tag}`}>on a rough day</span>
+                        )}
+                      </p>
                       <p className="text-sm whitespace-pre-wrap break-words mt-0.5">{win.text}</p>
                     </div>
                     {confirmId !== win.id && (
