@@ -16,7 +16,7 @@ export function noteTaskTimeChanged(taskId) {
 
 export function taskTimeChangedSince(taskId, sinceMs) {
   const at = timeChangedAt.get(taskId);
-  return !!at && at >= sinceMs;
+  return !!at && at > sinceMs;
 }
 
 // A booking made for a task that has since moved, been finished or deleted:
