@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { base44 } from "@/api/base44Client";
+import { currentStreak } from "@/components/utils/completionStreak";
 import { motion, AnimatePresence } from "framer-motion";
 import { isCompletedToday } from "../utils/todayTasks";
 
@@ -49,8 +50,7 @@ export default function MotivationCoach({ theme }) {
         !t.birthday_person
       );
       
-      const summaries = await base44.entities.DailySummary.list('-date', 7);
-      const recentStreak = summaries[0]?.streak_days || 0;
+      const recentStreak = await currentStreak();
 
       const prompt = `You are a motivational coach for someone with ADHD. Generate a brief, personalized, encouraging message based on their current situation.
 
