@@ -94,7 +94,7 @@ async function loadCounts(days) {
   byId.forEach((t) => {
     if (!happened(t, sinceMs, nowMs)) return;
     total++;
-    if (AREAS[t.life_category]) {
+    if (AREA_KEYS.includes(t.life_category)) {
       sorted++;
       byArea[t.life_category] = (byArea[t.life_category] || 0) + 1;
     }
