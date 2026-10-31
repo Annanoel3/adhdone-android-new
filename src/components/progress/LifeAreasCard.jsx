@@ -15,10 +15,10 @@ import {
 } from "lucide-react";
 
 // "Your last month went to 5 areas of life": bubbles sized by how much of what
-// happened in the window went to each area of life. The area is
-// Task.life_category, set by the sortLifeAreas function (the model's judgment,
-// gpt-6-astra). Anything in the window that isn't sorted yet is sent to it once,
-// and the card recounts when it's done.
+// happened in the window went to each area of life. The card reads no tasks:
+// the sortLifeAreas function sorts anything new in the window (the model's
+// judgment, gpt-6-astra, kept in TaskLifeArea, which only the server reads)
+// and answers with the counts.
 //
 // Props: days = the Insights window in days (7, 30, 365), or null for all
 // time; theme = the page's theme, like HabitPatterns.
@@ -35,86 +35,34 @@ const AREAS = {
 };
 const AREA_KEYS = Object.keys(AREAS);
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const SORT_MAX_DAYS = 90; // the most sortLifeAreas looks back
 const MIN_ITEMS = 3;
 // Bubble labels: under 6% (or too small to read) shows only its icon, and its
 // name and % go in the line under the bubbles instead.
 const SMALL_SHARE = 0.06;
 const NAME_MIN_PX = 70;
 const PCT_MIN_PX = 44;
-const FIELDS = ["id", "status", "completed_at", "classification", "event_time", "birthday_person", "next_reminder", "due_date", "life_category"];
 
-const ms = (iso) => {
-  if (!iso) return NaN;
-  const t = new Date(iso).getTime();
-  return Number.isFinite(t) ? t : NaN;
-};
-
-// When a birthday's day was, the last time it came round: next_reminder is the
-// birthday, and it rolls over to next year once the day is past.
-function birthdayDayMs(t, nowMs) {
-  const at = ms(t?.next_reminder || t?.due_date || t?.event_time);
-  if (!Number.isFinite(at)) return NaN;
-  const d = new Date(at);
-  for (let i = 0; i < 3 && d.getTime() > nowMs; i++) d.setUTCFullYear(d.getUTCFullYear() - 1);
-  return d.getTime();
-}
-
-// Did this task "happen" in the window? Finished in it (steps too), an event
-// that took place in it, or a birthday that fell in it. The same rule as
-// happenedAt in base44/functions/sortLifeAreas: change both together.
-function happened(t, sinceMs, nowMs) {
-  if (!t || t.status === "cancelled") return false;
-  const inRange = (x) => Number.isFinite(x) && x >= sinceMs && x <= nowMs;
-  if (t.status === "completed" && inRange(ms(t.completed_at))) return true;
-  if (t.classification === "event" && inRange(ms(t.event_time))) return true;
-  if (t.birthday_person && inRange(birthdayDayMs(t, nowMs))) return true;
-  return false;
-}
-
-async function loadCounts(days) {
-  const nowMs = Date.now();
-  const sinceMs = days ? nowMs - days * DAY_MS : -Infinity;
-  const nowIso = new Date(nowMs).toISOString();
-  const sinceIso = days ? new Date(sinceMs).toISOString() : null;
-  const Task = base44.entities.Task;
-  const [done, events, birthdays] = await Promise.all([
-    Task.filter(sinceIso ? { status: "completed", completed_at: { $gte: sinceIso } } : { status: "completed" }, "-completed_at", 2000, 0, FIELDS),
-    Task.filter({ classification: "event", event_time: sinceIso ? { $gte: sinceIso, $lte: nowIso } : { $lte: nowIso } }, "-event_time", 1000, 0, FIELDS).catch(() => []),
-    Task.filter({ birthday_person: { $nin: [null, ""] } }, "-created_date", 1000, 0, FIELDS).catch(() => []),
-  ]);
-  const byId = new Map();
-  [...(done || []), ...(events || []), ...(birthdays || [])].forEach((t) => {
-    if (t?.id && !byId.has(t.id)) byId.set(t.id, t);
-  });
-  const byArea = {};
-  let total = 0;
-  let sorted = 0;
-  byId.forEach((t) => {
-    if (!happened(t, sinceMs, nowMs)) return;
-    total++;
-    if (AREA_KEYS.includes(t.life_category)) {
-      sorted++;
-      byArea[t.life_category] = (byArea[t.life_category] || 0) + 1;
-    }
-  });
-  return { days, total, sorted, unsorted: total - sorted, byArea };
-}
-
-// One sort call at a time, and at most one per window per app session, so the
-// card can never loop on tasks the model couldn't place.
-const sortTried = new Set();
-let sortInFlight = null;
-const sortPending = (days) => !!sortInFlight || !sortTried.has(days);
-async function sortOnce(days) {
-  while (sortInFlight) {
-    try { await sortInFlight; } catch (e) { /* what's sorted still shows */ }
+// One sortLifeAreas call per window per app session: it sorts what's new and
+// counts the window, and its answer (or its failure) is kept until the app is
+// reopened, so the card can never loop. Calls go one at a time, so two
+// windows never send the same tasks to the model at once.
+const answers = new Map();
+let queue = Promise.resolve();
+const windowKey = (days) => (days == null ? "all" : String(days));
+function areasFor(days) {
+  const key = windowKey(days);
+  if (!answers.has(key)) {
+    const run = queue
+      .then(() => base44.functions.invoke("sortLifeAreas", { days: days == null ? null : days }))
+      .then((res) => {
+        const data = res?.data ?? res;
+        if (!data || !data.counts || typeof data.total !== "number") throw new Error("No counts");
+        return data;
+      });
+    queue = run.catch(() => {});
+    answers.set(key, run);
   }
-  if (sortTried.has(days)) return;
-  sortTried.add(days);
-  sortInFlight = base44.functions.invoke("sortLifeAreas", { days }).finally(() => { sortInFlight = null; });
-  await sortInFlight;
+  return answers.get(key);
 }
 
 // Circles packed around the biggest, largest first: each one goes to the free
