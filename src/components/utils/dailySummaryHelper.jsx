@@ -1,18 +1,21 @@
 import { base44 } from "@/api/base44Client";
 import { isTodayTask } from "./todayTasks";
+import { currentStreak } from "./completionStreak";
 
 /**
  * Updates or creates today's daily summary based on actual task data
  */
 export async function updateTodaysSummary() {
-  const today = new Date().toISOString().split('T')[0];
+  // Their own calendar day, not UTC: an evening in the US used to land on the
+  // next UTC date (Oct 31 2026).
+  const today = new Date().toLocaleDateString('en-CA');
 
   try {
     const allTasks = await base44.entities.Task.list();
 
     const completedToday = allTasks.filter(t => {
       if (t.status !== 'completed' || !t.completed_at) return false;
-      const completedDate = new Date(t.completed_at).toISOString().split('T')[0];
+      const completedDate = new Date(t.completed_at).toLocaleDateString('en-CA');
       return completedDate === today;
     });
 
@@ -23,18 +26,8 @@ export async function updateTodaysSummary() {
       ? Math.round((completedCount / totalTasks) * 100)
       : 0;
 
-    // Calculate streak
-    const summaries = await base44.entities.DailySummary.list('-date', 30);
-    let streakDays = 0;
-
-    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-    const yesterdaySummary = summaries.find(s => s.date === yesterday);
-
-    if (completedCount > 0) {
-      streakDays = yesterdaySummary && yesterdaySummary.tasks_completed > 0
-        ? (yesterdaySummary.streak_days || 0) + 1
-        : 1;
-    }
+    // The same streak Insights shows (completionStreak.js).
+    const streakDays = await currentStreak();
 
     // Get energy logs for today
     // Recorded notes share this table (kind: "note_recording"); only old energy check-ins count here.
