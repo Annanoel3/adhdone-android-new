@@ -36,6 +36,7 @@ import ImageViewer from "../components/shared/ImageViewer";
 import IdeaNotesDialog from "../components/parkinglot/IdeaNotesDialog";
 import WeeklyEgg from "../components/shared/WeeklyEgg";
 import RaccoonPeek from "../components/parkinglot/RaccoonPeek";
+import { isIPhoneApp } from '@/lib/phonePlatform'; // iPhone zooms into a box under 16px when it's tapped
 
 function stripHtml(html) {
   if (!html) return "";
@@ -1806,7 +1807,7 @@ Return ONLY the category name, nothing else.`;
                       <Input
                         name="subidea"
                         placeholder="Add item to this list..."
-                        className="flex-1 h-9 text-sm"
+                        className={`flex-1 h-9 ${isIPhoneApp() ? 'text-base' : 'text-sm'}`}
                       />
                       <Button type="submit" size="icon" className="h-9 w-9 flex-shrink-0">
                         <Plus className="w-4 h-4" />

@@ -302,7 +302,11 @@ Answer plainly and practically, then stop.`;
 
   const handleVoiceTranscription = async (audioBlob) => {
     try {
-      const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, { type: audioBlob.type || 'audio/webm' });
+      // The name says what's inside: iPhone records audio/mp4, and a file called
+      // .webm holding mp4 audio is turned down by transcription (Oct 30 2026).
+      const voiceType = audioBlob.type || 'audio/webm';
+      const voiceExt = voiceType.includes('mp4') ? 'mp4' : voiceType.includes('ogg') ? 'ogg' : 'webm';
+      const audioFile = new File([audioBlob], `voice-${Date.now()}.${voiceExt}`, { type: voiceType });
       const { file_url } = await base44.integrations.Core.UploadFile({ file: audioFile });
 
       const sttResult = await base44.functions.invoke('transcribeAudio', { file_url });

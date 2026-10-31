@@ -100,7 +100,11 @@ export default function AddTask() {
   const handleVoiceTranscription = async (audioBlob) => {
     setIsTranscribing(true);
     try {
-      const audioFile = new File([audioBlob], `voice-${Date.now()}.webm`, { type: audioBlob.type || 'audio/webm' });
+      // The name says what's inside: iPhone records audio/mp4, and a file called
+      // .webm holding mp4 audio is turned down by transcription (Oct 30 2026).
+      const voiceType = audioBlob.type || 'audio/webm';
+      const voiceExt = voiceType.includes('mp4') ? 'mp4' : voiceType.includes('ogg') ? 'ogg' : 'webm';
+      const audioFile = new File([audioBlob], `voice-${Date.now()}.${voiceExt}`, { type: voiceType });
       const uploadResult = await base44.integrations.Core.UploadFile({ file: audioFile });
       if (!uploadResult?.file_url) throw new Error('Failed to upload audio');
 

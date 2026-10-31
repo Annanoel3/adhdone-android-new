@@ -21,6 +21,9 @@ export function initAdMob() {
   if (initPromise) return initPromise;
   initPromise = (async () => {
     if (!Capacitor.isNativePlatform()) return false;
+    // iPhone: no ADHDone ad units yet (IOS_AD_UNIT_ID below), so the ad SDK and
+    // its consent form aren't started there at all.
+    if (Capacitor.getPlatform() === 'ios' && !IOS_AD_UNIT_ID) return false;
     try {
       const plugin = registerPlugin('AdMob');
       await plugin.initialize({ initializeForTesting: false });
