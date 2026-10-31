@@ -241,6 +241,41 @@ Deno.serve(async (req) => {
     // notification_recipient_email on completion, so a completed task has no email
     // and would be skipped here, leaving completedTaskIds empty and letting
     // pre-scheduled smart nudges fire for tasks the user already finished.
+    // The last time each person did anything with ADHDone, opened or not (for
+    // PAUSED AFTER A WEEK AWAY below; Anna, Oct 31 2026: "if they check a task
+    // off in an alarm, that counts etc. Things that interact with the app
+    // without opening it"): finishing a task (an alarm's or notification's
+    // Done, the widget), answering an alarm or reminder (snooze, Later,
+    // closing it; not one that just rang out), or adding something from
+    // outside the app (share sheet, widget, the pinned notification's reply
+    // box: captures carry capture_id). Calendar imports don't count. A finish
+    // is dated by completed_at, not updated_date: a later bulk edit of old
+    // finished tasks (one on Oct 16 2026 touched every one) would make
+    // everyone look active.
+    const lastSignByUser: Record<string, number> = {};
+    const noteSign = (email: string | undefined, ms: number) => {
+      if (!email || !Number.isFinite(ms) || ms > nowMs + 60 * 60 * 1000) return;
+      if (!(lastSignByUser[email] >= ms)) lastSignByUser[email] = ms;
+    };
+    for (const task of allTasks) {
+      const owner = task?.created_by;
+      if (task?.status === 'completed') {
+        const doneAt = utcMs(task.completed_at);
+        noteSign(owner, Number.isFinite(doneAt) ? doneAt : utcMs(task.updated_date));
+      }
+      const choice = task?.last_alarm_choice;
+      if (choice && choice.choice !== 'ignored') noteSign(owner, utcMs(choice.at));
+      if (task?.capture_id) noteSign(owner, utcMs(task.created_date));
+    }
+    try {
+      const since = new Date(nowMs - 8 * DAY_MS).toISOString();
+      const ideas = await filterAll(base44.asServiceRole.entities.ParkingLotIdea,
+        onlyEmail ? { created_by: onlyEmail, created_date: { $gte: since } } : { created_date: { $gte: since } });
+      for (const idea of ideas) if (idea?.capture_id) noteSign(idea.created_by, utcMs(idea.created_date));
+    } catch (e) {
+      console.error('[SMART NUDGE] Parking Lot captures unavailable for the away check:', e);
+    }
+
     for (const task of allTasks) {
       if (task.status === 'completed') {
         completedTaskIds.add(task.id);
@@ -348,12 +383,7 @@ Deno.serve(async (req) => {
       // Reminders and the summary stop: times they set, events and birthdays
       // still come.
       let awayFromMs = utcMs(user.last_active_at || user.signed_up_at || user.created_date);
-      for (const c of completionsByUser[email] || []) if (c.at > awayFromMs) awayFromMs = c.at;
-      for (const t of tasksByUser[email] || []) {
-        const choice = t?.last_alarm_choice;
-        const at = utcMs(choice?.at);
-        if (choice && choice.choice !== 'ignored' && Number.isFinite(at) && at > awayFromMs) awayFromMs = at;
-      }
+      if (lastSignByUser[email] > awayFromMs || !Number.isFinite(awayFromMs)) awayFromMs = lastSignByUser[email] ?? awayFromMs;
       const pausedAtMs = utcMs(user.smart_nudge_paused_at);
       const pausedNow = Number.isFinite(pausedAtMs) && Number.isFinite(awayFromMs) && pausedAtMs > awayFromMs;
       // Back after a pause (even just a Done on a notification): the morning
