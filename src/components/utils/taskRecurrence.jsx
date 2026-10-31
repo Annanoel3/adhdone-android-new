@@ -390,6 +390,10 @@ async function makeNextCopy(task) {
     alert_style: task.alert_style || null,
     pictures: task.pictures || [],
     notes: task.notes || '',
+    // A goal's daily habit stays that goal's (components/goals/goalLogic.js).
+    goal_id: task.goal_id || null,
+    goal_step_id: task.goal_step_id || null,
+    goal_context: task.goal_context || null,
     // Its dates move to the new day together.
     due_date: shiftDays(task.due_date, days) || (dayOnly ? endOfNewDay.toISOString() : null),
     event_time: shiftDays(task.event_time, days),
