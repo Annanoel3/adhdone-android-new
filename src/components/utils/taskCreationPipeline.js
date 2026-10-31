@@ -909,3 +909,78 @@ export async function createTaskAnyDay(data) {
     notification_recipient_email: data.currentUser.email
   });
 }
+
+// A task whose fields are already worked out (a goal's current step,
+// components/goals/goalLogic.js): saved and booked exactly as a typed task
+// with the same fields would be (processAndCreateTask's 'once' branch). An
+// all-day task or a "by" deadline books nothing (Smart Reminders has it); a
+// time they set gets its one reminder at that time.
+// booking: { email, dayOnly, deadlineStyle }.
+export async function createTaskFromFields(fields, booking) {
+  const nextReminder = fields.next_reminder ? new Date(fields.next_reminder) : null;
+  const once = fields.reminder_interval === 'once';
+  const bookable = !!nextReminder && once && nextReminder.getTime() > Date.now() + 2 * 60 * 1000;
+  const createdTask = await base44.entities.Task.create({
+    ...fields,
+    next_reminder: nextReminder && (bookable || !once) ? nextReminder.toISOString() : (fields.next_reminder || null),
+    status: 'active',
+    notification_recipient_email: booking.email,
+    reminder_scheduling_since: bookable ? new Date().toISOString() : null,
+  });
+  announceEventConflict(createdTask);
+  announceTaskCreated(createdTask);
+  trackFire('task_created', {
+    props: {
+      classification: createdTask.classification || 'task',
+      urgency: createdTask.urgency,
+      interval: fields.reminder_interval || 'none',
+      has_reminder: bookable,
+      has_due_date: !!fields.due_date,
+      day_only: !!fields.day_only_task,
+      silent: !bookable && !fields.due_date,
+      source: 'goal',
+    },
+  });
+  if (!bookable) return createdTask;
+
+  const dayOnly = !!booking.dayOnly;
+  const deadlineStyle = booking.deadlineStyle === 'by' ? 'by' : 'on';
+  const bookingStartedAt = Date.now();
+  const bookedFor = createdTask.next_reminder || null;
+  const commitUnlessMoved = async (ids) => {
+    if (await dropBookingIfMoved(createdTask.id, ids, bookedFor, bookingStartedAt)) return null;
+    return commitNotificationIds(createdTask.id, ids);
+  };
+  import('./multiReminderScheduler')
+    .then(module => module.scheduleMultiReminders({
+      email: booking.email,
+      title: createdTask.title,
+      scheduledDateISO: nextReminder.toISOString(),
+      taskId: createdTask.id,
+      urgency: createdTask.urgency,
+      dayOnly,
+      deadlineStyle,
+      classification: createdTask.classification,
+      reminderWish: createdTask.reminder_wish || null,
+      timeStated: createdTask.time_stated === true,
+    }))
+    .then(multiIds => {
+      if (multiIds) return commitUnlessMoved(multiIds);
+      if (deadlineStyle === 'by' && !dayOnly) return commitNotificationIds(createdTask.id, []);
+      return scheduleReminder({
+        email: booking.email,
+        ...getReminderCopy(createdTask, nextReminder),
+        sendAtISO: nextReminder.toISOString(),
+        taskId: createdTask.id,
+        exact: createdTask.time_stated === true,
+        data: { screen: "/TaskNotification", taskId: createdTask.id, urgency: createdTask.urgency, type: 'task_reminder' },
+        buttons: [
+          { id: "snooze_15", text: "Snooze 15 min" },
+          { id: "snooze_60", text: "Snooze 1 hour" },
+          { id: "complete", text: "✅ Done" }
+        ]
+      }).then(notificationId => commitUnlessMoved(notificationId ? [notificationId] : []));
+    })
+    .catch(error => console.error("Failed to schedule reminder:", error));
+  return createdTask;
+}
