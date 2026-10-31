@@ -3,6 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { ONBOARDING_STEPS, waitForStep } from '@/components/onboarding/onboardingGate';
 import { snoozeTask } from '@/components/utils/snoozeTask';
+import { answerRemindersHelping, HELPING_PARAM } from '@/components/shared/RemindersHelpingPopup';
+
+// The same tap can reach here twice (the warm-start event, then the launch
+// notification read on a later mount): one answer per tap.
+let lastHelpingTap = { key: '', at: 0 };
 
 // Persist the OneSignal subscription/player ID to the user record so the
 // backend can deliver pushes by include_player_ids (per-device, reliable).
@@ -70,6 +75,21 @@ function handleNotificationData(data, navigate) {
   if (data.type === 'win_ask') {
     const target = '/Home?win=1';
     if (navigate) navigate(target); else window.location.href = target;
+    return;
+  }
+  // "Are your reminders helping?" (cronSmartTaskNudge, Anna, Oct 31 2026).
+  // Its Yes / No buttons answer it right here. A tap on the push itself, or a
+  // phone that doesn't pass the button on, opens the same question as a popup
+  // (RemindersHelpingPopup); so does an answer that couldn't be saved.
+  if (data.type === 'reminders_helping') {
+    const ask = `/Home?${HELPING_PARAM}=1`;
+    const go = (target) => { if (navigate) navigate(target); else window.location.href = target; };
+    const answer = data.actionId === 'helping_yes' ? 'yes' : data.actionId === 'helping_no' ? 'no' : '';
+    if (!answer) { go(ask); return; }
+    const key = `${answer}|${data.asked_at || ''}`;
+    if (lastHelpingTap.key === key && Date.now() - lastHelpingTap.at < 60 * 1000) return;
+    lastHelpingTap = { key, at: Date.now() };
+    answerRemindersHelping(answer).then((ok) => { if (!ok) go(ask); });
     return;
   }
   const taskId = data.taskId || data.task_id;
