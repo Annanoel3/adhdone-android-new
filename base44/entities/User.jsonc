@@ -460,6 +460,11 @@
       "type": "boolean",
       "description": "\"Notice when I wake up\" (Settings, next to quiet hours): the phone reports its first unlock each morning (Usage access, used only for that) and Smart Reminders starts their day from then. Turned on only once Android's Usage access is granted."
     },
+    "wins_slump_shown_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the \"Rough week?\" popup (WinsSlumpPopup) last appeared on screen for them: no task finished in 7 days, at least one still waiting, at least 5 wins saved, account 8+ days old. It shows at most once every 7 days, counted from this (the phone keeps a copy too). Written by the app only when the popup is actually shown."
+    },
     "wake_offer_seen_at": {
       "type": "string",
       "format": "date-time",
