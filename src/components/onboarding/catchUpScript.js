@@ -147,7 +147,7 @@ export const ABOUT_NOW_ABOUT_ONLY_SCRIPT = [
 
 // For someone who closed the welcome chat before giving a name (so the app has
 // nothing to call them): asked once more, on a later open, for the name alone.
-// The about-you question still comes after their first checked-off task.
+// The about-you question is then the catch-up's, on a later open still.
 export const NAME_ONLY_SCRIPT = [
   {
     text: () =>
