@@ -388,7 +388,13 @@ How it works, and how it must keep working:
    19: "it becomes harassment once a user presses a later or time button").
 6. **Put off on 3 different days = a lighter plan (Anna, Oct 22 2026).** Later, a snooze,
    stopping it without a snooze (Open, a swipe), closed or rang out all count as putting
-   it off; Done doesn't. The
+   it off; Done doesn't. On plain notifications (not alarms, and every iPhone), where
+   nothing is pressed, a day a Smart Reminder about the task went out and the task was
+   still open when that day ended counts too (`silentPutOffDays` in cronSmartTaskNudge,
+   Nov 1 2026, Anna: "how do we fix arcticwolf's experience and make sure other people
+   aren't bombarded": arcticwolf444 got 8 on Fri Oct 30 and one callback was mentioned 7
+   times Oct 26-30, none answered, and nothing could see it). Light mentions and roundups
+   don't count. The
    days are kept on the task (`put_off_days`). On the 3rd different day the AI judges the
    plan from what they typed, the priority and who relies on it (`shared/easeOff.ts`,
    `ease_plan`), never from keywords: `daily_alarm` (it matters: morning summary plus one
@@ -446,7 +452,12 @@ How it works, and how it must keep working:
    2 days (they stay on one a day). Unlike the week-away pause, only opening the app ends it;
    they restart on one a day with a fresh week. "Back to normal" in Settings > Reminders turns
    one a day off. Times they set, events and birthdays are never limited or paused. Check:
-   `{"email": "…", "helping_preview": true}` to `cronSmartTaskNudge`. Counted (Anna, Nov 1
+   `{"email": "…", "helping_preview": true}` to `cronSmartTaskNudge` (it also lists the
+   `silent_put_offs` each open task would get). On plain notifications nothing is pressed,
+   so each Smart Reminder on a day that's over stands in for a press: finished that day =
+   helped, still open = a put-off day (Nov 1 2026; arcticwolf444 previewed at 6 put-off
+   days, 3 of 20 finished that day, so asked; Brianna and cjkelso72, on alarms, unchanged
+   and not asked). Counted (Anna, Nov 1
    2026: "keep tabs on how many times the 'are your reminders helping' alarms happen"): every
    one that goes out is an AppEvent `reminders_helping_sent` (props `as` alarm | push, `stage`
    first | again | pause, `at`), kept, unlike the 3-day ledger. The owner's daily note
