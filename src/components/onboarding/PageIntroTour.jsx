@@ -189,10 +189,12 @@ const ADD_PATHS_WALKTHROUGH_ON = false;
 // A clip that never arrives used to sit there as a plain black box with no
 // sign anything was wrong (Anna, Oct 31 2026: the Share selected text clip in
 // the App Guide "wasn't loading at all. Just a black rectangle"; it loaded
-// fine later). Now it says "Loading video…" until the first frame is in, tries
-// again on its own if nothing has arrived 12 seconds after it started (twice),
-// and after that offers a tap to try again instead of a silent black box.
-const CLIP_STALL_MS = 12000;
+// fine later). Now it says "Loading video…" the moment it appears, until the
+// first frame is in. If no data at all has come in for 3 seconds it reloads on
+// its own (twice; Anna: "At just 4 seconds of black rectangle, most people
+// would be gone"); a slow connection that is still receiving data is left to
+// finish instead of being restarted. After that, a tap to try again.
+const CLIP_STALL_MS = 3000;
 const CLIP_AUTO_RETRIES = 2;
 
 export function AutoClip({ src, className }) {
@@ -200,6 +202,7 @@ export function AutoClip({ src, className }) {
   const [state, setState] = useState("loading"); // loading | ready | failed
   const retries = useRef(0);
   const stallTimer = useRef(null);
+  const lastData = useRef(0);
 
   const clearStall = () => {
     if (stallTimer.current) { clearTimeout(stallTimer.current); stallTimer.current = null; }
@@ -211,19 +214,24 @@ export function AutoClip({ src, className }) {
     const p = v.play();
     if (p && p.catch) p.catch(() => {});
     clearStall();
-    // Nothing to show yet: check back, and reload it if it's still empty.
-    if (v.readyState < 2) {
-      stallTimer.current = setTimeout(() => {
-        if (!ref.current || ref.current.readyState >= 2) return;
-        if (retries.current < CLIP_AUTO_RETRIES) {
-          retries.current += 1;
-          ref.current.load();
-          start();
-        } else {
-          setState("failed");
-        }
-      }, CLIP_STALL_MS);
-    }
+    lastData.current = Date.now();
+    // Nothing to show yet: check back, and reload it if no data is coming in.
+    const check = () => {
+      const el = ref.current;
+      if (!el || el.readyState >= 2) return;
+      if (Date.now() - lastData.current < CLIP_STALL_MS) {
+        stallTimer.current = setTimeout(check, 1000);
+        return;
+      }
+      if (retries.current < CLIP_AUTO_RETRIES) {
+        retries.current += 1;
+        el.load();
+        start();
+      } else {
+        setState("failed");
+      }
+    };
+    if (v.readyState < 2) stallTimer.current = setTimeout(check, CLIP_STALL_MS);
   };
 
   const tryAgain = () => {
@@ -247,9 +255,11 @@ export function AutoClip({ src, className }) {
         setState("failed");
       }
     };
+    const gotData = () => { lastData.current = Date.now(); };
     v.addEventListener("loadeddata", ready);
     v.addEventListener("playing", ready);
     v.addEventListener("error", broke);
+    v.addEventListener("progress", gotData);
     const io = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) {
         start();
@@ -265,6 +275,7 @@ export function AutoClip({ src, className }) {
       v.removeEventListener("loadeddata", ready);
       v.removeEventListener("playing", ready);
       v.removeEventListener("error", broke);
+      v.removeEventListener("progress", gotData);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src]);
