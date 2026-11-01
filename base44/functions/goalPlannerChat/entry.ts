@@ -868,6 +868,25 @@ async function continuePlan(openai: any, p: {
 // A bullet that starts with a day, not a topic: "Monday:", "Mon–Fri:", "Day 3:", "Weekdays:".
 const DAY_LABEL_RE = /^(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tues?|wed|thur?s?|fri|sat|sun)\b|^(?:days?\s*\d+|weekdays?|weekends?|daily|every\s+day|each\s+day)\b/i;
 
+// The short focus in a step's title ("Week N: <focus>"), from the week's first
+// bullet (its concrete action). The step's title is its task's name. Used by
+// extract_plan and step_feedback alike.
+function weekFocus(firstBullet: string): string {
+  const first = String(firstBullet || '').replace(/^\s*(?:[-•*]|\d+\.)\s+/, '').replace(/\*\*/g, '').trim();
+  let focus = (first.includes(':') ? first.split(':')[0] : first).trim();
+  // A week written day by day ("Monday: Set up the course. Tuesday: ...")
+  // made every step "Week N: Monday" (Nov 1 2026 self-test). Then the focus is
+  // that first thing to do.
+  if (first.includes(':') && DAY_LABEL_RE.test(focus)) {
+    focus = first.slice(first.indexOf(':') + 1).trim().split(/(?<=[.!?])\s/)[0].replace(/[.!?]+$/, '').trim() || focus;
+  }
+  // Too long for a task's name: cut at a word, with "…" so it reads as cut
+  // ("Week 1: On your first day, spend ten minutes sampling one new" looked
+  // finished, Nov 1 2026). The full step is in its description.
+  if (focus.length > 60) focus = focus.slice(0, 60).replace(/\s+\S*$/, '').replace(/[,;:\s]+$/, '').trim() + '…';
+  return focus;
+}
+
 // ── EXTRACT PLAN: the already-written plan → structured JSON (nothing saved) ─
 async function extractPlan(openai: any, messages: any[], today: string) {
   const conversationText = messages.map((m) => `${m.role === 'user' ? 'User' : 'Planner'}: ${m.content}`).join('\n\n');
@@ -941,18 +960,7 @@ async function extractPlan(openai: any, messages: any[], today: string) {
 
     const steps = parsedWeeks.map((wk, i) => {
       const bullets = wk.bullets.filter(Boolean);
-      const first = bullets[0] || '';
-      let focus = (first.includes(':') ? first.split(':')[0] : first).trim();
-      // A week written day by day ("Monday: Set up the course. Tuesday: ...")
-      // made every step "Week N: Monday" (Nov 1 2026 self-test), and the step
-      // is the task's name. Then the focus is that first thing to do.
-      if (first.includes(':') && DAY_LABEL_RE.test(focus)) {
-        focus = first.slice(first.indexOf(':') + 1).trim().split(/(?<=[.!?])\s/)[0].replace(/[.!?]+$/, '').trim() || focus;
-      }
-      // Too long for a task's name: cut at a word, with "…" so it reads as
-      // cut ("Week 1: On your first day, spend ten minutes sampling one new"
-      // looked finished, Nov 1 2026). The full step is in its description.
-      if (focus.length > 60) focus = focus.slice(0, 60).replace(/\s+\S*$/, '').replace(/[,;:\s]+$/, '').trim() + '…';
+      const focus = weekFocus(bullets[0] || '');
       const d = new Date(startDate); d.setUTCDate(d.getUTCDate() + Math.round(i * totalDays / T));
       return {
         title: focus ? `Week ${wk.week}: ${focus}` : `Week ${wk.week}`,
