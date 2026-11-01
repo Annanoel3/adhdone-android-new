@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Target, ChevronRight } from "lucide-react";
 import { base44 } from "@/api/base44Client";
 import { goalsEnabled } from "./goalsAccess";
-import { GOALS_CHANGED, sortSteps, currentStep, stepPosition, goalProgress, todayKey, goalStarted } from "./goalLogic";
+import { GOALS_CHANGED, sortSteps, currentStep, stepPosition, goalProgress, todayKey, goalStarted, liveGoals } from "./goalLogic";
 import { goalLook } from "./goalsTheme";
 
 // Home: for someone on an active goal, one compact card with up to 2 goals:
@@ -21,8 +21,8 @@ export default function GoalHomeCard({ user, theme, specialMode }) {
   const load = useCallback(async () => {
     if (!enabled) return;
     try {
-      const goals = await base44.entities.Goal.filter({ status: "active" }, "-updated_date", 20);
-      const withSteps = await Promise.all((goals || []).map(async (goal) => ({
+      const goals = liveGoals(await base44.entities.Goal.filter({ status: "active" }, "-updated_date", 20));
+      const withSteps = await Promise.all(goals.map(async (goal) => ({
         goal,
         steps: sortSteps(await base44.entities.GoalStep.filter({ goal_id: goal.id }, "order_index", 1000).catch(() => [])),
       })));
