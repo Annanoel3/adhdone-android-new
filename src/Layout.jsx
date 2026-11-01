@@ -777,8 +777,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       subItems: [
         // How they're feeling sits with the other looking-inward pages, not
         // with the doing tools (Anna, Sept 27 2026).
+        // Support Space again since Nov 1 2026 (Anna: "let's name talk it out
+        // back to Support Space"; Base44's builder renamed it Sep 10 2026).
         {
-          title: "Talk It Out",
+          title: "Support Space",
           url: createPageUrl("SupportSpace"),
           icon: MessageCircleHeart,
         },
