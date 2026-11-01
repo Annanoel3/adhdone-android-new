@@ -2262,13 +2262,44 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       // push of its own: captures that never finished, and new signups.
       const dayStalled = (await stalledCaptures(base44, nowMs - H_DAY, nowMs)).filter((s) => realUser(s.email));
       const newPeople = allUsers.filter((u: any) => realUser(u?.email) && nowMs - (Date.parse(u.created_date || '') || 0) < H_DAY).map((u: any) => u.email);
-      if (dayStalled.length) {
+      // "Are your reminders helping?" as an alarm (Anna, Nov 1 2026: "keep
+      // tabs on how many times the 'are your reminders helping' alarms
+      // happen"): how many rang since the last note that counted them, who,
+      // and how many in all (AppEvent reminders_helping_sent, written by
+      // cronSmartTaskNudge when one goes out). Not a problem, so its own
+      // line, and a day with nothing else to say gets a note only for it.
+      // Counted up to owner_alert_marks.helping_counted_to, so a day the note
+      // didn't go out isn't lost.
+      let helpingLine = '';
+      let helpingCountedTo = '';
+      try {
+        const sent = await filterAll(base44.asServiceRole.entities.AppEvent, { event: 'reminders_helping_sent' });
+        const atMs = (r: any) => msOf(r?.props?.at || r?.created_date);
+        const alarms = sent.filter((r: any) => r?.props?.as === 'alarm' && atMs(r) <= nowMs);
+        const fromMs = msOf(marks.helping_counted_to);
+        const since = Number.isFinite(fromMs) ? fromMs : nowMs - H_DAY;
+        const fresh = alarms.filter((r: any) => atMs(r) > since);
+        if (fresh.length) {
+          const who = [...new Set(fresh.map((r: any) => String(r.user_email || '')))].filter(Boolean);
+          helpingLine = `"Are your reminders helping?" rang as an alarm ${fresh.length}x (${who.slice(0, 3).join(', ')}${who.length > 3 ? ', …' : ''}). ${alarms.length} in all so far.`;
+          helpingCountedTo = new Date(nowMs).toISOString();
+        }
+      } catch (e) {
+        console.error('[HEALTH] could not count the helping alarms:', e);
+      }
+      if (dayStalled.length || helpingLine) {
         const parts: string[] = [];
         if (dayStalled.length) parts.push(`${dayStalled.length} capture(s) never finished: ${dayStalled.slice(0, 2).map((s) => s.email).join(', ')}`);
         // New signups are not a problem: their own labelled line, after the problems.
-        let body = `Problems: ${parts.join(' · ')}`;
+        let body = parts.length ? `Problems: ${parts.join(' · ')}` : '';
+        if (helpingLine) body += `${body ? '\n' : ''}${helpingLine}`;
         if (newPeople.length) body += `\nNew signups (not a problem): ${newPeople.join(', ')}`;
-        await pushOwner(base44, 'owner_daily', '🩺 ADHDone yesterday: something was off', body.slice(0, 480));
+        const title = parts.length ? '🩺 ADHDone yesterday: something was off' : '📊 ADHDone yesterday';
+        await pushOwner(base44, 'owner_daily', title, body.slice(0, 480));
+        if (helpingCountedTo && ownerRec?.id) {
+          marks.helping_counted_to = helpingCountedTo;
+          try { await base44.asServiceRole.entities.User.update(ownerRec.id, { owner_alert_marks: marks }); } catch (e) { console.error('[HEALTH] could not save the helping count mark:', e); }
+        }
       }
     } catch (e) {
       console.error('[HEALTH] daily note failed:', e);
