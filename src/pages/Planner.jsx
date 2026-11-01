@@ -920,10 +920,10 @@ function parsePlanHierarchy(text, goalMonthTitles = {}) {
 
 // How long the plan is, by its own month titles only (for "months X-Y
 // aren't written yet"). Not its free text: the Goals app took the first
-// "<number> month" in it, which could be a year ("January 2028" then
-// "Month 1" on the next line read as 2028, capped to 36), and padded the
-// plan view to Month 36 (Anna, Nov 1 2026: a 14-month plan showed Months
-// 15-36 empty). The server says how long the plan is (months_total).
+// "<number> month" in it, which can grab the wrong number (a year right
+// before the word "Month" reads as 2028, capped to 36), and padded the plan
+// view up to it (Anna, Nov 1 2026: a 14-month plan showed Months 15-36
+// empty). The server says how long the plan is (months_total).
 function planLength(text, goalMonthTitles = {}) {
   const titleNums = Object.keys(goalMonthTitles || {}).map((k) => parseInt(k, 10)).filter((n) => !isNaN(n));
   return Math.min(36, titleNums.length ? Math.max(...titleNums) : 0);
