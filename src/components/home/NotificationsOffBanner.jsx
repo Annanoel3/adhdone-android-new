@@ -32,6 +32,49 @@ function reaskDue() {
   return !answeredAt || answeredAt < launchedAt || Date.now() - answeredAt > 12 * 60 * 60 * 1000;
 }
 
+// "Show them what they missed" (Anna, Nov 1 2026): all 3 people with
+// notifications off stopped using the app, and the one-time re-ask above
+// didn't change christinazebra7's answer. A reminder they can see failed is a
+// better reason than a general ask: on an open after a reminder should have
+// gone off, a popup names it and offers Turn on. At most once a day, never on
+// the launch the re-ask shows, and only for reminders since this phone last
+// looked (three days at most).
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MISSED_CHECKED_KEY = "missed_reminder_checked_at";
+const MISSED_SHOWN_KEY = "missed_reminder_shown_at";
+let missedCheckedThisLaunch = false;
+
+function missedShownToday() {
+  try { return Date.now() - (Number(localStorage.getItem(MISSED_SHOWN_KEY)) || 0) < DAY_MS; } catch (e) { return false; }
+}
+
+// The most recent reminder that should have gone off since the last look: a
+// to-do's planned reminders, its next reminder, or a Smart Reminder sent.
+async function findMissedReminder(user) {
+  const now = Date.now();
+  let since = 0;
+  try { since = Number(localStorage.getItem(MISSED_CHECKED_KEY)) || 0; } catch (e) { /* first look */ }
+  since = Math.max(since, now - 3 * DAY_MS);
+  try { localStorage.setItem(MISSED_CHECKED_KEY, String(now)); } catch (e) { /* looks back 3 days next time */ }
+  const at = (v) => { const t = Date.parse(v || ""); return t > since && t <= now ? t : 0; };
+  const active = await base44.entities.Task.filter({ created_by: user.email, status: "active" }, "-updated_date", 100);
+  let best = null;
+  const consider = (title, t) => { if (title && t && (!best || t > best.t)) best = { title, t }; };
+  const byId = new Map();
+  for (const task of active || []) {
+    byId.set(task.id, task);
+    if (task.silenced) continue;
+    consider(task.title, at(task.next_reminder));
+    for (const r of task.reminder_schedule || []) consider(task.title, at(r?.send_at));
+  }
+  for (const e of user.smart_nudge_sent_log || []) {
+    if (e?.skip) continue;
+    const task = byId.get(e?.task_id);
+    if (task && !task.silenced) consider(task.title, at(e.at));
+  }
+  return best;
+}
+
 // True only when there is proof that reminders cannot reach this phone.
 async function pushIsBlocked() {
   // The phone's own answer comes first (AlarmBridge.getStatus, builds 1.3.9+):
@@ -65,11 +108,32 @@ async function pushIsBlocked() {
 
 // One compact row on Home, shown only in the phone app and only when reminders
 // cannot reach it. A reminder app that has been silenced should say so.
-export default function NotificationsOffBanner({ theme, specialMode }) {
+export default function NotificationsOffBanner({ theme, specialMode, user }) {
   const [blocked, setBlocked] = useState(blockedThisLaunch === true);
   const [working, setWorking] = useState(false);
   const [reask, setReask] = useState(false);
   const reaskShown = usePopupTurn(reask);
+  const [missed, setMissed] = useState(null);
+  const missedShown = usePopupTurn(!!missed && !reask);
+
+  // A reminder that should have gone off while notifications were off.
+  useEffect(() => {
+    if (!blocked || reask || !user?.email || missedCheckedThisLaunch) return undefined;
+    if (reaskDue() || missedShownToday()) return undefined;
+    missedCheckedThisLaunch = true;
+    let gone = false;
+    findMissedReminder(user)
+      .then((m) => { if (!gone && m) setMissed(m); })
+      .catch(() => {});
+    return () => { gone = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocked, reask, user?.email]);
+
+  // Counted once it's actually on screen.
+  useEffect(() => {
+    if (!missedShown) return;
+    try { localStorage.setItem(MISSED_SHOWN_KEY, String(Date.now())); } catch (e) { /* may show again */ }
+  }, [missedShown]);
 
   useEffect(() => {
     if (!window.Capacitor?.isNativePlatform?.()) return;
@@ -108,6 +172,7 @@ export default function NotificationsOffBanner({ theme, specialMode }) {
 
   const turnOn = async () => {
     if (reask) closeReask();
+    setMissed(null);
     setWorking(true);
     try {
       await window.Capacitor?.Plugins?.NotifyBridge?.requestPermission?.();
@@ -132,6 +197,25 @@ export default function NotificationsOffBanner({ theme, specialMode }) {
 
   return (
     <>
+    <Dialog open={missedShown} onOpenChange={(o) => { if (!o) setMissed(null); }}>
+      <DialogContent className="max-w-md w-[calc(100vw-2rem)] bg-card text-card-foreground border-border">
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center gap-2">
+            <BellOff className="w-5 h-5 text-amber-600" />
+            <h2 className="text-xl font-bold text-foreground">A reminder couldn't reach you</h2>
+          </div>
+          <p className="text-[15px] leading-relaxed text-muted-foreground">
+            {missed ? `Your reminder for "${missed.title}" didn't come through, because notifications are off for ADHDone on this phone.` : ""}
+          </p>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setMissed(null)}>Not now</Button>
+            <Button className="flex-1 bg-amber-600 hover:bg-amber-700 text-white" onClick={turnOn} disabled={working}>
+              Turn on
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
     <Dialog open={reaskShown} onOpenChange={(o) => { if (!o) closeReask(); }}>
       <DialogContent className="max-w-md w-[calc(100vw-2rem)] bg-card text-card-foreground border-border">
         <div className="space-y-4 pt-2">
