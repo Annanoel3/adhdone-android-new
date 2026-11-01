@@ -1,22 +1,28 @@
 import { base44 } from "@/api/base44Client";
 import { getLocalDateString } from "../utils/todayTasks";
 import { deadlineWindowStart } from "../utils/taskSchedule";
+import { sortSteps, isStepOpen, stepDeadline } from "./goalWeeks";
+
+export { sortSteps, isStepOpen, stepDeadline };
 
 // Goals (ported Oct 31 2026 from Anna's Goals app; GOALS_PORT.md). How a goal
 // lives on the ADHDone task list:
 //
 // - Each ACTIVE goal has exactly ONE open Task (goal_id set): its current
 //   step. The current step is the first step, by order_index, that isn't
-//   completed or skipped (the Goals app's own "Up Next" rule). For a daily-habit
-//   goal it's the Goals app's daily-habit rule: the latest week that has
-//   started (due_date on or before today) and isn't done; if every started week
-//   is done, the next open step.
-// - A plain step's task: the step's title, a short note from its description,
-//   its priority (critical = urgent), and a "by" deadline at the end of the
-//   step's week (no time), so Smart Reminders handles it like any "by" task.
-// - A daily-habit goal's task: ONE repeating task on the habit's days, at the
-//   time they chose in the planner (a time they set) or with no time (Smart
-//   Reminders). It is renamed as the current step moves on.
+//   completed or skipped (the Goals app's own "Up Next" rule), for every goal.
+// - The step's task is a "by the end of the week" task (Anna, Nov 1 2026: "each
+//   week's plan should have a task that is treated like a 'by the end of the
+//   week' task. It stays until checked off"): the step's title, a short note
+//   from its description, its priority (critical = urgent), a "by" deadline
+//   on the last day of the step's week (no time; Smart Reminders handles it
+//   like any "by" task), not repeating. When the week passes it stays, overdue,
+//   until it's checked off; checked off late, the weeks after it move later
+//   (goalWeeks.lateFinishShift).
+// - Daily-practice goals (requires_daily_action) get the same weekly task;
+//   the days are marked on the goal page's week tracker. (Before Nov 1 2026
+//   they had one repeating task; GoalStepSync turns an untouched one into the
+//   weekly task and leaves one the person changed as it is.)
 // - Nothing goes on the list before the goal's start date, and nothing for a
 //   future step: the next one is made when the current one is finished.
 // - Tasks are only ever made here, in the app, through the normal client path
@@ -32,14 +38,7 @@ export function notifyGoalsChanged(fromSync = false) {
 
 export const todayKey = () => getLocalDateString();
 
-const DONE = new Set(["completed", "skipped"]);
-export const isStepOpen = (s) => !!s && !DONE.has(s.status);
-
-export function sortSteps(steps) {
-  return [...(steps || [])].sort((a, b) =>
-    (Number(a.order_index) || 0) - (Number(b.order_index) || 0)
-    || String(a.created_date || "").localeCompare(String(b.created_date || "")));
-}
+export const isRepeatingTask = (t) => !!t?.recurrence_pattern && t.recurrence_pattern !== "none";
 
 // A goal the planner judged a daily habit (requires_daily_action), or one whose
 // every step is a daily habit.
@@ -53,19 +52,13 @@ export function goalStarted(goal, today = todayKey()) {
   return !goal?.start_date || goal.start_date <= today;
 }
 
+// The first step not yet finished, for every goal. (A daily-practice goal used
+// to follow the calendar, so an unfinished week was dropped when the next one
+// started; now a week stays until it's checked off, Nov 1 2026.) `goal` and
+// `today` are kept for the callers.
+// eslint-disable-next-line no-unused-vars
 export function currentStep(goal, steps, today = todayKey()) {
-  const ordered = sortSteps(steps);
-  const open = ordered.filter(isStepOpen);
-  if (open.length === 0) return null;
-  if (isHabitGoal(goal, ordered)) {
-    // The Goals app's daily-habit reminder followed the calendar: the latest
-    // step whose week has started and isn't completed.
-    let cur = null;
-    const dated = open.filter((s) => s.due_date).sort((a, b) => String(a.due_date).localeCompare(String(b.due_date)));
-    for (const s of dated) if (s.due_date <= today) cur = s;
-    if (cur) return cur;
-  }
-  return open[0];
+  return sortSteps(steps).find(isStepOpen) || null;
 }
 
 export function stepPosition(step, steps) {
@@ -78,23 +71,6 @@ export function goalProgress(steps) {
   const total = (steps || []).length;
   const done = (steps || []).filter((s) => s.status === "completed").length;
   return { done, total, pct: total > 0 ? Math.round((done / total) * 100) : 0 };
-}
-
-function addDays(key, n) {
-  const d = new Date(`${key}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().split("T")[0];
-}
-
-// A step's due_date (as in the Goals app) is the day its week STARTS. Its
-// task's "by" date is the end of that week: the day before the next later
-// week starts, or six days on for the last.
-export function stepDeadline(step, steps) {
-  if (!step?.due_date || !/^\d{4}-\d{2}-\d{2}$/.test(step.due_date)) return null;
-  const ordered = sortSteps(steps);
-  const i = ordered.findIndex((s) => s.id === step.id);
-  const next = ordered.slice(i + 1).find((s) => s.due_date && s.due_date > step.due_date);
-  return next ? addDays(next.due_date, -1) : addDays(step.due_date, 6);
 }
 
 // The habit's days, as the Goals app read them: its own days if it has them,
@@ -150,7 +126,7 @@ export function goalContextLine(goal, step, steps, habit) {
   const { n, m } = stepPosition(step, steps);
   const title = String(goal?.title || "").trim().slice(0, 120);
   return habit
-    ? `the daily habit for their goal "${title}", now on step ${n} of ${m}`
+    ? `step ${n} of ${m} of their daily-practice goal "${title}": this week's step, to finish by the end of the week (the daily practice is marked on the goal page)`
     : `step ${n} of ${m} of their goal "${title}"`;
 }
 
