@@ -51,7 +51,7 @@ import { listAll, filterAll } from '../../shared/listAll.ts';
 // mention, something that doesn't have to happen yet gets space).
 import { REMINDER_BRIEF, REMINDER_BRIEF_VERSION } from '../../shared/reminderBrief.ts';
 import { assignTaskFamilies } from '../../shared/runTaskParse.ts';
-import { easeNow } from '../../shared/easeOff.ts';
+import { easeNow, easeStep } from '../../shared/easeOff.ts';
 
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 
