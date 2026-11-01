@@ -62,7 +62,7 @@ export const FEATURE_GROUPS = [
     items: [
       { name: "Insights", what: "When you get things done, what keeps getting pushed, what actually sticks. Never a guilt trip." },
       { name: "Wins and mood", what: "Save one win a day and how you felt. Insights shows the rough days you still got things done. Private to you." },
-      { name: "Talk It Out", what: "An AI chat that knows the app and knows executive function. For when you're stuck before you're started." },
+      { name: "Support Space", what: "An AI chat that knows the app and knows executive function. For when you're stuck before you're started." },
       { name: "Themes & seasonal modes", what: "Four core themes plus a dozen date-driven seasonal skins that rotate through the year." },
       { name: "Hidden easter eggs", what: "Small rewards for genuinely ADHD behaviour — the 10-item Parking Lot, the task pushed one too many times. Never a punishment." },
     ],
