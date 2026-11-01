@@ -75,14 +75,14 @@ For reading/book goals: use web_search to learn what those exact chapters are ac
 
 const RESOURCE_LINK_RULE = `RESOURCE LINKS — a broken link is worse than no link. Never guess article/blog URLs or invent paths. Use only safe search-style URLs with REAL terms: https://www.youtube.com/results?search_query=…, https://www.amazon.com/s?k=Title+Author, https://www.google.com/search?q=…, Udemy/Coursera search URLs, or a root domain you are 100% sure of. No Google Maps links. No placeholder words (TOPIC, CITY, AUTHOR) inside URLs. If no real URL exists, leave it blank and put the actionable detail in the description.`;
 
-// ADHDone only (the Goals app sent its own goal notifications; ADHDone does
-// not). Facts about the app, so the planner never promises what won't happen.
 // When to bring up a therapist or doctor (Anna, Nov 1 2026: "It should only
 // suggest professional help if someone says something that endangers
 // themselves or others or is very worrying. It told me to go to one and all I
 // said was that I had bpd"). New goals and edits both.
 const PROFESSIONAL_HELP_RULE = `PROFESSIONAL HELP. A condition or diagnosis they mention (ADHD, autism, anxiety, depression, BPD, a physical illness, anything) is context: plan around it the way they describe it, like any other detail about their life. Suggest a therapist, doctor, crisis line or other professional ONLY when what they say shows a risk to themselves or someone else, or is seriously worrying (for example self-harm, not eating, being unsafe at home, a health emergency). Then say it once, plainly and kindly, and carry on helping. In every other case the conversation and the plan's steps stay free of referrals and of "this isn't treatment" disclaimers.`;
 
+// ADHDone only (the Goals app sent its own goal notifications; ADHDone does
+// not). Facts about the app, so the planner never promises what won't happen.
 const APP_RULE = `THIS APP. You are the goal planner inside ADHDone, a task app for people with ADHD. When a plan is saved, the step the user is on goes on their ADHDone task list (the next one appears when they finish it), and a daily habit becomes one repeating task on the days and at the time they chose. Neither you nor the app sends goal check-ins, summaries, pep talks or messages of any kind: never promise reminders, check-ins, notifications or messages (no "I'll check in every Monday", no "you'll get a reminder", no "I'll send you"). Plan steps never mention reminders or notifications.`;
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -1194,6 +1194,11 @@ async function selfTest(openai: any, body: any, today: string) {
   const promisesIn = (t: string) => String(t || '').split('\n')
     .filter((ln) => /\b(remind|reminder|notification|notify|check[- ]in|i'?ll (send|check|text|message|ping)|you'?ll (get|receive))\b/i.test(ln))
     .map((ln) => ln.trim()).slice(0, 20);
+  // Lines that send them to a professional (PROFESSIONAL_HELP_RULE: only for
+  // a risk or something seriously worrying).
+  const referralsIn = (t: string) => String(t || '').split('\n')
+    .filter((ln) => /\b(therap(y|ist)|counsel(or|ing)|psychiatr|psycholog|doctor|clinician|professional (help|support)|crisis|hotline|988|treatment)\b/i.test(ln))
+    .map((ln) => ln.trim().slice(0, 200)).slice(0, 20);
   const monthsWritten = (t: string) => {
     const a = analyzePlan(stripClosing(t));
     return Object.keys(a.headerIdx).map(Number).filter((n) => n >= 1).sort((x, y) => x - y);
@@ -1208,6 +1213,7 @@ async function selfTest(openai: any, body: any, today: string) {
     months_total: r.months_total,
     months_with_headers: monthsWritten(planText),
     reminder_promise_lines: promisesIn(planText),
+    referral_lines: referralsIn([...(extra?.turns || []).map((t: any) => t?.message || ''), planText].join('\n')),
     plan_start: planText.slice(0, 1200),
     plan_end: planText.slice(-600),
     done: false,
