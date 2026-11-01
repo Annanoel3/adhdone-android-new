@@ -31,8 +31,8 @@ const REWELCOME_SCRIPT = [
 // Never the page tours.
 export default function CatchUpDialog({ user }) {
   const [open, setOpen] = useState(false);
-  // 'catchup' = name (if missing) + about-you after the first checked-off
-  // task; 'name' = the name alone (see NAME_RETRY_STEP).
+  // 'catchup' = name (if missing) + about-you, on a later open; 'name' = the
+  // name alone (see NAME_RETRY_STEP).
   const [kind, setKind] = useState('catchup');
   // Whether they've checked anything off: "First one done" opens it only then.
   const [doneOne, setDoneOne] = useState(false);
