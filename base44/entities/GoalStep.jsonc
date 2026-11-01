@@ -151,6 +151,20 @@
     "task_claim": {
       "type": "string",
       "description": "'<device>:<ms>' written by a GoalStepSync run that is about to make this step's task, so two phones or tabs never make two. Cleared once task_id is saved; a claim older than 90 seconds is ignored."
+    },
+    "feedback": {
+      "type": "string",
+      "description": "How this step went, in their words (typed or dictated), answered in the 'How did it go?' popup after it was marked done (Anna, Nov 1 2026). The planner reads it to adjust the upcoming weeks (goalPlannerChat mode step_feedback)."
+    },
+    "feedback_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When they answered 'How did it go?'."
+    },
+    "feedback_asked_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When 'How did it go?' was answered or skipped for this step. Set either way, so it is asked once, never again."
     }
   },
   "required": [
