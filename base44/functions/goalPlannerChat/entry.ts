@@ -409,13 +409,12 @@ ONE ROUND ONLY: ask 4 to 6 questions in ONE numbered list, in ONE message, then 
   d) Ask only what THIS goal's plan needs. From the list below, choose the 4–6 that matter most for it; skip anything they already told you.
   The questions to choose from:
    - ONE combined experience + prior attempts question (MANDATORY, every goal): "What's your current experience with this? Have you tried before — and if so, what worked or didn't?"
-   - Obstacles/fears (MANDATORY, every goal): "What obstacles or fears do you have? I'll build specific contingency steps to address them."
+   - Obstacles/fears (MANDATORY, every goal): "What usually gets in the way, or worries you about it?" (build specific contingency steps for what they say)
    - The target amount/outcome (for finance goals, reference the real price).
    - Realistic monthly commitment (time or money).
    - Deadline/target date — ONLY if they haven't already stated one.
-   - Start date: "When do you want to start? I'll calculate the timeline from your start date to the end date."
-   - DAILY-ACTION GOALS ONLY (practice, reading, exercise, learning): what time of day they'll do it: "What time of day do you want to do this? I'll put it on your task list at that time — or say no set time."
-   - DAILY-ACTION GOALS ONLY: "Every day, or just weekdays?"
+   - Start date: "When do you want to start?" (merge with the deadline question when you need both)
+   - DAILY-ACTION GOALS ONLY (practice, reading, exercise, learning), as ONE question: "What time of day, and every day or just weekdays?" (or no set time)
    - BUDGET (ask for almost all goals — books, courses, tools, classes all cost money): "Do you have a budget for things like books, courses, or tools? A rough idea helps — or I can stick to free resources only." Skip ONLY for pure save/pay-off-money goals. Use the answer to filter resources strictly: no budget / no answer / vague / question not asked → FREE resources only (never recommend paid books, courses, or tools). A stated budget → tailor to fit it.
    - LOCAL RESOURCES (only for goals where in-person options genuinely help — music lessons, clubs, dance, martial arts, classes, etc.): ${userCity ? `the user's city is ${userCity}; ask if they want local resources included.` : `ask "What city are you in? (optional — I can include local classes, clubs, and meetups near you)".`} Ask this once only.
 
