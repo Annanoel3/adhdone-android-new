@@ -2,7 +2,7 @@
 // Support Space prompt so the AI can answer "how does X work?" questions
 // accurately instead of guessing.
 export const APP_FEATURE_GUIDE = `
-NAVIGATION: Open the menu with the icon in the top-left. Main items: Home, Tasks, Calendar. "Tools" holds Focus Timer, Parking Lot, Scheduled Texts. "Reflect & Connect" holds Progress, Insights, Talk It Out, Community. Bottom of the menu: App Guide, Settings.
+NAVIGATION: Open the menu with the icon in the top-left. Main items: Home, Tasks, Calendar. "Tools" holds Focus Timer, Parking Lot, Record Notes, Decision Maker and Places. "Reflect" holds Support Space and Insights. Bottom of the menu: App Guide, Settings.
 
 HOME: Today's Tasks (due today, overdue, or spanning today), Quick Add (type or speak a task), daily tip, motivation coach, streak, upcoming birthday card, Focus Mode button, end-of-day review. Tap a task's circle to complete it (a little celebration plays). Completing a recurring task automatically creates the next occurrence.
 
@@ -12,11 +12,11 @@ DATES & REMINDERS: "on Friday" = happens that day (night-before heads-up + day-o
 
 TASK FIELDS: priority (low/medium/high/urgent), energy required (low/medium/high), notes, photos, location (only if you gave one — used to suggest combining errands using real drive distance from your home zip, set in Settings → Personalization), start date & end date for multi-day items, recurrence (daily/weekly/every other week/monthly/yearly).
 
-TASKS PAGE: grouped into Today, Tomorrow, Next 7 Days, Upcoming, No Date, Back Burner. Empty groups start collapsed. Sort options in the dropdown. Swipe/tap a task for details, edit, push due date later (push count is tracked so Insights can flag chronically postponed tasks), snooze, silence, or delete. Open a task to start a timer on it (5, 10, 15, 25 or 45 minutes, or any length): it counts down on screen with "I finished the task" (checks the task off) and "Stop working" (stops the timer, the task stays open) buttons, rings when time is up, then offers "Keep going" (Focus Mode on that task) or the same two. Both stops log the time spent. The Home "Timer" button does the same for any of today's tasks.
+TASKS PAGE: grouped into Today, Tomorrow, Next 7 Days, Upcoming, No Date, Back Burner. Empty groups start collapsed. Sort options in the dropdown. Swipe/tap a task for details, edit, push due date later (push count is tracked so Insights can flag chronically postponed tasks), snooze, silence, or delete. Tasks worth timing (chores, cleaning, studying, writing) have a "Time it" button: a stopwatch counts up on that task, with "I finished the task" (checks it off) and "Stop" on screen the whole time, and the time spent is logged either way. The Home "Timer" button does the same for today's tasks.
 
 BACK BURNER 🔥: silences a task's notifications and drops it out of Today and nudges, but keeps it in the list. Its priority is forced to low while parked and restored when you bring it back. Back-burnered rows show only the task name.
 
-CALENDAR: month grid plus a week agenda. Always opens on today. Dots: a single red dot for any overdue tasks, one summary dot for back-burner items. Emojis: 🎂 birthday, 📅 imported calendar event, ✅ imported calendar task, 📌 in-app task, 💳 payment. Google Calendar sync: connect your Google account on the Calendar page; events auto-import as tasks/events (birthdays route to the Birthdays feature). Auto-sync interval (6 hours / daily / weekly / never) is chosen on the Calendar page and runs whenever the app opens.
+CALENDAR: month grid plus a week agenda. Always opens on today. Dots: a single red dot for any overdue tasks, one summary dot for back-burner items. Emojis: 🎂 birthday, 📅 imported calendar event, ✅ imported calendar task, 📌 in-app task, 💳 payment. Phone calendars: on the Calendar page, tick which of the phone's calendars to bring in (any calendar the phone's calendar app shows: Google, Samsung or Outlook on Android; iCloud, Google or Outlook on iPhone). Their events become tasks with reminders (birthdays route to the Birthdays feature).
 
 BIRTHDAYS 🎂: a separate feature — never shown in normal task lists. Add from the Birthdays dialog (name, date, optional phone via the contact picker). Reminder options: 1 week before, 1 day before, day-of. On the day, the app can draft a birthday text with AI (adjust tone/formality, regenerate with instructions) and open your messaging app pre-filled; hourly reminders stop once you press Send. Rolls over yearly automatically.
 
@@ -28,9 +28,7 @@ PARKING LOT: dump ideas without losing focus (the "Park an Idea" button floats o
 
 PROGRESS & INSIGHTS: streaks, completion rates, focus time stats, recurring-task patterns, weekly challenges, achievements. Insights highlights patterns like tasks you keep pushing.
 
-TALK IT OUT (formerly "Support Space"): this chat — a judgment-free place to vent, process, or ask how the app works. Voice or text. Not a substitute for professional care.
-
-COMMUNITY: Accountability partners, partner chat, Focus Rooms (shared co-working timers), mood check-ins, report/block tools.
+SUPPORT SPACE (it was called "Talk It Out" for a while): this chat — a judgment-free place to vent, process, or ask how the app works. Voice or text. Not a substitute for professional care.
 
 THEMES: pick one at the top of Settings, under "Look and feel": Light, Dark, Colorful, Spicy Brains (color-psychology theme with an explainer), plus Seasonal and Kawaii once unlocked. Seasonal themes follow the real calendar (spring, summer, fall, harvest, winter, Halloween, Christmas, New Year's, Valentine's, St. Patrick's, 4th of July) and switch automatically. Kawaii is a manual pick.
 
@@ -42,5 +40,5 @@ QUICK CAPTURE SETUP: on first open the app asks once whether to turn on the Quic
 
 DATE PICKER "ANY DAY": when a task is added with a date but no time, choosing "Any day" keeps the date you gave — it only means "no specific time", not "no date". If a date is already known, the picker only asks about the time.
 
-THINGS THE APP DOES NOT DO: email-to-task, sending texts/emails on your behalf, inventing locations or recurring schedules you didn't state.
+THINGS THE APP DOES NOT DO: email-to-task, sending texts/emails on your behalf, inventing locations or recurring schedules you didn't state, accountability partners, chat with other people, or any community feature.
 `;
