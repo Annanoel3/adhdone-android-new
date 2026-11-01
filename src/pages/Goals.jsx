@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Target, Plus, ChevronRight, Loader2, Calendar } from "lucide-react";
 import GoalsGate from "@/components/goals/GoalsGate";
 import { useGoalTheme, goalLook } from "@/components/goals/goalsTheme";
-import { GOALS_CHANGED } from "@/components/goals/goalLogic";
+import { GOALS_CHANGED, liveGoals } from "@/components/goals/goalLogic";
 import { readLocalSession, clearLocalSession, loadAccountDraft, completeAccountDraft, sessionTime } from "@/components/goals/plannerDraft";
 
 // My Goals (ported Oct 31 2026 from Anna's Goals app, Goals.jsx; GOALS_PORT.md):
@@ -43,10 +43,11 @@ function Goals() {
 
   const loadData = useCallback(async () => {
     try {
-      const goalsData = await base44.entities.Goal.list("-created_date", 100);
-      const stepLists = await Promise.all((goalsData || []).map((g) =>
+      // A goal being deleted on this phone is already gone from the list.
+      const goalsData = liveGoals(await base44.entities.Goal.list("-created_date", 100));
+      const stepLists = await Promise.all(goalsData.map((g) =>
         base44.entities.GoalStep.filter({ goal_id: g.id }, "order_index", 1000).catch(() => [])));
-      setGoals(goalsData || []);
+      setGoals(liveGoals(goalsData));
       setSteps(stepLists.flat());
     } catch (err) {
       console.error(err);
