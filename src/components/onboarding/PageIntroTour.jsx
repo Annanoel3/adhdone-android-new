@@ -185,24 +185,110 @@ const ADD_PATHS_WALKTHROUGH_ON = false;
 // A how-to clip that behaves like a GIF: silent, looping, and it starts on its
 // own the moment it scrolls into view (and pauses when it leaves), so nobody
 // has to find a play button. Muted is what lets a WebView autoplay at all.
+//
+// A clip that never arrives used to sit there as a plain black box with no
+// sign anything was wrong (Anna, Oct 31 2026: the Share selected text clip in
+// the App Guide "wasn't loading at all. Just a black rectangle"; it loaded
+// fine later). Now it says "Loading video…" until the first frame is in, tries
+// again on its own if nothing has arrived 12 seconds after it started (twice),
+// and after that offers a tap to try again instead of a silent black box.
+const CLIP_STALL_MS = 12000;
+const CLIP_AUTO_RETRIES = 2;
+
 export function AutoClip({ src, className }) {
   const ref = useRef(null);
+  const [state, setState] = useState("loading"); // loading | ready | failed
+  const retries = useRef(0);
+  const stallTimer = useRef(null);
+
+  const clearStall = () => {
+    if (stallTimer.current) { clearTimeout(stallTimer.current); stallTimer.current = null; }
+  };
+
+  const start = () => {
+    const v = ref.current;
+    if (!v) return;
+    const p = v.play();
+    if (p && p.catch) p.catch(() => {});
+    clearStall();
+    // Nothing to show yet: check back, and reload it if it's still empty.
+    if (v.readyState < 2) {
+      stallTimer.current = setTimeout(() => {
+        if (!ref.current || ref.current.readyState >= 2) return;
+        if (retries.current < CLIP_AUTO_RETRIES) {
+          retries.current += 1;
+          ref.current.load();
+          start();
+        } else {
+          setState("failed");
+        }
+      }, CLIP_STALL_MS);
+    }
+  };
+
+  const tryAgain = () => {
+    retries.current = 0;
+    setState("loading");
+    if (ref.current) ref.current.load();
+    start();
+  };
+
   useEffect(() => {
     const v = ref.current;
     if (!v) return undefined;
     v.muted = true;
+    const ready = () => { clearStall(); setState("ready"); };
+    const broke = () => {
+      clearStall();
+      if (retries.current < CLIP_AUTO_RETRIES) {
+        retries.current += 1;
+        setTimeout(() => { if (ref.current) { ref.current.load(); start(); } }, 1000);
+      } else {
+        setState("failed");
+      }
+    };
+    v.addEventListener("loadeddata", ready);
+    v.addEventListener("playing", ready);
+    v.addEventListener("error", broke);
     const io = new IntersectionObserver(([entry]) => {
       if (entry.isIntersecting) {
-        const p = v.play();
-        if (p && p.catch) p.catch(() => {});
+        start();
       } else {
+        clearStall();
         v.pause();
       }
     }, { threshold: 0.35 });
     io.observe(v);
-    return () => io.disconnect();
-  }, []);
-  return <video ref={ref} src={src} muted loop playsInline preload="metadata" className={className} />;
+    return () => {
+      io.disconnect();
+      clearStall();
+      v.removeEventListener("loadeddata", ready);
+      v.removeEventListener("playing", ready);
+      v.removeEventListener("error", broke);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [src]);
+
+  return (
+    <div className={`relative ${className || ""}`}>
+      <video ref={ref} src={src} muted loop playsInline preload="metadata" className="block w-full max-h-[50vh] rounded-lg bg-black object-contain" />
+      {state !== "ready" && (
+        <div className="absolute inset-0 flex items-center justify-center rounded-lg">
+          {state === "failed" ? (
+            <button
+              type="button"
+              onClick={tryAgain}
+              className="rounded-full bg-white/90 px-4 py-2 text-sm font-medium text-gray-900 shadow"
+            >
+              Couldn't load the video. Tap to try again.
+            </button>
+          ) : (
+            <span className="text-sm text-white/80">Loading video…</span>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // First visit to Tasks: one scrolling card. The top says adding is easy; the
