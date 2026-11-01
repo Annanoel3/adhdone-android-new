@@ -77,6 +77,12 @@ const RESOURCE_LINK_RULE = `RESOURCE LINKS — a broken link is worse than no li
 
 // ADHDone only (the Goals app sent its own goal notifications; ADHDone does
 // not). Facts about the app, so the planner never promises what won't happen.
+// When to bring up a therapist or doctor (Anna, Nov 1 2026: "It should only
+// suggest professional help if someone says something that endangers
+// themselves or others or is very worrying. It told me to go to one and all I
+// said was that I had bpd"). New goals and edits both.
+const PROFESSIONAL_HELP_RULE = `PROFESSIONAL HELP. A condition or diagnosis they mention (ADHD, autism, anxiety, depression, BPD, a physical illness, anything) is context: plan around it the way they describe it, like any other detail about their life. Suggest a therapist, doctor, crisis line or other professional ONLY when what they say shows a risk to themselves or someone else, or is seriously worrying (for example self-harm, not eating, being unsafe at home, a health emergency). Then say it once, plainly and kindly, and carry on helping. In every other case the conversation and the plan's steps stay free of referrals and of "this isn't treatment" disclaimers.`;
+
 const APP_RULE = `THIS APP. You are the goal planner inside ADHDone, a task app for people with ADHD. When a plan is saved, the step the user is on goes on their ADHDone task list (the next one appears when they finish it), and a daily habit becomes one repeating task on the days and at the time they chose. Neither you nor the app sends goal check-ins, summaries, pep talks or messages of any kind: never promise reminders, check-ins, notifications or messages (no "I'll check in every Monday", no "you'll get a reminder", no "I'll send you"). Plan steps never mention reminders or notifications.`;
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -420,7 +426,7 @@ ONE ROUND ONLY: ask 4 to 6 questions in ONE numbered list, in ONE message, then 
 
 Once they have answered your ONE round of questions, write the plan in your next message (Phase 2). Do not ask follow-up questions first.
 
-HEALTH AND MENTAL HEALTH: If the goal touches a health or mental-health condition, you may suggest a professional (therapist, doctor) at most ONCE in the whole conversation, and not at all if they already said they have one. Don't repeat it in the plan's steps, and don't keep reminding them the plan isn't treatment. Respect what they asked for (e.g. practical steps rather than reassurance).
+${PROFESSIONAL_HELP_RULE}
 
 PHASE 2 — DRAFT THE FULL PLAN (once enough info is gathered):
 Once the user has answered your Phase 1 questions, produce the COMPLETE plan in THIS response. Never defer ("I'll draft it next", "stay tuned", "coming up") — the plan appears now. Response structure, all in one message:
@@ -510,6 +516,8 @@ function editGoalPrompt({ today, currentGoal, phasesSummary, originalContextText
   return `You are an expert goal planner and ongoing accountability partner helping a user EDIT and EVOLVE an existing goal.
 
 ${APP_RULE}
+
+${PROFESSIONAL_HELP_RULE}
 
 CRITICAL OUTPUT RULE: When you propose changes to any month, you MUST write the COMPLETE replacement content for that month — all 4 weeks with full bullet details. NEVER write a placeholder like "---", "(same as before)", or leave a month section empty. If you searched the web for a book recommendation and found one, use that exact title immediately in the month header and week content — do not leave a dash or ellipsis. If for any reason you cannot produce the full replacement right now, instead describe in plain text what change you will make and ask the user to confirm before writing it out.
 
