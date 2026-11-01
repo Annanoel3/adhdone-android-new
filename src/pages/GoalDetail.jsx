@@ -25,7 +25,7 @@ import {
   openGoalTasks, finishLinkedTask, unfinishLinkedTask, pauseGoal, resumeGoal, completeGoal, reopenGoal, deleteGoal,
   shortNotes,
 } from "@/components/goals/goalLogic";
-import { stepWeek, trackerDays, planBehind, behindText, fmtDay } from "@/components/goals/goalWeeks";
+import { stepWeek, trackerDays, planBehind, behindText, fmtDay, daysBetween } from "@/components/goals/goalWeeks";
 
 // "How did it go?" (StepFeedbackPopup): a step finished somewhere else (its
 // task checked off on the task list) is asked about the next time its goal
@@ -272,8 +272,11 @@ function GoalDetail() {
           status: "completed",
           completed_at: new Date().toISOString(),
         });
-        // Ask how it went (Anna, Nov 1 2026), once per step.
-        if (!step.feedback_asked_at && !step.feedback) setFeedbackStep((curStep) => curStep || step);
+        // Ask how it went (Anna, Nov 1 2026), once per step. Checked off
+        // after its week ended: the planner hears how late (step_feedback).
+        const wk = stepWeek(step, steps);
+        const lateBy = wk && todayKey() > wk.end ? daysBetween(wk.end, todayKey()) : 0;
+        if (!step.feedback_asked_at && !step.feedback) setFeedbackStep((curStep) => curStep || { ...step, days_late: lateBy });
       } else {
         // Back to not done. Its old task stays checked off; the goal's open
         // task moves to whichever step is now current.
@@ -324,6 +327,7 @@ function GoalDetail() {
         goal_id: goal.id,
         step_id: step.id,
         feedback: result.feedback,
+        days_late: Number(step.days_late) || 0,
         tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
       });
       const data = res?.data || {};
