@@ -126,7 +126,7 @@ export function goalContextLine(goal, step, steps, habit) {
   const { n, m } = stepPosition(step, steps);
   const title = String(goal?.title || "").trim().slice(0, 120);
   return habit
-    ? `step ${n} of ${m} of their daily-practice goal "${title}": this week's step, to finish by the end of the week (the daily practice is marked on the goal page)`
+    ? `step ${n} of ${m} of their daily-practice goal "${title}" (this week's step, due by the end of the week)`
     : `step ${n} of ${m} of their goal "${title}"`;
 }
 
@@ -135,9 +135,10 @@ const localAt = (key, h, min) => {
   return new Date(y, mo - 1, d, h, min, 0, 0);
 };
 
-// What a plain step's task is saved with: a "by" deadline at the end of its
-// week, no time (or no date at all if the step has none). A deadline already
-// gone by is kept: the task is overdue, not undated (RULES.md §9 Q3).
+// What a step's task is saved with: a "by" deadline on the last day of its
+// week, no time (or no date at all if the step has none). It's on Today from
+// when it's made until then (deadlineWindowStart). A deadline already gone by
+// is kept: the task is overdue, not undated (RULES.md §9 Q3).
 function stepDates(step, steps, now) {
   const deadline = stepDeadline(step, steps);
   if (!deadline) {
@@ -155,20 +156,6 @@ function stepDates(step, steps, now) {
   };
 }
 
-// The next habit day: today if it's one (and the time, if any, is still
-// ahead), else the next one.
-function firstHabitMoment(goal, time, now) {
-  for (let i = 0; i < 14; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() + i);
-    if (!isHabitDay(goal, d)) continue;
-    if (!time) return d;
-    const [h, m] = time.split(":").map(Number);
-    const at = new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m, 0, 0);
-    if (at.getTime() > now.getTime() + 2 * 60 * 1000) return at;
-  }
-  return null;
-}
-
 export function goalTaskFields(goal, step, steps, habit, now = new Date()) {
   const base = {
     title: String(step.title || "Goal step").trim(),
@@ -183,55 +170,16 @@ export function goalTaskFields(goal, step, steps, habit, now = new Date()) {
     goal_step_id: step.id,
     goal_context: goalContextLine(goal, step, steps, habit),
   };
-  if (!habit) {
-    const dates = stepDates(step, steps, now);
-    return {
-      fields: { ...base, ...dates, recurrence_pattern: "none" },
-      booking: { dayOnly: dates.day_only_task, deadlineStyle: dates.deadline_style },
-    };
-  }
-  const { pattern, days } = habitPattern(goal);
-  const time = habitTime(goal);
-  const first = firstHabitMoment(goal, time, now) || now;
-  if (time) {
-    // A time they chose in the planner: a time they set (RULES.md §9 Q4).
-    return {
-      fields: {
-        ...base,
-        reminder_interval: "once",
-        recurrence_pattern: pattern,
-        recurrence_days: days,
-        day_only_task: false,
-        deadline_style: "on",
-        anchor_time: time,
-        time_stated: true,
-        next_reminder: first.toISOString(),
-        due_date: null,
-        start_date: null,
-      },
-      booking: { dayOnly: false, deadlineStyle: "on" },
-    };
-  }
-  // No time chosen: a repeating all-day task; Smart Reminders handles it.
-  const key = getLocalDateString(first);
-  const at9 = localAt(key, 9, 0);
+  // Every goal's step, daily practice or not: one weekly "by" task (Nov 1
+  // 2026; it was a repeating task for a daily-practice goal).
+  const dates = stepDates(step, steps, now);
   return {
-    fields: {
-      ...base,
-      reminder_interval: "once",
-      recurrence_pattern: pattern,
-      recurrence_days: days,
-      day_only_task: true,
-      deadline_style: "on",
-      anchor_time: null,
-      time_stated: false,
-      next_reminder: at9.getTime() > now.getTime() + 2 * 60 * 1000 ? at9.toISOString() : null,
-      due_date: localAt(key, 23, 59).toISOString(),
-      start_date: null,
-    },
-    booking: { dayOnly: true, deadlineStyle: "on" },
+    fields: { ...base, ...dates, recurrence_pattern: "none", recurrence_days: null, anchor_time: null, time_stated: false },
+    booking: { dayOnly: dates.day_only_task, deadlineStyle: dates.deadline_style },
   };
 }
+
+const DATE_FIELDS = ["reminder_interval", "day_only_task", "deadline_style", "next_reminder", "due_date", "start_date"];
 
 export async function createGoalTask(goal, step, steps, user, habit) {
   const { fields, booking } = goalTaskFields(goal, step, steps, habit);
@@ -339,10 +287,14 @@ export async function retargetTask(task, goal, step, steps, habit, oldStep = nul
   const oldNotes = oldStep ? shortNotes(oldStep.description) : "";
   if (!task.notes || task.notes === oldNotes) updates.notes = fields.notes;
   if (!task.silenced && (!oldStep || task.urgency === urgencyFor(oldStep.priority))) updates.urgency = fields.urgency;
-  if (!habit) {
-    for (const k of ["reminder_interval", "day_only_task", "deadline_style", "next_reminder", "due_date", "start_date"]) {
-      updates[k] = fields[k];
-    }
+  for (const k of DATE_FIELDS) updates[k] = fields[k];
+  if (isRepeatingTask(task)) {
+    // A daily-practice goal's old repeating task becomes the weekly one:
+    // changed in place (nothing deleted), its timed pushes cancelled.
+    Object.assign(updates, { recurrence_pattern: "none", recurrence_days: null, anchor_time: null, time_stated: false, onesignal_notification_ids: [] });
+    const ids = task.onesignal_notification_ids || [];
+    if (ids.length) import("../utils/reminderScheduler").then((m) => m.cancelScheduledReminder(ids)).catch(() => {});
+    refreshAlarmsSoon();
   }
   await base44.entities.Task.update(task.id, updates);
   if ((task.title || "").trim() !== fields.title && (!oldStep || (task.title || "").trim() === String(oldStep.title || "").trim())) {
