@@ -452,7 +452,7 @@ export async function judgeDailyThing(input: { title: string; said?: string | nu
 
 Daily: taking a medication, pill, birth control or vitamin; feeding a pet or giving a pet its medicine; a child's homework; brushing teeth; a daily walk; checking email daily.
 
-Not daily: anything done weekly or less (laundry, trash night, cleaning the bathroom, groceries), errands, calls, appointments, bills, one-off projects, and anything the wording marks as a one-time thing ("pick up my pills", "refill the prescription", "finish the last of the antibiotics").
+Not daily: anything done weekly or less (laundry, trash night, cleaning the bathroom, groceries), errands, calls, appointments, bills, one-off projects, and anything the wording marks as a one-time thing ("pick up my pills", "refill the prescription", "finish the last of the antibiotics"). "Remind me tomorrow" or a time only says when to remind them this once; it doesn't make the thing one-time.
 
 When it isn't clearly a daily thing, answer daily false.`,
       },
