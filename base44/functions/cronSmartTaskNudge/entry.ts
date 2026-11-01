@@ -662,6 +662,15 @@ Deno.serve(async (req) => {
                     .catch((e: any) => console.error(`[SMART NUDGE] Could not mark ${email} unreachable:`, e?.message || e));
                 } else {
                   await ledgerRecord(base44, { email, kind: 'general', source: 'smart_helping', notificationId: outcome, title: which === 'ask' ? HELP_ASK_TITLE : HELP_PAUSE_TITLE });
+                  // Kept for counting (Anna, Nov 1 2026: "keep tabs on how many
+                  // times the 'are your reminders helping' alarms happen"); the
+                  // ledger is pruned after 3 days. The owner's daily note counts
+                  // the alarms (cronRefillReminders).
+                  await base44.asServiceRole.entities.AppEvent.create({
+                    event: 'reminders_helping_sent',
+                    user_email: String(email || '').toLowerCase(),
+                    props: { as: ringIt ? 'alarm' : 'push', stage: which === 'pause' ? 'pause' : (again ? 'again' : 'first'), at: nowIso },
+                  }).catch((e: any) => console.error(`[SMART NUDGE] Could not log the helping send for ${email}:`, e?.message || e));
                 }
                 console.log(`[SMART NUDGE] ${email}: ${which === 'ask' ? `asked "${HELP_ASK_TITLE}"${again ? ' again (no answer to the first)' : ''} (put off on ${look.press_days} days, ${look.finished_pairs} of ${look.pairs} finished that day)` : `paused, not helping (${look.trial?.reminders_in_window} sent this week, none finished that day)`}${outcome === UNSUBSCRIBED ? ' — phone not reachable' : ''}`);
                 continue;
