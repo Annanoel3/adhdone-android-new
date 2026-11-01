@@ -6,6 +6,7 @@ import { Target, Plus, ChevronRight, Loader2, Calendar } from "lucide-react";
 import GoalsGate from "@/components/goals/GoalsGate";
 import { useGoalTheme, goalLook } from "@/components/goals/goalsTheme";
 import { GOALS_CHANGED } from "@/components/goals/goalLogic";
+import { readLocalSession, clearLocalSession, loadAccountDraft, completeAccountDraft, sessionTime } from "@/components/goals/plannerDraft";
 
 // My Goals (ported Oct 31 2026 from Anna's Goals app, Goals.jsx; GOALS_PORT.md):
 // Active / Completed / Paused tabs, the "goal in progress" note when a planner
@@ -62,12 +63,16 @@ function Goals() {
   }, [loadData]);
 
   useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("plannerInProgress") || "null");
-      setInProgress(!!saved?.messages?.length);
-    } catch (e) {
-      setInProgress(false);
-    }
+    // This device's planner chat, or the account's when it changed later (a
+    // chat started on another device shows here too; plannerDraft.js).
+    const local = readLocalSession();
+    setInProgress(!!local?.messages?.length);
+    let alive = true;
+    loadAccountDraft().then((account) => {
+      if (!alive || !account || sessionTime(account) <= sessionTime(local)) return;
+      setInProgress(!account.completed && account.messages.length > 0);
+    });
+    return () => { alive = false; };
   }, []);
 
   const getGoalProgress = (goalId) => {
@@ -117,7 +122,7 @@ function Goals() {
                 Continue
               </button>
               <button
-                onClick={() => { try { localStorage.removeItem("plannerInProgress"); } catch (e) { /* storage unavailable */ } setInProgress(false); }}
+                onClick={() => { clearLocalSession(); completeAccountDraft(); setInProgress(false); }}
                 className={`px-3 py-1 rounded-lg text-xs font-semibold ${L.muted}`}
               >
                 Dismiss
