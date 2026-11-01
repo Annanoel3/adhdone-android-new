@@ -1241,7 +1241,7 @@ ${PROFESSIONAL_HELP_RULE}
 
 HOW TO DECIDE (judgment, the way a good coach would; not keywords):
 - Change upcoming weeks only when what they said calls for it: an activity that didn't help or didn't suit them, too hard or too easy, too long, no time, something they disliked, a new constraint, or something that worked well and is worth building on.
-- Something didn't help: the weeks ahead must not repeat that KIND of activity, not just that exact one (if a crafts exercise felt pointless, no more crafts-style exercises), unless they said otherwise. Replace it with something that fits what they told you when planning and now.
+- Something didn't help: the weeks ahead must not repeat that KIND of activity, not just that exact one (if a crafts exercise felt pointless, no more crafts-style exercises), unless they said otherwise. Replace it with something that fits what they told you when planning and now: start from what they said worked, what they enjoy or used to enjoy, and the kind of help they asked for. The replacement is a real, specific activity that does the same job for the goal, never a vaguer or smaller version of the thing that didn't help.
 - Something helped: build on it, so it grows over the coming weeks.
 - Keep the goal, its timeline and the order of the weeks. Keep each week's theme unless the feedback says the direction itself is wrong.
 - Their answer is positive, neutral or very short, and the plan already fits: change nothing. Never rewrite for the sake of it.
@@ -1252,7 +1252,7 @@ HOW TO DECIDE (judgment, the way a good coach would; not keywords):
 
 Answer with JSON only:
 {"change": true | false,
- "summary": "1-3 short plain sentences TO THEM: which weeks you changed and why, or that the plan stays as it is and why. Warm, no pep talk, no promises of reminders or check-ins.",
+ "summary": "1-3 short plain sentences TO THEM: what you took out, what you put in its place (name the new activity itself, e.g. 'a 10-minute walk with no destination'), and which weeks; or that the plan stays as it is and why. Warm, no pep talk, no promises of reminders or check-ins.",
  "steps": [{"id": "<id from UPCOMING>", "description": "the rewritten week, one line per item", "success_criteria": ["2-4 concrete done-checks"], "tips_and_guidance": "a short helpful note, or empty"}]}`;
 
   const user = [
