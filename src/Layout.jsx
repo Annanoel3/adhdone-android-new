@@ -340,7 +340,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 
     // TEMPORARY (Oct 31 2026): Anna's account previews a season, now harvest.
     // Remove this line to put her back on the real date-based season.
-    if (String(user?.email || '').toLowerCase() === 's2kap2chick@gmail.com') return 'harvest';
 
     // Christmas: Dec 20 - Dec 26
     if (month === 12 && day >= 20 && day <= 26) return 'christmas';
