@@ -1,5 +1,7 @@
 // Goals planner (ported Oct 31 2026 from Anna's Goals app, function of the
 // same name; what was copied, adapted and dropped is in GOALS_PORT.md).
+// Nov 1 2026: long plans finish (continue_plan) and extract_plan reads every
+// planner message.
 //
 // Same conversation, same questions, same plan shape as the Goals app. What
 // changed: every model call is gpt-6-astra through OpenAI (RULES.md §1; the
