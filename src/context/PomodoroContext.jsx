@@ -226,9 +226,10 @@ export function PomodoroProvider({ children }) {
     stopAlertLoop();
     // First timer on this account: Android's alarm switches, with the reason.
     if (!isActive && timerAlarmsSupported()) requestAlarmPermissions({ feature: 'timers' });
+    const starting = !isActive;
+    trackFire('pomodoro', { props: { action: starting ? (timeLeft < (mode === 'work' ? workDuration : breakDuration) * 60 ? 'resume' : 'start') : 'pause', mode } });
     setIsActive(prev => {
       const nowActive = !prev;
-      trackFire('pomodoro', { props: { action: nowActive ? (timeLeft < (mode === 'work' ? workDuration : breakDuration) * 60 ? 'resume' : 'start') : 'pause', mode } });
       if (nowActive) {
         // Starting/resuming — book the alarm (or the fallback push)
         setTimeLeft(tl => {
@@ -241,7 +242,7 @@ export function PomodoroProvider({ children }) {
       }
       return nowActive;
     });
-  }, [armTimer, disarmTimer, mode, isActive]);
+  }, [armTimer, disarmTimer, mode, isActive, timeLeft, workDuration, breakDuration]);
 
   const resetTimer = useCallback(() => {
     stopAlertLoop();
