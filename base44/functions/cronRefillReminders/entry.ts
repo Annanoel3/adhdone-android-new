@@ -1620,6 +1620,13 @@ const OWNER_ACCOUNTS = new Set([
   'annanoelwenballew@gmail.com', 'annanoelbusinessemail@gmail.com', 's2kap2chick@gmail.com',
   'mediocreatbestdev@outlook.com', 'annanoelwenballew@outlook.com',
 ]);
+// People Anna never wants to hear about again in these alerts (Anna, Nov 1
+// 2026: "Can we stop mentioning wickeddevildriver666? You and the push
+// notifications I get about errors won't let her go."). Left out of every
+// check and note here, like her own accounts.
+const NEVER_MENTION = new Set([
+  'wickeddevildriver666@gmail.com',
+]);
 const ALERT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 const H_HOUR = 60 * 60 * 1000;
 const H_DAY = 24 * H_HOUR;
@@ -1769,7 +1776,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   // again every ALERT_COOLDOWN_MS.
   // mark: written to owner_alert_marks once this alert has gone out.
   const problems: { title: string; body: string; sinceMs?: number; mark?: { key: string; value: string } }[] = [];
-  const realUser = (email: string) => !!email && !OWNER_ACCOUNTS.has(email);
+  const realUser = (email: string) => !!email && !OWNER_ACCOUNTS.has(email) && !NEVER_MENTION.has(String(email).toLowerCase());
   const msOf = (v: any) => {
     const s = String(v || '');
     return s ? Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`) : NaN;
@@ -1996,7 +2003,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   //    19 OneSignal said her phone no longer takes pushes. Nothing told Anna.
   //    Each is told once per happening (sinceMs), not every 6 hours. Left out
   //    with her own accounts: family who only installed it to try it.
-  const notReal = new Set([...OWNER_ACCOUNTS, 'antonio.baird1996@gmail.com', 'aleck.baird@gmail.com']);
+  const notReal = new Set([...OWNER_ACCOUNTS, ...NEVER_MENTION, 'antonio.baird1996@gmail.com', 'aleck.baird@gmail.com']);
   // Checks 9 and 10 skip anyone known to be gone (see `gone` above).
   const people = allUsers.filter((u: any) => u?.email && !notReal.has(u.email) && !gone(u));
   const nameOf = (u: any) => String(u?.preferred_name || u?.full_name || u?.email || 'Someone').trim();
@@ -2062,7 +2069,14 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   //     medication alarm, a time the app picked, rang out on Oct 18 and again
   //     on Oct 19.
   let alarmLogRows: number | null = null;
-  const ANSWERED_MS = 3 * 3600e3;
+  // A ring followed by the task getting done within a day is answered: the
+  // reminder did its job (Anna, Nov 1 2026: "cjkelso and brianna are both
+  // good examples of people who let things ring out or dismiss them, but the
+  // reminders are still helping them"). Chad's 8 AM alarm rang out three times
+  // on Oct 28 and he finished it at 3:19 PM; the alert had already gone at
+  // 1:55 PM. It was 3 hours. A ring with the task still open isn't judged
+  // until a day has passed.
+  const ANSWERED_MS = 24 * 3600e3;
   try {
     const sinceIso = new Date(nowMs - 2 * H_DAY).toISOString();
     const [recent, logged] = await Promise.all([
