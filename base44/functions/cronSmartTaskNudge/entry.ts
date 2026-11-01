@@ -165,7 +165,23 @@ Deno.serve(async (req) => {
     }
 
     const base44 = createClientFromRequest(req);
-    const now = new Date();
+    // REPLAY (preview only, owner only): { email, preview: true, as_of: ISO,
+    // last_active_at?: ISO } plans as if it were that moment: tasks made after
+    // it are left out, ones finished after it count as open, Smart Reminders
+    // sent after it never went out, and they last opened the app at
+    // last_active_at. To check the planner's judgment against a real day
+    // (Anna, Nov 1 2026: "Wouldn't the real fix be in making the smart
+    // reminder ai not be stupid" — arcticwolf444's 8 on Oct 30). Saves and
+    // sends nothing.
+    let body: any = null;
+    try { body = await req.clone().json(); } catch { body = null; }
+    const asOfMs = body?.preview === true && typeof body?.email === 'string' && typeof body?.as_of === 'string' ? Date.parse(body.as_of) : NaN;
+    const replay = Number.isFinite(asOfMs);
+    if (replay) {
+      const me = await base44.auth.me().catch(() => null);
+      if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
+    }
+    const now = replay ? new Date(asOfMs) : new Date();
     const nowMs = now.getTime();
 
     // A request naming one person comes from onTaskUpdate right after they
@@ -204,12 +220,32 @@ Deno.serve(async (req) => {
       : await listAll(base44.asServiceRole.entities.User);
     const userMap: Record<string, any> = {};
     for (const u of allUsers) if (u && u.email) userMap[u.email] = u;
+    if (replay) {
+      for (const u of allUsers) {
+        if (!u) continue;
+        if (typeof body?.last_active_at === 'string') u.last_active_at = body.last_active_at;
+        u.smart_nudge_sent_log = (u.smart_nudge_sent_log || []).filter((l: any) => !(utcMs(l?.at) > nowMs));
+        u.smart_nudge_schedule = (u.smart_nudge_schedule || []).filter((e: any) => !(utcMs(e?.sent_at || e?.send_at) > nowMs));
+        u.smart_nudge_one_a_day = false;
+        u.smart_nudge_paused_at = null;
+      }
+    }
 
     // 2. Tasks — EVERY task, paged (completed ones too: completedTaskIds and
     // the done-today context below need them).
-    const allTasks = onlyEmail
+    let allTasks = onlyEmail
       ? await filterAll(base44.asServiceRole.entities.Task, { created_by: onlyEmail })
       : await listAll(base44.asServiceRole.entities.Task);
+    if (replay) {
+      allTasks = allTasks
+        .filter((t: any) => !(utcMs(t?.created_date) > nowMs))
+        .map((t: any) => {
+          const doneMs = utcMs(t?.completed_at || t?.updated_date);
+          return t?.status === 'completed' && doneMs > nowMs
+            ? { ...t, status: 'active', completed_at: null, put_off_days: [], ease_plan: null }
+            : { ...t, put_off_days: (t.put_off_days || []).filter((d: string) => d <= new Date(nowMs).toISOString().slice(0, 10)) };
+        });
+    }
     const taskById = new Map<string, any>();
     for (const t of allTasks) if (t && t.id) taskById.set(t.id, t);
     const tasksByUser: Record<string, any[]> = {};
@@ -837,6 +873,8 @@ Deno.serve(async (req) => {
           for (const r of rows) {
             const at = utcMs(r.send_at);
             if (!Number.isFinite(at)) continue;
+            // REPLAY: a Smart Reminder after that moment hadn't been picked yet.
+            if (replay && at > nowMs && r.kind === 'smart_nudge') continue;
             if (at <= nowMs && Number.isFinite(seenMs) && at > seenMs) sentSinceSeen++;
             if (at >= dayStartMs && at < dayStartMs + DAY_MS) {
               dayPushes.push({ at, title: String(r.title || r.kind || 'a notification').slice(0, 80), mine: r.kind === 'smart_nudge' });
