@@ -226,9 +226,45 @@ export async function ledgerCancel(base44: any, notificationIds: (string | null 
 }
 
 // Entries older than a few days can't conflict with anything — clear them out.
+// Before they go, each is kept as an AppEvent 'reminder_sent' (Anna, Nov 1
+// 2026: "Keep 30 days of reminder history"). Rows still here at this point are
+// pushes that actually went out: cancelled bookings, evicted ones and dead ones
+// already left the ledger. Without this, a check-off's reminder count only saw
+// the last 3 days, and a retention study read that as "no reminders at all".
+// The ledger itself stays short (its readers expect only recent rows; Commute
+// Watch's late alert checks it per task). No titles in the event, by AppEvent's
+// own rule; props.send_at is when it went out (created_date is the archive time).
+const LEDGER_KEEP_MS = 3 * 24 * 60 * 60 * 1000;
+const ARCHIVE_BATCH = 500;
+const ARCHIVE_CHUNK = 100;
 export async function ledgerPrune(base44: any): Promise<void> {
+  const cutoff = new Date(Date.now() - LEDGER_KEEP_MS).toISOString();
   try {
-    await ledger(base44).deleteMany({ send_at: { $lt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() } });
+    const old: any[] = (await ledger(base44).filter({ send_at: { $lt: cutoff } }, 'send_at', ARCHIVE_BATCH)) || [];
+    if (!old.length) return;
+    const kept: string[] = [];
+    for (let i = 0; i < old.length; i += ARCHIVE_CHUNK) {
+      const part = old.slice(i, i + ARCHIVE_CHUNK);
+      try {
+        await base44.asServiceRole.entities.AppEvent.bulkCreate(part.map((row: any) => ({
+          event: 'reminder_sent',
+          user_email: row.user_email || '',
+          session_id: '',
+          page: '',
+          props: {
+            task_id: row.task_id || null,
+            kind: row.kind || null,
+            source: row.source || null,
+            send_at: row.send_at || null,
+          },
+        })));
+        for (const row of part) kept.push(row.id);
+      } catch (e) {
+        // Not kept: left in the ledger for the next run to try again.
+        console.error('[sendLedger] reminder history not kept:', e);
+      }
+    }
+    if (kept.length) await ledger(base44).deleteMany({ id: { $in: kept } });
   } catch (e) {
     console.error('[sendLedger] prune failed:', e);
   }
