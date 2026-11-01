@@ -56,7 +56,6 @@ export function goalStarted(goal, today = todayKey()) {
 // to follow the calendar, so an unfinished week was dropped when the next one
 // started; now a week stays until it's checked off, Nov 1 2026.) `goal` and
 // `today` are kept for the callers.
-// eslint-disable-next-line no-unused-vars
 export function currentStep(goal, steps, today = todayKey()) {
   return sortSteps(steps).find(isStepOpen) || null;
 }
