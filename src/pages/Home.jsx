@@ -371,7 +371,7 @@ export default function Home() {
         />
 
         <div className="space-y-6">
-          <NotificationsOffBanner theme={theme} specialMode={specialMode} />
+          <NotificationsOffBanner theme={theme} specialMode={specialMode} user={user} />
           <AlarmSetupBanner theme={theme} specialMode={specialMode} user={user} />
           <CalendarOffBanner theme={theme} specialMode={specialMode} user={user} />
 
