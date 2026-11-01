@@ -9,11 +9,17 @@ import { phoneOs } from '@/lib/phonePlatform';
 // that it's the app talking to the user, so everything below stays in the app's
 // voice ("this app", "we") and never says "I'm Anna" again.
 //
-// Shape: the whole first sitting is a name, one task, one time, one permission
-// and one alert-style question — about a minute. It used to open with a bio
-// and a Places explainer before the first task, and most new people left
-// inside four minutes with nothing set up that could reach them. The about-you
-// question now comes after their first task is checked off.
+// Shape: the whole first sitting is a name, one task, one time, one permission,
+// one optional about-you question, then the alert-style question — about a
+// minute. It used to open with a bio and a Places explainer before the first
+// task, and most new people left inside four minutes with nothing set up that
+// could reach them, so nothing that reaches them comes after the about-you
+// question now: it is the last thing asked, and it can be skipped.
+// It spent Sep 29 – Nov 1 2026 waiting for the first checked-off task
+// instead, and almost nobody got it: 3 of 16 new accounts. Someone on night
+// shifts had nowhere to say so, and kept quiet hours of 10 PM to 8 AM —
+// silent through their shift, ringing while they sleep (Anna, Nov 1 2026:
+// "someone with a night shift would have nowhere to put that").
 // Did they already say when, inside the task itself? "call the dentist at 3",
 // "dentist tomorrow", "pay rent friday", "in 20 minutes" — then "when should
 // it remind you?" is a question they just answered, so it isn't asked; the
@@ -42,7 +48,7 @@ const SCRIPT = [
     // The first win comes right after the name. One real thing on the list
     // inside the first minute, before a bio, a tour or a permission — so there
     // is a reminder to arrive, and a reason to come back. (The about-you
-    // question waits until their first task is checked off; see catchUpScript.)
+    // question comes last, below.)
     // (The @handle line that used to sit here promised sharing with friends,
     // which the app doesn't have; Anna, Oct 27 2026: no advertising what isn't there.)
     text: (name) => `Nice to meet you, ${name}! What's one thing you keep forgetting? Type it in and it's on your list.`,
@@ -67,12 +73,23 @@ const SCRIPT = [
     input: 'notify',
   },
   {
+    // Last, after the task, its time and notifications are all set, so a
+    // skip or a close here costs nothing. Answered, it is saved at once and
+    // their quiet hours follow it (WelcomeChat.submitAbout →
+    // checkQuietHoursFit: "I work nights" moves 10 PM-8 AM to when they
+    // sleep). Reaching it counts as asked: the catch-up never asks again.
+    text: () =>
+      "Last one, and you can skip it: tell us a little about your life, so reminders fit around it. Like \"I'm a nurse on night shifts\" or \"I play violin at weddings.\"",
+    input: 'about',
+  },
+  {
     text: (name, handle, about, task, when, notify) =>
+      (String(about || '').trim() ? 'Got it, thanks. ' : '') + (
       notify === 'declined'
         ? "Without notifications nothing from ADHDone can reach you. You can turn them on any time from the row at the top of Home."
         : task
           ? `You're set. ${when ? `First reminder: ${when}.` : "It'll remind you when it's time."}`
-          : "You're set — add something from Home whenever you're ready.",
+          : "You're set — add something from Home whenever you're ready."),
     final: true,
   },
 ];
