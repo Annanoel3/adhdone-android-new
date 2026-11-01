@@ -5,7 +5,7 @@ import { enterOnboardingSurface, exitOnboardingSurface, waitForCalm } from './on
 import WelcomeChat from './WelcomeChat';
 import { base44 } from '@/api/base44Client';
 import WELCOME_SCRIPT from './welcomeScript';
-import CATCH_UP_SCRIPT, { CATCH_UP_ABOUT_ONLY_SCRIPT, FIRST_DONE_SCRIPT, FIRST_DONE_ABOUT_ONLY_SCRIPT, NAME_ONLY_SCRIPT } from './catchUpScript';
+import CATCH_UP_SCRIPT, { CATCH_UP_ABOUT_ONLY_SCRIPT, FIRST_DONE_SCRIPT, FIRST_DONE_ABOUT_ONLY_SCRIPT, ABOUT_NOW_SCRIPT, ABOUT_NOW_ABOUT_ONLY_SCRIPT, NAME_ONLY_SCRIPT } from './catchUpScript';
 
 // The name alone, asked once more for someone who closed the welcome chat
 // before giving one (Anna, Oct 1 2026 — "for people like Rycher"). On a later
@@ -21,16 +21,21 @@ const REWELCOME_SCRIPT = [
   ...WELCOME_SCRIPT.slice(1),
 ];
 
-// The name + about-me questions, for anyone whose profile is missing them:
-// accounts that finished onboarding before those questions existed, and (since
-// the first sitting was cut down to one task and one time) every new account.
-// Either way it waits for the first checked-off task — the app has done
-// something for them before it asks about them. Never the page tours.
+// The name + about-me questions, for anyone whose profile is missing them and
+// who was never asked: accounts that finished onboarding before those
+// questions existed, and new accounts that finished the welcome while it
+// didn't ask (Sep 29 – Nov 1 2026) or closed it before its last question.
+// On a later app open, once the screen is calm. Until Nov 1 2026 it also
+// waited for the first checked-off task, and almost nobody got it (3 of 16
+// new accounts); now a checked-off task only changes its opening line.
+// Never the page tours.
 export default function CatchUpDialog({ user }) {
   const [open, setOpen] = useState(false);
   // 'catchup' = name (if missing) + about-you after the first checked-off
   // task; 'name' = the name alone (see NAME_RETRY_STEP).
   const [kind, setKind] = useState('catchup');
+  // Whether they've checked anything off: "First one done" opens it only then.
+  const [doneOne, setDoneOne] = useState(false);
   const openRef = useRef(false);
   useEffect(() => { openRef.current = open; }, [open]);
   const nameChecked = useRef(false);
@@ -50,10 +55,15 @@ export default function CatchUpDialog({ user }) {
     if (!isStepDone(ONBOARDING_STEPS.welcome)) return;
     if (isStepDone(ONBOARDING_STEPS.catchUp)) return;
     if (user.about_me) return;
+    // The welcome was closed in THIS sitting (before its about-you question):
+    // not now, a later open.
+    try { if (sessionStorage.getItem(NAME_RETRY_HOLD) === '1') return; } catch (e) {}
     checked.current = true;
     base44.entities.Task.filter({ status: 'completed' }, '-updated_date', 1)
+      .catch(() => [])
       .then((rows) => {
-        if (!mounted.current || !rows?.length) return;
+        if (!mounted.current) return;
+        const finishedOne = !!rows?.length;
         // Its turn: nothing else on screen (the name re-ask below, a tour, a
         // question), and the user not mid-tap.
         return waitForCalm().then(() => {
@@ -64,6 +74,7 @@ export default function CatchUpDialog({ user }) {
           // closed early) can't bring it back on the next sign-in. What the profile
           // already holds is never asked for again — see the script choice below.
           markStepDone(ONBOARDING_STEPS.catchUp);
+          setDoneOne(finishedOne);
           setKind('catchup');
           setOpen(true);
         });
@@ -100,8 +111,9 @@ export default function CatchUpDialog({ user }) {
   }, [user]);
 
   const knownName = (user?.preferred_name || user?.display_name || '').trim();
-  // An account from after the first sitting was cut down (no name asked yet)
-  // gets the "first one done" version; an older one gets the welcome-back.
+  // An account from after the first sitting was cut down gets the "first one
+  // done" version when it has checked something off, the plain one when it
+  // hasn't; an older one gets the welcome-back.
   const NEW_FLOW_SINCE = Date.parse('2026-09-29T00:00:00Z');
   const newFlow = Date.parse(user?.created_date || '') >= NEW_FLOW_SINCE;
   const script = kind === 'rewelcome'
@@ -109,7 +121,9 @@ export default function CatchUpDialog({ user }) {
     : kind === 'name'
     ? NAME_ONLY_SCRIPT
     : newFlow
-      ? (knownName ? FIRST_DONE_ABOUT_ONLY_SCRIPT : FIRST_DONE_SCRIPT)
+      ? (doneOne
+        ? (knownName ? FIRST_DONE_ABOUT_ONLY_SCRIPT : FIRST_DONE_SCRIPT)
+        : (knownName ? ABOUT_NOW_ABOUT_ONLY_SCRIPT : ABOUT_NOW_SCRIPT))
       : (knownName ? CATCH_UP_ABOUT_ONLY_SCRIPT : CATCH_UP_SCRIPT);
 
   useEffect(() => {
@@ -121,7 +135,7 @@ export default function CatchUpDialog({ user }) {
   const handleClose = () => {
     setOpen(false);
     // The name re-ask doesn't stand in for the catch-up: the about-you
-    // question still comes after their first checked-off task.
+    // question still comes, on a later open.
     markStepDone(kind === 'name' ? NAME_RETRY_STEP : ONBOARDING_STEPS.catchUp);
     // Done with an onboarding chat: the App Guide's red dot (see
     // WelcomeDialog), unless they've opened the guide already.
