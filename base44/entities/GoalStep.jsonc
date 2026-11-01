@@ -38,7 +38,7 @@
     "due_date": {
       "type": "string",
       "format": "date",
-      "description": "As in the Goals app: the day this step's week starts (Week 1 = the goal's start date, later weeks = that calendar week's Monday). Its task's 'by' date is the end of that week (goalLogic.stepDeadline)."
+      "description": "As in the Goals app: the day this step's week starts (Week 1 = the goal's start date, later weeks = that calendar week's Monday). Its task's 'by' date is the end of that week (goalWeeks.stepDeadline). A step checked off after its week ended moves every unfinished step after it later, so the next one starts the day after (goalWeeks.lateFinishShift)."
     },
     "phase": {
       "type": "string",
@@ -165,6 +165,10 @@
       "type": "string",
       "format": "date-time",
       "description": "When 'How did it go?' was answered or skipped for this step. Set either way, so it is asked once, never again."
+    },
+    "finished_days_late": {
+      "type": "integer",
+      "description": "How many days after its week ended this step was checked off, saved when the weeks after it were moved later because of that (goalWeeks.lateFinishShift). The planner's 'How did it go?' reads it (step_feedback)."
     }
   },
   "required": [
