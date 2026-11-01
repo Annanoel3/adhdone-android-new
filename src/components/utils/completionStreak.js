@@ -10,7 +10,7 @@ import { base44 } from "@/api/base44Client";
 // which chained yesterday's summary + 1 using UTC dates. An evening finish
 // (after 7 PM Central) landed on the next UTC day, so a day with nothing
 // finished (Oct 28) never broke the chain, and that number reached the daily
-// tip, the motivation message, Talk It Out and the end-of-day review.
+// tip, the motivation message, Support Space and the end-of-day review.
 
 const dayKey = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
