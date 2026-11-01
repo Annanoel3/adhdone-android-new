@@ -423,11 +423,12 @@ Deno.serve(async (req) => {
       if (helpingPreview) {
         const dayOfP = (ms: number) => theirDayKey(new Date(ms), timeZone, startMin, endMin);
         const logP = pruneSentLog(user.smart_nudge_sent_log || [], nowMs);
+        const scheduleP = applySentLog(pruneHistory(user.smart_nudge_schedule || [], nowMs), logP);
         results.push({
           email,
           ...helpingLook({
             user,
-            schedule: applySentLog(pruneHistory(user.smart_nudge_schedule || [], nowMs), logP),
+            schedule: scheduleP,
             sentLog: logP,
             rows: await choicesFor(email),
             taskById,
@@ -435,6 +436,11 @@ Deno.serve(async (req) => {
             dayOf: dayOfP,
             nowMs,
           }),
+          // SILENT PUT-OFFS: the days each open task would gain (nothing written).
+          silent_put_offs: onPlainNotifications(user)
+            ? silentPutOffDays(tasksByUser[email] || [], plainSends(scheduleP, logP), dayOfP, dayOfP(nowMs))
+              .map((x) => ({ task_id: x.task.id, title: String(x.task.title || '').slice(0, 60), had: x.had, adds: x.adds }))
+            : [],
           note: 'Preview only: nothing was saved or sent.',
         });
         continue;
@@ -562,6 +568,37 @@ Deno.serve(async (req) => {
       // than a week are dropped; the rest is history.
       const sentLog = pruneSentLog(user.smart_nudge_sent_log || [], nowMs);
       let schedule: any[] = applySentLog(pruneHistory(user.smart_nudge_schedule || [], nowMs), sentLog);
+
+      // SILENT PUT-OFFS (Anna, Nov 1 2026: "how do we fix arcticwolf's
+      // experience and make sure other people aren't bombarded"). A plain
+      // notification reports nothing back: no Later, no swipe, no ring-out.
+      // So for someone on plain notifications, ignoring Smart Reminders left no
+      // trace, and her put-off rule (point 6 in RULES §10: put off on 3
+      // different days = a lighter plan) and ARE THEY HELPING? could never see
+      // it. arcticwolf444 got 8 on Fri Oct 30 and one callback was mentioned 7
+      // times Oct 26-30, none answered, still open. Now: a day (theirs) on
+      // which a Smart Reminder about a task went out as a plain notification,
+      // and the task is still open after that day ended, is a put-off day for
+      // it, like a ring-out on an alarm. Light mentions and roundups don't
+      // count. Alarm users are untouched: the phone reports every alarm's
+      // answer already.
+      if (!onlyEmail && !previewOnly && onPlainNotifications(user)) {
+        for (const x of silentPutOffDays(pool, plainSends(schedule, sentLog), dayOf, todayStr)) {
+          const fields: any = { put_off_days: x.days };
+          try {
+            Object.assign(fields, await easeStep({ ...x.task, put_off_days: x.days }, user, nowMs));
+          } catch (e: any) {
+            console.error(`[SMART NUDGE] Could not judge the eased plan for ${email}:`, e?.message || e);
+          }
+          try {
+            await base44.asServiceRole.entities.Task.update(x.task.id, fields);
+            Object.assign(x.task, fields);
+            console.log(`[SMART NUDGE] ${email}: "${x.task.title}" got plain Smart Reminders and stayed open on ${x.adds.join(', ')}: put off on ${x.days.length} day(s)${fields.ease_plan ? `, now on the eased plan (${fields.ease_plan.plan})` : ''}`);
+          } catch (e: any) {
+            console.error(`[SMART NUDGE] Could not record silent put-offs for ${email}:`, e?.message || e);
+          }
+        }
+      }
 
       // The brief: a plan made under anything else (the old rulebook prompt, or
       // an older copy of the brief) is thrown out — every nudge it still had
@@ -2619,6 +2656,50 @@ function helpAskStage(u: any, nowMs: number): 'first' | 'again' | '' {
   return unanswered && !askedAgain && nowMs - asked >= HELP_ASK_AGAIN_MS ? 'again' : '';
 }
 
+// On plain notifications, not alarms: their Smart Reminders arrive as ordinary
+// notifications, which report nothing back (SILENT PUT-OFFS). iPhone has no
+// alarms.
+function onPlainNotifications(user: any): boolean {
+  return user?.alarm_mode !== 'alarm' || user?.app_platform === 'ios';
+}
+
+// Smart Reminders that went out as a plain notification: not rung as an alarm,
+// not a light mention (an unanswered light mention is never a put-off), not a
+// roundup (no single task).
+function plainSends(schedule: any[], sentLog: any[]): { at: number; taskId: string }[] {
+  const byKey = new Map<string, any>();
+  for (const e of schedule || []) if (e) byKey.set(entryKey(e), e);
+  const out: { at: number; taskId: string }[] = [];
+  for (const l of sentLog || []) {
+    if (!l?.k || l.skip || l.rang || !l.task_id || l.type === 'roundup') continue;
+    if (byKey.get(l.k)?.light) continue;
+    const at = utcMs(l.at);
+    if (Number.isFinite(at)) out.push({ at, taskId: String(l.task_id) });
+  }
+  return out;
+}
+
+// For each open task: the days (theirs, already over) a plain Smart Reminder
+// about it went out that aren't on its put_off_days yet. It's still open, so
+// it wasn't done that day. Birthdays and events have their own reminders.
+function silentPutOffDays(pool: any[], sends: { at: number; taskId: string }[], dayOf: (ms: number) => string, todayStr: string) {
+  const out: { task: any; had: string[]; adds: string[]; days: string[] }[] = [];
+  for (const t of pool || []) {
+    if (!t || t.status !== 'active') continue;
+    if (t.classification === 'event' || t.classification === 'birthday' || t.birthday_person) continue;
+    const had: string[] = Array.isArray(t.put_off_days) ? t.put_off_days.filter((d: any) => typeof d === 'string') : [];
+    const adds = new Set<string>();
+    for (const s of sends) {
+      if (s.taskId !== t.id) continue;
+      const d = dayOf(s.at);
+      if (d < todayStr && !had.includes(d)) adds.add(d);
+    }
+    if (!adds.size) continue;
+    out.push({ task: t, had, adds: [...adds].sort(), days: [...new Set([...had, ...adds])].sort().slice(-30) });
+  }
+  return out;
+}
+
 // What ARE THEY HELPING? sees for one person: the presses on Smart Reminders
 // it counts, how many of those tasks got finished that day, and whether it
 // would ask or (on one a day) pause. Also what helping_preview returns.
@@ -2689,14 +2770,29 @@ function helpingLook(p: {
     if (ownReminderMoments(t, timeZone, lastSmart, at).some((ms) => ms > lastSmart && ms <= at + 60 * 1000)) continue;
     presses.push({ at, task_id: taskId, title: String(t.title || '').slice(0, 60), choice, day: dayOf(at) });
   }
+  // On plain notifications nothing is pressed (SILENT PUT-OFFS): each plain
+  // Smart Reminder on a day that's over stands in for a press. Finished that
+  // day, it counts as helped; still open, that day was a put-off.
+  if (onPlainNotifications(user)) {
+    const today = dayOf(nowMs);
+    for (const s of plainSends(schedule, sentLog)) {
+      if (s.at < fromMs || s.at > nowMs) continue;
+      const day = dayOf(s.at);
+      if (day >= today) continue;
+      const t = taskById.get(s.taskId);
+      if (!t) continue;
+      presses.push({ at: s.at, task_id: s.taskId, title: String(t.title || '').slice(0, 60), choice: 'silent', day });
+    }
+  }
   presses.sort((a, b) => a.at - b.at);
-  const days = new Set(presses.map((x) => x.day));
   // One per task per day: was it finished that day?
   const pairs = new Map<string, { task_id: string; day: string; at: number; finished: boolean }>();
   for (const x of presses) {
     const k = `${x.task_id}|${x.day}`;
     if (!pairs.has(k)) pairs.set(k, { task_id: x.task_id, day: x.day, at: x.at, finished: finishedThatDay(taskById.get(x.task_id), x.at, dayOf) });
   }
+  // Days with a put-off: any press, or a plain reminder whose task stayed open.
+  const days = new Set(presses.filter((x) => x.choice !== 'silent' || !pairs.get(`${x.task_id}|${x.day}`)?.finished).map((x) => x.day));
   const finishedPairs = [...pairs.values()].filter((x) => x.finished).length;
   const pattern = days.size >= 4 && pairs.size > 0 && finishedPairs / pairs.size < 0.25;
   const rested = askStage === 'first';
