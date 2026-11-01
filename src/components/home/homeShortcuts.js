@@ -30,7 +30,7 @@ export const HOME_SHORTCUTS = [
   { key: "pomodoro", title: "Pomodoro", icon: Timer, page: "FocusTimer" },
   { key: "decisions", title: "Decision Maker", icon: Shuffle, page: "DecisionMaker" },
   { key: "places", title: "Places", icon: MapPin, page: "Places" },
-  { key: "talk", title: "Talk It Out", icon: MessageCircleHeart, page: "SupportSpace" },
+  { key: "talk", title: "Support Space", icon: MessageCircleHeart, page: "SupportSpace" },
   { key: "insights", title: "Insights", icon: TrendingUp, page: "Progress" },
   // No Diary tile since Oct 31 2026 (Diary left the menu); a saved "diary"
   // tile is dropped by known() below.
