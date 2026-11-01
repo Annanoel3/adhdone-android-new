@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { BookOpen, Link as LinkIcon, Video, FileText, Wrench, Globe, CheckCircle2, Lightbulb, X, Upload, Loader2 } from "lucide-react";
+import { BookOpen, Link as LinkIcon, Video, FileText, Wrench, Globe, CheckCircle2, Lightbulb, X, Upload, Loader2, Pencil } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { base44 } from "@/api/base44Client";
 import { dialogLook } from "./goalsTheme";
@@ -24,8 +24,21 @@ const resourceTypeIcons = {
   other: LinkIcon,
 };
 
-export default function StepDetailsModal({ step, isOpen, onClose, onUpdate, theme, specialMode }) {
+export default function StepDetailsModal({ step, isOpen, onClose, onUpdate, onRename, theme, specialMode }) {
   const D = dialogLook(theme, specialMode);
+  // The title renames in place here too, the same as on the goal's page
+  // (onRename = GoalDetail's renameStep, which also renames the step's task
+  // if it still has the step's name). Pencil beside it (Nov 1 2026).
+  const [title, setTitle] = useState(step?.title || "");
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleText, setTitleText] = useState(step?.title || "");
+  const saveTitle = async () => {
+    const trimmed = titleText.trim();
+    setEditingTitle(false);
+    if (!trimmed || trimmed === title) { setTitleText(title); return; }
+    setTitle(trimmed);
+    await onRename?.({ ...step, title }, trimmed);
+  };
   const [notes, setNotes] = useState(step?.notes || "");
   const [pictures, setPictures] = useState(step?.pictures || []);
   const [isSaving, setIsSaving] = useState(false);
@@ -68,7 +81,28 @@ export default function StepDetailsModal({ step, isOpen, onClose, onUpdate, them
           grid's children get min-w-0 so long words wrap instead. */}
       <DialogContent className={`max-h-[90vh] overflow-y-auto overflow-x-hidden w-[calc(100vw-2rem)] max-w-2xl rounded-2xl [&>*]:min-w-0 ${D.surface}`} onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader className="min-w-0">
-          <DialogTitle className={`text-xl text-left break-words pr-6 ${D.title}`}>{step.title}</DialogTitle>
+          {editingTitle && onRename ? (
+            <div className="flex items-center gap-2 pr-6">
+              <input
+                autoFocus
+                className={`flex-1 min-w-0 text-base font-semibold border rounded-lg px-2 py-1 focus:outline-none ${D.field}`}
+                value={titleText}
+                onChange={(e) => setTitleText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") saveTitle(); if (e.key === "Escape") { setEditingTitle(false); setTitleText(title); } }}
+                aria-label="Step name"
+              />
+              <Button size="sm" onClick={saveTitle} className="bg-violet-600 hover:bg-violet-700 text-white">Save</Button>
+            </div>
+          ) : (
+            <DialogTitle
+              className={`text-xl text-left break-words pr-6 ${onRename ? "cursor-pointer" : ""} ${D.title}`}
+              onClick={() => { if (onRename) { setTitleText(title); setEditingTitle(true); } }}
+              title={onRename ? "Tap to edit" : undefined}
+            >
+              {title}
+              {onRename && <Pencil className="inline-block w-3.5 h-3.5 ml-2 -mt-1 align-middle opacity-60" aria-hidden="true" />}
+            </DialogTitle>
+          )}
         </DialogHeader>
 
         <div className="space-y-6 min-w-0">
