@@ -10,6 +10,10 @@ import GoalsGate from "@/components/goals/GoalsGate";
 import { useGoalTheme, goalLook } from "@/components/goals/goalsTheme";
 import { runGoalSync } from "@/components/goals/GoalStepSync";
 import { notifyGoalsChanged } from "@/components/goals/goalLogic";
+import {
+  readLocalSession, writeLocalSession, clearLocalSession, sessionTime, loadAccountDraft,
+  saveAccountDraft, completeAccountDraft, persistSession, flushAccountDraft,
+} from "@/components/goals/plannerDraft";
 
 // The Goals planner (ported Oct 31 2026 from Anna's Goals app, Planner.jsx;
 // GOALS_PORT.md). Same conversation, same approval flow, same plan view. In
@@ -17,22 +21,16 @@ import { notifyGoalsChanged } from "@/components/goals/goalLogic";
 // (never an assistant message), and saving a plan puts its first step on the
 // task list (GoalStepSync) instead of booking goal notifications.
 
-const SESSION_KEY = "plannerInProgress";
-
-function readSession() {
-  try {
-    const s = localStorage.getItem(SESSION_KEY);
-    return s ? JSON.parse(s) : null;
-  } catch (e) {
-    return null;
-  }
-}
-function writeSession(data) {
-  try { localStorage.setItem(SESSION_KEY, JSON.stringify(data)); } catch (e) { /* storage unavailable */ }
-}
-function clearSession() {
-  try { localStorage.removeItem(SESSION_KEY); } catch (e) { /* storage unavailable */ }
-}
+// The chat in progress is saved on this device (localStorage, as before) and
+// to the account (GoalPlannerDraft; plannerDraft.js), so it comes back on any
+// device (Anna, Nov 1 2026). readSession: this device's copy.
+const readSession = readLocalSession;
+// Every save goes to the account right away too: before the planner is asked
+// and after each answer.
+const writeSession = (data) => persistSession(data, { now: true });
+// The chat is finished (a goal saved): gone from this device, marked
+// completed on the account (kept, never restored).
+const clearSession = () => { clearLocalSession(); completeAccountDraft(); };
 const deviceTz = () => {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch (e) { return null; }
 };
@@ -70,18 +68,39 @@ function Planner() {
   const [saveError, setSaveError] = useState(false);
   const [isDraftingFirstPlan, setIsDraftingFirstPlan] = useState(false);
   const [user, setUser] = useState(null);
+  // A long plan still being written (continue_plan), one call at a time.
+  const [continuing, setContinuing] = useState(false);
   // "Plan New Goal" (and Goals' New Goal, /Planner?new=1) opens a fresh plan.
   // In the Goals app that button left the goals list on screen.
   const [forceNew, setForceNew] = useState(() => new URLSearchParams(window.location.search).get("new") === "1");
   const messagesEndRef = useRef(null);
   const messagesRef = useRef(messages);
   const savedStepsRef = useRef(null);
+  const continuingRef = useRef(false);
+  const convoGenRef = useRef(0); // bumped when the conversation is replaced
+  const touchedRef = useRef(false); // they've typed or started fresh since opening
+  const mountedRef = useRef(true);
+  const editingGoalRef = useRef(null);
+  const pendingActionRef = useRef(null);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { theme, specialMode } = useGoalTheme();
   const L = goalLook(theme, specialMode);
 
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { editingGoalRef.current = editingGoal; }, [editingGoal]);
+  useEffect(() => { pendingActionRef.current = pendingAction; }, [pendingAction]);
+  // Leaving the page or the app: a save still waiting goes now.
+  useEffect(() => {
+    mountedRef.current = true;
+    const onHide = () => { if (document.visibilityState === "hidden") flushAccountDraft(); };
+    document.addEventListener("visibilitychange", onHide);
+    return () => {
+      mountedRef.current = false;
+      document.removeEventListener("visibilitychange", onHide);
+      flushAccountDraft();
+    };
+  }, []);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isChatLoading]);
@@ -100,23 +119,47 @@ function Planner() {
 
   useEffect(() => {
     base44.auth.me().then(setUser).catch(() => {});
-    loadGoals().then((all) => {
-      const editId = searchParams.get("edit");
+    const editId = searchParams.get("edit");
+    Promise.all([loadGoals(), editId ? Promise.resolve(null) : loadAccountDraft()]).then(([all, account]) => {
       if (editId) {
         const goal = all.find((g) => g.id === editId);
         if (goal) startEditSession(goal);
         return;
       }
-      // Messages were restored above. Bring back the approval buttons only if
-      // the last message is a full plan.
-      const d = readSession();
+      // They typed or started fresh while this loaded: what they're doing wins.
+      if (touchedRef.current) return;
+      // This device's chat (shown above) or the account's, whichever changed
+      // last. The account's comes back on any device; this device's goes up
+      // to the account when it's the newer one.
+      let d = readSession();
+      if (account && sessionTime(account) > sessionTime(d)) {
+        if (account.completed || account.messages.length === 0) {
+          // Finished or started fresh on another device since: not restored.
+          if (d?.messages?.length) {
+            clearLocalSession();
+            messagesRef.current = [];
+            setMessages([]);
+          }
+          d = null;
+        } else {
+          d = writeLocalSession(account, { keepTime: true });
+          messagesRef.current = account.messages;
+          setMessages(account.messages);
+        }
+      } else if (d?.messages?.length) {
+        saveAccountDraft(d, { now: true });
+      }
+      // Bring back the approval buttons only if the last message is a full plan.
       const lastMsg = d?.messages?.[d.messages.length - 1];
       const lastContent = lastMsg?.content || "";
       const looksLikePlan = lastContent.includes("Month 1") && (lastContent.includes("Month 2") || lastContent.includes("Week 1"));
       // A conversation about changing a saved goal stays about that goal (the
       // Goals app restored it as a new plan, and approving it made a second goal).
       const editGoal = d?.editGoalId ? all.find((g) => g.id === d.editGoalId) : null;
-      if (editGoal && d?.messages?.length) setEditingGoal(editGoal);
+      if (editGoal && d?.messages?.length) {
+        setEditingGoal(editGoal);
+        editingGoalRef.current = editGoal;
+      }
       if (editGoal && lastMsg?.role === "assistant" && (d?.pendingAction === "edit_approved" || lastContent.includes("EDIT_APPROVED"))) {
         setPendingAction("edit_approved");
         setPendingGoalId(editGoal.id);
@@ -124,11 +167,17 @@ function Planner() {
       // Closed while the planner was answering: the question is saved, the
       // answer never came. Offer to ask again.
       if (lastMsg?.role === "user") setChatError(true);
+      // A plan that wasn't finished (closed while it was being written, or
+      // from before long plans were finished): pick up where it stopped.
+      if (lastMsg?.role === "assistant" && planNeedsWriting(d.messages)) continueWriting();
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const startEditSession = (goal) => {
+    convoGenRef.current += 1;
+    touchedRef.current = true;
+    editingGoalRef.current = goal;
     setEditingGoal(goal);
     setChatError(false);
     if (goal.conversation_history && goal.conversation_history.length > 0) {
@@ -171,13 +220,93 @@ function Planner() {
     setChatError(false);
     setSaveError(false);
     setStepsFailed(false);
-    writeSession({ startedAt: new Date().toISOString(), messages: [], pendingAction: null });
+    convoGenRef.current += 1;
+    touchedRef.current = true;
+    editingGoalRef.current = null;
+    // A fresh start: this device's chat is emptied and the account's draft
+    // marked finished.
+    writeLocalSession({ startedAt: new Date().toISOString(), messages: [], pendingAction: null });
+    completeAccountDraft();
   };
 
   const startFreshPlan = () => {
     handleNewPlan();
     setForceNew(true);
   };
+
+  // A long plan the time ran out on: continue_plan writes the rest, one call
+  // at a time (each with the planner's full time budget), at most 4 calls a
+  // go, into that same answer, saving after each. Then "Looks good" shows;
+  // if it still isn't finished, "Keep writing" (PlanProgress) runs it again.
+  const continueWriting = useCallback(async () => {
+    if (continuingRef.current) return;
+    const start = messagesRef.current;
+    const lastAt = start.length - 1;
+    if (lastAt < 0 || start[lastAt].role !== "assistant") return;
+    continuingRef.current = true;
+    setContinuing(true);
+    const gen = convoGenRef.current;
+    // Unfinished until the planner says otherwise, so a failed call leaves
+    // "Keep writing", never "Looks good".
+    if (start[lastAt].planIncomplete !== true) {
+      const marked = [...start.slice(0, lastAt), { ...start[lastAt], planIncomplete: true }];
+      messagesRef.current = marked;
+      setMessages(marked);
+    }
+    try {
+      for (let call = 0; call < 4; call++) {
+        const convo = messagesRef.current;
+        const idx = convo.length - 1;
+        const last = convo[idx];
+        if (!last || last.role !== "assistant") return;
+        const goal = editingGoalRef.current;
+        const payload = {
+          mode: "continue_plan",
+          messages: convo.slice(0, idx).filter((m) => m.role !== "system").map((m) => ({ role: m.role, content: m.content })),
+          plan_text: last.content,
+          tz: deviceTz(),
+        };
+        if (goal) payload.goal_id = goal.id;
+        let data = null;
+        try {
+          const res = await base44.functions.invoke("goalPlannerChat", payload);
+          data = res?.data || null;
+        } catch (e) {
+          console.error("[Planner] writing the rest of the plan failed:", e);
+        }
+        if (convoGenRef.current !== gen) return; // a fresh start or another goal since
+        if (!data || data.error || !data.message) continue;
+        const done = data.incomplete !== true;
+        const updatedMsg = {
+          ...last,
+          content: data.message,
+          planIncomplete: !done,
+          monthsDone: data.months_done ?? last.monthsDone ?? null,
+          monthsTotal: data.months_total ?? last.monthsTotal ?? null,
+          goalMonthTitles: { ...(last.goalMonthTitles || {}), ...(data.month_titles || {}) },
+        };
+        const updated = [...convo.slice(0, idx), updatedMsg];
+        messagesRef.current = updated;
+        persistSession({
+          startedAt: new Date().toISOString(),
+          messages: updated,
+          pendingAction: pendingActionRef.current || "plan_proposed",
+          completed: false,
+          editGoalId: goal?.id || null,
+        }, { now: true });
+        // Left the Planner: saved, and it carries on the next time it opens.
+        if (!mountedRef.current) return;
+        setMessages(updated);
+        if (done) {
+          setPendingAction("plan_proposed");
+          return;
+        }
+      }
+    } finally {
+      continuingRef.current = false;
+      setContinuing(false);
+    }
+  }, []);
 
   // One planner turn for the conversation as it stands (the user's message is
   // already in it). Used by Send and by Retry.
@@ -188,6 +317,7 @@ function Planner() {
     const planAlreadyWritten = convo.some((m) => m.role === "assistant" && /Month\s+\d+/i.test(m.content) && /Week\s+\d+/i.test(m.content));
     const isRevisionRequest = /revise|change|rewrite|redo|adjust|update|swap|remove|extend|shorten|easier|harder|restructure|skip|simplif|speed|slow|accelerate|compress|expand/i.test(latestText || "");
     setIsDraftingFirstPlan((!planAlreadyWritten && priorAssistantMessages >= 1) || (planAlreadyWritten && isRevisionRequest));
+    let needsMore = false;
     try {
       const payload = {
         messages: convo.filter((m) => m.role !== "system").map((m) => ({ role: m.role, content: m.content })),
@@ -203,8 +333,15 @@ function Planner() {
       const newMonthTitles = (month_titles && Object.keys(month_titles).length > 0)
         ? month_titles
         : (editingGoal?.month_titles || {});
-      const updatedMessages = [...convo, { role: "assistant", content: message, goalMonthTitles: newMonthTitles }];
+      // A plan the time ran out on comes back incomplete; the rest is written
+      // below (continueWriting).
+      const progress = typeof data.incomplete === "boolean"
+        ? { planIncomplete: data.incomplete, monthsDone: data.months_done ?? null, monthsTotal: data.months_total ?? null }
+        : {};
+      const updatedMessages = [...convo, { role: "assistant", content: message, goalMonthTitles: newMonthTitles, ...progress }];
+      messagesRef.current = updatedMessages;
       setMessages(updatedMessages);
+      needsMore = data.incomplete === true;
       writeSession({ startedAt: new Date().toISOString(), messages: updatedMessages, pendingAction: action || null, completed: false, editGoalId: editingGoal?.id || null });
 
       const looksLikeFullPlan = message.includes("Month 1") && (message.includes("Month 2") || message.includes("Week 1") || message.includes("Week 2"));
@@ -231,10 +368,12 @@ function Planner() {
       setIsChatLoading(false);
       setIsDraftingFirstPlan(false);
     }
-  }, [editingGoal, goals]);
+    if (needsMore) continueWriting();
+  }, [editingGoal, goals, continueWriting]);
 
   const sendMessage = useCallback(async (content) => {
-    if (!content || !content.trim() || isChatLoading) return;
+    if (!content || !content.trim() || isChatLoading || continuingRef.current) return;
+    touchedRef.current = true;
     const userMsg = { role: "user", content: content.trim() };
     const newMessages = [...messagesRef.current, userMsg];
     setMessages(newMessages);
@@ -387,6 +526,9 @@ function Planner() {
   const hasSavedSession = (readSession()?.messages?.length || 0) > 0;
   const showGoalsList = goalsLoaded && activeGoals.length > 0 && !editingGoal && isEmpty && !hasSavedSession && !forceNew;
   const lastIsUser = messages.length > 0 && messages[messages.length - 1].role === "user";
+  const lastMsg = messages[messages.length - 1];
+  // The plan in the last answer isn't finished: no "Looks good" until it is.
+  const planUnfinished = continuing || (lastMsg?.role === "assistant" && lastMsg.planIncomplete === true);
 
   return (
     <div className="min-h-full flex flex-col">
@@ -409,7 +551,7 @@ function Planner() {
             </div>
             <div className="flex items-center gap-2">
               {(editingGoal || messages.length > 0) && (
-                <Button variant="ghost" size="sm" onClick={handleNewPlan} disabled={isSaving || isChatLoading} className={`text-xs h-7 px-3 rounded-full ${L.soft}`}>
+                <Button variant="ghost" size="sm" onClick={handleNewPlan} disabled={isSaving || isChatLoading || continuing} className={`text-xs h-7 px-3 rounded-full ${L.soft}`}>
                   {editingGoal ? "Back" : "New"}
                 </Button>
               )}
@@ -433,6 +575,10 @@ function Planner() {
 
             {isChatLoading && <TypingIndicator isDrafting={isDraftingFirstPlan} L={L} />}
 
+            {planUnfinished && !isChatLoading && (
+              <PlanProgress msg={lastMsg} writing={continuing} onKeepWriting={() => continueWriting()} L={L} />
+            )}
+
             {chatError && !isChatLoading && lastIsUser && (
               <div className={`rounded-2xl px-4 py-3 flex items-center justify-between gap-3 ${L.card}`}>
                 <p className={`text-sm ${L.danger}`}>Couldn't reach the planner. Your conversation is saved.</p>
@@ -443,7 +589,7 @@ function Planner() {
             )}
 
             {/* 2-step approval flow */}
-            {pendingAction === "plan_proposed" && !isChatLoading && !saved && !editingGoal && !showCelebration && !showApprovalModal && (
+            {pendingAction === "plan_proposed" && !planUnfinished && !isChatLoading && !saved && !editingGoal && !showCelebration && !showApprovalModal && (
               <div className="flex flex-col items-center gap-3 pt-4 pb-4">
                 <Button onClick={() => setShowApprovalModal(true)} className={`rounded-2xl px-6 py-2.5 font-semibold shadow-lg ${L.primary}`}>
                   <Check className="w-4 h-4 mr-2" />
@@ -456,7 +602,7 @@ function Planner() {
             )}
 
             {/* Create Plan confirmation */}
-            {showApprovalModal && !saved && !showCelebration && (
+            {showApprovalModal && !planUnfinished && !saved && !showCelebration && (
               <div className={`flex flex-col items-center gap-3 pt-4 pb-4 border-t-2 border-dashed mt-4 ${L.dark ? "border-gray-700" : "border-gray-300"}`}>
                 <p className={`text-sm font-medium ${L.text}`}>Create your plan now?</p>
                 <Button onClick={() => { setShowCelebration(true); handleSaveNewGoal(); }} className="rounded-2xl px-6 py-2.5 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg">
@@ -470,7 +616,7 @@ function Planner() {
             )}
 
             {/* Edit session: the planner wrote a revised plan */}
-            {pendingAction === "plan_proposed" && !isChatLoading && !saved && editingGoal && !showCelebration && (
+            {pendingAction === "plan_proposed" && !planUnfinished && !isChatLoading && !saved && editingGoal && !showCelebration && (
               <div className="flex flex-col items-center gap-3 pt-4 pb-4">
                 <Button onClick={() => { setPendingGoalId(editingGoal.id); setShowCelebration(true); handleApplyEdits(); }} className="rounded-2xl px-6 py-2.5 font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg">
                   <Check className="w-4 h-4 mr-2" />
@@ -581,12 +727,12 @@ function Planner() {
                   : "Continue the conversation…"
             }
             className={`flex-1 min-h-[56px] max-h-64 text-sm resize-none rounded-2xl ${L.input}`}
-            disabled={isChatLoading}
+            disabled={isChatLoading || continuing}
             rows={1}
           />
           <button
             onClick={() => sendMessage(input)}
-            disabled={!input.trim() || isChatLoading}
+            disabled={!input.trim() || isChatLoading || continuing}
             aria-label="Send"
             className="w-10 h-10 flex-shrink-0 rounded-full bg-gradient-to-br from-violet-600 to-indigo-600 flex items-center justify-center text-white shadow-md transition-all disabled:opacity-40 disabled:shadow-none"
           >
@@ -749,16 +895,10 @@ function parsePlanHierarchy(text, goalMonthTitles = {}) {
     }
   }
 
-  const totalMonthsMatch = text.match(/(\d+)[\s-]month/i);
-  const titlesMaxMonth = Object.keys(goalMonthTitles).length > 0
-    ? Math.max(...Object.keys(goalMonthTitles).map((k) => parseInt(k)).filter((n) => !isNaN(n)))
-    : 0;
-  const totalMonths = Math.min(36, Math.max(totalMonthsMatch ? parseInt(totalMonthsMatch[1]) : 0, titlesMaxMonth));
-  if (totalMonths > months.length) {
-    for (let m = months.length + 1; m <= totalMonths; m++) {
-      months.push({ title: "Month " + m, weeks: [1, 2, 3, 4].map((n) => ({ title: "Week " + n, tasks: [], description: "" })) });
-    }
-  }
+  // The Goals app padded empty month cards up to the plan's length here, so a
+  // plan the time ran out on looked finished with empty months (Anna, Nov 1
+  // 2026: months 15+ empty). Only the months written are shown; an unfinished
+  // plan shows how far it got and "Keep writing" (PlanProgress).
 
   for (const month of months) {
     const mNum = month.title.match(/\d+/)?.[0];
@@ -770,6 +910,65 @@ function parsePlanHierarchy(text, goalMonthTitles = {}) {
 
   months.sort((a, b) => parseInt(a.title.match(/\d+/)?.[0] || 999) - parseInt(b.title.match(/\d+/)?.[0] || 999));
   return { months, preamble: preamble.join("\n") };
+}
+
+// How long the plan says it is: its own "N-month" words or its month titles
+// (what the Goals app padded the plan view up to).
+function planLength(text, goalMonthTitles = {}) {
+  const totalMonthsMatch = String(text || "").match(/(\d+)[\s-]month/i);
+  const titleNums = Object.keys(goalMonthTitles || {}).map((k) => parseInt(k, 10)).filter((n) => !isNaN(n));
+  const titlesMaxMonth = titleNums.length ? Math.max(...titleNums) : 0;
+  return Math.min(36, Math.max(totalMonthsMatch ? parseInt(totalMonthsMatch[1], 10) : 0, titlesMaxMonth));
+}
+
+// Months 1..N written with something in them, in a row.
+function monthsWritten(text) {
+  const { months } = parsePlanHierarchy(String(text || ""));
+  const nums = new Set(months
+    .filter((m) => m.weeks.some((w) => w.tasks.length > 0))
+    .map((m) => parseInt(m.title.match(/\d+/)?.[0] || "0", 10)));
+  let n = 0;
+  while (nums.has(n + 1)) n++;
+  return n;
+}
+
+// The last answer is a plan that isn't finished: the planner said so, or (a
+// chat saved before Nov 1 2026) it ends with the old "continue expanding any
+// remaining months" line or has fewer months written than it says it has.
+function planNeedsWriting(msgs) {
+  const last = msgs?.[msgs.length - 1];
+  if (!last || last.role !== "assistant") return false;
+  if (last.planIncomplete === true) return true;
+  if (last.planIncomplete === false) return false;
+  const text = String(last.content || "");
+  if (!/Month\s+\d+/i.test(text) || !/Week\s+\d+/i.test(text)) return false;
+  if (/continue expanding any remaining months/i.test(text)) return true;
+  return planLength(text, last.goalMonthTitles || {}) > monthsWritten(text);
+}
+
+// A long plan being written, or stopped before its last month.
+function PlanProgress({ msg, writing, onKeepWriting, L }) {
+  const from = (Number(msg?.monthsDone) || 0) + 1;
+  const to = Number(msg?.monthsTotal) || 0;
+  const range = to >= from ? (to === from ? `month ${from}` : `months ${from}–${to}`) : null;
+  if (writing) {
+    return (
+      <div className={`rounded-2xl px-4 py-3 flex items-center gap-2 ${L.card}`}>
+        <Loader2 className={`w-4 h-4 animate-spin flex-shrink-0 ${L.accent}`} />
+        <p className={`text-sm ${L.soft}`}>{range ? `Writing ${range}…` : "Writing the rest of your plan…"}</p>
+      </div>
+    );
+  }
+  return (
+    <div className={`rounded-2xl px-4 py-3 flex items-center justify-between gap-3 ${L.card}`}>
+      <p className={`text-sm ${L.text}`}>
+        {range ? `Your plan isn't finished: ${range} ${to === from ? "isn't" : "aren't"} written yet.` : "Your plan isn't finished yet."}
+      </p>
+      <Button size="sm" onClick={onKeepWriting} className={`rounded-xl text-xs font-semibold flex-shrink-0 ${L.primary}`}>
+        <RotateCw className="w-3.5 h-3.5 mr-1" /> Keep writing
+      </Button>
+    </div>
+  );
 }
 
 function WeekDropdown({ week, L }) {
