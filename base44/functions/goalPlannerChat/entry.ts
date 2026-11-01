@@ -1174,7 +1174,7 @@ Extract every single step. If the planner listed 48 steps, return all 48.`,
 //              "continue") assembles to the same months and weeks
 async function selfTest(openai: any, body: any, today: string) {
   const startedAt = Date.now();
-  const stage = ['chat', 'continue', 'extract'].includes(body?.stage) ? body.stage : 'chat';
+  const stage = ['chat', 'continue', 'extract', 'edit', 'edit_apply'].includes(body?.stage) ? body.stage : 'chat';
   const call = Math.max(1, Number(body?.call) || 1);
   const remaining = () => CHAT_BUDGET_MS - (Date.now() - startedAt);
   const seconds = () => Math.round((Date.now() - startedAt) / 1000);
@@ -1241,6 +1241,56 @@ async function selfTest(openai: any, body: any, today: string) {
     if (convo.length === 0 || !planText.trim()) return { error: 'messages and plan_text are required' };
     const r = await continuePlan(openai, { messages: convo, planText, goalId: null, city: null, today, startedAt, ...none });
     return afterPlan(convo, r.message, r, {});
+  }
+
+  // edit — coming back to a saved goal (its Change this plan button opens
+  // /Planner?edit=<id>, the chat it was made in): an edit session on this
+  // plan as if it were saved (nothing is), a change asked for, then "yes".
+  // edit_apply — what applying that edit would save (extractEdit; no writes).
+  if (stage === 'edit') {
+    const convo = cleanMessages(body?.messages);
+    if (convo.length === 0) return { error: 'messages (a conversation that ends with the plan) are required' };
+    const plan: any = await extractPlan(openai, convo, today);
+    const goal: any = {
+      id: 'selftest-goal', title: plan.title, description: plan.description, plan_summary: plan.plan_summary,
+      timeline: plan.timeline, target_date: plan.target_date, start_date: plan.start_date, status: 'active',
+      created_date: today, month_titles: plan.month_titles || {}, requires_daily_action: plan.requires_daily_action,
+      conversation_history: convo,
+    };
+    const steps = (plan.steps || []).map((s: any, i: number) => ({ ...s, id: `selftest-step-${i}`, goal_id: goal.id, status: 'pending' }));
+    const ask = String(body?.edit_request || 'Month 2 feels too hard for me. Can you make it easier?');
+    const msgs: any[] = [...convo, { role: 'user', content: ask }];
+    const ctx = { goalId: goal.id, city: null, today, startedAt, existingGoals: [goal], stepsByGoal: { [goal.id]: steps } };
+    const turns: any[] = [];
+    let r: any = await runChat(openai, { messages: msgs, ...ctx });
+    turns.push({ action: r.action, message: String(r.message || '').slice(0, 1500) });
+    msgs.push({ role: 'assistant', content: String(r.message || '') });
+    if (r.action !== 'edit_approved' && remaining() > 60 * 1000) {
+      msgs.push({ role: 'user', content: 'yes' });
+      r = await runChat(openai, { messages: msgs, ...ctx });
+      turns.push({ action: r.action, message: String(r.message || '').slice(0, 1500) });
+      msgs.push({ role: 'assistant', content: String(r.message || '') });
+    }
+    const { conversation_history: _h, ...goalShown } = goal;
+    return {
+      ...base, seconds: seconds(), steps_before: steps.length, turns, approved: r.action === 'edit_approved', done: false,
+      next: { selftest: true, stage: 'edit_apply', call: call + 1, messages: msgs, goal: goalShown, tz: body?.tz || null },
+    };
+  }
+  if (stage === 'edit_apply') {
+    const convo = cleanMessages(body?.messages);
+    if (convo.length === 0) return { error: 'messages are required' };
+    const { goalUpdates, otherUpdates, newSteps } = await extractEdit(openai, convo, body?.goal || {}, today);
+    const monthOf = (s: any) => parseInt(String(s?.phase || '').match(/Month\s+(\d+)/i)?.[1] || '0', 10);
+    return {
+      ...base, seconds: seconds(), done: true,
+      would_save: newSteps.length > 0,
+      steps_after: newSteps.length,
+      months_after: [...new Set(newSteps.map(monthOf).filter((n: number) => n > 0))].sort((a: any, b: any) => a - b),
+      goal_updates: otherUpdates,
+      month_titles_changed: Object.keys(goalUpdates?.month_titles || {}).length,
+      month2_steps: newSteps.filter((s: any) => monthOf(s) === 2).map((s: any) => ({ title: s.title, description: String(s.description || '').slice(0, 300) })),
+    };
   }
 
   // extract
