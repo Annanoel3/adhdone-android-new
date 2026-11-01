@@ -23,7 +23,7 @@
 //     A chat answer that holds a plan carries incomplete / months_done /
 //     months_total too; the Planner calls continue_plan until incomplete is
 //     false (Anna, Nov 1 2026: a long plan came out with months 15+ empty).
-//   { mode: 'step_feedback', goal_id, step_id, feedback?, tz? }
+//   { mode: 'step_feedback', goal_id, step_id, feedback?, days_late?, tz? }
 //                       → { kept, summary, changed: [{ id, phase, old_title, title, old_description, description }] }
 //     "How did it go?" after a step was marked done (Nov 1 2026): rewrites
 //     upcoming steps in place when the feedback calls for it, and adds the
@@ -1204,8 +1204,12 @@ Extract every single step. If the planner listed 48 steps, return all 48.`,
 const stepMonth = (s: any) => parseInt(String(s?.phase || '').match(/Month\s*(\d+)/i)?.[1] || '0', 10);
 const stepWeek = (s: any) => parseInt(String(s?.phase || '').match(/Week\s*(\d+)/i)?.[1] || '0', 10);
 
-async function planFromFeedback(openai: any, p: { goal: any; steps: any[]; step: any; feedback: string; today: string }) {
+async function planFromFeedback(openai: any, p: { goal: any; steps: any[]; step: any; feedback: string; today: string; daysLate?: number }) {
   const { goal, step, feedback, today } = p;
+  // Checked off after its week ended (Anna, Nov 1 2026: "if someone checks
+  // off late, the plan can readjust"): the app has already moved the later
+  // weeks' dates (goalWeeks.lateFinishShift); the planner may lighten them.
+  const daysLate = Math.max(0, Math.round(Number(p.daysLate) || 0));
   const sorted = [...(p.steps || [])].sort((a: any, b: any) => (Number(a.order_index) || 0) - (Number(b.order_index) || 0));
   const isDone = (s: any) => s.status === 'completed' || s.status === 'skipped' || s.id === step.id;
   const open = sorted.filter((s: any) => !isDone(s));
@@ -1241,6 +1245,7 @@ HOW TO DECIDE (judgment, the way a good coach would; not keywords):
 - Something helped: build on it, so it grows over the coming weeks.
 - Keep the goal, its timeline and the order of the weeks. Keep each week's theme unless the feedback says the direction itself is wrong.
 - Their answer is positive, neutral or very short, and the plan already fits: change nothing. Never rewrite for the sake of it.
+- They finished late (see TIMING, when it's there): the app has already moved the later weeks' dates, so never change dates or the number of weeks. Late is common and isn't a failure. Make the next few weeks lighter (smaller, shorter, fewer things) only when what they said, or how late it was, suggests the load is too much for them; keep what's working. A little late with a positive answer: change nothing.
 - Respect everything they set when planning: budget, time per day or week, start and end, what kind of help they want.
 - Same format and depth as the existing weeks: the first line is the concrete thing to do this week, then the same kind of lines (for example "Focus on: ...", "Reflect: ...", "Activity: ..."), one per line. No markdown headings, no bullets characters. Keep a link a week already has unless that activity is gone.
 - Only the weeks under UPCOMING may change, and only return the ones you change, by their id.
@@ -1256,6 +1261,7 @@ Answer with JSON only:
     theyPlanned ? `WHAT THEY SAID WHEN PLANNING (their words):\n${theyPlanned}` : '',
     earlier.length ? `WHAT THEY SAID ABOUT EARLIER WEEKS:\n${earlier.join('\n')}` : '',
     `THE WEEK THEY JUST FINISHED:\n${weekBlock(step)}`,
+    daysLate > 0 ? `TIMING: they checked this week off ${daysLate} day${daysLate === 1 ? '' : 's'} after it was due. The weeks after it have already been moved later to match.` : '',
     `HOW IT WENT, IN THEIR WORDS: "${String(feedback).slice(0, 2000)}"`,
     `UPCOMING (the only weeks you may change):\n\n${window.map(weekBlock).join('\n\n')}`,
   ].filter(Boolean).join('\n\n');
@@ -1310,7 +1316,7 @@ function feedbackTurns(step: any, feedback: string, summary: string) {
   ];
 }
 
-async function stepFeedback(base44: any, openai: any, goalId: string, stepId: string, feedbackIn: string, today: string) {
+async function stepFeedback(base44: any, openai: any, goalId: string, stepId: string, feedbackIn: string, today: string, daysLateIn = 0) {
   const goal = (await base44.entities.Goal.filter({ id: goalId }))?.[0];
   if (!goal) return { error: 'Goal not found' };
   const steps = await base44.entities.GoalStep.filter({ goal_id: goalId }, 'order_index', 1000);
@@ -1318,7 +1324,8 @@ async function stepFeedback(base44: any, openai: any, goalId: string, stepId: st
   if (!step) return { error: 'Step not found' };
   const feedback = String(feedbackIn || step.feedback || '').trim();
   if (!feedback) return { error: 'No feedback to read' };
-  const r = await planFromFeedback(openai, { goal, steps, step, feedback, today });
+  const daysLate = Math.max(Number(step.finished_days_late) || 0, Number(daysLateIn) || 0);
+  const r = await planFromFeedback(openai, { goal, steps, step, feedback, today, daysLate });
   for (const c of r.changes) {
     await base44.entities.GoalStep.update(c.id, {
       title: c.title,
@@ -1447,11 +1454,13 @@ async function selfTest(openai: any, body: any, today: string) {
     }));
     const step = steps[doneAt];
     if (!step) return { error: 'done_index is past the last step' };
-    const r = await planFromFeedback(openai, { goal, steps, step, feedback, today });
+    const daysLate = Math.max(0, Number(body?.days_late) || 0);
+    const r = await planFromFeedback(openai, { goal, steps, step, feedback, today, daysLate });
     return {
       ...base, seconds: seconds(), done: true,
       finished_step: { phase: step.phase, title: step.title },
       feedback,
+      days_late: daysLate,
       kept: r.kept,
       summary: r.summary,
       steps_after_it: steps.length - doneAt - 1,
@@ -1584,7 +1593,7 @@ export default async function (req: Request) {
     if (mode === 'step_feedback') {
       const stepId = typeof body?.step_id === 'string' ? body.step_id : '';
       if (!goalId || !stepId) return Response.json({ error: 'goal_id and step_id required' }, { status: 400 });
-      const out: any = await stepFeedback(base44, openai, goalId, stepId, typeof body?.feedback === 'string' ? body.feedback : '', today);
+      const out: any = await stepFeedback(base44, openai, goalId, stepId, typeof body?.feedback === 'string' ? body.feedback : '', today, Number(body?.days_late) || 0);
       return Response.json(out, { status: out.error ? 422 : 200 });
     }
 
