@@ -429,6 +429,44 @@ ${input.finished.join("\n")}`,
   };
 }
 
+const DAILY_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: { daily: { type: "boolean" } },
+  required: ["daily"],
+};
+
+// "Every day around this time?" (Anna, Nov 1 2026): whether a one-time to-do
+// someone just checked off is the kind of thing people normally do every day,
+// so the app can offer to make it repeat. Asked once per kind of task
+// (logTaskCompletion keeps the answer per task_family).
+export async function judgeDailyThing(input: { title: string; said?: string | null }): Promise<boolean> {
+  const openai = lean(new OpenAI({ apiKey: Deno.env.get("OPENAI_API_KEY") }), { name: 'runTaskParse' });
+  const completion = await openai.chat.completions.create({
+    model: MODEL,
+    reasoning_effort: "low",
+    messages: [
+      {
+        role: "system",
+        content: `Someone just checked off a to-do they had added as a one-time thing. Decide whether it's something most people who write this would normally do every day, so the app can offer to make it repeat daily.
+
+Daily: taking a medication, pill, birth control or vitamin; feeding a pet or giving a pet its medicine; a child's homework; brushing teeth; a daily walk; checking email daily.
+
+Not daily: anything done weekly or less (laundry, trash night, cleaning the bathroom, groceries), errands, calls, appointments, bills, one-off projects, and anything the wording marks as a one-time thing ("pick up my pills", "refill the prescription", "finish the last of the antibiotics").
+
+When it isn't clearly a daily thing, answer daily false.`,
+      },
+      {
+        role: "user",
+        content: `To-do: "${String(input.title || "").slice(0, 160)}"${input.said && String(input.said).trim().toLowerCase() !== String(input.title || "").trim().toLowerCase() ? `\nWhat they typed or said: "${String(input.said).slice(0, 200)}"` : ""}`,
+      },
+    ],
+    response_format: { type: "json_schema", json_schema: { name: "daily_thing", strict: true, schema: DAILY_SCHEMA } },
+  });
+  const parsed = JSON.parse(completion.choices?.[0]?.message?.content || "{}");
+  return parsed?.daily === true;
+}
+
 // ── Two alarms at about the same time: one alarm or two? ────────────────────
 // Anna, Oct 10 2026: "If two tasks would go well together and are closely
 // scheduled, then yeah, combine. If two tasks are super different from each
