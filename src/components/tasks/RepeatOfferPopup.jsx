@@ -64,13 +64,12 @@ let lastLookAt = 0;
 let looking = false;
 let timers = [];
 let listening = false;
-let pendingUntil = 0; // still watching for an offer after a check-off
 let upNow = false; // an offer is waiting its turn or on screen
 
-// For the "What's next?" box (WhatsNextPopup): it waits for this offer, since
-// a Yes here means the list isn't empty after all.
-export function repeatOfferBusy() {
-  return upNow || Date.now() < pendingUntil;
+// For the "What's next?" box (WhatsNextPopup): it waits while an offer is up,
+// since a Yes here means the list isn't empty after all.
+export function repeatOfferUp() {
+  return upNow;
 }
 
 async function findOffer() {
@@ -116,14 +115,10 @@ function afterDone() {
   timers.forEach(clearTimeout);
   timers = [];
   let settled = false;
-  pendingUntil = Date.now() + AFTER_DONE_MS[AFTER_DONE_MS.length - 1] + 1000;
   for (const wait of AFTER_DONE_MS) {
     timers.push(setTimeout(async () => {
       if (settled) return;
-      if (await look(true)) {
-        settled = true;
-        pendingUntil = 0;
-      }
+      if (await look(true)) settled = true;
     }, wait));
   }
 }
