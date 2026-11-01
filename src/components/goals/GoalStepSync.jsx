@@ -5,8 +5,13 @@ import { goalsEnabled } from "./goalsAccess";
 import {
   GOALS_CHANGED, notifyGoalsChanged, todayKey, sortSteps, isStepOpen, isHabitGoal, goalStarted,
   currentStep, goalContextLine, shortNotes, openGoalTasks, createGoalTask, retargetTask,
-  closeOutTask, deleteLinkedTask, unparkPausedTasks,
+  closeOutTask, deleteLinkedTask, unparkPausedTasks, isRepeatingTask, applyLateShift,
 } from "./goalLogic";
+import { lateFinishShift } from "./goalWeeks";
+
+// The goal's weekly step tasks (an old repeating one a person changed, from
+// before Nov 1 2026, is left as it is and doesn't count).
+const weeklyTasks = async (goalId) => (await openGoalTasks(goalId)).filter((t) => !isRepeatingTask(t));
 
 // Keeps every goal's ONE open task true (goalLogic.js says what that is).
 // Mounted once in Layout; does nothing for an account Goals isn't open to
@@ -71,14 +76,14 @@ async function makeTaskForStep(goal, step, steps, user, habit) {
   await sleep(1500);
   const again = await stepById(step.id);
   if (!again || again.task_claim !== token || again.task_id || again.task_dismissed || !isStepOpen(again)) return false;
-  if ((await openGoalTasks(goal.id)).length > 0) {
+  if ((await weeklyTasks(goal.id)).length > 0) {
     await base44.entities.GoalStep.update(step.id, { task_claim: null });
     return false; // someone else's is there; the next run links it
   }
   const task = await createGoalTask(goal, again, steps, user, habit);
   await base44.entities.GoalStep.update(step.id, { task_id: task.id, task_claim: null, task_dismissed: false });
   // Two phones (or tabs) that both got through: keep the first one made.
-  const after = (await openGoalTasks(goal.id)).sort(byCreated);
+  const after = (await weeklyTasks(goal.id)).sort(byCreated);
   if (after.length > 1 && after[0].id !== task.id) {
     // The step points at the kept one first, so removing this one isn't read
     // as the person deleting their step's task (onTaskUpdate).
@@ -110,9 +115,9 @@ async function syncGoal(goal, user, today) {
   let steps = sortSteps(await base44.entities.GoalStep.filter({ goal_id: goal.id }, "order_index", 1000));
   const habit = isHabitGoal(goal, steps);
 
-  // A plain step's task finished or un-finished where onTaskUpdate didn't get
-  // to it (it normally does): the step follows its task.
-  if (!habit && steps.some((s) => s.task_id)) {
+  // A step's task finished or un-finished where onTaskUpdate didn't get to it
+  // (it normally does): the step follows its task.
+  if (steps.some((s) => s.task_id)) {
     const linked = await base44.entities.Task.filter({ goal_id: goal.id }, "-created_date", 300).catch(() => []);
     const byId = new Map((linked || []).map((t) => [t.id, t]));
     let fixed = false;
@@ -133,6 +138,17 @@ async function syncGoal(goal, user, today) {
     }
   }
 
+  // Checked off after its week ended: the weeks after it move later, so the
+  // next one starts the day after (before its task is made, so the task gets
+  // the new date).
+  const shift = lateFinishShift(steps);
+  if (shift) {
+    await applyLateShift(goal, shift, steps, habit);
+    changed = true;
+    steps = sortSteps(await base44.entities.GoalStep.filter({ goal_id: goal.id }, "order_index", 1000));
+    open = await openGoalTasks(goal.id);
+  }
+
   const current = goalStarted(goal, today) ? currentStep(goal, steps, today) : null;
   if (!current) {
     // Every step done (the last one just finished): nothing stays open.
@@ -142,10 +158,25 @@ async function syncGoal(goal, user, today) {
     return changed;
   }
 
-  // The one task to keep: the current step's, else (a habit) its repeating
-  // task, else the oldest open one, which then moves to the current step.
+  // A daily-practice goal's repeating task from before Nov 1 2026: untouched,
+  // it becomes the current step's weekly task (changed in place, nothing
+  // deleted); one the person changed stays exactly as it is, and the step
+  // gets its weekly task alongside it.
+  for (const t of open.filter(isRepeatingTask)) {
+    const itsStep = steps.find((s) => s.id === t.goal_step_id) || null;
+    if (untouched(t, itsStep) && !open.some((x) => !isRepeatingTask(x))) {
+      await retargetTask(t, goal, current, steps, habit, itsStep);
+      if (itsStep && itsStep.id !== current.id && itsStep.task_id === t.id) await base44.entities.GoalStep.update(itsStep.id, { task_id: null });
+      changed = true;
+    } else {
+      console.warn(`[GoalStepSync] goal ${goal.id}: an old repeating task (${t.id}) the person changed is left as is`);
+    }
+  }
+  open = await weeklyTasks(goal.id);
+
+  // The one task to keep: the current step's, else the oldest open one, which
+  // then moves to the current step.
   let keep = open.find((t) => t.goal_step_id === current.id)
-    || (habit ? open.find((t) => t.recurrence_pattern && t.recurrence_pattern !== "none") : null)
     || [...open].sort(byCreated)[0]
     || null;
 
@@ -187,14 +218,22 @@ async function syncGoal(goal, user, today) {
       await base44.entities.GoalStep.update(current.id, { task_dismissed: true, task_id: null });
       return true;
     }
-    if (t.status !== "completed") return changed;
+    if (t.status !== "completed") {
+      // An old repeating task the person changed (left as is): the step
+      // still gets its weekly task.
+      if (!isRepeatingTask(t)) return changed;
+      await base44.entities.GoalStep.update(current.id, { task_id: null });
+      current.task_id = null;
+      if (await makeTaskForStep(goal, current, steps, user, habit)) changed = true;
+      return changed;
+    }
     // Checked off when the goal was marked done (no longer this step's): the
     // goal was reopened, so the step gets a fresh task.
     const closedOut = t.goal_step_id !== current.id;
-    // A plain step's task finished: the step is marked done above or by
-    // onTaskUpdate. A habit's copy finished without its next copy: wait two
-    // minutes (the copy may be on its way), then make a fresh one.
-    if (!habit && !closedOut) return changed;
+    // The step's task finished: the step is marked done above or by
+    // onTaskUpdate. An old repeating copy finished without its next copy:
+    // wait two minutes (the copy may be on its way), then make a fresh one.
+    if (!closedOut && !isRepeatingTask(t)) return changed;
     const doneMs = Date.parse(t.completed_at || t.updated_date || "");
     if (!closedOut && Number.isFinite(doneMs) && Date.now() - doneMs < 2 * 60 * 1000) return changed;
     await base44.entities.GoalStep.update(current.id, { task_id: null });
