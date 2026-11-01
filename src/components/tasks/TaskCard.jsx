@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/popover";
 import { formatTimeRange } from "../utils/timeRangeLabel";
 import SubtaskQuickAdd from "./SubtaskQuickAdd";
+import BreakItDownOffer from "./BreakItDownOffer";
 import LifeAreaPill, { TagPill } from "./LifeAreaPill";
 import { checkDuePushEgg } from "../eastereggs/duePushEgg";
 import { firstDateMakesDeadline, isPastDue } from "../utils/todayTasks";
@@ -1145,6 +1146,12 @@ export default function TaskCard({
             {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
           </button>
         </div>
+
+        {/* A several-steps job offers its break-down right here, without
+            opening the card (opened, the same button is in the card). */}
+        {!expanded && (
+          <BreakItDownOffer task={task} theme={theme} subtaskCount={subtaskCount || 0} onRefreshTasks={onRefreshTasks} />
+        )}
 
         {/* Expanded section: all other info + inline editing */}
         {expanded && (
