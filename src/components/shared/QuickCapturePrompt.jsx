@@ -1651,9 +1651,14 @@ const NOTES_BUILD_ON_PLAY = true;
 // a ringing alarm) is live on Google Play, Oct 12 2026, and build 41 (1.3.18)
 // was accepted the same day. Build 42 (1.3.19: per-part capture hand-off,
 // event alarms with event buttons only, wake-time and alarm fixes) was
-// approved on Google Play Oct 14 2026.
+// approved on Google Play Oct 14 2026. Build 45 (1.3.22) replaced 42 in
+// production on Nov 1 2026, 100% rollout (43 and 44 never went to
+// production): an alarm at a time they set rings first, phone calendar sync
+// with the app closed, links open in the phone's browser, the Yes/No
+// reminders question as an alarm, on-time reminders without exact-alarm
+// access, a tap on the recording notification opens Record Notes.
 const LATER_BUILD_ON_PLAY = true;
-const NEWEST_BUILD = 42;
+const NEWEST_BUILD = 45;
 const hasQuietHoursBuild = () =>
   typeof window !== 'undefined' &&
   typeof window.Capacitor?.Plugins?.AlarmBridge?.quietFor === 'function';
