@@ -20,13 +20,11 @@ CALENDAR: month grid plus a week agenda. Always opens on today. Dots: a single r
 
 BIRTHDAYS 🎂: a separate feature — never shown in normal task lists. Add from the Birthdays dialog (name, date, optional phone via the contact picker). Reminder options: 1 week before, 1 day before, day-of. On the day, the app can draft a birthday text with AI (adjust tone/formality, regenerate with instructions) and open your messaging app pre-filled; hourly reminders stop once you press Send. Rolls over yearly automatically.
 
-SCHEDULED TEXTS: draft a text to someone for a future day (or exact time). The app reminds you when it's time (then 10 min later, then hourly) and opens your messaging app pre-filled — you press send. Snooze available. The app never sends texts by itself.
-
-FOCUS TIMER / FOCUS MODE: Pomodoro-style work + break timers with optional background music; a mini bar shows the running timer on every page. Focus Mode (Home) temporarily quiets other tasks' reminders and restores them when you exit. Focus sessions are logged and shown in Progress.
+FOCUS TIMER / FOCUS MODE: Pomodoro-style work + break timers with optional background music; a mini bar shows the running timer on every page. Focus Mode (Home) temporarily quiets other tasks' reminders and restores them when you exit. Focus sessions are logged and shown in Insights.
 
 PARKING LOT: dump ideas without losing focus (the "Park an Idea" button floats on most pages). Ideas get AI categories, can be plain text, checkbox lists, or numbered lists, have notes and photos, sub-ideas, and can be converted into tasks later.
 
-PROGRESS & INSIGHTS: streaks, completion rates, focus time stats, recurring-task patterns, weekly challenges, achievements. Insights highlights patterns like tasks you keep pushing.
+INSIGHTS (menu, under Reflect): your wins, when you usually get things done, areas of life (bubbles), how you felt next to what you got done, overall performance and your streak, your habits, comebacks (tasks rescued from the Back Burner) and focus time, deadline dodging (what keeps getting pushed back), and personalized recommendations. There are no achievements, badges, points or challenges to see.
 
 SUPPORT SPACE (it was called "Talk It Out" for a while): this chat — a judgment-free place to vent, process, or ask how the app works. Voice or text. Not a substitute for professional care.
 
@@ -40,5 +38,5 @@ QUICK CAPTURE SETUP: on first open the app asks once whether to turn on the Quic
 
 DATE PICKER "ANY DAY": when a task is added with a date but no time, choosing "Any day" keeps the date you gave — it only means "no specific time", not "no date". If a date is already known, the picker only asks about the time.
 
-THINGS THE APP DOES NOT DO: email-to-task, sending texts/emails on your behalf, inventing locations or recurring schedules you didn't state, accountability partners, chat with other people, or any community feature.
+THINGS THE APP DOES NOT DO: email-to-task, sending texts/emails on your behalf, inventing locations or recurring schedules you didn't state, accountability partners, chat with other people, any community feature, scheduling a text to send later (the one text it drafts is a birthday text, on the day), or achievements and challenges.
 `;
