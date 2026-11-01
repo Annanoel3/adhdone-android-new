@@ -365,7 +365,7 @@ Answer plainly and practically, then stop.`;
                     specialMode !== 'normal' ? `${specialMode}-title` :
                     theme === 'dark' ? 'text-white' : 'text-gray-900'
                   }`}>
-                    Talk It Out
+                    Support Space
                   </h1>
                   <p className={
                     specialMode !== 'normal' ? `${specialMode}-text` :
