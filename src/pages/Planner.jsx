@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, Loader2, Sparkles, Target, Plus, Check, ChevronDown, ChevronRight, RotateCw } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
+import { openInBrowser } from "@/components/utils/openInBrowser";
 import VoiceTaskInput from "@/components/tasks/VoiceTaskInput";
 import GoalsGate from "@/components/goals/GoalsGate";
 import { useGoalTheme, goalLook } from "@/components/goals/goalsTheme";
@@ -781,16 +782,39 @@ function EmptyState({ onExampleClick, L }) {
   );
 }
 
+// A link the planner wrote (its web search cites sources) opens in the
+// phone's browser: the app keeps web pages inside itself, so a plain link
+// would load the page over the app (openInBrowser).
+function PlannerLink({ href, children, className }) {
+  return (
+    <a
+      href={href}
+      onClick={(e) => { e.preventDefault(); e.stopPropagation(); openInBrowser(href); }}
+      className={className}
+    >
+      {children}
+    </a>
+  );
+}
+
+// Bold, [markdown](links) and bare links. Week steps used to show a
+// markdown link as raw text ("([nimh.nih.gov](https://...))", Nov 1 2026).
 function renderInlineText(text) {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const parts = String(text || "").split(/(\*\*[^*]+\*\*|https?:\/\/[^\s]+)/g);
-  const cleanUrl = (url) => url.replace(/[.,;:!?)]+$/, "");
+  const parts = String(text || "").split(/(\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^)\s]+\)|https?:\/\/[^\s]+)/g);
+  const cleanUrl = (url) => url.replace(/[.,;:!?)\]]+$/, "");
+  const linkClass = "underline hover:opacity-80 transition-opacity font-semibold break-words";
   return parts.map((part, i) => {
+    if (!part) return null;
     if (part.startsWith("**") && part.endsWith("**")) return <strong key={i}>{part.slice(2, -2)}</strong>;
-    if (part.match(urlRegex)) {
+    const md = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)$/);
+    if (md) return <PlannerLink key={i} href={md[2]} className={linkClass}>{md[1]}</PlannerLink>;
+    if (/^https?:\/\//.test(part)) {
       const href = cleanUrl(part);
       return (
-        <a key={i} href={href} target="_blank" rel="noopener noreferrer" className="underline hover:opacity-80 transition-opacity font-semibold break-all">{href}</a>
+        <React.Fragment key={i}>
+          <PlannerLink href={href} className={`${linkClass} break-all`}>{href}</PlannerLink>
+          {part.slice(href.length)}
+        </React.Fragment>
       );
     }
     return part;
@@ -997,13 +1021,13 @@ function WeekDropdown({ week, L }) {
       </div>
       {open && (
         <div className={`px-4 pb-3 pt-2 border-t ${L.panel}`}>
-          {week.description && <p className={`text-xs leading-relaxed mb-2 italic ${L.soft}`}>{week.description}</p>}
+          {week.description && <p className={`text-xs leading-relaxed mb-2 italic ${L.soft}`}>{renderInlineText(week.description)}</p>}
           {week.tasks.length > 0 ? (
             <ul className="space-y-1">
               {week.tasks.map((task, i) => (
                 <li key={i} className={`text-xs leading-relaxed flex gap-1.5 ${L.text}`}>
                   <span className="mt-0.5 text-violet-400">•</span>
-                  <span>{task}</span>
+                  <span className="min-w-0 break-words">{renderInlineText(task)}</span>
                 </li>
               ))}
             </ul>
@@ -1103,7 +1127,7 @@ function MessageBubble({ msg, onExampleClick, L }) {
           if (!part) return null;
           if (part.startsWith("**") && part.endsWith("**")) return <strong key={`b-${i}`}>{part.slice(2, -2)}</strong>;
           const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
-          if (link) return <a key={`l-${i}`} href={link[2]} className="text-blue-500 underline" target="_blank" rel="noopener noreferrer">{link[1]}</a>;
+          if (link) return <PlannerLink key={`l-${i}`} href={link[2]} className="text-blue-500 underline">{link[1]}</PlannerLink>;
           if (part === "- ") return null;
           return <span key={`t-${i}`}>{part}</span>;
         });
