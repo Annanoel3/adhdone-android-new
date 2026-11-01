@@ -459,7 +459,12 @@ function GoalDetail() {
     setShowDeleteConfirm(false);
     navigate("/Goals");
     toast({ title: "Goal deleted", description: `"${g.title}" has been removed.` });
-    deleteGoal(g).catch((err) => console.error("Goal delete failed:", err));
+    // Gone from the Goals page at once (deleteGoal); if it couldn't be
+    // deleted it comes back there, and this says so.
+    deleteGoal(g).catch((err) => {
+      console.error("Goal delete failed:", err);
+      toast({ title: "Couldn't delete the goal", description: "It's back on your Goals page. Try again in a moment.", variant: "destructive" });
+    });
   };
 
   if (loading) {
