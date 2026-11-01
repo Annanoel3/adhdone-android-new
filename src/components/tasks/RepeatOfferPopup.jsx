@@ -67,11 +67,20 @@ let listening = false;
 
 async function findOffer() {
   const done = await base44.entities.Task.filter({ created_by: email, status: "completed" }, "-updated_date", 25);
-  return (done || []).find((t) =>
+  const task = (done || []).find((t) =>
     t.repeat_offer?.time &&
     !t.repeat_offer.answer &&
     Date.now() - ms(t.repeat_offer.made_at) < OFFER_DAYS * DAY
   ) || null;
+  if (!task) return null;
+  // They made it repeat some other way since: nothing to offer.
+  if (task.task_family) {
+    const open = await base44.entities.Task.filter(
+      { created_by: email, status: "active", task_family: task.task_family }, "-updated_date", 20
+    );
+    if ((open || []).some((t) => t.recurrence_pattern && t.recurrence_pattern !== "none")) return null;
+  }
+  return task;
 }
 
 // True once something is up (or nothing more to do this time).
