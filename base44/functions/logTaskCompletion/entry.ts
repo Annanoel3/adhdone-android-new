@@ -2,7 +2,7 @@
 // Re-saved Oct 17 2026 so the bundled shared/runTaskParse.ts and shared/taskParsePrompt.ts are picked up: the parser and its helpers run on gpt-6-astra (was gpt-5.4), the parser's calendar beats the real date astra is given, and "tomorrow morning" / "Sunday night" get a time.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { resolveQuietHours, adjustForQuietHours, userTimeZone, localDateKey } from '../../shared/quietHours.ts';
-import { assignTaskFamilies, judgeCompletionHabit } from '../../shared/runTaskParse.ts';
+import { assignTaskFamilies, judgeCompletionHabit, judgeDailyThing } from '../../shared/runTaskParse.ts';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
 
 // Records ONE analytics row when a task is completed, with the reminder history
@@ -153,6 +153,14 @@ export default async function (req: Request): Promise<Response> {
       console.error('[logTaskCompletion] habit tracking failed:', e?.message || e);
     }
 
+    // "Every day around this time?" (offerRepeat, below). After the habit
+    // tracking, which gives the task its family.
+    try {
+      await offerRepeat(base44, taskId);
+    } catch (e) {
+      console.error('[logTaskCompletion] repeat offer failed:', e?.message || e);
+    }
+
     return Response.json({ logged: true, reminders: reminders.length });
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
@@ -273,4 +281,77 @@ async function recordCompletionHabit(base44: any, task: any) {
     habits[family] = h;
     await svc.User.update(owner.id, { task_habits: habits });
   }
+}
+
+// ── "Every day around this time?" (Anna, Nov 1 2026) ───────────────────────
+// The two people who open ADHDone every day both have a to-do that repeats
+// daily; "pills" and "take birth control" were saved as one-time, checked off
+// once, and the app went quiet. So when a one-time to-do that people normally
+// do every day is checked off, the app offers to make it repeat, at the time
+// they actually did it, so it never has to guess morning or night. This only
+// marks the offer on the task (repeat_offer); the app asks (RepeatOfferPopup)
+// and a Yes adds a daily to-do through captureText. Nothing changes on its own.
+// The model judges each kind of task (task_family) once, kept in task_habits.
+// Never offered while that kind of task already repeats, while an offer is
+// waiting, or ever again after a No or a close.
+const REPEAT_OFFER_DAYS = 3;
+async function offerRepeat(base44: any, taskId: string) {
+  const svc = base44.asServiceRole.entities;
+  const task = await svc.Task.get(taskId).catch(() => null);
+  if (!task || task.status !== 'completed' || task.repeat_offer) return;
+  if (task.parent_task_id || task.birthday_person || task.goal_id || task.google_event_id) return;
+  if (task.classification && task.classification !== 'task') return;
+  if (task.recurrence_pattern && task.recurrence_pattern !== 'none') return;
+  if (HABIT_RHYTHMS.has(task.reminder_interval)) return;
+  const title = String(task.title || '').trim();
+  const email = task.created_by;
+  if (!title || !email) return;
+
+  const lc = (s: any) => String(s || '').trim().toLowerCase();
+  const family = lc(task.task_family);
+  const nowMs = Date.now();
+  const recent: any[] = (await svc.Task.filter({ created_by: email }, '-updated_date', 300)) || [];
+  const kin = recent.filter((t: any) => t.id !== task.id && !t.parent_task_id
+    && (family ? lc(t.task_family) === family : lc(t.title) === lc(title)));
+  // Already repeating, already said yes, an offer still waiting, or a No / close.
+  if (kin.some((t: any) => t.status === 'active' && t.recurrence_pattern && t.recurrence_pattern !== 'none')) return;
+  if (kin.some((t: any) => {
+    const o = t.repeat_offer;
+    if (!o) return false;
+    if (o.answer) return true;
+    return nowMs - serverMs(o.made_at) < REPEAT_OFFER_DAYS * HABIT_DAY_MS;
+  })) return;
+
+  const owner = (await svc.User.filter({ email }, '-created_date', 1))?.[0];
+  if (!owner) return;
+  const habits: Record<string, any> = { ...(owner.task_habits || {}) };
+  const h: any = family ? { ...(habits[family] || {}) } : {};
+  let daily: boolean;
+  if (family && typeof h.daily === 'boolean') {
+    daily = h.daily;
+  } else {
+    daily = await judgeDailyThing({ title, said: task.original_input });
+    if (family) {
+      h.daily = daily;
+      habits[family] = h;
+      await svc.User.update(owner.id, { task_habits: habits });
+    }
+  }
+  if (!daily) return;
+
+  // When they finished it, on their own clock, to the nearest 5 minutes.
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: userTimeZone(owner), hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date(nowMs));
+  const hh = parseInt(parts.find((p) => p.type === 'hour')?.value || '', 10);
+  const mm = parseInt(parts.find((p) => p.type === 'minute')?.value || '', 10);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return;
+  const rounded = (hh * 60 + Math.round(mm / 5) * 5) % 1440;
+  const time = `${String(Math.floor(rounded / 60)).padStart(2, '0')}:${String(rounded % 60).padStart(2, '0')}`;
+
+  // Still checked off? (Undo is a few seconds; the model can take longer.)
+  const fresh = await svc.Task.get(taskId).catch(() => null);
+  if (!fresh || fresh.status !== 'completed' || fresh.repeat_offer) return;
+  await svc.Task.update(taskId, { repeat_offer: { time, made_at: new Date(nowMs).toISOString() } });
+  console.log(`[logTaskCompletion] repeat offer on task ${taskId} (${family || 'no family'}) around ${time}`);
 }
