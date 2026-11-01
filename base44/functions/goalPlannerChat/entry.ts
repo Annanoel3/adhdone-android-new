@@ -321,16 +321,18 @@ function monthsFromText(text: string, nowYear: number, nowMonth: number): number
     if (ti <= nowMonth || /next/i.test(bm[1] || '')) ty++;
     return ok(Math.max(1, (ty - nowYear) * 12 + (ti - nowMonth)));
   }
-  // "before 2028" = by its January; "by 2028" / "by the end of 2028" = its December.
-  const yr = t.match(/\b(by|before)\s+(?:(?:the\s+)?end\s+of\s+)?(20\d{2})\b/i);
-  if (yr) {
-    const y = parseInt(yr[2], 10);
-    const endOf = /end\s+of/i.test(yr[0]);
-    const n = yr[1].toLowerCase() === 'before' && !endOf ? (y - nowYear) * 12 - nowMonth : (y - nowYear) * 12 + (11 - nowMonth);
+  // "before 2028" = by its January; "by the end of 2028" = its December. A
+  // bare "by 2028" could be either, and "next year" is no date at all: no
+  // guess (a guess would be firm, planFirm), the planner asks or works it out
+  // (Nov 1 2026: it asked "does 'by 2028' mean January 1, 2028, or the end
+  // of 2028?" and the answer, "before January 2028", set 14).
+  const yr = t.match(/\b(by|before)\s+((?:the\s+)?end\s+of\s+)?(20\d{2})\b/i);
+  if (yr && (yr[2] || yr[1].toLowerCase() === 'before')) {
+    const y = parseInt(yr[3], 10);
+    const n = yr[2] ? (y - nowYear) * 12 + (11 - nowMonth) : (y - nowYear) * 12 - nowMonth;
     if (n >= 1) return ok(n);
   }
   if (/\b(?:by|before)\s+(?:the\s+)?end\s+of\s+(?:(?:this|the)\s+)?year\b/i.test(t)) return ok(Math.max(1, 11 - nowMonth));
-  if (/\bnext\s+year\b/i.test(t)) return ok(Math.max(6, 12 - nowMonth + 6));
   return null;
 }
 
