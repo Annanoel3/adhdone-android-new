@@ -49,7 +49,7 @@ export const FEATURES = [
   { icon: Timer, title: "Task timer", desc: "Pick how long, watch it count down, then keep going or call it done when it rings." },
   { icon: Timer, title: "Pomodoro timer", desc: "Focus sessions with a break baked in, completion sounds, and optional background music." },
   { icon: Lightbulb, title: "Parking Lot", desc: "Where random ideas go. Brain dump now, turn into tasks later — or never. Both are fine." },
-  { icon: CalendarDays, title: "Google Calendar sync", desc: "Optional read-only import. Events, tasks, and birthdays get routed to the right place automatically." },
+  { icon: CalendarDays, title: "Phone calendar sync", desc: "Optional. Brings in any calendar your phone shows (Google, Samsung, Outlook, iCloud). Events, tasks, and birthdays get routed to the right place automatically." },
   { icon: Cake, title: "Birthdays", desc: "Never forget a birthday again. AI drafts the text, you tap send." },
   { icon: TrendingUp, title: "Insights", desc: "Your data, your patterns, made visible. When you get things done, what gets pushed, what actually sticks — never a guilt trip." },
   { icon: MapPin, title: "Errand-aware nudges", desc: "Add a location and reminders account for drive time. Two errands nearby? It'll suggest one trip." },
