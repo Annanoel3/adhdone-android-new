@@ -290,7 +290,7 @@ const numOf = (s: string) => (/^\d+$/.test(s) ? parseInt(s, 10) : (NUMBER_WORDS[
 
 function monthsFromText(text: string, nowYear: number, nowMonth: number): number | null {
   const t = String(text || '');
-  const ok = (n: number) => (Number.isFinite(n) && n >= 1 && n <= 36 ? n : null);
+  const ok = (n: number) => (Number.isFinite(n) && n >= 1 ? Math.min(36, n) : null);
   // A month with a year: "January 2028", "Jan 1, 2028", "the end of January 2028".
   // One that comes after a deadline word wins; otherwise the furthest one ahead.
   const datedRe = new RegExp(`\\b${MONTH_NAME_RE}\\s+(?:\\d{1,2}(?:st|nd|rd|th)?,?\\s+)?(20\\d{2})\\b`, 'gi');
