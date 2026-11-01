@@ -132,6 +132,7 @@ import WinsSlumpPopup from "./components/wins/WinsSlumpPopup";
 import NewInsightsPopup from "./components/shared/NewInsightsPopup";
 import RemindersHelpingPopup from "./components/shared/RemindersHelpingPopup";
 import RepeatOfferPopup from "./components/tasks/RepeatOfferPopup";
+import WhatsNextPopup from "./components/tasks/WhatsNextPopup";
 import WebAddressFooter from "./components/shared/WebAddressFooter";
 import {
   Dialog,
@@ -1393,6 +1394,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <RemindersHelpingPopup theme={theme} specialMode={specialMode} />
         {/* "Every day around this time?" after checking off a daily-type to-do (see RepeatOfferPopup). */}
         <RepeatOfferPopup user={user} theme={theme} specialMode={specialMode} />
+        {/* "What's next?" when a new person's list empties (see WhatsNextPopup). */}
+        <WhatsNextPopup user={user} theme={theme} specialMode={specialMode} />
         <TaskCaptureProcessor userEmail={user?.email} />
         {/* Keeps each active goal's current step on the task list (GOALS_PORT.md). */}
         <GoalStepSync user={user} />
