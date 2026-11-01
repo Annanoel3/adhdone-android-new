@@ -126,7 +126,6 @@ export default function NotificationsOffBanner({ theme, specialMode, user }) {
       .then((m) => { if (!gone && m) setMissed(m); })
       .catch(() => {});
     return () => { gone = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocked, reask, user?.email]);
 
   // Counted once it's actually on screen.
