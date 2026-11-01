@@ -1197,7 +1197,7 @@ async function selfTest(openai: any, body: any, today: string) {
   // Lines that send them to a professional (PROFESSIONAL_HELP_RULE: only for
   // a risk or something seriously worrying).
   const referralsIn = (t: string) => String(t || '').split('\n')
-    .filter((ln) => /\b(therap(y|ist)|counsel(or|ing)|psychiatr|psycholog|doctor|clinician|professional (help|support)|crisis|hotline|988|treatment)\b/i.test(ln))
+    .filter((ln) => /\b(therap(y|ist)|counsel(or|ing)|psychiatr\w*|psycholog\w*|doctor|clinician|professional (help|support)|crisis|hotline|988|treatment)\b/i.test(ln))
     .map((ln) => ln.trim().slice(0, 200)).slice(0, 20);
   const monthsWritten = (t: string) => {
     const a = analyzePlan(stripClosing(t));
