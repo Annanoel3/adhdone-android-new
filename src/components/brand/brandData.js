@@ -53,7 +53,7 @@ export const FEATURES = [
   { icon: Cake, title: "Birthdays & scheduled texts", desc: "Never forget a birthday again. AI drafts the text, you tap send. Schedule any text for later, too." },
   { icon: TrendingUp, title: "Insights", desc: "Your data, your patterns, made visible. When you get things done, what gets pushed, what actually sticks — never a guilt trip." },
   { icon: MapPin, title: "Errand-aware nudges", desc: "Add a location and reminders account for drive time. Two errands nearby? It'll suggest one trip." },
-  { icon: MessageCircleHeart, title: "Talk It Out", desc: "An AI chat that knows the app and knows executive function. Stuck? Overwhelmed? Start here." },
+  { icon: MessageCircleHeart, title: "Support Space", desc: "An AI chat that knows the app and knows executive function. Stuck? Overwhelmed? Start here." },
   { icon: Smartphone, title: "Home widget & quick capture", desc: "Add a task from the home screen without opening the app. Because the idea won't wait." },
   { icon: Palette, title: "Themes built for focus", desc: "Four core themes plus a dozen seasonal ones that rotate through the year. Low-stimulation by default, dopamine on tap." },
 ];
