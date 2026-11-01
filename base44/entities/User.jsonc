@@ -518,7 +518,7 @@
     },
     "task_habits": {
       "type": "object",
-      "description": "Per task_family (see Task): { minutes (typical time from timed sessions), preferred_time 'HH:MM' (they said yes to reminders around then), checked_at (last time the model looked for a completion habit) }, plus _minutes_at (newest timed session already counted). Written by the server only (logTaskCompletion, cronSmartTaskNudge)."
+      "description": "Per task_family (see Task): { minutes (typical time from timed sessions), preferred_time 'HH:MM' (they said yes to reminders around then), checked_at (last time the model looked for a completion habit), daily (the model's one-time judgment that this kind of task is normally done every day, for the \"Every day around this time?\" offer: Task.repeat_offer) }, plus _minutes_at (newest timed session already counted). Written by the server only (logTaskCompletion, cronSmartTaskNudge)."
     },
     "phone_plugins": {
       "type": "array",
