@@ -878,12 +878,16 @@ const DAY_LABEL_RE = /^(?:monday|tuesday|wednesday|thursday|friday|saturday|sund
 // extract_plan and step_feedback alike.
 function weekFocus(firstBullet: string): string {
   const first = String(firstBullet || '').replace(/^\s*(?:[-•*]|\d+\.)\s+/, '').replace(/\*\*/g, '').trim();
-  let focus = (first.includes(':') ? first.split(':')[0] : first).trim();
-  // A week written day by day ("Monday: Set up the course. Tuesday: ...")
-  // made every step "Week N: Monday" (Nov 1 2026 self-test). Then the focus is
-  // that first thing to do.
-  if (first.includes(':') && DAY_LABEL_RE.test(focus)) {
-    focus = first.slice(first.indexOf(':') + 1).trim().split(/(?<=[.!?])\s/)[0].replace(/[.!?]+$/, '').trim() || focus;
+  // The label ends at the first colon that isn't inside a clock time: "Each
+  // night at 9:00 PM: Spend…" made "Week 1: Each night at 9" (Nov 1 2026).
+  const cut = first.search(/:(?!\d)/);
+  let focus = (cut > 0 ? first.slice(0, cut) : first).trim();
+  // A label that says WHEN, not what ("Monday:", "Day 3:", "Each night at
+  // 9:00 PM:") made every step "Week N: Monday" (Nov 1 2026 self-test). Then
+  // the focus is that first thing to do.
+  const whenLabel = DAY_LABEL_RE.test(focus) || /^(?:each|every)\s+\w+/i.test(focus) || /\b\d{1,2}(?::\d{2})?\s*(?:am|pm)\b|\b\d{1,2}:\d{2}\b/i.test(focus);
+  if (cut > 0 && whenLabel) {
+    focus = first.slice(cut + 1).trim().split(/(?<=[.!?])\s/)[0].replace(/[.!?]+$/, '').trim() || focus;
   }
   // Too long for a task's name: cut at a word, with "…" so it reads as cut
   // ("Week 1: On your first day, spend ten minutes sampling one new" looked
