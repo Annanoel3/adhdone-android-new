@@ -99,9 +99,11 @@ export default function StepFeedbackPopup({ step, open, onDone, theme, specialMo
               aria-label="How it went"
               className={`min-h-[88px] flex-1 text-sm ${D.field}`}
             />
-            <VoiceTaskInput onTranscription={addSpoken} theme={theme} />
+            <span className={D.mic}>
+              <VoiceTaskInput onTranscription={addSpoken} theme={theme} />
+            </span>
           </div>
-          {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
+          {error && <p role="alert" className={`text-sm ${D.error}`}>{error}</p>}
           <div className="flex gap-2">
             <Button type="button" variant="ghost" onClick={skip} disabled={saving} className={`flex-1 ${D.muted}`}>
               Skip
