@@ -162,10 +162,12 @@ async function syncGoal(goal, user, today) {
   // it becomes the current step's weekly task (changed in place, nothing
   // deleted); one the person changed stays exactly as it is, and the step
   // gets its weekly task alongside it.
+  let hasWeekly = open.some((x) => !isRepeatingTask(x));
   for (const t of open.filter(isRepeatingTask)) {
     const itsStep = steps.find((s) => s.id === t.goal_step_id) || null;
-    if (untouched(t, itsStep) && !open.some((x) => !isRepeatingTask(x))) {
+    if (untouched(t, itsStep) && !hasWeekly) {
       await retargetTask(t, goal, current, steps, habit, itsStep);
+      hasWeekly = true;
       if (itsStep && itsStep.id !== current.id && itsStep.task_id === t.id) await base44.entities.GoalStep.update(itsStep.id, { task_id: null });
       changed = true;
     } else {
