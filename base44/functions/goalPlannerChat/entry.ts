@@ -293,13 +293,14 @@ function monthsFromText(text: string, nowYear: number, nowMonth: number): number
   const ok = (n: number) => (Number.isFinite(n) && n >= 1 && n <= 36 ? n : null);
   // A month with a year: "January 2028", "Jan 1, 2028", "the end of January 2028".
   // One that comes after a deadline word wins; otherwise the furthest one ahead.
-  const datedRe = new RegExp(`(by|before|until|till|til|deadline|due|end\\s+of|finish(?:ed)?|done|complete(?:d)?|reach|goal)?[^.\\n]{0,25}?\\b${MONTH_NAME_RE}\\s+(?:\\d{1,2}(?:st|nd|rd|th)?,?\\s+)?(20\\d{2})\\b`, 'gi');
+  const datedRe = new RegExp(`\\b${MONTH_NAME_RE}\\s+(?:\\d{1,2}(?:st|nd|rd|th)?,?\\s+)?(20\\d{2})\\b`, 'gi');
+  const deadlineBefore = /\b(?:by|before|until|till|deadline|due|end\s+of|finish(?:ed)?|done|complete(?:d)?|reach)\b[^.\n]*$/i;
   let deadline: number | null = null, furthest: number | null = null;
   for (const m of t.matchAll(datedRe)) {
-    const ti = MONTH_WORDS[m[2].toLowerCase()];
-    const n = (parseInt(m[3], 10) - nowYear) * 12 + (ti - nowMonth);
+    const ti = MONTH_WORDS[m[1].toLowerCase()];
+    const n = (parseInt(m[2], 10) - nowYear) * 12 + (ti - nowMonth);
     if (n < 1) continue;
-    if (m[1]) deadline = n;
+    if (deadlineBefore.test(t.slice(Math.max(0, (m.index || 0) - 30), m.index || 0))) deadline = Math.max(deadline || 0, n);
     furthest = Math.max(furthest || 0, n);
   }
   if (deadline || furthest) return ok((deadline || furthest) as number);
