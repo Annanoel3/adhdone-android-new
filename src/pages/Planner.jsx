@@ -918,13 +918,15 @@ function parsePlanHierarchy(text, goalMonthTitles = {}) {
   return { months, preamble: preamble.join("\n") };
 }
 
-// How long the plan says it is: its own "N-month" words or its month titles
-// (what the Goals app padded the plan view up to).
+// How long the plan is, by its own month titles only (for "months X-Y
+// aren't written yet"). Not its free text: the Goals app took the first
+// "<number> month" in it, which could be a year ("January 2028" then
+// "Month 1" on the next line read as 2028, capped to 36), and padded the
+// plan view to Month 36 (Anna, Nov 1 2026: a 14-month plan showed Months
+// 15-36 empty). The server says how long the plan is (months_total).
 function planLength(text, goalMonthTitles = {}) {
-  const totalMonthsMatch = String(text || "").match(/(\d+)[\s-]month/i);
   const titleNums = Object.keys(goalMonthTitles || {}).map((k) => parseInt(k, 10)).filter((n) => !isNaN(n));
-  const titlesMaxMonth = titleNums.length ? Math.max(...titleNums) : 0;
-  return Math.min(36, Math.max(totalMonthsMatch ? parseInt(totalMonthsMatch[1], 10) : 0, titlesMaxMonth));
+  return Math.min(36, titleNums.length ? Math.max(...titleNums) : 0);
 }
 
 // Months 1..N written with something in them, in a row.
@@ -940,7 +942,8 @@ function monthsWritten(text) {
 
 // The last answer is a plan that isn't finished: the planner said so, or (a
 // chat saved before Nov 1 2026) it ends with the old "continue expanding any
-// remaining months" line or has fewer months written than it says it has.
+// remaining months" line. Never by counting "N month" words in it, which
+// made a finished 14-month plan look 36 months long.
 function planNeedsWriting(msgs) {
   const last = msgs?.[msgs.length - 1];
   if (!last || last.role !== "assistant") return false;
@@ -948,8 +951,7 @@ function planNeedsWriting(msgs) {
   if (last.planIncomplete === false) return false;
   const text = String(last.content || "");
   if (!/Month\s+\d+/i.test(text) || !/Week\s+\d+/i.test(text)) return false;
-  if (/continue expanding any remaining months/i.test(text)) return true;
-  return planLength(text, last.goalMonthTitles || {}) > monthsWritten(text);
+  return /continue expanding any remaining months/i.test(text);
 }
 
 // A long plan being written, or stopped before its last month.
