@@ -249,7 +249,13 @@ function Planner() {
     // Unfinished until the planner says otherwise, so a failed call leaves
     // "Keep writing", never "Looks good".
     if (start[lastAt].planIncomplete !== true) {
-      const marked = [...start.slice(0, lastAt), { ...start[lastAt], planIncomplete: true }];
+      const m0 = start[lastAt];
+      const marked = [...start.slice(0, lastAt), {
+        ...m0,
+        planIncomplete: true,
+        monthsDone: m0.monthsDone ?? monthsWritten(m0.content),
+        monthsTotal: m0.monthsTotal ?? (planLength(m0.content, m0.goalMonthTitles || {}) || null),
+      }];
       messagesRef.current = marked;
       setMessages(marked);
     }
