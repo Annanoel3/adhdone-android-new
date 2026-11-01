@@ -83,6 +83,7 @@ export default function StepDetailsModal({ step, isOpen, onClose, onUpdate, onRe
         <DialogHeader className="min-w-0">
           {editingTitle && onRename ? (
             <div className="flex items-center gap-2 pr-6">
+              <DialogTitle className="sr-only">{title}</DialogTitle>
               <input
                 autoFocus
                 className={`flex-1 min-w-0 text-base font-semibold border rounded-lg px-2 py-1 focus:outline-none ${D.field}`}
