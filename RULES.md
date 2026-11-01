@@ -445,7 +445,13 @@ How it works, and how it must keep working:
    2 days (they stay on one a day). Unlike the week-away pause, only opening the app ends it;
    they restart on one a day with a fresh week. "Back to normal" in Settings > Reminders turns
    one a day off. Times they set, events and birthdays are never limited or paused. Check:
-   `{"email": "…", "helping_preview": true}` to `cronSmartTaskNudge`.
+   `{"email": "…", "helping_preview": true}` to `cronSmartTaskNudge`. Counted (Anna, Nov 1
+   2026: "keep tabs on how many times the 'are your reminders helping' alarms happen"): every
+   one that goes out is an AppEvent `reminders_helping_sent` (props `as` alarm | push, `stage`
+   first | again | pause, `at`), kept, unlike the 3-day ledger. The owner's daily note
+   (cronRefillReminders) has a line when any rang as an alarm since the last count: how many,
+   who, and how many in all (`owner_alert_marks.helping_counted_to`); with nothing else to say
+   it goes out titled "📊 ADHDone yesterday".
 
 **Do not change `base44/functions/cronSmartTaskNudge`, `base44/shared/reminderBrief.ts`, the
 "Smart Task Nudge" workflow, or the `smart_nudge_*` fields on User unless Anna explicitly
