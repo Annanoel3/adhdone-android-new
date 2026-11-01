@@ -1012,6 +1012,7 @@ Deno.serve(async (req) => {
         }
 
         const newEntries = await generateDailySchedule(pool, {
+          nowMs,
           localMin,
           timeZone,
           quietStartMin: startMin,
@@ -1825,6 +1826,8 @@ function recurrenceLabel(t: any): string {
 }
 
 interface PlanContext {
+  // The moment being planned for (REPLAY sets an earlier one); now by default.
+  nowMs?: number;
   localMin: number;
   timeZone: string;
   quietStartMin: number;
@@ -1919,7 +1922,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     : toBedMin <= 180 && timeOfDay !== 'evening'
       ? '; the end of THEIR day: they keep different hours'
       : '';
-  const now = new Date();
+  const now = new Date(Number.isFinite(ctx.nowMs) ? (ctx.nowMs as number) : Date.now());
   const nowMs = now.getTime();
   // Their day (theirDayKey): "today", "tomorrow" and "late" go by it, so a
   // task due Monday is still due today at 2 AM on a night shift.
