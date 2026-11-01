@@ -4,7 +4,8 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { ArrowLeft, Loader2, Calendar, CheckCircle2, Clock, Trash2, ChevronDown, History, ListTodo, Plus, Pause, Play, Flag, RotateCcw, MessageCircle } from "lucide-react";
+import { ArrowLeft, Loader2, Calendar, CheckCircle2, Clock, Trash2, ChevronDown, History, ListTodo, Plus, Pause, Play, Flag, RotateCcw, MessageCircle, Pencil } from "lucide-react";
+import { linkFreeText } from "@/components/goals/LinkedText";
 import { openInBrowser } from "@/components/utils/openInBrowser";
 import { toast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/AuthContext";
@@ -76,15 +77,19 @@ function StepRow({ step, L, isHabit, isCurrent, goal, openTask, doneDays, busy, 
             </div>
           ) : (
             <button onClick={() => onOpen(step)} className="w-full text-left">
+              {/* Tapping the title renames it right here; the tiny pencil says
+                  so (Anna, Nov 1 2026: "should have a tiny pencil next to it
+                  since that line is clickable for inline editing"). */}
               <h4
-                className={`font-medium text-sm cursor-pointer ${done ? `line-through ${L.muted}` : L.title}`}
+                className={`font-medium text-sm cursor-pointer break-words ${done ? `line-through ${L.muted}` : L.title}`}
                 onClick={(e) => { e.stopPropagation(); setEditing(true); }}
                 title="Tap to edit"
               >
                 {step.title}
+                <Pencil className={`inline-block w-3 h-3 ml-1.5 -mt-0.5 align-middle opacity-60 ${L.muted}`} aria-hidden="true" />
               </h4>
               {step.description && (
-                <p className={`text-xs mt-1 line-clamp-2 ${L.muted}`}>{step.description}</p>
+                <p className={`text-xs mt-1 line-clamp-2 break-words [overflow-wrap:anywhere] ${L.muted}`}>{linkFreeText(step.description)}</p>
               )}
             </button>
           )}
@@ -653,6 +658,7 @@ function GoalDetail() {
           isOpen={!!selectedStep}
           onClose={() => setSelectedStep(null)}
           onUpdate={loadData}
+          onRename={renameStep}
           theme={theme}
           specialMode={specialMode}
         />
