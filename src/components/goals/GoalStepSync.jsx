@@ -5,7 +5,7 @@ import { goalsEnabled } from "./goalsAccess";
 import {
   GOALS_CHANGED, notifyGoalsChanged, todayKey, sortSteps, isStepOpen, isHabitGoal, goalStarted,
   currentStep, goalContextLine, shortNotes, openGoalTasks, createGoalTask, retargetTask,
-  closeOutTask, deleteLinkedTask, unparkPausedTasks, isRepeatingTask, applyLateShift,
+  closeOutTask, deleteLinkedTask, unparkPausedTasks, isRepeatingTask, applyLateShift, liveGoals,
 } from "./goalLogic";
 import { lateFinishShift } from "./goalWeeks";
 
