@@ -1041,13 +1041,58 @@ Rules:
 
 // ── APPLY EDIT: commit approved edits to an existing goal ───────────────────
 async function applyEdit(base44: any, openai: any, messages: any[], goalId: string, today: string) {
-  const conversationText = messages.map((m) => `${m.role === 'user' ? 'User' : 'Planner'}: ${m.content}`).join('\n\n');
   const existingGoal = (await base44.entities.Goal.filter({ id: goalId }))?.[0];
   if (!existingGoal) throw new Error('Goal not found');
   const existingSteps = await base44.entities.GoalStep.filter({ goal_id: goalId }, 'order_index', 1000);
   const completedSteps = existingSteps.filter((s: any) => s.status === 'completed');
   const replaceableSteps = existingSteps.filter((s: any) => s.status !== 'completed');
 
+  const { goalUpdates, otherUpdates, newSteps } = await extractEdit(openai, messages, existingGoal, today);
+  if (Object.keys(otherUpdates).length > 0) await base44.entities.Goal.update(goalId, otherUpdates);
+  if (goalUpdates.month_titles && typeof goalUpdates.month_titles === 'object' && Object.keys(goalUpdates.month_titles).length > 0) {
+    await base44.entities.Goal.update(goalId, { month_titles: { ...(existingGoal.month_titles || {}), ...goalUpdates.month_titles } });
+  }
+
+  // A plan that came back empty replaces nothing (the Goals app would have
+  // deleted every open step and created none).
+  if (newSteps.length === 0) {
+    return { success: false, error: 'No steps found in the new plan', steps_replaced: 0, steps_created: 0, completed_kept: completedSteps.length };
+  }
+
+  for (const step of replaceableSteps) {
+    await base44.entities.GoalStep.delete(step.id);
+  }
+
+  // New steps go after the kept (completed) ones, in plan order.
+  const keptMax = completedSteps.reduce((mx: number, s: any) => Math.max(mx, Number(s.order_index) || 0), -1);
+  const wasHabit = existingGoal.requires_daily_action === true;
+  const PRIORITIES = new Set(['low', 'medium', 'high', 'critical']);
+  for (let i = 0; i < newSteps.length; i++) {
+    const step = newSteps[i];
+    await base44.entities.GoalStep.create({
+      goal_id: goalId,
+      title: String(step.title || `Step ${i + 1}`),
+      description: step.description || '',
+      phase: step.phase || '',
+      priority: PRIORITIES.has(step.priority) ? step.priority : 'medium',
+      due_date: stepDueDate(existingGoal.start_date, step.phase, i, step.due_date) || null,
+      order_index: keptMax + 1 + i,
+      status: 'pending',
+      step_resources: Array.isArray(step.step_resources) ? step.step_resources : [],
+      success_criteria: Array.isArray(step.success_criteria) ? step.success_criteria : [],
+      tips_and_guidance: step.tips_and_guidance || '',
+      is_daily_habit: step.is_daily_habit === true || wasHabit,
+    });
+  }
+
+  return { success: true, steps_replaced: replaceableSteps.length, steps_created: newSteps.length, completed_kept: completedSteps.length };
+}
+
+// What an edit conversation changes: the goal's fields and its full new step
+// list, read by the model from the conversation (Goals app logic). Writes
+// nothing; applyEdit saves it, and the self-test's edit stage only looks.
+async function extractEdit(openai: any, messages: any[], existingGoal: any, today: string) {
+  const conversationText = messages.map((m) => `${m.role === 'user' ? 'User' : 'Planner'}: ${m.content}`).join('\n\n');
   const extractionResponse = await openai.chat.completions.create({
     model: MODEL,
     reasoning_effort: 'low',
@@ -1103,22 +1148,8 @@ Extract every single step. If the planner listed 48 steps, return all 48.`,
     if (typeof v === 'string' && v.trim() && !/^only if changed/i.test(v.trim())) otherUpdates[k] = v.trim();
   }
   if (otherUpdates.target_date && !/^\d{4}-\d{2}-\d{2}$/.test(otherUpdates.target_date)) delete otherUpdates.target_date;
-  if (Object.keys(otherUpdates).length > 0) await base44.entities.Goal.update(goalId, otherUpdates);
-  if (goalUpdates.month_titles && typeof goalUpdates.month_titles === 'object' && Object.keys(goalUpdates.month_titles).length > 0) {
-    await base44.entities.Goal.update(goalId, { month_titles: { ...(existingGoal.month_titles || {}), ...goalUpdates.month_titles } });
-  }
 
   const newSteps = Array.isArray(extracted.new_steps) ? extracted.new_steps : [];
-  // A plan that came back empty replaces nothing (the Goals app would have
-  // deleted every open step and created none).
-  if (newSteps.length === 0) {
-    return { success: false, error: 'No steps found in the new plan', steps_replaced: 0, steps_created: 0, completed_kept: completedSteps.length };
-  }
-
-  for (const step of replaceableSteps) {
-    await base44.entities.GoalStep.delete(step.id);
-  }
-
   newSteps.sort((a: any, b: any) => {
     const aMonth = parseInt(a.phase?.match(/Month (\d+)/i)?.[1] || 0);
     const bMonth = parseInt(b.phase?.match(/Month (\d+)/i)?.[1] || 0);
@@ -1127,30 +1158,7 @@ Extract every single step. If the planner listed 48 steps, return all 48.`,
     const bWeek = parseInt(b.phase?.match(/Week (\d+)/i)?.[1] || 0);
     return aWeek - bWeek;
   });
-
-  // New steps go after the kept (completed) ones, in plan order.
-  const keptMax = completedSteps.reduce((mx: number, s: any) => Math.max(mx, Number(s.order_index) || 0), -1);
-  const wasHabit = existingGoal.requires_daily_action === true;
-  const PRIORITIES = new Set(['low', 'medium', 'high', 'critical']);
-  for (let i = 0; i < newSteps.length; i++) {
-    const step = newSteps[i];
-    await base44.entities.GoalStep.create({
-      goal_id: goalId,
-      title: String(step.title || `Step ${i + 1}`),
-      description: step.description || '',
-      phase: step.phase || '',
-      priority: PRIORITIES.has(step.priority) ? step.priority : 'medium',
-      due_date: stepDueDate(existingGoal.start_date, step.phase, i, step.due_date) || null,
-      order_index: keptMax + 1 + i,
-      status: 'pending',
-      step_resources: Array.isArray(step.step_resources) ? step.step_resources : [],
-      success_criteria: Array.isArray(step.success_criteria) ? step.success_criteria : [],
-      tips_and_guidance: step.tips_and_guidance || '',
-      is_daily_habit: step.is_daily_habit === true || wasHabit,
-    });
-  }
-
-  return { success: true, steps_replaced: replaceableSteps.length, steps_created: newSteps.length, completed_kept: completedSteps.length };
+  return { goalUpdates, otherUpdates, newSteps };
 }
 
 // ── Admin self-test ────────────────────────────────────────────────────────
