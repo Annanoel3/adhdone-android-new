@@ -341,6 +341,7 @@ export async function processAndCreateTask(inputText, opts = {}) {
         urgency: mainTaskParsed.urgency || 'medium',
         energy_required: mainTaskParsed.energy_required || 'medium',
         takes_time: mainTaskParsed.takes_time === true,
+        worth_breaking_down: mainTaskParsed.worth_breaking_down === true,
         life_area: mainTaskParsed.life_area === 'work' ? 'work' : 'personal',
         status: 'active',
         notification_recipient_email: currentUser.email,
@@ -588,6 +589,9 @@ export async function processAndCreateTask(inputText, opts = {}) {
       urgency: parsed.urgency || 'medium',
       energy_required: parsed.energy_required || 'medium',
       takes_time: parsed.takes_time === true,
+      // A several-steps job: "Break it into steps" right on the row
+      // (BreakItDownOffer).
+      worth_breaking_down: parsed.worth_breaking_down === true,
       life_area: parsed.life_area === 'work' ? 'work' : 'personal',
       status: 'active',
       notification_recipient_email: currentUser.email,
@@ -789,6 +793,7 @@ export async function createTaskWithPriority(data, priority) {
     urgency,
     energy_required: data.energy_required,
     takes_time: data.takes_time === true,
+    worth_breaking_down: data.worth_breaking_down === true,
     life_area: data.life_area || 'personal',
     status: 'active',
     notification_recipient_email: data.currentUser.email
@@ -831,6 +836,7 @@ export async function createTaskWithDate(data, date, time) {
     urgency: data.urgency,
     energy_required: data.energy_required,
     takes_time: data.takes_time === true,
+    worth_breaking_down: data.worth_breaking_down === true,
     life_area: data.life_area || 'personal',
     status: 'active',
     notification_recipient_email: data.currentUser.email,
@@ -904,6 +910,7 @@ export async function createTaskAnyDay(data) {
     urgency: data.urgency,
     energy_required: data.energy_required,
     takes_time: data.takes_time === true,
+    worth_breaking_down: data.worth_breaking_down === true,
     life_area: data.life_area || 'personal',
     status: 'active',
     notification_recipient_email: data.currentUser.email
