@@ -1348,29 +1348,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
               <WebAddressFooter theme={theme} seasonal={isSeasonalTheme()} currentPageName={currentPageName} />
             </div>
 
-            {currentPageName !== "Home" && currentPageName !== "ParkingLot" && currentPageName !== "SupportSpace" && currentPageName !== "AddTask" && currentPageName !== "Tasks" && currentPageName !== "Diary" && currentPageName !== "Notes" && currentPageName !== "Planner" && (
-              <Button
-                onClick={() => {
-                  const event = new CustomEvent('open-voice-assistant');
-                  window.dispatchEvent(event);
-                }}
-                size="lg"
-                className={`fixed bottom-6 right-6 h-14 w-14 rounded-full shadow-2xl z-50 md:hidden bg-opacity-90 ${
-                  theme === 'minimalist'
-                    ? 'bg-purple-600 hover:bg-purple-700'
-                    : theme === 'dark'
-                      ? 'bg-purple-600 hover:bg-purple-700'
-                      : theme === 'spicybrains'
-                        ? 'bg-gradient-to-r from-pink-500 to-yellow-500 hover:from-pink-600 hover:to-yellow-600 border-2 border-cyan-400'
-                        : 'bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600'
-                }`}
-                style={{
-                  marginBottom: 'max(1.5rem, calc(1.5rem + env(safe-area-inset-bottom)))'
-                }}
-              >
-                <Mic className="w-6 h-6" />
-              </Button>
-            )}
           </main>
 
           <MiniPomodoroBar theme={theme} />
