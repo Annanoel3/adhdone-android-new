@@ -949,7 +949,10 @@ async function extractPlan(openai: any, messages: any[], today: string) {
       if (first.includes(':') && DAY_LABEL_RE.test(focus)) {
         focus = first.slice(first.indexOf(':') + 1).trim().split(/(?<=[.!?])\s/)[0].replace(/[.!?]+$/, '').trim() || focus;
       }
-      if (focus.length > 60) focus = focus.slice(0, 60).replace(/\s+\S*$/, '').trim();
+      // Too long for a task's name: cut at a word, with "…" so it reads as
+      // cut ("Week 1: On your first day, spend ten minutes sampling one new"
+      // looked finished, Nov 1 2026). The full step is in its description.
+      if (focus.length > 60) focus = focus.slice(0, 60).replace(/\s+\S*$/, '').replace(/[,;:\s]+$/, '').trim() + '…';
       const d = new Date(startDate); d.setUTCDate(d.getUTCDate() + Math.round(i * totalDays / T));
       return {
         title: focus ? `Week ${wk.week}: ${focus}` : `Week ${wk.week}`,
