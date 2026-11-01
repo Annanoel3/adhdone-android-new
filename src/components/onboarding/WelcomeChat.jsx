@@ -107,6 +107,13 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     if (gone) setIdx((i) => i + 1);
   }, [idx, script, name, handle, about, task, when, notify]);
 
+  // The about-you question is asked once per account, wherever it comes up
+  // (the welcome chat ends with it; the catch-up asks it otherwise): reaching
+  // it counts, answered, skipped or closed, so it is never asked twice.
+  useEffect(() => {
+    if (script[idx]?.input === 'about') markStepDone(ONBOARDING_STEPS.catchUp);
+  }, [idx, script]);
+
   const beat = script[idx];
   const line = beat ? beat.text(name || 'you', handle, about, task, when, notify) : '';
   const { shown, done } = useTypewriter(line, 28, idx);
