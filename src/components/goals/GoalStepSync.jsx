@@ -264,9 +264,10 @@ export function runGoalSync(user) {
       do {
         again = false;
         const today = todayKey();
-        const goals = await base44.entities.Goal.list("-created_date", 100);
+        // Never a goal being deleted on this phone (it would get a new task).
+        const goals = liveGoals(await base44.entities.Goal.list("-created_date", 100));
         let changed = false;
-        for (const goal of goals || []) {
+        for (const goal of goals) {
           try {
             if (await syncGoal(goal, user, today)) changed = true;
           } catch (e) {
