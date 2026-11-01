@@ -25,6 +25,7 @@ import {
   openGoalTasks, finishLinkedTask, unfinishLinkedTask, pauseGoal, resumeGoal, completeGoal, reopenGoal, deleteGoal,
   shortNotes,
 } from "@/components/goals/goalLogic";
+import { stepWeek, trackerDays, planBehind, behindText, fmtDay } from "@/components/goals/goalWeeks";
 
 // "How did it go?" (StepFeedbackPopup): a step finished somewhere else (its
 // task checked off on the task list) is asked about the next time its goal
@@ -67,7 +68,7 @@ export default function GoalDetailPage() {
   );
 }
 
-function StepRow({ step, L, isHabit, isCurrent, goal, openTask, doneDays, busy, canCheckIn, onOpen, onToggle, onRename, onCheckIn, onToggleDay, onAddToTasks, onOpenTask }) {
+function StepRow({ step, L, isHabit, isCurrent, goal, openTask, doneDays, busy, canCheckIn, week, tracker, onOpen, onToggle, onRename, onCheckIn, onToggleDay, onAddToTasks, onOpenTask }) {
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(step.title);
   const done = step.status === "completed";
@@ -131,10 +132,16 @@ function StepRow({ step, L, isHabit, isCurrent, goal, openTask, doneDays, busy, 
               <p className={`mt-1.5 text-[11px] ${L.muted}`}>On your task list from {new Date(`${goal.start_date}T00:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</p>
             )
           )}
+          {/* Its week is over and it isn't checked off: it stays (Anna, Nov 1
+              2026: "It stays until checked off"), and checking it off moves
+              the weeks after it (goalWeeks.lateFinishShift). */}
+          {showTaskLine && week && today > week.end && (
+            <p className={`mt-1.5 text-[11px] ${L.muted}`}>This week was due {fmtDay(week.end)}. When you check it off, the weeks after it move to start the next day.</p>
+          )}
         </div>
       </div>
-      {isHabit && !done && <HabitWeekTracker doneDays={doneDays} onToggleDay={(d) => onToggleDay(step, d)} busy={busy} L={L} />}
-      {isHabit && !done && canCheckIn && !doneDays.has(today) && (
+      {isHabit && !done && <HabitWeekTracker tracker={tracker} doneDays={doneDays} onToggleDay={(d) => onToggleDay(step, d)} busy={busy} L={L} />}
+      {isHabit && !done && canCheckIn && tracker?.hasToday && !doneDays.has(today) && (
         <button
           onClick={(e) => { e.stopPropagation(); onCheckIn(step); }}
           className={`w-full text-center py-2 text-xs font-semibold border-t ${L.accent} ${L.dark ? "border-gray-700" : "border-gray-200"}`}
@@ -264,7 +271,6 @@ function GoalDetail() {
         await base44.entities.GoalStep.update(step.id, {
           status: "completed",
           completed_at: new Date().toISOString(),
-          ...(habit ? { task_id: null } : {}),
         });
         // Ask how it went (Anna, Nov 1 2026), once per step.
         if (!step.feedback_asked_at && !step.feedback) setFeedbackStep((curStep) => curStep || step);
@@ -465,6 +471,22 @@ function GoalDetail() {
   const progress = steps.length > 0 ? Math.round((completedSteps / steps.length) * 100) : 0;
   const allDone = steps.length > 0 && completedSteps === steps.length;
   const habitToday = isHabitDay(goal);
+  // Weeks checked off late moved the plan past their deadline (target_date).
+  const behind = goal.status === "active" ? planBehind(goal, steps) : null;
+  const movedLate = steps.some((s) => (Number(s.finished_days_late) || 0) > 0);
+  // A week's or month's dates from its steps' own weeks (they move when a
+  // week is checked off late); the old count from the start date otherwise.
+  const rangeOf = (list) => {
+    let a = null;
+    let b = null;
+    for (const s of list || []) {
+      const w = stepWeek(s, steps);
+      if (!w) continue;
+      if (!a || w.start < a) a = w.start;
+      if (!b || w.end > b) b = w.end;
+    }
+    return a ? `${fmtDay(a)} – ${fmtDay(b)}` : null;
+  };
 
   // Month → week → steps, titles from goal.month_titles (as in the Goals app).
   const monthsMap = {};
@@ -523,6 +545,8 @@ function GoalDetail() {
     isCurrent: cur?.id === step.id,
     openTask: openTasks.find((t) => t.goal_step_id === step.id) || null,
     doneDays: doneDaysFor(step),
+    week: stepWeek(step, steps),
+    tracker: trackerDays(step, steps, todayKey(), { current: cur?.id === step.id }),
     canCheckIn: cur?.id === step.id && goal.status === "active" && habitToday && goalStarted(goal),
     onOpen: (s) => setSelectedStep(s),
     onToggle: toggleStepStatus,
@@ -597,6 +621,18 @@ function GoalDetail() {
             </div>
           )}
 
+          {behind && (
+            <div className={`mt-4 border rounded-xl p-3 ${L.tip}`}>
+              <p className="text-sm font-semibold">{behindText(behind)}</p>
+              <p className="text-xs mt-1">
+                {movedLate ? "Weeks checked off late moved the rest of the plan later. " : ""}The plan now ends {fmtDay(behind.finish, true)}. You can change the plan to fit your deadline, or keep going at your own pace.
+              </p>
+              <Button size="sm" disabled={busy} className={`mt-2 rounded-xl text-xs ${L.primary}`} onClick={() => navigate(`/Planner?edit=${goal.id}`)}>
+                <MessageCircle className="w-3.5 h-3.5 mr-1" /> Change this plan
+              </Button>
+            </div>
+          )}
+
           <div className="flex flex-wrap gap-2 mt-4">
             {/* Back to the planner chat this goal was made in, to change the
                 plan (Anna, Nov 1 2026: "remind the user they can come back to
@@ -639,6 +675,7 @@ function GoalDetail() {
             const isMonthOpen = expandedPhases[monthKey];
             const sortedWeeks = Object.keys(weeksMap).filter((w) => w !== "_month").sort(monthSort);
             const monthOnlySteps = weeksMap._month || [];
+            const monthRange = rangeOf(allMonthSteps) || monthDateRange(monthNum);
             return (
               <div key={monthKey} className={`rounded-xl overflow-hidden ${L.card}`}>
                 <button onClick={() => setExpandedPhases((prev) => ({ ...prev, [monthKey]: !prev[monthKey] }))} className="w-full flex items-center gap-3 px-4 py-3 text-left">
@@ -646,7 +683,7 @@ function GoalDetail() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-2">
                       <h3 className={`text-sm font-bold ${L.title}`}>{monthKey}</h3>
-                      {monthDateRange(monthNum) && <span className={`text-[10px] flex-shrink-0 ${L.muted}`}>{monthDateRange(monthNum)}</span>}
+                      {monthRange && <span className={`text-[10px] flex-shrink-0 ${L.muted}`}>{monthRange}</span>}
                     </div>
                     {monthTitles[monthKey] && <p className={`text-xs mt-0.5 ${L.accent}`}>— {String(monthTitles[monthKey]).replace(/\*+/g, "").trim()}</p>}
                   </div>
@@ -661,6 +698,7 @@ function GoalDetail() {
                       const weekId = `${monthKey}-${weekKey}`;
                       const isWeekOpen = expandedPhases[weekId];
                       const weekNum = parseInt(weekKey.match(/\d+/)?.[0] || 0);
+                      const weekRange = rangeOf(weekSteps) || weekDateRange(monthNum, weekNum);
                       return (
                         <div key={weekKey} className={`rounded-lg border overflow-hidden ${L.row}`}>
                           <button onClick={() => setExpandedPhases((prev) => ({ ...prev, [weekId]: !prev[weekId] }))} className="w-full flex items-center gap-3 px-3 py-2.5 text-left">
@@ -670,7 +708,7 @@ function GoalDetail() {
                                 <span className={`text-xs font-semibold flex-shrink-0 ${L.text}`}>{weekKey}</span>
                                 {weekTitles[weekId] && <span className={`text-xs truncate ${L.muted}`}>— {weekTitles[weekId]}</span>}
                               </div>
-                              {isWeekOpen && weekDateRange(monthNum, weekNum) && <span className={`text-[10px] ${L.muted}`}>{weekDateRange(monthNum, weekNum)}</span>}
+                              {isWeekOpen && weekRange && <span className={`text-[10px] ${L.muted}`}>{weekRange}</span>}
                             </div>
                             <span className={`text-xs mr-2 ${L.muted}`}>{weekSteps.filter((s) => s.status === "completed").length}/{weekSteps.length}</span>
                             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${L.muted} ${isWeekOpen ? "rotate-180" : ""}`} />
