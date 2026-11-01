@@ -853,6 +853,9 @@ async function continuePlan(openai: any, p: {
   };
 }
 
+// A bullet that starts with a day, not a topic: "Monday:", "Mon–Fri:", "Day 3:", "Weekdays:".
+const DAY_LABEL_RE = /^(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tues?|wed|thur?s?|fri|sat|sun)\b|^(?:days?\s*\d+|weekdays?|weekends?|daily|every\s+day|each\s+day)\b/i;
+
 // ── EXTRACT PLAN: the already-written plan → structured JSON (nothing saved) ─
 async function extractPlan(openai: any, messages: any[], today: string) {
   const conversationText = messages.map((m) => `${m.role === 'user' ? 'User' : 'Planner'}: ${m.content}`).join('\n\n');
@@ -928,7 +931,13 @@ async function extractPlan(openai: any, messages: any[], today: string) {
       const bullets = wk.bullets.filter(Boolean);
       const first = bullets[0] || '';
       let focus = (first.includes(':') ? first.split(':')[0] : first).trim();
-      if (focus.length > 60) focus = focus.slice(0, 60).trim();
+      // A week written day by day ("Monday: Set up the course. Tuesday: ...")
+      // made every step "Week N: Monday" (Nov 1 2026 self-test), and the step
+      // is the task's name. Then the focus is that first thing to do.
+      if (first.includes(':') && DAY_LABEL_RE.test(focus)) {
+        focus = first.slice(first.indexOf(':') + 1).trim().split(/(?<=[.!?])\s/)[0].replace(/[.!?]+$/, '').trim() || focus;
+      }
+      if (focus.length > 60) focus = focus.slice(0, 60).replace(/\s+\S*$/, '').trim();
       const d = new Date(startDate); d.setUTCDate(d.getUTCDate() + Math.round(i * totalDays / T));
       return {
         title: focus ? `Week ${wk.week}: ${focus}` : `Week ${wk.week}`,
