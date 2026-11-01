@@ -570,7 +570,9 @@ function Planner() {
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
+            // Enter makes a new line; only the send button sends (Anna, Nov 1
+            // 2026: "make it so that the enter button creates a new line and
+            // doesn't send the message").
             placeholder={
               editingGoal
                 ? `What changes do you want for "${editingGoal.title}"?`
