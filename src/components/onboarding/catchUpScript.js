@@ -102,6 +102,49 @@ export const FIRST_DONE_ABOUT_ONLY_SCRIPT = [
   },
 ];
 
+// For a NEW account that hasn't checked anything off yet: the same questions
+// without the "first one done" opener. Since Nov 1 2026 the catch-up no longer
+// waits for a checked-off task (3 of 16 new accounts ever got it that way;
+// Anna: "someone with a night shift would have nowhere to put that"); it
+// comes on the next app open for anyone who finished the welcome without it.
+export const ABOUT_NOW_SCRIPT = [
+  {
+    text: () => "Two quick questions that make ADHDone a lot better at helping *you*.",
+  },
+  {
+    text: () => "What should we call you? You can change it in Settings anytime.",
+    input: 'name',
+  },
+  {
+    text: (name) => `Thanks, ${name}!`,
+  },
+  {
+    text: () =>
+      "And tell us a little about yourself, so ADHDone knows what matters to you. Like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
+    input: 'about',
+  },
+  {
+    text: afterAbout('list'),
+    final: true,
+  },
+];
+
+// Same, for an account that already gave its name (the usual case).
+export const ABOUT_NOW_ABOUT_ONLY_SCRIPT = [
+  {
+    text: (name) => `Quick one, ${name}, that makes ADHDone a lot better at helping *you*.`,
+  },
+  {
+    text: () =>
+      "Tell us a little about yourself, so ADHDone knows what matters to you. Like \"I play violin at weddings\" or \"I'm a nurse on night shifts.\"",
+    input: 'about',
+  },
+  {
+    text: afterAbout('list'),
+    final: true,
+  },
+];
+
 // For someone who closed the welcome chat before giving a name (so the app has
 // nothing to call them): asked once more, on a later open, for the name alone.
 // The about-you question still comes after their first checked-off task.
