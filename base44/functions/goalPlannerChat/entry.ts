@@ -13,11 +13,19 @@
 // Body:
 //   { messages, mode: 'chat', goal_id?, city?, tz? }    → { message, action, goal_id?, month_titles }
 //   { messages, mode: 'extract_plan', tz? }             → { plan }  (nothing saved; the app saves)
+//     built from EVERY planner message (assemblePlan), not just the last one.
 //   { messages, mode: 'apply_edit', goal_id, tz? }      → replaces the goal's not-completed steps
+//   { messages, mode: 'continue_plan', plan_text, goal_id?, tz? }
+//                       → { message, incomplete, months_done, months_total, month_titles }
+//     writes the months a long plan is still missing, with a fresh time budget.
+//     A chat answer that holds a plan carries incomplete / months_done /
+//     months_total too; the Planner calls continue_plan until incomplete is
+//     false (Anna, Nov 1 2026: a long plan came out with months 15+ empty).
 //   admin only: { selftest: true, goal: "<text>", answers: ["...", ...], tz? }
 //     runs the planner on a sample goal (its questions answered from `answers`,
-//     in order) through to the full plan and its extraction, and returns them.
-//     Reads and writes nothing.
+//     in order) through to the full plan and its extraction, in stages over
+//     several calls: every answer carries `next`, the body for the next call,
+//     until `done` (see selfTest). Reads and writes nothing.
 import { createClientFromRequest } from "npm:@base44/sdk@0.8.44";
 import OpenAI from "npm:openai";
 import { lean } from '../../shared/aiCost.ts';
@@ -191,6 +199,60 @@ function parsePlanWeeks(text: string) {
   }
 
   return { weeks, monthTitles };
+}
+
+// Closing lines the planner (or this function) puts under a plan. A plan that
+// is being continued never keeps one in the middle.
+const CLOSING_RE = /continue expanding any remaining months|that completes the full plan|does this plan look good|ready to save it\?/i;
+const COMPLETE_LINE = 'That completes the full plan — does this look good and are you ready to save it?';
+function stripClosing(text: string): string {
+  return String(text || '').split('\n')
+    .filter((ln) => !(CLOSING_RE.test(ln) && !/^\s*(?:[-•*]|\d+\.)\s/.test(ln)))
+    .join('\n').replace(/\s+$/, '');
+}
+
+// The plan from EVERY planner message (ADHDone; the Goals app read only the
+// last one, so a long plan finished with "continue" saved only its last
+// months). Each Month N comes from the most recent message that wrote it in
+// full (as many weeks with content as its fullest version). How many months:
+// the latest message that starts at Month 1 sets the length and messages
+// after it (a continuation, a rewritten month) can only add to it, so a plan
+// that was made shorter doesn't bring back the longer version's last months.
+function assemblePlan(messages: any[]) {
+  const plans = (Array.isArray(messages) ? messages : [])
+    .filter((m) => m?.role === 'assistant' && /^\s*#{0,4}\s*\*{0,2}\s*Month\s+\d+/im.test(String(m.content || '')))
+    .map((m) => {
+      const text = stripClosing(String(m.content));
+      const parsed = parsePlanWeeks(text);
+      const byMonth = new Map<number, any[]>();
+      for (const w of parsed.weeks) {
+        if (!byMonth.has(w.month)) byMonth.set(w.month, []);
+        byMonth.get(w.month)!.push(w);
+      }
+      const a = analyzePlan(text);
+      return { text, byMonth, titles: parsed.monthTitles, reach: Math.max(a.maxMentioned, a.maxPresent) };
+    });
+  if (plans.length === 0) return null;
+  const filled = (i: number, n: number) => (plans[i].byMonth.get(n) || []).filter((w: any) => w.bullets.length > 0).length;
+  let fullIdx = -1;
+  for (let i = plans.length - 1; i >= 0; i--) { if (filled(i, 1) > 0) { fullIdx = i; break; } }
+  let limit = 0;
+  for (let i = Math.max(0, fullIdx); i < plans.length; i++) limit = Math.max(limit, plans[i].reach);
+  limit = Math.min(36, limit);
+  const weeks: any[] = [];
+  const monthTitles: Record<number, string> = {};
+  for (let n = 1; n <= limit; n++) {
+    let best = 0;
+    for (let i = 0; i < plans.length; i++) best = Math.max(best, filled(i, n));
+    if (best === 0) continue;
+    const need = Math.min(4, best);
+    let pick = -1;
+    for (let i = plans.length - 1; i >= 0 && pick < 0; i--) if (filled(i, n) >= need) pick = i;
+    weeks.push(...(plans[pick].byMonth.get(n) || []));
+    if (plans[pick].titles[n]) monthTitles[n] = plans[pick].titles[n];
+  }
+  weeks.sort((a, b) => a.month - b.month || a.week - b.week);
+  return { weeks, monthTitles, intro: plans[fullIdx >= 0 ? fullIdx : plans.length - 1].text, months: limit };
 }
 
 // ── Dates: the person's own day, not the server's (RULES.md: their time) ────
@@ -500,12 +562,13 @@ Return ONLY the JSON object, no other text.`,
   }
 }
 
-// ── CHAT: one planner turn ─────────────────────────────────────────────────
-async function runChat(openai: any, p: {
-  messages: any[]; goalId: string | null; city: string | null; today: string; startedAt: number;
+// ── The system prompt and the plan's length for a conversation ─────────────
+// (Goals app logic, unchanged; shared by a chat turn and continue_plan.)
+function planContext(p: {
+  messages: any[]; goalId: string | null; city: string | null; today: string;
   existingGoals: any[]; stepsByGoal: Record<string, any[]>;
 }) {
-  const { messages, goalId, city, today, startedAt, existingGoals, stepsByGoal } = p;
+  const { messages, goalId, city, today, existingGoals, stepsByGoal } = p;
   const conversationText = messages.map((m) => `${m.role === 'user' ? 'User' : 'Planner'}: ${m.content}`).join('\n\n');
   const detectedMonths = detectMonths(conversationText, today);
   const monthsRule = detectedMonths
@@ -527,19 +590,6 @@ async function runChat(openai: any, p: {
     : 'The user has no existing goals yet.';
 
   const isEditSession = !!goalId;
-
-  // Safety check on a new goal's first message (as in the Goals app).
-  if (!isEditSession) {
-    const firstUserMessage = messages.find((m) => m.role === 'user')?.content || '';
-    if (firstUserMessage && messages.length <= 2) {
-      try {
-        const safety = await safetyCheck(openai, firstUserMessage);
-        if (!safety.safe && safety.reason) return { message: safety.reason, action: 'safety_flag' };
-      } catch (e: any) {
-        console.error('[goalPlannerChat] safety check failed, carrying on:', e?.message);
-      }
-    }
-  }
 
   let planMonths = detectedMonths;
   let systemPrompt: string;
@@ -571,83 +621,71 @@ async function runChat(openai: any, p: {
     systemPrompt = newGoalPrompt({ today, goalsSummary, userCity: city, monthsRule });
   }
 
+  return { systemPrompt, planMonths };
+}
+
+// Guarantee a plan draft is fully expanded into SEPARATE months (Goals app
+// logic). ADHDone: when the time runs out with months still missing, the plan
+// so far comes back with incomplete, months_done and months_total (and no
+// closing line), and the Planner asks for the rest (continue_plan, a fresh
+// time budget each call). The Goals app closed it with "You can also ask me
+// to continue expanding any remaining months", and the months never came.
+const HARD_CAP_MONTHS = 36;
+async function expandPlan(openai: any, systemPrompt: string, messages: any[], startText: string, planMonths: number | null, startedAt: number) {
   const remaining = () => CHAT_BUDGET_MS - (Date.now() - startedAt);
-
-  // Guarantee a plan draft is fully expanded into SEPARATE months (Goals app
-  // logic, unchanged apart from the time budget).
-  const HARD_CAP_MONTHS = 36;
-  const expandPlan = async (text: string) => {
-    let stalls = 0;
-    for (let attempt = 0; attempt < 16; attempt++) {
-      const a = analyzePlan(text);
-      const expected = Math.min(HARD_CAP_MONTHS, Math.max(planMonths || 0, a.maxMentioned));
-      if (a.contig >= expected && !a.groupingPresent) break;
-      const from = a.contig + 1;
-      if (from > expected) break;
-      if (remaining() < 60 * 1000) break; // out of time: close honestly below
-      const cut = a.contig >= 1
-        ? a.sectionEnd(a.headerIdx[a.contig])
-        : (a.firstHeaderIdx >= 0 ? a.firstHeaderIdx : a.lines.length);
-      const head = a.lines.slice(0, cut).join('\n');
-      const target = Math.min(HARD_CAP_MONTHS, Math.max(expected, a.maxPresent));
-      let addition = '';
-      try {
-        addition = await modelTurn(openai, systemPrompt, [
-          ...messages,
-          { role: 'assistant', content: head },
-          {
-            role: 'user',
-            content: `Continue building this exact plan. Do NOT repeat, rewrite, or alter any month you already wrote — Month 1 through Month ${a.contig} are done. Now write Month ${from} through Month ${target}, EACH as its own separate section titled "**Month N — Title**" with all 4 weeks (Week 1–Week 4), in the same detailed format and depth as the earlier months. Every week must be detailed, not a one-liner: the concrete action PLUS what to focus on (tied to the actual content/themes), a reflection/thinking prompt, and a practice/application activity. NEVER write a month range like "Month ${from}-${target}", NEVER write "TBD"/"to be determined"/"I'll continue" — write every single month out in full and separately. Output ONLY Month ${from} through Month ${target}.`,
-          },
-        ], remaining() - 15 * 1000);
-      } catch (e: any) {
-        console.error('[goalPlannerChat] continuation pass failed:', e?.message);
-        addition = '';
-      }
-      const candidate = (addition && addition.trim()) ? head.replace(/\s+$/, '') + '\n\n' + addition.trim() : null;
-      if (candidate && analyzePlan(candidate).contig > a.contig) {
-        text = candidate;
-        stalls = 0;
-      } else if (++stalls >= 3) {
-        break;
-      }
+  let text = startText;
+  let stalls = 0;
+  for (let attempt = 0; attempt < 16; attempt++) {
+    const a = analyzePlan(text);
+    const expected = Math.min(HARD_CAP_MONTHS, Math.max(planMonths || 0, a.maxMentioned));
+    if (a.contig >= expected && !a.groupingPresent) break;
+    const from = a.contig + 1;
+    if (from > expected) break;
+    if (remaining() < 60 * 1000) break; // out of time: the Planner asks for the rest
+    const cut = a.contig >= 1
+      ? a.sectionEnd(a.headerIdx[a.contig])
+      : (a.firstHeaderIdx >= 0 ? a.firstHeaderIdx : a.lines.length);
+    const head = stripClosing(a.lines.slice(0, cut).join('\n'));
+    const target = Math.min(HARD_CAP_MONTHS, Math.max(expected, a.maxPresent));
+    let addition = '';
+    try {
+      addition = await modelTurn(openai, systemPrompt, [
+        ...messages,
+        { role: 'assistant', content: head },
+        {
+          role: 'user',
+          content: `Continue building this exact plan. Do NOT repeat, rewrite, or alter any month you already wrote — Month 1 through Month ${a.contig} are done. Now write Month ${from} through Month ${target}, EACH as its own separate section titled "**Month N — Title**" with all 4 weeks (Week 1–Week 4), in the same detailed format and depth as the earlier months. Every week must be detailed, not a one-liner: the concrete action PLUS what to focus on (tied to the actual content/themes), a reflection/thinking prompt, and a practice/application activity. NEVER write a month range like "Month ${from}-${target}", NEVER write "TBD"/"to be determined"/"I'll continue" — write every single month out in full and separately. Output ONLY Month ${from} through Month ${target}.`,
+        },
+      ], remaining() - 15 * 1000);
+    } catch (e: any) {
+      console.error('[goalPlannerChat] continuation pass failed:', e?.message);
+      addition = '';
     }
-    const fin = analyzePlan(text);
-    const finExpected = Math.min(HARD_CAP_MONTHS, Math.max(planMonths || 0, fin.maxMentioned));
-    if (fin.contig < finExpected || fin.rangePresent) {
-      const cut = fin.contig >= 1
-        ? fin.sectionEnd(fin.headerIdx[fin.contig])
-        : (fin.firstHeaderIdx >= 0 ? fin.firstHeaderIdx : fin.lines.length);
-      const head = fin.lines.slice(0, cut).join('\n').replace(/\s+$/, '');
-      if (fin.contig >= finExpected) {
-        text = head + '\n\nThat completes the full plan — does this look good and are you ready to save it?';
-      } else {
-        text = head + '\n\nDoes this plan look good so far? You can also ask me to continue expanding any remaining months.';
-      }
-    } else if (!/\?\s*$/.test(text.trim())) {
-      text = text.trim() + '\n\nThat completes the full plan — does this look good and are you ready to save it?';
+    const candidate = (addition && addition.trim()) ? head + '\n\n' + addition.trim() : null;
+    if (candidate && analyzePlan(candidate).contig > a.contig) {
+      text = candidate;
+      stalls = 0;
+    } else if (++stalls >= 3) {
+      break;
     }
-    return text;
-  };
-
-  let finalReply = await modelTurn(openai, systemPrompt, messages, remaining() - 10 * 1000);
-  if (!finalReply.trim()) throw new Error('The planner gave an empty answer');
-
-  const isApproval = /\b(?:PLAN_APPROVED|EDIT_APPROVED)\b/i.test(finalReply);
-  const looksLikePlan = /^\s*#{0,4}\s*\*{0,2}\s*Month\s+\d+/im.test(finalReply);
-  if (!isApproval && looksLikePlan) finalReply = await expandPlan(finalReply);
-
-  if (isEditSession && finalReply.includes('EDIT_APPROVED')) {
-    return { message: finalReply.replace(/EDIT_APPROVED\s*/i, '').trim(), action: 'edit_approved', goal_id: goalId };
   }
-  if (finalReply.includes('PLAN_APPROVED')) {
-    return { message: finalReply.replace(/PLAN_APPROVED\s*/i, '').trim(), action: 'plan_proposed' };
+  const fin = analyzePlan(text);
+  const finExpected = Math.min(HARD_CAP_MONTHS, Math.max(planMonths || 0, fin.maxMentioned));
+  const progress = { months_done: Math.min(fin.contig, finExpected), months_total: finExpected };
+  if (fin.contig < finExpected || fin.rangePresent) {
+    const cut = fin.contig >= 1
+      ? fin.sectionEnd(fin.headerIdx[fin.contig])
+      : (fin.firstHeaderIdx >= 0 ? fin.firstHeaderIdx : fin.lines.length);
+    const head = stripClosing(fin.lines.slice(0, cut).join('\n'));
+    if (fin.contig >= finExpected) return { text: head + '\n\n' + COMPLETE_LINE, incomplete: false, ...progress };
+    return { text: head, incomplete: true, ...progress };
   }
-  const editMatch = finalReply.match(/EDIT_APPROVED:([^\s]+)/i);
-  if (editMatch) {
-    return { message: finalReply.replace(/EDIT_APPROVED:[^\s]+\s*/i, '').trim(), action: 'edit_approved', goal_id: editMatch[1] };
-  }
+  if (!/\?\s*$/.test(text.trim())) text = text.trim() + '\n\n' + COMPLETE_LINE;
+  return { text, incomplete: false, ...progress };
+}
 
+// Month titles from a plan's text (verbatim from the Goals app).
+function monthTitlesFrom(finalReply: string): Record<number, string> {
   // Month titles from the reply (verbatim from the Goals app).
   const chatMonthTitles: Record<number, string> = {};
   const replyLines = finalReply.split('\n');
@@ -679,7 +717,77 @@ async function runChat(openai: any, p: {
       }
     }
   }
-  return { message: finalReply, action: 'chat', month_titles: chatMonthTitles };
+  return chatMonthTitles;
+}
+
+// ── CHAT: one planner turn ─────────────────────────────────────────────────
+async function runChat(openai: any, p: {
+  messages: any[]; goalId: string | null; city: string | null; today: string; startedAt: number;
+  existingGoals: any[]; stepsByGoal: Record<string, any[]>;
+}) {
+  const { messages, goalId, startedAt } = p;
+  const isEditSession = !!goalId;
+  const remaining = () => CHAT_BUDGET_MS - (Date.now() - startedAt);
+
+  // Safety check on a new goal's first message (as in the Goals app).
+  if (!isEditSession) {
+    const firstUserMessage = messages.find((m) => m.role === 'user')?.content || '';
+    if (firstUserMessage && messages.length <= 2) {
+      try {
+        const safety = await safetyCheck(openai, firstUserMessage);
+        if (!safety.safe && safety.reason) return { message: safety.reason, action: 'safety_flag' };
+      } catch (e: any) {
+        console.error('[goalPlannerChat] safety check failed, carrying on:', e?.message);
+      }
+    }
+  }
+
+  const { systemPrompt, planMonths } = planContext(p);
+
+  let finalReply = await modelTurn(openai, systemPrompt, messages, remaining() - 10 * 1000);
+  if (!finalReply.trim()) throw new Error('The planner gave an empty answer');
+
+  const isApproval = /\b(?:PLAN_APPROVED|EDIT_APPROVED)\b/i.test(finalReply);
+  const looksLikePlan = /^\s*#{0,4}\s*\*{0,2}\s*Month\s+\d+/im.test(finalReply);
+  // incomplete / months_done / months_total: see expandPlan.
+  let progress: any = {};
+  if (!isApproval && looksLikePlan) {
+    const r = await expandPlan(openai, systemPrompt, messages, finalReply, planMonths, startedAt);
+    finalReply = r.text;
+    progress = { incomplete: r.incomplete, months_done: r.months_done, months_total: r.months_total };
+  }
+
+  if (isEditSession && finalReply.includes('EDIT_APPROVED')) {
+    return { message: finalReply.replace(/EDIT_APPROVED\s*/i, '').trim(), action: 'edit_approved', goal_id: goalId, ...progress };
+  }
+  if (finalReply.includes('PLAN_APPROVED')) {
+    return { message: finalReply.replace(/PLAN_APPROVED\s*/i, '').trim(), action: 'plan_proposed', ...progress };
+  }
+  const editMatch = finalReply.match(/EDIT_APPROVED:([^\s]+)/i);
+  if (editMatch) {
+    return { message: finalReply.replace(/EDIT_APPROVED:[^\s]+\s*/i, '').trim(), action: 'edit_approved', goal_id: editMatch[1], ...progress };
+  }
+  return { message: finalReply, action: 'chat', month_titles: monthTitlesFrom(finalReply), ...progress };
+}
+
+// ── CONTINUE PLAN: the months a long plan is still missing ─────────────────
+// The Planner calls this when a plan came back incomplete; the same
+// continuation passes as a chat turn, from the plan as it stands, with this
+// call's own time budget. `messages` is the conversation before the plan.
+async function continuePlan(openai: any, p: {
+  messages: any[]; planText: string; goalId: string | null; city: string | null; today: string; startedAt: number;
+  existingGoals: any[]; stepsByGoal: Record<string, any[]>;
+}) {
+  const { systemPrompt, planMonths } = planContext(p);
+  const r = await expandPlan(openai, systemPrompt, p.messages, stripClosing(p.planText), planMonths, p.startedAt);
+  return {
+    message: r.text,
+    action: 'chat',
+    month_titles: monthTitlesFrom(r.text),
+    incomplete: r.incomplete,
+    months_done: r.months_done,
+    months_total: r.months_total,
+  };
 }
 
 // ── EXTRACT PLAN: the already-written plan → structured JSON (nothing saved) ─
@@ -689,9 +797,13 @@ async function extractPlan(openai: any, messages: any[], today: string) {
   const lastAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant');
   const planText = lastAssistantMessage?.content || conversationText;
 
-  const parsed = parsePlanWeeks(planText);
-  const parsedWeeks = parsed.weeks;
-  const parsedMonthTitles = parsed.monthTitles;
+  // ADHDone: the plan is built from EVERY planner message (assemblePlan), so a
+  // long plan finished with "continue", or a month rewritten later, is all in.
+  // (The AI fallback below still reads the last message, as before.)
+  const assembled = assemblePlan(messages);
+  const parsedWeeks = assembled ? assembled.weeks : [];
+  const parsedMonthTitles = assembled ? assembled.monthTitles : {};
+  const planIntro = assembled ? assembled.intro : planText;
   const weeksWithContent = parsedWeeks.filter((w) => w.bullets.length > 0).length;
 
   if (weeksWithContent >= 3) {
@@ -717,7 +829,7 @@ async function extractPlan(openai: any, messages: any[], today: string) {
         - preferred_time: the time of day the user said they want to do it (daily-action goals), in 24h HH:MM format (e.g., "09:00", "18:00", "08:00" for morning, "17:00" for evening). null if they gave no time or said no set time.
         - start_date: The date the user wants to START, as YYYY-MM-DD. TODAY IS ${today}. Resolve loose/relative phrasing: "next month" → the 1st of next month; a bare month name ("July", "in July", "start in July") → the 1st of that month (this year if still upcoming, else next year); "now"/"today"/"asap" → ${today}. Only return null if no start timing is given at all.
         ${TIME_MAPPING_RULE}` },
-          { role: 'user', content: `User said:\n${userText}\n\nPlan intro:\n${planText.slice(0, 1200)}\n\nFrom the user's text above, extract BOTH the time of day they want to do it AND their start date. For start_date, resolve relative phrasing ("next month", "in July", "start in July", "now") to a real YYYY-MM-DD using today = ${today}. Return the JSON.` },
+          { role: 'user', content: `User said:\n${userText}\n\nPlan intro:\n${planIntro.slice(0, 1200)}\n\nFrom the user's text above, extract BOTH the time of day they want to do it AND their start date. For start_date, resolve relative phrasing ("next month", "in July", "start in July", "now") to a real YYYY-MM-DD using today = ${today}. Return the JSON.` },
         ],
       });
       meta = JSON.parse(metaResp.choices?.[0]?.message?.content || '{}') || {};
@@ -963,45 +1075,132 @@ Extract every single step. If the planner listed 48 steps, return all 48.`,
 }
 
 // ── Admin self-test ────────────────────────────────────────────────────────
+// Runs the planner on a sample goal, its questions answered from `answers` in
+// order, through to the full plan and its extraction. Reads and writes
+// nothing. A long plan needs more than one call (each call has the planner's
+// time budget), so every answer carries `next`: the exact body for the next
+// call, until `done`. Stages:
+//   chat     — the questions, then the plan (as the app's chat turns)
+//   continue — the months still missing (as the app's continue_plan)
+//   extract  — extract_plan on the finished plan, and a check that the same
+//              plan split over two planner messages (as when someone types
+//              "continue") assembles to the same months and weeks
 async function selfTest(openai: any, body: any, today: string) {
   const startedAt = Date.now();
-  const goal = String(body.goal || '').trim();
-  if (!goal) return { error: 'goal (text) is required' };
-  const answers = Array.isArray(body.answers) ? body.answers.map((a: any) => String(a || '').trim()).filter(Boolean) : [];
-  const messages: any[] = [{ role: 'user', content: goal }];
-  const turns: any[] = [];
-  let planText = '';
-  for (let i = 0; i <= answers.length; i++) {
-    const r: any = await runChat(openai, { messages, goalId: null, city: null, today, startedAt, existingGoals: [], stepsByGoal: {} });
-    turns.push({ action: r.action, message: r.message });
-    messages.push({ role: 'assistant', content: r.message });
-    if (r.action === 'safety_flag') break;
-    if (/Month\s+\d+/i.test(r.message) && /Week\s+\d+/i.test(r.message)) { planText = r.message; break; }
-    if (i < answers.length) messages.push({ role: 'user', content: answers[i] });
-  }
-  let plan: any = null;
-  if (planText) plan = await extractPlan(openai, messages, today);
-  // Any line of the plan that sounds like it promises a reminder, a check-in or
-  // a message: the prompt says never to (APP_RULE); this shows if it slipped.
-  const promises = String(planText || turns.map((t) => t.message).join('\n'))
-    .split('\n')
+  const stage = ['chat', 'continue', 'extract'].includes(body?.stage) ? body.stage : 'chat';
+  const call = Math.max(1, Number(body?.call) || 1);
+  const remaining = () => CHAT_BUDGET_MS - (Date.now() - startedAt);
+  const seconds = () => Math.round((Date.now() - startedAt) / 1000);
+  const base = { selftest: true, saved: false, stage, call, today };
+  const none = { existingGoals: [] as any[], stepsByGoal: {} as Record<string, any[]> };
+  const isPlan = (t: string) => /^\s*#{0,4}\s*\*{0,2}\s*Month\s+\d+/im.test(t) && /Week\s+\d+/i.test(t);
+  // Any line that sounds like it promises a reminder, a check-in or a
+  // message: the prompt says never to (APP_RULE); this shows if it slipped.
+  const promisesIn = (t: string) => String(t || '').split('\n')
     .filter((ln) => /\b(remind|reminder|notification|notify|check[- ]in|i'?ll (send|check|text|message|ping)|you'?ll (get|receive))\b/i.test(ln))
-    .map((ln) => ln.trim())
-    .slice(0, 20);
+    .map((ln) => ln.trim()).slice(0, 20);
+  const monthsWritten = (t: string) => {
+    const a = analyzePlan(stripClosing(t));
+    return Object.keys(a.headerIdx).map(Number).filter((n) => n >= 1).sort((x, y) => x - y);
+  };
+  const afterPlan = (convo: any[], planText: string, r: any, extra: any) => ({
+    ...base,
+    ...extra,
+    seconds: seconds(),
+    plan_reached: true,
+    incomplete: r.incomplete === true,
+    months_done: r.months_done,
+    months_total: r.months_total,
+    months_with_headers: monthsWritten(planText),
+    reminder_promise_lines: promisesIn(planText),
+    plan_start: planText.slice(0, 1200),
+    plan_end: planText.slice(-600),
+    done: false,
+    next: r.incomplete === true
+      ? { selftest: true, stage: 'continue', call: call + 1, messages: convo, plan_text: planText, tz: body?.tz || null }
+      : { selftest: true, stage: 'extract', call: call + 1, messages: [...convo, { role: 'assistant', content: planText }], tz: body?.tz || null },
+  });
+
+  if (stage === 'chat') {
+    const messages = cleanMessages(body?.messages);
+    if (messages.length === 0) {
+      const goal = String(body?.goal || '').trim();
+      if (!goal) return { error: 'goal (text) is required' };
+      messages.push({ role: 'user', content: goal });
+    }
+    let answers: string[] = Array.isArray(body?.answers) ? body.answers.map((a: any) => String(a || '').trim()).filter(Boolean) : [];
+    const turns: any[] = [];
+    while (true) {
+      if (turns.length > 0 && remaining() < 150 * 1000) {
+        return { ...base, seconds: seconds(), turns, plan_reached: false, done: false, next: { selftest: true, stage: 'chat', call: call + 1, messages, answers, tz: body?.tz || null } };
+      }
+      const r: any = await runChat(openai, { messages, goalId: null, city: null, today, startedAt, ...none });
+      const plan = isPlan(r.message);
+      turns.push({ action: r.action, message: plan ? '(the plan: see plan_start / plan_end)' : r.message });
+      if (r.action === 'safety_flag') return { ...base, seconds: seconds(), turns, plan_reached: false, done: true };
+      if (plan) return afterPlan(messages, r.message, r, { turns });
+      messages.push({ role: 'assistant', content: r.message });
+      if (answers.length === 0) {
+        return { ...base, seconds: seconds(), turns, plan_reached: false, done: true, note: 'The planner asked more than the answers given; add answers and run again.' };
+      }
+      messages.push({ role: 'user', content: answers[0] });
+      answers = answers.slice(1);
+    }
+  }
+
+  if (stage === 'continue') {
+    const convo = cleanMessages(body?.messages);
+    const planText = String(body?.plan_text || '');
+    if (convo.length === 0 || !planText.trim()) return { error: 'messages and plan_text are required' };
+    const r = await continuePlan(openai, { messages: convo, planText, goalId: null, city: null, today, startedAt, ...none });
+    return afterPlan(convo, r.message, r, {});
+  }
+
+  // extract
+  const convo = cleanMessages(body?.messages);
+  if (convo.length === 0) return { error: 'messages are required' };
+  const plan: any = await extractPlan(openai, convo, today);
+  const steps = Array.isArray(plan?.steps) ? plan.steps : [];
+  const months = [...new Set(steps.map((st: any) => parseInt(String(st.phase || '').match(/Month\s+(\d+)/i)?.[1] || '0', 10)).filter((n: number) => n > 0))].sort((x: any, y: any) => x - y);
+  const timelineMonths = parseInt(String(plan?.timeline || '').match(/\d+/)?.[0] || '0', 10);
+  const missing: number[] = [];
+  for (let n = 1; n <= timelineMonths; n++) if (!months.includes(n)) missing.push(n);
+  let merge_check: any = null;
+  const last = convo[convo.length - 1];
+  if (last?.role === 'assistant') {
+    const a = analyzePlan(stripClosing(last.content));
+    const mid = Math.floor(a.contig / 2) + 1;
+    if (a.contig >= 2 && a.headerIdx[mid] != null) {
+      const split = [
+        ...convo.slice(0, -1),
+        { role: 'assistant', content: a.lines.slice(0, a.headerIdx[mid]).join('\n') },
+        { role: 'user', content: 'continue' },
+        { role: 'assistant', content: a.lines.slice(a.headerIdx[mid]).join('\n') },
+      ];
+      const whole = assemblePlan(convo);
+      const parts = assemblePlan(split);
+      const monthsOf = (x: any) => [...new Set((x?.weeks || []).map((w: any) => w.month))].sort((p: any, q: any) => p - q);
+      merge_check = {
+        split_at_month: mid,
+        months_one_message: monthsOf(whole).length,
+        months_two_messages: monthsOf(parts).length,
+        weeks_one_message: whole?.weeks.length || 0,
+        weeks_two_messages: parts?.weeks.length || 0,
+        same: JSON.stringify(monthsOf(whole)) === JSON.stringify(monthsOf(parts)) && (whole?.weeks.length || 0) === (parts?.weeks.length || 0),
+      };
+    }
+  }
   return {
-    selftest: true,
-    saved: false,
-    seconds: Math.round((Date.now() - startedAt) / 1000),
-    today,
-    turns,
-    plan_reached: !!planText,
-    plan: plan ? {
-      ...plan,
-      steps_count: plan.steps?.length || 0,
-      steps: (plan.steps || []).slice(0, 6),
-      steps_left_out_of_this_preview: Math.max(0, (plan.steps?.length || 0) - 6),
-    } : null,
-    reminder_promise_lines: promises,
+    ...base,
+    seconds: seconds(),
+    done: true,
+    timeline: plan?.timeline,
+    steps_count: steps.length,
+    months_with_steps: months.length,
+    months_missing: missing,
+    all_months_have_steps: months.length > 0 && missing.length === 0,
+    merge_check,
+    plan: { ...plan, steps: steps.slice(0, 6), steps_left_out_of_this_preview: Math.max(0, steps.length - 6) },
   };
 }
 
@@ -1039,7 +1238,7 @@ export default async function (req: Request) {
       return Response.json(out, { status: out.success ? 200 : 422 });
     }
 
-    // CHAT. The user's own goals and steps (RLS scopes to their own).
+    // CHAT and CONTINUE PLAN. The user's own goals and steps (RLS scopes to their own).
     let existingGoals: any[] = [];
     try { existingGoals = await base44.entities.Goal.list('-created_date', 50); } catch (_) { existingGoals = []; }
     const stepsByGoal: Record<string, any[]> = {};
@@ -1049,8 +1248,21 @@ export default async function (req: Request) {
         stepsByGoal[g.id] = (steps || []).sort((a: any, b: any) => (a.order_index || 0) - (b.order_index || 0));
       } catch (_) { stepsByGoal[g.id] = []; }
     }
+    const city = typeof body?.city === 'string' ? body.city : null;
+    if (mode === 'continue_plan') {
+      const planText = String(body?.plan_text || '');
+      if (!planText.trim()) return Response.json({ error: 'plan_text required' }, { status: 400 });
+      // The conversation before the plan (the plan itself may be sent too).
+      let convo = messages;
+      const lastMsg = convo[convo.length - 1];
+      if (lastMsg?.role === 'assistant' && lastMsg.content.trim() === planText.trim()) convo = convo.slice(0, -1);
+      const out = await continuePlan(openai, {
+        messages: convo, planText, goalId, city, today, startedAt: Date.now(), existingGoals, stepsByGoal,
+      });
+      return Response.json(out);
+    }
     const out = await runChat(openai, {
-      messages, goalId, city: typeof body?.city === 'string' ? body.city : null, today,
+      messages, goalId, city, today,
       startedAt: Date.now(), existingGoals, stepsByGoal,
     });
     return Response.json(out);
