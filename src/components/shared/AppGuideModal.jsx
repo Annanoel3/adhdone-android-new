@@ -221,7 +221,7 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
       children: [
     {
       icon: MessageCircleHeart,
-      title: "Talk It Out",
+      title: "Support Space",
       description: "A judgment-free space for ADHD and executive-function strategy. App questions go here too."
     },
     {
