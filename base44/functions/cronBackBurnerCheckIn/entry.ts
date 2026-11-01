@@ -42,7 +42,7 @@ const COMEBACK_STEPS = [
     day: 3,
     lines: [
       { title: 'Brain getting crowded?', body: 'Toss one thing in here and let ADHDone do the remembering.' },
-      { title: 'Your list is empty', body: "Either you're crushing it or life got busy. Either way, ADHDone's here when you need it." },
+      { title: 'Your list is empty', body: "Either you're crushing it or life got busy. Either way, ADHDone's here when you need it.", emptyOnly: true },
       { title: "Anything you're trying to remember?", body: 'Tell ADHDone and stop carrying it in your head.' },
     ],
   },
@@ -140,11 +140,19 @@ Deno.serve(async (req) => {
     // ── Come back (see COMEBACK_STEPS) ────────────────────────────────────
     let comebacks = 0;
     try {
+      // Birthdays don't count as something open: they only speak up on the
+      // day, so someone whose list is only birthdays heard nothing at all and
+      // got no come-back push either (Tricia, Nov 1 2026: two birthdays saved
+      // Oct 28-29, nothing from the app until Nov 7; Anna: "How do we pull
+      // back tricia"). They get these, minus "Your list is empty".
+      const isBirthday = (t: any) => t?.classification === 'birthday' || !!t?.birthday_person;
       const openFor = new Set<string>();
+      const birthdaysOnly = new Set<string>();
       for (const t of allTasks) {
         if (t?.status !== 'active') continue;
-        if (t.created_by) openFor.add(String(t.created_by).toLowerCase());
-        if (t.notification_recipient_email) openFor.add(String(t.notification_recipient_email).toLowerCase());
+        const who = [t.created_by, t.notification_recipient_email].filter(Boolean).map((x: any) => String(x).toLowerCase());
+        if (isBirthday(t)) { for (const w of who) birthdaysOnly.add(w); continue; }
+        for (const w of who) openFor.add(w);
       }
       const ms = (v: any) => { const n = Date.parse(String(v || '')); return Number.isFinite(n) ? n : NaN; };
       for (const user of allUsers) {
@@ -180,7 +188,9 @@ Deno.serve(async (req) => {
         if (!gate.allowed) continue;
 
         const round = Math.max(0, Number(user.comeback_round) || 0) + (step === 0 ? 1 : 0);
-        const line = next.lines[(round - 1 + next.lines.length) % next.lines.length];
+        const hasBirthdays = birthdaysOnly.has(String(email).toLowerCase());
+        const usable = next.lines.filter((l: any) => !(hasBirthdays && l.emptyOnly));
+        const line = usable[(round - 1 + usable.length) % usable.length];
         const outcome = await sendComeback(email, line.title, line.body);
         const fields: Record<string, any> = { comeback_from: seenIso, comeback_round: round, comeback_last_at: now.toISOString() };
         if (outcome === 'unsubscribed') {
