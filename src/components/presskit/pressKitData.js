@@ -52,8 +52,7 @@ export const FEATURE_GROUPS = [
     group: "The life admin nobody remembers",
     items: [
       { name: "Birthdays", what: "Their own page, their own reminders, never cluttering the task list. AI drafts the text; the user taps send." },
-      { name: "Scheduled texts", what: "Write any message now, get reminded to send it at the right moment." },
-      { name: "Google Calendar sync", what: "Optional, read-only. Events, tasks, and birthdays are each routed to the right place automatically." },
+      { name: "Phone calendar sync", what: "Optional. Brings in any calendar the phone shows (Google, Samsung, Outlook, iCloud). Events, tasks, and birthdays are each routed to the right place automatically." },
       { name: "Errand-aware nudges", what: "Add a location and reminders account for drive time. Two errands nearby? It suggests one trip." },
     ],
   },
