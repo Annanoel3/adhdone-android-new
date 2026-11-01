@@ -1345,7 +1345,7 @@ async function stepFeedback(base44: any, openai: any, goalId: string, stepId: st
 //              "continue") assembles to the same months and weeks
 async function selfTest(openai: any, body: any, today: string) {
   const startedAt = Date.now();
-  const stage = ['chat', 'continue', 'extract', 'edit', 'edit_apply'].includes(body?.stage) ? body.stage : 'chat';
+  const stage = ['chat', 'continue', 'extract', 'edit', 'edit_apply', 'feedback'].includes(body?.stage) ? body.stage : 'chat';
   const call = Math.max(1, Number(body?.call) || 1);
   const remaining = () => CHAT_BUDGET_MS - (Date.now() - startedAt);
   const seconds = () => Math.round((Date.now() - startedAt) / 1000);
@@ -1418,6 +1418,36 @@ async function selfTest(openai: any, body: any, today: string) {
     if (convo.length === 0 || !planText.trim()) return { error: 'messages and plan_text are required' };
     const r = await continuePlan(openai, { messages: convo, planText, goalId: null, city: null, today, startedAt, ...none });
     return afterPlan(convo, r.message, r, {});
+  }
+
+  // feedback — "How did it go?" (STEP FEEDBACK): the plan as if saved (nothing
+  // is), the step at done_index (default 0) finished with `feedback`, and what
+  // the planner would change in the weeks ahead. Writes nothing.
+  if (stage === 'feedback') {
+    const convo = cleanMessages(body?.messages);
+    const feedback = String(body?.feedback || '').trim();
+    if (convo.length === 0 || !feedback) return { error: 'messages (a conversation that ends with the plan) and feedback are required' };
+    const plan: any = await extractPlan(openai, convo, today);
+    const goal: any = { id: 'selftest-goal', title: plan.title, description: plan.description, timeline: plan.timeline, conversation_history: convo };
+    const doneAt = Math.max(0, Number(body?.done_index) || 0);
+    const steps = (plan.steps || []).map((s: any, i: number) => ({
+      ...s, id: `selftest-step-${i}`, goal_id: goal.id, order_index: i,
+      status: i <= doneAt ? 'completed' : 'pending',
+      ...(i === doneAt ? { feedback } : {}),
+    }));
+    const step = steps[doneAt];
+    if (!step) return { error: 'done_index is past the last step' };
+    const r = await planFromFeedback(openai, { goal, steps, step, feedback, today });
+    return {
+      ...base, seconds: seconds(), done: true,
+      finished_step: { phase: step.phase, title: step.title },
+      feedback,
+      kept: r.kept,
+      summary: r.summary,
+      steps_after_it: steps.length - doneAt - 1,
+      changed: r.changes.map((c: any) => ({ phase: c.phase, old_title: c.old_title, title: c.title, description: String(c.description).slice(0, 500) })),
+      unchanged_next: steps.slice(doneAt + 1, doneAt + 6).filter((s: any) => !r.changes.some((c: any) => c.id === s.id)).map((s: any) => ({ phase: s.phase, title: s.title })),
+    };
   }
 
   // edit — coming back to a saved goal (its Change this plan button opens
