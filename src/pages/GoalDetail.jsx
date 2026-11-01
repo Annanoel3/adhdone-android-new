@@ -4,7 +4,8 @@ import { base44 } from "@/api/base44Client";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { ArrowLeft, Loader2, Calendar, CheckCircle2, Clock, Trash2, ChevronDown, History, ListTodo, Plus, Pause, Play, Flag, RotateCcw } from "lucide-react";
+import { ArrowLeft, Loader2, Calendar, CheckCircle2, Clock, Trash2, ChevronDown, History, ListTodo, Plus, Pause, Play, Flag, RotateCcw, MessageCircle } from "lucide-react";
+import { openInBrowser } from "@/components/utils/openInBrowser";
 import { toast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/AuthContext";
 import GoalsGate from "@/components/goals/GoalsGate";
@@ -477,8 +478,9 @@ function GoalDetail() {
               {goal.plan_summary.split(/(\[Click here\]|\(https?:\/\/[^)]+\))/g).map((part, idx) => {
                 const urlMatch = part.match(/\(https?:\/\/([^)]+)\)/);
                 if (urlMatch) {
+                  const href = `https://${urlMatch[1]}`;
                   return (
-                    <a key={idx} href={`https://${urlMatch[1]}`} target="_blank" rel="noopener noreferrer" className={`hover:underline font-semibold ${L.accent}`}>
+                    <a key={idx} href={href} onClick={(e) => { e.preventDefault(); openInBrowser(href); }} className={`hover:underline font-semibold ${L.accent}`}>
                       {part}
                     </a>
                   );
@@ -501,6 +503,16 @@ function GoalDetail() {
           )}
 
           <div className="flex flex-wrap gap-2 mt-4">
+            {/* Back to the planner chat this goal was made in, to change the
+                plan (Anna, Nov 1 2026: "remind the user they can come back to
+                this chat to edit their goal. (make sure that works.)"). The
+                port had no way back: /Planner?edit= existed but nothing
+                opened it. */}
+            {(goal.status === "active" || goal.status === "paused") && (
+              <Button size="sm" disabled={busy} className={`rounded-xl text-xs ${L.primary}`} onClick={() => navigate(`/Planner?edit=${goal.id}`)}>
+                <MessageCircle className="w-3.5 h-3.5 mr-1" /> Change this plan
+              </Button>
+            )}
             {goal.status === "active" && (
               <>
                 <Button size="sm" variant="outline" disabled={busy} className={`rounded-xl text-xs ${L.outline}`} onClick={() => changeStatus(pauseGoal, "Goal paused")}>
