@@ -174,7 +174,7 @@ export function goalTaskFields(goal, step, steps, habit, now = new Date()) {
   // 2026; it was a repeating task for a daily-practice goal).
   const dates = stepDates(step, steps, now);
   return {
-    fields: { ...base, ...dates, recurrence_pattern: "none", recurrence_days: null, anchor_time: null, time_stated: false },
+    fields: { ...base, ...dates, recurrence_pattern: "none" },
     booking: { dayOnly: dates.day_only_task, deadlineStyle: dates.deadline_style },
   };
 }
@@ -302,6 +302,38 @@ export async function retargetTask(task, goal, step, steps, habit, oldStep = nul
     await saveTaskTitle({ ...task, ...updates }, fields.title);
   }
   tasksChanged();
+}
+
+// A step checked off after its week ended (goalWeeks.lateFinishShift): the
+// unfinished steps after it get their new start days, the next one first (so
+// another phone doing the same at the same moment sees it moved and stops),
+// and the finished step remembers how late it was (the planner reads that in
+// "How did it go?"). Only GoalStep due dates change; nothing is made or
+// removed. An open task already made for a moved step gets the new "by"
+// date, unless its date was changed by hand.
+export async function applyLateShift(goal, shift, steps, habit) {
+  const save = async (id, data) => {
+    try { await base44.entities.GoalStep.update(id, data); } catch (e) { await base44.entities.GoalStep.update(id, data); }
+  };
+  for (const u of shift.updates) await save(u.id, { due_date: u.due_date });
+  await save(shift.step.id, { finished_days_late: shift.daysLate });
+  const moved = new Map(shift.updates.map((u) => [u.id, u.due_date]));
+  const after = (steps || []).map((s) => (moved.has(s.id) ? { ...s, due_date: moved.get(s.id) } : s));
+  try {
+    for (const t of await openGoalTasks(goal.id)) {
+      const before = (steps || []).find((s) => s.id === t.goal_step_id);
+      if (!before || !moved.has(before.id) || isRepeatingTask(t)) continue;
+      const was = goalTaskFields(goal, before, steps, habit).fields;
+      if (t.due_date && was.due_date && Date.parse(t.due_date) !== Date.parse(was.due_date)) continue;
+      const now = goalTaskFields(goal, { ...before, due_date: moved.get(before.id) }, after, habit).fields;
+      const updates = {};
+      for (const k of DATE_FIELDS) updates[k] = now[k];
+      await base44.entities.Task.update(t.id, updates);
+      tasksChanged();
+    }
+  } catch (e) {
+    console.error("[goals] couldn't move a moved step's task date:", e);
+  }
 }
 
 // ── Goal status: pause, resume, done, reopen, delete ─────────────────────────
