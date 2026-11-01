@@ -1,3 +1,4 @@
+// Re-saved Nov 1 2026 so the bundled shared/runTaskParse.ts, shared/taskParsePrompt.ts and shared/captureToTasks.ts are picked up: worth_breaking_down, a several-steps job, saved on the task so the card offers "Break it into steps" right on the row.
 // Re-saved Oct 21 2026 so the bundled shared/captureToTasks.ts is picked up: something they describe about a tracked thing (no reading) is kept as a note, never charted.
 // Re-saved Oct 19 2026 (night) so the bundled shared/taskParsePrompt.ts and shared/runTaskParse.ts are picked up: a link the task needs (a video-session or meeting link) goes in the task's notes, never its title, and the time zone of a time stays out of the title.
 // Re-saved Oct 19 2026 so the bundled shared/runTaskParse.ts is picked up: a time picked from a part of the day ("morning medication") is never marked as one the person stated, so it can't ring inside their quiet hours.
