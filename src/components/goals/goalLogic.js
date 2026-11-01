@@ -38,6 +38,15 @@ export function notifyGoalsChanged(fromSync = false) {
 
 export const todayKey = () => getLocalDateString();
 
+// Goals being deleted on this phone right now. A delete takes a while (its
+// task, then every step, one record at a time), and until the goal record was
+// gone the Goals page, the Home card and GoalStepSync still found it: the
+// page showed the goal just deleted for about 15 seconds (Anna, Nov 1 2026:
+// "we need optimistic ui when deleting a goal"), and the sync could have made
+// it a new task meanwhile. Everything that lists goals leaves these out.
+const deletingGoals = new Set();
+export const liveGoals = (goals) => (goals || []).filter((g) => g && !deletingGoals.has(g.id));
+
 export const isRepeatingTask = (t) => !!t?.recurrence_pattern && t.recurrence_pattern !== "none";
 
 // A goal the planner judged a daily habit (requires_daily_action), or one whose
@@ -382,14 +391,28 @@ export async function reopenGoal(goal) {
   notifyGoalsChanged();
 }
 
-// Deleting a goal the person chose to delete: its open task(s), its steps and
-// the goal. Tasks already finished stay (they're part of what they got done).
+// Deleting a goal the person chose to delete: its open task(s), the goal, then
+// its steps. Tasks already finished stay (they're part of what they got done).
+// It leaves every list on this phone at once (deletingGoals), and the goal
+// record goes before its steps, so no other phone finds it while they go
+// (steps are only ever reached through their goal). If it couldn't be
+// deleted it comes back, and the caller says so.
 export async function deleteGoal(goal) {
-  for (const t of await openGoalTasks(goal.id)) await deleteLinkedTask(t);
-  const steps = await base44.entities.GoalStep.filter({ goal_id: goal.id }, "order_index", 1000).catch(() => []);
-  for (const s of steps || []) {
-    try { await base44.entities.GoalStep.delete(s.id); } catch (e) { console.error("[goals] step delete failed", s.id, e); }
+  deletingGoals.add(goal.id);
+  notifyGoalsChanged();
+  try {
+    for (const t of await openGoalTasks(goal.id)) await deleteLinkedTask(t);
+    await base44.entities.Goal.delete(goal.id);
+  } catch (e) {
+    deletingGoals.delete(goal.id);
+    notifyGoalsChanged();
+    throw e;
   }
-  await base44.entities.Goal.delete(goal.id);
+  const steps = await base44.entities.GoalStep.filter({ goal_id: goal.id }, "order_index", 1000).catch(() => []);
+  // A few at a time rather than one by one (a long plan has 50+ steps).
+  for (let i = 0; i < (steps || []).length; i += 8) {
+    await Promise.all(steps.slice(i, i + 8).map((s) =>
+      base44.entities.GoalStep.delete(s.id).catch((e) => console.error("[goals] step delete failed", s.id, e))));
+  }
   notifyGoalsChanged();
 }
