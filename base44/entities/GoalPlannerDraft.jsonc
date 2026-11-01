@@ -1,0 +1,40 @@
+{
+  "name": "GoalPlannerDraft",
+  "type": "object",
+  "properties": {
+    "messages": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": [],
+      "description": "The planner conversation so far, as the Planner shows it: { role, content, goalMonthTitles?, planIncomplete?, monthsDone?, monthsTotal? }"
+    },
+    "pending_action": {
+      "type": "string",
+      "description": "The planner's last action ('plan_proposed', 'edit_approved', 'chat') when it was saved"
+    },
+    "edit_goal_id": {
+      "type": "string",
+      "description": "When the chat is about changing a saved goal: that Goal's id"
+    },
+    "completed": {
+      "type": "boolean",
+      "default": false,
+      "description": "True once the chat is finished (goal saved, started fresh, or dismissed). A completed draft is never restored."
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the device last changed this chat (the newest wins between devices)"
+    }
+  },
+  "rls": {
+    "read": {
+      "created_by": "{{user.email}}"
+    },
+    "write": {
+      "created_by": "{{user.email}}"
+    }
+  }
+}
