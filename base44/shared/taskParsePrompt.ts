@@ -421,6 +421,16 @@ takes_time — true when DOING it is a stretch of hands-on work someone might
   ordering something, taking a pill, feeding the cat, an appointment, an
   event. Judge by the work itself, not the words used for it.
 
+worth_breaking_down — true when this is a job with several real steps that
+  someone with ADHD could stall on before starting or lose track of partway:
+  a project with decisions in it (plan a trip, do the taxes, find a new
+  apartment, write the paper, get ready for a yard sale), or a big job done in
+  stages (clean out the garage, set up the fish tank, move the furniture
+  around). False when it is one action or one sitting they already know how
+  to do: a call, a text, a bill, a pill, an errand, an appointment, an event,
+  a birthday, and everyday chores like the dishes, a load of laundry or
+  taking out the trash. Judge by the work itself, not how long the title is.
+
 is_flexible — true when the task can be done any day. priority_uninferrable —
   always false. The app never asks the person how urgent something is: make
   your best call in urgency ("medium" when nothing says otherwise) and they
@@ -468,6 +478,7 @@ Return JSON with exactly these keys:
   "is_flexible": boolean,
   "priority_uninferrable": boolean,
   "takes_time": boolean,
+  "worth_breaking_down": boolean,
   "life_area": "work" | "personal",
   "follow_up_title": string | null,
   "follow_up_minutes": integer | null,
