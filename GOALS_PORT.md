@@ -165,6 +165,22 @@ All skipped.
   with no steps).
 - **A closed edit chat** comes back as an edit of that goal (the Goals app restored it as a new plan,
   so approving it made a second goal).
+- **The chat in progress is saved to the account** (Nov 1 2026, Anna: "yes make it save to the
+  account"), not only `localStorage.plannerInProgress`: entity `GoalPlannerDraft` (private, one row
+  per person; `src/components/goals/plannerDraft.js`). Saved before each planner call and after each
+  answer; on opening the Planner the newer of the device's and the account's copy wins (the device's
+  goes up when it's newer). Saving a goal, a fresh start or Dismiss marks it `completed` (kept,
+  never restored). A failed call never blocks the chat; the device copy stays as before.
+- **Long plans finish.** The Goals app's continuation passes stop when the time budget runs out and
+  closed with "You can also ask me to continue expanding any remaining months"; its plan view then
+  padded empty months up to the timeline, and `extract_plan` read only the last message, so a
+  typed "continue" saved only the last months. Now a plan the time ran out on comes back
+  `incomplete` (`months_done` / `months_total`, no closing line); the Planner shows the months so
+  far with "Writing months 15–24…" and calls `continue_plan` (a fresh budget each call, at most 4
+  in a go) into the same answer, saving after each; "Looks good" shows only when it's finished,
+  otherwise "Keep writing". A restored chat with an unfinished plan picks up by itself. No empty
+  month cards. `extract_plan` builds the plan from every planner message (each month from the most
+  recent message that wrote it in full; a plan made shorter stays shorter).
 - **"Plan New Goal"** and My Goals' "New Goal" open a fresh plan (in the Goals app the button left
   the goals list on screen). The Planner's list shows active goals only (the Goals app showed every
   other goal as a disabled "Building…" row forever).
