@@ -4,6 +4,12 @@ import { cancelScheduled } from '@/functions/cancelScheduled';
 import { COMPLETION_SOUNDS } from '@/components/utils/completionSounds';
 import { startAlertLoop, stopAlertLoop } from '@/components/utils/alertLoop';
 import { timerAlarmsSupported, bookOwnAlarm, cancelOwnAlarm, requestAlarmPermissions } from '@/components/utils/widgetBridge';
+import { trackFire } from '@/lib/appTrack';
+
+// Counted (Anna, Nov 1 2026: "has anyone used Pomodoro timer?" — the only
+// sign was a page view, and a timer started from Focus Mode or the mini bar
+// left none): AppEvent 'pomodoro' with action start | resume | pause |
+// focus_done | break_done.
 
 // The one alarm the focus timer holds on the phone: re-booked for each phase
 // (work, then break), cancelled on pause or reset.
@@ -139,6 +145,7 @@ export function PomodoroProvider({ children }) {
     // The fallback push is no longer needed: the phase completed in-app. (The
     // phone alarm for this moment is left alone — it IS the alert.)
     cancelTimerNotification();
+    trackFire('pomodoro', { props: { action: currentMode === 'work' ? 'focus_done' : 'break_done', session: currentSessionCount + (currentMode === 'work' ? 1 : 0) } });
     if (currentMode === 'work') {
       playCompletionSound();
       const newSessionCount = currentSessionCount + 1;
@@ -221,6 +228,7 @@ export function PomodoroProvider({ children }) {
     if (!isActive && timerAlarmsSupported()) requestAlarmPermissions({ feature: 'timers' });
     setIsActive(prev => {
       const nowActive = !prev;
+      trackFire('pomodoro', { props: { action: nowActive ? (timeLeft < (mode === 'work' ? workDuration : breakDuration) * 60 ? 'resume' : 'start') : 'pause', mode } });
       if (nowActive) {
         // Starting/resuming — book the alarm (or the fallback push)
         setTimeLeft(tl => {
