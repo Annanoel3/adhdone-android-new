@@ -1180,6 +1180,158 @@ Extract every single step. If the planner listed 48 steps, return all 48.`,
   return { goalUpdates, otherUpdates, newSteps };
 }
 
+// ── STEP FEEDBACK: "How did it go?" adjusts the weeks ahead ───────────────────
+// Anna, Nov 1 2026: "Anytime someone checks a milestone or whatever done, ask
+// them how it went... It would be nice if the plan chat could basically read
+// any feedback it gets and adjust the rest of the plan if it needs adjusting.
+// Like if they come back saying the paper collage etc was not helpful.. the
+// planner chat would make sure the following weeks are not more of the same."
+// The model reads what they said (and everything they said about earlier
+// weeks) and rewrites only upcoming weeks, in place: never a finished one,
+// only the rest of the month they're in and the next one, and nothing at all
+// when the plan already fits. Rows are updated, never deleted or made, so the
+// step's task stays linked (GoalStepSync carries the new words over).
+const stepMonth = (s: any) => parseInt(String(s?.phase || '').match(/Month\s*(\d+)/i)?.[1] || '0', 10);
+const stepWeek = (s: any) => parseInt(String(s?.phase || '').match(/Week\s*(\d+)/i)?.[1] || '0', 10);
+
+async function planFromFeedback(openai: any, p: { goal: any; steps: any[]; step: any; feedback: string; today: string }) {
+  const { goal, step, feedback, today } = p;
+  const sorted = [...(p.steps || [])].sort((a: any, b: any) => (Number(a.order_index) || 0) - (Number(b.order_index) || 0));
+  const isDone = (s: any) => s.status === 'completed' || s.status === 'skipped' || s.id === step.id;
+  const open = sorted.filter((s: any) => !isDone(s));
+  const firstMonth = open.length ? stepMonth(open[0]) : 0;
+  // The rest of the month they're in and the next one, at most 10 weeks.
+  const window = open.filter((s: any) => !firstMonth || !stepMonth(s) || stepMonth(s) <= firstMonth + 1).slice(0, 10);
+  if (window.length === 0) {
+    return { kept: true, summary: 'Thanks for telling me how it went. That was the last step in the plan, so there was nothing left to change.', changes: [] as any[] };
+  }
+  const earlier = sorted.filter((s: any) => s.id !== step.id && String(s.feedback || '').trim())
+    .map((s: any) => `- ${s.phase || ''} "${s.title}": ${String(s.feedback).slice(0, 600)}`);
+  const theyPlanned = (Array.isArray(goal?.conversation_history) ? goal.conversation_history : [])
+    .filter((m: any) => m?.role === 'user' && String(m.content || '').trim())
+    .map((m: any) => `- ${String(m.content).slice(0, 700)}`).join('\n').slice(0, 4000);
+  const weekBlock = (s: any) => [
+    `id: ${s.id}`,
+    `phase: ${s.phase || ''}`,
+    `title: ${s.title || ''}`,
+    `description:\n${String(s.description || '').slice(0, 2500)}`,
+    Array.isArray(s.success_criteria) && s.success_criteria.length ? `success criteria: ${s.success_criteria.join(' | ')}` : '',
+    s.tips_and_guidance ? `tips: ${String(s.tips_and_guidance).slice(0, 600)}` : '',
+  ].filter(Boolean).join('\n');
+
+  const system = `You are the goal planner inside ADHDone. Someone just finished a week of their goal plan and told you how it went, in their own words. Decide whether the weeks ahead should change, and if so, rewrite them.
+
+${APP_RULE}
+
+${PROFESSIONAL_HELP_RULE}
+
+HOW TO DECIDE (judgment, the way a good coach would; not keywords):
+- Change upcoming weeks only when what they said calls for it: an activity that didn't help or didn't suit them, too hard or too easy, too long, no time, something they disliked, a new constraint, or something that worked well and is worth building on.
+- Something didn't help: the weeks ahead must not repeat that KIND of activity, not just that exact one (if a crafts exercise felt pointless, no more crafts-style exercises), unless they said otherwise. Replace it with something that fits what they told you when planning and now.
+- Something helped: build on it, so it grows over the coming weeks.
+- Keep the goal, its timeline and the order of the weeks. Keep each week's theme unless the feedback says the direction itself is wrong.
+- Their answer is positive, neutral or very short, and the plan already fits: change nothing. Never rewrite for the sake of it.
+- Respect everything they set when planning: budget, time per day or week, start and end, what kind of help they want.
+- Same format and depth as the existing weeks: the first line is the concrete thing to do this week, then the same kind of lines (for example "Focus on: ...", "Reflect: ...", "Activity: ..."), one per line. No markdown headings, no bullets characters. Keep a link a week already has unless that activity is gone.
+- Only the weeks under UPCOMING may change, and only return the ones you change, by their id.
+
+Answer with JSON only:
+{"change": true | false,
+ "summary": "1-3 short plain sentences TO THEM: which weeks you changed and why, or that the plan stays as it is and why. Warm, no pep talk, no promises of reminders or check-ins.",
+ "steps": [{"id": "<id from UPCOMING>", "description": "the rewritten week, one line per item", "success_criteria": ["2-4 concrete done-checks"], "tips_and_guidance": "a short helpful note, or empty"}]}`;
+
+  const user = [
+    `TODAY: ${today}`,
+    `GOAL: "${goal?.title || ''}"${goal?.timeline ? ` (${goal.timeline})` : ''}${goal?.description ? ` — ${String(goal.description).slice(0, 400)}` : ''}`,
+    theyPlanned ? `WHAT THEY SAID WHEN PLANNING (their words):\n${theyPlanned}` : '',
+    earlier.length ? `WHAT THEY SAID ABOUT EARLIER WEEKS:\n${earlier.join('\n')}` : '',
+    `THE WEEK THEY JUST FINISHED:\n${weekBlock(step)}`,
+    `HOW IT WENT, IN THEIR WORDS: "${String(feedback).slice(0, 2000)}"`,
+    `UPCOMING (the only weeks you may change):\n\n${window.map(weekBlock).join('\n\n')}`,
+  ].filter(Boolean).join('\n\n');
+
+  let out: any = {};
+  try {
+    const res = await openai.chat.completions.create({
+      model: MODEL,
+      reasoning_effort: 'medium',
+      max_completion_tokens: 16000,
+      response_format: { type: 'json_object' },
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+    });
+    out = JSON.parse(res.choices?.[0]?.message?.content || '{}') || {};
+  } catch (e: any) {
+    console.error('[goalPlannerChat] step_feedback model call failed:', e?.message || e);
+    throw new Error('The planner could not read your feedback right now');
+  }
+  const byId = new Map(window.map((s: any) => [s.id, s]));
+  const changes: any[] = [];
+  if (out.change === true && Array.isArray(out.steps)) {
+    for (const c of out.steps) {
+      const s = byId.get(String(c?.id || ''));
+      const description = String(c?.description || '').trim();
+      if (!s || !description) continue;
+      byId.delete(s.id); // once each
+      const focus = weekFocus(description.split('\n').map((l) => l.trim()).find(Boolean) || '');
+      const wk = stepWeek(s);
+      changes.push({
+        id: s.id,
+        phase: s.phase || '',
+        old_title: s.title || '',
+        old_description: s.description || '',
+        title: focus ? `${wk ? `Week ${wk}: ` : ''}${focus}` : (s.title || ''),
+        description,
+        success_criteria: Array.isArray(c?.success_criteria) ? c.success_criteria.map((x: any) => String(x)).filter(Boolean).slice(0, 6) : (s.success_criteria || []),
+        tips_and_guidance: typeof c?.tips_and_guidance === 'string' ? c.tips_and_guidance : (s.tips_and_guidance || ''),
+      });
+    }
+  }
+  const summary = String(out.summary || '').trim() ||
+    (changes.length ? `I changed ${changes.length} of the weeks ahead to fit what you said.` : 'Thanks for telling me how it went. The weeks ahead still fit, so I left them as they are.');
+  return { kept: changes.length === 0, summary, changes };
+}
+
+// The goal's chat gets the exchange, so "Change this plan" shows it.
+function feedbackTurns(step: any, feedback: string, summary: string) {
+  const label = stepWeek(step) ? `${stepMonth(step) ? `Month ${stepMonth(step)}, ` : ''}Week ${stepWeek(step)}` : (step?.title || 'that step');
+  return [
+    { role: 'user', content: `How ${label} went: ${feedback}` },
+    { role: 'assistant', content: summary },
+  ];
+}
+
+async function stepFeedback(base44: any, openai: any, goalId: string, stepId: string, feedbackIn: string, today: string) {
+  const goal = (await base44.entities.Goal.filter({ id: goalId }))?.[0];
+  if (!goal) return { error: 'Goal not found' };
+  const steps = await base44.entities.GoalStep.filter({ goal_id: goalId }, 'order_index', 1000);
+  const step = (steps || []).find((s: any) => s.id === stepId);
+  if (!step) return { error: 'Step not found' };
+  const feedback = String(feedbackIn || step.feedback || '').trim();
+  if (!feedback) return { error: 'No feedback to read' };
+  const r = await planFromFeedback(openai, { goal, steps, step, feedback, today });
+  for (const c of r.changes) {
+    await base44.entities.GoalStep.update(c.id, {
+      title: c.title,
+      description: c.description,
+      success_criteria: c.success_criteria,
+      tips_and_guidance: c.tips_and_guidance,
+    });
+  }
+  try {
+    const history = Array.isArray(goal.conversation_history) ? goal.conversation_history : [];
+    await base44.entities.Goal.update(goalId, { conversation_history: [...history, ...feedbackTurns(step, feedback, r.summary)] });
+  } catch (e: any) {
+    console.error('[goalPlannerChat] could not add the feedback to the goal chat:', e?.message || e);
+  }
+  console.log(`[goalPlannerChat] step_feedback: ${r.changes.length} upcoming week(s) changed for goal ${goalId}`);
+  return {
+    success: true,
+    kept: r.kept,
+    summary: r.summary,
+    changed: r.changes.map((c: any) => ({ id: c.id, phase: c.phase, old_title: c.old_title, title: c.title, old_description: c.old_description, description: c.description })),
+  };
+}
+
 // ── Admin self-test ────────────────────────────────────────────────────────
 // Runs the planner on a sample goal, its questions answered from `answers` in
 // order, through to the full plan and its extraction. Reads and writes
@@ -1387,6 +1539,15 @@ export default async function (req: Request) {
     const messages = cleanMessages(body?.messages);
     const mode = body?.mode || 'chat';
     const goalId = typeof body?.goal_id === 'string' && body.goal_id ? body.goal_id : null;
+
+    // "How did it go?" after a step was marked done: adjust the weeks ahead.
+    if (mode === 'step_feedback') {
+      const stepId = typeof body?.step_id === 'string' ? body.step_id : '';
+      if (!goalId || !stepId) return Response.json({ error: 'goal_id and step_id required' }, { status: 400 });
+      const out: any = await stepFeedback(base44, openai, goalId, stepId, typeof body?.feedback === 'string' ? body.feedback : '', today);
+      return Response.json(out, { status: out.error ? 422 : 200 });
+    }
+
     if (messages.length === 0) return Response.json({ error: 'messages required' }, { status: 400 });
 
     if (mode === 'extract_plan') {
