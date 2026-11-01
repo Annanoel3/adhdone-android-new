@@ -467,6 +467,21 @@ How it works, and how it must keep working:
    who, and how many in all (`owner_alert_marks.helping_counted_to`); with nothing else to say
    it goes out titled "📊 ADHDone yesterday".
 
+11. **Judge the day, not just the ping (brief r41, Nov 1 2026).** Anna: "Wouldn't the real
+   fix be in making the smart reminder ai not be stupid". arcticwolf444 got 8 Smart
+   Reminders on Fri Oct 30, each justified on its own ("they close at 5"), none of them
+   seen. A paragraph was added to her doc (rev 41) and to `reminderBrief.ts`: before an
+   extra ping, look at the whole day; several gone out with no app open since = they aren't
+   seeing them, so stop or send only what is truly lost tonight; a place closing today is a
+   loss only if it can't happen the next day it's open; a task brought up day after day
+   with nothing happening needs a different approach, never more of the same. Checked with
+   REPLAY (below): at 3:20 PM that day the old brief sent a 6th ping, r41 sent none; at
+   10:30 AM r41 still sent the time-sensitive first mention; at 12:30 PM (3 unseen) none.
+   REPLAY: `{"email": "…", "preview": true, "as_of": "<ISO>", "last_active_at": "<ISO>"}`
+   to `cronSmartTaskNudge` (owner only) plans as of that moment (later tasks, completions and
+   Smart Reminders left out) and saves and sends nothing. Use it to check any brief change
+   against a real day before shipping it.
+
 **Do not change `base44/functions/cronSmartTaskNudge`, `base44/shared/reminderBrief.ts`, the
 "Smart Task Nudge" workflow, or the `smart_nudge_*` fields on User unless Anna explicitly
 asks for that change in her own words.** A request about something else (another feature's
