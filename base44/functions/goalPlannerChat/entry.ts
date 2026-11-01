@@ -23,6 +23,11 @@
 //     A chat answer that holds a plan carries incomplete / months_done /
 //     months_total too; the Planner calls continue_plan until incomplete is
 //     false (Anna, Nov 1 2026: a long plan came out with months 15+ empty).
+//   { mode: 'step_feedback', goal_id, step_id, feedback?, tz? }
+//                       → { kept, summary, changed: [{ id, phase, old_title, title, old_description, description }] }
+//     "How did it go?" after a step was marked done (Nov 1 2026): rewrites
+//     upcoming steps in place when the feedback calls for it, and adds the
+//     exchange to the goal's conversation_history.
 //   admin only: { selftest: true, goal: "<text>", answers: ["...", ...], tz? }
 //     runs the planner on a sample goal (its questions answered from `answers`,
 //     in order) through to the full plan and its extraction, in stages over
@@ -1190,7 +1195,8 @@ Extract every single step. If the planner listed 48 steps, return all 48.`,
 // weeks) and rewrites only upcoming weeks, in place: never a finished one,
 // only the rest of the month they're in and the next one, and nothing at all
 // when the plan already fits. Rows are updated, never deleted or made, so the
-// step's task stays linked (GoalStepSync carries the new words over).
+// step's task stays linked; the goal page then gives that task the step's new
+// name and note if they were still the old ones (GoalDetail carryToTasks).
 const stepMonth = (s: any) => parseInt(String(s?.phase || '').match(/Month\s*(\d+)/i)?.[1] || '0', 10);
 const stepWeek = (s: any) => parseInt(String(s?.phase || '').match(/Week\s*(\d+)/i)?.[1] || '0', 10);
 
