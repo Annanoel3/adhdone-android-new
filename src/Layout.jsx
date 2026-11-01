@@ -131,6 +131,7 @@ import { WinAskFromLink } from "./components/wins/WinBox";
 import WinsSlumpPopup from "./components/wins/WinsSlumpPopup";
 import NewInsightsPopup from "./components/shared/NewInsightsPopup";
 import RemindersHelpingPopup from "./components/shared/RemindersHelpingPopup";
+import RepeatOfferPopup from "./components/tasks/RepeatOfferPopup";
 import WebAddressFooter from "./components/shared/WebAddressFooter";
 import {
   Dialog,
@@ -1390,6 +1391,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <NewInsightsPopup user={user} theme={theme} specialMode={specialMode} currentPageName={currentPageName} />
         {/* "Are your reminders helping?" when the push itself was tapped (see RemindersHelpingPopup). */}
         <RemindersHelpingPopup theme={theme} specialMode={specialMode} />
+        {/* "Every day around this time?" after checking off a daily-type to-do (see RepeatOfferPopup). */}
+        <RepeatOfferPopup user={user} theme={theme} specialMode={specialMode} />
         <TaskCaptureProcessor userEmail={user?.email} />
         {/* Keeps each active goal's current step on the task list (GOALS_PORT.md). */}
         <GoalStepSync user={user} />
