@@ -11,6 +11,7 @@ import { toast } from "@/components/ui/use-toast";
 import { useAuth } from "@/lib/AuthContext";
 import GoalsGate from "@/components/goals/GoalsGate";
 import StepDetailsModal from "@/components/goals/StepDetailsModal";
+import StepFeedbackPopup from "@/components/goals/StepFeedbackPopup";
 import HabitCheckInModal from "@/components/goals/HabitCheckInModal";
 import HabitWeekTracker from "@/components/goals/HabitWeekTracker";
 import MonthCelebrationModal from "@/components/goals/MonthCelebrationModal";
@@ -22,7 +23,29 @@ import { getLocalDateString } from "@/components/utils/todayTasks";
 import {
   GOALS_CHANGED, notifyGoalsChanged, sortSteps, isHabitGoal, currentStep, goalStarted, isHabitDay, todayKey,
   openGoalTasks, finishLinkedTask, unfinishLinkedTask, pauseGoal, resumeGoal, completeGoal, reopenGoal, deleteGoal,
+  shortNotes,
 } from "@/components/goals/goalLogic";
+
+// "How did it go?" (StepFeedbackPopup): a step finished somewhere else (its
+// task checked off on the task list) is asked about the next time its goal
+// opens, if it finished in the last 3 days and was never asked.
+const FEEDBACK_ASK_WITHIN_MS = 3 * 24 * 60 * 60 * 1000;
+
+// "Weeks 2–4" when the changed weeks run in a row in one month, else a count.
+function weeksLabel(changed) {
+  const parts = changed.map((c) => ({
+    m: parseInt(String(c.phase || "").match(/Month\s*(\d+)/i)?.[1] || "0", 10),
+    w: parseInt(String(c.phase || "").match(/Week\s*(\d+)/i)?.[1] || "0", 10),
+  }));
+  const sameMonth = parts.length > 0 && parts.every((p) => p.m && p.w && p.m === parts[0].m);
+  if (sameMonth) {
+    const ws = [...new Set(parts.map((p) => p.w))].sort((a, b) => a - b);
+    const inARow = ws.every((w, i) => i === 0 || w === ws[i - 1] + 1);
+    if (ws.length === 1) return `week ${ws[0]}`;
+    if (inARow) return `weeks ${ws[0]}–${ws[ws.length - 1]}`;
+  }
+  return `${changed.length} upcoming week${changed.length === 1 ? "" : "s"}`;
+}
 
 // A goal's page (ported Oct 31 2026 from Anna's Goals app, GoalDetail.jsx;
 // GOALS_PORT.md): the plan by month and week, progress, step details, habit
@@ -143,6 +166,10 @@ function GoalDetail() {
   const [celebrationSteps, setCelebrationSteps] = useState([]);
   const [celebrationWeek, setCelebrationWeek] = useState(null);
   const [busy, setBusy] = useState(false);
+  // The step "How did it go?" is about. Latched: set once when earned,
+  // cleared only when the popup is answered or skipped.
+  const [feedbackStep, setFeedbackStep] = useState(null);
+  const feedbackShown = usePopupTurn(feedbackStep != null, { reactive: true });
   const openedOnce = useRef(false);
   const closeWeek = useCallback(() => setCelebrationWeek(null), []);
   const closeMonth = useCallback(() => setCelebrationMonth(null), []);
@@ -167,6 +194,14 @@ function GoalDetail() {
       setOpenTasks(open || []);
       setDoneTasks(done || []);
       if (!openedOnce.current) {
+        // A step finished on the task list since they were last here: ask how
+        // it went (once; the newest one if there are several).
+        const nowMs = Date.now();
+        const unasked = ordered
+          .filter((s) => s.status === "completed" && !s.feedback_asked_at && !s.feedback)
+          .filter((s) => { const at = Date.parse(s.completed_at || ""); return Number.isFinite(at) && nowMs - at <= FEEDBACK_ASK_WITHIN_MS; })
+          .sort((a, b) => String(b.completed_at).localeCompare(String(a.completed_at)));
+        if (unasked[0]) setFeedbackStep((curStep) => curStep || unasked[0]);
         // Open on the step they're on.
         openedOnce.current = true;
         const cur = currentStep(target, ordered);
@@ -231,6 +266,8 @@ function GoalDetail() {
           completed_at: new Date().toISOString(),
           ...(habit ? { task_id: null } : {}),
         });
+        // Ask how it went (Anna, Nov 1 2026), once per step.
+        if (!step.feedback_asked_at && !step.feedback) setFeedbackStep((curStep) => curStep || step);
       } else {
         // Back to not done. Its old task stays checked off; the goal's open
         // task moves to whichever step is now current.
@@ -264,6 +301,59 @@ function GoalDetail() {
       loadData();
     } finally {
       setBusy(false);
+    }
+  };
+
+  // After "How did it go?": the planner reads it and may rewrite the weeks
+  // ahead (goalPlannerChat step_feedback). The popup has closed by now; this
+  // runs on its own, then the page and the task list catch up.
+  const feedbackDone = async (result) => {
+    const step = feedbackStep;
+    setFeedbackStep(null);
+    if (!result?.saved || !step || !goal) return;
+    toast({ title: "Thanks! Looking at the weeks ahead…" });
+    try {
+      const res = await base44.functions.invoke("goalPlannerChat", {
+        mode: "step_feedback",
+        goal_id: goal.id,
+        step_id: step.id,
+        feedback: result.feedback,
+        tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      });
+      const data = res?.data || {};
+      if (data.error) throw new Error(data.error);
+      const changed = Array.isArray(data.changed) ? data.changed : [];
+      if (changed.length) {
+        await carryToTasks(changed);
+        toast({ title: `Updated ${weeksLabel(changed)} after your feedback`, description: data.summary });
+      } else {
+        toast({ title: "Your plan stays as it is", description: data.summary });
+      }
+    } catch (e) {
+      console.error("[GoalDetail] feedback adjust failed:", e);
+      toast({ title: "Your feedback is saved", description: "Couldn't adjust the weeks ahead right now." });
+    }
+    await settle();
+  };
+
+  // A rewritten step's open task gets its new name and note, unless they
+  // changed those themselves (then theirs stay).
+  const carryToTasks = async (changed) => {
+    try {
+      const open = await openGoalTasks(goal.id).catch(() => []);
+      for (const c of changed) {
+        const t = (open || []).find((x) => x.goal_step_id === c.id);
+        if (!t) continue;
+        if (c.title && c.title !== c.old_title && (t.title || "").trim() === String(c.old_title || "").trim()) {
+          const { saveTaskTitle } = await import("@/components/utils/multiReminderScheduler");
+          await saveTaskTitle(t, c.title);
+        }
+        if ((t.notes || "") === shortNotes(c.old_description)) {
+          await base44.entities.Task.update(t.id, { notes: shortNotes(c.description) });
+        }
+      }
+    } catch (e) {
+      console.error("[GoalDetail] couldn't carry the new step words to its task:", e);
     }
   };
 
@@ -659,6 +749,14 @@ function GoalDetail() {
           onClose={() => setSelectedStep(null)}
           onUpdate={loadData}
           onRename={renameStep}
+          theme={theme}
+          specialMode={specialMode}
+        />
+
+        <StepFeedbackPopup
+          step={feedbackStep}
+          open={feedbackShown}
+          onDone={feedbackDone}
           theme={theme}
           specialMode={specialMode}
         />
