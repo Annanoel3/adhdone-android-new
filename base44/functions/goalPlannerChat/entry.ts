@@ -266,24 +266,81 @@ function localToday(tz?: string | null): string {
   }
 }
 
-// Detect the timeline (in months) from natural language so the plan's length
-// can be enforced (verbatim from the Goals app, counted from their own today).
-function detectMonths(conversationText: string, today: string): number | null {
-  const _mNames = ['january','february','march','april','may','june','july','august','september','october','november','december'];
-  const _wNum: Record<string, number> = { one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10, eleven:11, twelve:12 };
+// The plan's length in months, from the timeline the PERSON gave, counted
+// from their own today. Their newest message that names one wins, so a
+// changed deadline counts. The planner's own words never set it (its "in the
+// first 3 months" or a year next to the word "Month" used to), and nothing
+// found means null: the model works it out from the conversation.
+// Anna, Nov 1 2026: she said January 2028 (14 months away) and the plan view
+// showed Months 15-36 empty. The Goals app took the first "<number> month"
+// anywhere in the chat, planner included, and its "by January" ignored the
+// year ("by January 2028" came out as 2 months).
+const MONTH_WORDS: Record<string, number> = {
+  jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2, apr: 3, april: 3, may: 4,
+  jun: 5, june: 5, jul: 6, july: 6, aug: 7, august: 7, sep: 8, sept: 8, september: 8,
+  oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11,
+};
+const MONTH_NAME_RE = '(january|february|march|april|may|june|july|august|september|october|november|december|jan|feb|mar|apr|jun|jul|aug|sept|sep|oct|nov|dec)\\.?';
+const NUMBER_WORDS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
+  eleven: 11, twelve: 12, eighteen: 18, 'twenty-four': 24, 'thirty-six': 36,
+};
+const NUM_RE = '(\\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|eighteen|twenty-four|thirty-six)';
+const numOf = (s: string) => (/^\d+$/.test(s) ? parseInt(s, 10) : (NUMBER_WORDS[s.toLowerCase()] || 0));
+
+function monthsFromText(text: string, nowYear: number, nowMonth: number): number | null {
+  const t = String(text || '');
+  const ok = (n: number) => (Number.isFinite(n) && n >= 1 && n <= 36 ? n : null);
+  // A month with a year: "January 2028", "Jan 1, 2028", "the end of January 2028".
+  // One that comes after a deadline word wins; otherwise the furthest one ahead.
+  const datedRe = new RegExp(`(by|before|until|till|til|deadline|due|end\\s+of|finish(?:ed)?|done|complete(?:d)?|reach|goal)?[^.\\n]{0,25}?\\b${MONTH_NAME_RE}\\s+(?:\\d{1,2}(?:st|nd|rd|th)?,?\\s+)?(20\\d{2})\\b`, 'gi');
+  let deadline: number | null = null, furthest: number | null = null;
+  for (const m of t.matchAll(datedRe)) {
+    const ti = MONTH_WORDS[m[2].toLowerCase()];
+    const n = (parseInt(m[3], 10) - nowYear) * 12 + (ti - nowMonth);
+    if (n < 1) continue;
+    if (m[1]) deadline = n;
+    furthest = Math.max(furthest || 0, n);
+  }
+  if (deadline || furthest) return ok((deadline || furthest) as number);
+  // "6 months", "a 6-month plan", "in six months".
+  const nm = t.match(new RegExp(`\\b${NUM_RE}[\\s-]+months?\\b`, 'i'));
+  if (nm) return ok(numOf(nm[1]));
+  // "in 2 years", "a two-year plan".
+  const ny = t.match(new RegExp(`(?:\\bin\\s+${NUM_RE}\\s+years?\\b|\\b${NUM_RE}-years?\\b)`, 'i'));
+  if (ny) return ok(numOf(ny[1] || ny[2]) * 12);
+  // "in 8 weeks".
+  const nw = t.match(/\bin\s+(\d{1,3})\s+weeks?\b/i);
+  if (nw) return ok(Math.max(1, Math.round(parseInt(nw[1], 10) / 4)));
+  // "by June" (no year): the next June.
+  const bm = t.match(new RegExp(`\\b(?:by|before|until)\\s+(next\\s+|this\\s+|(?:the\\s+)?end\\s+of\\s+)?${MONTH_NAME_RE}(?!\\s+\\d)`, 'i'));
+  if (bm) {
+    const ti = MONTH_WORDS[bm[2].toLowerCase()];
+    let ty = nowYear;
+    if (ti <= nowMonth || /next/i.test(bm[1] || '')) ty++;
+    return ok(Math.max(1, (ty - nowYear) * 12 + (ti - nowMonth)));
+  }
+  // "before 2028" = by its January; "by 2028" / "by the end of 2028" = its December.
+  const yr = t.match(/\b(by|before)\s+(?:(?:the\s+)?end\s+of\s+)?(20\d{2})\b/i);
+  if (yr) {
+    const y = parseInt(yr[2], 10);
+    const endOf = /end\s+of/i.test(yr[0]);
+    const n = yr[1].toLowerCase() === 'before' && !endOf ? (y - nowYear) * 12 - nowMonth : (y - nowYear) * 12 + (11 - nowMonth);
+    if (n >= 1) return ok(n);
+  }
+  if (/\b(?:by|before)\s+(?:the\s+)?end\s+of\s+(?:(?:this|the)\s+)?year\b/i.test(t)) return ok(Math.max(1, 11 - nowMonth));
+  if (/\bnext\s+year\b/i.test(t)) return ok(Math.max(6, 12 - nowMonth + 6));
+  return null;
+}
+
+function detectMonths(messages: any[], today: string): number | null {
   const [ty0, tm0] = today.split('-').map(Number);
-  const nowYear = ty0, nowMonth = tm0 - 1;
-  let detectedMonths: number | null = null;
-  const _em = conversationText.match(/(\d+)[- ]month/i);
-  if (_em) detectedMonths = parseInt(_em[1], 10);
-  if (!detectedMonths) { const m = conversationText.match(/in\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+)\s+years?/i); if (m) detectedMonths = (parseInt(m[1]) || _wNum[m[1].toLowerCase()] || 1) * 12; }
-  if (!detectedMonths) { const m = conversationText.match(/in\s+(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+)\s+months?/i); if (m) detectedMonths = parseInt(m[1]) || _wNum[m[1].toLowerCase()] || 1; }
-  if (!detectedMonths) { const m = conversationText.match(/in\s+(\d+)\s+weeks?/i); if (m) detectedMonths = Math.max(1, Math.round(parseInt(m[1]) / 4)); }
-  if (!detectedMonths) { const m = conversationText.match(/by\s+(?:next\s+|this\s+|end\s+of\s+)?(january|february|march|april|may|june|july|august|september|october|november|december)/i); if (m) { const ti = _mNames.indexOf(m[1].toLowerCase()); const isNext = /next/i.test(m[0]); let ty = nowYear; if (ti <= nowMonth || isNext) ty++; detectedMonths = Math.max(1, (ty - nowYear) * 12 + (ti - nowMonth)); } }
-  if (!detectedMonths) { const m = conversationText.match(/(?:by|before)\s+(?:(?:the\s+)?end\s+of\s+)?(\d{4})/i); if (m) { const ty = parseInt(m[1]); if (ty >= nowYear) detectedMonths = Math.max(1, (ty - nowYear) * 12 + (11 - nowMonth)); } }
-  if (!detectedMonths && /(?:by|before)\s+(?:the\s+)?end\s+of\s+(?:(?:this|the)\s+)?year/i.test(conversationText)) detectedMonths = Math.max(1, 11 - nowMonth);
-  if (!detectedMonths && /next\s+year/i.test(conversationText)) detectedMonths = Math.max(6, 12 - nowMonth + 6);
-  return detectedMonths;
+  const theirs = (Array.isArray(messages) ? messages : []).filter((m) => m?.role === 'user');
+  for (let i = theirs.length - 1; i >= 0; i--) {
+    const n = monthsFromText(String(theirs[i].content || ''), ty0, tm0 - 1);
+    if (n) return n;
+  }
+  return null;
 }
 
 function cleanMessages(messages: any[]): { role: 'user' | 'assistant'; content: string }[] {
@@ -571,8 +628,7 @@ function planContext(p: {
   existingGoals: any[]; stepsByGoal: Record<string, any[]>;
 }) {
   const { messages, goalId, city, today, existingGoals, stepsByGoal } = p;
-  const conversationText = messages.map((m) => `${m.role === 'user' ? 'User' : 'Planner'}: ${m.content}`).join('\n\n');
-  const detectedMonths = detectMonths(conversationText, today);
+  const detectedMonths = detectMonths(messages, today);
   const monthsRule = detectedMonths
     ? `- Use EXACTLY ${detectedMonths} months for this plan (Month 1 through Month ${detectedMonths}). Do NOT recalculate or shorten it. Each month MUST have exactly 4 weeks (Week 1–Week 4) — ${detectedMonths * 4} week-blocks total. Never combine or skip weeks or months.`
     : `- Identify the exact duration from the conversation (a deadline, date, or duration phrase) and use that many months — do NOT shorten it. Each month has exactly 4 weeks.`;
@@ -623,7 +679,10 @@ function planContext(p: {
     systemPrompt = newGoalPrompt({ today, goalsSummary, userCity: city, monthsRule });
   }
 
-  return { systemPrompt, planMonths };
+  // A timeline the person gave is the plan's length: a stray "Months 15-36"
+  // or a header past it doesn't make the plan longer (planFirm, expandPlan).
+  // An edit can change the timeline, so there the plan's own months count.
+  return { systemPrompt, planMonths, planFirm: !isEditSession && !!detectedMonths };
 }
 
 // Guarantee a plan draft is fully expanded into SEPARATE months (Goals app
@@ -633,13 +692,14 @@ function planContext(p: {
 // time budget each call). The Goals app closed it with "You can also ask me
 // to continue expanding any remaining months", and the months never came.
 const HARD_CAP_MONTHS = 36;
-async function expandPlan(openai: any, systemPrompt: string, messages: any[], startText: string, planMonths: number | null, startedAt: number) {
+async function expandPlan(openai: any, systemPrompt: string, messages: any[], startText: string, planMonths: number | null, startedAt: number, planFirm = false) {
   const remaining = () => CHAT_BUDGET_MS - (Date.now() - startedAt);
+  const expectedFor = (a: any) => Math.min(HARD_CAP_MONTHS, planFirm && planMonths ? planMonths : Math.max(planMonths || 0, a.maxMentioned));
   let text = startText;
   let stalls = 0;
   for (let attempt = 0; attempt < 16; attempt++) {
     const a = analyzePlan(text);
-    const expected = Math.min(HARD_CAP_MONTHS, Math.max(planMonths || 0, a.maxMentioned));
+    const expected = expectedFor(a);
     if (a.contig >= expected && !a.groupingPresent) break;
     const from = a.contig + 1;
     if (from > expected) break;
@@ -672,7 +732,7 @@ async function expandPlan(openai: any, systemPrompt: string, messages: any[], st
     }
   }
   const fin = analyzePlan(text);
-  const finExpected = Math.min(HARD_CAP_MONTHS, Math.max(planMonths || 0, fin.maxMentioned));
+  const finExpected = expectedFor(fin);
   const progress = { months_done: Math.min(fin.contig, finExpected), months_total: finExpected };
   if (fin.contig < finExpected || fin.rangePresent) {
     const cut = fin.contig >= 1
@@ -744,7 +804,7 @@ async function runChat(openai: any, p: {
     }
   }
 
-  const { systemPrompt, planMonths } = planContext(p);
+  const { systemPrompt, planMonths, planFirm } = planContext(p);
 
   let finalReply = await modelTurn(openai, systemPrompt, messages, remaining() - 10 * 1000);
   if (!finalReply.trim()) throw new Error('The planner gave an empty answer');
@@ -754,7 +814,7 @@ async function runChat(openai: any, p: {
   // incomplete / months_done / months_total: see expandPlan.
   let progress: any = {};
   if (!isApproval && looksLikePlan) {
-    const r = await expandPlan(openai, systemPrompt, messages, finalReply, planMonths, startedAt);
+    const r = await expandPlan(openai, systemPrompt, messages, finalReply, planMonths, startedAt, planFirm);
     finalReply = r.text;
     progress = { incomplete: r.incomplete, months_done: r.months_done, months_total: r.months_total };
   }
@@ -780,8 +840,8 @@ async function continuePlan(openai: any, p: {
   messages: any[]; planText: string; goalId: string | null; city: string | null; today: string; startedAt: number;
   existingGoals: any[]; stepsByGoal: Record<string, any[]>;
 }) {
-  const { systemPrompt, planMonths } = planContext(p);
-  const r = await expandPlan(openai, systemPrompt, p.messages, stripClosing(p.planText), planMonths, p.startedAt);
+  const { systemPrompt, planMonths, planFirm } = planContext(p);
+  const r = await expandPlan(openai, systemPrompt, p.messages, stripClosing(p.planText), planMonths, p.startedAt, planFirm);
   return {
     message: r.text,
     action: 'chat',
@@ -795,8 +855,11 @@ async function continuePlan(openai: any, p: {
 // ── EXTRACT PLAN: the already-written plan → structured JSON (nothing saved) ─
 async function extractPlan(openai: any, messages: any[], today: string) {
   const conversationText = messages.map((m) => `${m.role === 'user' ? 'User' : 'Planner'}: ${m.content}`).join('\n\n');
-  const detectedMonths = detectMonths(conversationText, today);
-  const lastAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant');
+  const detectedMonths = detectMonths(messages, today);
+  // The newest planner message that is a plan (a question asked after it,
+  // like "why does it stop at Month 14?", leaves an answer that isn't one).
+  const lastAssistantMessage = [...messages].reverse().find((m) => m.role === 'assistant' && /^\s*#{0,4}\s*\*{0,2}\s*Month\s+\d+/im.test(String(m.content || '')))
+    || [...messages].reverse().find((m) => m.role === 'assistant');
   const planText = lastAssistantMessage?.content || conversationText;
 
   // ADHDone: the plan is built from EVERY planner message (assemblePlan), so a
