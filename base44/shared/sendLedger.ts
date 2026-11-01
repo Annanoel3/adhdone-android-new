@@ -243,6 +243,7 @@ export async function ledgerPrune(base44: any): Promise<void> {
     const old: any[] = (await ledger(base44).filter({ send_at: { $lt: cutoff } }, 'send_at', ARCHIVE_BATCH)) || [];
     if (!old.length) return;
     const kept: string[] = [];
+    let lastKeptAt = '';
     for (let i = 0; i < old.length; i += ARCHIVE_CHUNK) {
       const part = old.slice(i, i + ARCHIVE_CHUNK);
       try {
@@ -259,12 +260,19 @@ export async function ledgerPrune(base44: any): Promise<void> {
           },
         })));
         for (const row of part) kept.push(row.id);
+        lastKeptAt = part[part.length - 1]?.send_at || lastKeptAt;
       } catch (e) {
         // Not kept: left in the ledger for the next run to try again.
         console.error('[sendLedger] reminder history not kept:', e);
+        break;
       }
     }
-    if (kept.length) await ledger(base44).deleteMany({ id: { $in: kept } });
+    if (!kept.length) return;
+    await ledger(base44).deleteMany({ id: { $in: kept } });
+    // Never archive the same rows twice: if they're somehow still here, clear
+    // the archived stretch by time instead (rows come oldest first).
+    const left = (await ledger(base44).filter({ id: { $in: kept.slice(0, 50) } }, 'send_at', 1).catch(() => [])) || [];
+    if (left.length && lastKeptAt) await ledger(base44).deleteMany({ send_at: { $lte: lastKeptAt, $lt: cutoff } });
   } catch (e) {
     console.error('[sendLedger] prune failed:', e);
   }
