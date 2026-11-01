@@ -686,7 +686,7 @@ function Planner() {
                     </div>
                     <div className={`rounded-2xl px-5 py-4 max-w-sm text-center ${L.card}`}>
                       <p className={`text-sm font-medium mb-1 ${L.accent}`}>Your plan is a living document 🌱</p>
-                      <p className={`text-xs leading-relaxed mb-3 ${L.soft}`}>Come back anytime to adjust difficulty, add resources, skip ahead, extend the timeline, or completely restructure a phase. Just tell me what's working and what isn't.</p>
+                      <p className={`text-xs leading-relaxed mb-3 ${L.soft}`}>Come back to this chat anytime to adjust difficulty, add resources, skip ahead, extend the timeline, or restructure a phase: open the goal and tap <span className="font-semibold">Change this plan</span>. Just tell me what's working and what isn't.</p>
                       {stepsFailed ? (
                         <div className="space-y-2">
                           <p className={`text-xs ${L.danger}`}>Your plan's steps didn't save.</p>
