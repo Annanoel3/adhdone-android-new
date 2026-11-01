@@ -363,6 +363,9 @@ async function makeNextCopy(task) {
     urgency: task.urgency || 'medium',
     energy_required: task.energy_required || 'medium',
     takes_time: task.takes_time === true,
+    // The row's break-it-down offer: shown or hidden the same on every occurrence.
+    worth_breaking_down: task.worth_breaking_down === true,
+    breakdown_offer_dismissed: task.breakdown_offer_dismissed === true,
     reminder_interval: interval || 'once',
     // What makes this task itself, carried to every occurrence: where it
     // happens, what the user originally wrote, how they asked to be reminded,
@@ -499,6 +502,9 @@ async function createNextBirthday(task) {
     urgency: task.urgency || 'medium',
     energy_required: task.energy_required || 'medium',
     takes_time: task.takes_time === true,
+    // The row's break-it-down offer: shown or hidden the same on every occurrence.
+    worth_breaking_down: task.worth_breaking_down === true,
+    breakdown_offer_dismissed: task.breakdown_offer_dismissed === true,
     reminder_interval: task.reminder_interval || 'once',
     original_input: task.original_input || null,
     location: task.location || null,
