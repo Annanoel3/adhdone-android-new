@@ -1921,8 +1921,11 @@ function nextLookIso(
   minutes: number | null, picked: number, nowMs: number,
   quiet?: { startMin: number; endMin: number; timeZone: string },
 ): string | null {
-  if (minutes !== null) {
-    let m = Math.min(Math.max(minutes, 15), 24 * 60);
+  // A nudge picked with no look-again time used to mean "look again once it
+  // goes out", even when it was hours away; now that waits 3 hours at most too
+  // (once it goes out, the look comes at once anyway).
+  if (minutes !== null || picked > 0) {
+    let m = minutes !== null ? Math.min(Math.max(minutes, 15), 24 * 60) : 24 * 60;
     if (m > LOOK_MAX_AWAKE_MIN) {
       const capAt = new Date(nowMs + LOOK_MAX_AWAKE_MIN * 60 * 1000);
       if (quiet && quiet.startMin !== quiet.endMin && isInQuietHours(capAt, quiet.startMin, quiet.endMin, quiet.timeZone)) {
@@ -1934,7 +1937,7 @@ function nextLookIso(
     }
     return new Date(nowMs + m * 60 * 1000).toISOString();
   }
-  return picked > 0 ? null : new Date(nowMs + 60 * 60 * 1000).toISOString();
+  return new Date(nowMs + 60 * 60 * 1000).toISOString();
 }
 const PASSED_KEEP_MS = 3 * 24 * 60 * 60 * 1000;
 const PASSED_MAX = 60;
