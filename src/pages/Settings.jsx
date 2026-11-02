@@ -678,6 +678,24 @@ export default function Settings() {
                 )}
               </div>
             )}
+            {/* Work hours live in Places (Anna, Nov 2 2026, "idea 2": point
+                people to Places from where they go when reminders bother
+                them). Shown to everyone; it only links. */}
+            <div className={`mt-4 pt-4 border-t ${theme === 'dark' ? 'border-gray-700' : 'border-gray-200'}`}>
+              <p className={`text-sm font-medium ${theme === 'dark' ? 'text-gray-200' : 'text-gray-900'}`}>
+                Work hours or shifts?
+              </p>
+              <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-600'}`}>
+                Add them in Places and nudges can stay quiet while you work. Anything set for a specific time still comes through.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate('/settings?section=places#work-hours')}
+                className={`mt-1 text-sm font-medium underline underline-offset-2 ${theme === 'dark' ? 'text-green-400' : 'text-purple-600'}`}
+              >
+                Open Places
+              </button>
+            </div>
           </CardContent>
         </Card>
 
