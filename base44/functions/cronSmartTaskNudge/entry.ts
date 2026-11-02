@@ -1140,7 +1140,7 @@ Deno.serve(async (req) => {
                 smart_nudge_schedule_dirty: stillDirty,
                 smart_nudge_planned_at: runStartIso,
                 smart_nudge_plan_prints: prints,
-                smart_nudge_look_at: useBrief ? nextLookIso(lastLookAgain, newEntries.length + stillQueued.length, nowMs) : null,
+                smart_nudge_look_at: useBrief ? nextLookIso(lastLookAgain, newEntries.length + stillQueued.length, nowMs, { startMin, endMin, timeZone }) : null,
                 smart_nudge_brief_version: useBrief ? REMINDER_BRIEF_VERSION : null,
                 smart_nudge_passed: mergePassed(fresh?.smart_nudge_passed ?? user.smart_nudge_passed, lastPassed, nowMs),
               });
@@ -1909,8 +1909,31 @@ let lastLookAgain: number | null = null;
 // When to look again after a look: the time it asked for (no sooner than the
 // next check or two, no later than a day), or, when it said nothing, after
 // its nudge goes out (no time needed) — and in an hour when it picked nothing.
-function nextLookIso(minutes: number | null, picked: number, nowMs: number): string | null {
-  if (minutes !== null) return new Date(nowMs + Math.min(Math.max(minutes, 15), 24 * 60) * 60 * 1000).toISOString();
+// Never more than 3 hours between looks while they're awake (Anna, Nov 2
+// 2026: "at minimum, it should check every 3 hours"). The planner picks its own
+// look-again time (15 minutes to a day); at 8:09 AM it gave a new person's
+// undated task a look at 6 PM, so one morning guess decided the whole day.
+// A 3-hour mark that falls inside their quiet hours moves to when those end
+// (nothing is sent overnight, so a look then would only cost an AI call), and
+// never later than the planner's own pick.
+const LOOK_MAX_AWAKE_MIN = 180;
+function nextLookIso(
+  minutes: number | null, picked: number, nowMs: number,
+  quiet?: { startMin: number; endMin: number; timeZone: string },
+): string | null {
+  if (minutes !== null) {
+    let m = Math.min(Math.max(minutes, 15), 24 * 60);
+    if (m > LOOK_MAX_AWAKE_MIN) {
+      const capAt = new Date(nowMs + LOOK_MAX_AWAKE_MIN * 60 * 1000);
+      if (quiet && quiet.startMin !== quiet.endMin && isInQuietHours(capAt, quiet.startMin, quiet.endMin, quiet.timeZone)) {
+        const toEnd = (quiet.endMin - localMinutesOfDay(capAt, quiet.timeZone) + 24 * 60) % (24 * 60);
+        m = Math.min(m, LOOK_MAX_AWAKE_MIN + toEnd);
+      } else {
+        m = LOOK_MAX_AWAKE_MIN;
+      }
+    }
+    return new Date(nowMs + m * 60 * 1000).toISOString();
+  }
   return picked > 0 ? null : new Date(nowMs + 60 * 60 * 1000).toISOString();
 }
 const PASSED_KEEP_MS = 3 * 24 * 60 * 60 * 1000;
