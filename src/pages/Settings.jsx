@@ -24,9 +24,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import PlacesSection from '@/components/places/PlacesSection';
-import QuickCaptureCard, { AlarmCard } from '@/components/settings/QuickCaptureCard';
+import QuickCaptureCard, { AlarmCard, NotifySoundCard } from '@/components/settings/QuickCaptureCard';
 import { voiceCheckInsOn, setVoiceCheckIns, speechAvailable } from '@/components/utils/speak';
-import { refreshAlarms, alarmPermissionStatus } from '@/components/utils/widgetBridge';
+import { refreshAlarms, alarmPermissionStatus, pushNotifySound } from '@/components/utils/widgetBridge';
 import { onThisPhone } from '@/lib/phonePlatform';
 import AdDiagnosticsCard from '@/components/settings/AdDiagnosticsCard';
 import { Textarea } from '@/components/ui/textarea';
@@ -403,6 +403,9 @@ export default function Settings() {
       // Full-screen alarms follow the same window: rebuild the phone's alarm
       // set so nothing booked inside the new quiet hours can ring.
       refreshAlarms().catch(() => {});
+      // A read-aloud notification sound keeps to quiet hours: the phone gets
+      // the new window now (build 46 on; nothing happens on older builds).
+      pushNotifySound({ ...(user || {}), quiet_hours_enabled: enabled, quiet_hours_start: start, quiet_hours_end: end });
       return true;
     } catch (e) {
       console.error('Failed to save quiet hours:', e);
@@ -735,6 +738,11 @@ export default function Settings() {
             everyone. The one-time popups tell people it lives here, and the
             App Guide's Start-here card links to /settings?section=reminders#alarms. */}
         <div id="alarms"><AlarmCard user={user} theme={theme} /></div>
+
+        {/* The sound regular notifications make (build 46 on; Anna, Nov 1
+            2026: "can our sounds for alarms also be an option for regular
+            notifications? Including reading it out loud?"). */}
+        <NotifySoundCard user={user} theme={theme} />
 
         {/* "What rang": the phone's own list of every alarm and reminder that
             sounded in the last 2 days (NotificationSettings). That page has
