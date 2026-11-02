@@ -854,49 +854,40 @@ const saveFirstWinDemo = (demo) => {
   } catch (e) {}
 };
 
-// Book the welcome chat's demo once this phone can receive it. The chat used
-// to book it on the spot, but a new phone isn't linked to the account for
-// pushes until after the notifications question, so that push had nowhere to
-// go and never arrived. The link can take a few seconds to settle on
-// OneSignal's side, hence the retries.
+// Book the demo. Since Nov 1 2026 the server books it (bookFirstWinDemo): the
+// phone hands it over the moment it's planned, and the server waits for this
+// phone's link to the account itself (a new phone isn't linked for pushes
+// until a few seconds after the notifications question, and a push booked
+// before that is refused). It used to be booked from here, after a pause and
+// only once linked, so someone who closed the app right after their first
+// to-do saved never got it: a phone in the background stops running the
+// app's code (Caterina, Nov 1 2026: closed 7 seconds after it saved). Once
+// per account on the server; calling again just gets the one booked. Inside
+// their quiet hours too (Anna, Oct 23 2026; RULES.md §9 Q4).
 let firstWinDemoBooking = null;
 function bookFirstWinDemo() {
   const waiting = readFirstWinDemo();
   if (!waiting || waiting.id || firstWinDemoBooking) return firstWinDemoBooking;
   firstWinDemoBooking = (async () => {
-    for (const pause of [2000, 5000, 10000, 20000]) {
-      await new Promise((r) => setTimeout(r, pause));
-      const demo = readFirstWinDemo();
-      if (!demo || demo.id) return;
-      const planned = Date.parse(demo.at);
-      if (!(planned > Date.now() - FIRST_WIN_DEMO_STALE_MS)) { saveFirstWinDemo(null); return; }
-      const sendAt = new Date(Math.max(planned, Date.now() + FIRST_WIN_DEMO_MIN_LEAD_MS)).toISOString();
-      // Inside their quiet hours too: they are in the app setting it up right
-      // now, and it arrives a few minutes later (never more than 15 minutes
-      // after it was planned, see the stale check above). Anna, Oct 23 2026:
-      // it "should break quiet hours if its actually arriving soon after they
-      // get through that onboarding part of the app" (RULES.md §9 Q4).
-      const alarm = demo.alarm === true;
-      try {
-        const me = await base44.auth.me();
-        if (!me?.email) return;
-        const res = await base44.functions.invoke('schedulePush', {
-          toUserExternalId: me.email,
-          title: demo.title,
-          body: demo.body,
-          sendAtISO: sendAt,
-          data: alarm ? { type: 'first_win_demo', alarm: true } : { type: 'first_win_demo' },
-        });
-        const id = res?.data?.notificationId;
-        if (!id) continue;
-        // Full-screen alarms may have been picked while this was booking.
-        const latest = readFirstWinDemo() || demo;
-        saveFirstWinDemo({ ...demo, at: sendAt, id, alarm });
-        if (latest.alarm === true && !alarm) await ringFirstWinDemo();
-        return;
-      } catch (e) {
-        // try again after the next pause
-      }
+    const planned = Date.parse(waiting.at);
+    if (!(planned > Date.now() - FIRST_WIN_DEMO_STALE_MS)) { saveFirstWinDemo(null); return; }
+    try {
+      const res = await base44.functions.invoke('bookFirstWinDemo', {
+        title: waiting.title,
+        body: waiting.body,
+        at: waiting.at,
+        alarm: waiting.alarm === true,
+      });
+      const r = res?.data || {};
+      if (r.gone) { saveFirstWinDemo(null); return; }
+      if (!r.notificationId) return; // not booked yet; the next link event asks again
+      // Full-screen alarms may have been picked while this was booking.
+      const latest = readFirstWinDemo() || waiting;
+      const alarm = r.alarm === true;
+      saveFirstWinDemo({ ...waiting, at: r.at || waiting.at, id: r.notificationId, alarm });
+      if (latest.alarm === true && !alarm) await ringFirstWinDemo();
+    } catch (e) {
+      // Not booked: the next link event (or app open) asks again while it's on time.
     }
   })().finally(() => { firstWinDemoBooking = null; });
   return firstWinDemoBooking;
@@ -904,8 +895,10 @@ function bookFirstWinDemo() {
 
 if (typeof window !== 'undefined') {
   window.addEventListener(PUSH_LINKED_EVENT, () => { bookFirstWinDemo(); });
+  // Handed to the server the moment it's planned, linked yet or not: the
+  // server waits for the link (bookFirstWinDemo).
   window.addEventListener(FIRST_WIN_PLANNED_EVENT, () => {
-    if (window.__adhdonePushLinked) bookFirstWinDemo();
+    if (window.Capacitor?.isNativePlatform?.()) bookFirstWinDemo();
   });
   // Everyone new gets the demo reminder after their first task, wherever they
   // add it (Anna, Oct 22 2026). It used to come only from a task added in the
