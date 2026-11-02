@@ -14,8 +14,17 @@ if (typeof window !== 'undefined') {
   window.addEventListener('pointerdown', touch, true);
 }
 
+// How many popups have been up since the app was opened. Something that can
+// just as well wait (the about-you catch-up) waits for a later open once
+// another popup has already had this one, so an open never stacks two asks
+// back to back (Nov 1 2026: "Every day around this time?", "What's next?" and
+// the missed-reminder popup all arrived the same day).
+let shownThisLaunch = 0;
+export const popupsShownThisLaunch = () => shownThisLaunch;
+
 export function enterOnboardingSurface() {
   open += 1;
+  shownThisLaunch += 1;
   setTourActive(true);
 }
 
