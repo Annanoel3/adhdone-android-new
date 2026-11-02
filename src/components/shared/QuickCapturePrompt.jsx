@@ -1711,6 +1711,13 @@ export function AppUpdatePrompt({ user, theme }) {
     if (!user || checked.current) return;
     if (!NEWEST_BUILD_ON_PLAY) return;
     checked.current = true;
+    // Not on an account's first day (Anna, Nov 2 2026: "you can hide the
+    // update card on the first day"). Jordan's very first open, Nov 1, was an
+    // "Update available" card: Google Play had handed him the older build the
+    // day build 45 went out. Someone who just installed from Play is asked
+    // from their second day on, if the phone still has an older build.
+    const joinedMs = Date.parse(user.signed_up_at || user.created_date || '');
+    if (Number.isFinite(joinedMs) && Date.now() - joinedMs < 24 * 60 * 60 * 1000) return;
     if (!window.Capacitor?.isNativePlatform?.()) return;
     // Android only: it counts Android build numbers and sends people to the
     // Play Store. The iPhone app has its own numbers and store (Anna, Oct 22
