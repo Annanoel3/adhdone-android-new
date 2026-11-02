@@ -32,7 +32,6 @@ import {
   HelpCircle,
   ChevronDown,
   Wrench,
-  Shuffle,
   MapPin,
   BookLock,
   Settings as SettingsIcon
@@ -180,16 +179,17 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     },
     // The same groups as the side menu (Tools, Reflect), so the guide reads
     // the way the app is laid out (Anna, Oct 24 2026). The entries for Record
-    // Notes, Decision Maker and Places use each page's own words. (Diary left
-    // the menu and the guide Oct 31 2026.)
+    // Notes and Places use each page's own words. (Diary left the menu and the
+    // guide Oct 31 2026; Decision Maker left both Nov 2 2026, when Places moved
+    // under Settings.)
     {
       icon: Wrench,
       title: "Tools",
       children: [
     {
       icon: Timer,
-      title: "Focus Timer",
-      description: "Pomodoro: work-and-break rounds with lengths you pick. Or a plain stopwatch."
+      title: "Pomodoro Timer",
+      description: "Work-and-break rounds with lengths you pick. Or a plain stopwatch."
     },
     {
       icon: Lightbulb,
@@ -203,16 +203,6 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
       description: "Record a meeting, appointment or class. ADHDone writes short, clear notes: to-dos first, then the details you'll need."
     },
     ] : []),
-    {
-      icon: Shuffle,
-      title: "Decision Maker",
-      description: "Too many options? Type or say them and let the app pick one for you."
-    },
-    {
-      icon: MapPin,
-      title: "Places",
-      description: "Your home area and work address, so \"leave now\" comes with a real drive time."
-    },
       ],
     },
     {
@@ -245,6 +235,12 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
       title: "Quiet Hours",
       description: "Set the hours you don't want to be bothered.",
       link: { label: "Set them in Settings", to: "/settings?section=reminders#quiet-hours" },
+    },
+    {
+      icon: MapPin,
+      title: "Places",
+      description: "Your home area, work address and work hours, so \"leave now\" comes with a real drive time and reminders can stay quiet while you work.",
+      link: { label: "Open Places in Settings", to: "/settings?section=places" },
     },
       ],
     }
