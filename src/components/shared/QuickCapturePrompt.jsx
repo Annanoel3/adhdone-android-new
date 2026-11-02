@@ -730,7 +730,7 @@ export function AlarmPermissionsDialog({ theme }) {
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
             {feature === 'timers'
-              ? `The focus timer and task timers ring when their time is up, so ${phoneOs()} needs these switched on. You can say no — they'll still work, just quieter and easier to miss.`
+              ? `The Pomodoro timer and task timers ring when their time is up, so ${phoneOs()} needs these switched on. You can say no — they'll still work, just quieter and easier to miss.`
               : setup
               ? (allOk
                 ? `Pick the sound it rings with. Every switch ${phoneOs()} needed is already on.`
