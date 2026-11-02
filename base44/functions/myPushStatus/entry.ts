@@ -34,6 +34,37 @@ Deno.serve(async (req) => {
             return Response.json({ success: false, error: 'Missing OneSignal environment variables.' }, { status: 500 });
         }
 
+        // The owner can also ask what happened to particular pushes (Test
+        // Function: { "notificationIds": ["..."] }, ids from NotificationLedger):
+        // OneSignal's own counts for each (delivered, failed because the phone
+        // no longer takes pushes, errored, opened), and when it finished. Read
+        // only; nothing about the words. Nov 2 2026: two new people's phones
+        // were found "not subscribed" the day after they joined, and the only
+        // way to tell when that happened is which of their pushes got through.
+        if (me.role === 'admin' && Array.isArray(input?.notificationIds)) {
+            const ids = input.notificationIds.filter((x) => typeof x === 'string').slice(0, 20);
+            const out = [];
+            for (const id of ids) {
+                try {
+                    const r = await fetch(`https://onesignal.com/api/v1/notifications/${encodeURIComponent(id)}?app_id=${appId}`, {
+                        headers: { Authorization: `Basic ${restApiKey}` },
+                    });
+                    const n = await r.json();
+                    const a = n?.platform_delivery_stats?.android || {};
+                    out.push({
+                        id, ok: r.ok,
+                        successful: n?.successful ?? null, failed: n?.failed ?? null, errored: n?.errored ?? null,
+                        converted: n?.converted ?? null, remaining: n?.remaining ?? null, canceled: !!n?.canceled,
+                        android_received: a.received ?? null,
+                        send_after: n?.send_after ?? null, completed_at: n?.completed_at ?? null,
+                    });
+                } catch (e) {
+                    out.push({ id, ok: false, error: String(e?.message || e) });
+                }
+            }
+            return Response.json({ success: true, notifications: out });
+        }
+
         const res = await fetch(
             `https://api.onesignal.com/apps/${appId}/users/by/external_id/${encodeURIComponent(lookup || me.email)}`,
             { headers: { Authorization: `Basic ${restApiKey}` } }
