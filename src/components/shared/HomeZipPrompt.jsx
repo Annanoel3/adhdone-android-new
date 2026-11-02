@@ -57,7 +57,8 @@ export default function HomeZipPrompt({ user, theme }) {
     localStorage.setItem(SEEN_KEY, 'true');
     setOpen(false);
     base44.auth.updateMe({ home_zip_prompt_seen_v2: true }).catch(() => {});
-    navigate('/Places');
+    // Places is a Settings section since Nov 2 2026.
+    navigate('/settings?section=places');
   };
 
   if (step === 'work') {
@@ -103,7 +104,7 @@ export default function HomeZipPrompt({ user, theme }) {
         <HomeBaseFields user={user} theme={theme} onSaved={() => setStep('work')} compact />
 
         <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-          Totally optional — you can add or change it any time in <strong>Tools → Places</strong>.
+          Totally optional — you can add or change it any time in <strong>Settings → Places</strong>.
         </p>
 
         <DialogFooter>
