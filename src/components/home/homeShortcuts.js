@@ -1,5 +1,5 @@
 import {
-  Mic, ListTodo, CalendarDays, Cake, Lightbulb, Timer, Shuffle, MapPin,
+  Mic, ListTodo, CalendarDays, Cake, Lightbulb, Timer,
   MessageCircleHeart, TrendingUp, BookLock, Settings, Target,
 } from "lucide-react";
 import { base44 } from "@/api/base44Client";
@@ -27,9 +27,10 @@ export const HOME_SHORTCUTS = [
   { key: "calendar", title: "Calendar", icon: CalendarDays, page: "Calendar" },
   { key: "birthdays", title: "Birthdays", icon: Cake, page: "Birthdays" },
   { key: "parkinglot", title: "Parking Lot", icon: Lightbulb, page: "ParkingLot" },
-  { key: "pomodoro", title: "Pomodoro", icon: Timer, page: "FocusTimer" },
-  { key: "decisions", title: "Decision Maker", icon: Shuffle, page: "DecisionMaker" },
-  { key: "places", title: "Places", icon: MapPin, page: "Places" },
+  { key: "pomodoro", title: "Pomodoro Timer", icon: Timer, page: "FocusTimer" },
+  // No Decision Maker tile since Nov 2 2026 (it left the menu), and no Places
+  // tile (Places is a Settings section now). A saved "decisions" or "places"
+  // tile is dropped by known() below; nobody had saved either.
   { key: "talk", title: "Support Space", icon: MessageCircleHeart, page: "SupportSpace" },
   { key: "insights", title: "Insights", icon: TrendingUp, page: "Progress" },
   // No Diary tile since Oct 31 2026 (Diary left the menu); a saved "diary"
