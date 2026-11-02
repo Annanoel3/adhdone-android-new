@@ -1048,6 +1048,20 @@ Deno.serve(async (req) => {
             const made = utcMs(user.signed_up_at || user.created_date);
             return Number.isFinite(made) && nowMs - made < DAY_MS && !sentLog.some((l: any) => l && !l.skip);
           })(),
+          // Joined in the last 3 days, past their first day, and not back in
+          // the app since that first day (Anna, Nov 2 2026, yes to "someone who
+          // joined in the last 3 days and hasn't been back should get one
+          // well-timed mention today, aimed at getting them to open the app
+          // and finish one small thing"). On Nov 2 the planner left Jordan,
+          // Connie and Caterina alone on their second day: no deadline, "no
+          // cost of waiting", or their own 9 AM reminder had already gone out.
+          earlyDays: (() => {
+            const made = utcMs(user.signed_up_at || user.created_date);
+            if (!Number.isFinite(made) || nowMs - made >= 3 * DAY_MS) return false;
+            const firstDay = dayOf(made);
+            if (firstDay === todayStr) return false; // still day one: NEW HERE
+            return !Number.isFinite(seenMs) || dayOf(seenMs) <= firstDay;
+          })(),
           sentSinceSeen,
           oneADay,
           seenCountIsFloor: Number.isFinite(seenMs) && seenMs < nowMs - 3 * DAY_MS,
@@ -1853,6 +1867,8 @@ interface PlanContext {
   dayStart?: string;
   // Joined in the last day, nothing from Smart Reminders yet.
   newAccount?: boolean;
+  // Joined in the last 3 days, not back since their first day (EARLY DAYS).
+  earlyDays?: boolean;
   // They answered No to "Are your reminders helping?": one a day (ONE A DAY).
   oneADay?: boolean;
   lastSeenMs: number;
@@ -2350,6 +2366,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     if (ctx.dayStart) out.push(ctx.dayStart);
     if (ctx.oneADay) out.push("ONE A DAY: the app asked whether your reminders were helping and they said no, so they get ONE from you a day now, in all, and today's hasn't gone out yet. Of everything here, pick the single mention most worth their attention today, at the moment it's most likely to get done; if that moment isn't now, wait for it. Nothing more from you reaches them today after it.");
     if (ctx.newAccount) out.push('NEW HERE: they joined ADHDone today, and nothing from you has reached them yet. These are their first tasks. Make sure at least one of them gets a mention today, at a waking hour, even one with no date or a low priority, so they see the app actually work. Not tomorrow.');
+    if (ctx.earlyDays) out.push("EARLY DAYS: they joined ADHDone in the last three days and haven't opened the app since their first day. Bringing them back now matters more than usual: someone who comes back and finishes something on a second day is far more likely to stay. Make sure one mention from you reaches them today, at a moment that fits their day, even for a task with no date and nothing lost by waiting, worded to get them to open the app and finish one small thing (a first step counts). A reminder of their own that already went out today unanswered doesn't count as that mention. One well-timed mention is the goal, not several.");
     if (aboutMe.trim()) out.push(`What they told you about themselves, in their own words: ${aboutMe.trim()}`);
     if (work.lines.length) out.push(`Work schedule (${work.remote ? 'works from home' : 'goes in to work'}${work.quietAtWork ? '; they turned on "don\'t notify me at work", so nothing goes out during those hours' : ''}):\n${work.lines.map((l) => `- ${l}`).join('\n')}`);
     out.push(`OPEN TASKS — yours to plan (numbered; use these numbers in your answer):\n${tasks.map(line).join('\n')}`);
