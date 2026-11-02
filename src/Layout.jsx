@@ -744,8 +744,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
       isCollapsible: true,
       icon: Wrench,
       subItems: [
+        // Pomodoro Timer since Nov 2 2026 (Anna: "rename focus timer to
+        // Pomodoro timer"); the page's own heading already said that.
         {
-          title: "Focus Timer",
+          title: "Pomodoro Timer",
           url: createPageUrl("FocusTimer"),
           icon: Timer,
         },
@@ -758,16 +760,10 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         // Everywhere (Anna, Oct 31 2026): recording needs the phone's recorder,
         // but the website still opens the recordings and their notes.
         { title: "Record Notes", url: createPageUrl("Notes"), icon: Mic, dot: notesDot },
-        {
-          title: "Decision Maker",
-          url: createPageUrl("DecisionMaker"),
-          icon: Shuffle,
-        },
-        {
-          title: "Places",
-          url: createPageUrl("Places"),
-          icon: MapPin,
-        },
+        // Decision Maker came out of the menu Nov 2 2026 (Anna: "we can hide
+        // the decision maker"): 6 people opened it, none used it. The page is
+        // kept; /DecisionMaker still opens it. Places moved into Settings the
+        // same day (/settings?section=places; /Places redirects there).
         // Goals (GOALS_PORT.md): only for the accounts goalsAccess.js lets in.
         ...(goalsEnabled(user) ? [{ title: "Goals", url: createPageUrl("Goals"), icon: Target }] : []),
       ],
