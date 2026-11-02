@@ -13,6 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import HomeBaseFields from '@/components/settings/HomeBaseFields';
 import { base44 } from '@/api/base44Client';
 import { usePopupTurn } from '@/components/onboarding/onboardingSurface';
+import { trackFire } from '@/lib/appTrack';
 
 // v2: the prompt moved from "on launch" to "first errand", so everyone who
 // hasn't actually saved a home base yet gets one more chance to see it.
@@ -33,6 +34,16 @@ export default function HomeZipPrompt({ user, theme }) {
   const [step, setStep] = useState('home');
   const navigate = useNavigate();
 
+  // Counted (AppEvent `home_prompt`, props.action shown / home_saved /
+  // not_now / add_work, props.step) since Nov 2 2026: until then only an
+  // answer left a mark (home_zip_prompt_seen_v2), so nobody could say how
+  // many people it had been shown to (Anna: "How many people have gotten
+  // the places popup?").
+  useEffect(() => {
+    if (shown) trackFire('home_prompt', { props: { action: 'shown', step } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown]);
+
   useEffect(() => {
     if (!user) return;
     // Saved on the profile too, so a new device / cleared browser storage
@@ -48,12 +59,14 @@ export default function HomeZipPrompt({ user, theme }) {
   }, [user]);
 
   const dismiss = () => {
+    trackFire('home_prompt', { props: { action: 'not_now', step } });
     localStorage.setItem(SEEN_KEY, 'true');
     setOpen(false);
     base44.auth.updateMe({ home_zip_prompt_seen_v2: true }).catch(() => {});
   };
 
   const goToPlaces = () => {
+    trackFire('home_prompt', { props: { action: 'add_work', step } });
     localStorage.setItem(SEEN_KEY, 'true');
     setOpen(false);
     base44.auth.updateMe({ home_zip_prompt_seen_v2: true }).catch(() => {});
@@ -101,7 +114,7 @@ export default function HomeZipPrompt({ user, theme }) {
           </DialogDescription>
         </DialogHeader>
 
-        <HomeBaseFields user={user} theme={theme} onSaved={() => setStep('work')} compact />
+        <HomeBaseFields user={user} theme={theme} onSaved={() => { trackFire('home_prompt', { props: { action: 'home_saved', step: 'home' } }); setStep('work'); }} compact />
 
         <p className={`text-xs ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
           Totally optional — you can add or change it any time in <strong>Settings → Places</strong>.
