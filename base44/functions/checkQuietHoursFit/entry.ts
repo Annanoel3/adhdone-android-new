@@ -81,7 +81,9 @@ Do these quiet hours fit the hours this person most likely sleeps? Judge it the 
 
 If it doesn't fit, and what they said or their work hours make their sleep reasonably clear (for example, the stretch after a night shift ends), suggest quiet hours that would cover it. Otherwise leave the suggestion empty.
 
-Answer in JSON only: {"fits": true or false, "why": "one short sentence on what you went by", "suggest_start": "HH:MM" in 24-hour time or null, "suggest_end": "HH:MM" or null}`;
+Separately: from what they said, do they have a job, shifts, classes or another commitment with regular hours, the kind of hours they could enter as a work schedule? Someone who mentions a job they go to or work from, shift work or school counts. Occasional gigs, chores, hobbies, caring for family at home, being retired, or saying nothing about it do not. Judge what they actually said; never guess.
+
+Answer in JSON only: {"fits": true or false, "why": "one short sentence on what you went by", "suggest_start": "HH:MM" in 24-hour time or null, "suggest_end": "HH:MM" or null, "has_set_hours": true or false}`;
 
   const openai = lean(new OpenAI({ apiKey: secrets.get('OPENAI_API_KEY') }), { name: 'checkQuietHoursFit' });
   const completion = await openai.chat.completions.create({
@@ -100,8 +102,13 @@ Answer in JSON only: {"fits": true or false, "why": "one short sentence on what 
   const end = isHhmm(out?.suggest_end) ? String(out.suggest_end).padStart(5, '0') : null;
   const both = !fits && start && end && start !== end;
   const why = String(out?.why || '').trim().slice(0, 240);
-  return { fits, why, start: both ? start : null, end: both ? end : null };
+  return { fits, why, start: both ? start : null, end: both ? end : null, hasSetHours: out?.has_set_hours === true };
 }
+
+// Offer "Add my work hours" (Places) at the end of the welcome chat or the
+// catch-up (Anna, Nov 2 2026, "idea 1"): only when what they said has work or
+// school hours in it and no work hours are saved yet.
+const offerWorkHours = (verdict: any, work: string[]) => verdict?.hasSetHours === true && work.length === 0;
 
 export default async function(req: Request) {
   try {
@@ -109,6 +116,13 @@ export default async function(req: Request) {
     const me = await base44.auth.me();
     if (!me) return Response.json({ error: 'Unauthorized' }, { status: 401 });
     const body: any = await req.json().catch(() => ({}));
+
+    // Self-test (owner only): judge a made-up about-you text against the
+    // starting quiet hours and no work hours; nothing is read or saved.
+    if (me.role === 'admin' && typeof body?.tryAbout === 'string') {
+      const v = await judge(body.tryAbout.trim(), '10:00 PM to 8:00 AM', []);
+      return Response.json({ ...v, offer_work_hours: offerWorkHours(v, []) });
+    }
 
     const previewEmail = me.role === 'admin' && typeof body?.previewEmail === 'string' ? body.previewEmail.trim() : '';
     const user = previewEmail
@@ -126,8 +140,9 @@ export default async function(req: Request) {
       ? 'turned off, so reminders can come at any hour'
       : `${clock(isHhmm(user.quiet_hours_start) ? user.quiet_hours_start : '22:00')} to ${clock(isHhmm(user.quiet_hours_end) ? user.quiet_hours_end : '08:00')}`;
     const verdict = !aboutMe && work.length === 0
-      ? { fits: true, why: '', start: null, end: null }
+      ? { fits: true, why: '', start: null, end: null, hasSetHours: false }
       : await judge(aboutMe, quietLine, work);
+    const offer_work_hours = offerWorkHours(verdict, work);
 
     // Still the starting hours, and a clear answer about when they sleep: use it.
     const untouched = user.quiet_hours_enabled !== false
@@ -145,6 +160,7 @@ export default async function(req: Request) {
         // told: the popup has shown them the change (QuietHoursReviewPrompt).
         applied: { from_start: '22:00', from_end: '08:00', start: verdict.start, end: verdict.end, at: nowIso, told: false },
         answered_key: null,
+        offer_work_hours,
       };
       if (previewEmail) return Response.json({ ...appliedFit, wouldApply: true, quietLine, aboutMe, work });
       await base44.asServiceRole.entities.User.update(user.id, {
@@ -180,6 +196,7 @@ export default async function(req: Request) {
       at: new Date().toISOString(),
       // The key they last answered the popup for (QuietHoursReviewPrompt).
       answered_key: prev?.answered_key || null,
+      offer_work_hours,
     };
     if (!previewEmail) await base44.asServiceRole.entities.User.update(user.id, { quiet_hours_fit: fit });
     return Response.json(previewEmail ? { ...fit, quietLine, aboutMe, work } : fit);
