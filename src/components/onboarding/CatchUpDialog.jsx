@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { ONBOARDING_STEPS, isStepDone, markStepDone, waitForStep } from './onboardingGate';
-import { enterOnboardingSurface, exitOnboardingSurface, waitForCalm } from './onboardingSurface';
+import { enterOnboardingSurface, exitOnboardingSurface, waitForCalm, popupsShownThisLaunch } from './onboardingSurface';
 import WelcomeChat from './WelcomeChat';
 import { base44 } from '@/api/base44Client';
 import WELCOME_SCRIPT from './welcomeScript';
@@ -69,6 +69,10 @@ export default function CatchUpDialog({ user }) {
         return waitForCalm().then(() => {
           if (!mounted.current || openRef.current) return;
           if (isStepDone(ONBOARDING_STEPS.catchUp)) return;
+          // Another popup already had this open (a missed reminder, "What's
+          // next?", the update card): this question waits for a later open,
+          // so they never get two asks back to back.
+          if (popupsShownThisLaunch() > 0) return;
           // Asked ONCE: the flag is written the moment it appears, not when it is
           // closed, so a sign-out before the flag reached the account (or a dialog
           // closed early) can't bring it back on the next sign-in. What the profile
