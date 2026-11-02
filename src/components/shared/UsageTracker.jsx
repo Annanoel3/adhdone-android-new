@@ -1,6 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { track, trackFire, setTrackedEmail } from '@/lib/appTrack';
+import { track, trackFire, setTrackedEmail, newSessionId } from '@/lib/appTrack';
+
+// A return after this long away is a new visit (Anna, Nov 1 2026: opens were
+// logged only when the app started fresh, so a phone that kept ADHDone in the
+// background showed days of use as one visit). The same 30 minutes AdManager
+// uses to count an open.
+const NEW_VISIT_MS = 30 * 60 * 1000;
 
 // Measures how long the app actually stays open, which screens get used, and
 // catches every unhandled error the app throws. Renders nothing.
@@ -13,6 +19,7 @@ export default function UsageTracker({ user }) {
   const startedRef = useRef(null);
   const activeSecondsRef = useRef(0);
   const reportedRef = useRef(false);
+  const hiddenAtRef = useRef(null);
 
   useEffect(() => {
     if (user?.email) setTrackedEmail(user.email);
@@ -42,10 +49,21 @@ export default function UsageTracker({ user }) {
         // Backgrounding a phone app is where sessions really end — pagehide
         // often never fires, so the duration is written here.
         endSession();
+        hiddenAtRef.current = Date.now();
       } else {
-        // Coming back is a new measurable stretch of the same session.
+        const away = hiddenAtRef.current ? Date.now() - hiddenAtRef.current : 0;
+        hiddenAtRef.current = null;
         startedRef.current = Date.now();
         reportedRef.current = false;
+        if (away >= NEW_VISIT_MS) {
+          // Back after a long time away: a new visit, with its own id, its own
+          // length and the page it opened on.
+          newSessionId();
+          activeSecondsRef.current = 0;
+          track('session_start', { props: { resumed: true, away_seconds: Math.round(away / 1000) } });
+          trackFire('page_view');
+        }
+        // Otherwise it's a new measurable stretch of the same session.
       }
     };
 
