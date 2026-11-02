@@ -30,9 +30,7 @@ import {
   Shield,
   ArrowLeft,
   Cake,
-  Shuffle,
   BookLock,
-  MapPin,
   BellOff,
   Target,
 } from "lucide-react";
