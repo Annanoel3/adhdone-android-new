@@ -512,6 +512,20 @@ export function AlarmQuietChoice({ value, when, onChange, theme, className = '' 
   );
 }
 
+// Settings → Reminders: the sound regular notifications make (build 46 on;
+// renders nothing on an older build, the iPhone app or the website).
+export function NotifySoundCard({ user, theme }) {
+  const dark = theme === 'dark';
+  if (!notifySoundSupported()) return null;
+  return (
+    <Card id="notification-sound" className={`mb-6 border-none shadow-lg ${dark ? 'bg-gray-800' : 'bg-white'}`}>
+      <CardContent className="pt-6">
+        <AlarmSoundPicker user={user} theme={theme} kind="notify" />
+      </CardContent>
+    </Card>
+  );
+}
+
 export function AlarmCard({ user, theme }) {
   const { AlarmBridge, NotifyBridge } = getPlugins();
   const dark = theme === 'dark';
