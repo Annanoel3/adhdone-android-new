@@ -15,14 +15,15 @@ import {
   Info,
   User as UserIcon,
   UserCircle,
-  Volume2
+  Volume2,
+  MapPin
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { base44 } from '@/api/base44Client';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import HomeZipCard from '@/components/settings/HomeZipCard';
+import PlacesSection from '@/components/places/PlacesSection';
 import QuickCaptureCard, { AlarmCard } from '@/components/settings/QuickCaptureCard';
 import { voiceCheckInsOn, setVoiceCheckIns, speechAvailable } from '@/components/utils/speak';
 import { refreshAlarms, alarmPermissionStatus } from '@/components/utils/widgetBridge';
@@ -136,6 +137,9 @@ export default function Settings() {
       blurb: 'What ADHDone knows about you. It reads this every time it sorts a task, breaks one down, nudges you, or writes your notes.',
     },
     reminders: { title: 'Reminders', blurb: 'When and how ADHDone gets your attention.' },
+    // Places moved here from the Tools menu Nov 2 2026 (Anna: "we can move
+    // places into settings"); /Places redirects to it.
+    places: { title: 'Places', blurb: 'Home area, work address and work hours, so "leave now" comes with a real drive time.' },
   };
   const page = SECTIONS[section] || null;
   useEffect(() => { window.scrollTo(0, 0); }, [section]);
@@ -450,6 +454,11 @@ export default function Settings() {
       onClick: () => navigate('/settings?section=reminders')
     },
     {
+      icon: MapPin,
+      label: 'Places',
+      onClick: () => navigate('/settings?section=places')
+    },
+    {
       icon: UserIcon,
       label: 'My Account',
       onClick: () => navigate('/myaccount')
@@ -552,8 +561,13 @@ export default function Settings() {
 
         {section === 'personalization' && (<>
         <AboutYouCard user={user} theme={theme} onSaved={loadUser} />
-        <HomeZipCard user={user} theme={theme} />
+        {/* The Home Base card that sat here (HomeZipCard) left Nov 2 2026: the
+            home circle lives in Places now, one row down in Settings. */}
         </>)}
+
+        {section === 'places' && (
+          <PlacesSection user={user} theme={theme} onSaved={loadUser} />
+        )}
 
         {section === 'reminders' && (<>
         {/* Only while they're on one a day; nothing else about it lives here. */}
