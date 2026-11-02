@@ -980,6 +980,33 @@ export async function pushAlarmSound(user) {
   }
 }
 
+// The sound regular notifications make (build 46 on; native NotifySound):
+// a preset or upload (downloaded once), 'speak:' for the phone's voice, or ''
+// for the phone's usual notification sound. Their quiet hours go along so the
+// voice stays silent at night. Resolves { result, ready }, or null when this
+// phone can't (older build, iPhone app, website).
+export const notifySoundSupported = () =>
+  typeof window !== 'undefined' && typeof window.Capacitor?.Plugins?.AlarmBridge?.setNotifySound === 'function';
+export async function pushNotifySound(user) {
+  const AlarmBridge = window.Capacitor?.Plugins?.AlarmBridge;
+  if (!AlarmBridge?.setNotifySound) return null;
+  let url = user?.notify_sound_url || '';
+  let name = user?.notify_sound_name || '';
+  if (url === 'speak:' && !onThisPhone('spokenAlarm')) { url = ''; name = ''; }
+  try {
+    return await AlarmBridge.setNotifySound({
+      url,
+      name,
+      quietOn: user?.quiet_hours_enabled !== false,
+      quietStart: user?.quiet_hours_start || '22:00',
+      quietEnd: user?.quiet_hours_end || '08:00',
+    });
+  } catch (err) {
+    console.error('Notification sound sync failed:', err);
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // The full-screen alarm wears the app's current look.
 //
