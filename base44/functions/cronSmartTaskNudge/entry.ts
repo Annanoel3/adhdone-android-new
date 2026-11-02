@@ -203,13 +203,24 @@ Deno.serve(async (req) => {
     // counts, what got finished, whether it would ask or pause. Saves and
     // sends nothing, and makes no AI call.
     let helpingPreview = false;
+    // replan: true (with an email; owner only) = plan this one person again
+    // right now, even when their plan is still current, and save it (the
+    // scheduled runs send it). For putting a planner change in front of
+    // someone the same day (Nov 2 2026: EARLY DAYS for three people on their
+    // second day, whose next looks were hours away).
+    let replanNow = false;
     try {
       const body = await req.json();
       if (body && typeof body.email === 'string') onlyEmail = body.email.trim();
       previewOnly = !!onlyEmail && body?.preview === true;
       previewAsNew = previewOnly && body?.as_new === true;
       helpingPreview = !!onlyEmail && body?.helping_preview === true;
+      replanNow = !!onlyEmail && !previewOnly && body?.replan === true;
     } catch { /* scheduled run: no body */ }
+    if (replanNow) {
+      const me = await base44.auth.me().catch(() => null);
+      if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
+    }
     if (helpingPreview) {
       const me = await base44.auth.me().catch(() => null);
       if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
@@ -802,7 +813,7 @@ Deno.serve(async (req) => {
         (schedule.length > 0 || lookSet);
 
       // A one-person request only re-plans an out-of-date plan.
-      if (onlyEmail && hasValidSchedule && !previewOnly) continue;
+      if (onlyEmail && hasValidSchedule && !previewOnly && !replanNow) continue;
 
       // A second look. The day's plan is made once, so when every nudge in it
       // has gone out and a task it nudged is still open, nothing else came for
@@ -856,7 +867,7 @@ Deno.serve(async (req) => {
         console.log(`[SMART NUDGE] ${email}: ${unseenSentMs.length} of today's nudges went out since they last looked — re-planning before sending more`);
       }
 
-      if (!hasValidSchedule || secondLook || notLanding || previewOnly) {
+      if (!hasValidSchedule || secondLook || notLanding || previewOnly || replanNow) {
         // Everything the app sends them today, from every sender (the send
         // ledger keeps three days), and how much has gone out since they last
         // looked at the app: the planner budgets their attention for the whole
