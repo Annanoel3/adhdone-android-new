@@ -37,8 +37,10 @@ import {
   BellOff,
   AlarmClock,
   Info,
-  Copy
+  Copy,
+  CalendarPlus
 } from "lucide-react";
+import { canAddToPhoneCalendar, phoneCalendarWhen, addToPhoneCalendar } from "../utils/addToPhoneCalendar";
 import { Task } from "@/entities/Task";
 import TaskDecompositionModal from "./TaskDecompositionModal";
 import SmartReminderEditor from "./SmartReminderEditor";
@@ -1870,6 +1872,21 @@ Return JSON:
       toast({ title: "Couldn't make a copy", description: 'Try again in a moment.' });
     }
   };
+  // Add to phone calendar (Anna, Nov 2 2026): opens the phone's calendar app
+  // on a filled-in new event (utils/addToPhoneCalendar.js). Only where the
+  // phone app can do it, for something with a date that didn't come from a
+  // calendar.
+  const canPhoneCalendar = currentType !== 'birthday' && canAddToPhoneCalendar() && !!phoneCalendarWhen(task);
+  const handleAddToPhoneCalendar = async () => {
+    const r = await addToPhoneCalendar(task);
+    trackFire('add_to_phone_calendar', { props: { ok: !!r?.ok, reason: r?.reason || null, kind: task?.classification || 'task', all_day: task?.day_only_task === true } });
+    if (!r?.ok) {
+      toast({
+        title: "Couldn't open your calendar",
+        description: r?.reason === 'no_calendar_app' ? 'No calendar app on this phone can add events.' : 'Try again in a moment.',
+      });
+    }
+  };
 
   const handleToParkingLot = async () => {
     if (!(await appConfirm(`Convert "${task.title}" to a parking lot idea?`, { okText: 'Move it' }))) return;
@@ -2566,6 +2583,11 @@ Return JSON:
                   {currentType !== 'birthday' && !task.parent_task_id && (
                   <button type="button" onClick={handleDuplicate} className={`flex items-center gap-1 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                     <Copy className="w-4 h-4" /> Duplicate
+                  </button>
+                  )}
+                  {canPhoneCalendar && (
+                  <button type="button" onClick={handleAddToPhoneCalendar} className={`flex items-center gap-1 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
+                    <CalendarPlus className="w-4 h-4" /> Add to phone calendar
                   </button>
                   )}
                   <button type="button" onClick={handleDelete} className="flex items-center gap-1 text-red-600">
