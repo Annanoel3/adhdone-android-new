@@ -840,9 +840,8 @@ const FIRST_WIN_KEY = 'onboarding_first_win_push_booked';
 // A demo that still can't be booked this long after its planned time is
 // dropped — arriving much later it would no longer read as a demo.
 const FIRST_WIN_DEMO_STALE_MS = 15 * 60 * 1000;
-// Never booked closer than this, so it can't land on top of the question
-// that's open when it gets booked.
-const FIRST_WIN_DEMO_MIN_LEAD_MS = 90 * 1000;
+// (Never booked closer than 90 seconds out, so it can't land on top of the
+// question that's open: the server keeps to that now, bookFirstWinDemo.)
 
 const readFirstWinDemo = () => {
   try { return JSON.parse(localStorage.getItem(FIRST_WIN_DEMO_KEY) || 'null'); } catch (e) { return null; }
