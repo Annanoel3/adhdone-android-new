@@ -73,7 +73,7 @@ export default function WeeklyChallenges({ theme }) {
       {
         challenge_type: "daily_focus_sprint",
         title: "Focus Sprint Streak",
-        description: "Do a 25-minute focus timer every day this week",
+        description: "Do a 25-minute Pomodoro every day this week",
         target_count: 7
       },
       {
