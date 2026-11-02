@@ -239,7 +239,7 @@ export default function AppGuideModal({ isOpen, onClose, onGo, theme }) {
     {
       icon: MapPin,
       title: "Places",
-      description: "Your home area, work address and work hours, so \"leave now\" comes with a real drive time and reminders can stay quiet while you work.",
+      description: "Your home area, work address and work hours, so \"leave now\" comes with a real drive time and nudges can stay quiet while you work.",
       link: { label: "Open Places in Settings", to: "/settings?section=places" },
     },
       ],
