@@ -36,7 +36,23 @@ const SEND_TO_MIN_AFTER_WAKE = 12 * 60;
 // Task. The count starts over each time they open the app. Anyone with a task
 // still open (Back Burner included) hears from the app another way and gets
 // none of these. Same afternoon window and quiet hours as the check-in.
+//
+// Day 2 for someone new (Anna, Nov 2 2026: "It's important to bring them back
+// day 2"): an account under a week old gets its FIRST come-back the afternoon
+// of the day after it was last opened (their own calendar day, and at least
+// 12 hours away), not on day 3. Vega signed up Sun Nov 1, added nothing, and
+// would have heard nothing until Wed Nov 4. The next two keep their days (7
+// and 14) and spacing, so it's still three pushes in all.
 const DAY_MS = 24 * 60 * 60 * 1000;
+const NEW_ACCOUNT_MS = 7 * DAY_MS;
+const NEW_FIRST_AWAY_MS = 12 * 60 * 60 * 1000;
+const localDayKey = (d: Date, timeZone: string) => {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  } catch {
+    return d.toISOString().slice(0, 10);
+  }
+};
 const COMEBACK_STEPS = [
   {
     day: 3,
@@ -60,6 +76,17 @@ Deno.serve(async (req) => {
     const openai = lean(new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') }), { name: 'cronBackBurnerCheckIn' });
     const now = new Date();
 
+    // { "previewComeback": true } from an admin (Test Function): who is due a
+    // come-back push and whether now is in their window. Sends nothing, saves
+    // nothing, skips the Back Burner check-ins.
+    const body: any = await req.json().catch(() => ({}));
+    const previewComeback = body?.previewComeback === true;
+    if (previewComeback) {
+      const me = await base44.auth.me().catch(() => null);
+      if (me?.role !== 'admin') return Response.json({ error: 'Admins only' }, { status: 403 });
+    }
+    const preview: any[] = [];
+
     const allUsers = await listAll(base44.asServiceRole.entities.User);
     const allTasks = await listAll(base44.asServiceRole.entities.Task);
 
@@ -80,6 +107,7 @@ Deno.serve(async (req) => {
     const results: any[] = [];
 
     for (const user of allUsers) {
+      if (previewComeback) break;
       const email = user?.email;
       if (!email) continue;
 
@@ -171,7 +199,25 @@ Deno.serve(async (req) => {
         const next = COMEBACK_STEPS[step];
         if (!next) continue;
         const away = now.getTime() - seen;
-        if (away < next.day * DAY_MS) continue;
+        const timeZone = userTimeZone(user);
+        const created = ms(user.signed_up_at || user.created_date);
+        const isNew = Number.isFinite(created) && now.getTime() - created < NEW_ACCOUNT_MS;
+        // New account, first push of this absence: the next day of theirs.
+        const due = step === 0 && isNew
+          ? away >= NEW_FIRST_AWAY_MS && localDayKey(now, timeZone) > localDayKey(new Date(seen), timeZone)
+          : away >= next.day * DAY_MS;
+        if (previewComeback && (due || isNew)) {
+          const q = resolveQuietHours(user);
+          const sw = (localMinutesOfDay(now, timeZone) - q.endMin + 24 * 60) % (24 * 60);
+          preview.push({
+            email, step, newAccount: isNew, due,
+            hoursAway: Math.round(away / 3600000),
+            inWindowNow: sw >= SEND_FROM_MIN_AFTER_WAKE && sw < SEND_TO_MIN_AFTER_WAKE && !(q.enabled && isInQuietHours(now, q.startMin, q.endMin, timeZone)),
+            timeZone,
+          });
+          continue;
+        }
+        if (!due) continue;
         // Steps keep their spacing even for someone who's been gone a while:
         // 4 days after the first, 7 after the second.
         if (step > 0) {
@@ -179,7 +225,6 @@ Deno.serve(async (req) => {
           const gap = (next.day - COMEBACK_STEPS[step - 1].day) * DAY_MS;
           if (Number.isFinite(lastAt) && now.getTime() - lastAt < gap) continue;
         }
-        const timeZone = userTimeZone(user);
         const quiet = resolveQuietHours(user);
         const sinceWake = (localMinutesOfDay(now, timeZone) - quiet.endMin + 24 * 60) % (24 * 60);
         if (sinceWake < SEND_FROM_MIN_AFTER_WAKE || sinceWake >= SEND_TO_MIN_AFTER_WAKE) continue;
@@ -211,6 +256,7 @@ Deno.serve(async (req) => {
       console.error('[COME BACK] pass failed:', e);
     }
 
+    if (previewComeback) return Response.json({ preview, at: now.toISOString() });
     console.log(`[BACK BURNER] Done — ${sent} check-in(s), ${comebacks} come-back push(es) at ${now.toISOString()}`);
     return Response.json({ success: true, sent, comebacks, results, at: now.toISOString() });
   } catch (err) {
