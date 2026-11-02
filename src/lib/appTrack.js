@@ -24,6 +24,15 @@ export function getSessionId() {
   }
 }
 
+// A fresh session id, for a return to the app after a long time away (see
+// UsageTracker): sessionStorage outlives backgrounding, so without this every
+// return to a warm app counted as the same visit.
+export function newSessionId() {
+  const id = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  try { sessionStorage.setItem(SESSION_KEY, id); } catch (e) { /* stays 'unknown' */ }
+  return id;
+}
+
 let cachedEmail = null;
 
 async function resolveEmail() {
