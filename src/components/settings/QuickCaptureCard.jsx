@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/dialog';
 import { Zap, AlarmClock } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import { setAlarmMode, refreshAlarms, pushAlarmSound, requestAlarmPermissions, alarmQuietChoiceSupported, pushAlarmQuietVibrate, eventQuietSupported, pushEventQuiet, alarmQuietWhenSupported, pushAlarmQuietWhen } from '../utils/widgetBridge';
+import { setAlarmMode, refreshAlarms, pushAlarmSound, pushNotifySound, notifySoundSupported, requestAlarmPermissions, alarmQuietChoiceSupported, pushAlarmQuietVibrate, eventQuietSupported, pushEventQuiet, alarmQuietWhenSupported, pushAlarmQuietWhen } from '../utils/widgetBridge';
 import { onThisPhone } from '@/lib/phonePlatform';
 
 const getPlugins = () => {
@@ -122,9 +122,17 @@ const SPOKEN_SAMPLE = 'Time for this. Move the laundry to the dryer.';
 // The alarm-sound chooser on its own, so the Settings card and the first-time
 // set-up popup (QuickCapturePrompt's AlarmPermissionsDialog) show the very
 // same thing and save to the same place.
-export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
+// kind 'notify' (build 46, Anna, Nov 1 2026: "can our sounds for alarms also
+// be an option for regular notifications? Including reading it out loud?"):
+// the same list for regular notifications, saved to notify_sound_url / _name
+// and handed to the phone with pushNotifySound (native NotifySound).
+export function AlarmSoundPicker({ user, theme, onSaved, className = '', kind = 'alarm' }) {
   const dark = theme === 'dark';
-  const [sound, setSound] = useState({ url: user?.alarm_sound_url || '', name: user?.alarm_sound_name || '' });
+  const notify = kind === 'notify';
+  const F = notify
+    ? { url: 'notify_sound_url', name: 'notify_sound_name' }
+    : { url: 'alarm_sound_url', name: 'alarm_sound_name' };
+  const [sound, setSound] = useState({ url: user?.[F.url] || '', name: user?.[F.name] || '' });
   const [soundBusy, setSoundBusy] = useState(false);
   const [soundNote, setSoundNote] = useState('');
   const [previewing, setPreviewing] = useState(false);
@@ -136,8 +144,9 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
   const canSpeak = speakHere && typeof AlarmBridge?.previewSpeech === 'function';
 
   useEffect(() => {
-    setSound({ url: user?.alarm_sound_url || '', name: user?.alarm_sound_name || '' });
-  }, [user?.alarm_sound_url, user?.alarm_sound_name]);
+    setSound({ url: user?.[F.url] || '', name: user?.[F.name] || '' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.[F.url], user?.[F.name]]);
 
   useEffect(() => () => {
     if (previewRef.current === 'speech') AlarmBridge?.stopSpeech?.().catch(() => {});
@@ -193,10 +202,22 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
     setSoundBusy(true);
     setSoundNote('');
     try {
-      await base44.auth.updateMe({ alarm_sound_url: url, alarm_sound_name: name });
+      await base44.auth.updateMe({ [F.url]: url, [F.name]: name });
       setSound({ url, name });
-      const res = await pushAlarmSound({ alarm_sound_url: url, alarm_sound_name: name });
-      if (url === SPOKEN_SOUND_URL) {
+      const res = notify
+        ? await pushNotifySound({ ...(user || {}), notify_sound_url: url, notify_sound_name: name })
+        : await pushAlarmSound({ alarm_sound_url: url, alarm_sound_name: name });
+      if (notify) {
+        if (url === SPOKEN_SOUND_URL) {
+          setSoundNote("Saved. Your notifications will be read out loud in the phone's voice, except on silent, vibrate or Do Not Disturb, and during quiet hours.");
+        } else if (url) {
+          setSoundNote(res?.ready
+            ? 'Saved to your phone. Notifications play it, even with no signal.'
+            : "Saved. It couldn't download yet, so notifications use the phone's usual sound until it does.");
+        } else {
+          setSoundNote("Saved. Notifications use the phone's usual sound.");
+        }
+      } else if (url === SPOKEN_SOUND_URL) {
         setSoundNote("Saved. Your alarms will be read out loud in the phone's voice — tap Play to hear it.");
       } else if (url) {
         setSoundNote(res?.ready
@@ -234,7 +255,7 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
       return;
     }
     setSoundBusy(true);
-    setSoundNote('Getting it to alarm loudness…');
+    setSoundNote(notify ? 'Getting it ready…' : 'Getting it to alarm loudness…');
     try {
       // Uploads ring as loud as the presets: the file is re-mastered here
       // first (alarmSoundMaster.js). One that can't be decoded goes up as is.
@@ -259,7 +280,12 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
 
   return (
     <div className={className}>
-      <p className={`text-sm font-medium ${textMain}`}>Alarm sound</p>
+      <p className={`text-sm font-medium ${textMain}`}>{notify ? 'Notification sound' : 'Alarm sound'}</p>
+      {notify && (
+        <p className={`text-xs mt-1 ${textSub}`}>
+          For regular notifications. Read-aloud stays quiet on silent, vibrate and Do Not Disturb, and during quiet hours.
+        </p>
+      )}
       <div className="flex items-center gap-2 mt-2">
         <select
           value={shownUrl}
@@ -270,7 +296,7 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '' }) {
           {(canSpeak || (speakHere && sound.url === SPOKEN_SOUND_URL)) && (
             <option value={SPOKEN_SOUND_URL}>{SPOKEN_SOUND_NAME} (spoken, no tone)</option>
           )}
-          <option value="">Phone's default alarm</option>
+          <option value="">{notify ? "Phone's usual notification sound" : "Phone's default alarm"}</option>
           {ALARM_SOUND_PRESETS.map((p) => (
             <option key={p.url} value={p.url}>{p.name}</option>
           ))}
