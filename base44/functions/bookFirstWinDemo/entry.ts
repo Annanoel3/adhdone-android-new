@@ -55,8 +55,12 @@ Deno.serve(async (req) => {
     if (!me?.email) return Response.json({ ok: false, error: 'Unauthorized' }, { status: 401 });
     const body = await req.json().catch(() => ({}));
 
+    // { selftest: true } from the owner's account skips the new-account check,
+    // to try the whole path from the editor (it still books only to the
+    // caller's own account, which has no phone linked: every try is refused).
+    const selftest = body?.selftest === true && me.role === 'admin';
     const made = utcMs(me.signed_up_at || me.created_date);
-    if (!(Number.isFinite(made) && Date.now() - made < NEW_ACCOUNT_MS)) {
+    if (!selftest && !(Number.isFinite(made) && Date.now() - made < NEW_ACCOUNT_MS)) {
       return Response.json({ ok: false, reason: 'not_new' });
     }
 
@@ -65,7 +69,7 @@ Deno.serve(async (req) => {
     const owner = await record();
     if (!owner) return Response.json({ ok: false, reason: 'no_account' });
 
-    const prior = owner.first_win_demo || null;
+    const prior = selftest ? null : (owner.first_win_demo || null);
     if (prior?.id) {
       return Response.json({ ok: true, notificationId: prior.id, at: prior.at, alarm: prior.alarm === true, already: true });
     }
