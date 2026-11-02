@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { trackFire } from '@/lib/appTrack';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -91,6 +93,12 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   const [waitingHandle, setWaitingHandle] = useState(false);
   const [draft, setDraft] = useState('');
   const endRef = useRef(null);
+  // "Add my work hours" under the last line (Anna, Nov 2 2026, "idea 1"):
+  // only when checkQuietHoursFit judged that their about-you answer has a
+  // job, shifts or school with set hours in it, and none are saved yet. It
+  // opens Settings → Places at the schedule card.
+  const [offerWork, setOfferWork] = useState(false);
+  const navigate = useNavigate();
 
   // Beats that don't apply are stepped over (a "when?" with no task; the
   // notifications question outside the phone app, where there is nothing to
@@ -176,9 +184,20 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     if (value) {
       base44.auth.updateMe({ about_me: value })
         .then(() => base44.functions.invoke('checkQuietHoursFit', {}))
+        .then((r) => { if (r?.data?.offer_work_hours === true) setOfferWork(true); })
         .catch(() => {});
     }
     answer(value);
+  };
+
+  const showWorkOffer = offerWork && done && !!beat?.final;
+  useEffect(() => {
+    if (showWorkOffer) trackFire('work_hours_offer', { props: { action: 'shown' } });
+  }, [showWorkOffer]);
+  const openWorkHours = () => {
+    trackFire('work_hours_offer', { props: { action: 'open' } });
+    onDone();
+    navigate('/settings?section=places#work-hours');
   };
 
   // The task waits for the time they pick, then goes in once. A script with
@@ -347,6 +366,13 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
             </Button>
             <Button variant="outline" onClick={() => submitNotify(false)} disabled={busy}>Not now</Button>
           </div>
+        </div>
+      )}
+
+      {showWorkOffer && (
+        <div className="rounded-xl border p-3 space-y-2">
+          <p className="text-sm">Add your work hours and nudges can stay quiet while you're working.</p>
+          <Button variant="outline" onClick={openWorkHours} className="w-full">Add my work hours</Button>
         </div>
       )}
 
