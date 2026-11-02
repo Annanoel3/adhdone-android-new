@@ -30,7 +30,8 @@ export const HOME_SHORTCUTS = [
   { key: "pomodoro", title: "Pomodoro Timer", icon: Timer, page: "FocusTimer" },
   // No Decision Maker tile since Nov 2 2026 (it left the menu), and no Places
   // tile (Places is a Settings section now). A saved "decisions" or "places"
-  // tile is dropped by known() below; nobody had saved either.
+  // tile is dropped by known() below (on Nov 2 only Anna's own account had
+  // one: a Decision Maker tile).
   { key: "talk", title: "Support Space", icon: MessageCircleHeart, page: "SupportSpace" },
   { key: "insights", title: "Insights", icon: TrendingUp, page: "Progress" },
   // No Diary tile since Oct 31 2026 (Diary left the menu); a saved "diary"
