@@ -562,7 +562,7 @@ export default function Settings() {
         {section === 'personalization' && (<>
         <AboutYouCard user={user} theme={theme} onSaved={loadUser} />
         {/* The Home Base card that sat here (HomeZipCard) left Nov 2 2026: the
-            home circle lives in Places now, one row down in Settings. */}
+            home circle lives in Places now, its own row in the Account list. */}
         </>)}
 
         {section === 'places' && (
