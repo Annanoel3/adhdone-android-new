@@ -97,6 +97,17 @@ Deno.serve(async (req) => {
       const todayStr = theirDayKeyFor(user, now, timeZone);
       if (user.last_digest_date === todayStr) continue;
 
+      // Focus Mode on: no morning summary that day (Anna, Nov 2 2026: "we can
+      // skip the morning summary if focus mode is on"). A new person in Focus
+      // Mode since 7:43 AM got the summary of everything at 8:11, between
+      // check-ins about the one task. Today's turn is still marked done, so
+      // Smart Reminders stop waiting for it (the same as an empty day).
+      if (user.focus_mode_task_id) {
+        try { await base44.asServiceRole.entities.User.update(user.id, { last_digest_date: todayStr }); } catch {}
+        console.log(`[DIGEST] ${email}: Focus Mode is on, no morning summary today`);
+        continue;
+      }
+
       // Get today's tasks
       const userTasks = activeTasksByUser[email] || [];
       // Tasks put off on 3 different days are on the eased plan
