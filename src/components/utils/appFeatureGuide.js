@@ -2,7 +2,7 @@
 // Support Space prompt so the AI can answer "how does X work?" questions
 // accurately instead of guessing.
 export const APP_FEATURE_GUIDE = `
-NAVIGATION: Open the menu with the icon in the top-left. Main items: Home, Tasks, Calendar. "Tools" holds Focus Timer, Parking Lot, Record Notes, Decision Maker and Places. "Reflect" holds Support Space and Insights. Bottom of the menu: App Guide, Settings.
+NAVIGATION: Open the menu with the icon in the top-left. Main items: Home, Tasks, Calendar. "Tools" holds Pomodoro Timer, Parking Lot and Record Notes. "Reflect" holds Support Space and Insights. Bottom of the menu: App Guide, Settings. Places (home area, work address, work hours) is in Settings, not the menu.
 
 HOME: Today's Tasks (due today, overdue, or spanning today), Quick Add (type or speak a task), daily tip, motivation coach, streak, upcoming birthday card, Focus Mode button, end-of-day review. Tap a task's circle to complete it (a little celebration plays). Completing a recurring task automatically creates the next occurrence.
 
@@ -10,7 +10,7 @@ ADDING TASKS: Quick Add on Home, the Tasks page, the floating mic button, or And
 
 DATES & REMINDERS: "on Friday" = happens that day (night-before heads-up + day-of nudges). "by Friday" = deadline (reminders start earlier and build up). Tasks with a specific time get a smart reminder schedule (e.g. day before, morning of, 1 hour before) that you can view and edit per-reminder in the task details. Tasks with no time get intelligent hourly "smart nudges" that surface ONE task at a time with a friendly message instead of flooding the tray. Recurring intervals (every 10/20/30 min, hourly, daily, etc.) are available for habit-style tasks. Quiet hours (Settings) silence all nudges overnight — if disabled, nudges can run until midnight. Push notifications go through the phone; you must allow notifications for the app. On Android, a to-do's reminder notification has a Done button that finishes the task.
 
-TASK FIELDS: priority (low/medium/high/urgent), energy required (low/medium/high), notes, photos, location (only if you gave one — used to suggest combining errands using real drive distance from your home zip, set in Settings → Personalization), start date & end date for multi-day items, recurrence (daily/weekly/every other week/monthly/yearly).
+TASK FIELDS: priority (low/medium/high/urgent), energy required (low/medium/high), notes, photos, location (only if you gave one — used to suggest combining errands using real drive distance from your home area, set in Settings → Places), start date & end date for multi-day items, recurrence (daily/weekly/every other week/monthly/yearly).
 
 TASKS PAGE: grouped into Today, Tomorrow, Next 7 Days, Upcoming, No Date, Back Burner. Empty groups start collapsed. Sort options in the dropdown. Swipe/tap a task for details, edit, push due date later (push count is tracked so Insights can flag chronically postponed tasks), snooze, silence, or delete. Tasks worth timing (chores, cleaning, studying, writing) have a "Time it" button: a stopwatch counts up on that task, with "I finished the task" (checks it off) and "Stop" on screen the whole time, and the time spent is logged either way. The Home "Timer" button does the same for today's tasks.
 
@@ -20,7 +20,7 @@ CALENDAR: month grid plus a week agenda. Always opens on today. Dots: a single r
 
 BIRTHDAYS 🎂: a separate feature — never shown in normal task lists. Add from the Birthdays dialog (name, date, optional phone via the contact picker). Reminder options: 1 week before, 1 day before, day-of. On the day, the app can draft a birthday text with AI (adjust tone/formality, regenerate with instructions) and open your messaging app pre-filled; hourly reminders stop once you press Send. Rolls over yearly automatically.
 
-FOCUS TIMER / FOCUS MODE: Pomodoro-style work + break timers with optional background music; a mini bar shows the running timer on every page. Focus Mode (Home) temporarily quiets other tasks' reminders and restores them when you exit. Focus sessions are logged and shown in Insights.
+POMODORO TIMER / FOCUS MODE: the Pomodoro Timer (menu, under Tools) runs work + break timers with optional background music; a mini bar shows the running timer on every page. Focus Mode (Home) temporarily quiets other tasks' reminders and restores them when you exit. Focus sessions are logged and shown in Insights.
 
 PARKING LOT: dump ideas without losing focus (the "Park an Idea" button floats on most pages). Ideas get AI categories, can be plain text, checkbox lists, or numbered lists, have notes and photos, sub-ideas, and can be converted into tasks later.
 
@@ -30,7 +30,7 @@ SUPPORT SPACE (it was called "Talk It Out" for a while): this chat — a judgmen
 
 THEMES: pick one at the top of Settings, under "Look and feel": Light, Dark, Colorful, Spicy Brains (color-psychology theme with an explainer), plus Seasonal and Kawaii once unlocked. Seasonal themes follow the real calendar (spring, summer, fall, harvest, winter, Halloween, Christmas, New Year's, Valentine's, St. Patrick's, 4th of July) and switch automatically. Kawaii is a manual pick.
 
-SETTINGS: Look and feel (theme) at the top; Quick Capture; the Account list holds Personalization (your name, a note about your life that every AI feature reads, home zip code for errand grouping) and Reminders (quiet hours, full-screen reminder default, ring sound, phone permissions); notification settings, Quick Capture (Android: a pinned notification you tap to add a task from anywhere — needs the notification permission), profile, account, subscription, delete data/account.
+SETTINGS: Look and feel (theme) at the top; Quick Capture; the Account list holds Personalization (your name and a note about your life that every AI feature reads), Reminders (quiet hours, full-screen reminder default, ring sound, phone permissions) and Places (a circle over your home area for drive times and errand grouping, whether you work from home, your work address so "leave now" pushes use real traffic, your work hours or shifts, and a switch that keeps nudges quiet while you're at work); notification settings, Quick Capture (Android: a pinned notification you tap to add a task from anywhere — needs the notification permission), profile, account, subscription, delete data/account.
 
 ANDROID EXTRAS: share any text into ADHDone from another app and it becomes a task; Quick Capture pinned notification with inline reply (type "test task due Saturday" right in the notification and it's parsed like any other task); native contact picker for birthdays; back button navigates back or exits on Home.
 
