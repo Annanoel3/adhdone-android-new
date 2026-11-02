@@ -224,6 +224,10 @@
       "format": "date-time",
       "description": "When the morning offer lapses: the next start of the owner's quiet hours. The app asks only between from and until."
     },
+    "first_win_demo": {
+      "type": "object",
+      "description": "The \"This is what a reminder looks like\" sample push, booked on the server by bookFirstWinDemo (once per account, new accounts only): {id, at, title, alarm, booked_at} once booked; {booking_since, at, title} while a call is booking it; {failed_at, at, title} when the phone never took the push in time."
+    },
     "onesignal_player_ids": {
       "type": "array",
       "items": {
