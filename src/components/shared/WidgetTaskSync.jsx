@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { pushWidgetTasks, pushAlarms, pushAlarmSound, LOUD_ALARM_SOUND_FOR, setAlarmMode, pushAlarmQuietWhen, quietWhenFor, pushEventQuiet, refreshAlarms, alarmPermissionStatus, alarmSwitchesOff, listActiveTasks } from '../utils/widgetBridge';
+import { pushWidgetTasks, pushAlarms, pushAlarmSound, pushNotifySound, LOUD_ALARM_SOUND_FOR, setAlarmMode, pushAlarmQuietWhen, quietWhenFor, pushEventQuiet, refreshAlarms, alarmPermissionStatus, alarmSwitchesOff, listActiveTasks } from '../utils/widgetBridge';
 import { phonePlatform, onThisPhone } from '@/lib/phonePlatform';
 import { maybeAutoSyncDevice } from '@/lib/calendarSync';
 
@@ -112,6 +112,16 @@ export default function WidgetTaskSync({ user }) {
     pushAlarmSound(user);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, soundUrl]);
+
+  // The notification sound (build 46 on) and the quiet hours its voice keeps:
+  // the phone keeps its own copy, so it's handed over on open too (a
+  // reinstall, a change on another phone, quiet hours moved by the app).
+  const notifyKey = [user?.notify_sound_url || '', user?.quiet_hours_enabled !== false, user?.quiet_hours_start || '', user?.quiet_hours_end || ''].join('|');
+  useEffect(() => {
+    if (!userId) return;
+    pushNotifySound(user);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, notifyKey]);
 
   // Vibrate-only while the phone is quiet (silent or vibrate mode, Do Not
   // Disturb, or both, as picked): the phone keeps its own copy of the answer,
