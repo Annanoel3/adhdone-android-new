@@ -38,9 +38,9 @@ const SEND_TO_MIN_AFTER_WAKE = 12 * 60;
 // none of these. Same afternoon window and quiet hours as the check-in.
 //
 // Day 2 for someone new (Anna, Nov 2 2026: "It's important to bring them back
-// day 2"): an account under a week old gets its FIRST come-back the afternoon
-// of the day after it was last opened (their own calendar day, and at least
-// 12 hours away), not on day 3. Vega signed up Sun Nov 1, added nothing, and
+// day 2"): an account under a week old gets its very FIRST come-back the
+// afternoon of the day after it was last opened (their own calendar day, and
+// at least 12 hours away), not on day 3; later absences go back to day 3. Vega signed up Sun Nov 1, added nothing, and
 // would have heard nothing until Wed Nov 4. The next two keep their days (7
 // and 14) and spacing, so it's still three pushes in all.
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -201,7 +201,11 @@ Deno.serve(async (req) => {
         const away = now.getTime() - seen;
         const timeZone = userTimeZone(user);
         const created = ms(user.signed_up_at || user.created_date);
-        const isNew = Number.isFinite(created) && now.getTime() - created < NEW_ACCOUNT_MS;
+        // Only an account's very first come-back comes early (comeback_round
+        // counts absences that got one), so someone new who opens the app
+        // most days without adding anything isn't pinged every next afternoon.
+        const isNew = Number.isFinite(created) && now.getTime() - created < NEW_ACCOUNT_MS
+          && !(Number(user.comeback_round) > 0);
         // New account, first push of this absence: the next day of theirs.
         const due = step === 0 && isNew
           ? away >= NEW_FIRST_AWAY_MS && localDayKey(now, timeZone) > localDayKey(new Date(seen), timeZone)
