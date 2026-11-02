@@ -54,7 +54,7 @@ export const PAGE_TOURS = {
   ],
   FocusTimer: [
     {
-      title: "Focus Timer ⏱️",
+      title: "Pomodoro Timer ⏱️",
       body: "One short focused block, a break, repeat — a defined end point makes starting way easier.",
     },
   ],
