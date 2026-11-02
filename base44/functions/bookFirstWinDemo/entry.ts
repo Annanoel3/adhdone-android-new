@@ -92,6 +92,8 @@ Deno.serve(async (req) => {
     });
 
     const internalKey = Deno.env.get('CRON_SECRET')?.trim();
+    // What each try got back, shown to a selftest only.
+    const tries: any[] = [];
     for (const pause of PAUSES_MS) {
       if (pause) await sleep(pause);
       if (planned < Date.now() - STALE_MS) break;
@@ -107,6 +109,7 @@ Deno.serve(async (req) => {
         });
         const result = res?.data || res;
         const id = result?.notificationId;
+        if (selftest) tries.push({ id: id || null, skipped: result?.skipped || null, reason: result?.reason || null, error: result?.error || null, onesignal: result?.onesignal_response?.errors || null });
         if (!id) continue; // not linked yet (refused), or held back: try again after the next pause
         const at = typeof result?.sendAt === 'string' && result.sendAt ? result.sendAt : sendAt;
         await users.update(owner.id, {
@@ -115,7 +118,9 @@ Deno.serve(async (req) => {
         console.log(`[bookFirstWinDemo] ${me.email}: booked for ${at}${alarm ? ' (alarm)' : ''}`);
         return Response.json({ ok: true, notificationId: id, at, alarm });
       } catch (e) {
-        console.warn('[bookFirstWinDemo] try failed:', (e as any)?.message || e);
+        const err: any = e;
+        if (selftest) tries.push({ thrown: String(err?.message || err), status: err?.response?.status || null, data: err?.response?.data || null });
+        console.warn('[bookFirstWinDemo] try failed:', err?.message || err);
       }
     }
 
@@ -125,7 +130,7 @@ Deno.serve(async (req) => {
       first_win_demo: { failed_at: new Date().toISOString(), at: new Date(planned).toISOString(), title },
     }).catch(() => {});
     console.warn(`[bookFirstWinDemo] ${me.email}: not booked (this phone never took the push in time)`);
-    return Response.json({ ok: false });
+    return Response.json(selftest ? { ok: false, tries } : { ok: false });
   } catch (error) {
     console.error('[bookFirstWinDemo] failed:', error);
     return Response.json({ ok: false, error: String((error as any)?.message || error) }, { status: 500 });
