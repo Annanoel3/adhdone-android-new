@@ -51,7 +51,13 @@ const SCRIPT = [
     // question comes last, below.)
     // (The @handle line that used to sit here promised sharing with friends,
     // which the app doesn't have; Anna, Oct 27 2026: no advertising what isn't there.)
-    text: (name) => `Nice to meet you, ${name}! What's one thing you keep forgetting? Type it in and it's on your list.`,
+    // It asks for something they can do today, so their first real reminder can
+    // land on something they can check off. After 9 PM it says tomorrow, the
+    // same cutoff as sometimeOption in WelcomeChat. The "When should it remind
+    // you?" buttons stay as they are: someone who means tomorrow can still pick
+    // it (Anna, Nov 2 2026, after Connie and Caterina's first reminders were
+    // both the next morning).
+    text: (name) => `Nice to meet you, ${name}! What's one thing you keep forgetting that you could knock out ${new Date().getHours() >= 21 ? 'tomorrow' : 'today'}? Type it in and it's on your list.`,
     input: 'task',
   },
   {
