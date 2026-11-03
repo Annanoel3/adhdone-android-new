@@ -70,11 +70,14 @@ Phase 1 = in the first TestFlight build. Later phases follow in order.
 - App Store privacy answers: filled in by Anna Nov 3 2026 (Identifiers used for
   tracking = Yes; everything collected is linked to the user).
 - Tracking prompt in the build: done (above).
-- Ads on iPhone: needs the AdMob iOS app + interstitial unit (ids pasted as above),
-  or the review build shows no ads at all. The Google account signed in on Anna's
-  Chrome has no AdMob account (AdMob showed its sign-up page, Nov 3 2026), so the
-  AdMob account that holds ca-app-pub-7979856440890193 is under another login: Anna
-  creates the iOS app + unit there, or signs that account in and says so.
+- Ads on iPhone: done Nov 3 2026. AdMob iOS app 3513826797 "ADHDone: Done, Despite
+  ADHD" (app id ca-app-pub-7979856440890193~3513826797, in Info.plist) and the
+  "iPhone interstitial" unit (ca-app-pub-7979856440890193/1949463689, IOS_AD_UNIT_ID
+  in src/lib/admob.js). The AdMob account is annabairdballew@gmail.com: open AdMob
+  as https://apps.admob.com/v2/apps/list?authuser=annabairdballew@gmail.com (Chrome's
+  default Google account has no AdMob account and shows the sign-up page). Still to
+  do once the app is on the App Store: AdMob → the iOS app → Add store (the App
+  Store listing), which lifts "Requires review" / the ad-serving limit.
 - Store name: already "ADHDone: Done, Despite ADHD" in App Store Connect (app 6828975743).
 - Price: Free ($0.00, 175 countries), set Nov 3 2026. Content Rights: Anna picks the
   answer herself (ads are third-party content: "Yes … and I have the necessary
