@@ -5,6 +5,7 @@ import { ArrowLeft, Mail, AlertTriangle, Database, Shield, Clock } from "lucide-
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { base44 } from "@/api/base44Client";
+import DeletionRequestButton from "@/components/shared/DeletionRequestButton";
 
 export default function DeleteAccount() {
   const navigate = useNavigate();
@@ -188,28 +189,12 @@ export default function DeleteAccount() {
                       <h3 className={`font-semibold mb-2 break-words ${
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
                       }`}>
-                        Send an Email to MediocreAtBestDev
+                        Send Your Request
                       </h3>
                       <p className={`mb-3 text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Email us at <strong className="break-all">adhdone.space@gmail.com</strong> with the subject line "Account Deletion Request"
+                        Tap the button and your request is sent to MediocreAtBestDev automatically.
                       </p>
-                      <div className={`flex items-center gap-2 p-3 rounded-lg ${
-                        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-                      }`}>
-                        <Mail className={`w-5 h-5 flex-shrink-0 ${
-                          theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
-                        }`} />
-                        <a 
-                          href="mailto:adhdone.space@gmail.com?subject=Account%20Deletion%20Request"
-                          className={`font-medium break-all ${
-                            theme === 'dark' 
-                              ? 'text-blue-400 hover:text-blue-300' 
-                              : 'text-blue-600 hover:text-blue-700'
-                          }`}
-                        >
-                          adhdone.space@gmail.com
-                        </a>
-                      </div>
+                      <DeletionRequestButton kind="account" label="Request Account Deletion" className="bg-red-600 hover:bg-red-700" dark={theme === 'dark'} />
                     </div>
                   </div>
                 </div>
@@ -480,7 +465,7 @@ export default function DeleteAccount() {
             {/* CTA Button */}
             <div className="flex justify-center pt-4">
               <Button
-                onClick={() => (me?.email && !requestedAt) ? askToDelete() : (window.location.href = 'mailto:adhdone.space@gmail.com?subject=Account%20Deletion%20Request&body=Hello%20MediocreAtBestDev%2C%0A%0AI%20would%20like%20to%20request%20the%20deletion%20of%20my%20ADHDone%20account.%0A%0AAccount%20Email%3A%20%5Byour%20email%5D%0AFull%20Name%3A%20%5Byour%20name%5D%0A%0AI%20understand%20that%20this%20action%20is%20permanent%20and%20cannot%20be%20undone.%0A%0AThank%20you.')}
+                onClick={() => (me?.email && !requestedAt) ? askToDelete() : document.querySelector('input[type="email"]')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
                 disabled={!!(me?.email && requestedAt)}
                 size="lg"
                 className={`${

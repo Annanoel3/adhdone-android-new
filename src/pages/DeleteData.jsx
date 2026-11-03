@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, Mail, AlertTriangle, Database, Shield, Clock } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import DeletionRequestButton from "@/components/shared/DeletionRequestButton";
 
 export default function DeleteData() {
   const navigate = useNavigate();
@@ -105,28 +106,12 @@ export default function DeleteData() {
                       <h3 className={`font-semibold mb-2 break-words ${
                         theme === 'dark' ? 'text-white' : 'text-gray-900'
                       }`}>
-                        Send an Email to MediocreAtBestDev
+                        Send Your Request
                       </h3>
                       <p className={`mb-3 text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Email us at <strong className="break-all">mediocreatbestdev@outlook.com</strong> with the subject line "Data Deletion Request"
+                        Tap the button and your request is sent to MediocreAtBestDev automatically.
                       </p>
-                      <div className={`flex items-center gap-2 p-3 rounded-lg ${
-                        theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
-                      }`}>
-                        <Mail className={`w-5 h-5 flex-shrink-0 ${
-                          theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
-                        }`} />
-                        <a 
-                          href="mailto:mediocreatbestdev@outlook.com?subject=Data%20Deletion%20Request"
-                          className={`font-medium break-all ${
-                            theme === 'dark' 
-                              ? 'text-blue-400 hover:text-blue-300' 
-                              : 'text-blue-600 hover:text-blue-700'
-                          }`}
-                        >
-                          mediocreatbestdev@outlook.com
-                        </a>
-                      </div>
+                      <DeletionRequestButton kind="data" label="Request Data Deletion" className="bg-blue-600 hover:bg-blue-700" dark={theme === 'dark'} />
                     </div>
                   </div>
                 </div>
@@ -417,29 +402,10 @@ export default function DeleteData() {
               <ul className={`list-disc list-inside space-y-2 text-sm break-words ${
                 theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
               }`}>
-                <li>You can request a copy of your data before deletion by including that request in your email</li>
+                <li>You can request a copy of your data before deletion by including that request in your message</li>
                 <li>After data deletion, your account will remain active and you can continue using ADHDone</li>
                 <li>You can always create new data after deletion is complete</li>
-                <li>For questions about this process, contact MediocreAtBestDev at <span className="break-all">mediocreatbestdev@outlook.com</span></li>
               </ul>
-            </div>
-
-            {/* CTA Button */}
-            <div className="flex justify-center pt-4">
-              <Button
-                onClick={() => window.location.href = 'mailto:mediocreatbestdev@outlook.com?subject=Data%20Deletion%20Request&body=Hello%20MediocreAtBestDev%2C%0A%0AI%20would%20like%20to%20request%20the%20deletion%20of%20specific%20data%20from%20my%20ADHDone%20account.%0A%0AAccount%20Email%3A%20%5Byour%20email%5D%0AFull%20Name%3A%20%5Byour%20name%5D%0A%0AData%20I%20want%20to%20delete%3A%0A%5BPlease%20describe%20which%20data%20you%20want%20deleted%20-%20e.g.%2C%20%22All%20tasks%22%2C%20%22Chat%20history%20from%20January%202024%22%2C%20etc.%5D%0A%0AThank%20you.'}
-                size="lg"
-                className={`${
-                  theme === 'minimalist'
-                    ? 'bg-blue-600 hover:bg-blue-700'
-                    : theme === 'dark'
-                      ? 'bg-blue-600 hover:bg-blue-700'
-                      : 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700'
-                } text-white`}
-              >
-                <Mail className="w-5 h-5 mr-2" />
-                Request Data Deletion
-              </Button>
             </div>
           </CardContent>
         </Card>
