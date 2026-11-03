@@ -107,8 +107,13 @@ function extractBirthdayPerson(title) {
   let t = title
     .replace(/happy/gi, '')
     .replace(/birthday|bday/gi, '')
-    .replace(/['\u2019]*s\b/gi, '')
-    .replace(/['\-:,]/g, ' ')
+    // Only an apostrophe-s is a possessive. The old /['\u2019]*s\b/ took the s
+    // off any name ending in one: "Curtis' Birthday" came in as "Curti"
+    // (Maelisa's phone calendar, Nov 2 2026), and "James birthday" would have
+    // been "Jame". A bare apostrophe after an s ("Curtis'") goes with the
+    // punctuation on the next line.
+    .replace(/['\u2019]s\b/gi, '')
+    .replace(/['\u2019\-:,]/g, ' ')
     .trim();
   t = t.replace(/\s+/g, ' ').trim();
   // If nothing meaningful remains (just punctuation/emojis), there's no
