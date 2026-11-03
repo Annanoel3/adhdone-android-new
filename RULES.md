@@ -248,7 +248,7 @@ The AAB is built from Anna's PC folder (adhdone-android-new), and the build agen
 folder to GitHub's main before every build. GitHub's main is this Base44 app. So a change to
 android/ made only in the PC folder is wiped by the next build. On Nov 3 2026 (1:47 AM UTC)
 that reset dropped most of build 46 (Add to phone calendar, the notification sound wiring, the
-wake-up quick-look fix, the manifest's queries) and the AAB went out without them; only the
+wake-up quick-look fix, the manifest's queries) and the AAB was built without them; only the
 new NotifySound.java survived, because a reset leaves new files alone. Every android/ change
 is written here (edit_file / write_file on android/...), and checked on GitHub's main before
 anyone is told to build. The version code is set at build time, not here.
