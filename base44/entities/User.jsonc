@@ -167,7 +167,7 @@
     "alarm_trial_started_at": {
       "type": "string",
       "format": "date-time",
-      "description": "When the user pressed 'Try it out' on the one-time full-screen reminders introduction (alarm_mode was switched to 'alarm' at that moment). Once the phone reports a full-screen reminder rang after this time, the app asks ONCE on the next open whether to keep tasks that way (onboarding flag onboarding_fullscreen_keep_done). Empty = never tried from that popup."
+      "description": "When the user picked full-screen alarms in the one-time 'How should reminders reach you?' question or pressed 'Try it out' on the full-screen reminders introduction (alarm_mode was switched to 'alarm' at that moment; since Nov 3 2026 every pick there sets it, before that only 'Try it out'). Once the phone reports a full-screen reminder rang after this time, the app asks ONCE on the next open whether it was too loud: keep alarms, or switch to regular notifications (AlarmKeepPrompt; onboarding flag onboarding_fullscreen_keep_done). Empty = alarms were never picked from those popups."
     },
     "device_calendar_ids": {
       "type": "array",
