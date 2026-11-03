@@ -551,8 +551,8 @@ How it works, and how it must keep working:
    the quiet-hours check and before the notifications-off and unreachable guards. The phone
    writes `app_build` about 12 seconds after it opens (WidgetTaskSync), so a new person is
    planned from their first open. Checked the same day: the only other accounts without a
-   phone and with open tasks were a family account and one gone since Sep 14 (already
-   paused for being away), so nobody lost a reminder. Previews, REPLAY and
+   phone and with open tasks were a family account and one gone since Sep 14, both already
+   paused for being away since Oct 18, so nobody lost a reminder. Previews, REPLAY and
    `helping_preview` still work for any account (they return before the guard). Verified
    from the Test Function: `{"email": "<editor account>"}` with its look-again time already
    past came back with `schedulesGenerated: 0`.
