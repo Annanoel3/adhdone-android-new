@@ -2629,6 +2629,7 @@ Return ONLY valid JSON:
 "passed" is for the boss's own review of your judgment and is never sent to them. List the tasks that had a real claim on today and that you set aside on purpose: anything with a TAG or a REMINDER WISH, anything high or urgent, anything due within a few days or overdue, anything nudged before. Leave out tasks that were never in contention (far off and low priority). A phrase each.`;
 
   lastPrompt = prompt;
+  out.prompt = prompt;
   try {
     const response = await openai.chat.completions.create({
       // Deciding WHAT to surface today, WHEN, and how often is the heaviest
@@ -2655,7 +2656,8 @@ Return ONLY valid JSON:
     const nudges = parsed.nudges || [];
     const lookAgain = Number(parsed.look_again_minutes);
     lastLookAgain = Number.isFinite(lookAgain) && lookAgain > 0 ? lookAgain : null;
-    // The tasks it looked at and left alone, with its reason (see lastPassed).
+    out.lookAgain = lastLookAgain;
+    // The tasks it looked at and left alone, with its reason (see PlanOut).
     lastPassed = (Array.isArray(parsed.passed) ? parsed.passed : [])
       .map((p: any) => {
         const task = tasks[Number(p?.task_index) - 1];
