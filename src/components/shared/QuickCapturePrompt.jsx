@@ -1039,9 +1039,14 @@ export function AlertStylePrompt({ user, theme }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState('first');
   const [busy, setBusy] = useState(false);
-  // 'choose' → the question; 'sound' → right after picking full-screen, the
-  // ring sound is picked here instead of being left for Settings to find.
+  // 'choose' → the question; 'preview' → they tapped full-screen alarms and
+  // are looking at one (AlarmScreenPreview) before anything is saved; 'sound'
+  // → right after keeping full-screen, the ring sound is picked here instead
+  // of being left for Settings to find.
   const [step, setStep] = useState('choose');
+  // Whether the preview was reached from "Try it out" (the intro) — kept so
+  // the choice made on it starts the trial the same way.
+  const [previewTrial, setPreviewTrial] = useState(false);
   const [me, setMe] = useState(null);
   // Vibrate only while the phone is on silent, vibrate or Do Not Disturb?
   // Asked on the sound step, and the step won't close without an answer
@@ -1102,13 +1107,32 @@ export function AlertStylePrompt({ user, theme }) {
     setOpen(false);
   };
 
+  // Tapping full-screen alarms shows one first (AlarmScreenPreview); nothing
+  // is saved until they answer on it. Closing the dialog on this step isn't
+  // possible: the preview covers the screen until they pick.
+  const preview = (trial = false) => {
+    setPreviewTrial(trial);
+    setStep('preview');
+  };
+  const previewAnswered = (kept, seconds) => {
+    trackFire('alert_style_preview', { seconds, props: { kept, trial: previewTrial } });
+    if (kept) choose('alarm', previewTrial);
+    else choose('notification');
+  };
+
   // style 'alarm' with trial=true is "Try it out": same switch, plus a note of
   // when the trial started so the keep-it question can wait for a real ring.
+  // Since Nov 3 2026 that note is made for everyone who picks alarms here,
+  // not only the intro's trial: after their first real alarm rings, the next
+  // open asks once whether it was too loud (AlarmKeepPrompt), so the way back
+  // to regular notifications is in front of them instead of buried in
+  // Settings (Anna: "After the first real alarm, we should give some kind of
+  // option, too loud switch to notifications").
   const choose = async (style, trial = false) => {
     setBusy(true);
     try {
       const patch = { alarm_mode: style };
-      if (trial) {
+      if (style === 'alarm') {
         trialStartedThisSession = new Date().toISOString();
         patch.alarm_trial_started_at = trialStartedThisSession;
       }
@@ -1118,7 +1142,6 @@ export function AlertStylePrompt({ user, theme }) {
       markStepDone(ALERT_STYLE_STEP);
       await refreshAlarms();
       if (style === 'alarm') {
-        ringFirstWinDemo();
         base44.auth.me().then((u) => {
           setMe(u);
           if (typeof u?.alarm_vibrate_when_quiet === 'boolean') setQuietAnswer(u.alarm_vibrate_when_quiet);
@@ -1146,6 +1169,18 @@ export function AlertStylePrompt({ user, theme }) {
 
   const card = `w-full text-left rounded-xl border p-4 transition-colors ${dark ? 'border-gray-700 hover:bg-gray-800' : 'border-gray-200 hover:bg-gray-50'}`;
   const panel = `max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`;
+
+  if (open && step === 'preview') {
+    return (
+      <AlarmScreenPreview
+        user={user}
+        trial={previewTrial}
+        busy={busy}
+        onKeep={(seconds) => previewAnswered(true, seconds)}
+        onRegular={(seconds) => previewAnswered(false, seconds)}
+      />
+    );
+  }
 
   if (step === 'sound') {
     const quietPending =
@@ -1213,11 +1248,11 @@ export function AlertStylePrompt({ user, theme }) {
           </p>
 
           <p className={`text-sm ${dark ? 'text-gray-300' : 'text-gray-700'}`}>
-            Try it and your tasks switch over. After the first one rings, we'll ask if you want to keep it.
+            Tap Try it out to see one first. Say yes and your tasks switch over; after the first real one rings, we'll ask if you want to keep it.
           </p>
 
           <div className="flex flex-col gap-2 pt-1">
-            <Button onClick={() => choose('alarm', true)} disabled={busy} className="w-full">
+            <Button onClick={() => preview(true)} disabled={busy} className="w-full">
               Try it out
             </Button>
             <Button variant="outline" onClick={() => choose('notification')} disabled={busy} className="w-full">
@@ -1250,10 +1285,10 @@ export function AlertStylePrompt({ user, theme }) {
               Shows up in your tray like any app's. Easy to miss when the phone is face down.
             </p>
           </button>
-          <button type="button" className={card} onClick={() => choose('alarm')} disabled={busy}>
+          <button type="button" className={card} onClick={() => preview(false)} disabled={busy}>
             <div className="flex items-center gap-2 font-medium"><AlarmClock className="w-4 h-4" /> Full-screen alarm</div>
             <p className={`text-xs mt-1 ${dark ? 'text-gray-400' : 'text-gray-600'}`}>
-              Rings out loud and takes over the screen, even locked, until you snooze or dismiss it. Rings even on silent or Do Not Disturb{alarmQuietChoiceSupported() ? " (next, you can choose to have it only vibrate then)" : ''}.
+              Rings out loud and takes over the screen, even locked, until you snooze or dismiss it. Rings even on silent or Do Not Disturb{alarmQuietChoiceSupported() ? " (next, you can choose to have it only vibrate then)" : ''}. Tap to see one first.
             </p>
           </button>
         </div>
