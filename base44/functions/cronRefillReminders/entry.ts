@@ -1887,6 +1887,14 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   // 4. Pushes in the last hour that OneSignal couldn't deliver, to people who
   //    were in the app this week (an uninstalled phone fails forever and is
   //    not news). Up to 12 looked up.
+  //    A failed push is the first sign of an uninstall (Liz, Nov 3 2026: her
+  //    morning summary failed the day after she joined; OneSignal had every
+  //    push subscription on her account off). So each one is followed by a
+  //    look at the person's subscriptions (phoneTakesPushes), and when none
+  //    is on, the account is marked: push_unreachable_at (so check 11 says
+  //    "stopped taking notifications" and the rest of the app rests them) and
+  //    suspected_uninstall. That one isn't repeated in the "not reaching"
+  //    alert; check 11 covers it.
   const undelivered: string[] = [];
   try {
     const rows = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
@@ -1895,17 +1903,62 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
     const key = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
     const candidates = rows.filter((r: any) => r.notification_id && realUser(r.user_email) && activeLately(userByEmail[r.user_email]) && !String(r.kind || '').startsWith('owner_')).slice(0, 12);
+    const looked = new Set<string>();
     for (const r of candidates) {
       const res = await fetch(`https://onesignal.com/api/v1/notifications/${r.notification_id}?app_id=${appId}`, { headers: { Authorization: `Basic ${key}` } });
       const n: any = await res.json().catch(() => ({}));
       if (!res.ok || n.canceled) continue;
-      if ((n.failed || 0) > 0 || (n.errored || 0) > 0) undelivered.push(`${r.user_email}: ${String(r.title || r.kind).slice(0, 36)}`);
+      if (!((n.failed || 0) > 0 || (n.errored || 0) > 0)) continue;
+      const u = userByEmail[r.user_email];
+      let goneNow = false;
+      if (u?.id && !looked.has(r.user_email)) {
+        looked.add(r.user_email);
+        const takes = ctx.dryRun ? null : await phoneTakesPushes(r.user_email);
+        if (takes === false) {
+          goneNow = true;
+          const stamp = new Date(nowMs).toISOString();
+          u.push_unreachable_at = stamp;
+          u.suspected_uninstall = true;
+          u.suspected_uninstall_at = stamp;
+          try {
+            await base44.asServiceRole.entities.User.update(u.id, { push_unreachable_at: stamp, suspected_uninstall: true, suspected_uninstall_at: stamp });
+          } catch (e) {
+            console.error(`[HEALTH] could not mark ${r.user_email} unreachable:`, e);
+          }
+        }
+      } else if (u && gone(u)) {
+        goneNow = true;
+      }
+      if (!goneNow) undelivered.push(`${r.user_email}: ${String(r.title || r.kind).slice(0, 36)}`);
     }
   } catch (e) {
     console.error('[HEALTH] delivery check failed:', e);
   }
   if (undelivered.length) {
     problems.push({ title: '⚠️ ADHDone: pushes not reaching phones', body: `${undelivered.length} push(es) in the last hour failed to deliver: ${undelivered.slice(0, 3).join('; ')}.` });
+  }
+
+  // 4b. suspected_uninstall kept in step with what's known (Anna, Nov 3 2026:
+  //     "add a field to the user data that says suspected uninstall"): true
+  //     while their phone stopped taking pushes after their last open (gone:
+  //     set above, or by Smart Reminders when a nudge is refused), false again
+  //     once they've opened the app since. One write per change, never on a
+  //     preview.
+  if (!ctx.dryRun) {
+    for (const u of allUsers) {
+      if (!u?.id || !u?.email) continue;
+      const should = gone(u);
+      const is = u.suspected_uninstall === true;
+      if (should === is) continue;
+      try {
+        await base44.asServiceRole.entities.User.update(u.id, should
+          ? { suspected_uninstall: true, suspected_uninstall_at: u.push_unreachable_at || new Date(nowMs).toISOString() }
+          : { suspected_uninstall: false });
+        u.suspected_uninstall = should;
+      } catch (e) {
+        console.error(`[HEALTH] could not update suspected_uninstall for ${u.email}:`, e);
+      }
+    }
   }
 
   // 5. Captures typed in the last 2 hours that never became a task (the app
