@@ -45,7 +45,7 @@ import {
   readRingLog,
 } from '../utils/widgetBridge';
 import { isIPhoneApp, onThisPhone, phoneOs } from '@/lib/phonePlatform';
-import { AlarmSoundPicker, AlarmQuietChoice, AlarmEventQuietChoice, QuietWhenButtons } from '../settings/QuickCaptureCard';
+import { AlarmSoundPicker, AlarmQuietChoice, AlarmEventQuietChoice, QuietWhenButtons, alarmPreviewSoundUrl } from '../settings/QuickCaptureCard';
 import { NAG_INTERVALS } from '../utils/reminderScheduler';
 import { subscribeCaptures } from '@/lib/pendingCaptures';
 
@@ -1300,11 +1300,16 @@ export function AlertStylePrompt({ user, theme }) {
   );
 }
 
-// The second half of "Try it out". Once a full-screen reminder has actually
-// rung on this phone (native reports lastRangAt), the next open asks whether
-// to keep tasks that way. Asked once per account. "Keep" changes nothing;
-// "Back to regular" returns the account default to notifications — a task
-// someone switched to full-screen by hand keeps its own setting.
+// "Too loud?" Once a full-screen reminder has actually rung on this phone
+// (native reports lastRangAt) for someone who picked alarms in the question
+// above (any path, since Nov 3 2026; before that only the intro's "Try it
+// out"), the next open asks whether to keep tasks that way. Asked once per
+// account. "Keep" changes nothing; "Switch to regular notifications" returns
+// the account default to notifications — a task someone switched to
+// full-screen by hand keeps its own setting. Anna, Nov 3 2026, after Connie
+// and Michael each got a full-screen alarm minutes after signing up and were
+// gone within a day: "After the first real alarm, we should give some kind of
+// option — too loud, switch to regular notifications".
 const KEEP_STEP = 'onboarding_fullscreen_keep_done';
 
 export function AlarmKeepPrompt({ user, theme }) {
@@ -1374,19 +1379,19 @@ export function AlarmKeepPrompt({ user, theme }) {
       <DialogContent className={`max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
         <DialogHeader>
           <DialogTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
-            <AlarmClock className="w-5 h-5" /> Keep full-screen reminders?
+            <AlarmClock className="w-5 h-5" /> Too loud?
           </DialogTitle>
           <DialogDescription className={dark ? 'text-gray-400' : ''}>
-            Your first one has rung. Keep full-screen reminders, or go back to regular notifications?
+            Your first full-screen alarm has rung. Keep your reminders this way, or switch to regular notifications?
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex flex-col gap-2 pt-1">
           <Button onClick={keep} disabled={busy} className="w-full">
-            Keep full-screen
+            Keep full-screen alarms
           </Button>
           <Button variant="outline" onClick={goBack} disabled={busy} className="w-full">
-            Back to regular notifications
+            Switch to regular notifications
           </Button>
         </div>
 
