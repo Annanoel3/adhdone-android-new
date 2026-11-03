@@ -1877,6 +1877,10 @@ Return JSON:
   // phone app can do it, for something with a date that didn't come from a
   // calendar.
   const canPhoneCalendar = currentType !== 'birthday' && canAddToPhoneCalendar() && !!phoneCalendarWhen(task);
+  // An event's button sits right under the title (Anna, Nov 2 2026: "on
+  // events only, can we put the 'add to calendar' button like right under the
+  // title"); a task's stays with the other actions at the bottom.
+  const phoneCalendarUpTop = canPhoneCalendar && isEvent;
   const handleAddToPhoneCalendar = async () => {
     const r = await addToPhoneCalendar(task);
     trackFire('add_to_phone_calendar', { props: { ok: !!r?.ok, reason: r?.reason || null, kind: task?.classification || 'task', all_day: task?.day_only_task === true } });
@@ -1967,6 +1971,19 @@ Return JSON:
                 </div>
               )}
             </DialogTitle>
+            {phoneCalendarUpTop && (
+              <div className="pb-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleAddToPhoneCalendar}
+                  className={theme === 'dark' ? 'border-gray-600 text-gray-200 hover:bg-gray-800' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}
+                >
+                  <CalendarPlus className="w-4 h-4 mr-2" /> Add to phone calendar
+                </Button>
+              </div>
+            )}
           </DialogHeader>
 
           <div className={v2 ? 'space-y-3 py-3' : 'space-y-6 py-4'}>
@@ -2585,7 +2602,7 @@ Return JSON:
                     <Copy className="w-4 h-4" /> Duplicate
                   </button>
                   )}
-                  {canPhoneCalendar && (
+                  {canPhoneCalendar && !phoneCalendarUpTop && (
                   <button type="button" onClick={handleAddToPhoneCalendar} className={`flex items-center gap-1 ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
                     <CalendarPlus className="w-4 h-4" /> Add to phone calendar
                   </button>
