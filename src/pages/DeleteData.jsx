@@ -108,7 +108,7 @@ export default function DeleteData() {
                         Send an Email to MediocreAtBestDev
                       </h3>
                       <p className={`mb-3 text-sm break-words ${theme === 'dark' ? 'text-gray-300' : 'text-gray-700'}`}>
-                        Email us at <strong className="break-all">adhdone.space@gmail.com</strong> with the subject line "Data Deletion Request"
+                        Email us at <strong className="break-all">mediocreatbestdev@outlook.com</strong> with the subject line "Data Deletion Request"
                       </p>
                       <div className={`flex items-center gap-2 p-3 rounded-lg ${
                         theme === 'dark' ? 'bg-gray-900' : 'bg-gray-50'
@@ -117,14 +117,14 @@ export default function DeleteData() {
                           theme === 'dark' ? 'text-blue-400' : 'text-blue-600'
                         }`} />
                         <a 
-                          href="mailto:adhdone.space@gmail.com?subject=Data%20Deletion%20Request"
+                          href="mailto:mediocreatbestdev@outlook.com?subject=Data%20Deletion%20Request"
                           className={`font-medium break-all ${
                             theme === 'dark' 
                               ? 'text-blue-400 hover:text-blue-300' 
                               : 'text-blue-600 hover:text-blue-700'
                           }`}
                         >
-                          adhdone.space@gmail.com
+                          mediocreatbestdev@outlook.com
                         </a>
                       </div>
                     </div>
@@ -420,14 +420,14 @@ export default function DeleteData() {
                 <li>You can request a copy of your data before deletion by including that request in your email</li>
                 <li>After data deletion, your account will remain active and you can continue using ADHDone</li>
                 <li>You can always create new data after deletion is complete</li>
-                <li>For questions about this process, contact MediocreAtBestDev at <span className="break-all">adhdone.space@gmail.com</span></li>
+                <li>For questions about this process, contact MediocreAtBestDev at <span className="break-all">mediocreatbestdev@outlook.com</span></li>
               </ul>
             </div>
 
             {/* CTA Button */}
             <div className="flex justify-center pt-4">
               <Button
-                onClick={() => window.location.href = 'mailto:adhdone.space@gmail.com?subject=Data%20Deletion%20Request&body=Hello%20MediocreAtBestDev%2C%0A%0AI%20would%20like%20to%20request%20the%20deletion%20of%20specific%20data%20from%20my%20ADHDone%20account.%0A%0AAccount%20Email%3A%20%5Byour%20email%5D%0AFull%20Name%3A%20%5Byour%20name%5D%0A%0AData%20I%20want%20to%20delete%3A%0A%5BPlease%20describe%20which%20data%20you%20want%20deleted%20-%20e.g.%2C%20%22All%20tasks%22%2C%20%22Chat%20history%20from%20January%202024%22%2C%20etc.%5D%0A%0AThank%20you.'}
+                onClick={() => window.location.href = 'mailto:mediocreatbestdev@outlook.com?subject=Data%20Deletion%20Request&body=Hello%20MediocreAtBestDev%2C%0A%0AI%20would%20like%20to%20request%20the%20deletion%20of%20specific%20data%20from%20my%20ADHDone%20account.%0A%0AAccount%20Email%3A%20%5Byour%20email%5D%0AFull%20Name%3A%20%5Byour%20name%5D%0A%0AData%20I%20want%20to%20delete%3A%0A%5BPlease%20describe%20which%20data%20you%20want%20deleted%20-%20e.g.%2C%20%22All%20tasks%22%2C%20%22Chat%20history%20from%20January%202024%22%2C%20etc.%5D%0A%0AThank%20you.'}
                 size="lg"
                 className={`${
                   theme === 'minimalist'
