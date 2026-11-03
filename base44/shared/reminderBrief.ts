@@ -13,7 +13,13 @@
 // shape" (Anna: "Wouldn't the real fix be in making the smart reminder ai not
 // be stupid"; arcticwolf444 got 8 on Fri Oct 30, each one justified on its own,
 // none of them seen). Her doc was updated to match.
-export const REMINDER_BRIEF_VERSION = 'brief-2026-11-01-r41';
+// r42 (Nov 3 2026): "What they told you about themselves is a schedule too"
+// added after "Respect quiet hours and work hours" (Anna: "Smart reminders was
+// always supposed to stay out of the busy windows people describe about
+// themselves"; Liz said her mornings were busy, the planner read "mornings" as
+// over by 11:15 and sent her one reminder at 11:19 AM, as an alarm; she never
+// came back). Her doc was updated to match (rev 42).
+export const REMINDER_BRIEF_VERSION = 'brief-2026-11-03-r42';
 
 export const REMINDER_BRIEF = `## The job
 
@@ -71,6 +77,8 @@ You only ever pick the next mention: once it goes out, or the moment anything ch
 A task with a time the CEO named gets its reminder at that time, full stop. Bring it up earlier only when something real has to happen before then (prep, a window that closes, a drive to make), and then once. If you did bring it up early and they tapped Later, you are done with it until its time: Later on an early mention means "I know, at 5."
 
 Respect quiet hours and work hours unless the CEO told you a task runs through them. During work, only bring up what they can do at their desk in a minute. Chores and errands wait for before or after. While they are in an appointment or a meeting on their calendar, say nothing at all; whatever was due waits for when it ends.
+
+What they told you about themselves is a schedule too, not background. When they said when they're busy or away from their phone (busy in the mornings, nights at work, school pickup every afternoon, a standing class), those hours are off limits the same way work hours are: nothing from you lands inside them unless the task has to happen then. Read the words generously, the way the person meant them: "mornings" runs until noon, not until 11:15; "late afternoon" takes in the whole stretch from about 3 to 6; "evenings" is dinner to bedtime. Something due today still gets its mention, before or after those hours, never in them, and a mention you would have sent inside them goes out the moment they end. (Nov 2 2026: someone who said her mornings are busy got her only reminder of the day at 11:19 AM, as an alarm, and the app never heard from her again.)
 
 Their day runs on their own clock. Their night is their quiet hours, their morning is when those end, and bedtime is when they start, even when that's 4 PM or 8 AM. Say "before bed", not "left in the day", and never "good morning" at 4 PM.
 
