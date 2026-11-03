@@ -44,7 +44,7 @@ export default function PrivacyPolicy() {
           <Shield className="w-7 h-7 text-green-600" />
           <h1 className="text-2xl font-bold">Privacy Policy</h1>
         </div>
-        <p className="text-xs mb-8 text-gray-500">Last updated: June 2026 · ADHDone</p>
+        <p className="text-xs mb-8 text-gray-500">Last updated: November 2026 · ADHDone</p>
 
         <div className="rounded-2xl border border-gray-200 bg-white divide-y divide-gray-100 shadow-sm">
 
@@ -52,27 +52,27 @@ export default function PrivacyPolicy() {
             <P>ADHDone is a productivity and task management app designed for people with ADHD. This policy explains what data we collect, how we use it, and how we protect it.</P>
           </div>
 
-          {/* ── GOOGLE API SECTION ── */}
-          <Section title="Google API Limited Use Disclosure" highlight>
-            <div className="p-4 bg-white rounded-xl border border-blue-200 shadow-sm">
-              <p className="text-sm leading-relaxed text-gray-800 font-medium">
-                "ADHDone's use and transfer of information received from Google APIs adheres to the Google API Services User Data Policy, including the Limited Use requirements."
-              </p>
-            </div>
-            <P>Specifically, ADHDone's use of Google Calendar data is subject to the following restrictions:</P>
+          {/* Your phone's calendar. The Google Calendar connection (Google's
+              own calendar API) was retired Oct 1 2026; the phone app reads
+              the calendars on the phone instead (syncGoogleCalendar, device
+              source). This section replaced the Google API Limited Use
+              disclosure on Nov 3 2026. */}
+          <Section title="Your Phone's Calendar (optional)" highlight>
+            <P>If you allow calendar access, the ADHDone phone app reads events from the calendars you pick on your phone (Google, Samsung, Outlook, or any other calendar app on the phone) so they show up as ADHDone tasks and reminders.</P>
             <List items={[
-              "ADHDone requests read-only access to your primary Google Calendar solely to display your upcoming events within the app, let the AI assign importance levels and reminder frequencies, and route yearly birthday events into ADHDone's birthday feature.",
-              "ADHDone never creates, edits, or deletes any events or data in your Google Calendar.",
-              "ADHDone never sells, rents, or shares your Google Calendar data with any third party for any purpose.",
-              "ADHDone never uses your Google Calendar data for advertising, marketing, or to build advertising profiles.",
-              "ADHDone never uses your Google Calendar data to train AI or machine learning models. The AI classification happens in-memory at sync time; your raw calendar data is not retained for model training.",
-              "ADHDone does not persistently store raw Google Calendar event data. Only derived metadata (event title, time, AI-assigned importance, and routing decision) is stored to power the in-app task list and deduplication.",
-              "You can disconnect Google Calendar at any time from the Calendar page in the app. Disconnecting immediately revokes ADHDone's access to your Google account.",
+              "ADHDone keeps the event's title, time, place, and the importance the AI assigns it, so it can remind you and avoid importing the same event twice.",
+              "ADHDone never changes or deletes anything in your calendar. The only time it adds to your calendar is when you tap \"Add to phone calendar\" on an event, and your phone's own calendar screen asks you to confirm.",
+              "ADHDone never sells or shares your calendar data, never uses it for advertising, and never uses it to train AI models.",
+              "You can turn calendar reading off at any time on the Calendar page, or in your phone's app permissions.",
             ]} />
+          </Section>
+
+          <Section title="Advertising">
+            <P>The free version of ADHDone shows ads through Google AdMob. To show and measure ads, Google may collect your device's advertising identifier, IP address, approximate location, and which ads you saw or tapped. ADHDone never hands Google your tasks, notes, or recordings. You can limit ad personalization in your phone's settings (Android: Settings → Google → Ads; iPhone: Settings → Privacy → Tracking and Apple Advertising).</P>
             <p className="text-xs text-gray-500 mt-2">
-              For more information, see the{' '}
-              <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline inline-flex items-center gap-0.5">
-                Google API Services User Data Policy <ExternalLink className="w-3 h-3" />
+              See{' '}
+              <a href="https://policies.google.com/technologies/ads" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline inline-flex items-center gap-0.5">
+                how Google uses data in ads <ExternalLink className="w-3 h-3" />
               </a>.
             </p>
           </Section>
@@ -88,8 +88,13 @@ export default function PrivacyPolicy() {
               "Support Space conversations",
               "Focus room participation",
               "Device type and push notification tokens (for reminders)",
-              "Subscription status via Apple App Store or Google Play (we never store card details)",
-              "Google Calendar metadata — see the Google API section above for full details",
+              "Purchases of Record Notes minute packs through Google Play or the App Store (we never see or store card details)",
+              "Events from the phone calendars you choose to share — see the calendar section above",
+              "A contact's name and phone number, only when you use \"Pick from Contacts\" on a birthday. ADHDone never reads your full contact list; your phone's own picker hands over just the one you chose.",
+              "Photos you attach to a task",
+              "Voice recordings you choose to make (adding a task by voice, or Record Notes), which are uploaded so they can be turned into text; the text is kept with your task or notes",
+              "What you write about yourself in Settings → Personalization, so reminders can fit your day",
+              "Which screens you open and when, so we can see what is working and fix what is not (never the words you type)",
             ]} />
           </Section>
 
@@ -101,8 +106,9 @@ export default function PrivacyPolicy() {
               "To track your streaks and progress",
               "To provide AI-powered support in the Support Space",
               "To moderate community content for safety",
-              "To process your subscription and verify purchases",
-              "To import Google Calendar events as smart ADHDone tasks (read-only, only when you connect Google Calendar)",
+              "To verify purchases of Record Notes minutes",
+              "To turn the phone calendar events you share into ADHDone tasks and reminders (read-only, only when you allow calendar access)",
+              "To show ads in the free version",
             ]} />
           </Section>
 
@@ -125,14 +131,14 @@ export default function PrivacyPolicy() {
           </Section>
 
           <Section title="Data Retention">
-            <P>We retain your data for as long as your account is active or as needed to provide the service. If you delete your account, we delete your personal data within 30 days, except where retention is required by law. Google Calendar metadata derived from synced events is also deleted upon account deletion.</P>
+            <P>We retain your data for as long as your account is active or as needed to provide the service. If you delete your account, we delete your personal data within 30 days, except where retention is required by law. Calendar events imported from your phone, attached photos, and recordings are deleted with your account.</P>
           </Section>
 
           <Section title="Your Rights">
             <List items={[
               "Access and edit your data anytime in the app",
               "Disable push notifications in your device settings",
-              "Disconnect Google Calendar at any time from the Calendar page",
+              "Turn calendar reading off at any time on the Calendar page or in your phone's app permissions",
               "Request deletion of your data or account",
             ]} />
             <div className="flex flex-wrap gap-2 mt-4">
