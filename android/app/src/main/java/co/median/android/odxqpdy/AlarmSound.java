@@ -189,7 +189,8 @@ final class AlarmSound {
         return ok;
     }
 
-    private static boolean downloadTo(String url, File target, File tmp) {
+    /** Also used by NotifySound for the notification sound's own copy. */
+    static boolean downloadTo(String url, File target, File tmp) {
         HttpURLConnection conn = null;
         try {
             conn = (HttpURLConnection) new URL(url).openConnection();

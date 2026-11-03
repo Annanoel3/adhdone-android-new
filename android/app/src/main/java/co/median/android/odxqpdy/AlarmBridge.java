@@ -153,6 +153,29 @@ public class AlarmBridge extends Plugin {
     }
 
     /**
+     * The sound regular notifications make (NotifySound, build 46): { url,
+     * name, quietOn, quietStart, quietEnd }. url is a preset or upload (fetched
+     * once), "speak:" for the phone's voice, or empty for the phone's usual
+     * notification sound. Quiet hours (HH:MM) keep the voice silent at night.
+     * Resolves { result, ready } like setSound.
+     */
+    @PluginMethod
+    public void setNotifySound(final PluginCall call) {
+        final Context ctx = getContext();
+        NotifySound.setQuiet(ctx, !Boolean.FALSE.equals(call.getBoolean("quietOn", true)),
+                call.getString("quietStart", "22:00"), call.getString("quietEnd", "08:00"));
+        NotifySound.set(ctx, call.getString("url", ""), call.getString("name", ""), new NotifySound.Callback() {
+            @Override
+            public void done(String result) {
+                JSObject ret = new JSObject();
+                ret.put("result", result);
+                ret.put("ready", NotifySound.ready(ctx));
+                call.resolve(ret);
+            }
+        });
+    }
+
+    /**
      * Speaks a sample line once, in the voice the spoken alarm would use, at
      * media volume. Resolves when it has finished: { spoke } — false when no
      * speech engine could start (the web app then says so). A second preview

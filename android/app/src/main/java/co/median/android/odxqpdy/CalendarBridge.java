@@ -1,6 +1,8 @@
 package co.median.android.odxqpdy;
 
 import android.Manifest;
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Context;
@@ -41,6 +43,7 @@ import java.util.Map;
  *   CalendarBridge.listCalendars()                 -> { granted, calendars: [...] }
  *   CalendarBridge.listEvents({ calendarIds, days }) -> { granted, events: [...] }
  *   CalendarBridge.setSyncCalendars({ calendarIds })  -> { watching }
+ *   CalendarBridge.addEvent({ title, notes, location, beginMs, endMs, allDay }) -> { ok, reason? }
  *
  * setSyncCalendars hands the person's ticked calendars to CalendarSyncWorker,
  * which watches them and imports changes with the app closed (build 43 on).
@@ -324,6 +327,57 @@ public class CalendarBridge extends Plugin {
 
     private static String nz(String s) {
         return s == null ? "" : s;
+    }
+
+    /**
+     * "Add to phone calendar" on a task or event (Anna, Nov 2 2026: "it would
+     * be nice to click add to phone calendar on a task or event"). Opens the
+     * phone's own calendar app on a new event filled in with these details,
+     * through Android's standard insert intent; the person picks the calendar
+     * and saves it there. Needs no calendar permission (the calendar app does
+     * the writing). beginMs / endMs are epoch milliseconds; an all-day event is
+     * sent as local midnight to the next local midnight.
+     * Resolves { ok: true }, or { ok: false, reason: "no_calendar_app" } when
+     * nothing on the phone takes the intent.
+     */
+    @PluginMethod
+    public void addEvent(PluginCall call) {
+        // optLong, not getLong: getLong only takes a value that arrived as a
+        // Long, and a number from the web layer can arrive as an Integer or
+        // a Double.
+        long begin = call.getData().optLong("beginMs", 0L);
+        long end = call.getData().optLong("endMs", 0L);
+        boolean allDay = Boolean.TRUE.equals(call.getBoolean("allDay", false));
+        String title = call.getString("title", "");
+        String notes = call.getString("notes", "");
+        String location = call.getString("location", "");
+        if (begin <= 0) {
+            call.reject("beginMs is required");
+            return;
+        }
+        if (end <= begin) end = begin + (allDay ? 24L * 60 * 60 * 1000 : 60L * 60 * 1000);
+        Intent intent = new Intent(Intent.ACTION_INSERT)
+                .setData(CalendarContract.Events.CONTENT_URI)
+                .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, begin)
+                .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, end)
+                .putExtra(CalendarContract.EXTRA_EVENT_ALL_DAY, allDay)
+                .putExtra(CalendarContract.Events.TITLE, title == null ? "" : title);
+        if (notes != null && !notes.isEmpty()) intent.putExtra(CalendarContract.Events.DESCRIPTION, notes);
+        if (location != null && !location.isEmpty()) intent.putExtra(CalendarContract.Events.EVENT_LOCATION, location);
+        JSObject out = new JSObject();
+        try {
+            getActivity().startActivity(intent);
+            out.put("ok", true);
+        } catch (ActivityNotFoundException e) {
+            Log.w("CalendarBridge", "addEvent: no calendar app takes the insert intent");
+            out.put("ok", false);
+            out.put("reason", "no_calendar_app");
+        } catch (Exception e) {
+            Log.w("CalendarBridge", "addEvent failed", e);
+            out.put("ok", false);
+            out.put("reason", "failed");
+        }
+        call.resolve(out);
     }
 
     private static String colorHex(int argb) {

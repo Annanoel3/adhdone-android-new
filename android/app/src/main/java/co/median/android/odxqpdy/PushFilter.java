@@ -206,6 +206,10 @@ public class PushFilter implements INotificationServiceExtension {
                 return;
             }
             if (taskId.isEmpty()) {
+                // A push about no one task (the morning summary, a come-back
+                // push...): shown as usual, with the notification sound they
+                // picked when they picked one (NotifySound).
+                withOwnSound(ctx, notification, null);
                 return;
             }
             // Judged by when the push was SENT as well as by now: the alarm for
@@ -273,8 +277,41 @@ public class PushFilter implements INotificationServiceExtension {
         // alarm is the ring, and it is logged when it rings.
         RingLog.notified(ctx, data != null ? data.optString("taskId", "") : "",
                 data != null ? data.optString("type", "") : "", n.getTitle(), n.getBody());
-        if (TaskActions.buttonsFor(data) != TaskActions.BUTTONS_NONE) {
-            n.setExtender(TaskActions.extender(ctx, data, n.getAndroidNotificationId(), n.getTitle(), n.getBody(), false));
+        NotificationCompat.Extender buttons = TaskActions.buttonsFor(data) != TaskActions.BUTTONS_NONE
+                ? TaskActions.extender(ctx, data, n.getAndroidNotificationId(), n.getTitle(), n.getBody(), false)
+                : null;
+        if (!withOwnSound(ctx, n, buttons) && buttons != null) {
+            n.setExtender(buttons);
+        }
+    }
+
+    /**
+     * The notification sound they picked (NotifySound, build 46; Anna, Nov 1
+     * 2026: "can our sounds for alarms also be an option for regular
+     * notifications? Including reading it out loud?"). Only for a push that
+     * makes a sound anyway, and never for a late or restored copy (that one
+     * keeps the phone's usual behavior and plays nothing extra). The push goes
+     * on the app's own channel (it pops up and vibrates, with no sound of its
+     * own) and the chosen sound, or the voice, plays once. Returns true when it
+     * did; then `buttons` (the task's Done / Snooze, may be null) rides along.
+     * Nothing picked, silent / vibrate / Do Not Disturb, or the voice inside
+     * quiet hours: false, and the push shows exactly as before.
+     */
+    private static boolean withOwnSound(Context ctx, IDisplayableMutableNotification n,
+                                        final NotificationCompat.Extender buttons) {
+        try {
+            String title = n.getTitle() != null ? n.getTitle() : "";
+            String body = n.getBody() != null ? n.getBody() : "";
+            if ((title.isEmpty() && body.isEmpty()) || isStale(n) || !NotifySound.takesOver(ctx)) {
+                return false;
+            }
+            final Context app = ctx.getApplicationContext();
+            n.setExtender(builder -> NotifySound.useOwnChannel(app, buttons != null ? buttons.extend(builder) : builder));
+            NotifySound.play(ctx, title, body);
+            return true;
+        } catch (Exception e) {
+            Log.w(TAG, "PushFilter: own notification sound skipped", e);
+            return false;
         }
     }
 

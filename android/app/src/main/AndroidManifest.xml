@@ -233,6 +233,21 @@
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
 
+    <!-- Package visibility (Android 11+), build 46. SHOW_ALARMS: WakeWatch finds the
+         phone's own clock app, so its alarm tells apart from other apps' (quick look).
+         TTS_SERVICE: Android's documented requirement for TextToSpeech in apps that
+         target Android 11+ ("Read it to me" and the notification sound's spoken
+         option). Read-aloud worked on Anna's phone without it (Nov 2 2026), so it's
+         here as the documented requirement, not as a fix for something seen failing. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.SHOW_ALARMS" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
+
     <!-- Hardware features are optional. Without these, CAMERA and RECORD_AUDIO imply
          android.hardware.camera / .microphone as REQUIRED, which makes Play filter the app
          off devices lacking them (Chromebooks, camera-less tablets) and triggers the
