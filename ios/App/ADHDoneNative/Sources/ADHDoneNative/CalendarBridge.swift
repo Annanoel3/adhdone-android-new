@@ -1,6 +1,7 @@
 import Foundation
 import Capacitor
 import EventKit
+import EventKitUI
 
 /// CalendarBridge — the iPhone's calendars (iCloud, Google, Outlook, local...),
 /// through EventKit. Same shape as the Android CalendarBridge, so calendarSync.js
@@ -15,6 +16,7 @@ import EventKit
 ///   deleteEvents({ deviceEventIds })      -> { granted, deleted }
 ///   setSyncCalendars({ calendarIds })     -> { watching }   (nothing runs in the background on iPhone; the app syncs on open)
 ///   setExportEnabled({ enabled })         -> { ok }
+///   addEvent({ title, notes, location, beginMs, endMs, allDay }) -> { ok, saved }
 ///
 /// Rows from listEvents follow the Android Calendar Provider shape the server
 /// already reads: times are epoch milliseconds, all-day events sit at UTC
@@ -37,11 +39,69 @@ public class CalendarBridge: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "writeEvents", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "deleteEvents", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setSyncCalendars", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "setExportEnabled", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "setExportEnabled", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "addEvent", returnType: CAPPluginReturnPromise)
     ]
 
     private static let store = EKEventStore()
     private let work = DispatchQueue(label: "adhdone.calendar", qos: .userInitiated)
+    /// The addEvent call waiting for Apple's New Event sheet to close.
+    private var pendingAdd: CAPPluginCall?
+
+    // MARK: - Add to phone calendar
+
+    /// "Add to phone calendar" on a task or event (Anna, Nov 2 2026; Android has
+    /// it from build 46). Opens Apple's own New Event sheet, filled in with the
+    /// title, notes, place and time; the person picks the calendar and taps Add,
+    /// or Cancel. Nothing is written by ADHDone and no link is kept. On iOS 17
+    /// and up this sheet needs no calendar permission of its own.
+    /// beginMs / endMs are epoch milliseconds; an all-day event arrives as local
+    /// midnight to the midnight after its last day (the same shape Android gets).
+    /// Resolves { ok: true, saved } once the sheet closes; { ok: false, reason }
+    /// only when it can't open.
+    @objc func addEvent(_ call: CAPPluginCall) {
+        let beginMs = CalendarBridge.number(call.options["beginMs"])
+        var endMs = CalendarBridge.number(call.options["endMs"])
+        let allDay = call.getBool("allDay") ?? false
+        let title = (call.getString("title") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let notes = (call.getString("notes") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let location = (call.getString("location") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard beginMs > 0 else {
+            call.reject("beginMs is required")
+            return
+        }
+        if endMs <= beginMs { endMs = beginMs + (allDay ? 86_400_000 : 3_600_000) }
+        DispatchQueue.main.async {
+            guard let host = self.bridge?.viewController else {
+                call.resolve(["ok": false, "reason": "failed"])
+                return
+            }
+            if self.pendingAdd != nil {
+                // One sheet at a time.
+                call.resolve(["ok": false, "reason": "busy"])
+                return
+            }
+            let store = CalendarBridge.store
+            let ev = EKEvent(eventStore: store)
+            ev.title = title.isEmpty ? "Untitled" : title
+            if !notes.isEmpty { ev.notes = notes }
+            if !location.isEmpty { ev.location = location }
+            ev.isAllDay = allDay
+            ev.startDate = Date(timeIntervalSince1970: Double(beginMs) / 1000)
+            // An all-day event's end sits inside its last day (a midnight end
+            // would read as one day more); a timed one ends when it ends.
+            ev.endDate = Date(timeIntervalSince1970: Double(allDay ? endMs - 1000 : endMs) / 1000)
+            if let defaultCalendar = store.defaultCalendarForNewEvents {
+                ev.calendar = defaultCalendar
+            }
+            let sheet = EKEventEditViewController()
+            sheet.eventStore = store
+            sheet.event = ev
+            sheet.editViewDelegate = self
+            self.pendingAdd = call
+            host.present(sheet, animated: true)
+        }
+    }
 
     // MARK: - Permission
 
@@ -415,5 +475,15 @@ public class CalendarBridge: CAPPlugin, CAPBridgedPlugin {
         var local = Calendar(identifier: .gregorian)
         local.timeZone = TimeZone.current
         return local.date(from: comps) ?? Date(timeIntervalSince1970: Double(ms) / 1000)
+    }
+}
+
+// Apple's New Event sheet (addEvent) telling us it closed: Add, Cancel, or Delete.
+extension CalendarBridge: EKEventEditViewDelegate {
+    public func eventEditViewController(_ controller: EKEventEditViewController, didCompleteWith action: EKEventEditViewAction) {
+        controller.dismiss(animated: true)
+        let call = pendingAdd
+        pendingAdd = nil
+        call?.resolve(["ok": true, "saved": action == .saved])
     }
 }
