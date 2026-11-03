@@ -23,13 +23,11 @@ import { sortTasks } from '@/hooks/useTaskSort';
 // first), so the header said 5 on a 9-task day, "+4 more" never showed, and
 // an overdue high-priority task could be one of the missing ones (Anna, Nov 2
 // 2026: "Why are some of my tasks missing from the widget?"). Now the whole
-// day goes over, in the order they sort their list (Home's Today list uses
-// the same), so the widget's first 5 are Home's first 5.
+// day goes over, by priority (urgent, high, medium, low; Anna, Nov 2 2026:
+// "switch it to order of priority"), and within a priority by when they're
+// due (overdue and timed ones first, dateless after), whatever sort the list
+// in the app uses.
 const MAX_WIDGET_TASKS = 40;
-const SORT_KEY = 'task_sort_preference';
-function theirSort() {
-  try { return localStorage.getItem(SORT_KEY) || 'created_date'; } catch (e) { return 'created_date'; }
-}
 
 // Skip redundant bridge calls — this fires on every task edit, and re-pushing an
 // identical list makes the widget redraw for nothing.
@@ -52,7 +50,9 @@ export function todaysWidgetTasks(tasks) {
       !t.birthday_person &&
       isTodayTask(t)
     );
-  return sortTasks(today, theirSort())
+  // A stable sort twice: by due time first, then by priority, so each
+  // priority group keeps its due-time order.
+  return sortTasks(sortTasks(today, 'due_date'), 'priority')
     .slice(0, MAX_WIDGET_TASKS)
     .map((t) => ({
       id: t.id,
