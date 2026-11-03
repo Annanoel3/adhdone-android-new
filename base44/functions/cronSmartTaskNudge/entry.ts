@@ -1026,7 +1026,12 @@ Deno.serve(async (req) => {
           }
         }
 
+        // This call's own answers (passed, prompt, look-again, hold end):
+        // never read from the module-level variables, which another request
+        // in the same isolate can overwrite meanwhile (PlanOut).
+        const planOut = newPlanOut();
         const newEntries = await generateDailySchedule(pool, {
+          out: planOut,
           nowMs,
           localMin,
           timeZone,
@@ -1092,9 +1097,9 @@ Deno.serve(async (req) => {
             email,
             planner: useBrief ? REMINDER_BRIEF_VERSION : 'old prompt',
             one_a_day: oneADay,
-            shown: lastPrompt,
+            shown: planOut.prompt,
             nudges: newEntries,
-            passed: lastPassed,
+            passed: planOut.passed,
             note: 'Preview only: nothing was saved or sent.',
           });
           continue;
@@ -1119,7 +1124,7 @@ Deno.serve(async (req) => {
             try {
               await base44.asServiceRole.entities.User.update(user.id, {
                 smart_nudge_planned_at: runStartIso,
-                smart_nudge_passed: mergePassed(fresh?.smart_nudge_passed ?? user.smart_nudge_passed, lastPassed, nowMs),
+                smart_nudge_passed: mergePassed(fresh?.smart_nudge_passed ?? user.smart_nudge_passed, planOut.passed, nowMs),
               });
             } catch (e) {
               console.error(`[SMART NUDGE] Failed to note second look for ${email}:`, e);
@@ -1145,13 +1150,13 @@ Deno.serve(async (req) => {
                 smart_nudge_plan_prints: prints,
                 // A just-added task's hold ending sooner brings the look forward (JUST ADDED).
                 smart_nudge_look_at: useBrief ? (() => {
-                  const iso = nextLookIso(lastLookAgain, newEntries.length + stillQueued.length, nowMs, { startMin, endMin, timeZone });
+                  const iso = nextLookIso(planOut.lookAgain, newEntries.length + stillQueued.length, nowMs, { startMin, endMin, timeZone });
                   const at = utcMs(iso);
-                  return Number.isFinite(lastHoldEndsMs) && (!Number.isFinite(at) || lastHoldEndsMs < at)
-                    ? new Date(lastHoldEndsMs + 60 * 1000).toISOString() : iso;
+                  return Number.isFinite(planOut.holdEndsMs) && (!Number.isFinite(at) || planOut.holdEndsMs < at)
+                    ? new Date(planOut.holdEndsMs + 60 * 1000).toISOString() : iso;
                 })() : null,
                 smart_nudge_brief_version: useBrief ? REMINDER_BRIEF_VERSION : null,
-                smart_nudge_passed: mergePassed(fresh?.smart_nudge_passed ?? user.smart_nudge_passed, lastPassed, nowMs),
+                smart_nudge_passed: mergePassed(fresh?.smart_nudge_passed ?? user.smart_nudge_passed, planOut.passed, nowMs),
               });
               schedulesGenerated++;
               console.log(`[SMART NUDGE] ${onlyEmail ? 'Re-planned' : 'Generated schedule'} for ${email}: ${newEntries.length} new nudge(s), ${stillQueued.length} kept`);
@@ -2671,6 +2676,7 @@ Return ONLY valid JSON:
       })
       .filter(Boolean)
       .slice(0, 30);
+    out.passed = lastPassed;
 
     const entries = nudges.map((n: any) => {
       const task = n.task_index > 0 ? tasks[n.task_index - 1] : null;
