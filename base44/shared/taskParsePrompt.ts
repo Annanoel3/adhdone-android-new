@@ -229,11 +229,16 @@ location — a real address, business, or place taken verbatim from the text,
   and only when the person will physically go there (see above). Otherwise null.
 
 business_name — the name of a business, office, clinic, store or organization
-  the task involves in any way (to call, visit, email, text or order from),
-  verbatim from the text: "Brodie Animal Hospital", "the DMV", "Costco".
-  Different from location, which is only where they go; a business they call
-  still goes here. The app looks up its opening hours so reminders land while
-  it's open. Otherwise null.
+  the task is DONE WITH (they will call it, go there, email or text it, or
+  order from it), verbatim from the text: "Brodie Animal Hospital", "the
+  DMV", "Costco". Different from location, which is only where they go; a
+  business they call still goes here. The app looks up its opening hours so
+  reminders land while it's open, so the test is: does the task need that
+  business to be open? A business that is only named in passing is NOT this:
+  a key, badge, uniform, gift card or bag that belongs to one ("Bring the
+  Pizza Hut key to Jay" is a handoff between two people, not a trip to Pizza
+  Hut), a person who works there, a brand or product ("buy Tide"), a place
+  they are just back from. Those get null. Otherwise null.
 
 classification — what KIND of thing this is:
   "event"   something that happens at a set time whether or not the user shows
