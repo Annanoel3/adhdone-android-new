@@ -1116,19 +1116,18 @@ export function AlertStylePrompt({ user, theme }) {
   };
   const previewAnswered = (kept, seconds) => {
     trackFire('alert_style_preview', { seconds, props: { kept, trial: previewTrial } });
-    if (kept) choose('alarm', previewTrial);
-    else choose('notification');
+    choose(kept ? 'alarm' : 'notification');
   };
 
-  // style 'alarm' with trial=true is "Try it out": same switch, plus a note of
-  // when the trial started so the keep-it question can wait for a real ring.
-  // Since Nov 3 2026 that note is made for everyone who picks alarms here,
-  // not only the intro's trial: after their first real alarm rings, the next
-  // open asks once whether it was too loud (AlarmKeepPrompt), so the way back
-  // to regular notifications is in front of them instead of buried in
-  // Settings (Anna: "After the first real alarm, we should give some kind of
-  // option, too loud switch to notifications").
-  const choose = async (style, trial = false) => {
+  // Picking 'alarm' also notes when, so the keep-it question can wait for a
+  // real ring. That note used to be made only by the intro's "Try it out";
+  // since Nov 3 2026 it is made for everyone who picks alarms here: after
+  // their first real alarm rings, the next open asks once whether it was too
+  // loud (AlarmKeepPrompt), so the way back to regular notifications is in
+  // front of them instead of buried in Settings (Anna: "After the first real
+  // alarm, we should give some kind of option, too loud switch to
+  // notifications").
+  const choose = async (style) => {
     setBusy(true);
     try {
       const patch = { alarm_mode: style };
