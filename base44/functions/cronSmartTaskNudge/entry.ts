@@ -506,8 +506,10 @@ Deno.serve(async (req) => {
       // a nudge (an AI call) and sending it into nothing, every 10 minutes all
       // day (Oct 16 2026: four accounts). Nothing more until they're back in
       // the app (opening it signs the phone up again), or a day has gone by.
+      // (A REPLAY of a moment before the mark was made ignores it: the phone
+      // was still reachable then.)
       const unreachableAt = utcMs(user.push_unreachable_at);
-      if (Number.isFinite(unreachableAt) && nowMs - unreachableAt < DAY_MS && !(utcMs(user.last_active_at) > unreachableAt)) continue;
+      if (Number.isFinite(unreachableAt) && unreachableAt <= nowMs && nowMs - unreachableAt < DAY_MS && !(utcMs(user.last_active_at) > unreachableAt)) continue;
 
       // PAUSED BECAUSE THEY WEREN'T HELPING (ARE THEY HELPING? below; Anna,
       // Oct 31 2026). Unlike the week-away pause, only opening the app ends
