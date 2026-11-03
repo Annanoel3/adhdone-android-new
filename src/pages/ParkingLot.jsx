@@ -1849,6 +1849,8 @@ Return ONLY the category name, nothing else.`;
                     ? stripHtml(latestNote.content)
                     : (group.parent.notes || '');
                   const hasContent = previewText.length > 0;
+                  // No empty "Add notes..." box: notes are added from Details.
+                  if (!hasContent) return null;
 
                   return (
                     <button
