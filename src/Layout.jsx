@@ -131,6 +131,7 @@ import NewInsightsPopup from "./components/shared/NewInsightsPopup";
 import RemindersHelpingPopup from "./components/shared/RemindersHelpingPopup";
 import RepeatOfferPopup from "./components/tasks/RepeatOfferPopup";
 import WhatsNextPopup from "./components/tasks/WhatsNextPopup";
+import IdeaSavedNotice from "./components/tasks/IdeaSavedNotice";
 import WebAddressFooter from "./components/shared/WebAddressFooter";
 import {
   Dialog,
@@ -1390,6 +1391,8 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
         <RepeatOfferPopup user={user} theme={theme} specialMode={specialMode} />
         {/* "What's next?" when a new person's list empties (see WhatsNextPopup). */}
         <WhatsNextPopup user={user} theme={theme} specialMode={specialMode} />
+        {/* "Saved to your Parking Lot" with "Make it a task" (see IdeaSavedNotice). */}
+        <IdeaSavedNotice theme={theme} specialMode={specialMode} />
         <TaskCaptureProcessor userEmail={user?.email} />
         {/* Keeps each active goal's current step on the task list (GOALS_PORT.md). */}
         <GoalStepSync user={user} />
