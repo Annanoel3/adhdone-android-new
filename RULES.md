@@ -543,6 +543,19 @@ How it works, and how it must keep working:
    request could read another's (a preview of Liz came back with someone else's prompt).
    They come back per call now (`PlanOut` on `ctx.out`). And a REPLAY of a moment before
    someone's `push_unreachable_at` no longer skips them.
+13. **No plan for an account no phone has opened (Nov 3 2026).** Anna: "Yes, skip planning
+   for accounts with no phone linked." Her editor account (no `app_platform`, no
+   `app_build`) was being planned every run, an AI call every 10 minutes all day for pushes
+   that could never land: pushes reach only the phone app (the web build never loads
+   OneSignal's browser SDK). The main loop now skips anyone with neither field, right after
+   the quiet-hours check and before the notifications-off and unreachable guards. The phone
+   writes `app_build` about 12 seconds after it opens (WidgetTaskSync), so a new person is
+   planned from their first open. Checked the same day: the only other accounts without a
+   phone and with open tasks were a family account and one gone since Sep 14 (already
+   paused for being away), so nobody lost a reminder. Previews, REPLAY and
+   `helping_preview` still work for any account (they return before the guard). Verified
+   from the Test Function: `{"email": "<editor account>"}` with its look-again time already
+   past came back with `schedulesGenerated: 0`.
 
 **Do not change `base44/functions/cronSmartTaskNudge`, `base44/shared/reminderBrief.ts`, the
 "Smart Task Nudge" workflow, or the `smart_nudge_*` fields on User unless Anna explicitly
