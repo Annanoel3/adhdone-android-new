@@ -560,6 +560,12 @@ export default function Settings() {
           </CardContent>
         </Card>
 
+        {/* Alarms or regular notifications, right on the front page (Anna, Nov
+            3 2026), with "More notification settings" opening Reminders at
+            the full Alarms card. Phones that can ring only (the card renders
+            nothing elsewhere). */}
+        <AlarmCard user={user} theme={theme} compact onMore={() => navigate('/settings?section=reminders#alarms')} />
+
         </>)}
 
         {section === 'personalization' && (<>
