@@ -378,7 +378,16 @@
     "push_unreachable_at": {
       "type": "string",
       "format": "date-time",
-      "description": "When OneSignal last answered a Smart Reminders nudge with \"not subscribed\" (no phone signed in to this account takes pushes). Smart Reminders rests this account until they open the app again or a day has gone by (cronSmartTaskNudge)."
+      "description": "When OneSignal last answered a Smart Reminders nudge with \"not subscribed\" (no phone signed in to this account takes pushes). Smart Reminders rests this account until they open the app again or a day has gone by (cronSmartTaskNudge). The hourly health check (cronRefillReminders) also sets it when a failed push of theirs leads to OneSignal confirming every push subscription on the account is off."
+    },
+    "suspected_uninstall": {
+      "type": "boolean",
+      "description": "True while this account looks uninstalled (Anna, Nov 3 2026: \"add a field to the user data that says suspected uninstall\"): OneSignal says no phone on the account takes pushes any more (every push subscription off, notification_types -10: the app was uninstalled, or its notifications turned off on the phone), and that came after their last open (push_unreachable_at later than last_active_at). Kept by the hourly health check in cronRefillReminders: set when a failed push of theirs is confirmed that way or a Smart Reminders nudge was refused; back to false the hour after they open the app again."
+    },
+    "suspected_uninstall_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When suspected_uninstall last went true."
     },
     "smart_nudge_dirty_at": {
       "type": "string",
