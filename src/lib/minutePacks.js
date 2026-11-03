@@ -9,9 +9,21 @@ import { base44 } from "@/api/base44Client";
 
 const MINUTES = { notes_1h: 60, notes_5h: 300 };
 
+// The packs exist in neither store yet (Nov 3 2026: no one-time products on
+// Google Play, no in-app purchases in App Store Connect), so RevenueCat has
+// nothing to offer and the Notes page's buy sheet would say "isn't available
+// right now". On iPhone that is hidden altogether until the App Store
+// products and the RevenueCat offering exist, so App Review never meets a
+// purchase that can't go through (guideline 2.1); the page then says a paid
+// version is coming, as it does on builds without billing. Flip this to true
+// once notes_1h and notes_5h are live for the App Store app.
+const IOS_PACKS_LIVE = false;
+
 const bridge = () => (typeof window !== "undefined" && window.Capacitor?.Plugins?.BillingBridge) || null;
+const onIPhone = () => typeof window !== "undefined" && window.Capacitor?.getPlatform?.() === "ios";
 
 export async function billingAvailable() {
+  if (onIPhone() && !IOS_PACKS_LIVE) return false;
   const B = bridge();
   if (!B?.isAvailable) return false;
   try {
