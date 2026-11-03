@@ -1,7 +1,44 @@
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { trackFire } from '@/lib/appTrack';
+import { ONBOARDING_STEPS, waitForStep } from '@/components/onboarding/onboardingGate';
+import { waitForCalm } from '@/components/onboarding/onboardingSurface';
 
 const AD_UNIT_ID = 'ca-app-pub-7979856440890193/4453371625';
+
+// Apple's tracking prompt (App Tracking Transparency), iPhone only. Asked
+// once per phone, before the ad SDK starts (Google: ask before initializing),
+// and never on top of the welcome chat or another popup: it waits for the
+// notifications card to be answered and for the screen to be calm. Whatever
+// they answer, ads still work (Google serves non-personalized ones to a No).
+// Anna, Nov 3 2026: the App Store privacy answers say Identifiers are used
+// for tracking ("I will say yes"), and Apple expects the prompt in the build
+// that says so. The text is NSUserTrackingUsageDescription in
+// ios/App/App/Info.plist. Resolves to the status afterwards
+// ('authorized' | 'denied' | 'notDetermined' | 'restricted'), 'n/a' off
+// iPhone, 'error' when the plugin couldn't answer.
+let attAsk = null;
+export function askTrackingPermission() {
+  if (attAsk) return attAsk;
+  attAsk = (async () => {
+    if (Capacitor.getPlatform() !== 'ios') return 'n/a';
+    try {
+      const plugin = registerPlugin('AdMob');
+      const before = await plugin.trackingAuthorizationStatus();
+      if (before?.status && before.status !== 'notDetermined') return before.status;
+      await waitForStep(ONBOARDING_STEPS.permissions);
+      await waitForCalm();
+      await plugin.requestTrackingAuthorization();
+      const after = await plugin.trackingAuthorizationStatus();
+      const status = after?.status || 'unknown';
+      trackFire('att_prompt', { props: { status } });
+      return status;
+    } catch (e) {
+      console.warn('[AdMob] tracking prompt failed:', e);
+      return 'error';
+    }
+  })();
+  return attAsk;
+}
 
 let AdMob = null;
 let initPromise = null;      // the actual init promise, so callers can await it
@@ -21,9 +58,13 @@ export function initAdMob() {
   if (initPromise) return initPromise;
   initPromise = (async () => {
     if (!Capacitor.isNativePlatform()) return false;
-    // iPhone: no ADHDone ad units yet (IOS_AD_UNIT_ID below), so the ad SDK and
-    // its consent form aren't started there at all.
-    if (Capacitor.getPlatform() === 'ios' && !IOS_AD_UNIT_ID) return false;
+    // iPhone: the tracking prompt comes first, every time (its own once-per-
+    // phone guard), and the SDK only starts once ADHDone has its own iOS ad
+    // unit (IOS_AD_UNIT_ID below).
+    if (Capacitor.getPlatform() === 'ios') {
+      await askTrackingPermission();
+      if (!IOS_AD_UNIT_ID) return false;
+    }
     try {
       const plugin = registerPlugin('AdMob');
       await plugin.initialize({ initializeForTesting: false });
