@@ -863,6 +863,13 @@ const saveFirstWinDemo = (demo) => {
 // app's code (Caterina, Nov 1 2026: closed 7 seconds after it saved). Once
 // per account on the server; calling again just gets the one booked. Inside
 // their quiet hours too (Anna, Oct 23 2026; RULES.md §9 Q4).
+//
+// Always a regular notification, never a full-screen alarm (Anna, Nov 3
+// 2026). Until then someone who picked full-screen reminders while the demo
+// was on its way got it as an alarm, 5-7 minutes after signing up: Connie
+// (Nov 1) and Michael (Oct 31) both did, and both were gone within a day. The
+// alarm is now shown as a preview they can back out of instead
+// (AlertStylePrompt below); the demo only shows that reminders arrive.
 let firstWinDemoBooking = null;
 function bookFirstWinDemo() {
   const waiting = readFirstWinDemo();
@@ -875,16 +882,11 @@ function bookFirstWinDemo() {
         title: waiting.title,
         body: waiting.body,
         at: waiting.at,
-        alarm: waiting.alarm === true,
       });
       const r = res?.data || {};
       if (r.gone) { saveFirstWinDemo(null); return; }
       if (!r.notificationId) return; // not booked yet; the next link event asks again
-      // Full-screen alarms may have been picked while this was booking.
-      const latest = readFirstWinDemo() || waiting;
-      const alarm = r.alarm === true;
-      saveFirstWinDemo({ ...waiting, at: r.at || waiting.at, id: r.notificationId, alarm });
-      if (latest.alarm === true && !alarm) await ringFirstWinDemo();
+      saveFirstWinDemo({ ...waiting, at: r.at || waiting.at, id: r.notificationId });
     } catch (e) {
       // Not booked: the next link event (or app open) asks again while it's on time.
     }
@@ -926,37 +928,110 @@ if (typeof window !== 'undefined') {
   });
 }
 
-// Someone who picks full-screen alarms while the welcome chat's demo reminder
-// is still on its way should get the demo as an alarm — it is there to show
-// what THEIR reminders will look like. Cancel the booked push and book the
-// same one, same time, asking to ring on arrival. Too close to call (under a
-// minute out) is left alone rather than risk two. Not booked yet: it is simply
-// booked as an alarm when it is.
-async function ringFirstWinDemo() {
-  const demo = readFirstWinDemo();
-  if (!demo?.at || demo.alarm === true) return;
-  if (!demo.id) {
-    saveFirstWinDemo({ ...demo, alarm: true });
-    return;
-  }
-  const at = Date.parse(demo.at);
-  if (!(at > Date.now() + 60 * 1000)) return;
-  try { localStorage.removeItem(FIRST_WIN_DEMO_KEY); } catch (e) {}
-  try {
-    const { cancelScheduledReminder } = await import('@/components/utils/reminderScheduler');
-    await cancelScheduledReminder([demo.id]);
-    const me = await base44.auth.me();
-    if (!me?.email) return;
-    await base44.functions.invoke('schedulePush', {
-      toUserExternalId: me.email,
-      title: demo.title,
-      body: demo.body,
-      sendAtISO: demo.at,
-      data: { type: 'first_win_demo', alarm: true },
-    });
-  } catch (e) {
-    console.error('Could not re-book the demo reminder as an alarm:', e);
-  }
+// The alarm-screen preview (AlertStylePrompt, step 'preview'): what one of
+// their reminders would look and sound like as a full-screen alarm, drawn
+// here in the app the moment they tap that choice, so they can see it before
+// anything is saved and go back to regular notifications right there (Anna,
+// Nov 3 2026: "give them a preview of what that would look like there, right
+// then and there, so that they can go back and be like, nah, never mind").
+// Why drawn here and not rung for real: the phone's own alarm clock can only
+// ring on time with the "Alarms & reminders" access, which a fresh install
+// doesn't have yet at this point (it is asked for after the sound step), and
+// without it Android may hold an alarm back for minutes. The layout, words
+// and colours are the real screen's (android/.../activity_alarm.xml,
+// strings_alarm.xml, colors_alarm.xml); the sound is the one they picked, or
+// the first preset when they haven't picked one yet (a real alarm with no
+// pick uses the phone's own alarm tone). It rings for 20 seconds here; a real
+// one keeps going for a minute, at alarm volume, over the lock screen.
+const PREVIEW_RING_MS = 20 * 1000;
+const PREVIEW_TITLE = 'Move the laundry to the dryer';
+
+function AlarmScreenPreview({ user, trial, onKeep, onRegular, busy }) {
+  const [ringing, setRinging] = useState(true);
+  const [note, setNote] = useState('');
+  const audioRef = useRef(null);
+  const buzzRef = useRef(null);
+  const startedAt = useRef(Date.now());
+
+  const stopRing = () => {
+    try { audioRef.current?.pause(); } catch (e) {}
+    audioRef.current = null;
+    if (buzzRef.current) { clearInterval(buzzRef.current); buzzRef.current = null; }
+    try { navigator.vibrate?.(0); } catch (e) {}
+    setRinging(false);
+  };
+
+  useEffect(() => {
+    const audio = new Audio(alarmPreviewSoundUrl(user));
+    audio.loop = true;
+    audioRef.current = audio;
+    audio.play().catch(() => {});
+    // The real one vibrates in a pattern the whole time it rings.
+    try {
+      if (navigator.vibrate) {
+        navigator.vibrate([500, 500]);
+        buzzRef.current = setInterval(() => { try { navigator.vibrate([500, 500]); } catch (e) {} }, 1000);
+      }
+    } catch (e) {}
+    const stop = setTimeout(() => {
+      stopRing();
+      setNote('A real one keeps ringing for a full minute, until you answer it.');
+    }, PREVIEW_RING_MS);
+    return () => { clearTimeout(stop); stopRing(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const secondsShown = () => Math.round((Date.now() - startedAt.current) / 1000);
+  // The screen's own buttons stop the sound, the way they would on a real
+  // alarm, and say what they'd have done.
+  const mock = (what) => { stopRing(); setNote(what); };
+  const keep = () => { stopRing(); onKeep(secondsShown()); };
+  const regular = () => { stopRing(); onRegular(secondsShown()); };
+
+  const btn = 'h-14 rounded-md font-bold text-lg text-white';
+  return (
+    <div className="fixed inset-0 z-[200] flex flex-col" style={{ background: '#1F1B2E', color: '#FFFFFF' }} role="dialog" aria-label="Preview of a full-screen alarm">
+      <div className="px-4 pt-3 text-center" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
+        <p className="inline-block rounded-full px-3 py-1 text-xs font-semibold tracking-wide" style={{ background: '#8B5CF6' }}>
+          PREVIEW
+        </p>
+        <p className="mt-2 text-sm" style={{ color: '#C9C3DC' }}>
+          This is how a reminder rings as a full-screen alarm: over your lock screen, at alarm volume, even on silent or Do Not Disturb.
+        </p>
+      </div>
+
+      <div className="flex-1 flex flex-col items-center justify-center px-8">
+        <p className="text-lg" style={{ color: '#C9C3DC' }}>Time for this</p>
+        <p className="mt-3 text-center text-3xl font-bold leading-tight">{PREVIEW_TITLE}</p>
+        <p className="mt-10 text-sm self-start" style={{ color: '#C9C3DC' }}>Snooze</p>
+        <div className="mt-2 flex w-full gap-2">
+          {['10 min', '30 min', '60 min'].map((m) => (
+            <button key={m} type="button" onClick={() => mock(`On a real alarm that snoozes it for ${m}.`)} className="flex-1 h-14 rounded-md text-base font-medium" style={{ background: '#2E2843', color: '#FFFFFF' }}>{m}</button>
+          ))}
+        </div>
+        <button type="button" onClick={() => mock('On a real alarm that marks the task done.')} className={`mt-6 w-full h-16 ${btn}`} style={{ background: '#8B5CF6' }}>Done ✓</button>
+        <div className="mt-3 flex w-full gap-3">
+          <button type="button" onClick={() => mock('On a real alarm that opens the task in the app.')} className={`flex-1 h-16 ${btn}`} style={{ background: '#8B5CF6' }}>Open task</button>
+          <button type="button" onClick={() => mock('On a real alarm that stops the ring and leaves the task for later.')} className={`flex-1 h-16 ${btn}`} style={{ background: '#8B5CF6' }}>Later</button>
+        </div>
+        <p className="mt-4 min-h-[1.25rem] text-center text-sm" style={{ color: '#C9C3DC' }}>
+          {note || (ringing ? 'Ringing…' : '')}
+        </p>
+      </div>
+
+      <div className="px-4 pb-4 space-y-2" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
+        <p className="text-center text-sm" style={{ color: '#C9C3DC' }}>
+          {trial ? 'Try it this way?' : 'Want your reminders this way?'}
+        </p>
+        <Button onClick={keep} disabled={busy} className="w-full h-12 text-base bg-purple-600 hover:bg-purple-700 text-white">
+          {trial ? 'Yes, try full-screen alarms' : 'Yes, full-screen alarms'}
+        </Button>
+        <Button onClick={regular} disabled={busy} variant="outline" className="w-full h-12 text-base bg-transparent border-gray-500 text-white hover:bg-white/10 hover:text-white">
+          No thanks, regular notifications
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export function AlertStylePrompt({ user, theme }) {
