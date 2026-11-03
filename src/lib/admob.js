@@ -148,10 +148,14 @@ async function isRecordingNotes() {
 }
 
 // The ad unit above belongs to the Android app in AdMob. AdMob ad units are
-// made per app and per platform, so the iPhone app needs its own (an iPhone
-// app added in AdMob, its ad unit pasted here). Until then the iPhone app
-// shows no ads rather than Android's (Anna, Oct 22 2026).
-const IOS_AD_UNIT_ID = '';
+// made per app and per platform, so the iPhone app has its own: AdMob app
+// 3513826797 "ADHDone: Done, Despite ADHD" (iOS), unit "iPhone interstitial",
+// made Nov 3 2026 in the AdMob account annabairdballew@gmail.com. Its app id
+// is GADApplicationIdentifier in ios/App/App/Info.plist (the build before
+// that carried Google's sample id, so on it this unit can't load; nothing
+// breaks, the ad is just skipped). Before Nov 3 it was empty and the iPhone
+// app showed no ads rather than Android's (Anna, Oct 22 2026).
+const IOS_AD_UNIT_ID = 'ca-app-pub-7979856440890193/1949463689';
 const adUnitId = () => (Capacitor.getPlatform() === 'ios' ? IOS_AD_UNIT_ID : AD_UNIT_ID);
 
 // The owed ad is loaded AHEAD of the pause it shows at, so it can show the
