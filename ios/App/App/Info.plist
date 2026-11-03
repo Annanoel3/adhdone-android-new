@@ -85,11 +85,12 @@
 	<string>$(RC_APPLE_KEY)</string>
 	<key>ADHDoneAppStoreId</key>
 	<string>$(ADHDONE_APP_STORE_ID)</string>
-	<!-- Google Mobile Ads needs an app id at launch or it stops the app. This is
-	     Google's published sample id (test ads only), used until ADHDone has its own
-	     iOS app in AdMob; IOS_PLAN.md, phase 2. -->
+	<!-- Google Mobile Ads needs an app id at launch or it stops the app. ADHDone's
+	     own iOS app in AdMob (app 3513826797, made Nov 3 2026, AdMob account
+	     annabairdballew@gmail.com); its interstitial unit is IOS_AD_UNIT_ID in
+	     src/lib/admob.js. -->
 	<key>GADApplicationIdentifier</key>
-	<string>ca-app-pub-3940256099942544~1458002511</string>
+	<string>ca-app-pub-7979856440890193~3513826797</string>
 	<!-- Apple's tracking prompt (App Tracking Transparency), asked once before the
 	     ad SDK starts (src/lib/admob.js, iPhone only). Anna, Nov 3 2026: the App
 	     Store privacy answers say Identifiers are used for tracking, and Apple
