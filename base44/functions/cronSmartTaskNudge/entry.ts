@@ -1902,14 +1902,29 @@ interface PlanContext {
   useBrief: boolean;
   fixed: any[];
   habits?: Record<string, any>;
+  // Filled in by generateDailySchedule for THIS call (see PlanOut).
+  out?: PlanOut;
 }
 
-// What the last plan chose to leave alone, and why — read by the caller
-// right after generateDailySchedule returns (one person at a time), and kept
-// on the person's record as smart_nudge_passed for reviewing the planner's
-// judgment ("why didn't it nudge X?"). Never sent to anyone.
+// What one plan hands back beside its nudges: the tasks it left alone and
+// why (kept on the person's record as smart_nudge_passed, for reviewing the
+// planner's judgment; never sent to anyone), the prompt it was shown (a
+// preview returns it), when it asked to look again, and the earliest JUST
+// ADDED hold ending. Per call, on ctx.out — not the module-level `last*`
+// variables below, which are kept only as a fallback. Several requests run in
+// one isolate at once (a scheduled run, onTaskUpdate's re-plan of one person,
+// a preview), and a module-level variable written before or after the model
+// call was read back by whichever request got there next: Nov 3 2026, a
+// preview of Liz came back showing another person's prompt.
+interface PlanOut {
+  passed: any[];
+  prompt: string;
+  lookAgain: number | null;
+  holdEndsMs: number;
+}
+const newPlanOut = (): PlanOut => ({ passed: [], prompt: '', lookAgain: null, holdEndsMs: NaN });
+
 let lastPassed: any[] = [];
-// The prompt the last plan was made from (returned by a preview request).
 let lastPrompt = '';
 // JUST ADDED (Anna, Nov 2 2026: "can we make it so that smart reminders do
 // not remind someone of something they just added? For example, I made a task
@@ -1978,6 +1993,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
   lastPrompt = '';
   lastLookAgain = null;
   lastHoldEndsMs = NaN;
+  const out: PlanOut = ctx.out || newPlanOut();
   const {
     localMin, timeZone, quietStartMin, quietEndMin, subtasksByParent, events,
     homeOrigin, aboutMe, avoidTolls, nudgeHistory, queued, recentSent, work, doneToday, showReactions,
@@ -2055,7 +2071,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     const end = holdEndOf(t);
     if (Number.isFinite(end)) holdEnds.set(t.id, end);
   }
-  if (holdEnds.size) lastHoldEndsMs = Math.min(...holdEnds.values());
+  if (holdEnds.size) { lastHoldEndsMs = Math.min(...holdEnds.values()); out.holdEndsMs = lastHoldEndsMs; }
 
   // Hard filter, not a prompt instruction: a day-tied task ("do X on Nov 1")
   // cannot be acted on early, so it must never reach the LLM until the night
