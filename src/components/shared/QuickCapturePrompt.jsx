@@ -1000,7 +1000,10 @@ function AlarmScreenPreview({ user, trial, onKeep, onRegular, busy }) {
         </p>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center px-8">
+      {/* Scrolls on a short screen instead of clipping the top (my-auto
+          centres it when there is room). */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-8 flex flex-col">
+       <div className="my-auto w-full py-4 flex flex-col items-center">
         <p className="text-lg" style={{ color: '#C9C3DC' }}>Time for this</p>
         <p className="mt-3 text-center text-3xl font-bold leading-tight">{PREVIEW_TITLE}</p>
         <p className="mt-10 text-sm self-start" style={{ color: '#C9C3DC' }}>Snooze</p>
@@ -1017,6 +1020,7 @@ function AlarmScreenPreview({ user, trial, onKeep, onRegular, busy }) {
         <p className="mt-4 min-h-[1.25rem] text-center text-sm" style={{ color: '#C9C3DC' }}>
           {note || (ringing ? 'Ringing…' : '')}
         </p>
+       </div>
       </div>
 
       <div className="px-4 pb-4 space-y-2" style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}>
