@@ -1358,10 +1358,16 @@ export function AlarmKeepPrompt({ user, theme }) {
     setOpen(false);
   };
 
-  const keep = () => finish();
+  // Both answers are kept as AppEvent 'alarm_keep_choice' (kept true/false),
+  // so how often the first real alarm sends someone back can be counted.
+  const keep = () => {
+    trackFire('alarm_keep_choice', { props: { kept: true } });
+    finish();
+  };
 
   const goBack = async () => {
     setBusy(true);
+    trackFire('alarm_keep_choice', { props: { kept: false } });
     try {
       await base44.auth.updateMe({ alarm_mode: 'notification' });
       setAlarmMode('notification');
