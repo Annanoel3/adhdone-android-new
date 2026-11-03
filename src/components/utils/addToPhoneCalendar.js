@@ -8,7 +8,8 @@
 // keeps no link to the event they save.
 //
 // Offered only where the phone app has it (Android build 46 on; the iPhone
-// app and the website don't yet), and only for something with a date that
+// app from its next build after Nov 2 2026, where it opens Apple's New Event
+// sheet; the website never), and only for something with a date that
 // didn't come from a calendar in the first place (google_event_id: imported
 // from Google or the phone's calendars, so it's already there).
 
