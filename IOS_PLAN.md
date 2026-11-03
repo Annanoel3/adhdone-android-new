@@ -34,7 +34,7 @@ Phase 1 = in the first TestFlight build. Later phases follow in order.
 | Contact picker: ContactPickerBridge | ContactPickerBridge.swift (Apple's picker, no Contacts permission) | 1 |
 | Task photos: @capacitor/camera | same plugin, iOS side | 1 |
 | Play in-app update: InAppUpdate, NotifyBridge.startAppUpdate | none on iPhone; the update card opens the App Store page (`openPlayStore`) | 1 |
-| Ads: @capacitor-community/admob | same plugin; needs ADHDone's own iOS app + ad units in AdMob and Apple's tracking prompt (ATT). Phase 1 ships Google's sample app id (test ads) | 2 |
+| Ads: @capacitor-community/admob | same plugin. Apple's tracking prompt (ATT) is in since Nov 3 2026: `NSUserTrackingUsageDescription` in Info.plist, asked once per phone by `askTrackingPermission` in `src/lib/admob.js` after the notifications card, before the SDK starts (Anna said Yes to "used for tracking" on the App Store privacy form, so the build has to ask). `SKAdNetworkItems` carries Google's network id. Ads themselves still wait on ADHDone's own iOS app in AdMob: its app id replaces the sample `GADApplicationIdentifier` in Info.plist and its interstitial unit goes in `IOS_AD_UNIT_ID` (src/lib/admob.js); until then iPhone shows no ads | 1 (prompt), 2 (ads) |
 | Buttons on reminders (Done, Snooze 15/60, Later): TaskActions, TaskActionReceiver | notification categories with actions, answered without opening the app | 2 |
 | Reminders for finished tasks dropped, one row per reminder: PushFilter, TaskPushes | Notification Service Extension (sees every push before it shows) | 2 |
 | Alarms: AlarmScheduler, AlarmService, AlarmActivity, AlarmReceiver, AlarmStore, AlarmSound, AlarmTheme, AlarmBoost, BootReceiver, RingLog, ChoiceReports, ChoiceSyncWorker, LaterBreak, PairDecisions | iOS 26+: AlarmKit (real alarms that break through silent mode and Focus) with Stop + Later (Anna's decision); events get Stop only. iOS 17–25: time-sensitive notifications with the alarm sound. Every choice reported to the server like Android | 3 |
@@ -62,7 +62,24 @@ Phase 1 = in the first TestFlight build. Later phases follow in order.
   has AlarmBridge.
 - Links to other apps: NotifyBridge.openExternal (Apple Maps, Messages with the
   birthday text filled in), the same name the web already calls.
-- Ads: iOS ad unit ids once AdMob has the iOS app.
+- Ads: iOS ad unit ids once AdMob has the iOS app (the tracking prompt is already in).
+
+## Before the first App Review submission (Nov 3 2026, Anna: "I want the next build to
+## actually be put into review to be on the app store")
+
+- App Store privacy answers: filled in by Anna Nov 3 2026 (Identifiers used for
+  tracking = Yes; everything collected is linked to the user).
+- Tracking prompt in the build: done (above).
+- Ads on iPhone: needs the AdMob iOS app + interstitial unit (ids pasted as above),
+  or the review build shows no ads at all.
+- Store name: "ADHDone" is taken on the App Store; a variant has to be picked in App
+  Store Connect.
+- Minute packs: the two consumables (notes_1h, notes_5h) in App Store Connect +
+  RevenueCat, or the Buy minutes buttons fail for a reviewer who taps them.
+- Account deletion in the app: done (DeleteAccount.jsx asks and files the request
+  in-app; the email steps stay for people who can't sign in).
+- Privacy policy page updated Nov 3 2026 (ads, contacts, photos, recordings, phone
+  calendars) so it matches the answers above.
 
 ## Android fixes carried over before launch (Oct 30 2026)
 
