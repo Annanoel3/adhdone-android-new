@@ -120,8 +120,11 @@ export async function classifyCapture(text) {
 
 // An idea: into the Parking Lot. A real list becomes a parent idea with the
 // items the person wrote as checkboxes; anything else is one idea holding
-// their own words.
+// their own words. Answers the saved idea when it's one plain idea still
+// sitting in the Parking Lot (IdeaSavedNotice can offer to make it a task),
+// null for a list or a reading logged onto a tracker.
 async function saveIdeas(kind, inputText, captureId = null) {
+  let plainIdea = null;
   if (kind.is_list && Array.isArray(kind.items) && kind.items.length > 1) {
     const mainIdea = await base44.entities.ParkingLotIdea.create({
       idea: kind.main_idea || inputText.trim(),
@@ -155,9 +158,11 @@ async function saveIdeas(kind, inputText, captureId = null) {
     if (made?.id) {
       const res = await base44.functions.invoke('captureText', { foldIdea: made.id }).catch(() => null);
       if (!res) await base44.entities.ParkingLotIdea.update(made.id, { tracker_checked: false }).catch(() => {});
+      if (!res?.data?.folded) plainIdea = made;
     }
   }
   window.dispatchEvent(new Event('parking-lot-changed'));
+  return plainIdea;
 }
 
 // Something meant for ADHDone itself: a feature they want, something broken or
@@ -277,8 +282,12 @@ export async function processAndCreateTask(inputText, opts = {}) {
 
     if (kind.category === 'parking_lot') {
       if (handedOff()) return HANDED_OFF;
-      await saveIdeas(kind, inputText, captureId);
-      toast({ title: '💡 Saved to your Parking Lot', duration: 1500 });
+      const idea = await saveIdeas(kind, inputText, captureId);
+      if (idea) {
+        window.dispatchEvent(new CustomEvent('idea-saved', { detail: { id: idea.id, text: inputText.trim() } }));
+      } else {
+        toast({ title: '💡 Saved to your Parking Lot', duration: 1500 });
+      }
       return { status: 'done', kind: 'idea' };
     }
 
