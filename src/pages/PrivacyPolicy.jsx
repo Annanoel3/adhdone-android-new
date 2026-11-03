@@ -116,7 +116,7 @@ export default function PrivacyPolicy() {
             <P>We do not sell your data. We only share it in these cases:</P>
             <List items={[
               "With accountability partners — when you connect with someone, they can see your shared check-ins and messages",
-              "With service providers — cloud hosting, push notifications (OneSignal), and payment processors, solely to operate the app",
+              "With service providers, solely to operate the app — cloud hosting (Base44), push notifications (OneSignal), AI processing (OpenAI, which reads the task text, recordings and notes you ask the app to understand, plan reminders for, or transcribe), ads (Google AdMob), and purchases (RevenueCat, Google Play, the App Store)",
               "When legally required — court orders or to protect user safety",
             ]} />
           </Section>
