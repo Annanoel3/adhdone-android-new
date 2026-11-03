@@ -108,9 +108,33 @@ Deno.serve(async (req) => {
 
     // The two looks below show people's tasks and emails: the owner's
     // account only (Test Function in the editor).
-    if (body?.previewRepeats === true || body?.previewHealth === true || Array.isArray(body?.markTold)) {
+    if (body?.previewRepeats === true || body?.previewHealth === true || Array.isArray(body?.markTold) || Array.isArray(body?.checkPhones)) {
       const me = await base44.auth.me().catch(() => null);
       if (me?.role !== 'admin') return Response.json({ error: 'Not allowed' }, { status: 403 });
+    }
+
+    // Ask OneSignal right now whether these people's phones still take pushes,
+    // and set suspected_uninstall (and push_unreachable_at) from the answer
+    // (Test Function, owner only): { checkPhones: ["<email>", ...] }. For a
+    // failed push the hourly check already looked at (Liz, Nov 3 2026).
+    if (Array.isArray(body.checkPhones)) {
+      const out: any[] = [];
+      for (const raw of body.checkPhones.slice(0, 20)) {
+        const email = String(raw || '').trim().toLowerCase();
+        const u = allUsers.find((x: any) => String(x?.email || '').toLowerCase() === email);
+        if (!u?.id) { out.push({ email, result: 'no such account' }); continue; }
+        const takes = await phoneTakesPushes(u.email);
+        if (takes === null) { out.push({ email, result: 'OneSignal could not say' }); continue; }
+        const stamp = new Date().toISOString();
+        const lastMs = Date.parse(u.last_active_at || '') || 0;
+        const goneMs = Date.parse(u.push_unreachable_at || '') || 0;
+        const patch: any = takes
+          ? { suspected_uninstall: false }
+          : { suspected_uninstall: true, suspected_uninstall_at: goneMs > lastMs ? (u.push_unreachable_at || stamp) : stamp, ...(goneMs > lastMs ? {} : { push_unreachable_at: stamp }) };
+        await base44.asServiceRole.entities.User.update(u.id, patch);
+        out.push({ email, takes_pushes: takes, ...patch });
+      }
+      return Response.json({ success: true, checked: out });
     }
 
     // "I've seen this one": write owner_alert_marks on the owner record by hand
@@ -1767,6 +1791,32 @@ async function pushOwner(base44: any, kind: string, title: string, body: string)
     await ledgerRecord(base44, { email: OWNER_ALERT_EMAIL, kind, source: 'cronRefillReminders', notificationId: j.id, title });
   } else {
     console.error('[HEALTH] owner push failed:', JSON.stringify(j).slice(0, 200));
+  }
+}
+
+// Does any phone signed in to this account still take pushes? OneSignal's
+// user record by external id (the email every sender targets): true when a
+// push subscription is on, false when every one is off (notification_types
+// -10: uninstalled, or notifications turned off on the phone), null when
+// OneSignal can't say (never heard of them, or the lookup failed). The same
+// lookup the owner's myPushStatus makes.
+async function phoneTakesPushes(email: string): Promise<boolean | null> {
+  const appId = Deno.env.get('ONESIGNAL_APP_ID')?.trim();
+  const key = Deno.env.get('ONESIGNAL_REST_API_KEY')?.trim();
+  if (!appId || !key || !email) return null;
+  try {
+    const res = await fetch(`https://api.onesignal.com/apps/${appId}/users/by/external_id/${encodeURIComponent(email)}`, {
+      headers: { Authorization: `Basic ${key}` },
+    });
+    if (!res.ok) return null;
+    const body: any = await res.json().catch(() => null);
+    const subs = Array.isArray(body?.subscriptions) ? body.subscriptions : [];
+    const push = subs.filter((s: any) => typeof s?.type === 'string' && s.type.endsWith('Push'));
+    if (!push.length) return null;
+    return push.some((s: any) => s.enabled === true);
+  } catch (e) {
+    console.error(`[HEALTH] OneSignal lookup failed for ${email}:`, (e as any)?.message || e);
+    return null;
   }
 }
 
