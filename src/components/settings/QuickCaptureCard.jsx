@@ -622,7 +622,6 @@ export function AlarmCard({ user, theme, compact = false, onMore }) {
 
   if (!AlarmBridge?.sync) return null;
 
-  // Compact only: the extra permission rows below are the full card's.
   const handleToggle = async (next) => {
     setBusy(true);
     setError('');
