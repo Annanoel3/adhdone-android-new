@@ -17,6 +17,15 @@ import { MOODS, MOOD_REASONS, NOTE_MAX, moodInfo, saveDayMood } from "./moodStor
 // Modes: "ask" (nothing saved yet), "detail" (just picked or Change: chips,
 // note, Done), "small" (saved). onEditingChange tells the evening card the
 // person is in the middle of it, so the card doesn't vanish under them.
+//
+// autoFinish (the evening card on Home): the chips and note don't wait for
+// Done forever (Anna, Nov 2 2026: "After someone fills this out for the day,
+// it should go away" — she had picked a face, three chips and saved her win,
+// and the card sat there with "Anything going on? Done"). Once a face is
+// saved, tapping anywhere else on the page finishes it, and so does leaving it
+// alone for a few seconds with nothing being typed. Any tap or typing in it
+// starts the wait over, so chips and the note still work; Done still closes
+// it at once.
 
 // Classes for the card on Home (inside the app shell, where the night
 // seasons' glass turns pale surfaces dark by itself). Popups use winLook.
@@ -37,8 +46,10 @@ export function cardMoodLook(theme) {
 }
 
 const SAVE_ERROR = "Couldn't save. Check your connection and try again.";
+// autoFinish: untouched this long (and not typing a note) = done with it.
+const IDLE_FINISH_MS = 8000;
 
-export default function DayMoodRow({ day, row = null, onSaved, onEditingChange, look = {}, showQuestion = true, icon = null }) {
+export default function DayMoodRow({ day, row = null, onSaved, onEditingChange, look = {}, showQuestion = true, icon = null, autoFinish = false }) {
   const [saved, setSaved] = useState(row);
   const [mode, setMode] = useState(row ? "small" : "ask");
   const [chosen, setChosen] = useState(row?.mood ?? null);
@@ -54,6 +65,10 @@ export default function DayMoodRow({ day, row = null, onSaved, onEditingChange, 
   // The answer as it stands, for saves started from callbacks.
   const current = useRef({ chosen, reasons, note });
   current.current = { chosen, reasons, note };
+  const rootRef = useRef(null);
+  const noteRef = useRef(null);
+  // The newest done(), for the autoFinish listeners.
+  const doneRef = useRef(null);
 
   // Someone else's answer arrived (the card's first look, another phone, the
   // other surface): show it, unless they're in the middle of changing it here.
@@ -147,6 +162,37 @@ export default function DayMoodRow({ day, row = null, onSaved, onEditingChange, 
     setError("");
     setMode("detail");
   };
+  doneRef.current = done;
+
+  // autoFinish (see the top): a tap outside, or a few idle seconds, is Done.
+  const canAutoFinish = autoFinish && mode === "detail" && !!saved && chosen != null;
+  useEffect(() => {
+    if (!canAutoFinish || typeof document === "undefined") return undefined;
+    let timer = null;
+    const typingNote = () => noteRef.current && document.activeElement === noteRef.current;
+    const arm = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (typingNote()) { arm(); return; }
+        doneRef.current?.();
+      }, IDLE_FINISH_MS);
+    };
+    const onPointer = (e) => {
+      const root = rootRef.current;
+      if (root && e.target instanceof Node && root.contains(e.target)) { arm(); return; }
+      clearTimeout(timer);
+      doneRef.current?.();
+    };
+    const onKey = () => arm();
+    document.addEventListener("pointerdown", onPointer, true);
+    document.addEventListener("keydown", onKey, true);
+    arm();
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("pointerdown", onPointer, true);
+      document.removeEventListener("keydown", onKey, true);
+    };
+  }, [canAutoFinish]);
 
   const errorLine = error ? (
     <p role="alert" className={`text-sm ${look.error || ""}`}>
@@ -181,7 +227,7 @@ export default function DayMoodRow({ day, row = null, onSaved, onEditingChange, 
   const answered = !!saved && chosen != null;
 
   return (
-    <div className="space-y-3">
+    <div ref={rootRef} className="space-y-3">
       {showQuestion && (
         <div className="flex items-center gap-3">
           {icon}
@@ -249,6 +295,7 @@ export default function DayMoodRow({ day, row = null, onSaved, onEditingChange, 
             onSubmit={(e) => { e.preventDefault(); saveNote(); }}
           >
             <Input
+              ref={noteRef}
               value={note}
               onChange={(e) => setNote(e.target.value.slice(0, NOTE_MAX))}
               onBlur={() => { saveNote(); }}
