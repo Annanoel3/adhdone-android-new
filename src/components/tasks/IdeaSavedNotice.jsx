@@ -36,6 +36,7 @@ export default function IdeaSavedNotice({ theme, specialMode }) {
   const path = location.pathname.toLowerCase();
   const pathRef = useRef(path);
   pathRef.current = path;
+  const movingRef = useRef(null);
 
   useEffect(() => {
     const onSaved = (e) => {
@@ -87,8 +88,9 @@ export default function IdeaSavedNotice({ theme, specialMode }) {
 
   const makeTask = async () => {
     const saved = idea;
-    if (!saved) return;
-    // Closed first, so a second tap can't send it twice.
+    // A second tap can't send it twice.
+    if (!saved || movingRef.current === saved.id) return;
+    movingRef.current = saved.id;
     setIdea(null);
     trackFire("idea_notice", { props: { action: "make_task" } });
     try {
