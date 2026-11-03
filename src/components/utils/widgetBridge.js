@@ -15,10 +15,21 @@ import { isInQuietHours, isTimeTheySet } from './reminderScheduler';
 import { getReminderCopy } from './reminderCopy';
 import { isStepDone, markStepDone } from '@/components/onboarding/onboardingGate';
 import { isIPhoneApp, onThisPhone, IPHONE_SPACES_ALARMS } from '@/lib/phonePlatform';
+import { sortTasks } from '@/hooks/useTaskSort';
 
-// The widget only has room for a handful of rows, and a wall of text is the
-// opposite of useful on a home screen.
-const MAX_WIDGET_TASKS = 5;
+// The widget draws 5 rows and says "+N more" under them, with the day's count
+// in its header (TodayWidgetProvider). It used to be handed only the first 5
+// of today's tasks, in whatever order they arrived (most recently edited
+// first), so the header said 5 on a 9-task day, "+4 more" never showed, and
+// an overdue high-priority task could be one of the missing ones (Anna, Nov 2
+// 2026: "Why are some of my tasks missing from the widget?"). Now the whole
+// day goes over, in the order they sort their list (Home's Today list uses
+// the same), so the widget's first 5 are Home's first 5.
+const MAX_WIDGET_TASKS = 40;
+const SORT_KEY = 'task_sort_preference';
+function theirSort() {
+  try { return localStorage.getItem(SORT_KEY) || 'created_date'; } catch (e) { return 'created_date'; }
+}
 
 // Skip redundant bridge calls — this fires on every task edit, and re-pushing an
 // identical list makes the widget redraw for nothing.
@@ -34,13 +45,14 @@ function displayTimeFor(task) {
 }
 
 export function todaysWidgetTasks(tasks) {
-  return (tasks || [])
+  const today = (tasks || [])
     .filter((t) =>
       t.status === 'active' &&
       !t.parent_task_id &&
       !t.birthday_person &&
       isTodayTask(t)
-    )
+    );
+  return sortTasks(today, theirSort())
     .slice(0, MAX_WIDGET_TASKS)
     .map((t) => ({
       id: t.id,
