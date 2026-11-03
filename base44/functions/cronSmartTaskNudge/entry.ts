@@ -1917,8 +1917,11 @@ let lastPrompt = '';
 // "space after writing it down". So this is a hold in code now, not a prompt
 // hint: for the first 2 hours after a task is added, it isn't the planner's
 // to mention (see holdEndOf in generateDailySchedule for what isn't held).
+// A task they marked high priority or urgent waits 1 hour instead (Anna, Nov
+// 2 2026: "If a task is urgent or high priority, it can wait an hour").
 // The earliest hold ending in the last plan, so the next look comes then.
 const JUST_ADDED_HOLD_MS = 2 * 60 * 60 * 1000;
+const JUST_ADDED_HOLD_PRESSING_MS = 60 * 60 * 1000;
 let lastHoldEndsMs = NaN;
 // When the last look asked to look again if nothing changes first, in minutes
 // (ONE NUDGE AT A TIME, top of file); null when it didn't say.
@@ -2030,13 +2033,14 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     if (t.google_event_id) return NaN;
     if (String(t.reminder_wish || '').trim()) return NaN;
     const created = utcMs(t.created_date);
-    if (!Number.isFinite(created) || nowMs - created >= JUST_ADDED_HOLD_MS) return NaN;
+    const holdMs = t.urgency === 'high' || t.urgency === 'urgent' ? JUST_ADDED_HOLD_PRESSING_MS : JUST_ADDED_HOLD_MS;
+    if (!Number.isFinite(created) || nowMs - created >= holdMs) return NaN;
     const due = t.due_date || t.start_date;
     if (due) {
       const d = daysTo(due);
       if (Number.isFinite(d) && d <= 0) return NaN;
     }
-    let end = created + JUST_ADDED_HOLD_MS;
+    let end = created + holdMs;
     if (ctx.newAccount && !ctx.earlyDays && !noQuietHours) {
       const bedMs = nowMs + minsLeftToday * 60 * 1000;
       end = Math.max(created + 30 * 60 * 1000, Math.min(end, bedMs - 45 * 60 * 1000));
@@ -2466,7 +2470,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     const laterDay = notYet.filter((t: any) => !holdEnds.has(t.id));
     const justAdded = notYet.filter((t: any) => holdEnds.has(t.id));
     if (laterDay.length) out.push(`OPEN TASKS NOT YOURS TODAY (tied to a later day, or on a Later break that runs past today):\n${laterDay.map((t: any) => `- "${t.title}"${t.due_date ? ` — ${formatDateShort(t.due_date, timeZone)}` : ''}`).join('\n')}`);
-    if (justAdded.length) out.push(`JUST ADDED, NOT YOURS YET (they wrote these down within the last two hours, so they already know about them; nothing from you about them before the time shown, and you'll get to look again then):\n${justAdded.map((t: any) => `- "${t.title}" — yours from ${clock(holdEnds.get(t.id) as number)}`).join('\n')}`);
+    if (justAdded.length) out.push(`JUST ADDED, NOT YOURS YET (they wrote these down within the last hour or two, so they already know about them; nothing from you about them before the time shown, and you'll get to look again then):\n${justAdded.map((t: any) => `- "${t.title}" — yours from ${clock(holdEnds.get(t.id) as number)}`).join('\n')}`);
     if (fixedLines.length) out.push(`OPEN TASKS THAT ALREADY HAVE THEIR OWN REMINDERS (the app sends those; never yours to nudge, plan around them):\n${fixedLines.join('\n')}`);
     if (eventList) out.push(`TODAY'S APPOINTMENTS (they have their own reminders):\n${eventList}`);
     if (upcomingList) out.push(`THE WEEK AHEAD:\n${upcomingList}`);
