@@ -110,8 +110,9 @@ function utcMs(v: any): number {
   return Date.parse(/[zZ]$|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`);
 }
 
-// Everyone is planned with the brief (base44/shared/reminderBrief.ts) instead
-// of the old rulebook prompt. Anna tried it on her phone account first (Oct 9
+// Everyone is planned with the brief (base44/shared/reminderBrief.ts, r42 since
+// Nov 3 2026: what someone says about their own busy hours is a schedule the
+// planner keeps out of) instead of the old rulebook prompt. Anna tried it on her phone account first (Oct 9
 // 2026) and switched everyone over the next day ("some of the reminders on the
 // old system are just worded so badly"). The old prompt and the useBrief
 // checks are still here only as a fallback switch: put an email in
