@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
+import { localMinutesOfDay, userTimeZone } from '../../shared/quietHours.ts';
 
 // THE ONLY WAY an app-wide announcement may be sent.
 //
@@ -109,16 +110,45 @@ Deno.serve(async (req) => {
     });
     const out = await res.json();
 
-    // Record it BEFORE reporting success so a retry can't slip a second copy out.
-    await base44.asServiceRole.entities.NotificationLedger.create({
-      user_email: user.email,
+    // Record it BEFORE reporting success so a retry can't slip a second copy
+    // out. One row PER RECIPIENT (since Nov 3 2026), at the moment it reaches
+    // them: Smart Reminders budgets each person's day from their ledger rows
+    // ("everything the app has sent them today"), and a broadcast recorded
+    // only under the admin's email was invisible to it (Anna: "make sure we
+    // don't have so many different kinds of notifications that smart
+    // reminders can't see and someone ends up getting too much"). With
+    // deliveryTimeOfDay the row says that time of day in the person's own
+    // zone; otherwise now.
+    const nowMs = Date.now();
+    const m = deliveryTimeOfDay ? /^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)?$/i.exec(String(deliveryTimeOfDay).trim()) : null;
+    const targetMin = m
+      ? ((Number(m[1]) % 12) + (/pm/i.test(m[3] || '') ? 12 : 0)) * 60 + Number(m[2] || 0)
+      : null;
+    const sendAtFor = (u: any) => {
+      if (targetMin == null) return new Date(nowMs).toISOString();
+      const tz = userTimeZone(u);
+      const delta = (targetMin - localMinutesOfDay(new Date(nowMs), tz) + 1440) % 1440;
+      return new Date(nowMs + delta * 60 * 1000).toISOString();
+    };
+    const admin = user.email;
+    const rows = recipients.map((u: any) => ({
+      user_email: u.email,
       task_id: key,
       kind: 'general',
       source: 'broadcastAnnouncement',
-      send_at: new Date().toISOString(),
+      send_at: sendAtFor(u),
       notification_id: out?.id || '',
       title,
-    });
+    }));
+    // The guard row under the admin's own email stays (it is what the
+    // duplicate check above has always matched), unless the admin is a
+    // recipient already.
+    if (!recipients.some((u: any) => u.email === admin)) {
+      rows.push({ user_email: admin, task_id: key, kind: 'general', source: 'broadcastAnnouncement', send_at: new Date(nowMs).toISOString(), notification_id: out?.id || '', title });
+    }
+    for (let i = 0; i < rows.length; i += 25) {
+      await Promise.all(rows.slice(i, i + 25).map((r) => base44.asServiceRole.entities.NotificationLedger.create(r).catch((e: any) => console.error('[broadcastAnnouncement] ledger row failed:', e?.message || e))));
+    }
 
     return Response.json({
       success: true,
