@@ -537,7 +537,16 @@ export function NotifySoundCard({ user, theme }) {
   );
 }
 
-export function AlarmCard({ user, theme }) {
+// compact (Settings front page, Nov 3 2026 — Anna: "we can add the alarms vs
+// regular notifications. Then put a smaller link that says more notification
+// settings"): just the switch, in its own small card, plus a "More
+// notification settings" link that opens Settings → Reminders scrolled to
+// the full card (`onMore`). Same switch, same save, same "switch your
+// existing tasks too?" question; the sound, vibrate choices and permission
+// rows stay on the full card. Connie (Nov 1 2026) spent 3½ minutes in
+// Settings right after her first full-screen alarm and left; the switch was
+// two taps and a scroll away.
+export function AlarmCard({ user, theme, compact = false, onMore }) {
   const { AlarmBridge, NotifyBridge } = getPlugins();
   const dark = theme === 'dark';
   const [on, setOn] = useState(user?.alarm_mode === 'alarm');
@@ -613,6 +622,7 @@ export function AlarmCard({ user, theme }) {
 
   if (!AlarmBridge?.sync) return null;
 
+  // Compact only: the extra permission rows below are the full card's.
   const handleToggle = async (next) => {
     setBusy(true);
     setError('');
@@ -679,6 +689,65 @@ export function AlarmCard({ user, theme }) {
   const textMain = dark ? 'text-gray-200' : 'text-gray-900';
   const textSub = dark ? 'text-gray-400' : 'text-gray-600';
 
+  const convertDialog = (
+    <Dialog open={!!convertTo} onOpenChange={(o) => { if (!o && !converting) setConvertTo(null); }}>
+      <DialogContent className={`max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
+        <DialogHeader>
+          <DialogTitle className={dark ? 'text-white' : ''}>
+            {convertTo === 'alarm' ? 'Switch your existing tasks to alarms too?' : 'Switch your existing tasks to regular notifications too?'}
+          </DialogTitle>
+          <DialogDescription className={dark ? 'text-gray-400' : ''}>
+            New tasks use your new choice either way. Reminder times don't move.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex gap-2 pt-1">
+          <Button onClick={() => convertExistingTasks(convertTo)} disabled={converting} className="flex-1">
+            {converting ? 'Updating…' : 'Yes, all my tasks'}
+          </Button>
+          <Button variant="outline" onClick={() => setConvertTo(null)} disabled={converting} className="flex-1">
+            Just new ones
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+
+  if (compact) {
+    return (
+      <>
+        <p className={`text-xs font-bold uppercase tracking-wider mt-8 mb-3 ${dark ? 'text-gray-400' : 'text-gray-500'}`}>Reminders</p>
+        <Card className={`mb-6 border-none shadow-lg ${dark ? 'bg-gray-800' : 'bg-white'}`}>
+          {convertDialog}
+          <CardHeader>
+            <CardTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
+              <AlarmClock className="w-5 h-5" />
+              Alarms or regular notifications
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div className="pr-4">
+                <p className={`text-sm font-medium ${textMain}`}>New tasks ring as an alarm</p>
+                <p className={`text-xs ${textSub}`}>
+                  On: full screen and loud, even on silent. Off: a regular notification. Same reminder times either way.
+                </p>
+              </div>
+              <Switch checked={on} onCheckedChange={handleToggle} disabled={busy} />
+            </div>
+            {error && <p className="text-xs text-red-500 mt-3">{error}</p>}
+            <button
+              type="button"
+              onClick={onMore}
+              className={`mt-3 text-xs underline ${dark ? 'text-gray-300' : 'text-gray-600'}`}
+            >
+              More notification settings ›
+            </button>
+          </CardContent>
+        </Card>
+      </>
+    );
+  }
+
   const Row = ({ ok, label, detail, action, onAction }) => (
     <div className="flex items-center justify-between gap-3 py-2">
       <div className="min-w-0">
@@ -695,26 +764,7 @@ export function AlarmCard({ user, theme }) {
 
   return (
     <Card className={`mb-6 border-none shadow-lg ${dark ? 'bg-gray-800' : 'bg-white'}`}>
-      <Dialog open={!!convertTo} onOpenChange={(o) => { if (!o && !converting) setConvertTo(null); }}>
-        <DialogContent className={`max-w-md w-[calc(100vw-2rem)] ${dark ? 'bg-gray-900 border-gray-700 text-gray-100' : 'bg-white'}`}>
-          <DialogHeader>
-            <DialogTitle className={dark ? 'text-white' : ''}>
-              {convertTo === 'alarm' ? 'Switch your existing tasks to alarms too?' : 'Switch your existing tasks to regular notifications too?'}
-            </DialogTitle>
-            <DialogDescription className={dark ? 'text-gray-400' : ''}>
-              New tasks use your new choice either way. Reminder times don't move.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex gap-2 pt-1">
-            <Button onClick={() => convertExistingTasks(convertTo)} disabled={converting} className="flex-1">
-              {converting ? 'Updating…' : 'Yes, all my tasks'}
-            </Button>
-            <Button variant="outline" onClick={() => setConvertTo(null)} disabled={converting} className="flex-1">
-              Just new ones
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {convertDialog}
       <CardHeader>
         <CardTitle className={`flex items-center gap-2 ${dark ? 'text-white' : ''}`}>
           <AlarmClock className="w-5 h-5" />
