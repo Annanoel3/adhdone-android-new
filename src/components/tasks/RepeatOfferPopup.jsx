@@ -14,8 +14,11 @@ import { winLook } from "@/components/wins/winsTheme";
 // normally do every day with repeat_offer { time, made_at } (time = when they
 // actually did it, so the app never guesses morning or night). This asks once:
 // a few seconds after an in-app check-off (after Undo has had its moment, and
-// never while an ad is waiting for a pause), or on the next open when it was
-// done from a reminder. Yes adds a separate daily to-do through captureText,
+// never while an ad is waiting for a pause), and the same few seconds after
+// Done on a reminder or the phone's alarm, which lands them on Home (Anna,
+// Nov 1 2026: "What about people that barely open the app and check tasks
+// done by pressing done on an alarm"; it used to wait for their next open).
+// If they've left by then, it's there on the next open. Yes adds a separate daily to-do through captureText,
 // the same parser as everything else; No or closing it means never again for
 // that kind of task. Adding a task still never asks anything.
 const DAY = 24 * 60 * 60 * 1000;
@@ -111,17 +114,22 @@ async function look(afterDone) {
   }
 }
 
-function afterDone() {
+function scheduleLooks(inApp) {
   timers.forEach(clearTimeout);
   timers = [];
   let settled = false;
   for (const wait of AFTER_DONE_MS) {
     timers.push(setTimeout(async () => {
       if (settled) return;
-      if (await look(true)) settled = true;
+      if (await look(inApp)) settled = true;
     }, wait));
   }
 }
+
+const afterDone = () => scheduleLooks(true);
+// Done on a reminder or alarm (TaskNotification): no ad comes at that pause,
+// so there's no ad to wait for.
+const afterReminderDone = () => scheduleLooks(false);
 
 function onVisible() {
   if (document.visibilityState === "visible" && Date.now() - lastLookAt > 60 * 1000) look(false);
@@ -131,6 +139,7 @@ function listen() {
   if (listening || typeof window === "undefined") return;
   listening = true;
   window.addEventListener("task-done", afterDone);
+  window.addEventListener("reminder-task-done", afterReminderDone);
   document.addEventListener("visibilitychange", onVisible);
 }
 
