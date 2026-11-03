@@ -24,8 +24,10 @@ import DayMoodRow, { cardMoodLook } from "../wins/DayMoodRow";
 // before quiet hours for people who sleep days — see eveningWindow). It stays
 // up until BOTH are answered or they tap "Not today": a win without a mood
 // still shows the faces, a mood without a win still shows the win box, and
-// while they're picking chips or writing the note it waits for Done. A card,
-// not a popup. Both are stamped with the window's dayKey, so an answer at
+// while they're picking chips or writing the note it waits for Done, or for
+// a tap elsewhere or a few idle seconds (DayMoodRow autoFinish; Anna, Nov 2
+// 2026: "After someone fills this out for the day, it should go away"). A
+// card, not a popup. Both are stamped with the window's dayKey, so an answer at
 // 12:30 AM in a 9 PM-1 AM window belongs to the evening before.
 export default function EveningWinCard({ user, theme, specialMode }) {
   const [now, setNow] = useState(() => new Date());
@@ -172,6 +174,7 @@ export default function EveningWinCard({ user, theme, specialMode }) {
           row={need.mood}
           onSaved={(row) => setNeed((prev) => (prev.day === dayKey ? { ...prev, mood: row } : prev))}
           onEditingChange={setMoodEditing}
+          autoFinish
           look={cardMoodLook(theme)}
           icon={(
             <div className={`p-2 rounded-xl flex-shrink-0 ${badge}`}>
