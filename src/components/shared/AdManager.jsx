@@ -122,8 +122,26 @@ function shouldShowAd(count) {
 // interstitial 15 seconds in — for one new user that was 8 hours after she
 // signed up, right after a crash, and she never came back.
 const GRACE_OPENS = 3;
+// AND the first 3 days, whichever ends LAST (Anna, Nov 1 2026: "I still don't
+// want them to be hit with an ad on day 2. Here's what it really should have
+// been... First 3 days or 3 opens, whatever comes last."). Opens alone let a
+// 4th open land on day one or two, since any return 30+ minutes after the
+// last counts as an open. 3 days = 72 hours from signing up, which always
+// reaches past their third calendar day.
+const GRACE_DAYS_MS = 3 * 24 * 60 * 60 * 1000;
+let joinedAt = NaN; // when this account signed up (set from the user, below)
+const toMs = (v) => {
+  const s = String(v || '');
+  if (!s) return NaN;
+  return Date.parse(/[zZ]$|[+-]\d\d:?\d\d$/.test(s) ? s : `${s}Z`);
+};
+// true = still in their first 3 days; null = not known yet (account loading).
+function inFirstDays() {
+  if (!Number.isFinite(joinedAt)) return null;
+  return Date.now() - joinedAt < GRACE_DAYS_MS;
+}
 function inGrace(count) {
-  return count <= GRACE_OPENS;
+  return count <= GRACE_OPENS || inFirstDays() === true;
 }
 
 // A task they just added is still being set up (sorted, split, parsed, saved).
@@ -148,7 +166,7 @@ function cancelPending() {
 
 // Load the owed ad now, so it can show the instant a pause comes.
 function warmAd() {
-  if (owedThisOpen) preloadInterstitialAd().catch(() => {});
+  if (owedThisOpen && inFirstDays() !== true) preloadInterstitialAd().catch(() => {});
 }
 
 // A task was made: the pause is the moment its capture is finished. Run on
@@ -211,9 +229,12 @@ async function attempt(source) {
   if (inGrace(launchCount)) {
     owedThisOpen = false;
     writeOwed(false);
-    note(`${source}: one of the first ${GRACE_OPENS} opens, no ads yet`);
+    note(`${source}: ${launchCount <= GRACE_OPENS ? `one of the first ${GRACE_OPENS} opens` : 'their first 3 days'}, no ads yet`);
     return;
   }
+  // Their sign-up time isn't loaded yet: wait for the next pause rather than
+  // risk an ad in someone's first 3 days.
+  if (inFirstDays() === null) { note(`${source}: account not loaded yet`); return; }
   if (Date.now() - openStartedAt < MIN_OPEN_AGE_MS) { note(`${source}: too soon after opening`); return; }
   if (NO_AD_PAGE.test(window.location.pathname)) { note(`${source}: no ads on ${window.location.pathname}`); return; }
   if (anyPopupOpen()) { note(`${source}: a popup is open`); return; }
@@ -236,8 +257,15 @@ function atPause(source, delayMs) {
   pendingTimer = setTimeout(() => attempt(source), delayMs);
 }
 
-export default function AdManager() {
+export default function AdManager({ user }) {
   const location = useLocation();
+
+  // Before the launch is counted below, so the first-3-days rule can apply to it.
+  const joinedRaw = user?.signed_up_at || user?.created_date || '';
+  useEffect(() => {
+    const ms = toMs(joinedRaw);
+    if (Number.isFinite(ms)) joinedAt = ms;
+  }, [joinedRaw]);
 
   useEffect(() => {
     if (!isCapacitor()) return;
