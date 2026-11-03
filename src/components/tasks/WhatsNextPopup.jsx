@@ -13,11 +13,16 @@ import { repeatOfferUp } from "./RepeatOfferPopup";
 // afterward: nothing was coming tomorrow, so nothing brought them back. In a
 // person's first week, when their last open to-do gets checked off, this asks
 // for the next thing with a one-line add box that goes through the same
-// capture pipeline as everything else. Birthdays, events and Back Burner
-// tasks don't count as something coming. After an in-app check-off it waits
-// for Undo and for the "Every day?" offer (a Yes there means the list isn't
-// empty after all) and never shows while an ad is waiting; a list emptied
-// from a reminder gets it on the next open. At most once a day.
+// capture pipeline as everything else. Birthdays, steps and Back Burner
+// tasks don't count as something coming; an event counts only when it's in
+// the next 2 days (Anna, Nov 1 2026: "Maybe events should count?" — one
+// tomorrow rings tomorrow, but a calendar sync's events weeks or months out
+// don't bring anyone back: julianna got 50 at once and left). After an
+// in-app check-off it waits for Undo and for the "Every day?" offer (a Yes
+// there means the list isn't empty after all) and never shows while an ad is
+// waiting. Done on a reminder or alarm lands them on Home, and it looks then
+// too (it used to wait for the next open, which someone who barely opens the
+// app might never make). At most once a day.
 const DAY = 24 * 60 * 60 * 1000;
 const FIRST_WEEK = 7 * DAY;
 const SHOWN_KEY = "whats_next_shown_at";
@@ -42,13 +47,18 @@ function adWaiting() {
   try { return localStorage.getItem(AD_OWED_KEY) === "1"; } catch { return false; }
 }
 
-// Something still coming: an open to-do that isn't a step, a birthday, an
-// event or parked on the Back Burner.
+// Something still coming: an open to-do that isn't a step, a birthday or
+// parked on the Back Burner, or an event in the next 2 days.
+const EVENT_SOON_MS = 2 * DAY;
+const eventSoon = (t) => {
+  const at = ms(t.event_time || t.next_reminder || t.start_date || t.due_date);
+  return Number.isFinite(at) && at > Date.now() - 60 * 60 * 1000 && at < Date.now() + EVENT_SOON_MS;
+};
 const somethingComing = (t) =>
   !t.parent_task_id &&
   !t.birthday_person &&
-  t.classification !== "event" &&
   t.classification !== "birthday" &&
+  (t.classification !== "event" || eventSoon(t)) &&
   !t.silenced;
 
 // The Layout remounts on every page change, so the watching lives out here.
@@ -104,6 +114,12 @@ function afterDone() {
   timer = setTimeout(() => lookWhenClear(true), AFTER_DONE_MS);
 }
 
+// Done on a reminder or alarm (TaskNotification): no ad comes at that pause.
+function afterReminderDone() {
+  clearTimeout(timer);
+  timer = setTimeout(() => lookWhenClear(false), AFTER_DONE_MS);
+}
+
 function onVisible() {
   if (document.visibilityState === "visible" && Date.now() - lastLookAt > 60 * 1000) {
     clearTimeout(timer);
@@ -115,6 +131,7 @@ function listen() {
   if (listening || typeof window === "undefined") return;
   listening = true;
   window.addEventListener("task-done", afterDone);
+  window.addEventListener("reminder-task-done", afterReminderDone);
   document.addEventListener("visibilitychange", onVisible);
 }
 
