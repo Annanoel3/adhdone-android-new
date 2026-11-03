@@ -467,6 +467,12 @@ export async function saveTaskTitle(taskIn, newTitle) {
   if (!taskIn?.id || !title) return;
   await base44.entities.Task.update(taskIn.id, { title });
   if (taskIn.reminder_interval && taskIn.reminder_interval !== 'once') return;
+  // A birthday's reminders are the birthday scheduler's (cronRefillReminders
+  // / birthdayScheduler) and name the person from birthday_person, not the
+  // title. Re-booking them here put Done and Snooze on a birthday push and
+  // doubled the cake: "🎂 🎂 Curtis' Birthday" (Maelisa renamed an imported
+  // birthday, Nov 2 2026).
+  if (taskIn.classification === 'birthday' || taskIn.birthday_person || taskIn.is_own_birthday) return;
   // As saved: a card's copy can be older than what was booked since.
   const task = (await base44.entities.Task.get(taskIn.id).catch(() => null)) || taskIn;
   if (task.reminder_interval && task.reminder_interval !== 'once') return;
@@ -497,6 +503,9 @@ export async function saveTaskTitle(taskIn, newTitle) {
       // Words that never named the task: keep them, and still say what the
       // reminder is for.
       if (isBody) return src ? `${title}: ${src}` : title;
+      // A title that already opens with an emoji keeps it; otherwise the old
+      // push's lead emoji (or a pin) goes in front.
+      if (/^[^\p{L}\p{N}\s]/u.test(title)) return title;
       const lead = ((src.match(/^[^\p{L}\p{N}]+/u) || [''])[0]).trim();
       return `${lead || '📌'} ${title}`;
     };
