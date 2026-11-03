@@ -28,6 +28,8 @@ Phase 1 = in the first TestFlight build. Later phases follow in order.
 | Push notifications: NotifyBridge, MainApplication (OneSignal) | NotifyBridge.swift (OneSignal, same app id), started in AppDelegate so a tap that cold-starts the app isn't lost | 1 |
 | Record Notes: RecorderBridge, RecorderService, RecorderStore | RecorderBridge.swift (AVAudioRecorder, `audio` background mode: keeps going with the screen off, 10-minute parts) | 1 |
 | Phone calendars: CalendarBridge | CalendarBridge.swift (EventKit, read) | 1 |
+| Add to phone calendar on a task or event: CalendarBridge.addEvent (Android build 46) | CalendarBridge.addEvent (EventKitUI's New Event sheet, filled in; the person picks the calendar and taps Add; no permission needed on iOS 17+). Added Nov 2 2026, in the next TestFlight build | 1 |
+| Notification sound and read-aloud for regular pushes: NotifySound, PushFilter.withOwnSound (Android build 46) | Not on iPhone. iOS plays a push's sound itself from a file inside the app or in Library/Sounds (.caf/.wav/.aiff, 30 s or less), and the server would have to name that file on every push for that person; an app can't speak a push out loud while it's closed. The web app hides the Notification sound card where AlarmBridge.setNotifySound doesn't exist, so iPhone never shows it | — |
 | Recording-minute packs: BillingBridge (RevenueCat) | BillingBridge.swift (RevenueCat iOS, consumables notes_1h / notes_5h) | 1 (code) — products in App Store Connect + RevenueCat |
 | Contact picker: ContactPickerBridge | ContactPickerBridge.swift (Apple's picker, no Contacts permission) | 1 |
 | Task photos: @capacitor/camera | same plugin, iOS side | 1 |
