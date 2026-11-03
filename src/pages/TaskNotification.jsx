@@ -203,6 +203,14 @@ export default function TaskNotification() {
       return;
     }
 
+    // Done from a reminder or the phone's alarm lands on Home a moment from
+    // now: "Every day?" and "What's next?" look then, while the app is still
+    // in front of them (Anna, Nov 1 2026: "What about people that barely open
+    // the app and check tasks done by pressing done on an alarm"). Before, they
+    // waited for the next open, which for those people might never come. Not
+    // 'task-done': that event is also the ad's pause, and this Done never was.
+    try { window.dispatchEvent(new CustomEvent('reminder-task-done', { detail: { task } })); } catch (e) { /* the next open still looks */ }
+
     // The task is done — that is the one call worth waiting for. What follows
     // is bookkeeping: the next copy of a repeating task, cancelling the pushes
     // still booked, today's summary. It used to run here, one request after
