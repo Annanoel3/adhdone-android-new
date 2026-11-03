@@ -2334,6 +2334,27 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
     });
   }
 
+  // 13. Someone recorded notes for the first time (User.notes_seconds_used,
+  //     counted by transcribeAudioNew). Anna, Nov 3 2026: "flag whenever
+  //     someone starts using the recording thing so we can set up minute
+  //     packs. theres no need right now" — the packs exist in neither store
+  //     yet. Told once per person (mark recorded:<email>), real users only.
+  for (const u of allUsers) {
+    if (!u?.email || !realUser(u.email)) continue;
+    const used = Number(u?.notes_seconds_used) || 0;
+    if (used <= 0) continue;
+    const recKey = `recorded:${String(u.email).toLowerCase()}`;
+    if (marks[recKey]) continue;
+    const mins = Math.max(1, Math.round(used / 60));
+    const others = allUsers.filter((o: any) => o?.email && realUser(o.email) && o.email !== u.email && marks[`recorded:${String(o.email).toLowerCase()}`]).length;
+    problems.push({
+      title: `🎙️ ADHDone: ${nameOf(u)} started recording notes`,
+      body: `${mins} minute${mins === 1 ? '' : 's'} of Record Notes so far this month. ${others ? `${others} other${others === 1 ? '' : 's'} before them. ` : 'First person to use it. '}Minute packs aren't set up in either store yet; this is the signal to set them up. ${u.email}`,
+      sinceMs: nowMs - 7 * H_DAY,
+      mark: { key: recKey, value: new Date(nowMs).toISOString() },
+    });
+  }
+
   // A look at what would go out, sending nothing ({ previewHealth: true }).
   if (ctx.dryRun) {
     const out: any[] = [];
