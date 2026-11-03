@@ -67,6 +67,16 @@ Phase 1 = in the first TestFlight build. Later phases follow in order.
 ## Before the first App Review submission (Nov 3 2026, Anna: "I want the next build to
 ## actually be put into review to be on the app store")
 
+Submitted Nov 3 2026, 12:22 PM CST: iOS App 1.3.20, Codemagic build #4 (build number 4,
+commit 30dd6de), status "Waiting for Review". Codemagic's post-processing step shows
+"failed" on every build because it also tries to submit to TestFlight *external* beta
+review, which needs the TestFlight test information (feedback email, reviewer name/phone)
+that was never filled in; the IPA still uploads and App Store Connect still processes it,
+so that failure can be ignored (or the test info filled in once at
+appstoreconnect.apple.com/apps/6828975743/testflight/test-info). To replace the build on a
+version: remove the old one (the Delete control on its row) → Add Build → pick → Done →
+Save → Add for Review → Submit for Review.
+
 - App Store privacy answers: filled in by Anna Nov 3 2026 (Identifiers used for
   tracking = Yes; everything collected is linked to the user).
 - Tracking prompt in the build: done (above).
