@@ -119,6 +119,17 @@ const SPOKEN_SOUND_URL = 'speak:';
 const SPOKEN_SOUND_NAME = 'Read it to me';
 const SPOKEN_SAMPLE = 'Time for this. Move the laundry to the dryer.';
 
+// The sound the in-app alarm preview plays (QuickCapturePrompt's
+// AlarmScreenPreview): the one they picked, or the first preset while they
+// haven't picked one (a real alarm with no pick rings the phone's own alarm
+// tone, which a web page can't play). The spoken alarm can't be previewed
+// that way either, so it falls back to the preset too.
+export function alarmPreviewSoundUrl(user) {
+  const url = String(user?.alarm_sound_url || '').trim();
+  if (url && url !== SPOKEN_SOUND_URL) return url;
+  return ALARM_SOUND_PRESETS[0].url;
+}
+
 // The alarm-sound chooser on its own, so the Settings card and the first-time
 // set-up popup (QuickCapturePrompt's AlarmPermissionsDialog) show the very
 // same thing and save to the same place.
