@@ -111,7 +111,7 @@ function extractBirthdayPerson(title) {
     // off any name ending in one: "Curtis' Birthday" came in as "Curti"
     // (Maelisa's phone calendar, Nov 2 2026), and "James birthday" would have
     // been "Jame". A bare apostrophe after an s ("Curtis'") goes with the
-    // punctuation on the next line.
+    // punctuation below.
     .replace(/['\u2019]s\b/gi, '')
     .replace(/['\u2019\-:,]/g, ' ')
     .trim();
