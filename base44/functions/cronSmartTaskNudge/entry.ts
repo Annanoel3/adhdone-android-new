@@ -1902,6 +1902,18 @@ interface PlanContext {
 let lastPassed: any[] = [];
 // The prompt the last plan was made from (returned by a preview request).
 let lastPrompt = '';
+// JUST ADDED (Anna, Nov 2 2026: "can we make it so that smart reminders do
+// not remind someone of something they just added? For example, I made a task
+// to clean out all the fridges what seems like recently and just got a
+// reminder"). She typed "Clean out all fridges" at 6:39 PM and its first
+// nudge rang at 7:29 PM. Since Oct 22 the planner was told a task under 30
+// minutes old was still in front of them; at 49 minutes it called the gap
+// "space after writing it down". So this is a hold in code now, not a prompt
+// hint: for the first 2 hours after a task is added, it isn't the planner's
+// to mention (see holdEndOf in generateDailySchedule for what isn't held).
+// The earliest hold ending in the last plan, so the next look comes then.
+const JUST_ADDED_HOLD_MS = 2 * 60 * 60 * 1000;
+let lastHoldEndsMs = NaN;
 // When the last look asked to look again if nothing changes first, in minutes
 // (ONE NUDGE AT A TIME, top of file); null when it didn't say.
 let lastLookAgain: number | null = null;
@@ -1953,6 +1965,7 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
   lastPassed = [];
   lastPrompt = '';
   lastLookAgain = null;
+  lastHoldEndsMs = NaN;
   const {
     localMin, timeZone, quietStartMin, quietEndMin, subtasksByParent, events,
     homeOrigin, aboutMe, avoidTolls, nudgeHistory, queued, recentSent, work, doneToday, showReactions,
@@ -2000,11 +2013,45 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     : isInQuietHours(new Date(nowMs), quietStartMin, quietEndMin, timeZone) ? 0 : (quietStartMin - localMin + 24 * 60) % (24 * 60);
   const hoursLeftStr = minsLeftToday < 60 ? `${minsLeftToday} minutes` : `${Math.round(minsLeftToday / 60 * 10) / 10} hours`;
 
+  // JUST ADDED (top of file): when a task's 2-hour hold ends, or NaN when it
+  // isn't held. Not held: a calendar import (nobody just wrote it down), a
+  // task due today or already late (waiting there can cost something real),
+  // and one with their own words about reminding it (REMINDER WISH: "remind
+  // me in 20 minutes" is theirs to set). On a new account's first day the
+  // hold ends 45 minutes before bedtime at the latest (never under 30 minutes
+  // after adding), so NEW HERE's day-one mention still fits.
+  const holdEndOf = (t: any): number => {
+    if (t.google_event_id) return NaN;
+    if (String(t.reminder_wish || '').trim()) return NaN;
+    const created = utcMs(t.created_date);
+    if (!Number.isFinite(created) || nowMs - created >= JUST_ADDED_HOLD_MS) return NaN;
+    const due = t.due_date || t.start_date;
+    if (due) {
+      const d = daysTo(due);
+      if (Number.isFinite(d) && d <= 0) return NaN;
+    }
+    let end = created + JUST_ADDED_HOLD_MS;
+    if (ctx.newAccount && !ctx.earlyDays && !noQuietHours) {
+      const bedMs = nowMs + minsLeftToday * 60 * 1000;
+      end = Math.max(created + 30 * 60 * 1000, Math.min(end, bedMs - 45 * 60 * 1000));
+    }
+    return end > nowMs ? end : NaN;
+  };
+  const holdEnds = new Map<string, number>();
+  for (const t of tasks) {
+    const end = holdEndOf(t);
+    if (Number.isFinite(end)) holdEnds.set(t.id, end);
+  }
+  if (holdEnds.size) lastHoldEndsMs = Math.min(...holdEnds.values());
+
   // Hard filter, not a prompt instruction: a day-tied task ("do X on Nov 1")
   // cannot be acted on early, so it must never reach the LLM until the night
   // before. The prompt said as much and the model still nudged a form that
   // wasn't due for two months — so this is enforced in code now.
   const nudgeable = tasks.filter((t) => {
+    // Just added: held (JUST ADDED, above). It's listed for the planner as
+    // context, with when it becomes theirs.
+    if (holdEnds.has(t.id)) return false;
     // They tapped Later and the break runs past today: nothing to plan for it.
     // A break that ends later today stays in, with the break stated on its
     // line, so the planner can put a check-in after it (or nothing).
@@ -2410,7 +2457,10 @@ async function generateDailySchedule(tasks: any[], ctx: PlanContext): Promise<an
     if (aboutMe.trim()) out.push(`What they told you about themselves, in their own words: ${aboutMe.trim()}`);
     if (work.lines.length) out.push(`Work schedule (${work.remote ? 'works from home' : 'goes in to work'}${work.quietAtWork ? '; they turned on "don\'t notify me at work", so nothing goes out during those hours' : ''}):\n${work.lines.map((l) => `- ${l}`).join('\n')}`);
     out.push(`OPEN TASKS — yours to plan (numbered; use these numbers in your answer):\n${tasks.map(line).join('\n')}`);
-    if (notYet.length) out.push(`OPEN TASKS NOT YOURS TODAY (tied to a later day, or on a Later break that runs past today):\n${notYet.map((t: any) => `- "${t.title}"${t.due_date ? ` — ${formatDateShort(t.due_date, timeZone)}` : ''}`).join('\n')}`);
+    const laterDay = notYet.filter((t: any) => !holdEnds.has(t.id));
+    const justAdded = notYet.filter((t: any) => holdEnds.has(t.id));
+    if (laterDay.length) out.push(`OPEN TASKS NOT YOURS TODAY (tied to a later day, or on a Later break that runs past today):\n${laterDay.map((t: any) => `- "${t.title}"${t.due_date ? ` — ${formatDateShort(t.due_date, timeZone)}` : ''}`).join('\n')}`);
+    if (justAdded.length) out.push(`JUST ADDED, NOT YOURS YET (they wrote these down within the last two hours, so they already know about them; nothing from you about them before the time shown, and you'll get to look again then):\n${justAdded.map((t: any) => `- "${t.title}" — yours from ${clock(holdEnds.get(t.id) as number)}`).join('\n')}`);
     if (fixedLines.length) out.push(`OPEN TASKS THAT ALREADY HAVE THEIR OWN REMINDERS (the app sends those; never yours to nudge, plan around them):\n${fixedLines.join('\n')}`);
     if (eventList) out.push(`TODAY'S APPOINTMENTS (they have their own reminders):\n${eventList}`);
     if (upcomingList) out.push(`THE WEEK AHEAD:\n${upcomingList}`);
