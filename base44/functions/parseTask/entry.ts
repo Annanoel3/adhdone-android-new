@@ -152,6 +152,12 @@ const PARSER_CHECKS: { text: string; saidAt: number; expect: Record<string, any>
   // A party that runs past midnight is one night, not a two-day range: this one
   // showed on its card as "Nov 1 – Nov 2" (Anna, Oct 17 2026).
   { text: "4th Anniversary Neon Velocity Halloween Party Edition on Nov 1st, Sunday of Halloween weekend, from 7PM-2AM at Reset Arcade Bar, 10402 Menchaca Rd #2, Austin TX 78748.", saidAt: said("2026-10-14T10:25:00-05:00"), expect: { target_date: "2026-11-01", target_time: "19:00", end_date: null } },
+  // A business named in passing is not a business the task is done with
+  // (Nov 3 2026: a key to a restaurant handed to a friend got that
+  // restaurant's hours looked up and a "nudged a closed business" alert;
+  // Anna: "doesn't mean it's happening at Pizza Hut"). One they call still is.
+  { text: "Give the Target vest back to Sam", saidAt: said("2026-11-03T13:00:00-06:00"), expect: { business_name: null } },
+  { text: "Call Walgreens about the refill", saidAt: said("2026-11-03T13:00:00-06:00"), expect: { business_name: (v: any) => typeof v === "string" && /walgreens/i.test(v) } },
 ];
 
 async function runParserSelfTest(base44: any) {
