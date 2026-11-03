@@ -71,11 +71,21 @@ Phase 1 = in the first TestFlight build. Later phases follow in order.
   tracking = Yes; everything collected is linked to the user).
 - Tracking prompt in the build: done (above).
 - Ads on iPhone: needs the AdMob iOS app + interstitial unit (ids pasted as above),
-  or the review build shows no ads at all.
-- Store name: "ADHDone" is taken on the App Store; a variant has to be picked in App
-  Store Connect.
-- Minute packs: the two consumables (notes_1h, notes_5h) in App Store Connect +
-  RevenueCat, or the Buy minutes buttons fail for a reviewer who taps them.
+  or the review build shows no ads at all. The Google account signed in on Anna's
+  Chrome has no AdMob account (AdMob showed its sign-up page, Nov 3 2026), so the
+  AdMob account that holds ca-app-pub-7979856440890193 is under another login: Anna
+  creates the iOS app + unit there, or signs that account in and says so.
+- Store name: already "ADHDone: Done, Despite ADHD" in App Store Connect (app 6828975743).
+- Price: Free ($0.00, 175 countries), set Nov 3 2026. Content Rights: Anna picks the
+  answer herself (ads are third-party content: "Yes … and I have the necessary
+  rights"). App Review sign-in: an email+password account made on the Register page,
+  typed into the Sign-In Information fields by Anna.
+- Minute packs: no products exist in either store (Nov 3 2026: Google Play has no
+  one-time products, App Store Connect no in-app purchases), so `IOS_PACKS_LIVE`
+  (src/lib/minutePacks.js) keeps buying hidden on iPhone and the Notes page says a
+  paid version is coming. Set up later: the two consumables in App Store Connect
+  (submitted with an app version), the Paid Apps agreement, RevenueCat's App Store
+  app + offering; then flip the flag.
 - Account deletion in the app: done (DeleteAccount.jsx asks and files the request
   in-app; the email steps stay for people who can't sign in).
 - Privacy policy page updated Nov 3 2026 (ads, contacts, photos, recordings, phone
