@@ -4,9 +4,13 @@ import android.app.AppOpsManager;
 import android.app.usage.UsageEvents;
 import android.app.usage.UsageStatsManager;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.os.Build;
 import android.os.Process;
+import android.provider.AlarmClock;
 import android.util.Log;
 
 import org.json.JSONObject;
@@ -101,12 +105,30 @@ final class WakeWatch {
         }
     }
 
+    /** One stretch of real use that counts as being up (see firstUnlockToday). */
+    private static final long AWAKE_STRETCH_MS = 2 * 60_000L;
+    /** How far before quiet hours end the phone's state is read from. */
+    private static final long LOOK_BEFORE_MS = 6 * 60 * 60_000L;
+
     /**
-     * The first unlock this morning, or 0 when there hasn't been one yet. Only
-     * unlocks from the end of their quiet hours on count (Anna, Oct 12 2026: a
-     * 6:46 AM look at the time, with quiet hours until 8, was reported as her
-     * getting up). Nothing is sent during quiet hours anyway, so an earlier
-     * real start changes nothing; they unlock again once those are over.
+     * When they got up this morning, or 0 when they haven't yet: the start of
+     * the first time the phone was unlocked and in real use for a while, from
+     * the end of their quiet hours on.
+     *
+     * Nothing before quiet hours end counts (Anna, Oct 12 2026: a 6:46 AM look
+     * at the time, with quiet hours until 8, was reported as her getting up).
+     * Someone already up and on the phone when quiet hours end counts from
+     * that end, never earlier (Anna, Nov 1 2026: "if they do anything before
+     * their quiet hours, still wait for quiet hours to end at least"; the
+     * server holds to the same, wakeStartMs).
+     *
+     * A quick look doesn't count (Anna, Nov 1 2026: "I wish that opening to
+     * cancel an alarm or to check the time wouldn't count"; her own phone had
+     * reported 8:01 AM that morning, a minute after her quiet hours ended).
+     * The phone has to stay unlocked with the screen on for AWAKE_STRETCH_MS
+     * in one go, with something other than an alarm in front: ADHDone's own
+     * alarm screen and the phone's clock app don't count. Turning an alarm off
+     * or checking the time takes seconds.
      */
     static long firstUnlockToday(Context c) {
         if (!hasAccess(c)) {
@@ -124,49 +146,120 @@ final class WakeWatch {
             midnight.set(Calendar.SECOND, 0);
             midnight.set(Calendar.MILLISECOND, 0);
             long morning = midnight.getTimeInMillis() + quietEndMinutes(c) * 60_000L;
-            long from = morning;
-            if (from >= now) {
+            if (morning >= now) {
                 return 0L;
             }
-            UsageEvents events = usm.queryEvents(from, now);
-            UsageEvents.Event ev = new UsageEvents.Event();
             String mine = c.getPackageName();
-            long firstUnlock = 0L;
-            long firstApp = 0L;
-            boolean lockScreenSeen = false;
-            while (events != null && events.hasNextEvent()) {
-                events.getNextEvent(ev);
-                int type = ev.getEventType();
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
-                        && (type == UsageEvents.Event.KEYGUARD_SHOWN || type == UsageEvents.Event.KEYGUARD_HIDDEN)) {
-                    lockScreenSeen = true;
-                    // The lock screen going away = they unlocked it (Android 9+).
-                    if (type == UsageEvents.Event.KEYGUARD_HIDDEN && firstUnlock == 0L) {
-                        firstUnlock = ev.getTimeStamp();
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+                // No lock-screen or screen events before Android 9: the first
+                // app other than ADHDone's alarm screen to come up, as before.
+                UsageEvents events = usm.queryEvents(morning, now);
+                UsageEvents.Event ev = new UsageEvents.Event();
+                while (events != null && events.hasNextEvent()) {
+                    events.getNextEvent(ev);
+                    if (ev.getEventType() == UsageEvents.Event.MOVE_TO_FOREGROUND && !mine.equals(ev.getPackageName())) {
+                        return ev.getTimeStamp();
                     }
                 }
-                // The first app to come up (not ADHDone's own alarm screen,
-                // which opens by itself).
-                if (type == UsageEvents.Event.MOVE_TO_FOREGROUND && firstApp == 0L && !mine.equals(ev.getPackageName())) {
-                    firstApp = ev.getTimeStamp();
-                }
-            }
-            // With a lock screen, only unlocking it counts: pressing the power
-            // button to see the time can bring an app up behind the lock screen
-            // without anyone unlocking (Anna, Oct 12 2026). The first app is
-            // used only on a phone with no PIN, pattern or password, or an
-            // older one.
-            if (firstUnlock > 0L) {
-                return firstUnlock;
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && (lockScreenSeen || hasSecureLock(c))) {
                 return 0L;
             }
-            return firstApp;
+            String alarmScreen = AlarmActivity.class.getName();
+            String clock = clockPackage(c);
+            UsageEvents events = usm.queryEvents(morning - LOOK_BEFORE_MS, now);
+            UsageEvents.Event ev = new UsageEvents.Event();
+            boolean screenOn = false;
+            boolean locked = hasSecureLock(c);
+            String frontPkg = null;
+            String frontCls = null;
+            long start = 0L;
+            boolean real = false;
+            while (events != null && events.hasNextEvent()) {
+                events.getNextEvent(ev);
+                long ts = ev.getTimeStamp();
+                switch (ev.getEventType()) {
+                    case UsageEvents.Event.SCREEN_INTERACTIVE:
+                        screenOn = true;
+                        if (!locked && start == 0L) {
+                            start = ts;
+                            real = isRealUse(frontPkg, frontCls, mine, alarmScreen, clock);
+                        }
+                        break;
+                    case UsageEvents.Event.SCREEN_NON_INTERACTIVE:
+                    case UsageEvents.Event.KEYGUARD_SHOWN: {
+                        long up = stretchCounts(start, ts, real, morning);
+                        if (up > 0L) {
+                            return up;
+                        }
+                        start = 0L;
+                        if (ev.getEventType() == UsageEvents.Event.SCREEN_NON_INTERACTIVE) {
+                            screenOn = false;
+                        } else {
+                            locked = true;
+                        }
+                        break;
+                    }
+                    case UsageEvents.Event.KEYGUARD_HIDDEN:
+                        // Unlocked: the screen is on.
+                        locked = false;
+                        screenOn = true;
+                        if (start == 0L) {
+                            start = ts;
+                            real = isRealUse(frontPkg, frontCls, mine, alarmScreen, clock);
+                        }
+                        break;
+                    case UsageEvents.Event.MOVE_TO_FOREGROUND:
+                        frontPkg = ev.getPackageName();
+                        frontCls = ev.getClassName();
+                        if (start > 0L && isRealUse(frontPkg, frontCls, mine, alarmScreen, clock)) {
+                            real = true;
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            }
+            // Still unlocked and in use right now.
+            if (start > 0L && screenOn && !locked) {
+                return stretchCounts(start, now, real, morning);
+            }
         } catch (Exception e) {
             Log.w(TAG, "WakeWatch: could not read this morning's unlocks", e);
         }
         return 0L;
+    }
+
+    /** The stretch from start to end counts as being up: when (never before quiet hours end), or 0. */
+    private static long stretchCounts(long start, long end, boolean real, long morning) {
+        if (start <= 0L || !real) {
+            return 0L;
+        }
+        long from = Math.max(start, morning);
+        return end - from >= AWAKE_STRETCH_MS ? from : 0L;
+    }
+
+    /** Something other than an alarm in front: any app but ADHDone's alarm screen and the clock app. */
+    private static boolean isRealUse(String pkg, String cls, String mine, String alarmScreen, String clock) {
+        if (pkg == null) {
+            return false;
+        }
+        if (mine.equals(pkg) && alarmScreen.equals(cls)) {
+            return false;
+        }
+        return clock.isEmpty() || !clock.equals(pkg);
+    }
+
+    /** The phone's clock app (the one that shows its alarms), or "" when there isn't one clear one. */
+    private static String clockPackage(Context c) {
+        try {
+            Intent i = new Intent(AlarmClock.ACTION_SHOW_ALARMS);
+            ResolveInfo ri = c.getPackageManager().resolveActivity(i, PackageManager.MATCH_DEFAULT_ONLY);
+            if (ri != null && ri.activityInfo != null && ri.activityInfo.packageName != null
+                    && !"android".equals(ri.activityInfo.packageName)) {
+                return ri.activityInfo.packageName;
+            }
+        } catch (Exception ignored) {
+        }
+        return "";
     }
 
     /** A PIN, pattern or password on the phone (unlocking it is a real event). */
