@@ -496,6 +496,17 @@ Deno.serve(async (req) => {
       }
       if (isInQuietHours(now, startMin, endMin, timeZone)) continue;
 
+      // No phone has ever opened this account (no app build or platform on
+      // file: a browser-only sign-in, the owner's editor account, a test
+      // account). Pushes reach only the phone app (the web build never loads
+      // OneSignal's browser SDK), so there is nothing to plan (an AI call every
+      // run) or send. The phone writes app_build about 12 seconds after it
+      // opens (WidgetTaskSync), so this picks up the moment one does. Nov 3
+      // 2026 (Anna: "skip planning for accounts with no phone linked"): the
+      // owner's editor account was being planned all day for pushes that
+      // could never land. Previews above still work for any account.
+      if (!user.app_platform && !user.app_build) continue;
+
       // Notifications are off for ADHDone on their phone (as the app saw it the
       // last time it was open): nothing sent can reach them, so there's nothing
       // to plan (an AI call every run) or send. The app re-checks every time it
