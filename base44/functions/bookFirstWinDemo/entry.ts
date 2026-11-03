@@ -15,7 +15,13 @@
 // question, and OneSignal refuses a push for an account with nothing linked,
 // so this tries again over about a minute, whatever the phone does meanwhile.
 //
-// POST { title, body, at, alarm? } from the signed-in person, for their own
+// Always a regular notification, never a full-screen alarm (Anna, Nov 3
+// 2026): until then an `alarm` flag from the phone made it ring as one for
+// someone who had just picked full-screen reminders, 5-7 minutes after signing
+// up (Connie Nov 1, Michael Oct 31; both gone within a day). The flag is
+// ignored now, so a phone still running the older web build can't ring it.
+//
+// POST { title, body, at } from the signed-in person, for their own
 // account only. Once per account (User.first_win_demo): a second call gets
 // the one already booked (or "pending" while a first call is still booking).
 // Only for an account made in the last 2 days. Dropped once it is more than
@@ -84,7 +90,7 @@ Deno.serve(async (req) => {
     if (!Number.isFinite(planned)) planned = Date.now() + DEFAULT_DELAY_MS;
     // Never further out than a normal sample (a few minutes).
     planned = Math.min(planned, Date.now() + 10 * 60 * 1000);
-    const alarm = body?.alarm === true;
+    const alarm = false;
     if (planned < Date.now() - STALE_MS) return Response.json({ ok: false, gone: true });
 
     await users.update(owner.id, {
