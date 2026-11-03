@@ -954,10 +954,10 @@ function AlarmScreenPreview({ user, trial, onKeep, onRegular, busy }) {
   const startedAt = useRef(Date.now());
 
   const stopRing = () => {
-    try { audioRef.current?.pause(); } catch (e) {}
+    try { audioRef.current?.pause(); } catch (e) { /* nothing was playing */ }
     audioRef.current = null;
     if (buzzRef.current) { clearInterval(buzzRef.current); buzzRef.current = null; }
-    try { navigator.vibrate?.(0); } catch (e) {}
+    try { navigator.vibrate?.(0); } catch (e) { /* no vibrator here */ }
     setRinging(false);
   };
 
@@ -970,9 +970,9 @@ function AlarmScreenPreview({ user, trial, onKeep, onRegular, busy }) {
     try {
       if (navigator.vibrate) {
         navigator.vibrate([500, 500]);
-        buzzRef.current = setInterval(() => { try { navigator.vibrate([500, 500]); } catch (e) {} }, 1000);
+        buzzRef.current = setInterval(() => { try { navigator.vibrate([500, 500]); } catch (e) { /* stopped meanwhile */ } }, 1000);
       }
-    } catch (e) {}
+    } catch (e) { /* no vibrator here */ }
     const stop = setTimeout(() => {
       stopRing();
       setNote('A real one keeps ringing for a full minute, until you answer it.');
