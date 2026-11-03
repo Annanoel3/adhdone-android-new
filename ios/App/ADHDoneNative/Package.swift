@@ -3,7 +3,7 @@ import PackageDescription
 
 // ADHDone's own native pieces for iPhone, as one Swift package the app links:
 //   NotifyBridge   — push notifications (OneSignal)
-//   CalendarBridge — the phone's calendars (EventKit)
+//   CalendarBridge — the phone's calendars (EventKit), and "Add to phone calendar" (EventKitUI's New Event sheet)
 //   RecorderBridge — the Record Notes recorder (AVAudioRecorder, keeps going in the background)
 //   BillingBridge  — packs of Record Notes minutes (RevenueCat / StoreKit)
 //   ContactPickerBridge — Apple's contact picker (a birthday's phone number)
