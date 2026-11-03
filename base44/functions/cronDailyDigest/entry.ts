@@ -250,6 +250,25 @@ async function sendEveningWinAsks(base44: any, allUsers: any[], now: Date): Prom
     const dayKey = theirDayKeyFor(user, now, timeZone);
     if (user.win_ask_date === dayKey) continue;
 
+    // Only someone who opened the app today, or who has ever finished a task
+    // in it. Someone who signed up, looked for a minute and never came back
+    // was getting "How did you feel today?" the next evening with nothing
+    // behind it (Nov 3 2026: two accounts from the weekend), the kind of
+    // random ping that gets an app deleted. Anna: "the how did you feel could
+    // go to the people you said".
+    const openedToday = localDateKey(new Date(lastActive), timeZone) === localDateKey(now, timeZone);
+    if (!openedToday) {
+      let finishedOne = false;
+      try {
+        const done = await base44.asServiceRole.entities.Task.filter({ created_by: email, status: 'completed' }, '-updated_date', 1);
+        finishedOne = Array.isArray(done) && done.length > 0;
+      } catch (e) {
+        console.error(`[DIGEST] Finished-task check failed for ${email}:`, (e as any)?.message || e);
+        continue;
+      }
+      if (!finishedOne) continue;
+    }
+
     // Already checked in today: a win or a mood saved for today, as the app
     // stamps it (their calendar day, or the evening it belongs to when their
     // evening runs past midnight; both are checked).
