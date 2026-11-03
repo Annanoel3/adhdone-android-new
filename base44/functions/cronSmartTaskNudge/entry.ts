@@ -1140,7 +1140,13 @@ Deno.serve(async (req) => {
                 smart_nudge_schedule_dirty: stillDirty,
                 smart_nudge_planned_at: runStartIso,
                 smart_nudge_plan_prints: prints,
-                smart_nudge_look_at: useBrief ? nextLookIso(lastLookAgain, newEntries.length + stillQueued.length, nowMs, { startMin, endMin, timeZone }) : null,
+                // A just-added task's hold ending sooner brings the look forward (JUST ADDED).
+                smart_nudge_look_at: useBrief ? (() => {
+                  const iso = nextLookIso(lastLookAgain, newEntries.length + stillQueued.length, nowMs, { startMin, endMin, timeZone });
+                  const at = utcMs(iso);
+                  return Number.isFinite(lastHoldEndsMs) && (!Number.isFinite(at) || lastHoldEndsMs < at)
+                    ? new Date(lastHoldEndsMs + 60 * 1000).toISOString() : iso;
+                })() : null,
                 smart_nudge_brief_version: useBrief ? REMINDER_BRIEF_VERSION : null,
                 smart_nudge_passed: mergePassed(fresh?.smart_nudge_passed ?? user.smart_nudge_passed, lastPassed, nowMs),
               });
