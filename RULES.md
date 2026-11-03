@@ -575,3 +575,13 @@ either."
   `wake_watch`. The iPhone app sets an account's `wake_watch` back to null when it opens (it
   can't watch for waking), so this only matters for someone using an Android and an iPhone at
   once. `app_platform` on User says which phone app they last opened.
+- **Ads and the tracking prompt on iPhone (Nov 3 2026):** AdMob iOS app 3513826797 (app id
+  `ca-app-pub-7979856440890193~3513826797` in `ios/App/App/Info.plist`), interstitial unit
+  `ca-app-pub-7979856440890193/1949463689` (`IOS_AD_UNIT_ID`, src/lib/admob.js). The AdMob
+  account is **annabairdballew@gmail.com** — open it as
+  `https://apps.admob.com/v2/apps/list?authuser=annabairdballew@gmail.com`; Chrome's default
+  Google account has no AdMob account and lands on the sign-up page (Anna, Nov 3 2026: "I do NOT
+  want to have to change accounts for you each time"). Apple's tracking prompt is asked once per
+  phone by `askTrackingPermission` (after the notifications card, before the SDK starts;
+  `NSUserTrackingUsageDescription` in Info.plist) because the App Store privacy answers say
+  Identifiers are used for tracking. The review checklist lives in IOS_PLAN.md.
