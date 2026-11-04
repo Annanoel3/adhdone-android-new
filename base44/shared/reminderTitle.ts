@@ -191,23 +191,17 @@ export function ringsOutLoudOn(task: any, momentMs: number, timeZone: string, la
   const anchor = whenMs(task.event_time || task.due_date || task.next_reminder);
   if (isNaN(anchor)) return true;
   const isEvent = task.classification === 'event' || task.classification === 'birthday' || !!task.birthday_person;
-  // A timed event rings at its own time, at "leave now", and (since Nov 4
-  // 2026) the night before and the morning of: Anna forgot a vet visit that
-  // needed her cat fasting because those two came as plain notifications
-  // ("a notification is not enough. That's why I made alarms"). Only the
-  // "1 hour before" stays a push, the one she said she shouldn't get as an
-  // alarm (Oct 13 2026: "This is an event. I shouldn't be getting this kind
-  // of alarm"). A day-only event keeps its morning-of.
-  if (task.classification === 'event' && task.event_time && !task.day_only_task) {
-    const eventMs = whenMs(task.event_time);
-    const l = String(label || '');
-    // Its "It's time" rings one minute before the start (Oct 29 2026): the
-    // same 90 seconds widgetBridge.ringsOutLoud allows. (Until Nov 4 2026
-    // this copy allowed under 60, so a list the server sent for a timed
-    // event left its at-the-time alarm out; the phone's own sync on the next
-    // open put it back.)
-    return Math.abs(momentMs - eventMs) <= 90 * 1000 || /leave now|at the time|night before|morning of/i.test(l);
-  }
+  // EVERY reminder of a timed event rings (the night before, the morning of,
+  // the hour before, "leave now", its time). Oct 13 2026, 10:21 AM: Anna's
+  // "This is an event. I shouldn't be getting this kind of alarm" (an event
+  // alarm with Later / 10 min / 30 min buttons) was wrongly built as "an
+  // event's heads-ups stay pushes"; the fix she meant, event alarms with
+  // "Got it" only, came at 5:05 PM the same day, and the morning change was
+  // never undone. Nov 4 2026: she missed that her cat's vet visit needed him
+  // fasting because the night-before and morning-of came as notifications
+  // ("a notification is not enough. That's why I made alarms"). A day-only
+  // event keeps its morning-of. Quiet hours are judged by the caller.
+  if (task.classification === 'event' && task.event_time && !task.day_only_task) return true;
   const day = (ms: number) => localDateKey(new Date(ms), timeZone);
   const momentDay = day(momentMs);
   const anchorDay = day(anchor);
