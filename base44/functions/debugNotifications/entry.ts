@@ -120,6 +120,7 @@ Deno.serve(async (req) => {
             const RING_CHECKS: { name: string; task: any; at: string; label: string; expect: boolean }[] = [
                 { name: 'timed event: night before rings', task: timed, at: '2026-11-04T02:25:00Z', label: 'night before', expect: true },
                 { name: 'timed event: night before (questions wording) rings', task: timed, at: '2026-11-04T02:25:00Z', label: 'night before · questions', expect: true },
+                { name: 'timed event: night before (prep ask wording) rings', task: { ...timed, prep_worthy: true }, at: '2026-11-04T02:25:00Z', label: 'night before · prep', expect: true },
                 { name: 'timed event: morning of rings', task: timed, at: '2026-11-04T15:25:00Z', label: 'morning of', expect: true },
                 { name: 'timed event: 1 hour before rings', task: timed, at: '2026-11-04T18:45:00Z', label: '1 hour before', expect: true },
                 { name: 'timed event: leave now rings', task: timed, at: '2026-11-04T18:35:00Z', label: 'leave now', expect: true },
@@ -139,6 +140,75 @@ Deno.serve(async (req) => {
             });
             const failed = results.filter((r) => !r.pass);
             return Response.json({ success: failed.length === 0, passed: results.length - failed.length, failed: failed.length, results });
+        }
+        // { prepSelfTest: true } (owner only): the prep-note rules in
+        // shared/prepNote.ts, checked as pure functions — which plan gets the
+        // ask, what a note does to every reminder's words, how a saved entry
+        // is re-worded when the note changes, and when the one creation-time
+        // ask push goes. Run it after ANY change to prepNote.ts. Added Nov 4
+        // 2026 with the feature (RULES.md §9).
+        if (reqBody?.prepSelfTest === true) {
+            if (user.role !== 'admin') return Response.json({ success: false, error: 'Owner only' }, { status: 403 });
+            const now = new Date('2026-11-10T15:00:00Z').getTime(); // 9 AM Central
+            const vet = { id: 't1', title: 'Take the dog to the vet', classification: 'event', status: 'active', prep_worthy: true, event_time: '2026-11-11T19:45:00.000Z', next_reminder: '2026-11-11T19:45:00.000Z' };
+            const dinner = { ...vet, id: 't2', title: 'Dinner with friends', prep_worthy: false };
+            const plan = (labels: string[]) => labels.map((label) => ({ label, notification_title: `T ${label}`, notification_body: `B ${label}.` }));
+            const checks: { name: string; got: any; expect: any }[] = [];
+            const add = (name: string, got: any, expect: any) => checks.push({ name, got, expect });
+            // 1. The plan: no note on an appointment → the night before asks, once, nothing else touched.
+            const asked = applyPrepToPlan(plan(['night before', 'morning of', '1 hour before', 'at the time']), vet, { when: '1:45 PM' });
+            add('appointment, no note: night before becomes the ask', asked[0].label, PREP_ASK_LABEL);
+            add('appointment, no note: the ask names the time', /tomorrow at 1:45 PM/.test(asked[0].notification_body), true);
+            add('appointment, no note: morning of untouched', asked[1].notification_body, 'B morning of.');
+            add('appointment, no note: at the time untouched', asked[3].notification_body, 'B at the time.');
+            // 2. Questions wording keeps its label, merges the ask.
+            const merged = applyPrepToPlan(plan(['night before · questions', 'at the time · record notes']), vet);
+            add('questions night before keeps its label', merged[0].label, QUESTIONS_LABEL);
+            add('questions night before asks for prep too', /prep note/.test(merged[0].notification_body) && /questions/.test(merged[0].notification_body), true);
+            add('record notes at the time untouched', merged[1].notification_body, 'B at the time · record notes.');
+            // 3. Not an appointment: nothing changes.
+            add('plain event: plan untouched', JSON.stringify(applyPrepToPlan(plan(['night before', 'at the time']), dinner)), JSON.stringify(plan(['night before', 'at the time'])));
+            // 4. A note: on every reminder, once, trimmed and capped; a non-event with a note still gets it.
+            const noted = applyPrepToPlan(plan(['night before', 'morning of', 'leave now', 'at the time']), { ...vet, prep_note: '  no food   after midnight ' });
+            add('note: on every reminder', noted.every((r: any) => r.notification_body.endsWith('\nPrep: no food after midnight')), true);
+            add('note: night before stays a heads-up, not the ask', noted[0].label, 'night before');
+            add('note: applied twice is still one line', withPrep(withPrep('B.', 'x'), 'x'), 'B.\nPrep: x');
+            add('note: capped', prepNoteOf({ prep_note: 'a'.repeat(300) }).length <= PREP_MAX, true);
+            add('strip: takes the line off', stripPrep('B.\nPrep: x'), 'B.');
+            add('strip: leaves a body without one alone', stripPrep('B. Prep is fun.'), 'B. Prep is fun.');
+            // 5. Re-wording a saved entry when the note changes.
+            const askEntry = { label: PREP_ASK_LABEL, notification_title: asked[0].notification_title, notification_body: asked[0].notification_body, send_at: '2026-11-11T02:00:00.000Z' };
+            const r1 = rewordEntryForPrep(askEntry, { ...vet, prep_note: 'no food after midnight' });
+            add('note typed: the ask turns back into the heads-up', r1?.label, 'night before');
+            add('note typed: with the note on it', r1?.notification_body, `${nightBeforeWords(vet.title).body}\nPrep: no food after midnight`);
+            add('note still empty: the ask is left alone', rewordEntryForPrep(askEntry, vet), null);
+            const qEntry = { label: QUESTIONS_LABEL, notification_title: merged[0].notification_title, notification_body: merged[0].notification_body, send_at: '2026-11-11T02:00:00.000Z' };
+            const r2 = rewordEntryForPrep(qEntry, { ...vet, prep_note: 'bring the records' });
+            add('note typed on the questions ask: questions words + note', r2?.label === QUESTIONS_LABEL && r2?.notification_body === `${nightBeforeWords(vet.title, { questions: true }).body}\nPrep: bring the records`, true);
+            const plainEntry = { label: 'leave now', notification_title: 'T', notification_body: 'Head out now. 🚗\nPrep: old words', send_at: '2026-11-11T18:30:00.000Z' };
+            add('note changed: the old line is replaced', rewordEntryForPrep(plainEntry, { ...vet, prep_note: 'new words' })?.notification_body, 'Head out now. 🚗\nPrep: new words');
+            add('note cleared: the line comes off', rewordEntryForPrep(plainEntry, { ...vet, prep_note: '' })?.notification_body, 'Head out now. 🚗');
+            add('nothing to change: null', rewordEntryForPrep({ label: 'at the time', notification_title: 'T', notification_body: 'B.', send_at: '2026-11-11T19:44:00.000Z' }, vet), null);
+            // 6. Who wants the ask (row line, alarm button).
+            add('wants: appointment with no note', wantsPrepAsk(vet), true);
+            add('wants: not once a note is saved', wantsPrepAsk({ ...vet, prep_note: 'x' }), false);
+            add('wants: not a plain event', wantsPrepAsk(dinner), false);
+            add('wants: not a finished one', wantsPrepAsk({ ...vet, status: 'completed' }), false);
+            add('wants: not a birthday', wantsPrepAsk({ ...vet, birthday_person: 'Someone' }), false);
+            // 7. The one creation-time push: only when no night-before is left to ask, start 2 h+ away, not asked yet, timed.
+            const entries = (labels: string[], at: string) => labels.map((label) => ({ label, send_at: at }));
+            add('push: night before still ahead → no push', needsPrepAskPush(vet, entries(['night before'], '2026-11-11T02:00:00.000Z'), now), false);
+            add('push: night before already gone → push', needsPrepAskPush(vet, entries(['night before'], '2026-11-10T02:00:00.000Z'), now), true);
+            add('push: no night before in the plan → push', needsPrepAskPush(vet, entries(['1 hour before', 'at the time'], '2026-11-11T18:45:00.000Z'), now), true);
+            add('push: starts within 2 h → no push', needsPrepAskPush({ ...vet, event_time: '2026-11-10T16:30:00.000Z' }, [], now), false);
+            add('push: already asked → no push', needsPrepAskPush({ ...vet, prep_asked_at: '2026-11-10T14:00:00.000Z' }, [], now), false);
+            add('push: all-day event → no push', needsPrepAskPush({ ...vet, event_time: null, day_only_task: true }, [], now), false);
+            add('push: plain event → no push', needsPrepAskPush(dinner, [], now), false);
+            add('push words: today / tomorrow on their clock', startWords('2026-11-11T19:45:00.000Z', 'America/Chicago', now), 'tomorrow at 1:45 PM');
+            add('push words: the ask', /Added: "Take the dog to the vet" today at 1:45 PM\./.test(prepAskPushWords(vet.title, 'today at 1:45 PM').body), true);
+            const results = checks.map((c) => ({ ...c, pass: JSON.stringify(c.got) === JSON.stringify(c.expect) }));
+            const failed = results.filter((r) => !r.pass);
+            return Response.json({ success: failed.length === 0, passed: results.length - failed.length, failed: failed.length, failures: failed, results });
         }
         if (reqBody?.mode === 'cancel_pending') {
             // Owner-only: cancel specific booked pushes for good — OneSignal, the
