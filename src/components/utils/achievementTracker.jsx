@@ -1,6 +1,5 @@
 import { Achievement } from "@/entities/Achievement";
 import { User } from "@/entities/User";
-import { sendAchievementNotification } from "./notificationHelper";
 
 const ACHIEVEMENTS = {
   first_task: {
@@ -101,11 +100,10 @@ export async function checkAndAwardAchievements(stats) {
     }
   }
 
-  // Send notifications for new achievements
-  for (const achievement of newAchievements) {
-    await sendAchievementNotification(user.email, achievement);
-  }
-
+  // No push for a new achievement: that push ran through notifySend, which
+  // Anna switched off on Sept 17 2026 (RULES.md §2), so the call only ever came
+  // back "disabled". The achievement itself still shows on the Progress page.
+  // Removed Nov 4 2026 with notificationHelper.jsx.
   return newAchievements;
 }
 
