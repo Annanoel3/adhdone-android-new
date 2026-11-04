@@ -158,6 +158,19 @@ const PARSER_CHECKS: { text: string; saidAt: number; expect: Record<string, any>
   // Anna: "doesn't mean it's happening at Pizza Hut"). One they call still is.
   { text: "Give the Target vest back to Sam", saidAt: said("2026-11-03T13:00:00-06:00"), expect: { business_name: null } },
   { text: "Call Walgreens about the refill", saidAt: said("2026-11-03T13:00:00-06:00"), expect: { business_name: (v: any) => typeof v === "string" && /walgreens/i.test(v) } },
+  // An appointment with something to get ready BEFORE it is prep_worthy: its
+  // night-before reminder asks for prep notes and every reminder repeats
+  // them (Anna, Nov 4 2026: a vet visit with a fasting cat carried no note,
+  // "a notification is not enough"). Things people just show up to are not.
+  { text: "Kirito vet appointment Wednesday at 1:45pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { classification: "event", prep_worthy: true } },
+  { text: "Dentist Friday at 2pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { prep_worthy: true } },
+  { text: "Flight to Denver Saturday 6:40am", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { prep_worthy: true } },
+  { text: "DMV appointment Thursday 10am", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { prep_worthy: true } },
+  { text: "Job interview at Costco Monday 9am", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { prep_worthy: true } },
+  { text: "Dinner with Jess Friday at 7", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { prep_worthy: false } },
+  { text: "Haircut Saturday at 11", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { prep_worthy: false } },
+  { text: "Movie night with the kids Friday 8pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { prep_worthy: false } },
+  { text: "Vacuum the living room", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { prep_worthy: false } },
 ];
 
 async function runParserSelfTest(base44: any) {
