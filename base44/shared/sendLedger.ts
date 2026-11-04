@@ -33,7 +33,10 @@ const STACK_GAP_MS = 20 * 60 * 1000;
 // pushes instead of 20 (Anna, Oct 10 2026: an urgent call to a vet that closed
 // at noon waited behind a 10 AM medicine alarm and went out at 10:39).
 const URGENT_STACK_GAP_MS = 5 * 60 * 1000;
-const PROACTIVE_KINDS = new Set(['smart_nudge', 'daily_digest', 'motivation', 'general', 'task_checkin']);
+// Also soft (Nov 4 2026 audit): the one "two events overlap / look the same"
+// push (event_conflict) and the day-2 "add one thing" nudge (first_task_nudge).
+// Neither is tied to a moment, so each yields to a reminder that is.
+const PROACTIVE_KINDS = new Set(['smart_nudge', 'daily_digest', 'motivation', 'general', 'task_checkin', 'event_conflict', 'first_task_nudge']);
 
 function ledger(base44: any) {
   return base44.asServiceRole.entities.NotificationLedger;
