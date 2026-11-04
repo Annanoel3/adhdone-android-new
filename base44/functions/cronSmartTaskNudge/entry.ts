@@ -484,6 +484,7 @@ Deno.serve(async (req) => {
             timeZone,
             dayOf: dayOfP,
             nowMs,
+            completions: completionsByUser[email] || [],
           }),
           // SILENT PUT-OFFS: the days each open task would gain (nothing written).
           silent_put_offs: onPlainNotifications(user)
@@ -708,6 +709,7 @@ Deno.serve(async (req) => {
           const look = helpingLook({
             user, schedule, sentLog, rows: mayAsk ? await choicesFor(email) : [],
             taskById, timeZone, dayOf, nowMs,
+            completions: completionsByUser[email] || [],
           });
           const which: 'ask' | 'pause' | '' = mayAsk && look.would_ask ? 'ask' : mayPause && look.trial?.would_pause ? 'pause' : '';
           const wokeAtMs = wakeStartMs(user, now, timeZone);
@@ -2903,12 +2905,29 @@ function silentPutOffDays(pool: any[], sends: { at: number; taskId: string }[], 
 function helpingLook(p: {
   user: any; schedule: any[]; sentLog: any[]; rows: any[]; taskById: Map<string, any>;
   timeZone: string; dayOf: (ms: number) => string; nowMs: number;
+  // Every top-level task they ever finished (when), for THE LONG VIEW.
+  completions?: { at: number; title: string }[];
 }): any {
   const { user, schedule, sentLog, rows, taskById, timeZone, dayOf, nowMs } = p;
   const iso = (ms: number) => (Number.isFinite(ms) ? new Date(ms).toISOString() : null);
   const oneADay = user?.smart_nudge_one_a_day === true;
   const pausedMs = utcMs(user?.smart_nudge_paused_at);
   const askStage = helpAskStage(user, nowMs);
+
+  // THE LONG VIEW (Anna, Nov 4 2026: "should we really be bugging her with
+  // 'are your reminders helping?' Maybe we should be paying attention to
+  // long term trends and how they use the app instead of short term").
+  // Someone the app is plainly working for is never asked whether it helps,
+  // and never paused, whatever this week's nudged tasks say: a person who
+  // does her weekly chores every week and keeps putting off the calls she
+  // dreads is using it, not failing with it (Tabitha, Nov 1 2026: asked after
+  // a week in which she finished five things, because the five the nudges
+  // named stayed open). Healthy use = finished 3 or more tasks in the last 7
+  // days, or finished something on 4 or more different days in the last 14.
+  const done = Array.isArray(p.completions) ? p.completions : [];
+  const finished7 = done.filter((c) => Number.isFinite(c?.at) && nowMs - c.at <= 7 * DAY_MS && c.at <= nowMs).length;
+  const daysFinished14 = new Set(done.filter((c) => Number.isFinite(c?.at) && nowMs - c.at <= 14 * DAY_MS && c.at <= nowMs).map((c) => dayOf(c.at))).size;
+  const healthy = finished7 >= 3 || daysFinished14 >= 4;
 
   // A week of Smart Reminders: the account is a week old and the first one
   // still in the week's log went out 6+ days ago (the log keeps 7).
@@ -3014,7 +3033,7 @@ function helpingLook(p: {
       reminders_in_window: inWindow.length,
       finished_same_day: helped.length,
       opened_app_in_last_2_days: openedLately,
-      would_pause: !paused && weekIn && inWindow.length >= 3 && helped.length === 0 && !openedLately,
+      would_pause: !paused && weekIn && inWindow.length >= 3 && helped.length === 0 && !openedLately && !healthy,
     };
   }
 
@@ -3032,10 +3051,15 @@ function helpingLook(p: {
     pairs: pairs.size,
     finished_pairs: finishedPairs,
     pattern,
+    // THE LONG VIEW: finished things lately, so the reminders are not in
+    // question, whatever the nudged tasks say.
+    finished_last_7_days: finished7,
+    days_finished_last_14: daysFinished14,
+    healthy,
     // 'first' (30 days since the last ask or answer), 'again' (the last ask is
     // 3+ days old, unanswered, not asked again yet), or '' (not by the calendar).
     ask_stage: askStage,
-    would_ask: !oneADay && !paused && !!askStage && weekOfReminders && pattern,
+    would_ask: !oneADay && !paused && !!askStage && weekOfReminders && pattern && !healthy,
     trial,
     presses: presses.slice(-40).map((x) => ({ ...x, at: iso(x.at) })),
     tasks_by_day: [...pairs.values()].map((x) => ({ ...x, at: iso(x.at), title: String(taskById.get(x.task_id)?.title || '').slice(0, 60) })),
