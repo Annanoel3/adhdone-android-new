@@ -1198,6 +1198,9 @@ Deno.serve(async (req) => {
         // task at a real place gets the same drive-time "leave now" reminder.
         location: task.location || '',
         homeOrigin: getHomeOrigin(owner),
+        // Measured from where they'll be (shared/leaveOrigin.ts, Nov 4 2026).
+        ownerEmail: task.notification_recipient_email,
+        taskId: task.id,
         avoidTolls: owner?.commute_avoid_tolls === true,
         reminderWish: task.reminder_wish || null,
         canRecord: owner?.notes_can_record === true,
