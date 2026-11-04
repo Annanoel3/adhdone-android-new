@@ -11,6 +11,7 @@ import OpenAI from 'npm:openai';
 import { lean } from '../../shared/aiCost.ts';
 import { getTravelLead } from '../../shared/travelLead.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
+import { leaveOriginFor, fromWords } from '../../shared/leaveOrigin.ts';
 import { atTimeWords } from '../../shared/reminderTitle.ts';
 // (Re-saved Oct 13 2026 after shared/captureToTasks.ts: the reminder at a task's own time saves the words schedulePush sent it with.)
 
@@ -70,11 +71,14 @@ function getEventSchedule(lead, afternoonOrLater) {
 // that hour, so it never says "right now" (those words came from a Sep 13
 // 2026 demo). Commute Watch re-checks it on live traffic for the last 3 hours
 // and brings these words up to date before it goes (cronCommuteWatch, 3.).
+// `lead.fromWords` names where the drive starts when it isn't home ("from
+// work", from the event before it: shared/leaveOrigin.ts, Nov 4 2026).
 function leaveNowBody(t, lead) {
   if (!lead) return `Time to head out for "${t}". 🚗`;
+  const from = lead.fromWords ? ` ${lead.fromWords}` : ' away';
   return lead.inTraffic
-    ? `"${t}" is about ${lead.driveMinutes} min away with expected traffic, so head out now to get there on time. 🚗`
-    : `"${t}" is about ${lead.driveMinutes} min away, so head out now to get there on time. 🚗`;
+    ? `"${t}" is about ${lead.driveMinutes} min${from} with expected traffic, so head out now to get there on time. 🚗`
+    : `"${t}" is about ${lead.driveMinutes} min${from}, so head out now to get there on time. 🚗`;
 }
 
 // ── Events worth recording ─────────────────────────────────────────────────
@@ -185,7 +189,7 @@ export default async function(req) {
       const n = parsedBody.notesCheck;
       return Response.json({ notes: await notesWouldHelp(String(n.title || ''), String(n.location || '')) });
     }
-    const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, timezone, location, homeOrigin, avoidTolls, reminderWish, canRecord, noClockTime } = parsedBody;
+    const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, timezone, location, homeOrigin, avoidTolls, reminderWish, canRecord, noClockTime, ownerEmail, taskId } = parsedBody;
     // An event with a date and no clock time (a day-only capture, an all-day
     // calendar event): callers that know say so with dayOnly or noClockTime.
     const timelessEvent = classification === 'event' && (!!dayOnly || noClockTime === true);
@@ -201,11 +205,31 @@ export default async function(req) {
     // + cushion. Service-role callers (captureToTasks) have no session, so they
     // pass the origin explicitly — and the toll answer with it.
     const noTolls = user?.commute_avoid_tolls === true || avoidTolls === true;
-    const lead = dayOnly || timelessEvent
+    // Where the drive starts: home, unless they'll be at an event just before
+    // this one or at work (shared/leaveOrigin.ts; Anna, Nov 4 2026). The
+    // owner's own record decides: the signed-in user, or for a service-role
+    // call the `ownerEmail` the caller names (`taskId` keeps the event itself
+    // out of the "event before it" look).
+    let from = null;
+    let origin = getHomeOrigin(user) || homeOrigin || '';
+    if (location && !dayOnly && !timelessEvent) {
+      let owner = user;
+      if (!owner && typeof ownerEmail === 'string' && ownerEmail.trim()) {
+        try { owner = (await base44.asServiceRole.entities.User.filter({ email: ownerEmail.trim() }))?.[0] || null; } catch { owner = null; }
+      }
+      if (owner) {
+        from = await leaveOriginFor(base44, owner, { id: taskId || undefined, location, event_time: scheduledDateISO });
+        if (from?.origin) origin = from.origin;
+      }
+    }
+    let lead = dayOnly || timelessEvent || from?.samePlace
       ? null
-      : await getTravelLead(location || '', getHomeOrigin(user) || homeOrigin || '', scheduledDateISO, { avoidTolls: noTolls });
+      : await getTravelLead(location || '', origin, scheduledDateISO, { avoidTolls: noTolls });
     if (lead) {
-      console.log(`[generateReminderSchedule] Travel lead for "${title}" → ${lead.leadMinutes} min (${lead.driveMinutes} min drive${lead.inTraffic ? ', in traffic' : ''})`);
+      lead = { ...lead, fromWords: fromWords(from) };
+      console.log(`[generateReminderSchedule] Travel lead for "${title}" → ${lead.leadMinutes} min (${lead.driveMinutes} min drive${lead.inTraffic ? ', in traffic' : ''}${from && from.from !== 'home' ? `, ${lead.fromWords}` : ''})`);
+    } else if (from?.samePlace) {
+      console.log(`[generateReminderSchedule] "${title}" is where they already are (${from.from}); no drive, the hour before stays`);
     }
     // The server runs in UTC. Without the user's zone, a 2:21 PM Chicago task
     // was described to the LLM as "7:21 PM", so its absolute clock-time
@@ -444,7 +468,7 @@ RULES:
 - For clock-time reminders (morning, afternoon, evening, X days before at Y AM): use ABSOLUTE
 - For "N minutes/hours before" reminders: use RELATIVE with just the number of minutes
 ${lead
-  ? `- TRAVEL: this task happens at a place that is a measured ${lead.driveMinutes} minute drive from the user's home${lead.inTraffic ? ", measured against the traffic predicted for that time of day (you MAY say 'with expected traffic', but never 'right now': it is a forecast made ahead of time)" : " (free-flow estimate — do NOT mention traffic)"}. The "leave now" reminder is ${lead.leadMinutes} minutes before — use exactly that number, and do NOT add any other "time to head out" reminder.`
+  ? `- TRAVEL: this task happens at a place that is a measured ${lead.driveMinutes} minute drive ${lead.fromWords || "from the user's home"}${lead.inTraffic ? ", measured against the traffic predicted for that time of day (you MAY say 'with expected traffic', but never 'right now': it is a forecast made ahead of time)" : " (free-flow estimate — do NOT mention traffic)"}. The "leave now" reminder is ${lead.leadMinutes} minutes before — use exactly that number, and do NOT add any other "time to head out" reminder.`
   : `- TRAVEL: no location is known for this task, so NEVER tell the user to leave or head out. Say "coming up" / "start wrapping up" instead.`}
 - Only include reminders that would fire AFTER the current time (${nowStr})
 
