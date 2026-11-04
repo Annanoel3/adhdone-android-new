@@ -159,7 +159,11 @@ export async function leaveOriginFor(base44: any, user: any, task: { id?: string
       try {
         const dayKey = localDateKey(new Date(start), user?.timezone || 'America/Chicago');
         const prevKey = localDateKey(new Date(start - 24 * 60 * 60 * 1000), user?.timezone || 'America/Chicago');
-        shifts = await base44.asServiceRole.entities.WorkShift.filter({ created_by: email, shift_date: { $in: [dayKey, prevKey] } });
+        const [a, b] = await Promise.all([
+          base44.asServiceRole.entities.WorkShift.filter({ created_by: email, shift_date: dayKey }),
+          base44.asServiceRole.entities.WorkShift.filter({ created_by: email, shift_date: prevKey }),
+        ]);
+        shifts = [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])];
       } catch (e) {
         console.log('[leaveOrigin] could not read the shifts:', (e as any)?.message || e);
         shifts = [];
