@@ -1,3 +1,4 @@
+// Re-saved Nov 4 2026 (night) so the bundled shared/sendLedger.ts is picked up: an event's night-before / morning-of / prep ask is never cancelled to make room for a task's reminder booked after it.
 // Re-saved Nov 4 2026 (evening) so the bundled shared/reminderTitle.ts is picked up: an appointment with no prep note yet gets "Add prep notes" as its night-before / morning-of alarm's second button (shared/prepNote.ts).
 // Re-saved Nov 4 2026 (event alarms, all of them) so the bundled shared/reminderTitle.ts is picked up: every reminder of a timed event rings for an alarm user (night before, morning of, hour before, leave now, its time).
 // Re-saved Oct 21 2026 (noon) so the bundled shared/reminderTitle.ts is picked up: alarms at a time they set in the same minute ring in the order alarmOrder.ts judged (alarm_order), each one marked theirTime with the bell.
