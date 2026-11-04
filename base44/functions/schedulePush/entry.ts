@@ -108,7 +108,9 @@ Deno.serve(async (req) => {
         // instead — later first, earlier if it must — never into their quiet
         // hours and never within half an hour of the thing itself. The caller
         // gets the time it really went at (`sendAt`).
-        if (!gate.allowed && gate.reason === 'stacked_on_other_push' && (isInternal || isSelf) && data?.taskId && ledgerKind === 'task_checkin') {
+        // 'event_heads_up' is the app's own name for the same night-before
+        // (multiReminderScheduler), so it moves the same way (Nov 4 2026).
+        if (!gate.allowed && gate.reason === 'stacked_on_other_push' && (isInternal || isSelf) && data?.taskId && (ledgerKind === 'task_checkin' || ledgerKind === 'event_heads_up')) {
             try {
                 const task = await base44.asServiceRole.entities.Task.get(String(data.taskId));
                 const users = await base44.asServiceRole.entities.User.filter({ email: String(toUserExternalId) });
