@@ -1,4 +1,4 @@
-// Re-saved Nov 4 2026 (event alarms) so the bundled shared/reminderTitle.ts is picked up: a timed event's night-before and morning-of ring as alarms (only its 1-hour-before stays a push), and its at-the-time alarm is in the server's list again (90 s, as on the phone).
+// Re-saved Nov 4 2026 (TOUCH2) so the bundled shared/reminderTitle.ts is picked up: every reminder of a timed event rings for an alarm user (night before, morning of, hour before, leave now, its time).
 // Re-saved Oct 21 2026 (noon) so the bundled shared/reminderTitle.ts is picked up: alarms at a time they set in the same minute ring in the order alarmOrder.ts judged (alarm_order), each one marked theirTime with the bell.
 // Re-saved Oct 13 2026 (night) so the bundled shared/reminderTitle.ts is picked up: an appointment's alarm carries "Record notes" as its second button.
 // Re-saved Oct 13 2026 (evening) so the bundled shared/reminderTitle.ts is picked up: an event's alarm is marked `event` for the phone (build 42 on shows "Got it" only).
