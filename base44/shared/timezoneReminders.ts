@@ -1,5 +1,5 @@
 // Timezone-aware conversion of local wall-clock reminder times to UTC instants.
-// Shared by syncGoogleCalendar and resyncEventReminders so ABSOLUTE reminders
+// Shared by syncGoogleCalendar, cronRefillReminders and eventReminderPlan.ts so ABSOLUTE reminders
 // (e.g. "morning of" at 9 AM) fire at 9 AM in the user's timezone, not 9 AM UTC.
 import { DEFAULT_TIME_ZONE } from './quietHours.ts';
 
