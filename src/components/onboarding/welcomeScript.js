@@ -100,4 +100,33 @@ const SCRIPT = [
   },
 ];
 
+// Picking the first run back up. Someone who gave their name and then closed
+// the app (Anna, Nov 4 2026, halfway through on the iPhone, closed it for an
+// update: "if somebody doesn't complete the whole thing, it needs to come
+// back") used to count as done, because having a name looked like having
+// finished. Now the chat returns on the next open at the beat they left:
+// a one-line "welcome back", then the task (unless one is already on their
+// list), its time, the notifications question (unless already answered on
+// this account), the about-you question, and the closing line. Nothing
+// already answered is asked twice.
+export function resumeScript({ hasTask = false, notifyAnswered = false } = {}) {
+  const rest = SCRIPT.slice(2).map((beat) => {
+    if (beat.input === 'task') {
+      return {
+        ...beat,
+        text: () => `What's one thing you keep forgetting that you could knock out ${new Date().getHours() >= 21 ? 'tomorrow' : 'today'}? Type it in and it's on your list.`,
+        skip: () => hasTask,
+      };
+    }
+    if (beat.input === 'notify') {
+      return { ...beat, skip: () => notifyAnswered };
+    }
+    return beat;
+  });
+  return [
+    { text: (name) => `Welcome back, ${name}! Let's pick up where we left off.` },
+    ...rest,
+  ];
+}
+
 export default SCRIPT;
