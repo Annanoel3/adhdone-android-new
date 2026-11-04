@@ -33,6 +33,7 @@ import {
 import { formatTimeRange } from "../utils/timeRangeLabel";
 import SubtaskQuickAdd from "./SubtaskQuickAdd";
 import BreakItDownOffer from "./BreakItDownOffer";
+import AddAddressOffer from "./AddAddressOffer";
 import LifeAreaPill, { TagPill } from "./LifeAreaPill";
 import { checkDuePushEgg } from "../eastereggs/duePushEgg";
 import { firstDateMakesDeadline, isPastDue } from "../utils/todayTasks";
@@ -1151,6 +1152,12 @@ export default function TaskCard({
             opening the card (opened, the same button is in the card). */}
         {!expanded && (
           <BreakItDownOffer task={task} theme={theme} subtaskCount={subtaskCount || 0} onRefreshTasks={onRefreshTasks} />
+        )}
+        {/* An upcoming event with no address, on an account with a home
+            circle: "Add the address and I'll time when to leave" (the
+            drive-timed reminder needs a place). */}
+        {!expanded && (
+          <AddAddressOffer task={task} theme={theme} onRefreshTasks={onRefreshTasks} />
         )}
 
         {/* Expanded section: all other info + inline editing */}
