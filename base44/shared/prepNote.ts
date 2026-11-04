@@ -58,10 +58,11 @@ export function withPrep(body: unknown, note: unknown): string {
   return n ? `${base}${SEP}${n}` : base;
 }
 
-// A timed appointment-type event with no prep note yet: its reminders ask.
+// An appointment-type event with no prep note yet: its reminders ask, its
+// row offers, its night-before alarm's second button says "Add prep notes".
 export function wantsPrepAsk(task: any): boolean {
   if (!task || task.classification !== 'event' || task.prep_worthy !== true) return false;
-  if (!task.event_time || task.day_only_task || task.parent_task_id || task.birthday_person) return false;
+  if (task.parent_task_id || task.birthday_person) return false;
   if (task.status && task.status !== 'active') return false;
   if (task.silenced) return false;
   return !prepNoteOf(task);
@@ -173,6 +174,8 @@ export function startWords(startISO: string, timeZone: string, nowMs: number = D
 export function needsPrepAskPush(task: any, entries: any[], nowMs: number = Date.now()): boolean {
   if (!wantsPrepAsk(task)) return false;
   if (task.prep_asked_at) return false;
+  // Only a timed event: an all-day one has no clock time to say.
+  if (!task.event_time || task.day_only_task) return false;
   const startMs = new Date(task.event_time).getTime();
   if (!Number.isFinite(startMs) || startMs - nowMs < PREP_ASK_MIN_LEAD_MS) return false;
   const hasNightBefore = (Array.isArray(entries) ? entries : []).some((e) => {
