@@ -7,6 +7,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { atTimeWords, isPlainAtTimeWords, taskRingsAsAlarm, ringsOutLoudOn } from '../../shared/reminderTitle.ts';
 import { userTimeZone, resolveQuietHours, isInQuietHours } from '../../shared/quietHours.ts';
+import { withPrep } from '../../shared/prepNote.ts';
 
 // WHO MAY BOOK A PUSH
 // Like every Base44 function, this endpoint can be reached by anyone on the
@@ -177,7 +178,9 @@ Deno.serve(async (req) => {
                     reworded = await atTimeWords(task, new Date(resolvedSendAt).getTime(), userTimeZone(owner), 6000);
                     if (reworded) {
                         pushTitle = reworded.title;
-                        pushBody = reworded.body;
+                        // An event's prep note stays on the reworded words
+                        // (shared/prepNote.ts): the plain body carried it.
+                        pushBody = withPrep(reworded.body, task.prep_note);
                     }
                 }
             } catch (e) {
