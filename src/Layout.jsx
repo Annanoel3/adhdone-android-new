@@ -56,7 +56,6 @@ import {
 } from "@/components/ui/collapsible";
 import MiniPomodoroBar from "./components/shared/MiniPomodoroBar";
 import UniversalVoiceAssistant from "./components/shared/UniversalVoiceAssistant";
-import PokeNotification from "./components/shared/PokeNotification";
 // NotificationFollowupModal ("Did you do it?") is no longer mounted: it popped
 // up on its own on every open for any overdue task and for the latest smart
 // nudge, and people just tapped No. The only "did you do it?" now is the one a
@@ -1351,7 +1350,6 @@ function LayoutContent({ children, currentPageName, user, authCheckComplete }) {
 
           <MiniPomodoroBar theme={theme} />
           <UniversalVoiceAssistant theme={theme} currentPageName={currentPageName} />
-          <PokeNotification theme={theme} />
 
         <FocusModePrompt user={user} theme={theme} />
         <ScheduledTextSendPopup user={user} theme={theme} />
