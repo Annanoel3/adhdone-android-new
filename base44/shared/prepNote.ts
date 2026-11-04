@@ -21,6 +21,8 @@
 // Prep never changes how loud a reminder is: every reminder of a timed event
 // rings (RULES.md §9 Q6), with or without a note.
 
+import { resolveQuietHours, placeAppReminder, userTimeZone } from './quietHours.ts';
+
 export const PREP_MAX = 140;
 // The night-before ask when nothing else is asked there.
 export const PREP_ASK_LABEL = 'night before · prep';
@@ -179,4 +181,40 @@ export function needsPrepAskPush(task: any, entries: any[], nowMs: number = Date
     return Number.isFinite(at) && at > nowMs;
   });
   return !hasNightBefore;
+}
+
+// Books that one ask (needsPrepAskPush decided it's wanted) and stamps the
+// task so it is never asked twice. A soft push ('task_checkin': no buttons,
+// yields to anything time-critical in the ledger), moved out of quiet hours
+// or dropped when that would be too late. Never throws.
+export async function sendPrepAsk(base44: any, task: any, owner: any, email: string, source: string): Promise<boolean> {
+  try {
+    const tz = userTimeZone(owner);
+    const startMs = new Date(task.event_time).getTime();
+    const quiet = resolveQuietHours(owner);
+    const placed = placeAppReminder(Date.now() + PREP_ASK_DELAY_MS, startMs - PREP_ASK_MIN_LEAD_MS, quiet, tz);
+    if (placed == null) {
+      console.log(`[prepNote] ${task.id}: the prep ask would land inside quiet hours with no room before the event; left to the reminder page`);
+      return false;
+    }
+    const words = prepAskPushWords(task.title, startWords(task.event_time, tz));
+    const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+      internalKey: Deno.env.get('CRON_SECRET'),
+      toUserExternalId: email,
+      title: words.title,
+      body: words.body,
+      sendAtISO: new Date(placed).toISOString(),
+      data: { screen: '/TaskNotification', taskId: task.id, urgency: task.urgency || 'medium', type: 'task_checkin' },
+    });
+    const result = res?.data || res;
+    const id = result?.notificationId ? String(result.notificationId) : '';
+    // Stamped either way: refused (not subscribed, stacked on another push)
+    // means the row and the reminder page carry the ask, not a second try.
+    await base44.asServiceRole.entities.Task.update(task.id, { prep_asked_at: new Date().toISOString() });
+    console.log(`[prepNote] ${task.id}: prep ask ${id ? `booked for ${result.sendAt || new Date(placed).toISOString()}` : `not booked (${result?.reason || result?.error || 'no id'})`} (${source})`);
+    return !!id;
+  } catch (e) {
+    console.error('[prepNote] could not send the prep ask:', (e as any)?.message || e);
+    return false;
+  }
 }
