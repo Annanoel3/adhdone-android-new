@@ -1,3 +1,4 @@
+// Re-saved Nov 4 2026 (night) so the bundled shared/sendLedger.ts is picked up: an event's night-before / morning-of / prep ask is never cancelled to make room for a task's reminder booked after it (softer nudges still are).
 // Re-saved Nov 4 2026 (event alarms, all of them) so the bundled shared/reminderTitle.ts is picked up: every reminder of a timed event rings for an alarm user (night before, morning of, hour before, leave now, its time).
 // Re-saved Nov 1 2026 so the bundled shared/sendLedger.ts is picked up: ledgerPrune keeps each push that went out as an AppEvent 'reminder_sent' before clearing it from the ledger (30 days of reminder history).
 // Re-saved Oct 21 2026 (noon) so the bundled shared/reminderTitle.ts is picked up: alarms at a time they set in the same minute ring in the order alarmOrder.ts judged (alarm_order), each one marked theirTime with the bell.
