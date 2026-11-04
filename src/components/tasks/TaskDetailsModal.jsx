@@ -69,7 +69,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import LaunchButtons from "../launch/LaunchButtons"; import DetailsTopBlock from "./DetailsTopBlock";
-import LocationField from "./LocationField"; import TaskNotesField from "./TaskNotesField";
+import LocationField from "./LocationField"; import TaskNotesField from "./TaskNotesField"; import PrepNoteBox from "./PrepNoteBox";
 import SmartDueDatePill from "./SmartDueDatePill";
 import { useToast } from "@/components/ui/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -2280,6 +2280,14 @@ Return JSON:
                   theme={theme}
                   onSave={(loc) => handleUpdateField('location', loc)}
                 />
+              )}
+
+              {/* What to get ready before an appointment (prep_worthy from the
+                   parser, or any event with a note already): saving re-words
+                   every reminder still ahead, alarms too (base44/shared/prepNote.ts). */}
+              {isEvent && task?.status === 'active' && !task?.birthday_person
+                && (task?.prep_worthy === true || String(task?.prep_note || '').trim()) && (
+                <PrepNoteBox task={task} theme={theme} compact onSaved={(note) => onUpdate && onUpdate({ ...task, prep_note: note })} />
               )}
 
               {/* Event date & time — editable for event tasks. Setting it
