@@ -12,6 +12,7 @@ import { DEFAULT_TIME_ZONE, localDateKey, localMinutesOfDay, resolveQuietHours, 
 import OpenAI from 'npm:openai';
 import { lean } from './aiCost.ts';
 import { REMINDER_BRIEF } from './reminderBrief.ts';
+import { wantsPrepAsk } from './prepNote.ts';
 
 // The words of the one reminder a task gets AT the time they set for it,
 // written from the same brief Smart Reminders runs on, so the app has one
