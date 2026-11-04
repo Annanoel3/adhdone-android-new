@@ -132,7 +132,10 @@ Deno.serve(async (req) => {
             }
         }
         if (!gate.allowed) {
-            return Response.json({ success: true, skipped: true, reason: gate.reason, notificationId: null });
+            // `existing`: the live booking that blocked this one (same task,
+            // same time), so a caller whose task lost track of its id can
+            // adopt it (cronRefillReminders' rescue pass, Nov 4 2026).
+            return Response.json({ success: true, skipped: true, reason: gate.reason, notificationId: null, existing: gate.conflict || null });
         }
 
         // The reminder at a task's own time is booked everywhere with plain
