@@ -342,6 +342,11 @@ export function phoneAlarmsFor(task: any, owner: any, now: number = Date.now()):
       // second button opens the event's page (Record notes). Otherwise Got
       // it is the only button. Same as alarmSetFor in widgetBridge.js.
       if (/record notes/i.test(String(m.label || ''))) alarm.openLabel = 'Record notes';
+      // An appointment with no prep note yet (shared/prepNote.ts): its
+      // night-before and morning-of alarms' second button opens the event's
+      // page, where the prep box is. Gone once a note is saved. Same as
+      // alarmSetFor in widgetBridge.js.
+      if (wantsPrepAsk(task) && /night before|morning of/i.test(String(m.label || ''))) alarm.openLabel = 'Add prep notes';
     }
     out.push(alarm);
   }
