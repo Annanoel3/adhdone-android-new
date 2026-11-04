@@ -1159,6 +1159,10 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         // A reminder instruction written into the event ("remind me the night
         // before") — the planners obey it. Usually null.
         reminder_wish: ai?.reminder_wish || null,
+        // An appointment with something to get ready before it (a vet or
+        // doctor visit, a flight, the DMV): its reminders ask for prep notes
+        // and repeat them (shared/prepNote.ts).
+        prep_worthy: ai?.prep_worthy === true,
         notification_recipient_email: user.email,
         recurrence_pattern: recurrenceRule ? (recurrenceRule.includes('FREQ=DAILY') ? 'daily' : recurrenceRule.includes('FREQ=WEEKLY') ? 'weekly' : recurrenceRule.includes('FREQ=MONTHLY') ? 'monthly' : recurrenceRule.includes('FREQ=YEARLY') ? 'yearly' : 'none') : 'none'
       };
