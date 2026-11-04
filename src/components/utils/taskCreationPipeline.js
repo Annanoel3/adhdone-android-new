@@ -732,65 +732,6 @@ export async function processAndCreateTask(inputText, opts = {}) {
   }
 }
 
-// Creates one advance-eligible task with the user's chosen lead time.
-// The task KEEPS the time the user actually said (next_reminder = the real
-// time); the advance lead is an extra push, not a shift of the task itself.
-// Shifting next_reminder made "12 pm + 1 hour before" show up as an 11 AM task.
-export async function createAdvanceTask(taskData, currentUser, minutesBefore) {
-  const eventTime = new Date(taskData.next_reminder);
-  const advanceTime = minutesBefore > 0
-    ? new Date(eventTime.getTime() - (minutesBefore * 60 * 1000))
-    : null;
-
-  const createdTask = await base44.entities.Task.create({ ...taskData, reminder_scheduling_since: new Date().toISOString() });
-  announceEventConflict(createdTask);
-  announceTaskCreated(createdTask);
-
-  const buttons = [
-    { id: "snooze_15", text: "Snooze 15 min" },
-    { id: "snooze_60", text: "Snooze 1 hour" },
-    { id: "complete", text: "✅ Done" }
-  ];
-  const pushes = [];
-
-  if (advanceTime && advanceTime.getTime() > Date.now() + 2 * 60 * 1000) {
-    const lead = minutesBefore >= 60 ? `${minutesBefore / 60} hour${minutesBefore > 60 ? 's' : ''}` : `${minutesBefore} min`;
-    pushes.push({
-      title: "📋 Upcoming Task",
-      body: `In ${lead}: ${createdTask.title}\n\nTap to view details.`,
-      sendAtISO: advanceTime.toISOString(),
-      type: 'advance_reminder',
-    });
-  }
-  if (eventTime.getTime() > Date.now()) {
-    pushes.push({
-      ...getReminderCopy(createdTask, eventTime),
-      sendAtISO: eventTime.toISOString(),
-      type: 'task_reminder',
-    });
-  }
-
-  try {
-    const ids = [];
-    for (const p of pushes) {
-      const notificationId = await scheduleReminder({
-        email: currentUser.email,
-        title: p.title,
-        body: p.body,
-        sendAtISO: p.sendAtISO,
-        taskId: createdTask.id,
-        data: { screen: "/TaskNotification", taskId: createdTask.id, urgency: createdTask.urgency, type: p.type },
-        buttons,
-      });
-      if (notificationId) ids.push(notificationId);
-    }
-    await commitNotificationIds(createdTask.id, ids);
-  } catch (error) {
-    console.error("Failed to schedule reminder:", error);
-  }
-  return createdTask;
-}
-
 // Priority sets URGENCY ONLY — the smart nudge cron decides when to remind.
 export async function createTaskWithPriority(data, priority) {
   const urgency = ['high', 'medium', 'low'].includes(priority) ? priority : 'medium';
