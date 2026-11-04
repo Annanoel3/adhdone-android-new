@@ -10,8 +10,11 @@ import { openMapsApp } from "@/components/utils/openMapsApp";
 // errand-combining nudges only fire on tasks that have one).
 // Edits inline (no nested popover) — a popover layered inside the task dialog
 // swallowed taps on Android, so Save never fired.
-export default function LocationField({ task, theme, onSave }) {
-  const [editing, setEditing] = useState(false);
+// startEditing: open straight into the editor (the event row's "Add the
+// address" line, AddAddressOffer); onCancel: told when the editor is closed
+// without saving.
+export default function LocationField({ task, theme, onSave, startEditing = false, onCancel }) {
+  const [editing, setEditing] = useState(!!startEditing);
   const [value, setValue] = useState(task.location || '');
   // Local copy so add/remove shows instantly, before the parent's save round-trips.
   const [loc, setLoc] = useState(task.location || '');
@@ -98,7 +101,7 @@ export default function LocationField({ task, theme, onSave }) {
           >
             Save Location
           </Button>
-          <Button type="button" variant="outline" onClick={() => { setValue(task.location || ''); setEditing(false); }}>
+          <Button type="button" variant="outline" onClick={() => { setValue(task.location || ''); setEditing(false); if (onCancel) onCancel(); }}>
             Cancel
           </Button>
         </div>
