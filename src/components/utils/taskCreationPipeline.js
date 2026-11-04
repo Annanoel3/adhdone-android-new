@@ -351,6 +351,9 @@ export async function processAndCreateTask(inputText, opts = {}) {
         energy_required: mainTaskParsed.energy_required || 'medium',
         takes_time: mainTaskParsed.takes_time === true,
         worth_breaking_down: mainTaskParsed.worth_breaking_down === true,
+        // An appointment with something to get ready before it: the reminders
+        // ask for prep notes and repeat them (PrepOffer, prepNote.ts).
+        prep_worthy: mainTaskParsed.prep_worthy === true,
         life_area: mainTaskParsed.life_area === 'work' ? 'work' : 'personal',
         status: 'active',
         notification_recipient_email: currentUser.email,
@@ -601,6 +604,9 @@ export async function processAndCreateTask(inputText, opts = {}) {
       // A several-steps job: "Break it into steps" right on the row
       // (BreakItDownOffer).
       worth_breaking_down: parsed.worth_breaking_down === true,
+      // An appointment with something to get ready before it (PrepOffer,
+      // prepNote.ts).
+      prep_worthy: parsed.prep_worthy === true,
       life_area: parsed.life_area === 'work' ? 'work' : 'personal',
       status: 'active',
       notification_recipient_email: currentUser.email,
@@ -803,6 +809,7 @@ export async function createTaskWithPriority(data, priority) {
     energy_required: data.energy_required,
     takes_time: data.takes_time === true,
     worth_breaking_down: data.worth_breaking_down === true,
+    prep_worthy: data.prep_worthy === true,
     life_area: data.life_area || 'personal',
     status: 'active',
     notification_recipient_email: data.currentUser.email
@@ -846,6 +853,7 @@ export async function createTaskWithDate(data, date, time) {
     energy_required: data.energy_required,
     takes_time: data.takes_time === true,
     worth_breaking_down: data.worth_breaking_down === true,
+    prep_worthy: data.prep_worthy === true,
     life_area: data.life_area || 'personal',
     status: 'active',
     notification_recipient_email: data.currentUser.email,
@@ -920,6 +928,7 @@ export async function createTaskAnyDay(data) {
     energy_required: data.energy_required,
     takes_time: data.takes_time === true,
     worth_breaking_down: data.worth_breaking_down === true,
+    prep_worthy: data.prep_worthy === true,
     life_area: data.life_area || 'personal',
     status: 'active',
     notification_recipient_email: data.currentUser.email
