@@ -50,6 +50,13 @@ export function anyPopupOpen() {
   return false;
 }
 
+// The reminder page (a notification or alarm tap lands on /TaskNotification)
+// has one job: answer the reminder. No popup of its own ever opens over it;
+// Done, Snooze and Got it all go to Home, and whatever was waiting shows there
+// (Nov 4 2026 audit: every self-opening popup is mounted in Layout, which
+// wraps this page too).
+const onReminderPage = () => typeof window !== 'undefined' && /\/TaskNotification/i.test(window.location.pathname);
+
 const isUserBusy = () => {
   if (Date.now() - lastInteractionAt < 2000) return true;
   const el = document.activeElement;
@@ -71,7 +78,7 @@ const CLAIM_GRACE_MS = 2500;
 export function waitForCalm() {
   return new Promise((resolve) => {
     const check = () => {
-      if (!isOnboardingSurfaceOpen() && !isTourActive() && !anyPopupOpen() && !isUserBusy() && Date.now() >= claimedUntil) {
+      if (!isOnboardingSurfaceOpen() && !isTourActive() && !anyPopupOpen() && !isUserBusy() && !onReminderPage() && Date.now() >= claimedUntil) {
         claimedUntil = Date.now() + CLAIM_GRACE_MS;
         resolve();
         return;
@@ -89,7 +96,7 @@ export function waitForCalm() {
 export function waitForClear() {
   return new Promise((resolve) => {
     const check = () => {
-      if (!isOnboardingSurfaceOpen() && !isTourActive() && !anyPopupOpen() && Date.now() >= claimedUntil) {
+      if (!isOnboardingSurfaceOpen() && !isTourActive() && !anyPopupOpen() && !onReminderPage() && Date.now() >= claimedUntil) {
         claimedUntil = Date.now() + CLAIM_GRACE_MS;
         resolve();
         return;
