@@ -85,9 +85,9 @@ export default function PrivacyPolicy() {
               "Tasks, reminders, notes, and parking lot ideas you create",
               "Energy logs and mood check-ins",
               "Achievements, streaks, and progress data",
-              "Messages with accountability partners",
+              ...(isIPhoneApp() ? [] : ["Messages with accountability partners"]),
               "Support Space conversations",
-              "Focus room participation",
+              ...(isIPhoneApp() ? [] : ["Focus room participation"]),
               "Device type and push notification tokens (for reminders)",
               isIPhoneApp() ? "Purchases of Record Notes minute packs through the App Store (we never see or store card details)" : "Purchases of Record Notes minute packs through Google Play or the App Store (we never see or store card details)",
               "Events from the phone calendars you choose to share — see the calendar section above",
@@ -103,7 +103,7 @@ export default function PrivacyPolicy() {
             <List items={[
               "To run the app and manage your tasks and reminders",
               "To send push notifications for reminders you've set",
-              "To enable accountability partner features and chat",
+              ...(isIPhoneApp() ? [] : ["To enable accountability partner features and chat"]),
               "To track your streaks and progress",
               "To provide AI-powered support in the Support Space",
               "To moderate community content for safety",
@@ -116,7 +116,7 @@ export default function PrivacyPolicy() {
           <Section title="Data Sharing">
             <P>We do not sell your data. We only share it in these cases:</P>
             <List items={[
-              "With accountability partners — when you connect with someone, they can see your shared check-ins and messages",
+              ...(isIPhoneApp() ? [] : ["With accountability partners — when you connect with someone, they can see your shared check-ins and messages"]),
               "With service providers, solely to operate the app — cloud hosting (Base44), push notifications (OneSignal), AI processing (OpenAI, which reads the task text, recordings and notes you ask the app to understand, plan reminders for, or transcribe), ads (Google AdMob), and purchases (" + (isIPhoneApp() ? "RevenueCat, the App Store" : "RevenueCat, Google Play, the App Store") + ")",
               "When legally required — court orders or to protect user safety",
             ]} />
