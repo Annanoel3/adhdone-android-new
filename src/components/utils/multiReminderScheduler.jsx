@@ -47,7 +47,7 @@ function setCachedSchedule(title, urgency, data, location) {
 }
 
 // ── Core: get reminder times (minutes_before + label) from LLM or cache ──────
-async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, location, reminderWish) {
+async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, location, reminderWish, taskId) {
   // Day-only schedules have absolute clock times — never use the cache. A task
   // with the user's own reminder wish never uses it either: the cache is keyed
   // on title + priority, and the wish is what makes this one different. Nor
@@ -68,6 +68,10 @@ async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, 
       location,
       reminderWish: reminderWish || null,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      // So the "leave now" is measured from where they'll be (the event
+      // before this one, work, or home: shared/leaveOrigin.ts), with this
+      // event itself left out of that look.
+      taskId: taskId || null,
     });
 
     const data = response.data || response;
@@ -277,7 +281,7 @@ export async function scheduleMultiReminders({
       if (!overtaken()) base44.entities.Task.update(taskId, { reminder_schedule: [entry] }).catch(() => {});
       return id ? [id] : [];
     }
-    const reminders = await fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, taskLocation, reminderWish);
+    const reminders = await fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, taskLocation, reminderWish, taskId);
     if (!reminders || reminders.length === 0) return clockDeadline ? [] : null;
 
     // Safety net: a task set for a specific clock time ALWAYS gets a reminder at
