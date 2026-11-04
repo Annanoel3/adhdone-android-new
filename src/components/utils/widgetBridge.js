@@ -262,10 +262,14 @@ function reminderMomentsFor(task) {
 // Which of a task's reminders ring OUT LOUD, and which stay regular pushes.
 // An alarm is for not missing the moment, not for being told about it early:
 //  - an event with a clock time rings at that time, and at "leave now" when
-//    the app worked out the drive (missing that moment means being late);
-//    its heads-ups (the night before, "in about an hour") stay pushes. Anna,
-//    Oct 13 2026, on a full-screen alarm an hour before an appointment:
-//    "This is an event. I shouldn't be getting this kind of alarm";
+//    the app worked out the drive (missing that moment means being late),
+//    and since Nov 4 2026 the night before and the morning of too: Anna
+//    forgot a vet visit that needed her cat fasting because those came as
+//    plain notifications ("a notification is not enough. That's why I made
+//    alarms"). Only its "1 hour before" stays a push, the one she said she
+//    shouldn't get as an alarm (Oct 13 2026, on a full-screen alarm an hour
+//    before an appointment: "This is an event. I shouldn't be getting this
+//    kind of alarm");
 //  - otherwise the day the task is about (its event time, due day or
 //    reminder time) always rings;
 //  - an appointment's night-before and a birthday's week-before / day-before
@@ -295,12 +299,14 @@ function ringsOutLoud(task, momentMs, label = '') {
   const anchor = rawAnchor ? new Date(rawAnchor).getTime() : NaN;
   if (isNaN(anchor)) return true; // nothing to compare against: the booked moment stands
   const isEvent = task.classification === 'event' || task.classification === 'birthday' || !!task.birthday_person;
-  // A timed event: its own time and "leave now" are the moments; the rest are
-  // heads-ups (see above). A day-only event keeps its morning-of.
+  // A timed event: its own time, "leave now", the night before and the
+  // morning of ring; only "1 hour before" stays a push (see above). A
+  // day-only event keeps its morning-of.
   if (task.classification === 'event' && task.event_time && !task.day_only_task) {
     const eventMs = new Date(task.event_time).getTime();
+    const l = String(label || '');
     // Its "It's time" rings one minute before the start (Oct 29 2026).
-    return Math.abs(momentMs - eventMs) <= 90 * 1000 || /leave now/i.test(String(label || ''));
+    return Math.abs(momentMs - eventMs) <= 90 * 1000 || /leave now/i.test(l) || /night before|morning of/i.test(l);
   }
   if (sameLocalDay(momentMs, anchor)) return true;
   if (isEvent) return false;
