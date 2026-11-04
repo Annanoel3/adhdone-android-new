@@ -65,14 +65,25 @@ function ringsEachPing(t: any, user: any): boolean {
   return nagsThroughNight(t) && phoneCanRing(user) && (t.alert_style === 'alarm' || (t.alert_style !== 'notification' && user?.alarm_mode === 'alarm'));
 }
 
-async function scheduleOneSignalNotification(email, title, body, sendAfterIsoString, taskId, alarm = false) {
+// The push's kind (data.type, and its ledger kind): a task's reminder (Done +
+// Snooze on the phone), an event's reminder (Snooze only) or an event's
+// night-before / morning-of check-in (no buttons, soft). Same rule as every
+// other booking path (multiReminderScheduler, captureToTasks, the calendar
+// import, cronRefillReminders). Restored events used to go out from here as
+// task reminders, Done button and all (fixed Nov 4 2026).
+function pushTypeFor(task: any, label: unknown): string {
+  if (task?.classification !== 'event') return 'task_reminder';
+  return /night before|morning of/i.test(String(label || '')) ? 'task_checkin' : 'event_reminder';
+}
+
+async function scheduleOneSignalNotification(email, title, body, sendAfterIsoString, taskId, alarm = false, type = 'task_reminder') {
   if (!ONESIGNAL_APP_ID || !ONESIGNAL_REST_API_KEY) {
     console.log('[onTaskUpdate] OneSignal credentials missing, skipping schedule');
     return null;
   }
 
   if (ledgerClient) {
-    const gate = await ledgerCheck(ledgerClient, { email, taskId, kind: 'task_reminder', sendAt: sendAfterIsoString });
+    const gate = await ledgerCheck(ledgerClient, { email, taskId, kind: type, sendAt: sendAfterIsoString });
     if (!gate.allowed) return null;
   }
 
@@ -86,7 +97,7 @@ async function scheduleOneSignalNotification(email, title, body, sendAfterIsoStr
       data: {
         screen: '/TaskNotification',
         taskId: taskId,
-        type: 'task_reminder',
+        type,
         ...(alarm ? { alarm: true } : {})
       },
       // A ring-on-arrival push: not held by Doze, and never re-delivered by
@@ -111,7 +122,7 @@ async function scheduleOneSignalNotification(email, title, body, sendAfterIsoStr
 
     const result = await response.json();
     console.log(`[onTaskUpdate] Scheduled OneSignal notification, ID: ${result.id}`);
-    if (ledgerClient) await ledgerRecord(ledgerClient, { email, taskId, kind: 'task_reminder', source: 'onTaskUpdate', sendAt: sendAfterIsoString, notificationId: result.id, title });
+    if (ledgerClient) await ledgerRecord(ledgerClient, { email, taskId, kind: type, source: 'onTaskUpdate', sendAt: sendAfterIsoString, notificationId: result.id, title });
     return result.id;
   } catch (error) {
     console.error('[onTaskUpdate] Error scheduling OneSignal notification:', error);
@@ -951,7 +962,7 @@ async function handleTaskEvent(req: Request): Promise<Response> {
           c.at = placed;
         }
         const sendAtISO = new Date(c.at).toISOString();
-        const notificationId = await scheduleOneSignalNotification(email, c.title, c.body, sendAtISO, event.entity_id);
+        const notificationId = await scheduleOneSignalNotification(email, c.title, c.body, sendAtISO, event.entity_id, false, pushTypeFor(data, c.label));
         newSchedule.push({
           notification_id: notificationId,
           send_at: sendAtISO,
@@ -1078,7 +1089,7 @@ async function handleTaskEvent(req: Request): Promise<Response> {
           const sendAtISO = entry.send_at;
           const title = entry.notification_title || `📌 ${data.title}`;
           const body = entry.notification_body || `You've got this! ${data.title}`;
-          const notificationId = await scheduleOneSignalNotification(email, title, body, sendAtISO, event.entity_id);
+          const notificationId = await scheduleOneSignalNotification(email, title, body, sendAtISO, event.entity_id, false, pushTypeFor(data, entry?.label));
           if (notificationId) {
             newIds.push(notificationId);
             newSchedule.push({ ...entry, notification_id: notificationId });
