@@ -60,6 +60,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.44';
 import { getTodaysCommute, localDateKey } from '../../shared/commuteSchedule.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
+import { leaveOriginFor, fromWords } from '../../shared/leaveOrigin.ts';
 import { getProximity } from '../../shared/mapsDistance.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
 import { resolveQuietHours, isInQuietHours, adjustForQuietHours } from '../../shared/quietHours.ts';
@@ -370,8 +371,14 @@ async function checkEventLeaveTimes(base44: any, now: Date): Promise<any[]> {
       }
       const owner = owners.get(email);
       if (!owner || owner.notifications === false) continue;
-      const home = getHomeOrigin(owner);
-      if (!home) continue;
+      // Where the drive starts: the event before this one, work, or home
+      // (shared/leaveOrigin.ts; Anna, Nov 4 2026: "telling them when to leave
+      // home when they are not home is not helpful"). The same answer the
+      // booking got, so a live re-check never "corrects" it back to home.
+      const from = await leaveOriginFor(base44, owner, task);
+      const home = from.origin;
+      if (!home || from.samePlace) continue;
+      const whence = fromWords(from) || 'away';
       const routeOpts = { avoidTolls: owner.commute_avoid_tolls === true };
       const timeZone = owner.timezone || 'America/Chicago';
 
@@ -434,16 +441,16 @@ async function checkEventLeaveTimes(base44: any, now: Date): Promise<any[]> {
         // not when it's already too late, or the drive is past the 3-hour cap.
         const onTime = !late && drive.minutes + CUSHION_MINUTES <= MAX_EVENT_LEAD;
         body = late
-          ? `Traffic got worse: "${t}" is about ${about} min away right now, and it starts at ${arriveBy}. Leave as soon as you can. 🚗`
+          ? `Traffic got worse: "${t}" is about ${about} min ${whence} right now, and it starts at ${arriveBy}. Leave as soon as you can. 🚗`
           : onTime
-            ? `Traffic's worse than expected: "${t}" is about ${about} min away. Head out now to get there by ${arriveBy}. 🚗`
-            : `Traffic's worse than expected: "${t}" is about ${about} min away, and it starts at ${arriveBy}. Leave as soon as you can. 🚗`;
+            ? `Traffic's worse than expected: "${t}" is about ${about} min ${whence}. Head out now to get there by ${arriveBy}. 🚗`
+            : `Traffic's worse than expected: "${t}" is about ${about} min ${whence}, and it starts at ${arriveBy}. Leave as soon as you can. 🚗`;
       } else {
         // The last check before it goes: same minute, true numbers.
         sendAt = new Date(bookedMs);
         body = Number.isFinite(said) && about < said
-          ? `"${t}" is about ${about} min away with traffic right now. Leaving now gets you there a little early. 🚗`
-          : `"${t}" is about ${about} min away with traffic right now. Head out now to get there by ${arriveBy}. 🚗`;
+          ? `"${t}" is about ${about} min ${whence} with traffic right now. Leaving now gets you there a little early. 🚗`
+          : `"${t}" is about ${about} min ${whence} with traffic right now. Head out now to get there by ${arriveBy}. 🚗`;
       }
 
       const newId = await bookEventLeave(appId, restApiKey, email, task, owner, title, body, sendAt);
