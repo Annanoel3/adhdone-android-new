@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { base44 } from '@/api/base44Client';
 import { ONBOARDING_STEPS, isStepDone, markStepDone } from './onboardingGate';
@@ -62,15 +62,15 @@ export default function WelcomeDialog({ user }) {
     if (!user) return undefined;
     if (isStepDone(ONBOARDING_STEPS.welcome)) return undefined;
     // The about-you question is the last one: reaching it is the whole chat.
-    if (user.about_me) {
+    // An account older than a few days with a name is done too, as before
+    // (the about-you catch-up is CatchUpDialog's, once).
+    if (user.about_me || (user.preferred_name && accountIsOld(user))) {
       markStepDone(ONBOARDING_STEPS.welcome);
       return undefined;
     }
     let cancelled = false;
-    // A new account with a name and no finished chat: pick it back up. (An
-    // account older than a few days with only a name gets the welcome-back
-    // catch-up below instead, as before.)
-    if (user.preferred_name && !accountIsOld(user) && !wasReplayedThisSession()) {
+    // A new account with a name and no finished chat: pick it back up.
+    if (user.preferred_name && !wasReplayedThisSession()) {
       accountHasTasks().then((hasTask) => {
         if (cancelled || isStepDone(ONBOARDING_STEPS.welcome)) return;
         setResumeOpts({ hasTask, notifyAnswered: isStepDone(ONBOARDING_STEPS.permissions) });
@@ -132,6 +132,8 @@ export default function WelcomeDialog({ user }) {
   // Same choice the catch-up dialog makes: never ask for a name we already have.
   const knownName = (user?.preferred_name || user?.display_name || '').trim();
   const catchUpScript = knownName ? CATCH_UP_ABOUT_ONLY_SCRIPT : CATCH_UP_SCRIPT;
+  // One script object for the whole chat: WelcomeChat steps through it by index.
+  const pickedUpScript = useMemo(() => resumeScript(resumeOpts), [resumeOpts]);
 
   return (
     <Dialog open={!!mode} onOpenChange={(o) => { if (!o) handleClose(); }}>
@@ -140,7 +142,7 @@ export default function WelcomeDialog({ user }) {
           {mode === 'catchup' ? (
             <WelcomeChat onDone={handleClose} script={catchUpScript} initialName={knownName} />
           ) : mode === 'resume' ? (
-            <WelcomeChat onDone={handleClose} script={resumeScript(resumeOpts)} initialName={knownName} />
+            <WelcomeChat onDone={handleClose} script={pickedUpScript} initialName={knownName} />
           ) : (
             <WelcomeChat onDone={handleClose} />
           )}
