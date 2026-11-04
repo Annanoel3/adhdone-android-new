@@ -1307,6 +1307,29 @@ Deno.serve(async (req) => {
         await pushPhoneAlarms({ ...task, onesignal_notification_ids: [result.notificationId], reminder_schedule: [entry] }, owner,
           { before: task, changedAt: Date.now(), source: 'cronRefillReminders' });
         console.log(`🩹 [REFILL] Booked the reminder the app never got to for "${task.title}" at ${task.next_reminder}`);
+      } else if (result?.skipped && result?.reason === 'same_task_duplicate' && result?.existing?.notificationId
+        && (!result.existing.kind || result.existing.kind === 'task_reminder')) {
+        // The push IS booked, by the app, which then never got to write the
+        // id onto the task (it books, then saves in a second call; the phone
+        // was put away in between). Nov 4 2026: a daily 7 PM task's next copy
+        // was made from the alarm screen's Done, its push booked 4 seconds
+        // later (in the ledger, live in OneSignal), the save never landed.
+        // This pass then tried to book it again every 2 hours, was refused
+        // as a duplicate every time, and the owner alert called it "never
+        // booked" all night. Adopt the booking the ledger knows instead.
+        const existing = result.existing;
+        const sendAt = existing.sendAt || rescueAtISO;
+        const entry = { notification_id: existing.notificationId, send_at: sendAt, label: 'at the time', notification_title: existing.title || words.title, notification_body: words.body };
+        await base44.asServiceRole.entities.Task.update(task.id, {
+          onesignal_notification_ids: [existing.notificationId],
+          reminder_schedule: [entry],
+          reminder_plan_built_at: now.toISOString(),
+          reminder_scheduling_since: null,
+          reminder_retry_after: null,
+        });
+        await pushPhoneAlarms({ ...task, onesignal_notification_ids: [existing.notificationId], reminder_schedule: [entry] }, owner,
+          { before: task, changedAt: Date.now(), source: 'cronRefillReminders' });
+        console.log(`🩹 [REFILL] Adopted the reminder the app booked but never saved for "${task.title}" at ${sendAt} (${existing.notificationId})`);
       } else {
         await base44.asServiceRole.entities.Task.update(task.id, {
           reminder_retry_after: new Date(now.getTime() + RETRY_AFTER_MS).toISOString(),
