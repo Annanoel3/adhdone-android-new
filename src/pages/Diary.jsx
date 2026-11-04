@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import DiaryFirstRunDialog from "@/components/diary/DiaryFirstRunDialog";
 import DiaryEditor from "@/components/diary/DiaryEditor";
 import DiaryEntryRow from "@/components/diary/DiaryEntryRow";
+import { usePopupTurn } from "@/components/onboarding/onboardingSurface";
 
 const todayKey = () => format(new Date(), "yyyy-MM-dd");
 
@@ -16,6 +17,9 @@ export default function Diary() {
   const [user, setUser] = useState(null);
   const [entries, setEntries] = useState([]);
   const [showFirstRun, setShowFirstRun] = useState(false);
+  // Opens on its own the first time the page loads, so it waits for the
+  // page's intro card or any other popup to be gone first (Nov 4 2026 audit).
+  const firstRunShown = usePopupTurn(showFirstRun, { reactive: true });
   const [completedToday, setCompletedToday] = useState([]);
   const [prefill, setPrefill] = useState("");
   // null = list view. Otherwise the entry being written (may be a brand-new one).
@@ -175,7 +179,7 @@ export default function Diary() {
         />
       </div>
 
-      <DiaryFirstRunDialog open={showFirstRun} onChoose={handleFirstRunChoice} />
+      <DiaryFirstRunDialog open={firstRunShown} onChoose={handleFirstRunChoice} />
     </div>
   );
 }
