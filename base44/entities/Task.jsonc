@@ -283,6 +283,10 @@
       "type": "boolean",
       "description": "The row's 'Break it into steps' offer was tapped or hidden with its \u00d7, so it isn't shown again for this task. The same button stays inside the opened card."
     },
+    "address_offer_dismissed": {
+      "type": "boolean",
+      "description": "The event row's 'Add the address and I'll time when to leave' line (AddAddressOffer, Nov 4 2026) was hidden with its x, so it isn't shown again for this event. Only an upcoming timed event with no address, on an account with a home circle, gets the line; saving an address ends it on its own."
+    },
     "life_area": {
       "type": "string",
       "enum": [
