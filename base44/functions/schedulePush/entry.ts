@@ -8,6 +8,7 @@ import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 import { atTimeWords, isPlainAtTimeWords, taskRingsAsAlarm, ringsOutLoudOn } from '../../shared/reminderTitle.ts';
 import { userTimeZone, resolveQuietHours, isInQuietHours } from '../../shared/quietHours.ts';
 import { withPrep } from '../../shared/prepNote.ts';
+// (Re-saved Nov 4 2026 so the bundled shared/sendLedger.ts is picked up: event_conflict and first_task_nudge are soft pushes that yield to a reminder tied to a moment.)
 
 // WHO MAY BOOK A PUSH
 // Like every Base44 function, this endpoint can be reached by anyone on the
