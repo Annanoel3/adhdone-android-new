@@ -560,6 +560,20 @@ How it works, and how it must keep working:
    `helping_preview` still work for any account (they return before the guard). Verified
    from the Test Function: `{"email": "<editor account>"}` with its look-again time already
    past came back with `schedulesGenerated: 0`.
+14. **THE LONG VIEW before "Are your reminders helping?" (Nov 4 2026).** Anna: "should we
+   really be bugging her with 'are your reminders helping?' Maybe we should be paying
+   attention to long term trends and how they use the app instead of short term." Tabitha
+   was asked on Nov 1 after a week in which she finished five things (weekly trash and date
+   night every week, the calls done), because the question only looked at the week's nudged
+   tasks: 17 nudged task-days, 2 finished the same day (the calls she keeps putting off, the
+   folding). Now `helpingLook` is handed every task the person ever finished
+   (`completionsByUser`) and calls their use healthy when they finished 3+ tasks in the last
+   7 days or finished something on 4+ different days in the last 14; a healthy person is never
+   asked (first ask or the 3-day re-ask) and never paused on one a day, whatever the nudged
+   tasks say. `helping_preview` shows `healthy`, `finished_last_7_days`,
+   `days_finished_last_14`. Tabitha, Nov 4: healthy (5 in 7 days, 9 days of 14), would_ask
+   false, so her re-ask due that afternoon doesn't go. Someone who finishes nothing (a new
+   signup who never came back) is still judged by the week's presses as before.
 
 **Do not change `base44/functions/cronSmartTaskNudge`, `base44/shared/reminderBrief.ts`, the
 "Smart Task Nudge" workflow, or the `smart_nudge_*` fields on User unless Anna explicitly
