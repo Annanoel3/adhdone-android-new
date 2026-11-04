@@ -27,6 +27,7 @@ import { withChallengeRetry } from '../../shared/sdkRetry.ts';
 import { resolveQuietHours } from '../../shared/quietHours.ts';
 import { pushPhoneAlarms } from '../../shared/reminderTitle.ts';
 import { flagConflicts } from '../../shared/eventConflicts.ts';
+import { needsPrepAskPush, sendPrepAsk } from '../../shared/prepNote.ts';
 
 // Payment detection for imported calendar items. Calendar payment entries are
 // usually terse ("Discover payment", "$450 rent", "Pay water bill", "Chase"),
@@ -390,6 +391,11 @@ async function planEventReminders(base44: any, user: any, task: any, opts: { tit
         timezone: (user as any)?.timezone || undefined,
         // Lets an appointment's reminders offer recording notes (build 36+).
         canRecord: (user as any)?.notes_can_record === true,
+        // An appointment with something to get ready first: the night
+        // before asks for a prep note, or every reminder carries it
+        // (shared/prepNote.ts).
+        prepWorthy: (task as any)?.prep_worthy === true,
+        prepNote: (task as any)?.prep_note || '',
       });
       const scheduleData = scheduleRes?.data || scheduleRes || {};
       rawReminders = scheduleData.reminders || [];
@@ -699,6 +705,9 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
 
   let created = 0, updated = 0, skipped = 0, cancelledRemoved = 0;
   const budget = { n: MAX_REMINDERS_PER_SYNC };
+  // At most one "anything to prep?" push per sync (shared/prepNote.ts): a
+  // first connect can bring in several of today's appointments at once.
+  const prepAsks = { n: 1 };
   const results = [];
   // Tasks this run made or moved, checked for double bookings at the end.
   const toCheck: string[] = [];
@@ -1245,6 +1254,13 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
 
     await base44.asServiceRole.entities.Task.update(createdTask.id, finalPatch).catch((e) =>
       console.log('[syncGoogleCalendar] could not finalize task reminders:', e.message));
+    // An appointment imported too late for its night-before ask (it's today,
+    // or tomorrow and it's past 8 PM): one push in a few minutes asks for the
+    // prep note. Once per sync, never twice for one event (shared/prepNote.ts).
+    if (prepAsks.n > 0 && needsPrepAskPush({ ...createdTask, ...finalPatch }, finalPatch.reminder_schedule || [])) {
+      prepAsks.n--;
+      await sendPrepAsk(base44, { ...createdTask, ...finalPatch }, user, user.email, 'calendar import');
+    }
     // Its alarms go to the phone now: an import made with the app closed (the
     // phone's own calendar sync, CalendarSyncWorker) has no app open to rebuild
     // them, and an alarm user's event has to ring as an alarm (PushFilter).
