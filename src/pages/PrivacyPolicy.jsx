@@ -106,7 +106,7 @@ export default function PrivacyPolicy() {
               ...(isIPhoneApp() ? [] : ["To enable accountability partner features and chat"]),
               "To track your streaks and progress",
               "To provide AI-powered support in the Support Space",
-              "To moderate community content for safety",
+              ...(isIPhoneApp() ? [] : ["To moderate community content for safety"]),
               "To verify purchases of Record Notes minutes",
               "To turn the phone calendar events you share into ADHDone tasks and reminders (read-only, only when you allow calendar access)",
               "To show ads in the free version",
