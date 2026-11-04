@@ -438,7 +438,14 @@ export default function TaskNotification() {
 
           {prepBox && (
             <div className="mb-4">
-              <PrepNoteBox task={task} theme={theme} autoFocus={!String(task.prep_note || "").trim()} onSaved={(note) => setTask((t) => ({ ...t, prep_note: note }))} />
+              {/* The keyboard opens only when they came to type it: an alarm's
+                  "Add prep notes" button. From a tray reminder the box just sits there. */}
+              <PrepNoteBox
+                task={task}
+                theme={theme}
+                autoFocus={!String(task.prep_note || "").trim() && new URLSearchParams(window.location.search).get('from') === 'alarm'}
+                onSaved={(note) => setTask((t) => ({ ...t, prep_note: note }))}
+              />
             </div>
           )}
 
