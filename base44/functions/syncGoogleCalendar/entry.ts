@@ -380,6 +380,10 @@ async function planEventReminders(base44: any, user: any, task: any, opts: { tit
         // `homeZip`, which nothing reads, so an imported event with a location
         // never got its drive-time "leave now" reminder.
         homeOrigin: getHomeOrigin(user),
+        // The drive is measured from where they'll be: the event before
+        // this one, work, or home (shared/leaveOrigin.ts, Nov 4 2026).
+        ownerEmail: user.email,
+        taskId: task.id,
         avoidTolls: (user as any)?.commute_avoid_tolls === true,
         reminderWish: (task as any)?.reminder_wish || null,
         timezone: (user as any)?.timezone || undefined,
