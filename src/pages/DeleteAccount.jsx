@@ -6,6 +6,7 @@ import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
 import { base44 } from "@/api/base44Client";
 import DeletionRequestButton from "@/components/shared/DeletionRequestButton";
+import { isIPhoneApp } from "@/lib/phonePlatform";
 
 export default function DeleteAccount() {
   const navigate = useNavigate();
@@ -380,6 +381,9 @@ export default function DeleteAccount() {
                   </p>
                 </div>
 
+                {/* Not in the iPhone app: it has no social features, and App Review
+                    reads this page (Nov 4 2026, Guideline 2.1 review notes). */}
+                {!isIPhoneApp() && (
                 <div className={`p-4 rounded-lg border ${
                   theme === 'dark' 
                     ? 'bg-gray-900/50 border-gray-700' 
@@ -396,6 +400,7 @@ export default function DeleteAccount() {
                     Accountability connections, chat messages, mood check-ins, focus room participation, and leaderboard presence.
                   </p>
                 </div>
+                )}
 
                 <div className={`p-4 rounded-lg border ${
                   theme === 'dark' 
@@ -456,7 +461,7 @@ export default function DeleteAccount() {
                 theme === 'dark' ? 'text-gray-300' : 'text-gray-700'
               }`}>
                 <li>Consider requesting a copy of your data before deletion (include this in your email request)</li>
-                <li>Cancel your subscription through the App Store or Google Play if you have an active subscription</li>
+                {!isIPhoneApp() && <li>Cancel your subscription through the App Store or Google Play if you have an active subscription</li>}
                 <li>Remember that deletion is permanent and cannot be undone</li>
                 <li>If you only want to delete specific data, use our <a href={createPageUrl("DeleteData")} className={`underline ${theme === 'dark' ? 'text-blue-400' : 'text-blue-600'}`}>Data Deletion</a> page instead</li>
               </ul>
