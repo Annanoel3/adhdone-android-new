@@ -34,6 +34,7 @@ import { formatTimeRange } from "../utils/timeRangeLabel";
 import SubtaskQuickAdd from "./SubtaskQuickAdd";
 import BreakItDownOffer from "./BreakItDownOffer";
 import AddAddressOffer from "./AddAddressOffer";
+import PrepOffer, { prepOfferWanted } from "./PrepOffer";
 import LifeAreaPill, { TagPill } from "./LifeAreaPill";
 import { checkDuePushEgg } from "../eastereggs/duePushEgg";
 import { firstDateMakesDeadline, isPastDue } from "../utils/todayTasks";
@@ -1153,11 +1154,17 @@ export default function TaskCard({
         {!expanded && (
           <BreakItDownOffer task={task} theme={theme} subtaskCount={subtaskCount || 0} onRefreshTasks={onRefreshTasks} />
         )}
-        {/* An upcoming event with no address, on an account with a home
-            circle: "Add the address and I'll time when to leave" (the
-            drive-timed reminder needs a place). */}
+        {/* One offer line at a time on an event's row, never two: an
+            appointment with nothing noted to get ready first asks for its
+            prep note (PrepOffer); otherwise an upcoming event with no
+            address, on an account with a home circle, gets "Add the address
+            and I'll time when to leave" (the drive-timed reminder needs a
+            place). The address line comes back once the prep is answered
+            or hidden. */}
         {!expanded && (
-          <AddAddressOffer task={task} theme={theme} onRefreshTasks={onRefreshTasks} />
+          prepOfferWanted(task)
+            ? <PrepOffer task={task} theme={theme} onRefreshTasks={onRefreshTasks} />
+            : <AddAddressOffer task={task} theme={theme} onRefreshTasks={onRefreshTasks} />
         )}
 
         {/* Expanded section: all other info + inline editing */}
