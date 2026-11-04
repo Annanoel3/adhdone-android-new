@@ -12,10 +12,10 @@ import { ledgerCheck, ledgerRecord } from '../../shared/sendLedger.ts';
 //   2. the app owner (admin);
 //   3. a signed-in user sending to THEMSELVES (the "test notification" check,
 //      testOneSignalConnection).
-// Anything else is refused. That includes the Weekly Challenges "share with
-// partners" button (src/components/home/WeeklyChallenges.jsx), which pushed to
-// other people's emails — partner/challenge pushes are meant to be off
-// (RULES.md §2), and this was the one path that still sent them.
+// Anything else is refused. That included the Weekly Challenges "share with
+// partners" button (WeeklyChallenges.jsx, never mounted; file removed Nov 4
+// 2026), which pushed to other people's emails — partner/challenge pushes are
+// meant to be off (RULES.md §2), and this was the one path that still sent them.
 Deno.serve(async (req) => {
     try {
         console.log('[sendOneSignalPush] ⏹️ Function started');
