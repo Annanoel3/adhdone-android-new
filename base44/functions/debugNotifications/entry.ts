@@ -186,6 +186,9 @@ Deno.serve(async (req) => {
             const qEntry = { label: QUESTIONS_LABEL, notification_title: merged[0].notification_title, notification_body: merged[0].notification_body, send_at: '2026-11-11T02:00:00.000Z' };
             const r2 = rewordEntryForPrep(qEntry, { ...vet, prep_note: 'bring the records' });
             add('note typed on the questions ask: questions words + note', r2?.label === QUESTIONS_LABEL && r2?.notification_body === `${nightBeforeWords(vet.title, { questions: true }).body}\nPrep: bring the records`, true);
+            // The Notes page's Remove strips the questions mark but leaves the merged ask's words: still the ask.
+            const strippedEntry = { ...qEntry, label: 'night before' };
+            add('note typed on a stripped questions ask: plain words + note', rewordEntryForPrep(strippedEntry, { ...vet, prep_note: 'bring the records' })?.notification_body, `${nightBeforeWords(vet.title).body}\nPrep: bring the records`);
             const plainEntry = { label: 'leave now', notification_title: 'T', notification_body: 'Head out now. 🚗\nPrep: old words', send_at: '2026-11-11T18:30:00.000Z' };
             add('note changed: the old line is replaced', rewordEntryForPrep(plainEntry, { ...vet, prep_note: 'new words' })?.notification_body, 'Head out now. 🚗\nPrep: new words');
             add('note cleared: the line comes off', rewordEntryForPrep(plainEntry, { ...vet, prep_note: '' })?.notification_body, 'Head out now. 🚗');
