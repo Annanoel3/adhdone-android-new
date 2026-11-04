@@ -201,7 +201,12 @@ export function ringsOutLoudOn(task: any, momentMs: number, timeZone: string, la
   if (task.classification === 'event' && task.event_time && !task.day_only_task) {
     const eventMs = whenMs(task.event_time);
     const l = String(label || '');
-    return Math.abs(momentMs - eventMs) < 60 * 1000 || /leave now/i.test(l) || /night before|morning of/i.test(l);
+    // Its "It's time" rings one minute before the start (Oct 29 2026): the
+    // same 90 seconds widgetBridge.ringsOutLoud allows. (Until Nov 4 2026
+    // this copy allowed under 60, so a list the server sent for a timed
+    // event left its at-the-time alarm out; the phone's own sync on the next
+    // open put it back.)
+    return Math.abs(momentMs - eventMs) <= 90 * 1000 || /leave now|at the time|night before|morning of/i.test(l);
   }
   const day = (ms: number) => localDateKey(new Date(ms), timeZone);
   const momentDay = day(momentMs);
