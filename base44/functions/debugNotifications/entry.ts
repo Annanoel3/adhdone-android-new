@@ -6,7 +6,7 @@
 // Re-saved Oct 12 2026 (pets) so the bundled shared/reminderTitle.ts is picked up: a pet's birthday alarm has no "Write a text" button.
 // Re-saved Oct 6 2026 so the bundled shared/reminderTitle.ts (Later break: no alarm inside later_until) is picked up.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.7.1';
-import { getReminderContent, pushPhoneAlarms } from '../../shared/reminderTitle.ts';
+import { getReminderContent, pushPhoneAlarms, ringsOutLoudOn } from '../../shared/reminderTitle.ts';
 import { userTimeZone } from '../../shared/quietHours.ts';
 import { ledgerCancel } from '../../shared/sendLedger.ts';
 
@@ -102,6 +102,44 @@ Deno.serve(async (req) => {
 
         let reqBody: any = {};
         try { reqBody = await req.clone().json(); } catch { reqBody = {}; }
+        // { ringSelfTest: true } (owner only): which reminders ring as alarms,
+        // checked against Anna's rules (RULES.md §9 Q6). Run it after ANY change
+        // to ringsOutLoudOn (shared/reminderTitle.ts) or ringsOutLoud
+        // (widgetBridge.js, the same rules on the phone). Nov 4 2026: a timed
+        // event's heads-ups had been turned into notifications on Oct 13 from a
+        // sentence that meant something else, and nothing noticed for three
+        // weeks until a vet visit that needed a fasting cat.
+        if (reqBody?.ringSelfTest === true) {
+            if (user.role !== 'admin') return Response.json({ success: false, error: 'Owner only' }, { status: 403 });
+            const tz = 'America/Chicago';
+            const ms = (s: string) => new Date(s).getTime();
+            const timed = { classification: 'event', event_time: '2026-11-04T19:45:00.000Z', due_date: '2026-11-04T19:45:00.000Z', next_reminder: '2026-11-04T19:45:00.000Z' };
+            const dayOnly = { classification: 'event', event_time: null, day_only_task: true, due_date: '2026-11-05T15:00:00.000Z', next_reminder: '2026-11-05T15:00:00.000Z' };
+            const birthday = { classification: 'birthday', birthday_person: 'Someone', due_date: '2026-11-10T15:00:00.000Z', next_reminder: '2026-11-10T15:00:00.000Z' };
+            const onDay = { classification: 'task', due_date: '2026-11-06T22:00:00.000Z', next_reminder: '2026-11-06T22:00:00.000Z', urgency: 'medium', reminder_interval: 'once', deadline_style: 'on' };
+            const RING_CHECKS: { name: string; task: any; at: string; label: string; expect: boolean }[] = [
+                { name: 'timed event: night before rings', task: timed, at: '2026-11-04T02:25:00Z', label: 'night before', expect: true },
+                { name: 'timed event: night before (questions wording) rings', task: timed, at: '2026-11-04T02:25:00Z', label: 'night before · questions', expect: true },
+                { name: 'timed event: morning of rings', task: timed, at: '2026-11-04T15:25:00Z', label: 'morning of', expect: true },
+                { name: 'timed event: 1 hour before rings', task: timed, at: '2026-11-04T18:45:00Z', label: '1 hour before', expect: true },
+                { name: 'timed event: leave now rings', task: timed, at: '2026-11-04T18:35:00Z', label: 'leave now', expect: true },
+                { name: 'timed event: at the time (one minute before) rings', task: timed, at: '2026-11-04T19:44:00Z', label: 'at the time', expect: true },
+                { name: 'timed event: at the time (record notes wording) rings', task: timed, at: '2026-11-04T19:44:00Z', label: 'at the time · record notes', expect: true },
+                { name: 'all-day event: morning of rings', task: dayOnly, at: '2026-11-05T15:00:00Z', label: 'morning of', expect: true },
+                { name: 'all-day event: night before stays a push', task: dayOnly, at: '2026-11-05T02:00:00Z', label: 'night before', expect: false },
+                { name: 'birthday: day of rings', task: birthday, at: '2026-11-10T15:00:00Z', label: 'day of', expect: true },
+                { name: 'birthday: day before stays a push', task: birthday, at: '2026-11-09T15:00:00Z', label: 'day before', expect: false },
+                { name: 'medium task on its day rings', task: onDay, at: '2026-11-06T15:00:00Z', label: 'morning of', expect: true },
+                { name: 'medium task the day before stays a push', task: onDay, at: '2026-11-06T02:00:00Z', label: 'night before', expect: false },
+            ];
+            const results = RING_CHECKS.map((c) => {
+                let got: any = null;
+                try { got = ringsOutLoudOn(c.task, ms(c.at), tz, c.label); } catch (e) { got = `threw: ${(e as any)?.message || e}`; }
+                return { name: c.name, expect: c.expect, got, pass: got === c.expect };
+            });
+            const failed = results.filter((r) => !r.pass);
+            return Response.json({ success: failed.length === 0, passed: results.length - failed.length, failed: failed.length, results });
+        }
         if (reqBody?.mode === 'cancel_pending') {
             // Owner-only: cancel specific booked pushes for good — OneSignal, the
             // send ledger, and the id on the task — e.g. a reminder someone
