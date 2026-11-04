@@ -36,7 +36,18 @@ const URGENT_STACK_GAP_MS = 5 * 60 * 1000;
 // Also soft (Nov 4 2026 audit): the one "two events overlap / look the same"
 // push (event_conflict) and the day-2 "add one thing" nudge (first_task_nudge).
 // Neither is tied to a moment, so each yields to a reminder that is.
-const PROACTIVE_KINDS = new Set(['smart_nudge', 'daily_digest', 'motivation', 'general', 'task_checkin', 'event_conflict', 'first_task_nudge']);
+// 'event_heads_up' (an event's night-before booked by the app itself) is the
+// same kind of push as the server's 'task_checkin' and is treated the same:
+// soft, and moved to a free minute rather than dropped (schedulePush).
+const PROACTIVE_KINDS = new Set(['smart_nudge', 'daily_digest', 'motivation', 'general', 'task_checkin', 'event_heads_up', 'event_conflict', 'first_task_nudge']);
+// Which pending soft pushes a time-critical one may cancel to take the slot.
+// NOT an event's heads-up (task_checkin / event_heads_up: the night before,
+// the morning of, the prep ask): on Oct 13 2026 Anna lost a Bike Night's
+// night-before that way and "the first she heard of it that day was 'in about
+// an hour'", and on Nov 4 2026 every reminder of an event was made to count
+// (RULES.md §9 Q6). Those two may land in the same minute as a task's reminder
+// booked after them; the softer nudges still make way.
+const EVICTABLE_KINDS = new Set(['smart_nudge', 'daily_digest', 'motivation', 'general', 'event_conflict', 'first_task_nudge']);
 
 function ledger(base44: any) {
   return base44.asServiceRole.entities.NotificationLedger;
@@ -173,7 +184,7 @@ export async function ledgerCheck(
     // A time-critical push wins its slot: a pending proactive push already
     // booked there is cancelled rather than letting the two land together.
     const entryPending = new Date(entry.send_at).getTime() > Date.now() && !!entry.notification_id;
-    const evicts = !proactive && PROACTIVE_KINDS.has(entry.kind) && entryPending && diff < STACK_GAP_MS;
+    const evicts = !proactive && EVICTABLE_KINDS.has(entry.kind) && entryPending && diff < STACK_GAP_MS;
     if (!duplicate && !stacked && !evicts) continue;
 
     if (!(await stillLive(entry.notification_id))) {
