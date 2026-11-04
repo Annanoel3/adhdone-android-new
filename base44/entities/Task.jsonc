@@ -289,7 +289,7 @@
     },
     "prep_note": {
       "type": "string",
-      "description": "What to get ready before this event, in the user's own words ('Kirito fasting from midnight', 'bring insurance card and the referral'). Typed on the TaskNotification page, the row's PrepOffer line or the open card. Every reminder of the event (night before, morning of, hour before, leave now, at the time, the phone alarm) ends with 'Prep: <note>'; changing it rewords the pending pushes."
+      "description": "What to get ready before this event, in the user's own words ('no food after midnight', 'bring the insurance card and the referral'). Typed on the TaskNotification page, the row's PrepOffer line or the open card. Every reminder of the event (night before, morning of, hour before, leave now, at the time, the phone alarm) ends with 'Prep: <note>'; changing it rewords the pending pushes."
     },
     "prep_offer_dismissed": {
       "type": "boolean",
