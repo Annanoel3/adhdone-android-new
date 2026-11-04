@@ -119,7 +119,7 @@ async function atWork(base44: any, email: string, at: Date): Promise<boolean> {
 export async function ledgerCheck(
   base44: any,
   opts: { email: string; taskId?: string | null; kind?: string; sendAt?: string | Date; urgent?: boolean; firstClaim?: boolean }
-): Promise<{ allowed: boolean; reason?: string }> {
+): Promise<{ allowed: boolean; reason?: string; conflict?: { notificationId: string; sendAt: string; kind: string; title: string } }> {
   const email = opts.email;
   if (!email) return { allowed: true };
   const kind = opts.kind || 'task_reminder';
@@ -183,7 +183,10 @@ export async function ledgerCheck(
     }
     const reason = duplicate ? 'same_task_duplicate' : 'stacked_on_other_push';
     console.log(`[sendLedger] BLOCKED ${kind} for ${email} (${reason}) — conflicts with ${entry.kind} "${entry.title || ''}" at ${entry.send_at}`);
-    return { allowed: false, reason };
+    // The booking that blocked it, verified live just above. A caller that
+    // finds its task has no id on file can adopt this one instead of trying
+    // again (cronRefillReminders' abandoned-booking rescue, Nov 4 2026).
+    return { allowed: false, reason, conflict: { notificationId: String(entry.notification_id || ''), sendAt: String(entry.send_at || ''), kind: String(entry.kind || ''), title: String(entry.title || '') } };
   }
   return { allowed: true };
 }
