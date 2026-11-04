@@ -34,6 +34,9 @@ export default function HomeBaseFields({ user, theme, onSaved, compact = false }
       await base44.auth.updateMe({ home_lat: c.lat, home_lng: c.lng });
       setEditing(false);
       showSaved();
+      // The event rows' "Add the address" line (AddAddressOffer) asks about
+      // the home circle once per app load; a circle saved just now counts.
+      window.dispatchEvent(new Event('home-base-saved'));
       onSaved?.();
     } catch (e) {
       console.error('Failed to save home base:', e);
