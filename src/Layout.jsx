@@ -56,10 +56,12 @@ import {
 } from "@/components/ui/collapsible";
 import MiniPomodoroBar from "./components/shared/MiniPomodoroBar";
 import UniversalVoiceAssistant from "./components/shared/UniversalVoiceAssistant";
-// NotificationFollowupModal ("Did you do it?") is no longer mounted: it popped
-// up on its own on every open for any overdue task and for the latest smart
-// nudge, and people just tapped No. The only "did you do it?" now is the one a
-// notification tap lands on (the TaskNotification page).
+// NotificationFollowupModal ("Did you do it?") is gone (file removed Nov 4
+// 2026): it popped up on its own on every open for any overdue task and for the
+// latest smart nudge, and people just tapped No. The only "did you do it?" now
+// is the one a notification tap lands on (the TaskNotification page).
+// Every popup that opens on its own takes a turn (usePopupTurn / waitForCalm /
+// waitForClear in onboarding/onboardingSurface.js): one on screen at a time.
 import AppGuideModal from "./components/shared/AppGuideModal";
 import RecordingBar from "./components/shared/RecordingBar";
 import FocusModePrompt from "./components/shared/FocusModePrompt";
