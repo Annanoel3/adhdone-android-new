@@ -25,6 +25,7 @@ import TaskDetailsModal from '@/components/tasks/TaskDetailsModal';
 import KeepAppOpenNote from '@/components/shared/KeepAppOpenNote';
 import { isIPhoneApp, phoneOs } from '@/lib/phonePlatform';
 import FirstUseDialog, { firstUseSeen, markFirstUseSeen } from '@/components/onboarding/FirstUseDialog';
+import { usePopupTurn } from '@/components/onboarding/onboardingSurface';
 import {
   runCalendarSync, maybeAutoSync, getInFlightSync, setCalendarConnected,
   hasDeviceCalendars, listDeviceCalendars, requestDeviceCalendarPermission, runDeviceCalendarSync, handPhoneCalendars,
@@ -317,6 +318,9 @@ export default function Calendar() {
   const [detailItemClass, setDetailItemClass] = useState('task');
   const [modalOpen, setModalOpen] = useState(false);
   const [switchNote, setSwitchNote] = useState(false);
+  // Opens on its own when the page loads, so it waits for the page's intro
+  // card or any other popup to be gone first (Nov 4 2026 audit).
+  const switchNoteShown = usePopupTurn(switchNote, { reactive: true });
 
   const loadSyncedEvents = useCallback(async () => {
     try {
@@ -522,7 +526,7 @@ export default function Calendar() {
         />
 
         <FirstUseDialog
-          open={switchNote}
+          open={switchNoteShown}
           theme={theme}
           title="New calendar integration now in use!"
           body="ADHDone now reads calendars straight from your phone, no Google sign-in needed. Tick the ones you want under Phone calendars (your Google calendar is there too). Events already brought in stay put."
