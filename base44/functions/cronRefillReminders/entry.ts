@@ -1404,8 +1404,15 @@ Deno.serve(async (req) => {
           title: entry.notification_title || task.title,
           body: entry.notification_body || task.title,
           sendAtISO: entry.send_at,
-          // A task's reminder carries a task's buttons (Done, Snooze), not an event's.
-          data: { screen: '/TaskNotification', taskId: task.id, type: isEventTask ? 'event_reminder' : 'task_reminder' },
+          // A task's reminder carries a task's buttons (Done, Snooze), not an
+          // event's. An event's night-before / morning-of / prep ask is a
+          // check-in (no buttons, soft, moved to a free minute when stacked),
+          // the same as the calendar import and captures book it; it used to
+          // go out from here as 'event_reminder' with a Snooze button (fixed
+          // Nov 4 2026).
+          data: { screen: '/TaskNotification', taskId: task.id, type: isEventTask
+            ? (/night before|morning of/i.test(String(entry.label || '')) ? 'task_checkin' : 'event_reminder')
+            : 'task_reminder' },
           ...(isEventTask ? {} : { buttons: [
             { id: 'snooze_15', text: 'Snooze 15 min' },
             { id: 'snooze_60', text: 'Snooze 1 hour' },
