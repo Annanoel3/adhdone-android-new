@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Shield, Mail, ExternalLink } from "lucide-react";
+import { isIPhoneApp } from "@/lib/phonePlatform";
 
 const Section = ({ title, children, highlight }) => (
   <div className={`p-5 space-y-3 ${highlight ? 'bg-blue-50 border-l-4 border-blue-500' : ''}`}>
@@ -68,7 +69,7 @@ export default function PrivacyPolicy() {
           </Section>
 
           <Section title="Advertising">
-            <P>The free version of ADHDone shows ads through Google AdMob. To show and measure ads, Google may collect your device's advertising identifier, IP address, approximate location, and which ads you saw or tapped. ADHDone never hands Google your tasks, notes, or recordings. You can limit ad personalization in your phone's settings (Android: Settings → Google → Ads; iPhone: Settings → Privacy → Tracking and Apple Advertising).</P>
+            <P>The free version of ADHDone shows ads through Google AdMob. To show and measure ads, Google may collect your device's advertising identifier, IP address, approximate location, and which ads you saw or tapped. ADHDone never hands Google your tasks, notes, or recordings. You can limit ad personalization in your phone's settings {isIPhoneApp() ? "(Settings → Privacy → Tracking and Apple Advertising)" : "(Android: Settings → Google → Ads; iPhone: Settings → Privacy → Tracking and Apple Advertising)"}.</P>
             <p className="text-xs text-gray-500 mt-2">
               See{' '}
               <a href="https://policies.google.com/technologies/ads" target="_blank" rel="noopener noreferrer" className="text-blue-500 hover:underline inline-flex items-center gap-0.5">
@@ -88,7 +89,7 @@ export default function PrivacyPolicy() {
               "Support Space conversations",
               "Focus room participation",
               "Device type and push notification tokens (for reminders)",
-              "Purchases of Record Notes minute packs through Google Play or the App Store (we never see or store card details)",
+              isIPhoneApp() ? "Purchases of Record Notes minute packs through the App Store (we never see or store card details)" : "Purchases of Record Notes minute packs through Google Play or the App Store (we never see or store card details)",
               "Events from the phone calendars you choose to share — see the calendar section above",
               "A contact's name and phone number, only when you use \"Pick from Contacts\" on a birthday. ADHDone never reads your full contact list; your phone's own picker hands over just the one you chose.",
               "Photos you attach to a task",
@@ -116,7 +117,7 @@ export default function PrivacyPolicy() {
             <P>We do not sell your data. We only share it in these cases:</P>
             <List items={[
               "With accountability partners — when you connect with someone, they can see your shared check-ins and messages",
-              "With service providers, solely to operate the app — cloud hosting (Base44), push notifications (OneSignal), AI processing (OpenAI, which reads the task text, recordings and notes you ask the app to understand, plan reminders for, or transcribe), ads (Google AdMob), and purchases (RevenueCat, Google Play, the App Store)",
+              "With service providers, solely to operate the app — cloud hosting (Base44), push notifications (OneSignal), AI processing (OpenAI, which reads the task text, recordings and notes you ask the app to understand, plan reminders for, or transcribe), ads (Google AdMob), and purchases (" + (isIPhoneApp() ? "RevenueCat, the App Store" : "RevenueCat, Google Play, the App Store") + ")",
               "When legally required — court orders or to protect user safety",
             ]} />
           </Section>
