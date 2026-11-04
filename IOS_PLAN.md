@@ -77,6 +77,17 @@ appstoreconnect.apple.com/apps/6828975743/testflight/test-info). To replace the 
 version: remove the old one (the Delete control on its row) → Add Build → pick → Done →
 Save → Add for Review → Submit for Review.
 
+Rejected Nov 3 2026, 4:59 PM CST: Guideline 2.1 "Information Needed" (not a bug report). Apple wants, in
+the App Review Notes field: a screen recording from a physical device on the latest iOS that starts at
+launch and shows registration, login and account deletion; purpose and audience; setup steps; external
+services; regional differences; regulated material. Then resubmit. Web changes reach build 4 with a
+Publish, so no new build is needed unless native code changes. Done Nov 4 2026: TestFlight internal group
+"Internal" (Anna invited, builds 1, 3, 4); iPhone-only wording on DeleteAccount, Terms, TermsAndConditions
+and PrivacyPolicy (no Google Play or Android, no social features, app is free); App Store screenshot 2
+removed and the description's "launch into a task" line changed, because Launch and Google Calendar sync
+no longer exist on iPhone. Open: guideline 5.1.2(i) needs a popup naming OpenAI and asking permission
+before personal data goes there; today OpenAI is named only in the Privacy Policy.
+
 - App Store privacy answers: filled in by Anna Nov 3 2026 (Identifiers used for
   tracking = Yes; everything collected is linked to the user).
 - Tracking prompt in the build: done (above).
