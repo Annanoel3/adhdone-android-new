@@ -26,7 +26,6 @@ import {
   classifyCapture,
   detectMultipleTasks,
   processAndCreateTask,
-  createAdvanceTask,
   createTaskWithPriority,
   createTaskWithDate,
   createTaskAnyDay,
@@ -292,10 +291,6 @@ export default function TaskCaptureProcessor({ userEmail }) {
                     toast({ title: e.message, variant: 'destructive' });
                   }
                 }
-              } else if (result.status === 'needs_advance') {
-                const minutes = await requestInput('advance', result.taskData, capture.id);
-                if (capture.handedOff) { await finishOnServer(); break; }
-                await settle(await createAdvanceTask(result.taskData, result.currentUser, minutes ?? 0));
               } else if (result.status === 'error') {
                 // Same handling as a thrown error: kept and tried again.
                 throw new Error(result.message || 'Could not set up the task');
@@ -432,37 +427,6 @@ export default function TaskCaptureProcessor({ userEmail }) {
         onSelect={(priority) => answer(priority)}
       />
 
-      <Dialog open={askShown && ask?.type === 'advance'} onOpenChange={(open) => { if (!open) answer(0); }}>
-        <DialogContent className="max-w-md w-[calc(100vw-2rem)]">
-          <DialogHeader>
-            <DialogTitle>Would you like an advance reminder?</DialogTitle>
-            {ask?.type === 'advance' && ask.data?.title && (
-              <p className="text-sm font-medium text-gray-700 pt-1">📌 {ask.data.title}</p>
-            )}
-          </DialogHeader>
-          <div className="space-y-3 py-4">
-            <p className="text-sm text-gray-600">Get notified before the task is due:</p>
-            <div className="grid grid-cols-2 gap-2">
-              <Button onClick={() => answer(30)} variant="outline" className="h-auto py-3 flex flex-col">
-                <span className="font-semibold">30 minutes</span>
-                <span className="text-xs text-gray-500">before</span>
-              </Button>
-              <Button onClick={() => answer(60)} variant="outline" className="h-auto py-3 flex flex-col">
-                <span className="font-semibold">1 hour</span>
-                <span className="text-xs text-gray-500">before</span>
-              </Button>
-              <Button onClick={() => answer(1440)} variant="outline" className="h-auto py-3 flex flex-col">
-                <span className="font-semibold">1 day</span>
-                <span className="text-xs text-gray-500">before</span>
-              </Button>
-              <Button onClick={() => answer(0)} variant="outline" className="h-auto py-3 flex flex-col">
-                <span className="font-semibold">No thanks</span>
-                <span className="text-xs text-gray-500">just on time</span>
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   );
 }
