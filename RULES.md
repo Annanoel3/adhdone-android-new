@@ -92,6 +92,9 @@ Audited Nov 4 2026 (Anna: "do a dive into all notifications / all alarm types"):
 ### Cleanup rule
 Removing dead code must NEVER change what a user sees or receives. If a cleanup task would alter live notification behavior, stop and ask first.
 
+### Popups: one on screen at a time, never on the reminder page
+Every popup that opens on its own goes through `usePopupTurn` / `waitForCalm` / `waitForClear` (`src/components/onboarding/onboardingSurface.js`): it waits until nothing else is up (any open dialog, a tour card, the user mid-tap) and then holds the screen. Audited Nov 4 2026 (Anna: "do a dive into all in app popups. Make due none clash"): the ones that were opening on their own without a turn now take one — Focus Mode's active-session popup at app open and its "Good morning" question, the capture pipeline's day / priority questions (TaskCaptureProcessor), the Calendar page's "new calendar integration" note and the Diary's first-run dialog. New rule in the same file: no self-opening popup ever shows on `/TaskNotification` (a reminder or alarm tap lands there; its one job is the reminder) — it waits for Home. Removed as leftovers: `PokeNotification` (nothing ever dispatched a poke), `MicrophonePermissionCheck` (never mounted), `NotificationFollowupModal` (unmounted since the "Did you do it?" decision), `HelpfulRemindersSuggestions` (never imported). `WaysToAddPopup` stays unmounted on purpose until redesigned. Popups a user opens by tapping something don't take a turn, by design.
+
 ## 4. HARD RULES — THINGS THAT MUST NEVER HAPPEN
 
 These are absolutes. There is no clever exception, no "but in this case."
