@@ -442,6 +442,12 @@ export function alarmSetFor(tasks, userDefault = alarmMode) {
         // the alarm's second button opens the event's page, where Record
         // notes lives. Otherwise Got it is the only button.
         if (/record notes/i.test(String(m.label || ''))) alarm.openLabel = 'Record notes';
+        // An appointment with no prep note yet (base44/shared/prepNote.ts):
+        // its night-before and morning-of alarms' second button opens the
+        // event's page, where the prep box is. Gone once a note is saved.
+        // Same as phoneAlarmsFor in base44/shared/reminderTitle.ts.
+        const wantsPrep = t.prep_worthy === true && !String(t.prep_note || '').trim() && !t.birthday_person;
+        if (wantsPrep && /night before|morning of/i.test(String(m.label || ''))) alarm.openLabel = 'Add prep notes';
       }
       out.push({ alarm, quietExempt: !!t.quiet_hours_exempt });
     }
