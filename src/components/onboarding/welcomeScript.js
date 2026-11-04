@@ -121,6 +121,13 @@ export function resumeScript({ hasTask = false, notifyAnswered = false } = {}) {
     if (beat.input === 'notify') {
       return { ...beat, skip: () => notifyAnswered };
     }
+    if (beat.final && hasTask) {
+      // Their first task went in last time; this sitting didn't add one.
+      return {
+        ...beat,
+        text: (name, handle, about) => `${String(about || '').trim() ? 'Got it, thanks. ' : ''}You're set — your first task is already on your list.`,
+      };
+    }
     return beat;
   });
   return [
