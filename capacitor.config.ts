@@ -15,6 +15,15 @@ const config: CapacitorConfig = {
     allowNavigation: [
       '*.base44.app',
       'base44.app',
+      // Google (and Apple) hand the sign-in back to Base44 at
+      // app.base44.com/api/apps/auth/callback — .com, not .app. With only
+      // base44.app listed, the iPhone app opened that callback in Safari and
+      // the whole app carried on there, address bar and all (Anna, Nov 4 2026:
+      // "Why does it say the address at the bottom on iphone"; a fresh account
+      // signing in with Google). Android keeps every hop in its own WebView.
+      'app.base44.com',
+      '*.base44.com',
+      'base44.com',
       'accounts.google.com',
       '*.google.com',
       'adhdone.space',
