@@ -1,3 +1,4 @@
+// Re-saved Nov 4 2026 (night) so the bundled shared/sendLedger.ts is picked up: event_heads_up, event_conflict and first_task_nudge count as soft pushes in the ledger.
 // Re-saved Oct 21 2026 (noon) so the bundled shared/reminderTitle.ts is picked up: alarms at a time they set in the same minute ring in the order alarmOrder.ts judged (alarm_order), each one marked theirTime with the bell.
 // Re-saved Oct 21 2026 so the bundled shared/reminderTitle.ts is picked up: an alarm at a time they set is marked theirTime and headed with the bell, so the phone never moves it.
 // Weekly Back Burner check-in.
@@ -7,8 +8,9 @@
 // the user's Back Burner, picks the ONE task most worth reconsidering, and sends
 // a single low-pressure push with a small suggestion for how to restart it.
 //
-// Runs daily but only acts when 7+ days have passed since that user's last
-// check-in, so the send lands at a sane local hour instead of a fixed UTC one.
+// Runs every 2 hours (workflow "Back Burner Check-In") but only acts when 7+
+// days have passed since that user's last check-in and their own afternoon is
+// on, so the send lands at a sane local hour instead of a fixed UTC one.
 // It never changes a task — the user decides whether to bring it back.
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.40';
