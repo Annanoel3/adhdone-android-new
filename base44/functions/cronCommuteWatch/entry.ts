@@ -454,6 +454,8 @@ async function checkEventLeaveTimes(base44: any, now: Date): Promise<any[]> {
           : `"${t}" is about ${about} min ${whence} with traffic right now. Head out now to get there by ${arriveBy}. 🚗`;
       }
 
+      // The event's prep note stays on the re-worded push (shared/prepNote.ts).
+      body = withPrep(body, fresh.prep_note);
       const newId = await bookEventLeave(appId, restApiKey, email, task, owner, title, body, sendAt);
       if (!newId) continue; // the booked one stays as it was
       const sendIso = (sendAt || new Date()).toISOString();
