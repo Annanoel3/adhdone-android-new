@@ -1,12 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import { toast } from "@/components/ui/use-toast";
-import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import PriorityPickerDialog from "../tasks/PriorityPickerDialog";
 import DatePickerDialog from "../tasks/DatePickerDialog";
 import { base44 } from "@/api/base44Client";
@@ -118,7 +111,9 @@ const partPayload = (c, part) => ({ text: c.parts[part], timezone: localZone(), 
 
 // Lives in the app Layout so task parsing keeps running after the user leaves
 // the Add Task screen. Drains the pending-capture queue and asks the user for
-// the few things the AI can't infer (priority, date, advance reminder).
+// the few things the AI can't infer (priority, date). The "advance reminder"
+// question that used to live here went with Smart Reminders (nothing asked it
+// any more; removed Nov 4 2026).
 //
 // The queue is mirrored to storage, so a capture the app was closed on is
 // finished the next time this account opens the app instead of being lost.
@@ -135,7 +130,7 @@ export default function TaskCaptureProcessor({ userEmail }) {
   // Which capture the open question belongs to (a hand-off closes it).
   const askForRef = useRef(null);
   const [ask, setAsk] = useState(null); // { type, data }
-  // A question about a capture (its day, its priority, an advance reminder)
+  // A question about a capture (its day, its priority)
   // opens on its own, often while a capture from earlier is being finished at
   // app open, so it takes its turn with every other popup: nothing else on
   // screen first. The pipeline simply waits for the answer (Nov 4 2026 audit).
