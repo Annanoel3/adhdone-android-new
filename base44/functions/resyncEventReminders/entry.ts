@@ -55,6 +55,10 @@ Deno.serve(async (req) => {
         urgency: task.urgency,
         classification: task.classification || 'event',
         reminderWish: task.reminder_wish || null,
+        taskId: task.id,
+        // Prep (shared/prepNote.ts): the ask or the note stays in the rebuilt words.
+        prepWorthy: task.prep_worthy === true,
+        prepNote: task.prep_note || '',
       });
       const schedData = schedRes?.data || schedRes || {};
       const rawReminders = schedData.reminders || [];
