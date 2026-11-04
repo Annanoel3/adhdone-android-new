@@ -12,6 +12,7 @@ import { cancelScheduledReminder } from "../components/utils/reminderScheduler";
 import { snoozeTask, recordReminderDismissed } from "../components/utils/snoozeTask";
 import { usePluginPresent } from "../components/shared/WidgetTaskSync";
 import { formatTimeRange } from "../components/utils/timeRangeLabel";
+import PrepNoteBox from "../components/tasks/PrepNoteBox";
 
 // A check-off that can't reach the server is tried again instead of dropped
 // (Anna, Oct 17 2026: "Add the retry"). Done on an alarm or on a reminder in
@@ -319,6 +320,15 @@ export default function TaskNotification() {
   const notesButtons = recorderPresent ? notesButtonsFor(task, Date.now()) : null;
   const isEvent = task.classification === "event" || !!task.device_event_id;
   const when = isEvent ? eventWhen(task, Date.now()) : null;
+  // An appointment with something to get ready first (prep_worthy, or a prep
+  // note already on it): the box to type it in, right under the event. The
+  // night-before and morning-of reminders of one with no note yet ask for it
+  // and open here (an alarm's "Add prep notes" button too); saving re-words
+  // every reminder still ahead (base44/shared/prepNote.ts).
+  const startMs = new Date(task.event_time || task.next_reminder || task.due_date || "").getTime();
+  const prepBox = isEvent && task.status === "active" && !task.birthday_person
+    && (task.prep_worthy === true || String(task.prep_note || "").trim())
+    && Number.isFinite(startMs) && Date.now() < startMs;
   // "Got it" is an acknowledgment, not a brush-off: it isn't counted.
   const gotIt = () => { actedRef.current = true; navigate(createPageUrl("Home")); };
   const openNotes = (what) => {
@@ -424,6 +434,12 @@ export default function TaskNotification() {
               <Sparkles className="w-5 h-5 mr-2" />
               Draft Birthday Text 🎂
             </Button>
+          )}
+
+          {prepBox && (
+            <div className="mb-4">
+              <PrepNoteBox task={task} theme={theme} autoFocus={!String(task.prep_note || "").trim()} onSaved={(note) => setTask((t) => ({ ...t, prep_note: note }))} />
+            </div>
           )}
 
           {notesButtons && (
