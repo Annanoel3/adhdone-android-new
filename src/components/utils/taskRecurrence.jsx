@@ -366,6 +366,12 @@ async function makeNextCopy(task) {
     // The row's break-it-down offer: shown or hidden the same on every occurrence.
     worth_breaking_down: task.worth_breaking_down === true,
     breakdown_offer_dismissed: task.breakdown_offer_dismissed === true,
+    // A repeating appointment keeps its prep ("bring the vaccine card") and
+    // whether the row's prep line was hidden; the one-off "anything to prep?"
+    // push (prep_asked_at) is per occurrence and starts over.
+    prep_worthy: task.prep_worthy === true,
+    prep_note: task.prep_note || null,
+    prep_offer_dismissed: task.prep_offer_dismissed === true,
     reminder_interval: interval || 'once',
     // What makes this task itself, carried to every occurrence: where it
     // happens, what the user originally wrote, how they asked to be reminded,
@@ -505,6 +511,12 @@ async function createNextBirthday(task) {
     // The row's break-it-down offer: shown or hidden the same on every occurrence.
     worth_breaking_down: task.worth_breaking_down === true,
     breakdown_offer_dismissed: task.breakdown_offer_dismissed === true,
+    // A repeating appointment keeps its prep ("bring the vaccine card") and
+    // whether the row's prep line was hidden; the one-off "anything to prep?"
+    // push (prep_asked_at) is per occurrence and starts over.
+    prep_worthy: task.prep_worthy === true,
+    prep_note: task.prep_note || null,
+    prep_offer_dismissed: task.prep_offer_dismissed === true,
     reminder_interval: task.reminder_interval || 'once',
     original_input: task.original_input || null,
     location: task.location || null,
