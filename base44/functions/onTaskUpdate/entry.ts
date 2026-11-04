@@ -469,7 +469,8 @@ async function retimeLead(base44: any, owner: any, task: any, why: string): Prom
 }
 
 // rewordForPrep: the prep note on an upcoming event changed (typed on the
-// reminder page, the row's PrepOffer line or the open card; shared/prepNote.ts,
+// reminder page, the row's PrepOffer line or the open card; shared/prepNote.ts
+// (its isPrepAsk also knows a questions ask whose Notes mark was removed),
 // Anna, Nov 4 2026: her cat's vet visit needed him fasting and no reminder
 // said so). Every reminder of the event still ahead is re-booked with the new
 // words: a note typed puts "Prep: <note>" on each of them and turns the
