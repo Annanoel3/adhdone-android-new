@@ -13,6 +13,7 @@ import { getTravelLead } from '../../shared/travelLead.ts';
 import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 import { leaveOriginFor, fromWords } from '../../shared/leaveOrigin.ts';
 import { atTimeWords } from '../../shared/reminderTitle.ts';
+import { applyPrepToPlan, nightBeforeWords } from '../../shared/prepNote.ts';
 // (Re-saved Oct 13 2026 after shared/captureToTasks.ts: the reminder at a task's own time saves the words schedulePush sent it with.)
 
 const openai = lean(new OpenAI({
@@ -127,9 +128,9 @@ Return {"notes": true} or {"notes": false}.` },
 
 function notesText(label, title) {
   const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
-  if (label === 'night before') {
-    return { title: `📝 ${t} is tomorrow`, body: `Anything you want to ask or bring up? Tap to write your questions down so they're ready.` };
-  }
+  // The words live in shared/prepNote.ts (nightBeforeWords), where the
+  // prep ask merges with them for an appointment that has no prep note yet.
+  if (label === 'night before') return nightBeforeWords(title, { questions: true });
   if (label === 'at the time') {
     return { title: `🎙️ ${t}`, body: `It's time for "${t}". Want notes from it? Tap here, then tap Record notes.` };
   }
@@ -140,7 +141,8 @@ function getEventNotificationText(label, title, lead, whenToday) {
   const t = title.length > 40 ? title.slice(0, 37) + '...' : title;
 
   const templates = {
-    'night before': { title: `🎉 ${t}`, body: `Heads up! Your "${t}" is tomorrow. Don't forget to prep! ✨` },
+    // One source for the night-before words: shared/prepNote.ts.
+    'night before': nightBeforeWords(title),
     // Early enough in the day to still plan around it (see getEventSchedule).
     'morning of': { title: `📅 ${t}`, body: whenToday ? `Just a reminder: "${t}" is today at ${whenToday}.` : `Just a reminder: "${t}" is today.` },
     // Without a measured drive time we can't claim it's time to leave — that's
@@ -190,6 +192,21 @@ export default async function(req) {
       return Response.json({ notes: await notesWouldHelp(String(n.title || ''), String(n.location || '')) });
     }
     const { title, scheduledDateISO, urgency, dayOnly, classification, deadlineStyle, timezone, location, homeOrigin, avoidTolls, reminderWish, canRecord, noClockTime, ownerEmail, taskId } = parsedBody;
+    // Prep (shared/prepNote.ts, Nov 4 2026): an appointment-type event
+    // (prep_worthy) with no prep note gets its night-before turned into the
+    // ask; one with a note gets "Prep: <note>" on every reminder. Callers
+    // pass both; one that only names the task has them read off it, so no
+    // booking path can forget the note.
+    let prepWorthy = parsedBody.prepWorthy === true;
+    let prepNote = typeof parsedBody.prepNote === 'string' ? parsedBody.prepNote : '';
+    if (classification === 'event' && parsedBody.prepWorthy === undefined && parsedBody.prepNote === undefined && typeof taskId === 'string' && taskId) {
+      try {
+        const own = await base44.asServiceRole.entities.Task.get(taskId);
+        prepWorthy = own?.prep_worthy === true;
+        prepNote = typeof own?.prep_note === 'string' ? own.prep_note : '';
+      } catch { /* a task not found yet: no prep */ }
+    }
+    const prepTask = { title, classification, prep_worthy: prepWorthy, prep_note: prepNote };
     // An event with a date and no clock time (a day-only capture, an all-day
     // calendar event): callers that know say so with dayOnly or noClockTime.
     const timelessEvent = classification === 'event' && (!!dayOnly || noClockTime === true);
@@ -272,7 +289,7 @@ export default async function(req) {
     // sync), never by words in the title. Keeping this deterministic also
     // prevents "2 months before" reminders for far-future events.
     if (timelessEvent && !wish) {
-      const reminders = getDayOnlyEventSchedule(title);
+      const reminders = applyPrepToPlan(getDayOnlyEventSchedule(title), prepTask);
       console.log(`[generateReminderSchedule] Event with no clock time "${title}": night before + morning of`);
       return Response.json({ reminders });
     }
@@ -293,8 +310,9 @@ export default async function(req) {
           notification_body: text.body,
         };
       });
-      console.log(`[generateReminderSchedule] Event schedule for "${title}" — ${reminders.length} reminders${notes ? ', worded for recording notes' : ''}`);
-      return Response.json({ reminders });
+      const withPrepPlan = applyPrepToPlan(reminders, prepTask, { when: whenToday });
+      console.log(`[generateReminderSchedule] Event schedule for "${title}" — ${reminders.length} reminders${notes ? ', worded for recording notes' : ''}${prepNote.trim() ? ', with the prep note' : prepWorthy ? ', the night before asks for prep' : ''}`);
+      return Response.json({ reminders: withPrepPlan });
     }
 
     // ── Day-only tasks ("remind me to do X on [day]") ──────────────────────
@@ -627,6 +645,10 @@ Examples:
     if (classification === 'event' && !timelessEvent) {
       reminders = reminders.map((r) => (r.relative_minutes_before === 0 ? { ...r, relative_minutes_before: 1 } : r));
     }
+
+    // An event planned from the user's own reminder wish gets its prep the
+    // same way as the fixed ladder.
+    if (classification === 'event') reminders = applyPrepToPlan(reminders, prepTask);
 
     console.log(`[generateReminderSchedule] Generated ${reminders.length} reminders for "${title}"`);
 
