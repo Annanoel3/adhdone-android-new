@@ -1,4 +1,4 @@
-// Re-saved Nov 4 2026 (TOUCH2) so the bundled shared/reminderTitle.ts is picked up: every reminder of a timed event rings for an alarm user (night before, morning of, hour before, leave now, its time).
+// Re-saved Nov 4 2026 (event alarms, all of them) so the bundled shared/reminderTitle.ts is picked up: every reminder of a timed event rings for an alarm user (night before, morning of, hour before, leave now, its time).
 // Re-saved Nov 4 2026 so the bundled shared/leaveOrigin.ts is picked up: an event's "leave now" follows its address and starts where they'll be (the event before it, work, or home); followers are re-timed when an event's address or time moves.
 // Re-saved Oct 21 2026 so the bundled shared/reminderTitle.ts is picked up: an alarm at a time they set is marked theirTime and headed with the bell, so the phone never moves it.
 // Re-saved Oct 16 2026 so the bundled shared/reminderTitle.ts is picked up: a daily reminder after its first day reads as a reminder, never "slipped past".
