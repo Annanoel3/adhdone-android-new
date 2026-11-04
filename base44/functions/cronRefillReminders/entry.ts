@@ -1205,6 +1205,10 @@ Deno.serve(async (req) => {
         avoidTolls: owner?.commute_avoid_tolls === true,
         reminderWish: task.reminder_wish || null,
         canRecord: owner?.notes_can_record === true,
+        // An appointment with something to get ready first: the night before
+        // asks for a prep note, or every reminder carries it (shared/prepNote.ts).
+        prepWorthy: task.prep_worthy === true,
+        prepNote: task.prep_note || '',
       });
       const data = res?.data || res || {};
       const plan = buildEventReminderPlan({
