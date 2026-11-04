@@ -68,12 +68,13 @@ export function wantsPrepAsk(task: any): boolean {
   return !prepNoteOf(task);
 }
 
-// Does this reminder (by label) ask for prep? The plain ask has its own
-// label; the questions one is told apart by its words.
+// Does this reminder ask for prep? The plain ask has its own label; the
+// questions one (and a questions one whose mark was removed on the Notes
+// page, label back to 'night before') is told apart by its words.
 export function isPrepAsk(label: unknown, body?: unknown): boolean {
   const l = String(label || '').trim().toLowerCase();
   if (l === PREP_ASK_LABEL) return true;
-  return l === QUESTIONS_LABEL && /prep note/i.test(String(body || ''));
+  return l.startsWith('night before') && /prep note/i.test(String(body || ''));
 }
 
 // The three night-before wordings, in one place: the plain heads-up (the
