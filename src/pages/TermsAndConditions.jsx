@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, FileText, Mail } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { createPageUrl } from "@/utils";
+import { isIPhoneApp } from "@/lib/phonePlatform";
 
 const Section = ({ title, children, theme }) => (
   <div className="space-y-3">
@@ -107,8 +108,11 @@ export default function TermsAndConditions() {
           </div>
 
           <div className="p-5">
-            <Section title="4. Subscriptions & Payments" theme={theme}>
-              <List theme={theme} items={[
+            <Section title={isIPhoneApp() ? "4. Payments" : "4. Subscriptions & Payments"} theme={theme}>
+              <List theme={theme} items={isIPhoneApp() ? [
+                "ADHDone is free to use and shows ads.",
+                "Any purchases offered in the app are billed through the App Store, and refunds follow App Store policies.",
+              ] : [
                 "New users receive a free trial period. You may cancel anytime during the trial without charge.",
                 "After the trial, a subscription is required to continue using ADHDone.",
                 "Subscriptions are billed through Apple App Store or Google Play and auto-renew unless canceled at least 24 hours before renewal.",
