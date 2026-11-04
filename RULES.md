@@ -384,6 +384,21 @@ typed something" and "their phone rang", answer these in writing:
 5. **What if the phone is on an older build, or the reminder style is notification, not
    alarm?** Check the fields the old build reads, and the path a push takes when nothing
    rings (`PushFilter`).
+6. **Which of an event's reminders ring?** (`ringsOutLoud` in widgetBridge.js and
+   `ringsOutLoudOn` in shared/reminderTitle.ts, kept in step.) For an alarm user a timed
+   event rings the night before, the morning of, at "leave now" and at its time (one minute
+   before the start, Oct 29 2026, 90 seconds allowed in both copies since Nov 4 2026: the
+   server's copy allowed under 60, so an alarm list it sent for a timed event left the
+   at-the-time alarm out until the phone's next own sync). Only "1 hour before" is a plain
+   push. HOW IT GOT HERE: on Oct 13 2026 Anna got a full-screen alarm an hour before an
+   appointment and said "This is an event. I shouldn't be getting this kind of alarm"; that
+   was turned into "every heads-up of a timed event stays a push" (night before, morning of
+   and hour before), which she never asked for. On Nov 4 2026 she missed that her cat's vet
+   visit needed him fasting because the night-before and morning-of came as notifications:
+   "The alarms have saved my ass so many times when I forget an event... a notification is
+   not enough. That's why I made alarms." A birthday's week-before / day-before and an
+   all-day event's heads-ups are unchanged. Never turn an event's alarm into a push to
+   fix "too many alarms" (hard rule, Oct 7 and Oct 13 2026); ask her.
 
 Then run the parser self-test (`parseTask` → Test Function → `{"selfTest": true}`) if the
 prompt, the date resolver or the pipeline changed, and say what failed. Three hands change
