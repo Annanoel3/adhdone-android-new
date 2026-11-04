@@ -26,6 +26,9 @@ const config: CapacitorConfig = {
       'base44.com',
       'accounts.google.com',
       '*.google.com',
+      // Google's sign-in bounces through here once on a phone with no Google
+      // session yet (SetSID), on its way back to accounts.google.com.
+      'accounts.youtube.com',
       'adhdone.space',
       // Sign in with Apple (App Store guideline 4.8) opens Apple's page in the app.
       'appleid.apple.com',
