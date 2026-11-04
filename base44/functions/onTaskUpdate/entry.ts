@@ -418,41 +418,34 @@ async function retimeLeadForAddress(base44: any, data: any, old_data: any, id: s
       const at = newId && typeof result.sendAt === 'string' && result.sendAt ? result.sendAt : new Date(atMs).toISOString();
       return { newId, at, why: result?.reason || result?.error || '' };
     };
-    let booked = await book(words.title, words.body, sendMs);
-    let used = { label, title: words.title, body: words.body };
-    if (!booked.newId) {
-      console.log(`[onTaskUpdate] ${id}: could not book the re-timed lead (${booked.why || 'no id'}); putting the ${entry.label} back`);
-      // Best effort: the one that was there, at its old time, so the event
-      // doesn't lose its heads-up over this.
-      const oldMs = utcMs(entry.send_at);
-      if (Number.isFinite(oldMs) && oldMs > Date.now() + 60000) {
-        booked = await book(entry.notification_title || words.title, entry.notification_body || words.body, oldMs);
-        used = { label: String(entry.label || label), title: entry.notification_title || words.title, body: entry.notification_body || words.body };
-      }
-      if (!booked.newId) return;
-    }
+    const booked = await book(words.title, words.body, sendMs);
+    // Not booked (OneSignal down, the phone not taking pushes): the entry is
+    // still saved with the new time and words and no id, which is exactly what
+    // the hourly job books when it can (cronRefillReminders' event pass).
+    if (!booked.newId) console.log(`[onTaskUpdate] ${id}: could not book the re-timed lead now (${booked.why || 'no id'}); saved for the hourly job`);
 
     // Written against the task as it is now, not as the event read it.
     const fresh = await base44.asServiceRole.entities.Task.get(id).catch(() => null);
-    if (!fresh || fresh.status !== 'active') { await cancelOneSignalNotification(booked.newId); return; }
+    if (!fresh || fresh.status !== 'active') { if (booked.newId) await cancelOneSignalNotification(booked.newId); return; }
     const freshSchedule: any[] = Array.isArray(fresh.reminder_schedule) ? fresh.reminder_schedule : [];
+    const newEntry = { notification_id: booked.newId || null, send_at: booked.at, label, notification_title: words.title, notification_body: words.body, scheduled: !!booked.newId };
     let replaced = false;
     const nextSchedule = freshSchedule.map((r: any) => {
       const match = r && leadLabel(r) && (!oldId ? !r.notification_id || /^planned_/i.test(String(r.notification_id)) : String(r.notification_id || '') === oldId);
       if (!match || replaced) return r;
       replaced = true;
-      return { ...r, notification_id: booked.newId, send_at: booked.at, label: used.label, notification_title: used.title, notification_body: used.body, scheduled: true };
+      return { ...r, ...newEntry };
     });
-    if (!replaced) nextSchedule.push({ notification_id: booked.newId, send_at: booked.at, label: used.label, notification_title: used.title, notification_body: used.body, scheduled: true });
+    if (!replaced) nextSchedule.push(newEntry);
     const ids: string[] = (Array.isArray(fresh.onesignal_notification_ids) ? fresh.onesignal_notification_ids : []).map(String).filter((x) => x && x !== oldId);
-    const nextIds = [...ids, booked.newId];
+    const nextIds = booked.newId ? [...ids, booked.newId] : ids;
     await base44.asServiceRole.entities.Task.update(id, { reminder_schedule: nextSchedule, onesignal_notification_ids: nextIds });
     // The phone's alarm for it moves too (its owner's phone, with their settings).
     if (String(fresh.created_by || '').toLowerCase() === email.toLowerCase()) {
       await pushPhoneAlarms({ ...fresh, reminder_schedule: nextSchedule, onesignal_notification_ids: nextIds }, owner,
         { before: fresh, changedAt: Date.now(), source: 'onTaskUpdate' });
     }
-    console.log(`[onTaskUpdate] ${id}: address ${after ? `"${after}"` : 'removed'} → ${used.label} at ${booked.at}${lead ? ` (about ${lead.driveMinutes} min drive${lead.inTraffic ? ' with expected traffic' : ''})` : ''}`);
+    console.log(`[onTaskUpdate] ${id}: address ${after ? `"${after}"` : 'removed'} → ${label} at ${booked.at}${booked.newId ? '' : ' (not booked yet)'}${lead ? ` (about ${lead.driveMinutes} min drive${lead.inTraffic ? ' with expected traffic' : ''})` : ''}`);
   } catch (e) {
     console.error('[onTaskUpdate] could not re-time the lead reminder for the new address:', (e as any)?.message || e);
   }
