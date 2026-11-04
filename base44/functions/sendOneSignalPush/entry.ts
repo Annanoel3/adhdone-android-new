@@ -1,3 +1,4 @@
+// Re-saved Nov 4 2026 (night) so the bundled shared/sendLedger.ts is picked up: an event's night-before / morning-of / prep ask is never cancelled to make room for a push booked after it; event_conflict and first_task_nudge are soft.
 // Re-saved Oct 21 2026 (noon) so the bundled shared/reminderTitle.ts is picked up: alarms at a time they set in the same minute ring in the order alarmOrder.ts judged (alarm_order), each one marked theirTime with the bell.
 // Re-saved Oct 12 2026 so the bundled shared/workHours.ts (via sendLedger) is picked up:
 // an overnight shift belongs to the day it starts and runs past midnight.
