@@ -53,7 +53,10 @@ async function fetchReminderSchedule(title, scheduledDateISO, urgency, dayOnly, 
   // on title + priority, and the wish is what makes this one different. Nor
   // does a "by" deadline: its safety net isn't the plan an "at" task with the
   // same title would get, and neither may stand in for the other.
-  const noCache = dayOnly || reminderWish || deadlineStyle === 'by';
+  // Nor one at a place: its "leave now" is a drive measured for that day's
+  // traffic from wherever they'll be coming from (home, work, the event
+  // before it), which yesterday's plan for the same title can't stand in for.
+  const noCache = dayOnly || reminderWish || deadlineStyle === 'by' || !!(location && String(location).trim());
   let reminders = noCache ? null : getCachedSchedule(title, urgency, location);
 
   if (!reminders) {
