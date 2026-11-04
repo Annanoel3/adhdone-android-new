@@ -272,8 +272,8 @@ function reminderMomentsFor(task) {
 //    kind of alarm");
 //  - otherwise the day the task is about (its event time, due day or
 //    reminder time) always rings;
-//  - an appointment's night-before and a birthday's week-before / day-before
-//    are heads-ups, so they stay pushes;
+//  - a birthday's week-before / day-before are heads-ups, so they stay
+//    pushes (an appointment's night-before rings, see above);
 //  - a task with NO date at all has no "day it's about": every reminder for
 //    it is a do-it-now, so all of them ring (the priority decides how often
 //    it is reminded, not how loud);
