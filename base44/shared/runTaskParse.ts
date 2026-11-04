@@ -66,6 +66,11 @@ const TASK_PARSE_SCHEMA = {
     // the row (BreakItDownOffer; Anna, Nov 1 2026: "no one breaks down the
     // tasks because it's kind of hidden").
     worth_breaking_down: { type: "boolean" },
+    // An appointment with something to get ready BEFORE it (a vet or doctor
+    // visit, a procedure, a flight, the DMV, an interview): its night-before
+    // reminder asks for prep notes and every reminder repeats them (Anna, Nov 4
+    // 2026: fed a fasting cat because the vet event carried no note).
+    prep_worthy: { type: "boolean" },
     life_area: { type: "string", enum: ["work", "personal"] },
     follow_up_title: { type: ["string", "null"] },
     follow_up_minutes: { type: ["integer", "null"] },
@@ -77,7 +82,7 @@ const TASK_PARSE_SCHEMA = {
     "target_date", "target_time", "time_stated", "end_date", "due_date",
     "user_asked_to_repeat_every", "repeat_words", "recurrence_pattern", "deadline_style",
     "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
-    "takes_time", "worth_breaking_down", "life_area", "follow_up_title", "follow_up_minutes", "reminder_wish",
+    "takes_time", "worth_breaking_down", "prep_worthy", "life_area", "follow_up_title", "follow_up_minutes", "reminder_wish",
     "recurrence_days",
   ],
 };
