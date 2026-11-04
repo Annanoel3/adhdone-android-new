@@ -1,3 +1,4 @@
+// Re-saved Nov 4 2026 (evening) so the bundled shared/captureToTasks.ts, shared/runTaskParse.ts and shared/taskParsePrompt.ts are picked up: prep_worthy is parsed and saved; an appointment's reminders ask for and repeat its prep note (shared/prepNote.ts).
 // Re-saved Nov 4 2026 so the bundled shared/captureToTasks.ts is picked up: an event at a place has its "leave now" measured from where they'll be (shared/leaveOrigin.ts).
 // Re-saved Oct 13 2026 (night) so the bundled shared/captureToTasks.ts is picked up: a captured event's pushes carry an event's buttons (Snooze only), not a task's.
 // Re-saved Oct 13 2026 (evening) so the bundled shared/captureToTasks.ts is picked up: a heads-up moved off another push's minute is saved at the minute it really goes.
