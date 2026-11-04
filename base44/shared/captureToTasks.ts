@@ -16,6 +16,7 @@ import { runTaskParse } from "./runTaskParse.ts";
 import { decideReminderInterval, isRecurringInterval } from "./reminderIntervalDecision.ts";
 import { getHomeOrigin } from "./homeOrigin.ts";
 import { resolveQuietHours, isInQuietHours, isTimeTheySet, placeAppReminder } from "./quietHours.ts";
+import { needsPrepAskPush, sendPrepAsk } from "./prepNote.ts";
 
 // ── Calling sibling functions ──────────────────────────────────────────────
 // generateReminderSchedule and schedulePush are HTTP entrypoints, not
@@ -491,6 +492,10 @@ export async function scheduleTaskReminders(
     reminderWish: task.reminder_wish || parsed?.reminder_wish || null,
     timezone: tz,
     canRecord,
+    // An appointment with something to get ready first: the night before
+    // asks for a prep note, or every reminder carries it (shared/prepNote.ts).
+    prepWorthy: task.prep_worthy === true,
+    prepNote: task.prep_note || '',
   });
 
   const scheduled = new Date(task.next_reminder).getTime();
@@ -596,6 +601,11 @@ export async function scheduleTaskReminders(
         }
       : {}),
   });
+
+  // An appointment added from outside the app (no screen to ask on) too late
+  // for its night-before ask: one push a few minutes from now asks for the
+  // prep note (shared/prepNote.ts). Never when the night before will ask.
+  if (needsPrepAskPush(task, entries)) await sendPrepAsk(base44, task, owner, email, 'capture');
 
   // planned vs scheduled differ when OneSignal rejects a send (e.g. the device
   // isn't subscribed) — worth reporting rather than silently claiming success.
