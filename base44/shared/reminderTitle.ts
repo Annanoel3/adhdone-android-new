@@ -191,12 +191,17 @@ export function ringsOutLoudOn(task: any, momentMs: number, timeZone: string, la
   const anchor = whenMs(task.event_time || task.due_date || task.next_reminder);
   if (isNaN(anchor)) return true;
   const isEvent = task.classification === 'event' || task.classification === 'birthday' || !!task.birthday_person;
-  // A timed event rings at its own time and at "leave now"; its heads-ups
-  // (the night before, "in about an hour") stay pushes (Anna, Oct 13 2026).
-  // A day-only event keeps its morning-of.
+  // A timed event rings at its own time, at "leave now", and (since Nov 4
+  // 2026) the night before and the morning of: Anna forgot a vet visit that
+  // needed her cat fasting because those two came as plain notifications
+  // ("a notification is not enough. That's why I made alarms"). Only the
+  // "1 hour before" stays a push, the one she said she shouldn't get as an
+  // alarm (Oct 13 2026: "This is an event. I shouldn't be getting this kind
+  // of alarm"). A day-only event keeps its morning-of.
   if (task.classification === 'event' && task.event_time && !task.day_only_task) {
     const eventMs = whenMs(task.event_time);
-    return Math.abs(momentMs - eventMs) < 60 * 1000 || /leave now/i.test(String(label || ''));
+    const l = String(label || '');
+    return Math.abs(momentMs - eventMs) < 60 * 1000 || /leave now/i.test(l) || /night before|morning of/i.test(l);
   }
   const day = (ms: number) => localDateKey(new Date(ms), timeZone);
   const momentDay = day(momentMs);
