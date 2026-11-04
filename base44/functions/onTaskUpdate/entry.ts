@@ -13,6 +13,8 @@ import { getReminderContent, pushPhoneAlarms, platformTimeMs, phoneCanRing } fro
 import { orderSameMinuteAlarms } from '../../shared/alarmOrder.ts';
 import { adjustForQuietHours, resolveQuietHours, anchorToDaytime, placeRepeatingSlot, userTimeZone, rhythmNamedMin, notBeforeNamedTime, isTimeTheySet, placeAppReminder } from '../../shared/quietHours.ts';
 import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
+import { getTravelLead } from '../../shared/travelLead.ts';
+import { getHomeOrigin } from '../../shared/homeOrigin.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID');
 const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY');
@@ -338,6 +340,124 @@ async function goalStepFollows(base44: any, eventType: string, taskId: string, o
   }
 }
 
+// An address added to an upcoming event re-times its heads-up from the drive.
+// An event with a place gets "leave now" at drive time + cushion, measured
+// against the traffic expected then (shared/travelLead.ts; Commute Watch
+// re-checks it live for the last 3 hours), instead of the blanket hour before.
+// That only happened when the place was there as the reminders were made. A
+// place added afterwards (a phone-calendar event imported with no address,
+// then given one on its card) changed nothing: Anna, Nov 4 2026, a 9 AM
+// appointment in Dripping Springs got "Almost time! ... in about an hour" at
+// 8:00, when the drive meant leaving by 7:50. Now the hour-before (or a
+// leave-now measured for the old address) is taken back and booked again from
+// the new drive; a place removed, or one Google can't find, turns a leave-now
+// back into the hour before. A lead time the person picked themselves
+// (their_time) is never moved. Never throws.
+async function retimeLeadForAddress(base44: any, data: any, old_data: any, id: string) {
+  try {
+    if (!data || !id || data.status !== 'active' || data.classification !== 'event') return;
+    if (data.day_only_task || data.parent_task_id || data.silenced || data.birthday_person) return;
+    const before = String(old_data?.location || '').trim();
+    const after = String(data.location || '').trim();
+    if (before === after) return;
+    const startMs = utcMs(data.event_time || data.next_reminder);
+    if (!Number.isFinite(startMs) || startMs <= Date.now() + 5 * 60000) return;
+    const schedule: any[] = Array.isArray(data.reminder_schedule) ? data.reminder_schedule : [];
+    const leadLabel = (r: any) => /^(leave now|1 hour before)$/i.test(String(r?.label || '').trim());
+    const idx = schedule.findIndex((r: any) => r && leadLabel(r) && r.send_at);
+    // No lead reminder to re-time: a plan they trimmed themselves, or none
+    // written yet (the hourly job builds it, and sees the address then).
+    if (idx < 0) return;
+    const entry = schedule[idx];
+    if (entry.their_time === true) return;
+    const email = String(data.notification_recipient_email || data.created_by || '').trim();
+    if (!email) return;
+    const owner = (await base44.asServiceRole.entities.User.filter({ email }))?.[0];
+    if (!owner) return;
+
+    const lead = after
+      ? await getTravelLead(after, getHomeOrigin(owner), new Date(startMs).toISOString(), { avoidTolls: owner.commute_avoid_tolls === true })
+      : null;
+    const label = lead ? 'leave now' : '1 hour before';
+    const leadMinutes = lead ? lead.leadMinutes : 60;
+    const wantMs = startMs - leadMinutes * 60000;
+    const sameLabel = label.toLowerCase() === String(entry.label || '').trim().toLowerCase();
+    if (sameLabel && Math.abs(utcMs(entry.send_at) - wantMs) < 60000) return;
+    if (!lead && after) console.log(`[onTaskUpdate] ${id}: the drive to "${after}" could not be measured (no home circle, or the place wasn't found); the hour before stays`);
+    if (!lead && sameLabel) return;
+
+    const t = String(data.title || '').trim() || 'your event';
+    const short = t.length > 40 ? `${t.slice(0, 37)}...` : t;
+    const words = lead
+      ? {
+        title: `🚗 Time to leave — ${short}`,
+        body: lead.inTraffic
+          ? `"${short}" is about ${lead.driveMinutes} min away with expected traffic, so head out now to get there on time. 🚗`
+          : `"${short}" is about ${lead.driveMinutes} min away, so head out now to get there on time. 🚗`,
+      }
+      : { title: `⏰ ${short}`, body: `Almost time! Your "${short}" is in about an hour. Start wrapping up ✨` };
+    // Too late to book it ahead (the address came with the drive already due):
+    // it goes out in a minute, saying so.
+    const sendMs = Math.max(wantMs, Date.now() + 60000);
+
+    // The old push comes off first: the new one lands within minutes of it,
+    // and the ledger would otherwise refuse it as a duplicate.
+    const oldId = entry.notification_id && !/^planned_/i.test(String(entry.notification_id)) ? String(entry.notification_id) : '';
+    if (oldId) await cancelOneSignalNotification(oldId);
+
+    const book = async (title: string, body: string, atMs: number) => {
+      const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+        internalKey: Deno.env.get('CRON_SECRET'),
+        toUserExternalId: email,
+        title, body,
+        sendAtISO: new Date(atMs).toISOString(),
+        data: { screen: '/TaskNotification', taskId: id, urgency: data.urgency || 'medium', type: 'event_reminder' },
+      });
+      const result = res?.data || res;
+      const newId = result?.notificationId ? String(result.notificationId) : '';
+      const at = newId && typeof result.sendAt === 'string' && result.sendAt ? result.sendAt : new Date(atMs).toISOString();
+      return { newId, at, why: result?.reason || result?.error || '' };
+    };
+    let booked = await book(words.title, words.body, sendMs);
+    let used = { label, title: words.title, body: words.body };
+    if (!booked.newId) {
+      console.log(`[onTaskUpdate] ${id}: could not book the re-timed lead (${booked.why || 'no id'}); putting the ${entry.label} back`);
+      // Best effort: the one that was there, at its old time, so the event
+      // doesn't lose its heads-up over this.
+      const oldMs = utcMs(entry.send_at);
+      if (Number.isFinite(oldMs) && oldMs > Date.now() + 60000) {
+        booked = await book(entry.notification_title || words.title, entry.notification_body || words.body, oldMs);
+        used = { label: String(entry.label || label), title: entry.notification_title || words.title, body: entry.notification_body || words.body };
+      }
+      if (!booked.newId) return;
+    }
+
+    // Written against the task as it is now, not as the event read it.
+    const fresh = await base44.asServiceRole.entities.Task.get(id).catch(() => null);
+    if (!fresh || fresh.status !== 'active') { await cancelOneSignalNotification(booked.newId); return; }
+    const freshSchedule: any[] = Array.isArray(fresh.reminder_schedule) ? fresh.reminder_schedule : [];
+    let replaced = false;
+    const nextSchedule = freshSchedule.map((r: any) => {
+      const match = r && leadLabel(r) && (!oldId ? !r.notification_id || /^planned_/i.test(String(r.notification_id)) : String(r.notification_id || '') === oldId);
+      if (!match || replaced) return r;
+      replaced = true;
+      return { ...r, notification_id: booked.newId, send_at: booked.at, label: used.label, notification_title: used.title, notification_body: used.body, scheduled: true };
+    });
+    if (!replaced) nextSchedule.push({ notification_id: booked.newId, send_at: booked.at, label: used.label, notification_title: used.title, notification_body: used.body, scheduled: true });
+    const ids: string[] = (Array.isArray(fresh.onesignal_notification_ids) ? fresh.onesignal_notification_ids : []).map(String).filter((x) => x && x !== oldId);
+    const nextIds = [...ids, booked.newId];
+    await base44.asServiceRole.entities.Task.update(id, { reminder_schedule: nextSchedule, onesignal_notification_ids: nextIds });
+    // The phone's alarm for it moves too (its owner's phone, with their settings).
+    if (String(fresh.created_by || '').toLowerCase() === email.toLowerCase()) {
+      await pushPhoneAlarms({ ...fresh, reminder_schedule: nextSchedule, onesignal_notification_ids: nextIds }, owner,
+        { before: fresh, changedAt: Date.now(), source: 'onTaskUpdate' });
+    }
+    console.log(`[onTaskUpdate] ${id}: address ${after ? `"${after}"` : 'removed'} → ${used.label} at ${booked.at}${lead ? ` (about ${lead.driveMinutes} min drive${lead.inTraffic ? ' with expected traffic' : ''})` : ''}`);
+  } catch (e) {
+    console.error('[onTaskUpdate] could not re-time the lead reminder for the new address:', (e as any)?.message || e);
+  }
+}
+
 async function handleTaskEvent(req: Request): Promise<Response> {
   try {
     console.log('[onTaskUpdate] ========== FUNCTION START ==========');
@@ -488,6 +608,10 @@ async function handleTaskEvent(req: Request): Promise<Response> {
         }
       }
     }
+
+    // An address added to, changed on or removed from an upcoming event
+    // re-times its heads-up from the drive (see retimeLeadForAddress).
+    await retimeLeadForAddress(base44, data, old_data, event.entity_id);
 
     // A SNOOZE IS NOT A COMPLETION. The snooze handler has just booked the one
     // reminder the user asked for and written its id plus the new next_reminder.
