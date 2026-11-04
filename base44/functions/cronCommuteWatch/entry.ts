@@ -298,7 +298,10 @@ async function eventRunningLate(
         include_external_user_ids: [email],
         headings: { en: title },
         contents: { en: body },
-        data: { screen: '/TaskNotification', taskId: task.id, type: 'event_heads_up' },
+        // Its own type: the phone puts buttons on a push by type, and
+        // 'event_heads_up' gave this traffic note a "Write questions" button
+        // (TaskActions.java; fixed Nov 4 2026). An unknown type gets none.
+        data: { screen: '/TaskNotification', taskId: task.id, type: 'running_late' },
         channel_for_external_user_ids: 'push',
         priority: 10,
         ttl: 15 * 60,
