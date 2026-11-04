@@ -251,8 +251,9 @@ const PLANNER_FIELDS = [
 ];
 const norm = (v: any) => (v === undefined || v === null || v === '' ? null : JSON.stringify(v));
 function plannerFieldsChanged(a: any, b: any): string[] {
-  // A rhythm task's next_reminder is moved along by cronTaskReminders with
-  // every ping — bookkeeping, not an edit.
+  // A rhythm task's next_reminder is moved along by cronRefillReminders as it
+  // books each batch — bookkeeping, not an edit. (cronTaskReminders, which once
+  // did this, had no schedule and no caller; removed Nov 4 2026.)
   const rhythm = RECURRING_INTERVALS.has(a?.reminder_interval) && RECURRING_INTERVALS.has(b?.reminder_interval);
   return PLANNER_FIELDS.filter((f) => !(rhythm && f === 'next_reminder') && norm(a?.[f]) !== norm(b?.[f]));
 }
