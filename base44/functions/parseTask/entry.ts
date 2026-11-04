@@ -162,7 +162,7 @@ const PARSER_CHECKS: { text: string; saidAt: number; expect: Record<string, any>
   // night-before reminder asks for prep notes and every reminder repeats
   // them (Anna, Nov 4 2026: a vet visit with a fasting cat carried no note,
   // "a notification is not enough"). Things people just show up to are not.
-  { text: "Kirito vet appointment Wednesday at 1:45pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { classification: "event", prep_worthy: true } },
+  { text: "Take the dog to the vet Wednesday at 1:45pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { classification: "event", prep_worthy: true } },
   { text: "Dentist Friday at 2pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { prep_worthy: true } },
   { text: "Flight to Denver Saturday 6:40am", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { prep_worthy: true } },
   { text: "DMV appointment Thursday 10am", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { prep_worthy: true } },
