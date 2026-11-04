@@ -545,7 +545,11 @@ async function rewordForPrep(base44: any, data: any, old_data: any, id: string) 
       if (!hit) return r;
       const v = replaced.get(hit.entry);
       if (hit.entry.notification_id && !/^planned_/i.test(String(hit.entry.notification_id))) oldIds.add(String(hit.entry.notification_id));
-      return { ...r, ...hit.next, notification_id: v?.newId || null, send_at: v?.at || r.send_at, scheduled: !!v?.newId };
+      // Not booked now: a planned entry keeps its placeholder (the reminder
+      // editor removes entries by id), a booked one goes to null; the hourly
+      // job books both.
+      const planned = /^planned_/i.test(String(r?.notification_id || '')) ? String(r.notification_id) : null;
+      return { ...r, ...hit.next, notification_id: v?.newId || planned, send_at: v?.at || r.send_at, scheduled: !!v?.newId };
     });
     const kept: string[] = (Array.isArray(fresh.onesignal_notification_ids) ? fresh.onesignal_notification_ids : []).map(String).filter((x) => x && !oldIds.has(x));
     const nextIds = [...kept, ...Array.from(replaced.values()).map((v) => v.newId).filter(Boolean)];
