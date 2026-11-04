@@ -1,6 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { FileText, Mail } from "lucide-react";
+import { isIPhoneApp } from "@/lib/phonePlatform";
 
 const Section = ({ title, children }) => (
   <div className="p-5 space-y-3">
@@ -93,8 +94,11 @@ export default function Terms() {
             ]} />
           </Section>
 
-          <Section title="5. Subscriptions & Payments">
-            <List items={[
+          <Section title={isIPhoneApp() ? "5. Payments" : "5. Subscriptions & Payments"}>
+            <List items={isIPhoneApp() ? [
+              "ADHDone is free to use and shows ads.",
+              "Any purchases offered in the app are billed through the App Store, and refunds follow App Store policies.",
+            ] : [
               "New users receive a free trial period. You may cancel anytime during the trial without charge.",
               "After the trial, a subscription is required to continue using ADHDone.",
               "Subscriptions are billed through Apple App Store or Google Play and auto-renew unless canceled at least 24 hours before renewal.",
