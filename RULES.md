@@ -402,6 +402,12 @@ typed something" and "their phone rang", answer these in writing:
    That's why I made alarms." A birthday's week-before / day-before and an all-day event's
    night-before stay pushes, as before. Never turn an event's alarm into a push, for any
    reason, unless she says so in her own words (hard rule, Oct 7, Oct 13 and Nov 4 2026).
+   THE CHECK: `debugNotifications` → Test Function → `{"ringSelfTest": true}` (owner) runs 13
+   cases of what rings against these rules and must come back `failed: 0` after ANY change
+   to `ringsOutLoudOn` or `ringsOutLoud`; a change that makes one fail is wrong until Anna
+   says otherwise, and then the case changes with her words quoted. Second guard: a change
+   built from something she said that REMOVES a ring, a reminder or a push is stated back
+   to her in one line (what will stop, from when) before it is built, not after.
 
 Then run the parser self-test (`parseTask` → Test Function → `{"selfTest": true}`) if the
 prompt, the date resolver or the pipeline changed, and say what failed. Three hands change
