@@ -10,6 +10,7 @@ import {
 import PriorityPickerDialog from "../tasks/PriorityPickerDialog";
 import DatePickerDialog from "../tasks/DatePickerDialog";
 import { base44 } from "@/api/base44Client";
+import { usePopupTurn } from "../onboarding/onboardingSurface";
 import {
   subscribeCaptures,
   claimNextCapture,
@@ -135,6 +136,11 @@ export default function TaskCaptureProcessor({ userEmail }) {
   // Which capture the open question belongs to (a hand-off closes it).
   const askForRef = useRef(null);
   const [ask, setAsk] = useState(null); // { type, data }
+  // A question about a capture (its day, its priority, an advance reminder)
+  // opens on its own, often while a capture from earlier is being finished at
+  // app open, so it takes its turn with every other popup: nothing else on
+  // screen first. The pipeline simply waits for the answer (Nov 4 2026 audit).
+  const askShown = usePopupTurn(!!ask, { reactive: true });
 
   const requestInput = (type, data, captureId = null) =>
     new Promise((resolve) => {
@@ -411,7 +417,7 @@ export default function TaskCaptureProcessor({ userEmail }) {
   return (
     <>
       <DatePickerDialog
-        isOpen={ask?.type === 'date'}
+        isOpen={askShown && ask?.type === 'date'}
         onClose={() => answer(null)}
         onSelect={(date, time) => answer({ date, time })}
         onAnyDay={() => answer({ anyDay: true })}
@@ -421,12 +427,12 @@ export default function TaskCaptureProcessor({ userEmail }) {
       />
 
       <PriorityPickerDialog
-        isOpen={ask?.type === 'priority'}
+        isOpen={askShown && ask?.type === 'priority'}
         onClose={() => answer(null)}
         onSelect={(priority) => answer(priority)}
       />
 
-      <Dialog open={ask?.type === 'advance'} onOpenChange={(open) => { if (!open) answer(0); }}>
+      <Dialog open={askShown && ask?.type === 'advance'} onOpenChange={(open) => { if (!open) answer(0); }}>
         <DialogContent className="max-w-md w-[calc(100vw-2rem)]">
           <DialogHeader>
             <DialogTitle>Would you like an advance reminder?</DialogTitle>
