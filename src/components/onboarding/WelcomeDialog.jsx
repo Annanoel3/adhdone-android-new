@@ -5,6 +5,7 @@ import { ONBOARDING_STEPS, isStepDone, markStepDone } from './onboardingGate';
 import { enterOnboardingSurface, exitOnboardingSurface } from './onboardingSurface';
 import { wasReplayedThisSession } from './onboardingReplay';
 import WelcomeChat from './WelcomeChat';
+import { resumeScript } from './welcomeScript';
 import CATCH_UP_SCRIPT, { CATCH_UP_ABOUT_ONLY_SCRIPT } from './catchUpScript';
 
 // The very first thing a new user sees — a short back-and-forth that collects a
@@ -12,9 +13,14 @@ import CATCH_UP_SCRIPT, { CATCH_UP_ABOUT_ONLY_SCRIPT } from './catchUpScript';
 // first-run sequence starts until it's finished.
 //
 // Whether it has been done belongs to the ACCOUNT, not the phone: the flag is
-// copied down from the profile before this mounts, and an account that already
-// answered (it has a name or an about-me) counts as done even if the flag was
-// lost — so a reinstall or a new phone never asks twice.
+// copied down from the profile before this mounts, and an account that reached
+// the last question (it has an about-me) counts as done even if the flag was
+// lost — so a reinstall or a new phone never asks twice. A name alone is NOT
+// done: it is the first answer, and someone who closed the app right after it
+// (Anna, Nov 4 2026, on the iPhone, closing it for an update halfway through:
+// "if somebody doesn't complete the whole thing, it needs to come back") gets
+// the chat back on the next open at the beat they left (resumeScript).
+// Having a name used to count as finished, so the chat never returned.
 //
 // An account with history is never "new" either, whatever this phone
 // remembers. The done-flag only started living on the account partway
@@ -25,9 +31,12 @@ import CATCH_UP_SCRIPT, { CATCH_UP_ABOUT_ONLY_SCRIPT } from './catchUpScript';
 // still gets the real first run.
 const EXISTING_ACCOUNT_DAYS = 3;
 
-async function accountHasHistory(user) {
+const accountIsOld = (user) => {
   const created = Date.parse(user?.created_date || '');
-  if (!isNaN(created) && Date.now() - created > EXISTING_ACCOUNT_DAYS * 24 * 60 * 60 * 1000) return true;
+  return !isNaN(created) && Date.now() - created > EXISTING_ACCOUNT_DAYS * 24 * 60 * 60 * 1000;
+};
+
+async function accountHasTasks() {
   try {
     const rows = await base44.entities.Task.list('-created_date', 1);
     return Array.isArray(rows) && rows.length > 0;
@@ -36,18 +45,39 @@ async function accountHasHistory(user) {
   }
 }
 
+async function accountHasHistory(user) {
+  if (accountIsOld(user)) return true;
+  return accountHasTasks();
+}
+
 export default function WelcomeDialog({ user }) {
-  // 'welcome' = the first-run conversation, 'catchup' = the returning-user one.
+  // 'welcome' = the first-run conversation, 'resume' = the same one picked
+  // back up after the name, 'catchup' = the returning-user one.
   const [mode, setMode] = useState(null);
+  // Which beats the picked-up chat may skip: a task already on the list, the
+  // notifications question already answered on this account.
+  const [resumeOpts, setResumeOpts] = useState({ hasTask: false, notifyAnswered: false });
 
   useEffect(() => {
     if (!user) return undefined;
     if (isStepDone(ONBOARDING_STEPS.welcome)) return undefined;
-    if (user.preferred_name || user.about_me) {
+    // The about-you question is the last one: reaching it is the whole chat.
+    if (user.about_me) {
       markStepDone(ONBOARDING_STEPS.welcome);
       return undefined;
     }
     let cancelled = false;
+    // A new account with a name and no finished chat: pick it back up. (An
+    // account older than a few days with only a name gets the welcome-back
+    // catch-up below instead, as before.)
+    if (user.preferred_name && !accountIsOld(user) && !wasReplayedThisSession()) {
+      accountHasTasks().then((hasTask) => {
+        if (cancelled || isStepDone(ONBOARDING_STEPS.welcome)) return;
+        setResumeOpts({ hasTask, notifyAnswered: isStepDone(ONBOARDING_STEPS.permissions) });
+        setMode('resume');
+      });
+      return () => { cancelled = true; };
+    }
     (wasReplayedThisSession() ? Promise.resolve(false) : accountHasHistory(user)).then((existing) => {
       if (cancelled || isStepDone(ONBOARDING_STEPS.welcome)) return;
       if (!existing) {
@@ -109,6 +139,8 @@ export default function WelcomeDialog({ user }) {
         <div className="pt-2">
           {mode === 'catchup' ? (
             <WelcomeChat onDone={handleClose} script={catchUpScript} initialName={knownName} />
+          ) : mode === 'resume' ? (
+            <WelcomeChat onDone={handleClose} script={resumeScript(resumeOpts)} initialName={knownName} />
           ) : (
             <WelcomeChat onDone={handleClose} />
           )}
