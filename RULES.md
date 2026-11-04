@@ -435,7 +435,7 @@ typed something" and "their phone rang", answer these in writing:
    plain heads-up. A repeating appointment carries its note to the next occurrence; a copy
    keeps it. Prep NEVER changes how loud a reminder is (Q6 stands). Alarm bodies are capped by
    the push size, so the note is one line of at most 140 characters. THE CHECKS:
-   `debugNotifications` → `{"prepSelfTest": true}` (owner) runs 35 pure cases (which plan gets
+   `debugNotifications` → `{"prepSelfTest": true}` (owner) runs 36 pure cases (which plan gets
    the ask, the note on every body once, re-wording on change, who gets the push) and must come
    back `failed: 0` after ANY change to prepNote.ts; the parser self-test has 9 prep_worthy
    sentences. Phase 2, only if Anna says so: the parser tags who a task is about (a pet, a
