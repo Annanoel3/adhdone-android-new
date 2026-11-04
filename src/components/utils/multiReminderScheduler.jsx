@@ -334,9 +334,16 @@ export async function scheduleMultiReminders({
             screen: '/TaskNotification',
             taskId,
             urgency: urgency || 'medium',
+            // The prep ask ("anything to get ready first?", label 'night
+            // before · prep') is a plain check-in: no "Write questions"
+            // button, the tap opens the event's page with the prep box
+            // (base44/shared/prepNote.ts). The questions wording keeps its
+            // button.
             type: reminder.checkin ? 'task_checkin'
               : classification === 'event'
-                ? (/night before/i.test(reminder.label || '') ? 'event_heads_up' : 'event_reminder')
+                ? (/night before/i.test(reminder.label || '')
+                  ? (/· prep$/i.test(reminder.label || '') ? 'task_checkin' : 'event_heads_up')
+                  : 'event_reminder')
                 : 'task_reminder',
           },
         });
