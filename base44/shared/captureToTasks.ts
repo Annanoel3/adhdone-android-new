@@ -127,6 +127,9 @@ export function buildTaskRecord(
     energy_required: parsed.energy_required || "medium",
     takes_time: parsed.takes_time === true,
     worth_breaking_down: parsed.worth_breaking_down === true,
+    // An appointment with something to get ready before it: the reminders ask
+    // for prep notes and repeat them (see prepNote.ts).
+    prep_worthy: parsed.prep_worthy === true,
     recurrence_pattern: parsed.recurrence_pattern || "none",
     recurrence_days: Array.isArray(parsed.recurrence_days) && parsed.recurrence_days.length ? parsed.recurrence_days : null,
     // The next step this chore leads to, scheduled the moment the task is
