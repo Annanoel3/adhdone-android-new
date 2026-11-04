@@ -110,8 +110,10 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     const noBridge = b.input === 'notify' && !window.Capacitor?.Plugins?.NotifyBridge?.requestPermission;
     const gone =
       (typeof b.skip === 'function' && b.skip(name, handle, about, task, when, notify)) || noBridge;
-    // No notifications question here (a browser): the task goes in now instead.
-    if (noBridge && task && hasWhenBeat) captureTask(task, phraseRef.current);
+    // No notifications question here (a browser, or an account that already
+    // answered it when the chat is picked back up): the task goes in now
+    // instead of after that answer.
+    if (b.input === 'notify' && gone && task && hasWhenBeat) captureTask(task, phraseRef.current);
     if (gone) setIdx((i) => i + 1);
   }, [idx, script, name, handle, about, task, when, notify]);
 
