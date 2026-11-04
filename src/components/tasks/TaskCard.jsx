@@ -35,6 +35,7 @@ import SubtaskQuickAdd from "./SubtaskQuickAdd";
 import BreakItDownOffer from "./BreakItDownOffer";
 import AddAddressOffer from "./AddAddressOffer";
 import PrepOffer, { prepOfferWanted } from "./PrepOffer";
+import PrepNoteBox from "./PrepNoteBox";
 import LifeAreaPill, { TagPill } from "./LifeAreaPill";
 import { checkDuePushEgg } from "../eastereggs/duePushEgg";
 import { firstDateMakesDeadline, isPastDue } from "../utils/todayTasks";
@@ -1154,6 +1155,14 @@ export default function TaskCard({
         {!expanded && (
           <BreakItDownOffer task={task} theme={theme} subtaskCount={subtaskCount || 0} onRefreshTasks={onRefreshTasks} />
         )}
+        {/* An event's saved prep note, in plain sight on the collapsed row
+            (every reminder repeats it; base44/shared/prepNote.ts). */}
+        {!expanded && isEvent && String(task.prep_note || '').trim() && !isCancelled && (
+          <p className={`mt-1.5 flex items-start gap-1.5 text-xs leading-snug ${theme === 'dark' ? 'text-amber-300' : 'text-amber-800'}`}>
+            <ClipboardList className="w-3.5 h-3.5 flex-shrink-0 mt-px" />
+            <span className="break-words"><span className="font-semibold">Prep:</span> {task.prep_note}</span>
+          </p>
+        )}
         {/* One offer line at a time on an event's row, never two: an
             appointment with nothing noted to get ready first asks for its
             prep note (PrepOffer); otherwise an upcoming event with no
@@ -1197,6 +1206,14 @@ export default function TaskCard({
               <p className={`text-sm break-words whitespace-pre-wrap ${theme === 'dark' ? 'text-gray-300' : 'text-gray-600'}`}>
                 {task.description}
               </p>
+            )}
+
+            {/* What to get ready before an appointment, editable on the open
+                card; saving re-words every reminder still ahead (pushes and
+                alarms) to end with it. Shown for an appointment the parser
+                flagged (prep_worthy) or any event that already has a note. */}
+            {isEvent && task.status === 'active' && !isCancelled && (task.prep_worthy === true || String(task.prep_note || '').trim()) && (
+              <PrepNoteBox task={task} theme={theme} compact onSaved={() => { if (onRefreshTasks) onRefreshTasks(); }} />
             )}
 
             {/* Badges / inline editors */}
