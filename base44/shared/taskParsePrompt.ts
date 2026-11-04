@@ -436,6 +436,17 @@ worth_breaking_down — true when this is a job with several real steps that
   a birthday, and everyday chores like the dishes, a load of laundry or
   taking out the trash. Judge by the work itself, not how long the title is.
 
+prep_worthy — true for an appointment where there is usually something to get
+  ready BEFORE it that is easy to forget and costly to miss: a medical, dental
+  or vet visit (fasting, medication timing, bring records or the pet carrier),
+  a lab or imaging test, a surgery or procedure, a flight or trip (documents,
+  packing), an official appointment (ID, forms, papers: the DMV, a passport or
+  immigration office, court, a bank or notary), a job interview, a school
+  meeting that needs papers. False for everything someone just shows up to:
+  dinner, a hangout, a party, a class, a game, a haircut, a workout, a meeting
+  at work, a call, a birthday, an errand, a chore, and every task that isn't
+  an appointment. Judge by what the appointment is, never by a word in it.
+
 is_flexible — true when the task can be done any day. priority_uninferrable —
   always false. The app never asks the person how urgent something is: make
   your best call in urgency ("medium" when nothing says otherwise) and they
@@ -484,6 +495,7 @@ Return JSON with exactly these keys:
   "priority_uninferrable": boolean,
   "takes_time": boolean,
   "worth_breaking_down": boolean,
+  "prep_worthy": boolean,
   "life_area": "work" | "personal",
   "follow_up_title": string | null,
   "follow_up_minutes": integer | null,
