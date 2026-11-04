@@ -283,6 +283,23 @@
       "type": "boolean",
       "description": "The row's 'Break it into steps' offer was tapped or hidden with its \u00d7, so it isn't shown again for this task. The same button stays inside the opened card."
     },
+    "prep_worthy": {
+      "type": "boolean",
+      "description": "Whether this is an appointment with something to get ready BEFORE it (a vet, doctor or dental visit, a lab test or procedure, a flight or trip, the DMV or another official appointment, an interview) rather than something people just show up to (dinner, a hangout, a haircut, a birthday). Set by the task parser at creation (Nov 4 2026). While prep_note is empty the night-before reminder asks for prep notes instead of the plain heads-up and the row shows a 'Prep for this?' line (PrepOffer); never changes how loud a reminder is."
+    },
+    "prep_note": {
+      "type": "string",
+      "description": "What to get ready before this event, in the user's own words ('Kirito fasting from midnight', 'bring insurance card and the referral'). Typed on the TaskNotification page, the row's PrepOffer line or the open card. Every reminder of the event (night before, morning of, hour before, leave now, at the time, the phone alarm) ends with 'Prep: <note>'; changing it rewords the pending pushes."
+    },
+    "prep_offer_dismissed": {
+      "type": "boolean",
+      "description": "The row's 'Prep for this?' line (PrepOffer) was hidden with its x, so it isn't shown again for this event. Saving a prep note ends it on its own; the night-before reminder still asks once."
+    },
+    "prep_asked_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the one 'Anything to prep?' push went out for an event added from outside the app (shared text or photo, the widget, the pinned notification, a calendar import) that starts within the day, so it is never sent twice. Unset when the ask was left to the night-before reminder or the in-app row."
+    },
     "address_offer_dismissed": {
       "type": "boolean",
       "description": "The event row's 'Add the address and I'll time when to leave' line (AddAddressOffer, Nov 4 2026) was hidden with its x, so it isn't shown again for this event. Only an upcoming timed event with no address, on an account with a home circle, gets the line; saving an address ends it on its own."
