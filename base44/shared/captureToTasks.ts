@@ -480,6 +480,10 @@ export async function scheduleTaskReminders(
     deadlineStyle: task.deadline_style,
     location: task.location || '',
     homeOrigin,
+    // Measured from where they'll be: the event before it, work, or home
+    // (shared/leaveOrigin.ts, Nov 4 2026).
+    ownerEmail: owner?.email || task.notification_recipient_email || task.created_by || null,
+    taskId: task.id || null,
     avoidTolls,
     reminderWish: task.reminder_wish || parsed?.reminder_wish || null,
     timezone: tz,
