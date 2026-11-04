@@ -17,6 +17,7 @@ import { adjustForQuietHours, resolveQuietHours, anchorToDaytime, placeRepeating
 import { ledgerCheck, ledgerRecord, ledgerCancel } from '../../shared/sendLedger.ts';
 import { getTravelLead } from '../../shared/travelLead.ts';
 import { leaveOriginFor, fromWords, CHAIN_GAP_MS, ASSUMED_EVENT_MS } from '../../shared/leaveOrigin.ts';
+import { withPrep, prepNoteOf, rewordEntryForPrep } from '../../shared/prepNote.ts';
 
 const ONESIGNAL_APP_ID = Deno.env.get('ONESIGNAL_APP_ID');
 const ONESIGNAL_REST_API_KEY = Deno.env.get('ONESIGNAL_REST_API_KEY');
@@ -407,6 +408,8 @@ async function retimeLead(base44: any, owner: any, task: any, why: string): Prom
           : `"${short}" is about ${lead.driveMinutes} min ${whence}, so head out now to get there on time. 🚗`,
       }
       : { title: `⏰ ${short}`, body: `Almost time! Your "${short}" is in about an hour. Start wrapping up ✨` };
+    // The event's prep note stays on the re-timed push (shared/prepNote.ts).
+    words.body = withPrep(words.body, task.prep_note);
     // Too late to book it ahead (the address came with the drive already due):
     // it goes out in a minute, saying so.
     const sendMs = Math.max(wantMs, Date.now() + 60000);
@@ -462,6 +465,99 @@ async function retimeLead(base44: any, owner: any, task: any, why: string): Prom
   } catch (e) {
     console.error(`[onTaskUpdate] could not re-time the lead reminder (${why}):`, (e as any)?.message || e);
     return false;
+  }
+}
+
+// rewordForPrep: the prep note on an upcoming event changed (typed on the
+// reminder page, the row's PrepOffer line or the open card; shared/prepNote.ts,
+// Anna, Nov 4 2026: her cat's vet visit needed him fasting and no reminder
+// said so). Every reminder of the event still ahead is re-booked with the new
+// words: a note typed puts "Prep: <note>" on each of them and turns the
+// night-before ask back into the plain heads-up; a note cleared takes the
+// line off. Same cancel-then-rebook as retimeLead, so the ledger never
+// refuses the new push as the old one's duplicate; an entry that can't be
+// booked now is saved with its new words and no id for the hourly job. The
+// phone's alarms get the same words right after. Never throws.
+async function rewordForPrep(base44: any, data: any, old_data: any, id: string) {
+  try {
+    if (!data || !id || data.classification !== 'event' || data.status !== 'active') return;
+    if (!old_data || Object.keys(old_data).length === 0) return;
+    const before = prepNoteOf(old_data);
+    const after = prepNoteOf(data);
+    if (before === after) return;
+    if (data.silenced || data.parent_task_id || data.birthday_person) return;
+    const schedule: any[] = Array.isArray(data.reminder_schedule) ? data.reminder_schedule : [];
+    const now = Date.now();
+    const ahead = schedule.filter((r: any) => r && r.send_at && utcMs(r.send_at) > now + 60000);
+    if (ahead.length === 0) return;
+    const email = String(data.notification_recipient_email || data.created_by || '').trim();
+    if (!email) return;
+    const owners = await base44.asServiceRole.entities.User.filter({ email });
+    const owner = owners?.[0];
+
+    const changes: { entry: any; next: { label: string; notification_title: string; notification_body: string } }[] = [];
+    for (const entry of ahead) {
+      const next = rewordEntryForPrep(entry, data);
+      if (next) changes.push({ entry, next });
+    }
+    if (changes.length === 0) return;
+
+    // Old pushes off first, then the new ones on, each at its own minute.
+    const replaced = new Map<any, { newId: string; at: string }>();
+    for (const { entry, next } of changes) {
+      const oldId = entry.notification_id && !/^planned_/i.test(String(entry.notification_id)) ? String(entry.notification_id) : '';
+      if (oldId) await cancelOneSignalNotification(oldId);
+      let newId = '';
+      let at = String(entry.send_at);
+      try {
+        const res = await base44.asServiceRole.functions.invoke('schedulePush', {
+          internalKey: Deno.env.get('CRON_SECRET'),
+          toUserExternalId: email,
+          title: next.notification_title, body: next.notification_body,
+          sendAtISO: new Date(utcMs(entry.send_at)).toISOString(),
+          // Same buttons the plan gave it: a heads-up (night before, morning
+          // of) none, the rest an event's Snooze only (TaskActions).
+          data: { screen: '/TaskNotification', taskId: id, urgency: data.urgency || 'medium', type: /night before|morning of/i.test(next.label) ? 'task_checkin' : 'event_reminder' },
+        });
+        const result = res?.data || res;
+        newId = result?.notificationId ? String(result.notificationId) : '';
+        if (newId && typeof result.sendAt === 'string' && result.sendAt) at = result.sendAt;
+        if (!newId) console.log(`[onTaskUpdate] ${id}: could not re-book "${next.label}" with the prep words now (${result?.reason || result?.error || 'no id'}); saved for the hourly job`);
+      } catch (e) {
+        console.log(`[onTaskUpdate] ${id}: could not re-book "${next.label}" with the prep words now (${(e as any)?.message || e}); saved for the hourly job`);
+      }
+      replaced.set(entry, { newId, at });
+    }
+
+    // Written against the task as it is now, matched by the entry's old id (or
+    // its minute, for a planned entry), never by position.
+    const fresh = await base44.asServiceRole.entities.Task.get(id).catch(() => null);
+    if (!fresh || fresh.status !== 'active') {
+      for (const v of replaced.values()) if (v.newId) await cancelOneSignalNotification(v.newId);
+      return;
+    }
+    const freshSchedule: any[] = Array.isArray(fresh.reminder_schedule) ? fresh.reminder_schedule : [];
+    const oldIds = new Set<string>();
+    const nextSchedule = freshSchedule.map((r: any) => {
+      const hit = changes.find(({ entry }) => entry.notification_id && !/^planned_/i.test(String(entry.notification_id))
+        ? String(r?.notification_id || '') === String(entry.notification_id)
+        : String(r?.send_at || '') === String(entry.send_at) && String(r?.label || '') === String(entry.label || ''));
+      if (!hit) return r;
+      const v = replaced.get(hit.entry);
+      if (hit.entry.notification_id && !/^planned_/i.test(String(hit.entry.notification_id))) oldIds.add(String(hit.entry.notification_id));
+      return { ...r, ...hit.next, notification_id: v?.newId || null, send_at: v?.at || r.send_at, scheduled: !!v?.newId };
+    });
+    const kept: string[] = (Array.isArray(fresh.onesignal_notification_ids) ? fresh.onesignal_notification_ids : []).map(String).filter((x) => x && !oldIds.has(x));
+    const nextIds = [...kept, ...Array.from(replaced.values()).map((v) => v.newId).filter(Boolean)];
+    await base44.asServiceRole.entities.Task.update(id, { reminder_schedule: nextSchedule, onesignal_notification_ids: nextIds });
+    // The phone's alarms read the same words.
+    if (owner && String(fresh.created_by || '').toLowerCase() === email.toLowerCase()) {
+      await pushPhoneAlarms({ ...fresh, prep_note: data.prep_note, reminder_schedule: nextSchedule, onesignal_notification_ids: nextIds }, owner,
+        { before: fresh, changedAt: Date.now(), source: 'onTaskUpdate' });
+    }
+    console.log(`[onTaskUpdate] ${id}: prep note ${after ? (before ? 'changed' : 'added') : 'cleared'} → ${changes.length} reminder(s) re-worded${nextIds.length < kept.length + changes.length ? ' (some not booked yet)' : ''}`);
+  } catch (e) {
+    console.error('[onTaskUpdate] could not re-word the reminders for the prep note:', (e as any)?.message || e);
   }
 }
 
@@ -665,6 +761,10 @@ async function handleTaskEvent(req: Request): Promise<Response> {
     // re-times its heads-up from the drive (see retimeLeadForAddress).
     await retimeLeadForAddress(base44, data, old_data, event.entity_id);
 
+    // A prep note typed, changed or cleared on an upcoming event re-words every
+    // reminder still ahead of it, alarms included (see rewordForPrep).
+    await rewordForPrep(base44, data, old_data, event.entity_id);
+
     // A SNOOZE IS NOT A COMPLETION. The snooze handler has just booked the one
     // reminder the user asked for and written its id plus the new next_reminder.
     // Treating 'snoozed' like 'completed' cancelled that reminder and wiped the
@@ -824,6 +924,9 @@ async function handleTaskEvent(req: Request): Promise<Response> {
       ] : timed && data.deadline_style !== 'by' && clockMs > now ? [
         { at: clockMs, label: 'at the time', title: `🔔 ${t}`, body: `It's time — "${t}". You've got this! 💪` },
       ] : [];
+
+      // An event's prep note comes back on every reminder (shared/prepNote.ts).
+      if (isEvent) for (const c of candidates) c.body = withPrep(c.body, data.prep_note);
 
       const newIds = [];
       const newSchedule = [];
