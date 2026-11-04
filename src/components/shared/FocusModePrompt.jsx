@@ -13,7 +13,7 @@ import { Target, Info, CheckCircle2, Timer, Dices, X } from "lucide-react";
 import confetti from "canvas-confetti";
 import { isTodayTask } from "@/components/utils/todayTasks";
 import ConfirmDialog from "@/components/launch/ConfirmDialog";
-import { waitForTourEnd } from "@/components/onboarding/tourActive";
+import { waitForClear, usePopupTurn } from "@/components/onboarding/onboardingSurface";
 import { firstUseSeen, markFirstUseSeen } from "@/components/onboarding/FirstUseDialog";
 
 const FOCUS_FIRST_USE_FLAG = "firstuse_focus_mode_done";
@@ -86,6 +86,9 @@ export default function FocusModePrompt({ user, theme }) {
   try { morningDismissed = sessionStorage.getItem(MORNING_DISMISSED_KEY) === (morningOffer?.taskId || ""); } catch {}
   // A tap on the push always asks; the profile's offer asks until tucked away this app session.
   const askAboutId = morningTaskId || (morningOffer && !morningDismissed ? morningOffer.taskId : null);
+  // The morning question opens on its own (a push tap, or the offer on the
+  // profile at app open), so it takes its turn with every other popup.
+  const morningShown = usePopupTurn(!!morningTask, { reactive: true });
   useEffect(() => {
     if (!askAboutId) { setMorningTask(null); return; }
     let gone = false;
@@ -204,7 +207,9 @@ export default function FocusModePrompt({ user, theme }) {
       const offer = offerFrom(me);
       setMorningOffer(offer);
       // The morning question comes first; the session popup follows the answer.
-      if (tid && !offer) setOpen(true);
+      // Opened by the app, not a tap: it waits its turn like every other popup
+      // (nothing else on screen), so it never lands on top of one.
+      if (tid && !offer) waitForClear().then(() => setOpen(true));
     } catch (e) {
       console.error("FocusMode sync error:", e);
     }
@@ -270,7 +275,9 @@ export default function FocusModePrompt({ user, theme }) {
     if (!user?.email || !focusTaskId) return;
     if (sessionStorage.getItem("focus_popup_hidden") === "1") return;
     if (askAboutId) return; // the morning question is up (or about to be); never two popups at once
-    waitForTourEnd().then(() => setOpen(true));
+    // Its turn, not a timer: nothing else on screen (a tour card, another
+    // popup), the same rule every self-opening popup follows (Nov 4 2026 audit).
+    waitForClear().then(() => setOpen(true));
   }, [user?.email, focusTaskId, askAboutId]);
 
   // Completing the focus task ANYWHERE (task card, notification, subtask flow)
@@ -649,7 +656,7 @@ export default function FocusModePrompt({ user, theme }) {
         </button>
       )}
 
-      <Dialog open={!!morningTask} onOpenChange={(o) => { if (!o && !quietBusy) dismissMorning(); }}>
+      <Dialog open={morningShown} onOpenChange={(o) => { if (!o && !quietBusy) dismissMorning(); }}>
         <DialogContent className={`max-w-sm ${cardClass}`}>
           <DialogHeader>
             <DialogTitle>Good morning ☀️</DialogTitle>
