@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
         }
 
         // Quiet hours enforcement is handled by callers using per-user, timezone-aware
-        // logic (see cronRefillReminders, rescanTasks, and the client-side
+        // logic (see cronRefillReminders and the client-side
         // reminderScheduler). A crude UTC blanket here would collapse multiple
         // night/early-morning notifications to the same timestamp — causing
         // duplicate notifications — so we do NOT apply quiet hours in schedulePush.
