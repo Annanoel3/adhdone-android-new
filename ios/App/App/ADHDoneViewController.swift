@@ -2,16 +2,20 @@ import UIKit
 import WebKit
 import Capacitor
 import ADHDoneNative
+import ADHDoneShared
 
 /// The app's one screen: Capacitor's WebView showing adhdone.space, with
 /// ADHDone's own native plugins registered on it (Main.storyboard points here).
 /// Same plugin names and methods as the Android app, so the web app does not
 /// care which phone it is on. What isn't here yet is listed in IOS_PLAN.md.
 class ADHDoneViewController: CAPBridgeViewController {
-    /// Tells the website this iPhone app has the "ADHDone" share option, so the
-    /// App Guide only offers sharing on builds that have it (phonePlatform.js).
+    /// Tells the website what this iPhone build can do, so the App Guide and
+    /// Settings only offer what the build has (phonePlatform.js, IPHONE_BUILD_HAS):
+    /// the share option, full-screen alarms (AlarmBridge), the spoken alarm, the
+    /// widget, buttons on reminders, silence, the sound on regular pushes and
+    /// the calendar sync with the app closed (all Nov 4 2026).
     private static let featureScript =
-        "window.ADHDoneIPhone=Object.assign(window.ADHDoneIPhone||{},{shareExtension:true});"
+        "window.ADHDoneIPhone=Object.assign(window.ADHDoneIPhone||{},{shareExtension:true,alarms:true,spokenAlarm:true,homeWidget:true,reminderButtons:true,silence:true,notifySound:true,backgroundCalendar:true});"
 
     /// The web app's sign-in, the same three localStorage keys the Android
     /// SessionSnapshotter reads.
@@ -29,6 +33,8 @@ class ADHDoneViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(RecorderBridge())
         bridge?.registerPluginInstance(BillingBridge())
         bridge?.registerPluginInstance(ContactPickerBridge())
+        bridge?.registerPluginInstance(AlarmBridge())
+        bridge?.registerPluginInstance(WidgetBridge())
 
         webView?.configuration.userContentController.addUserScript(
             WKUserScript(source: Self.featureScript, injectionTime: .atDocumentStart, forMainFrameOnly: true))

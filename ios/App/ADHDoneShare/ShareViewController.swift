@@ -1,6 +1,7 @@
 import UIKit
 import ImageIO
 import UniformTypeIdentifiers
+import ADHDoneShared
 
 /// "ADHDone" in the iPhone share sheet. The twin of Android's CaptureActivity:
 /// shared text, a link, or one picture (a screenshot, a flyer) goes straight

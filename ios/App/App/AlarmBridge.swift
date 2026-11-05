@@ -72,7 +72,8 @@ public class AlarmBridge: CAPPlugin, CAPBridgedPlugin {
         return 0
     }
 
-    private static func alarm(from r: [String: Any]) -> StoredAlarm? {
+    /// One alarm as the web app (or the server's set_alarms_task push) describes it.
+    static func alarm(from r: [String: Any]) -> StoredAlarm? {
         guard let id = r["id"] as? String, !id.isEmpty else { return nil }
         let at = number(r["at"])
         guard at > 0 else { return nil }
