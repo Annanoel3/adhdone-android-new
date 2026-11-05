@@ -135,7 +135,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		6C1A0006000000000000E20B0 /* Frameworks */ = {
+		6C1A0006000000000000E21A /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -311,7 +311,7 @@
 			buildConfigurationList = 6C1A0006000000000000E21F /* Build configuration list for PBXNativeTarget "ADHDoneWidget" */;
 			buildPhases = (
 				6C1A0006000000000000E219 /* Sources */,
-				6C1A0006000000000000E20B0 /* Frameworks */,
+				6C1A0006000000000000E21A /* Frameworks */,
 				6C1A0006000000000000E21B /* Resources */,
 			);
 			buildRules = (
