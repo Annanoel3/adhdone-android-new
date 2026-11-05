@@ -21,32 +21,58 @@ TestFlight through Codemagic on Oct 29 2026.
 
 ## Every native feature, and what it becomes on iPhone
 
-Phase 1 = in the first TestFlight build. Later phases follow in order.
+**Nothing is phased.** Every feature goes in the build (Anna, Nov 4 2026: "always BUILD ALL
+OF IT. Why would you let me submit something to apple unfinished.. thats not cool"). The
+phases that stood here from Oct 30 to Nov 4 2026 were the assistant's own idea, never put to
+Anna, and the first App Review build went out without reminder buttons, alarms, the widget,
+silence and more. If something truly can't go in (a store rule, an Apple approval that is
+missing), it is said in one line BEFORE the build and Anna decides. RULES.md §0.
 
-| Android (files) | iPhone | Phase |
+| Android (files) | iPhone | Status |
 |---|---|---|
-| Push notifications: NotifyBridge, MainApplication (OneSignal) | NotifyBridge.swift (OneSignal, same app id), started in AppDelegate so a tap that cold-starts the app isn't lost | 1 |
-| Record Notes: RecorderBridge, RecorderService, RecorderStore | RecorderBridge.swift (AVAudioRecorder, `audio` background mode: keeps going with the screen off, 10-minute parts) | 1 |
-| Phone calendars: CalendarBridge | CalendarBridge.swift (EventKit, read) | 1 |
-| Add to phone calendar on a task or event: CalendarBridge.addEvent (Android build 46) | CalendarBridge.addEvent (EventKitUI's New Event sheet, filled in; the person picks the calendar and taps Add; no permission needed on iOS 17+). Added Nov 2 2026, in the next TestFlight build | 1 |
-| Notification sound and read-aloud for regular pushes: NotifySound, PushFilter.withOwnSound (Android build 46) | Later, with the Notification Service Extension (phase 2): iOS plays a push's sound itself, only from a file in the app or its Library/Sounds folder (aiff/wav/caf, under 30 seconds; Apple's UNNotificationSound page), so the chosen sound has to be converted and downloaded onto the phone, and the extension names it on each push. Read-aloud: not on iPhone (an app can't speak while it's closed). Until then the web app hides the Notification sound card where AlarmBridge.setNotifySound doesn't exist, so iPhone never shows it | 2 |
-| Recording-minute packs: BillingBridge (RevenueCat) | BillingBridge.swift (RevenueCat iOS, consumables notes_1h / notes_5h) | 1 (code) — products in App Store Connect + RevenueCat |
-| Contact picker: ContactPickerBridge | ContactPickerBridge.swift (Apple's picker, no Contacts permission) | 1 |
-| Task photos: @capacitor/camera | same plugin, iOS side | 1 |
-| Play in-app update: InAppUpdate, NotifyBridge.startAppUpdate | none on iPhone; the update card opens the App Store page (`openPlayStore`) | 1 |
-| Ads: @capacitor-community/admob | same plugin. Apple's tracking prompt (ATT) is in since Nov 3 2026: `NSUserTrackingUsageDescription` in Info.plist, asked once per phone by `askTrackingPermission` in `src/lib/admob.js` after the notifications card, before the SDK starts (Anna said Yes to "used for tracking" on the App Store privacy form, so the build has to ask). `SKAdNetworkItems` carries Google's network id. Ads themselves still wait on ADHDone's own iOS app in AdMob: its app id replaces the sample `GADApplicationIdentifier` in Info.plist and its interstitial unit goes in `IOS_AD_UNIT_ID` (src/lib/admob.js); until then iPhone shows no ads | 1 (prompt), 2 (ads) |
-| Buttons on reminders (Done, Snooze 15/60, Later): TaskActions, TaskActionReceiver | notification categories with actions, answered without opening the app | 2 |
-| Reminders for finished tasks dropped, one row per reminder: PushFilter, TaskPushes | Notification Service Extension (sees every push before it shows) | 2 |
-| Alarms: AlarmScheduler, AlarmService, AlarmActivity, AlarmReceiver, AlarmStore, AlarmSound, AlarmTheme, AlarmBoost, BootReceiver, RingLog, ChoiceReports, ChoiceSyncWorker, LaterBreak, PairDecisions | iOS 26+: AlarmKit (real alarms that break through silent mode and Focus) with Stop + Later (Anna's decision); events get Stop only. iOS 17–25: time-sensitive notifications with the alarm sound. Every choice reported to the server like Android | 3 |
-| Spoken alarm: AlarmSpeech | the reminder read aloud is rendered to a sound file when the alarm is booked (AlarmKit plays files) | 3 |
-| Silence ADHDone 1/2/3 h, vibrate-only during calendar events: ReminderPause, ReminderPauseReceiver, QuietShortcutActivity, AlarmQuiet | in-app switch + Control Center control (iOS 18); during events alarms go out as notifications | 3 |
-| Timer and Focus Mode check-ins spoken aloud | AVSpeechSynthesizer while the app is open (Android also needs the app open) | 3 |
-| Quick capture that never opens the app: QuickCapture (pinned notification), AddTaskTileService (quick settings tile), shortcuts.xml, CaptureActivity, CaptureQueue, CaptureSyncWorker, Base44Api, Base44Session, SessionSnapshotter | an "Add to ADHDone" App Intent (Siri, Shortcuts, Action button, Control Center, long-press on the icon) that asks for the words and sends them with the saved session; queued when offline. iPhone has no pinned notifications | 4 |
-| Share to ADHDone (text and screenshots): ShareBridge, SharedImageReader | Share Extension that sends straight to captureText / readImageCapture, never opening the app | 4 |
-| Today widget with tasks and "+": TodayWidgetProvider, WidgetData, WidgetBridge, WidgetRefreshWorker, WidgetCaptureActivity | WidgetKit widget (Home Screen + Lock Screen), "+" runs the App Intent | 4 |
-| Calendar changes picked up with the app closed: CalendarSyncWorker | background app refresh (iOS decides when; best effort) + sync on every open | 4 |
+| Push notifications: NotifyBridge, MainApplication (OneSignal) | NotifyBridge.swift (OneSignal, same app id), started in AppDelegate so a tap that cold-starts the app isn't lost | in |
+| Record Notes: RecorderBridge, RecorderService, RecorderStore | RecorderBridge.swift (AVAudioRecorder, `audio` background mode: keeps going with the screen off, 10-minute parts) | in |
+| Phone calendars: CalendarBridge | CalendarBridge.swift (EventKit, read) | in |
+| Add to phone calendar on a task or event: CalendarBridge.addEvent (Android build 46) | CalendarBridge.addEvent (EventKitUI's New Event sheet, filled in; the person picks the calendar and taps Add; no permission needed on iOS 17+) | in (Nov 2 2026) |
+| Notification sound for regular pushes: NotifySound, PushFilter.withOwnSound (Android build 46) | ADHDoneNotify (the Notification Service Extension, `ios/App/ADHDoneNotify`) names the sound on each push; the app downloads the chosen preset or upload once and turns it into a 29-second CAF in Library/Sounds (`SoundFiles.swift`: iOS plays only PCM aiff/wav/caf under 30 s from the app's own folder). Read-aloud for regular pushes: NOT on iPhone — an extension can't speak and can't write a sound file the app's notifications could play — so the picker leaves "Read it to me" out there (`spokenNotify` in phonePlatform.js) and a saved "speak:" means the phone's usual sound | in (Nov 4 2026) |
+| Recording-minute packs: BillingBridge (RevenueCat) | BillingBridge.swift (RevenueCat iOS, consumables notes_1h / notes_5h) | in (code); products in App Store Connect + RevenueCat still to make |
+| Contact picker: ContactPickerBridge | ContactPickerBridge.swift (Apple's picker, no Contacts permission) | in |
+| Task photos: @capacitor/camera | same plugin, iOS side | in |
+| Play in-app update: InAppUpdate, NotifyBridge.startAppUpdate | none on iPhone; the update card opens the App Store page (`openPlayStore`) | in |
+| Ads: @capacitor-community/admob | same plugin; the tracking prompt (ATT) since Nov 3 2026, kept on the first open (Anna, Nov 4 2026: "Keep both iphone things on the first open"); AdMob iOS app 3513826797 and unit `IOS_AD_UNIT_ID` in src/lib/admob.js | in |
+| Buttons on reminders (Done, Snooze 10, Later, Write questions): TaskActions, TaskActionReceiver | The extension names a category on each push by what it is about (`PushData.category`); the app registers the categories (`ReminderActions.swift`). Done and Write questions open the app and the web layer finishes them (OneSignalInit.jsx reads data.actionId). Snooze (a notification of the phone's own 10 minutes on, same buttons, quiet while silenced) and Later (counted; the web app collects it through AlarmBridge.drainActivity) are answered on the phone without opening the app (NotifyBridge.actionHandler) | in (Nov 4 2026) |
+| Reminders for finished tasks dropped, one row per reminder: PushFilter, TaskPushes | ADHDoneNotify: a reminder for a task finished, parked or deleted lately (the app writes the ids down at every alarm sync and on the server's "drop" message) goes out empty and silent — iOS shows nothing for an empty notification — and its id is left for the app to take down from Notification Center on its next open; reminders of one task group in one thread. The web app's own tidy on open (iphoneNotificationTidy.js) stays | in (Nov 4 2026) |
+| Alarms: AlarmScheduler, AlarmService, AlarmActivity, AlarmReceiver, AlarmStore, AlarmSound, AlarmTheme, AlarmBoost, BootReceiver, RingLog, ChoiceReports, ChoiceSyncWorker, LaterBreak, PairDecisions | `AlarmBridge.swift` + `AlarmEngine.swift` (app target). iOS 26+: AlarmKit — rings full screen over the lock screen, at alarm volume, through silent mode and Focus; a task gets Stop + Snooze 10 min (AlarmKit's own countdown, shown by the widget extension's Live Activity), an event Got it only, an event with something to do ("Add prep notes", "Send a text") Got it + that button, a timer its own button; every choice recorded (`AlarmIntents.swift`) and collected by the web app (drainActivity, ringLog). iOS 17–25, or AlarmKit refused: a notification of the phone's own at the same moment with the alarm sound and the buttons (Done / Snooze / Later; Got it). The list the phone holds lives in the keychain group (SharedStore). The server sends iPhone alarms too since Nov 4 2026, once the phone lists AlarmBridge (`phoneCanRing`, reminderTitle.ts), and its silent set_alarms_task / drop_alarms_task pushes reach the app (AppDelegate.didReceiveRemoteNotification). The permission: `getStatus` reports `alarms`, `requestAlarmAccess` asks (the web's alarm set-up already handles both). `NSAlarmKitUsageDescription` in Info.plist | in (Nov 4 2026) |
+| Spoken alarm: AlarmSpeech | "Read it to me" renders the reminder (heading, then body) to a CAF with the phone's voice when the alarm is booked (`SpeechFiles` in SoundFiles.swift; the nearest 24 alarms, one file per sentence) and AlarmKit plays that file; the notification fallback plays the chosen tone. `spokenAlarm` is on for builds that say so (IPHONE_BUILD_HAS) | in (Nov 4 2026) |
+| Silence ADHDone 1/2/3 h, vibrate-only during calendar events: ReminderPause, ReminderPauseReceiver, QuietShortcutActivity, AlarmQuiet | `quietFor` / `quietOff` / `quietStatus` and `setEventQuiet` / `setEventWindows` on AlarmBridge: alarms due inside the span become quiet notifications and go back to alarms when it ends (AlarmEngine.replan); the extension silences pushes inside it. Control Center (iOS 18+): "Silence ADHDone" (an hour; `SilenceControl` in ADHDoneWidget/Controls.swift) and "Add to ADHDone" | in (Nov 4 2026) |
+| Timer and Focus Mode check-ins spoken aloud | The web app's speak.js uses the browser's own voice (window.speechSynthesis), which WKWebView has, so the check-ins talk on iPhone while the app is open the same as on Android; `AlarmBridge.previewSpeech` / `stopSpeech` (AVSpeechSynthesizer) back the sound picker's Play | in |
+| Quick capture that never opens the app: QuickCapture (pinned notification), AddTaskTileService, shortcuts.xml, CaptureActivity, CaptureQueue, CaptureSyncWorker, Base44Api, Base44Session, SessionSnapshotter | iPhone has no pinned notifications; the widget's "+" and the Control Center "Add to ADHDone" button open the app ready for a task | in (Nov 4 2026) |
+| Share to ADHDone (text and screenshots): ShareBridge, SharedImageReader | Share Extension (`ios/App/ADHDoneShare`) sends straight to captureText / readImageCapture, never opening the app | in (Oct 31 2026) |
+| Today widget with tasks and "+": TodayWidgetProvider, WidgetData, WidgetBridge, WidgetRefreshWorker, WidgetCaptureActivity | `WidgetBridge.swift` (app) + `ios/App/ADHDoneWidget` (WidgetKit): Home Screen small and medium, Lock Screen rectangle, circle and inline line; the list is the one the web app hands over (SharedStore, keychain group); a tap opens Tasks, "+" opens Add Task (adhdone://open?path=…, AppDelegate → WidgetBridge.deliverPath, delivered exactly once like Android). `homeWidget` is on for builds that say so | in (Nov 4 2026) |
+| Calendar changes picked up with the app closed: CalendarSyncWorker | `BackgroundCalendarSync.swift`: iOS background app refresh (BGAppRefreshTask `com.mediocreatbest.adhdone.calendar`, about every 4 hours when iOS allows; `fetch` background mode) plus EventKit's "the store changed" notice while the app runs; reads the ticked calendars (CalendarBridge.setSyncCalendars remembers them) and hands changed rows to syncGoogleCalendar (source device, from phone_background), the same rules as Android (empty reads held 6 h, same rows not resent within a day). Best effort: iOS decides when it runs | in (Nov 4 2026) |
 | Wake-up detection: WakeWatch, WakeWatchWorker (usage access) | Android only. Hidden on iPhone (Anna, Oct 22 2026) | — |
-| Battery optimisation, display over other apps, exact-alarm and full-screen settings | Android only. Hidden on iPhone | — |
+| Battery optimisation, display over other apps, exact-alarm and full-screen settings, vibrate-only on silent | Android only. Hidden on iPhone; AlarmBridge answers `{ supported: false }` | — |
+
+### How the pieces share data (no App Group)
+
+The app, the share extension, the notification extension and the widget all link the
+`ADHDoneShared` Swift package (`ios/App/ADHDoneShared`): `SharedSession` (the sign-in and
+the server calls), `SharedStore` (alarms, widget tasks, sounds, silence, choices, "what
+rang"), `PushData` (a push's data and its buttons), `AlarmMetadata` (AlarmKit's metadata
+type). Everything lives in the keychain group `C6T8GPVSJ3.com.mediocreatbest.adhdone.shared`
+— an App Group would need the identifier changed in Apple's developer portal and the
+profiles made again; keychain groups come with every profile.
+
+### Targets and bundle ids
+
+| Target | Bundle id | Profile |
+|---|---|---|
+| App | com.mediocreatbest.adhdone | ADHDone App Store (`adhdone_app_store`) |
+| ADHDoneShare (share sheet) | com.mediocreatbest.adhdone.share | ADHDone Share App Store (`adhdone_share_app_store`) |
+| ADHDoneNotify (notification extension) | com.mediocreatbest.adhdone.notify | made by Codemagic's automatic signing on the first build (`ios_signing` fetches, and creates, profiles for every bundle id under the app's) — if it can't, Anna makes the App ID + App Store profile |
+| ADHDoneWidget (widget, controls, alarm Live Activity) | com.mediocreatbest.adhdone.widget | same |
+
+All four carry the same MARKETING_VERSION (Apple wants them equal).
 
 ## Web app checks for iPhone (phase 1, alongside the first build)
 
