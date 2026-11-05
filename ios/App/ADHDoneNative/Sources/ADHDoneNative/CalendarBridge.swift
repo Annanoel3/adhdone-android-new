@@ -14,7 +14,7 @@ import EventKitUI
 ///   listEvents({ calendarIds, days })     -> { granted, events: [rows] }
 ///   writeEvents({ calendarId, events })   -> { granted, results: [{ key, ok, deviceEventId, hash, error? }] }
 ///   deleteEvents({ deviceEventIds })      -> { granted, deleted }
-///   setSyncCalendars({ calendarIds })     -> { watching }   (nothing runs in the background on iPhone; the app syncs on open)
+///   setSyncCalendars({ calendarIds })     -> { watching }   (remembered for BackgroundCalendarSync, which reads them with the app closed)
 ///   setExportEnabled({ enabled })         -> { ok }
 ///   addEvent({ title, notes, location, beginMs, endMs, allDay }) -> { ok, saved }
 ///
@@ -43,8 +43,24 @@ public class CalendarBridge: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "addEvent", returnType: CAPPluginReturnPromise)
     ]
 
-    private static let store = EKEventStore()
+    static let store = EKEventStore()
     private let work = DispatchQueue(label: "adhdone.calendar", qos: .userInitiated)
+
+    /// Which calendars the person ticked, as the web app last said
+    /// (setSyncCalendars); BackgroundCalendarSync reads them when iOS wakes
+    /// the app in the background.
+    static let syncIdsKey = "adhdone_sync_calendar_ids"
+    static func syncCalendarIds() -> [String] {
+        UserDefaults.standard.stringArray(forKey: syncIdsKey) ?? []
+    }
+
+    static func hasFullAccessNow() -> Bool {
+        let status = EKEventStore.authorizationStatus(for: .event)
+        if #available(iOS 17.0, *) {
+            return status == .fullAccess
+        }
+        return status == .authorized
+    }
     /// The addEvent call waiting for Apple's New Event sheet to close.
     private var pendingAdd: CAPPluginCall?
 
@@ -106,11 +122,7 @@ public class CalendarBridge: CAPPlugin, CAPBridgedPlugin {
     // MARK: - Permission
 
     private func hasFullAccess() -> Bool {
-        let status = EKEventStore.authorizationStatus(for: .event)
-        if #available(iOS 17.0, *) {
-            return status == .fullAccess
-        }
-        return status == .authorized
+        CalendarBridge.hasFullAccessNow()
     }
 
     private func permissionWord() -> String {
@@ -208,11 +220,15 @@ public class CalendarBridge: CAPPlugin, CAPBridgedPlugin {
         call.resolve(["granted": true, "calendars": rows])
     }
 
-    // On Android these hand settings to a background worker. iPhone has no such
-    // worker: the app syncs when it opens. Accepted so the web app's calls succeed.
+    // The ticked calendars, remembered for the background sync (the twin of
+    // Android's CalendarSyncWorker.setCalendars). Since Nov 4 2026 iPhone reads
+    // them with the app closed too: BackgroundCalendarSync.
     @objc func setSyncCalendars(_ call: CAPPluginCall) {
         let ids = call.getArray("calendarIds", String.self) ?? []
-        call.resolve(["watching": !ids.isEmpty && hasFullAccess()])
+        UserDefaults.standard.set(ids, forKey: CalendarBridge.syncIdsKey)
+        let watching = !ids.isEmpty && hasFullAccess()
+        BackgroundCalendarSync.shared.calendarsChanged(watching: watching)
+        call.resolve(["watching": watching])
     }
 
     @objc func setExportEnabled(_ call: CAPPluginCall) {
@@ -226,9 +242,17 @@ public class CalendarBridge: CAPPlugin, CAPBridgedPlugin {
         let ids = Set(call.getArray("calendarIds", String.self) ?? [])
         let days = max(1, min(730, call.getInt("days") ?? 365))
         work.async {
+            call.resolve(["granted": true, "events": CalendarBridge.readRows(ids: ids, days: days)])
+        }
+    }
+
+    /// The event rows for those calendars (every calendar when `ids` is empty),
+    /// from a week ago to `days` ahead. Shared by listEvents and the background
+    /// sync, so both hand the server the very same rows.
+    static func readRows(ids: Set<String>, days: Int) -> [[String: Any]] {
             let store = CalendarBridge.store
             let wanted = store.calendars(for: .event).filter { ids.isEmpty || ids.contains($0.calendarIdentifier) }
-            guard !wanted.isEmpty else { call.resolve(["granted": true, "events": []]); return }
+            guard !wanted.isEmpty else { return [] }
             let start = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
             let end = Calendar.current.date(byAdding: .day, value: days, to: Date()) ?? Date()
             let predicate = store.predicateForEvents(withStart: start, end: end, calendars: wanted)
@@ -276,8 +300,7 @@ public class CalendarBridge: CAPPlugin, CAPBridgedPlugin {
                 }
                 rows.append(row)
             }
-            call.resolve(["granted": true, "events": rows])
-        }
+            return rows
     }
 
     /// Epoch ms. All-day events are reported at UTC midnight of their local day
