@@ -91,7 +91,6 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   // used to name it. No line has named it since Oct 27 2026 — the handle
   // promised sharing the app doesn't have — so the wait was a pause for
   // nothing; the handle is still minted, just not waited for.)
-  const [waitingHandle] = useState(false);
   const [draft, setDraft] = useState('');
   const endRef = useRef(null);
   // "Add my work hours" under the last line (Anna, Nov 2 2026, "idea 1"):
@@ -274,10 +273,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
         {history.map((m, i) => (
           <ChatBubble key={i} from={m.from}>{m.text}</ChatBubble>
         ))}
-        {waitingHandle && (
-          <ChatBubble from="app"><span className="opacity-40">…</span></ChatBubble>
-        )}
-        {beat && !waitingHandle && (
+        {beat && (
           <ChatBubble from="app">
             {shown}
             {!done && <span className="opacity-40">▍</span>}
@@ -286,7 +282,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
         <div ref={endRef} />
       </div>
 
-      {done && !waitingHandle && beat?.input === 'name' && (
+      {done && beat?.input === 'name' && (
         <div className="flex gap-2">
           <Input
             autoFocus
