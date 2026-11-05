@@ -375,6 +375,16 @@
       "type": "integer",
       "description": "How many times a run of come-back pushes has started for this person; picks which day-3 line they get so it differs each time."
     },
+    "first_task_nudge_sent_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the one day-2 \"Ready when you are\" push went out (cronDailyTips, sendDayTwoNudges): an account 20-96 hours old with no task yet. Set once; never sent again."
+    },
+    "about_me_nudge_sent_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the one \"tell us a little about your life\" push went out (cronDailyTips, sendAboutMeNudges; Anna, Nov 4 2026). The about-you question is asked on the second app open (CatchUpDialog); a phone account that finished the welcome chat and still has no about_me 44 hours on, because the question was skipped (onboarding_catchup_done is in onboarding_flags) or never came up (no second open), gets this push once, around midday their time. Its tap opens the question again (Home?askAbout=1). Set once; never sent again."
+    },
     "push_unreachable_at": {
       "type": "string",
       "format": "date-time",
