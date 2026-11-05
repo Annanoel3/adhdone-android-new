@@ -129,6 +129,16 @@ export default function WelcomeDialog({ user }) {
     markStepDone(ONBOARDING_STEPS.homeTour);
   };
 
+  // Swiped away, tapped outside, or the phone's back button mid-chat: that is
+  // a pause, not an answer. Nothing is marked done, so the chat comes back on
+  // the next open at the beat they left (the same rule as closing the app).
+  // Only "Let's go" at the end (onDone) finishes it. The catch-up chat is
+  // the one exception: it was already marked done before it opened.
+  const handleDismiss = () => {
+    if (mode === 'catchup') { handleClose(); return; }
+    setMode(null);
+  };
+
   // Same choice the catch-up dialog makes: never ask for a name we already have.
   const knownName = (user?.preferred_name || user?.display_name || '').trim();
   const catchUpScript = knownName ? CATCH_UP_ABOUT_ONLY_SCRIPT : CATCH_UP_SCRIPT;
@@ -136,7 +146,7 @@ export default function WelcomeDialog({ user }) {
   const pickedUpScript = useMemo(() => resumeScript(resumeOpts), [resumeOpts]);
 
   return (
-    <Dialog open={!!mode} onOpenChange={(o) => { if (!o) handleClose(); }}>
+    <Dialog open={!!mode} onOpenChange={(o) => { if (!o) handleDismiss(); }}>
       <DialogContent className="max-w-md w-[calc(100vw-2rem)] max-h-[85vh] overflow-y-auto overflow-x-hidden [&>*]:min-w-0 bg-card text-card-foreground border-border">
         <div className="pt-2">
           {mode === 'catchup' ? (
