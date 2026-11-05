@@ -121,3 +121,4 @@ Deno.serve(async (req) => {
     return Response.json({ error: err.message }, { status: 500 });
   }
 });
+// Redeployed Nov 4 2026: shared/reminderTitle.ts now lets the iPhone app ring (phoneCanRing).

@@ -356,3 +356,5 @@ async function offerRepeat(base44: any, taskId: string) {
   await svc.Task.update(taskId, { repeat_offer: { time, made_at: new Date(nowMs).toISOString() } });
   console.log(`[logTaskCompletion] repeat offer on task ${taskId} (${family || 'no family'}) around ${time}`);
 }
+
+// Redeployed Nov 4 2026: shared/reminderTitle.ts now lets the iPhone app ring (phoneCanRing).

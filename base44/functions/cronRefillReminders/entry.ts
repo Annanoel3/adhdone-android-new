@@ -2737,3 +2737,5 @@ function atItsOwnTimeEntry(task: any, owner: any): any | null {
     notification_body: `It's time — "${t}". You've got this! 💪`,
   };
 }
+
+// Redeployed Nov 4 2026: shared/reminderTitle.ts now lets the iPhone app ring (phoneCanRing).

@@ -734,3 +734,4 @@ export default async function (req: Request): Promise<Response> {
     return Response.json({ success: false, error: String(err) }, { status: 500 });
   }
 }
+// Redeployed Nov 4 2026: shared/reminderTitle.ts now lets the iPhone app ring (phoneCanRing).

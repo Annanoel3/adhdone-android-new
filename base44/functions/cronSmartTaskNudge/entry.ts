@@ -3286,3 +3286,4 @@ async function sendNudgeNotification(
     return false;
   }
 }
+// Redeployed Nov 4 2026: shared/reminderTitle.ts now lets the iPhone app ring (phoneCanRing).

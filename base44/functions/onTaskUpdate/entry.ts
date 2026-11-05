@@ -1367,3 +1367,5 @@ Deno.serve(async (req) => {
   if (payload && res.ok) await movePhoneAlarms(client, payload);
   return res;
 });
+
+// Redeployed Nov 4 2026: shared/reminderTitle.ts now lets the iPhone app ring (phoneCanRing).
