@@ -74,7 +74,7 @@ profiles made again; keychain groups come with every profile.
 
 All four carry the same MARKETING_VERSION (Apple wants them equal).
 
-## Web app checks for iPhone (phase 1, alongside the first build)
+## Web app checks for iPhone
 
 - Every Android-only setting, popup and App Guide line must not show on iPhone
   (`Capacitor.getPlatform()` checks; Anna, Oct 22 2026).
@@ -83,9 +83,8 @@ All four carry the same MARKETING_VERSION (Apple wants them equal).
   `src/components/AppleSignIn.jsx` on Login and Register, iPhone app only. Needs
   Apple switched on in Base44's authentication settings (switched on Oct 30 2026,
   Anna's yes).
-- Until alarms come (phase 2) reminders arrive as ordinary push notifications; the
-  Alarms card and alarm popups stay hidden because they only show when the phone
-  has AlarmBridge.
+- Alarms are in since Nov 4 2026 (AlarmBridge on iPhone); the Alarms card and the alarm
+  popups show on the builds that have it. Before that, reminders were ordinary pushes.
 - Links to other apps: NotifyBridge.openExternal (Apple Maps, Messages with the
   birthday text filled in), the same name the web already calls.
 - Ads: iOS ad unit ids once AdMob has the iOS app (the tracking prompt is already in).
@@ -183,7 +182,10 @@ Check on a device: keyboard covering inputs (no @capacitor/keyboard yet).
 ## What only Anna can do
 
 1. Apple Developer: register the identifier `com.mediocreatbest.adhdone` with Push
-   Notifications on (later also App Groups, for the widget and share extension).
+   Notifications on. (No App Groups needed: the extensions share through the keychain
+   group. If Codemagic's automatic signing can't make the App IDs and profiles for
+   `com.mediocreatbest.adhdone.notify` and `.widget` on the Nov 4 2026 build, Anna
+   registers those two identifiers and makes an App Store profile for each.)
 2. App Store Connect: create the app (name, bundle id above, SKU anything).
 3. OneSignal (ADHDone app): add the Apple iOS platform with the same .p8 push key
    GenCare uses.
