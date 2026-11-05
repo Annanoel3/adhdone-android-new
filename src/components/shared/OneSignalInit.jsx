@@ -77,6 +77,15 @@ function handleNotificationData(data, navigate) {
     if (navigate) navigate(target); else window.location.href = target;
     return;
   }
+  // The one "tell us about your life" push (cronDailyTips, sendAboutMeNudges;
+  // Anna, Nov 4 2026) opens the about-you question on Home (CatchUpDialog
+  // reads askAbout=1). Booked as a plain 'general' push so the send ledger
+  // treats it as the soft one it is; `ask` says what it opens.
+  if (data.ask === 'about') {
+    const target = '/Home?askAbout=1';
+    if (navigate) navigate(target); else window.location.href = target;
+    return;
+  }
   // "Are your reminders helping?" (cronSmartTaskNudge, Anna, Oct 31 2026).
   // Its Yes / No buttons answer it right here. A tap on the push itself, or a
   // phone that doesn't pass the button on, opens the same question as a popup
