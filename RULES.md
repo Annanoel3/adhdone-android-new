@@ -266,6 +266,16 @@ Layering fix on fix is how this codebase got competing schedulers, duplicate par
 notification paths nobody can reason about. A fix that requires the previous broken
 attempt to stay in place is not a fix.
 
+### Never change `.github/workflows/*` from here
+
+Nov 5 2026: an edit to `.github/workflows/ios-compile-check.yml` made from Base44 stopped
+EVERY push to GitHub for an hour (72 commits piled up, main stuck at the commit before it)
+— GitHub refuses a push from the Base44 app that creates or changes a workflow file, and
+every later push carried that commit. Putting the file back to its exact old content let
+the pushes through at once. Workflow files are edited only in Anna's GitHub (the web
+editor), never from Base44. Symptom to recognise: commits show on github.com by their
+sha, but main's latest commit doesn't move and no compile check runs.
+
 ### Phone (android/) code goes in THIS repo, not only on Anna's PC
 
 The AAB is built from Anna's PC folder (adhdone-android-new), and the build agent resets that
