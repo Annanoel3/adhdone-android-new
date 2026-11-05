@@ -323,7 +323,9 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
         {history.map((m, i) => (
           <ChatBubble key={i} from={m.from}>{m.text}</ChatBubble>
         ))}
-        {beat && (
+        {/* While the task offers are up, the question is already in the
+            history above them, so the live bubble steps aside. */}
+        {beat && !taskOffers && (
           <ChatBubble from="app">
             {shown}
             {!done && <span className="opacity-40">▍</span>}
