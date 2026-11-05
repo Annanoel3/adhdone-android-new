@@ -19,10 +19,14 @@
 # fetches it too because its bundle id starts with the app's. Nov 4 2026 added
 # two more extensions the same way: the notification extension
 # (com.mediocreatbest.adhdone.notify, ios/App/ADHDoneNotify) and the widget
-# (com.mediocreatbest.adhdone.widget, ios/App/ADHDoneWidget). Codemagic's
-# automatic signing makes the missing App IDs and App Store profiles for them
-# on the first build; if that build stops at signing, Anna registers those two
-# identifiers in Apple Developer and makes an App Store profile for each
+# (com.mediocreatbest.adhdone.widget, ios/App/ADHDoneWidget). Codemagic does
+# NOT make App IDs or profiles on its own (build 6, Nov 5 2026, stopped at
+# "Build the IPA" because the two targets had no profile), so on Nov 5 2026 the
+# App IDs were registered in Apple Developer and the App Store profiles
+# "ADHDone Notify App Store" and "ADHDone Widget App Store" were made and
+# fetched into Codemagic (references adhdone_notify_app_store and
+# adhdone_widget_app_store). Every profile is matched by bundle id, so a NEW
+# target always needs this same dance before its first build
 # (IOS_PLAN.md, "Targets and bundle ids").
 #
 # Starting a build: the "Start new build" button, or a git tag that starts with
