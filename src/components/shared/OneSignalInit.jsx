@@ -104,6 +104,21 @@ function handleNotificationData(data, navigate) {
   const taskId = data.taskId || data.task_id;
   if (!taskId) return;
 
+  // The buttons on an iPhone reminder (ReminderActions.swift, Nov 4 2026):
+  // Done finishes the task on its page, the way Android's Done button does;
+  // Write questions opens the appointment's questions. Snooze and Later are
+  // answered on the phone and never reach here.
+  if (data.actionId === 'done') {
+    const target = `/TaskNotification?taskId=${encodeURIComponent(taskId)}&done=1`;
+    if (navigate) navigate(target); else window.location.href = target;
+    return;
+  }
+  if (data.actionId === 'questions') {
+    const target = `/Notes?task=${encodeURIComponent(taskId)}&prep=1`;
+    if (navigate) navigate(target); else window.location.href = target;
+    return;
+  }
+
   // Focus Mode's morning question ("pick up where you left off?") opens the
   // app on that choice (FocusModePrompt).
   if (data.type === 'focus_morning') {
