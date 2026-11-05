@@ -44,12 +44,12 @@ struct AlarmLiveActivity: Widget {
         }
     }
 
-    static func title<T>(_ context: ActivityViewContext<AlarmAttributes<T>>) -> String where T == ADHDoneAlarmMetadata {
+    static func title(_ context: ActivityViewContext<AlarmAttributes<ADHDoneAlarmMetadata>>) -> String {
         let t = context.attributes.metadata?.title ?? ""
         return t.isEmpty ? "ADHDone" : t
     }
 
-    static func line<T>(_ context: ActivityViewContext<AlarmAttributes<T>>) -> String where T == ADHDoneAlarmMetadata {
+    static func line(_ context: ActivityViewContext<AlarmAttributes<ADHDoneAlarmMetadata>>) -> String {
         context.attributes.metadata?.body ?? ""
     }
 }
