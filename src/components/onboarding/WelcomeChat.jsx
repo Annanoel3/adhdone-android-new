@@ -39,7 +39,7 @@ const TASK_OFFER_LINE = "No pressure — brains don't take requests. These count
 const TASK_OFFERS = [
   "Drink a glass of water (it's been judging me)",
   "Answer the text I've opened four times",
-  'Move the laundry before it goes musty',
+  'Find my keys before I need them',
 ];
 const TASK_OFFER_DECLINE = 'Really, nothing today';
 function pickTaskOffers() {
