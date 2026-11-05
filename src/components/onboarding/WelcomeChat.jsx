@@ -32,27 +32,18 @@ const FIRST_WIN_PLANNED_EVENT = 'adhdone:first-win-planned';
 // things most people need anyway (Anna, Nov 4 2026: "use the lazy path as an
 // opportunity to show personality and relatability"). Each is a real, small
 // task for today, so a pick gets the same "when?" and the same first reminder
-// as a typed one. Only THREE of these show at a time (Anna, Nov 4 2026: "9
-// options is too much"), a different three by the day, under one line;
-// "Really, nothing today" skips for real. Written here, not taken from
-// anyone's tasks. Seven in all (the email and the charger lines were cut,
-// Anna, Nov 4 2026).
+// as a typed one. Exactly these three, always (Anna: "pick the top 3 most
+// likely to be chosen and use only those"); "Really, nothing today" skips for
+// real. Written here, not taken from anyone's tasks.
 const TASK_OFFER_LINE = "No pressure — brains don't take requests. These count too. Tap one and it's on your list:";
 const TASK_OFFERS = [
   "Drink a glass of water (it's been judging me)",
   "Answer the text I've opened four times",
   'Move the laundry before it goes musty',
-  'Eat an actual meal, not just snacks',
-  "Put the 'soaking' dishes in the dishwasher",
-  'Find my keys before I need them',
-  'Take the trash out before it takes itself out',
 ];
 const TASK_OFFER_DECLINE = 'Really, nothing today';
-function pickTaskOffers(now = new Date()) {
-  const n = TASK_OFFERS.length;
-  const start = Math.floor(now.getTime() / (24 * 60 * 60 * 1000)) % n;
-  // Three different ones: with 7 lines, steps of 2 never land on the same one.
-  return [0, 1, 2].map((i) => TASK_OFFERS[(start + i * 2) % n]);
+function pickTaskOffers() {
+  return TASK_OFFERS;
 }
 
 // "When should it remind you?" — three taps that fit the time of day, plus a
