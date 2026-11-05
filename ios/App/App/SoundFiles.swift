@@ -178,7 +178,8 @@ final class SpeechFiles: NSObject {
             var file: AVAudioFile?
             var failed = false
             var finished = false
-            let tmp = dest.appendingPathExtension("part")
+            // Still a .caf name: AVAudioFile picks the file type from the extension.
+            let tmp = SoundFiles.folder.appendingPathComponent("tmp_\(name)")
             try? FileManager.default.removeItem(at: tmp)
             DispatchQueue.main.async {
                 self.renderer.write(self.utterance(text)) { buffer in
