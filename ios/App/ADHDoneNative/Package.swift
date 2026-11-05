@@ -14,7 +14,7 @@ import PackageDescription
 // care which phone it is on.
 let package = Package(
     name: "ADHDoneNative",
-    platforms: [.iOS(.v15)],
+    platforms: [.iOS(.v17)],   // the app itself is iOS 17+, and ADHDoneShared is too
     products: [
         .library(name: "ADHDoneNative", targets: ["ADHDoneNative"])
     ],
