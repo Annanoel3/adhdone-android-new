@@ -236,10 +236,31 @@ public class AlarmBridge: CAPPlugin, CAPBridgedPlugin {
 
     // MARK: - What happened
 
+    /// "What rang", in the rows Android's RingLog gives (NotificationSettings.jsx
+    /// reads `ended`, `snoozeMinutes`, `heading`, `fromSnooze`, `kind`).
     @objc func ringLog(_ call: CAPPluginCall) {
         let days = call.getInt("days") ?? 2
         let rows = SharedStore.ringLog(days: days).map { r -> [String: Any] in
-            ["at": r.at, "taskId": r.taskId, "title": r.title, "body": r.body, "kind": r.kind, "outcome": r.outcome]
+            var ended = ""
+            var snoozeMinutes = 0
+            let o = r.outcome
+            if o.hasPrefix("snoozed") {
+                ended = "snoozed"
+                snoozeMinutes = Int(o.split(separator: " ").dropFirst().first ?? "") ?? ReminderCategory.snoozeMinutes
+            } else if o == "rang_out" {
+                ended = "ignored"
+            } else if o == "opened" {
+                ended = "dismissed"
+            } else {
+                ended = o   // dismissed, later, done, or "" (still open)
+            }
+            var row: [String: Any] = [
+                "id": "\(Int(r.at)):\(r.taskId)",
+                "at": r.at, "taskId": r.taskId, "title": r.title, "heading": r.title, "body": r.body,
+                "kind": r.kind, "ended": ended, "fromSnooze": false
+            ]
+            if snoozeMinutes > 0 { row["snoozeMinutes"] = snoozeMinutes }
+            return row
         }
         call.resolve(["rows": rows])
     }
