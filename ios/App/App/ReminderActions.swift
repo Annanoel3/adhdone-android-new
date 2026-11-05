@@ -154,6 +154,14 @@ final class LocalNotifications: NSObject, UNUserNotificationCenterDelegate {
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                 didReceive response: UNNotificationResponse,
                                 withCompletionHandler completionHandler: @escaping () -> Void) {
+        // A OneSignal push (its payload carries "custom"): OneSignal's own
+        // listener handles the tap and the buttons (ClickHandler in
+        // NotifyBridge); if its SDK passes the tap on here as well, it must
+        // not be answered a second time (a Snooze twice would make two copies).
+        if response.notification.request.content.userInfo["custom"] != nil {
+            completionHandler()
+            return
+        }
         var data = PushData.additionalData(from: response.notification.request.content.userInfo)
         let actionId = response.actionIdentifier
         if actionId != UNNotificationDefaultActionIdentifier && actionId != UNNotificationDismissActionIdentifier {
