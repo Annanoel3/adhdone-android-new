@@ -86,11 +86,12 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
   // The iPhone app has no pinned notification (Anna, Oct 22 2026).
   const offerPin = onThisPhone('pinnedCapture');
   const [busy, setBusy] = useState(false);
-  // Between sending the name and the next line: that line names the handle,
-  // which the server mints a moment later. Starting the line without it and
-  // then swapping its words in mid-typing read as the chat stuttering, so the
-  // next line waits for the handle (2.5 s at most), with a "…" meanwhile.
-  const [waitingHandle, setWaitingHandle] = useState(false);
+  // (Until Nov 4 2026 the line after the name waited up to 2.5 s, with a
+  // "…" bubble, for the server to mint the @handle, because the next line
+  // used to name it. No line has named it since Oct 27 2026 — the handle
+  // promised sharing the app doesn't have — so the wait was a pause for
+  // nothing; the handle is still minted, just not waited for.)
+  const [waitingHandle] = useState(false);
   const [draft, setDraft] = useState('');
   const endRef = useRef(null);
   // "Add my work hours" under the last line (Anna, Nov 2 2026, "idea 1"):
@@ -158,22 +159,14 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     setName(value);
     // The name they give IS their username (display_name) — the same field the
     // Settings page edits. Names collide, so the server also mints a unique
-    // handle (name + number) that future social features can key on.
+    // handle (name + number) that future social features can key on. Neither
+    // save holds the chat up: the next line starts at once.
     base44.auth.updateMe({ preferred_name: value, display_name: value }).catch(() => {});
-    // Their answer shows at once; the next line holds until the handle is in
-    // (or 2.5 s have passed — then it simply doesn't mention one).
+    claimHandle({ name: value })
+      .then((r) => { const got = r?.data?.handle || ''; if (got) setHandle(got); })
+      .catch(() => { /* no line needs it */ });
     setHistory((h) => [...h, { from: 'app', text: line }, { from: 'user', text: value }]);
     setDraft('');
-    setWaitingHandle(true);
-    try {
-      const r = await Promise.race([
-        claimHandle({ name: value }),
-        new Promise((resolve) => setTimeout(() => resolve(null), 2500)),
-      ]);
-      const got = r?.data?.handle || '';
-      if (got) setHandle(got);
-    } catch (e) { /* the line reads fine without a handle */ }
-    setWaitingHandle(false);
     setIdx((i) => i + 1);
   };
 
