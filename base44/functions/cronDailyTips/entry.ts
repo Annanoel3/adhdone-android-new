@@ -8,7 +8,8 @@ const CRON_SECRET = Deno.env.get('CRON_SECRET');
 // 2026 (Anna: "Drop the older day 2 push"): since Nov 2 the day-2 come-back in
 // cronBackBurnerCheckIn reaches the same people the afternoon of their next
 // day, so the two landed on the same day. User.first_task_nudge_sent_at stays
-// on older accounts as a record.)
+// on older accounts as a record; the ledger kind 'first_task_nudge' stays
+// listed in shared/sendLedger.ts as a name only.)
 const HOUR_MS = 60 * 60 * 1000;
 
 // The next HH:MM (minutes after midnight) in the user's own zone, as a UTC instant.
