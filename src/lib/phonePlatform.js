@@ -61,6 +61,10 @@ const NOT_ON_IPHONE = {
   androidClips: true,
   // (The spoken alarm and the home-screen widget moved to IPHONE_BUILD_HAS on
   // Nov 4 2026: the iPhone build that has them says so itself.)
+  // "Read it to me" for REGULAR notifications: iPhone's notification extension
+  // can't speak and can't write a sound file the app's notifications could
+  // play, so the choice isn't offered there (alarms can: spokenAlarm above).
+  spokenNotify: true,
   // OGG alarm-sound uploads: iPhone can't play or decode OGG (Haris, Oct 23
   // 2026), so the picker there offers MP3, WAV and M4A only.
   oggUploads: true,

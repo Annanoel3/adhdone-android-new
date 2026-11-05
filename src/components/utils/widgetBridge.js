@@ -1011,7 +1011,9 @@ export async function pushNotifySound(user) {
   if (!AlarmBridge?.setNotifySound) return null;
   let url = user?.notify_sound_url || '';
   let name = user?.notify_sound_name || '';
-  if (url === 'speak:' && !onThisPhone('spokenAlarm')) { url = ''; name = ''; }
+  // iPhone can't read a regular notification aloud (its notification extension
+  // can't speak), so that choice means the phone's usual sound there.
+  if (url === 'speak:' && !onThisPhone('spokenNotify')) { url = ''; name = ''; }
   try {
     return await AlarmBridge.setNotifySound({
       url,

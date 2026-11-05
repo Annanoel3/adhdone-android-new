@@ -150,8 +150,11 @@ export function AlarmSoundPicker({ user, theme, onSaved, className = '', kind = 
   const previewRef = useRef(null);
   const fileRef = useRef(null);
   const { AlarmBridge } = getPlugins();
-  // Hidden in the iPhone app until it can ring a spoken alarm (phonePlatform.js).
-  const speakHere = onThisPhone('spokenAlarm');
+  // iPhone: a spoken ALARM is rendered to a sound file when the alarm is booked
+  // (builds that say so, phonePlatform.js); a spoken regular notification isn't
+  // possible there (the notification extension can't speak), so that list
+  // leaves "Read it to me" out.
+  const speakHere = onThisPhone(notify ? 'spokenNotify' : 'spokenAlarm');
   const canSpeak = speakHere && typeof AlarmBridge?.previewSpeech === 'function';
 
   useEffect(() => {
