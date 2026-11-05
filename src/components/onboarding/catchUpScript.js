@@ -107,6 +107,10 @@ export const FIRST_DONE_ABOUT_ONLY_SCRIPT = [
 // waits for a checked-off task (3 of 16 new accounts ever got it that way;
 // Anna: "someone with a night shift would have nowhere to put that"); it
 // comes on the next app open for anyone who finished the welcome without it.
+// Since Nov 4 2026 that is everyone: the welcome chat no longer asks it, so
+// this IS the second-open about-you question (Anna: "Make about me on second
+// open"). Skipped, or never reached because they never came back, one push
+// (cronDailyTips) opens it again from Home (?askAbout=1, CatchUpDialog).
 export const ABOUT_NOW_SCRIPT = [
   {
     text: () => "Two quick questions that make ADHDone a lot better at helping *you*.",
@@ -155,10 +159,10 @@ export const NAME_ONLY_SCRIPT = [
     input: 'name',
   },
   {
-    text: (name, handle) =>
-      handle
-        ? `Thanks, ${name}! Your handle is @${handle} — that's how friends will find you once sharing goes live. That's all — back to your list.`
-        : `Thanks, ${name}! That's all — back to your list.`,
+    // (No @handle line: it promised sharing with friends, which the app
+    // doesn't have — Anna, Oct 27 2026: no advertising what isn't there.
+    // Dropped here Nov 4 2026; the welcome chat lost its copy Oct 27.)
+    text: (name) => `Thanks, ${name}! That's all — back to your list.`,
     final: true,
   },
 ];
