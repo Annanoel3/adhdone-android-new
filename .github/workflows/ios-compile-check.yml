@@ -11,12 +11,6 @@ on:
       - 'package.json'
       - '.github/workflows/ios-compile-check.yml'
   workflow_dispatch:
-# One run at a time: a newer push cancels the run still going for the older
-# commit, so a burst of small ios/ commits costs one Mac run, not ten (GitHub
-# bills Mac minutes at 10x; a private repo's free minutes run out fast).
-concurrency:
-  group: ios-compile-check
-  cancel-in-progress: true
 permissions:
   contents: write
 jobs:
