@@ -2,6 +2,8 @@ import Foundation
 import UIKit
 import UserNotifications
 import SwiftUI
+import AppIntents
+import ActivityKit
 import ADHDoneNative
 import ADHDoneShared
 #if canImport(AlarmKit)
@@ -461,7 +463,7 @@ final class AlarmEngine {
             }
             let metadata = ADHDoneAlarmMetadata(alarmId: a.id, taskId: a.taskId, title: a.spokenTitle, body: a.body,
                                                 event: a.event, openLabel: a.openLabel, screen: openPath)
-            let attributes = AlarmAttributes(presentation: presentation, metadata: metadata, tintColor: tint)
+            let attributes = AlarmAttributes<ADHDoneAlarmMetadata>(presentation: presentation, metadata: metadata, tintColor: tint)
             // The sound: a timer's own (already a file when the web app gave an
             // address the app has), the spoken sentence, the chosen alarm sound,
             // or the phone's own. Named WITH its extension (the iOS 26.5 fix).
@@ -474,7 +476,7 @@ final class AlarmEngine {
                 let file = SoundFiles.alarmSoundFile()
                 if !file.isEmpty { sound = .named(file) }
             }
-            let config = AlarmManager.AlarmConfiguration(
+            let config: AlarmManager.AlarmConfiguration<ADHDoneAlarmMetadata> = AlarmManager.AlarmConfiguration(
                 countdownDuration: countdown,
                 schedule: .fixed(date),
                 attributes: attributes,
