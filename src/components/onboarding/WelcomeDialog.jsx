@@ -118,9 +118,9 @@ export default function WelcomeDialog({ user }) {
     // the first-run one or the welcome-back one — counts as "done with
     // onboarding"; someone who already opened the guide gets no dot.
     if (!isStepDone(ONBOARDING_STEPS.guideSeen)) markStepDone(ONBOARDING_STEPS.guideNudge);
-    // Closed without a name? CatchUpDialog asks for the name once more — on a
-    // LATER open, not the moment this closes. (sessionStorage: gone when the
-    // app is next launched.)
+    // Finished without a name (the catch-up chat can be)? CatchUpDialog asks
+    // for it once more — on a LATER open, not the moment this closes.
+    // (sessionStorage: gone when the app is next launched.)
     try { sessionStorage.setItem('onboarding_name_retry_hold', '1'); } catch (e) {}
     // There is no Home tour any more; its step is what releases what comes
     // after the welcome (the notifications card for a new account, the alarm
