@@ -3,15 +3,13 @@ import { resolveQuietHours } from '../../shared/quietHours.ts';
 
 const CRON_SECRET = Deno.env.get('CRON_SECRET');
 
-// ── Day-2 nudge ─────────────────────────────────────────────────────────────
-// Someone who signed up a day or two ago and never put a single task in has
-// not seen the app do anything yet. One friendly push, once, two hours after
-// their quiet hours end (10 AM for the usual 8 AM; a fixed 10 AM was the middle
-// of the night for someone who sleeps days, Oct 12 2026); never again after
-// that, whatever they do with it.
+// (The day-2 "Ready when you are" push that lived here — a no-task account
+// 20-96 hours old, once, 2 hours after quiet hours end — was dropped Nov 4
+// 2026 (Anna: "Drop the older day 2 push"): since Nov 2 the day-2 come-back in
+// cronBackBurnerCheckIn reaches the same people the afternoon of their next
+// day, so the two landed on the same day. User.first_task_nudge_sent_at stays
+// on older accounts as a record.)
 const HOUR_MS = 60 * 60 * 1000;
-const NUDGE_MIN_AGE_MS = 20 * HOUR_MS;
-const NUDGE_MAX_AGE_MS = 96 * HOUR_MS;
 
 // The next HH:MM (minutes after midnight) in the user's own zone, as a UTC instant.
 function nextLocalTime(tz: string, minOfDay: number): string {
@@ -115,34 +113,6 @@ async function sendAboutMeNudges(base44: any, preview = false) {
   return preview ? out : sent;
 }
 
-async function sendDayTwoNudges(base44: any) {
-  const now = Date.now();
-  const users = await base44.asServiceRole.entities.User.list('-created_date', 1000);
-  let sent = 0;
-  for (const u of users) {
-    if (!u?.email || !u.signed_up_at || u.first_task_nudge_sent_at) continue;
-    const age = now - new Date(u.signed_up_at).getTime();
-    if (!(age >= NUDGE_MIN_AGE_MS && age <= NUDGE_MAX_AGE_MS)) continue;
-    const tasks = await base44.asServiceRole.entities.Task.filter({ created_by: u.email }, '-created_date', 1);
-    if (tasks?.length) continue;
-    try {
-      await base44.asServiceRole.functions.invoke('schedulePush', {
-        internalKey: CRON_SECRET,
-        toUserExternalId: u.email,
-        title: 'Ready when you are 👋',
-        body: "Add one thing you need to do today — a call, an errand, anything — and ADHDone will remind you at the right time.",
-        sendAtISO: nextLocalTime(u.timezone || 'America/Chicago', (resolveQuietHours(u).endMin + 120) % (24 * 60)),
-        data: { type: 'first_task_nudge' },
-      });
-      await base44.asServiceRole.entities.User.update(u.id, { first_task_nudge_sent_at: new Date().toISOString() });
-      sent++;
-    } catch (e) {
-      console.error('[DAILY TIPS] day-2 nudge failed for one account:', e?.message);
-    }
-  }
-  return sent;
-}
-
 Deno.serve(async (req) => {
   try {
     console.log('💡 [DAILY TIPS] Starting daily tip cleanup...');
@@ -192,13 +162,6 @@ Deno.serve(async (req) => {
       }
     }
 
-    let nudged = 0;
-    try {
-      nudged = await sendDayTwoNudges(base44);
-    } catch (e) {
-      console.error('[DAILY TIPS] day-2 nudge pass failed:', e?.message);
-    }
-
     let aboutNudged = 0;
     try {
       aboutNudged = await sendAboutMeNudges(base44);
@@ -211,7 +174,6 @@ Deno.serve(async (req) => {
       today: today,
       deleted: deletedCount,
       remaining: allTips.length - deletedCount,
-      day2_nudges: nudged,
       about_me_nudges: aboutNudged,
       at: new Date().toISOString()
     };
