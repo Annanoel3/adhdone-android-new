@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { ONBOARDING_STEPS, isStepDone, markStepDone, waitForStep } from './onboardingGate';
 import { enterOnboardingSurface, exitOnboardingSurface, waitForCalm, popupsShownThisLaunch } from './onboardingSurface';
@@ -23,13 +24,25 @@ const REWELCOME_SCRIPT = [
 
 // The name + about-me questions, for anyone whose profile is missing them and
 // who was never asked: accounts that finished onboarding before those
-// questions existed, and new accounts that finished the welcome while it
-// didn't ask (Sep 29 – Nov 1 2026) or closed it before its last question.
-// On a later app open, once the screen is calm. Until Nov 1 2026 it also
-// waited for the first checked-off task, and almost nobody got it (3 of 16
-// new accounts); now a checked-off task only changes its opening line.
-// Never the page tours.
+// questions existed, new accounts that finished the welcome while it didn't
+// ask (Sep 29 – Nov 1 2026) or closed it before its last question, and —
+// since Nov 4 2026 — every new account, because the welcome chat no longer
+// asks about-you at all: it is the SECOND open's question (Anna, Nov 4 2026:
+// "Make about me on second open"). On a later app open, once the screen is
+// calm. Until Nov 1 2026 it also waited for the first checked-off task, and
+// almost nobody got it (3 of 16 new accounts); now a checked-off task only
+// changes its opening line. Never the page tours.
+//
+// Asked once on its own. Skipped, or never shown because they never came
+// back, the server sends one push about it two days on (cronDailyTips,
+// sendAboutMeNudges); the tap opens Home with ?askAbout=1, and that opens
+// the about-you question here once more, flag or no flag, as long as the
+// profile still has no about-me.
+const ASK_ABOUT_PARAM = 'askAbout';
+
 export default function CatchUpDialog({ user }) {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   // 'catchup' = name (if missing) + about-you, on a later open; 'name' = the
   // name alone (see NAME_RETRY_STEP).
@@ -114,6 +127,33 @@ export default function CatchUpDialog({ user }) {
     return () => { cancelled = true; };
   }, [user]);
 
+  // From the about-you push (?askAbout=1): the question again, even though it
+  // was shown and skipped before. Nothing to ask once they have an about-me.
+  const askedFromPush = new URLSearchParams(location.search).get(ASK_ABOUT_PARAM) === '1';
+  useEffect(() => {
+    if (!askedFromPush || !user || openRef.current) return undefined;
+    if (String(user.about_me || '').trim()) return undefined;
+    let cancelled = false;
+    waitForCalm().then(() => {
+      if (cancelled || !mounted.current || openRef.current) return;
+      markStepDone(ONBOARDING_STEPS.catchUp);
+      setDoneOne(false);
+      setKind('catchup');
+      setOpen(true);
+    });
+    return () => { cancelled = true; };
+  }, [askedFromPush, location.key, user?.id]);
+
+  // askAbout=1 comes off the address when the question closes, not while it
+  // is up (a navigation while open could remount the page around it).
+  const dropAskParam = () => {
+    const params = new URLSearchParams(location.search);
+    if (params.get(ASK_ABOUT_PARAM) !== '1') return;
+    params.delete(ASK_ABOUT_PARAM);
+    const rest = params.toString();
+    navigate(`${location.pathname}${rest ? `?${rest}` : ''}`, { replace: true, state: location.state });
+  };
+
   const knownName = (user?.preferred_name || user?.display_name || '').trim();
   // An account from after the first sitting was cut down gets the "first one
   // done" version when it has checked something off, the plain one when it
@@ -138,6 +178,7 @@ export default function CatchUpDialog({ user }) {
 
   const handleClose = () => {
     setOpen(false);
+    dropAskParam();
     // The name re-ask doesn't stand in for the catch-up: the about-you
     // question still comes, on a later open.
     markStepDone(kind === 'name' ? NAME_RETRY_STEP : ONBOARDING_STEPS.catchUp);
