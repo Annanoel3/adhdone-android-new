@@ -15,8 +15,9 @@ import ADHDoneShared
 ///     Later on a Smart Reminders nudge, Snooze on an event's reminder, Write
 ///     questions on an appointment's night-before (PushData.category; the app
 ///     registers the categories, ReminderActions).
-///  3. The sound: nothing while ADHDone is silenced (the 1 / 2 / 3-hour button)
-///     or during a calendar event the person asked quiet for; otherwise the
+///  3. The sound: nothing while ADHDone is silenced (the 1 / 2 / 3-hour button),
+///     during a calendar event the person asked quiet for, or when the phone's
+///     own alarm rings for this task at this moment; otherwise the
 ///     notification sound they picked (a file the app put in Library/Sounds), or
 ///     the phone's own. "Read it to me" for regular pushes can't be done here
 ///     (an extension can't speak and can't write to the app's folder), so that
@@ -57,9 +58,16 @@ class NotificationService: UNNotificationServiceExtension {
             content.categoryIdentifier = category
         }
 
-        // 3. Sound.
+        // 3. Sound. A full-screen alarm the phone holds for this same task and
+        //    this same moment IS the reminder (AlarmEngine): the push stays as
+        //    the quiet copy in Notification Center, so one reminder never rings
+        //    twice (Android's PushFilter does the same, alarmCoversNow).
         let now = Date()
-        if SharedStore.isQuietNow(now) || SharedStore.quietForEvent(at: now.timeIntervalSince1970 * 1000) {
+        let nowMs = now.timeIntervalSince1970 * 1000
+        let alarmCovers = !taskId.isEmpty && SharedStore.alarms().contains {
+            $0.taskId == taskId && $0.booked == "alarmkit" && abs($0.at - nowMs) < 10 * 60 * 1000
+        }
+        if alarmCovers || SharedStore.isQuietNow(now) || SharedStore.quietForEvent(at: nowMs) {
             content.sound = nil
             if #available(iOS 15.0, *) { content.interruptionLevel = .passive }
         } else if let choice = SharedStore.read(.notifySound, as: SoundChoice.self), !choice.file.isEmpty {
