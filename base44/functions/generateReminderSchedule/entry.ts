@@ -660,4 +660,4 @@ Examples:
 }
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
 
-// Redeployed Nov 5 2026: the parser judges goes_somewhere (shared/runTaskParse.ts).
+// Redeployed Nov 5 2026: the parser now judges goes_somewhere (shared/runTaskParse.ts).
