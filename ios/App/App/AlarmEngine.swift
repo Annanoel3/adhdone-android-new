@@ -157,9 +157,13 @@ final class AlarmEngine {
             let held = SharedStore.alarms()
             let own = held.filter { $0.own }
             let oldTask = held.filter { !$0.own }
-            let oldById = Dictionary(uniqueKeysWithValues: oldTask.map { ($0.id, $0) })
+            let oldById = Dictionary(oldTask.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
             var next: [StoredAlarm] = own
+            var seen = Set<String>()
             for var a in incoming {
+                // One entry per id, whatever the web app sent.
+                if seen.contains(a.id) { continue }
+                seen.insert(a.id)
                 if let was = oldById[a.id] {
                     // The same alarm again: keep how it is booked and a snooze that runs.
                     a.booked = was.booked
@@ -478,18 +482,18 @@ final class AlarmEngine {
                 secondaryIntent: secondaryIntent,
                 sound: sound)
             let done = DispatchSemaphore(value: 0)
-            var ok = false
+            let outcome = ResultBox(false)
             Task {
                 do {
                     _ = try await AlarmManager.shared.schedule(id: id, configuration: config)
-                    ok = true
+                    outcome.value = true
                 } catch {
                     NSLog("[AlarmEngine] AlarmKit refused \(a.id): \(error)")
                 }
                 done.signal()
             }
             _ = done.wait(timeout: .now() + 10)
-            return ok
+            return outcome.value
         }
         #endif
         return false
@@ -522,6 +526,18 @@ extension SoundFiles {
             guard let tmp = tmp, error == nil else { return }
             _ = convertToCAF(from: tmp, to: dest)
         }.resume()
+    }
+}
+
+/// A value a Task writes and the waiting caller reads (a captured `var` can't
+/// be changed inside a Task).
+final class ResultBox<T>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var stored: T
+    init(_ value: T) { stored = value }
+    var value: T {
+        get { lock.lock(); defer { lock.unlock() }; return stored }
+        set { lock.lock(); stored = newValue; lock.unlock() }
     }
 }
 
