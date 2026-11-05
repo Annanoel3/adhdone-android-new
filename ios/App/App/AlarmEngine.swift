@@ -186,6 +186,8 @@ final class AlarmEngine {
             var a = alarm
             a.own = true
             a.booked = ""
+            // Its own sound is fetched for next time; this ring uses it when it's already here.
+            SoundFiles.prefetch(url: a.soundUrl)
             var list = SharedStore.alarms().filter { $0.id != a.id }
             if let was = SharedStore.alarm(id: a.id), was.booked != "" { self.unbook(was) }
             list.append(a)
