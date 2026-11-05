@@ -338,10 +338,13 @@ public enum SharedStore {
         if kept.count != list.count { write(.finishedTasks, kept) }
     }
 
-    /// Finished or deleted in the last two days: a reminder about it is stale.
+    /// Finished or deleted in the last day: a reminder about it is stale. A day,
+    /// not longer, so a task put back on the list from the web while the phone
+    /// app was closed (which no sync has told the phone about yet) isn't kept
+    /// quiet for long.
     public static func finishedRecently(taskId: String, now: Date = Date()) -> Bool {
         guard !taskId.isEmpty else { return false }
-        let cutoff = now.timeIntervalSince1970 * 1000 - 48 * 3600 * 1000
+        let cutoff = now.timeIntervalSince1970 * 1000 - 24 * 3600 * 1000
         return (read(.finishedTasks, as: [FinishedTask].self) ?? []).contains { $0.taskId == taskId && $0.at > cutoff }
     }
 
