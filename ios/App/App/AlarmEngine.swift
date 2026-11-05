@@ -233,6 +233,19 @@ final class AlarmEngine {
         queue.async { self.replanAll() }
     }
 
+    /// The ring sound changed: every booked alarm is booked again with it.
+    func rebookAllForSound() {
+        queue.async {
+            var list = SharedStore.alarms()
+            for i in list.indices where list[i].booked != "" {
+                self.unbook(list[i])
+                list[i].booked = ""
+            }
+            SharedStore.saveAlarms(list)
+            self.bookAll()
+        }
+    }
+
     /// Snooze from an alarm shown as a notification: the same alarm, `minutes` on.
     func snooze(alarmId: String, minutes: Int) {
         queue.async {
