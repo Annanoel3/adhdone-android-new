@@ -65,7 +65,7 @@ class NotificationService: UNNotificationServiceExtension {
         let now = Date()
         let nowMs = now.timeIntervalSince1970 * 1000
         let alarmCovers = !taskId.isEmpty && SharedStore.alarms().contains {
-            $0.taskId == taskId && $0.booked == "alarmkit" && abs($0.at - nowMs) < 10 * 60 * 1000
+            $0.taskId == taskId && ($0.booked == "alarmkit" || $0.booked == "notification") && abs($0.at - nowMs) < 10 * 60 * 1000
         }
         if alarmCovers || SharedStore.isQuietNow(now) || SharedStore.quietForEvent(at: nowMs) {
             content.sound = nil
