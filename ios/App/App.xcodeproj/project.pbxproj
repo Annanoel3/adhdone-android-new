@@ -7,6 +7,24 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		6C1A0004000000000000D030 /* ADHDoneShared in Frameworks */ = {isa = PBXBuildFile; productRef = 6C1A0004000000000000D010 /* ADHDoneShared */; };
+		6C1A0004000000000000D031 /* ADHDoneShared in Frameworks */ = {isa = PBXBuildFile; productRef = 6C1A0004000000000000D011 /* ADHDoneShared */; };
+		6C1A0004000000000000D032 /* ADHDoneShared in Frameworks */ = {isa = PBXBuildFile; productRef = 6C1A0004000000000000D012 /* ADHDoneShared */; };
+		6C1A0004000000000000D033 /* ADHDoneShared in Frameworks */ = {isa = PBXBuildFile; productRef = 6C1A0004000000000000D013 /* ADHDoneShared */; };
+		6C1A0004000000000000D034 /* OneSignalExtension in Frameworks */ = {isa = PBXBuildFile; productRef = 6C1A0004000000000000D014 /* OneSignalExtension */; };
+		6C1A0004000000000000E010 /* AlarmBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1A0004000000000000E000 /* AlarmBridge.swift */; };
+		6C1A0004000000000000E011 /* AlarmEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1A0004000000000000E001 /* AlarmEngine.swift */; };
+		6C1A0004000000000000E012 /* AlarmIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1A0004000000000000E002 /* AlarmIntents.swift */; };
+		6C1A0004000000000000E013 /* ReminderActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1A0004000000000000E003 /* ReminderActions.swift */; };
+		6C1A0004000000000000E014 /* SoundFiles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1A0004000000000000E004 /* SoundFiles.swift */; };
+		6C1A0004000000000000E015 /* WidgetBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1A0004000000000000E005 /* WidgetBridge.swift */; };
+		6C1A0005000000000000E105 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1A0005000000000000E102 /* NotificationService.swift */; };
+		6C1A0005000000000000E106 /* ADHDoneNotify.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6C1A0005000000000000E101 /* ADHDoneNotify.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		6C1A0006000000000000E205 /* ADHDoneWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1A0006000000000000E202 /* ADHDoneWidgetBundle.swift */; };
+		6C1A0006000000000000E206 /* TasksWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1A0006000000000000E203 /* TasksWidget.swift */; };
+		6C1A0006000000000000E207 /* Controls.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1A0006000000000000E204 /* Controls.swift */; };
+		6C1A0006000000000000E208 /* AlarmLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1A0006000000000000E20A /* AlarmLiveActivity.swift */; };
+		6C1A0006000000000000E209 /* ADHDoneWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6C1A0006000000000000E201 /* ADHDoneWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2FAD9763203C412B000D30F8 /* config.xml in Resources */ = {isa = PBXBuildFile; fileRef = 2FAD9762203C412B000D30F8 /* config.xml */; };
 		4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */ = {isa = PBXBuildFile; productRef = 4D22ABE82AF431CB00220026 /* CapApp-SPM */; };
 		50379B232058CBB4000EE86E /* capacitor.config.json in Resources */ = {isa = PBXBuildFile; fileRef = 50379B222058CBB4000EE86E /* capacitor.config.json */; };
@@ -20,11 +38,23 @@
 		6C1A0001000000000000AC11 /* ADHDoneNative in Frameworks */ = {isa = PBXBuildFile; productRef = 6C1A0001000000000000AC10 /* ADHDoneNative */; };
 		6C1A0003000000000000C005 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1A0003000000000000C002 /* ShareViewController.swift */; };
 		6C1A0003000000000000C006 /* ADHDoneShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6C1A0003000000000000C001 /* ADHDoneShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
-		6C1A0003000000000000C013 /* SharedSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1A0003000000000000C012 /* SharedSession.swift */; };
-		6C1A0003000000000000C014 /* SharedSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C1A0003000000000000C012 /* SharedSession.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		6C1A0005000000000000E10D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6C1A0005000000000000E108;
+			remoteInfo = ADHDoneNotify;
+		};
+		6C1A0006000000000000E20D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6C1A0006000000000000E20B;
+			remoteInfo = ADHDoneWidget;
+		};
 		6C1A0003000000000000C00D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 504EC2FC1FED79650016851F /* Project object */;
@@ -42,6 +72,8 @@
 			dstSubfolderSpec = 13;
 			files = (
 				6C1A0003000000000000C006 /* ADHDoneShare.appex in Embed Foundation Extensions */,
+				6C1A0005000000000000E106 /* ADHDoneNotify.appex in Embed Foundation Extensions */,
+				6C1A0006000000000000E209 /* ADHDoneWidget.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -49,6 +81,23 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		6C1A0004000000000000E000 /* AlarmBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmBridge.swift; sourceTree = "<group>"; };
+		6C1A0004000000000000E001 /* AlarmEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmEngine.swift; sourceTree = "<group>"; };
+		6C1A0004000000000000E002 /* AlarmIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmIntents.swift; sourceTree = "<group>"; };
+		6C1A0004000000000000E003 /* ReminderActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReminderActions.swift; sourceTree = "<group>"; };
+		6C1A0004000000000000E004 /* SoundFiles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundFiles.swift; sourceTree = "<group>"; };
+		6C1A0004000000000000E005 /* WidgetBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetBridge.swift; sourceTree = "<group>"; };
+		6C1A0005000000000000E101 /* ADHDoneNotify.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ADHDoneNotify.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		6C1A0005000000000000E102 /* NotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationService.swift; sourceTree = "<group>"; };
+		6C1A0005000000000000E103 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		6C1A0005000000000000E104 /* ADHDoneNotify.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ADHDoneNotify.entitlements; sourceTree = "<group>"; };
+		6C1A0006000000000000E201 /* ADHDoneWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ADHDoneWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		6C1A0006000000000000E202 /* ADHDoneWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ADHDoneWidgetBundle.swift; sourceTree = "<group>"; };
+		6C1A0006000000000000E203 /* TasksWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasksWidget.swift; sourceTree = "<group>"; };
+		6C1A0006000000000000E204 /* Controls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Controls.swift; sourceTree = "<group>"; };
+		6C1A0006000000000000E20A /* AlarmLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AlarmLiveActivity.swift; sourceTree = "<group>"; };
+		6C1A0006000000000000E20C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		6C1A0006000000000000E20F /* ADHDoneWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ADHDoneWidget.entitlements; sourceTree = "<group>"; };
 		2FAD9762203C412B000D30F8 /* config.xml */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = config.xml; sourceTree = "<group>"; };
 		50379B222058CBB4000EE86E /* capacitor.config.json */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.json; path = capacitor.config.json; sourceTree = "<group>"; };
 		504EC3041FED79650016851F /* App.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = App.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -65,7 +114,6 @@
 		6C1A0003000000000000C002 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		6C1A0003000000000000C003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		6C1A0003000000000000C004 /* ADHDoneShare.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ADHDoneShare.entitlements; sourceTree = "<group>"; };
-		6C1A0003000000000000C012 /* SharedSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedSession.swift; sourceTree = "<group>"; };
 		958DCC722DB07C7200EA8C5F /* debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = debug.xcconfig; path = ../debug.xcconfig; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -74,6 +122,24 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6C1A0004000000000000D031 /* ADHDoneShared in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6C1A0005000000000000E10A /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6C1A0004000000000000D032 /* ADHDoneShared in Frameworks */,
+				6C1A0004000000000000D034 /* OneSignalExtension in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6C1A0006000000000000E20B0 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6C1A0004000000000000D033 /* ADHDoneShared in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -83,6 +149,7 @@
 			files = (
 				4D22ABE92AF431CB00220026 /* CapApp-SPM in Frameworks */,
 				6C1A0001000000000000AC11 /* ADHDoneNative in Frameworks */,
+				6C1A0004000000000000D030 /* ADHDoneShared in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -94,8 +161,9 @@
 			children = (
 				958DCC722DB07C7200EA8C5F /* debug.xcconfig */,
 				504EC3061FED79650016851F /* App */,
-				6C1A0003000000000000C015 /* Shared */,
 				6C1A0003000000000000C007 /* ADHDoneShare */,
+				6C1A0005000000000000E107 /* ADHDoneNotify */,
+				6C1A0006000000000000E210 /* ADHDoneWidget */,
 				504EC3051FED79650016851F /* Products */,
 			);
 			sourceTree = "<group>";
@@ -105,6 +173,8 @@
 			children = (
 				504EC3041FED79650016851F /* App.app */,
 				6C1A0003000000000000C001 /* ADHDoneShare.appex */,
+				6C1A0005000000000000E101 /* ADHDoneNotify.appex */,
+				6C1A0006000000000000E201 /* ADHDoneWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -114,6 +184,12 @@
 			children = (
 				9582B6822FE993A50072D4E8 /* SceneDelegate.swift */,
 				6C1A0001000000000000AC00 /* ADHDoneViewController.swift */,
+				6C1A0004000000000000E000 /* AlarmBridge.swift */,
+				6C1A0004000000000000E001 /* AlarmEngine.swift */,
+				6C1A0004000000000000E002 /* AlarmIntents.swift */,
+				6C1A0004000000000000E003 /* ReminderActions.swift */,
+				6C1A0004000000000000E004 /* SoundFiles.swift */,
+				6C1A0004000000000000E005 /* WidgetBridge.swift */,
 				6C1A0001000000000000AC02 /* App.entitlements */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
 				504EC3071FED79650016851F /* AppDelegate.swift */,
@@ -137,12 +213,27 @@
 			path = ADHDoneShare;
 			sourceTree = "<group>";
 		};
-		6C1A0003000000000000C015 /* Shared */ = {
+		6C1A0005000000000000E107 /* ADHDoneNotify */ = {
 			isa = PBXGroup;
 			children = (
-				6C1A0003000000000000C012 /* SharedSession.swift */,
+				6C1A0005000000000000E102 /* NotificationService.swift */,
+				6C1A0005000000000000E103 /* Info.plist */,
+				6C1A0005000000000000E104 /* ADHDoneNotify.entitlements */,
 			);
-			path = Shared;
+			path = ADHDoneNotify;
+			sourceTree = "<group>";
+		};
+		6C1A0006000000000000E210 /* ADHDoneWidget */ = {
+			isa = PBXGroup;
+			children = (
+				6C1A0006000000000000E202 /* ADHDoneWidgetBundle.swift */,
+				6C1A0006000000000000E203 /* TasksWidget.swift */,
+				6C1A0006000000000000E204 /* Controls.swift */,
+				6C1A0006000000000000E20A /* AlarmLiveActivity.swift */,
+				6C1A0006000000000000E20C /* Info.plist */,
+				6C1A0006000000000000E20F /* ADHDoneWidget.entitlements */,
+			);
+			path = ADHDoneWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -161,11 +252,14 @@
 			);
 			dependencies = (
 				6C1A0003000000000000C00E /* PBXTargetDependency */,
+				6C1A0005000000000000E10E /* PBXTargetDependency */,
+				6C1A0006000000000000E20E /* PBXTargetDependency */,
 			);
 			name = App;
 			packageProductDependencies = (
 				4D22ABE82AF431CB00220026 /* CapApp-SPM */,
 				6C1A0001000000000000AC10 /* ADHDoneNative */,
+				6C1A0004000000000000D010 /* ADHDoneShared */,
 			);
 			productName = App;
 			productReference = 504EC3041FED79650016851F /* App.app */;
@@ -184,8 +278,52 @@
 			dependencies = (
 			);
 			name = ADHDoneShare;
+			packageProductDependencies = (
+				6C1A0004000000000000D011 /* ADHDoneShared */,
+			);
 			productName = ADHDoneShare;
 			productReference = 6C1A0003000000000000C001 /* ADHDoneShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		6C1A0005000000000000E108 /* ADHDoneNotify */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6C1A0005000000000000E10F /* Build configuration list for PBXNativeTarget "ADHDoneNotify" */;
+			buildPhases = (
+				6C1A0005000000000000E109 /* Sources */,
+				6C1A0005000000000000E10A /* Frameworks */,
+				6C1A0005000000000000E10B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ADHDoneNotify;
+			packageProductDependencies = (
+				6C1A0004000000000000D012 /* ADHDoneShared */,
+				6C1A0004000000000000D014 /* OneSignalExtension */,
+			);
+			productName = ADHDoneNotify;
+			productReference = 6C1A0005000000000000E101 /* ADHDoneNotify.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		6C1A0006000000000000E20B /* ADHDoneWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6C1A0006000000000000E21F /* Build configuration list for PBXNativeTarget "ADHDoneWidget" */;
+			buildPhases = (
+				6C1A0006000000000000E219 /* Sources */,
+				6C1A0006000000000000E20B0 /* Frameworks */,
+				6C1A0006000000000000E21B /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ADHDoneWidget;
+			packageProductDependencies = (
+				6C1A0004000000000000D013 /* ADHDoneShared */,
+			);
+			productName = ADHDoneWidget;
+			productReference = 6C1A0006000000000000E201 /* ADHDoneWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
@@ -210,6 +348,14 @@
 						CreatedOnToolsVersion = 15.0;
 						ProvisioningStyle = Automatic;
 					};
+					6C1A0005000000000000E108 = {
+						CreatedOnToolsVersion = 15.0;
+						ProvisioningStyle = Automatic;
+					};
+					6C1A0006000000000000E20B = {
+						CreatedOnToolsVersion = 15.0;
+						ProvisioningStyle = Automatic;
+					};
 				};
 			};
 			buildConfigurationList = 504EC2FF1FED79650016851F /* Build configuration list for PBXProject "App" */;
@@ -224,6 +370,8 @@
 			packageReferences = (
 				D4C12C0A2AAA248700AAC8A2 /* XCLocalSwiftPackageReference "CapApp-SPM" */,
 				6C1A0001000000000000AC20 /* XCLocalSwiftPackageReference "ADHDoneNative" */,
+				6C1A0004000000000000D020 /* XCLocalSwiftPackageReference "ADHDoneShared" */,
+				6C1A0004000000000000D021 /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */,
 			);
 			productRefGroup = 504EC3051FED79650016851F /* Products */;
 			projectDirPath = "";
@@ -231,11 +379,27 @@
 			targets = (
 				504EC3031FED79650016851F /* App */,
 				6C1A0003000000000000C008 /* ADHDoneShare */,
+				6C1A0005000000000000E108 /* ADHDoneNotify */,
+				6C1A0006000000000000E20B /* ADHDoneWidget */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		6C1A0005000000000000E10B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6C1A0006000000000000E21B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		6C1A0003000000000000C00B /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -266,7 +430,12 @@
 				6C1A0001000000000000AC01 /* ADHDoneViewController.swift in Sources */,
 				504EC3081FED79650016851F /* AppDelegate.swift in Sources */,
 				9582B6832FE993A70072D4E8 /* SceneDelegate.swift in Sources */,
-				6C1A0003000000000000C013 /* SharedSession.swift in Sources */,
+				6C1A0004000000000000E010 /* AlarmBridge.swift in Sources */,
+				6C1A0004000000000000E011 /* AlarmEngine.swift in Sources */,
+				6C1A0004000000000000E012 /* AlarmIntents.swift in Sources */,
+				6C1A0004000000000000E013 /* ReminderActions.swift in Sources */,
+				6C1A0004000000000000E014 /* SoundFiles.swift in Sources */,
+				6C1A0004000000000000E015 /* WidgetBridge.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -275,13 +444,41 @@
 			buildActionMask = 2147483647;
 			files = (
 				6C1A0003000000000000C005 /* ShareViewController.swift in Sources */,
-				6C1A0003000000000000C014 /* SharedSession.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6C1A0005000000000000E109 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6C1A0005000000000000E105 /* NotificationService.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6C1A0006000000000000E219 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6C1A0006000000000000E205 /* ADHDoneWidgetBundle.swift in Sources */,
+				6C1A0006000000000000E206 /* TasksWidget.swift in Sources */,
+				6C1A0006000000000000E207 /* Controls.swift in Sources */,
+				6C1A0006000000000000E208 /* AlarmLiveActivity.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		6C1A0005000000000000E10E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6C1A0005000000000000E108 /* ADHDoneNotify */;
+			targetProxy = 6C1A0005000000000000E10D /* PBXContainerItemProxy */;
+		};
+		6C1A0006000000000000E20E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6C1A0006000000000000E20B /* ADHDoneWidget */;
+			targetProxy = 6C1A0006000000000000E20D /* PBXContainerItemProxy */;
+		};
 		6C1A0003000000000000C00E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 6C1A0003000000000000C008 /* ADHDoneShare */;
@@ -512,6 +709,102 @@
 			};
 			name = Release;
 		};
+		6C1A0005000000000000E110 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ADHDoneNotify/ADHDoneNotify.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = ADHDoneNotify/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.3.20;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mediocreatbest.adhdone.notify;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		6C1A0005000000000000E111 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ADHDoneNotify/ADHDoneNotify.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = ADHDoneNotify/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.3.20;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mediocreatbest.adhdone.notify;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		6C1A0006000000000000E220 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ADHDoneWidget/ADHDoneWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = ADHDoneWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.3.20;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mediocreatbest.adhdone.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		6C1A0006000000000000E221 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ADHDoneWidget/ADHDoneWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				INFOPLIST_FILE = ADHDoneWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.3.20;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mediocreatbest.adhdone.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "";
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -542,6 +835,24 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		6C1A0005000000000000E10F /* Build configuration list for PBXNativeTarget "ADHDoneNotify" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6C1A0005000000000000E110 /* Debug */,
+				6C1A0005000000000000E111 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		6C1A0006000000000000E21F /* Build configuration list for PBXNativeTarget "ADHDoneWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6C1A0006000000000000E220 /* Debug */,
+				6C1A0006000000000000E221 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -553,7 +864,22 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = ADHDoneNative;
 		};
+		6C1A0004000000000000D020 /* XCLocalSwiftPackageReference "ADHDoneShared" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ADHDoneShared;
+		};
 /* End XCLocalSwiftPackageReference section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		6C1A0004000000000000D021 /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/OneSignal/OneSignal-XCFramework.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 5.2.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
 		4D22ABE82AF431CB00220026 /* CapApp-SPM */ = {
@@ -565,6 +891,31 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 6C1A0001000000000000AC20 /* XCLocalSwiftPackageReference "ADHDoneNative" */;
 			productName = ADHDoneNative;
+		};
+		6C1A0004000000000000D010 /* ADHDoneShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6C1A0004000000000000D020 /* XCLocalSwiftPackageReference "ADHDoneShared" */;
+			productName = ADHDoneShared;
+		};
+		6C1A0004000000000000D011 /* ADHDoneShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6C1A0004000000000000D020 /* XCLocalSwiftPackageReference "ADHDoneShared" */;
+			productName = ADHDoneShared;
+		};
+		6C1A0004000000000000D012 /* ADHDoneShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6C1A0004000000000000D020 /* XCLocalSwiftPackageReference "ADHDoneShared" */;
+			productName = ADHDoneShared;
+		};
+		6C1A0004000000000000D013 /* ADHDoneShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6C1A0004000000000000D020 /* XCLocalSwiftPackageReference "ADHDoneShared" */;
+			productName = ADHDoneShared;
+		};
+		6C1A0004000000000000D014 /* OneSignalExtension */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6C1A0004000000000000D021 /* XCRemoteSwiftPackageReference "OneSignal-XCFramework" */;
+			productName = OneSignalExtension;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
