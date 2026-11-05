@@ -29,7 +29,7 @@ import ADHDoneShared
 /// calendar account mid-sync can show nothing for a moment, and the import
 /// takes a calendar's missing events as deleted ones). The same rows are not
 /// sent twice within a day.
-public final class BackgroundCalendarSync {
+public final class BackgroundCalendarSync: NSObject {
     public static let shared = BackgroundCalendarSync()
     public static let taskIdentifier = "com.mediocreatbest.adhdone.calendar"
 
@@ -47,7 +47,7 @@ public final class BackgroundCalendarSync {
     private var settleTimer: DispatchWorkItem?
     private var registered = false
 
-    private init() {}
+    private override init() { super.init() }
 
     // MARK: - App start
 
@@ -56,7 +56,7 @@ public final class BackgroundCalendarSync {
     public func start() {
         guard !registered else { return }
         registered = true
-        BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.taskIdentifier, using: nil) { [weak self] task in
+        _ = BGTaskScheduler.shared.register(forTaskWithIdentifier: Self.taskIdentifier, using: nil) { [weak self] task in
             guard let self = self, let refresh = task as? BGAppRefreshTask else {
                 task.setTaskCompleted(success: false)
                 return
