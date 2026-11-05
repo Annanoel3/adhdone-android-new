@@ -16,7 +16,14 @@
 # adhdone_app_store), created Oct 30 2026. The share extension
 # (com.mediocreatbest.adhdone.share) has its own profile "ADHDone Share App Store"
 # (reference adhdone_share_app_store), created Oct 31 2026; ios_signing below
-# fetches it too because its bundle id starts with the app's.
+# fetches it too because its bundle id starts with the app's. Nov 4 2026 added
+# two more extensions the same way: the notification extension
+# (com.mediocreatbest.adhdone.notify, ios/App/ADHDoneNotify) and the widget
+# (com.mediocreatbest.adhdone.widget, ios/App/ADHDoneWidget). Codemagic's
+# automatic signing makes the missing App IDs and App Store profiles for them
+# on the first build; if that build stops at signing, Anna registers those two
+# identifiers in Apple Developer and makes an App Store profile for each
+# (IOS_PLAN.md, "Targets and bundle ids").
 #
 # Starting a build: the "Start new build" button, or a git tag that starts with
 # "ios-" (e.g. ios-1). Base44's own pushes to main never start a build.

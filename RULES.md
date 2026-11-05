@@ -652,17 +652,31 @@ either."
 - **`src/lib/phonePlatform.js` is the one list.** `onThisPhone('<feature>')` is false in the
   iPhone app for every Android-only feature (wake-up detection, the pinned notification,
   vibrate-only on silent, Google Play's update popup, Android's alarm switches, the Android
-  how-to clips) and for the ones still waiting on Haris (spoken alarm, share extension, widget).
-  Anything new that only Android can do goes on that list and gets an `onThisPhone` check.
-  On Android and the plain website every check passes, so nothing there changes.
+  how-to clips, "Read it to me" for regular notifications) and, through `IPHONE_BUILD_HAS`,
+  for anything an older iPhone build doesn't have yet: the share option, full-screen alarms,
+  the spoken alarm, the widget, reminder buttons, silence, the notification sound and the
+  calendar sync with the app closed (all in the Nov 4 2026 build; the app says what it has
+  in `window.ADHDoneIPhone`, ADHDoneViewController.swift). Anything new that only Android
+  can do goes on that list and gets an `onThisPhone` check. On Android and the plain
+  website every check passes, so nothing there changes.
+- **The iPhone's native pieces (Nov 4 2026):** `ios/App/App/AlarmBridge.swift` +
+  `AlarmEngine.swift` (AlarmKit on iOS 26+, notifications before; `AlarmIntents.swift` for
+  the alarm's buttons), `ReminderActions.swift` (the buttons on reminders),
+  `WidgetBridge.swift`, `SoundFiles.swift` (sounds and the voice), the extensions
+  `ios/App/ADHDoneNotify` (every push before it shows) and `ios/App/ADHDoneWidget` (widget,
+  Control Center buttons, the alarm's Live Activity), `ios/App/ADHDoneShared` (what they all
+  share, through the keychain group — no App Group), and `BackgroundCalendarSync.swift` in
+  ADHDoneNative. IOS_PLAN.md has the table. The server sends an iPhone alarms once the phone
+  lists `AlarmBridge` in `User.phone_plugins` (`phoneCanRing`, reminderTitle.ts).
 - **Never rely on "the plugin doesn't have that method"** to hide something on iPhone; the
   iPhone plugins may have a method of the same name. Check `onThisPhone` as well.
 - **No "Android", "Google Play", "Play Store" or "Samsung" on an iPhone screen.** Apple turns
   down apps that name other phone platforms (App Review Guideline 2.3.10). Use `phoneOs()`
   ("Android" / "your iPhone") in sentences.
 - **Alarm switches:** `alarmSwitchesOff(st)` in widgetBridge decides what's missing. On iPhone,
-  `AlarmBridge.getStatus()` reports `{ notifications, alarms }` (alarms = AlarmKit's own
-  permission) and `AlarmBridge.requestAlarmAccess()` asks for it.
+  `AlarmBridge.getStatus()` reports `{ notifications, alarms, alarmKit }` (alarms = AlarmKit's
+  own permission, left out where the phone has no AlarmKit) and `AlarmBridge.requestAlarmAccess()`
+  asks for it. `NSAlarmKitUsageDescription` is in Info.plist; without it AlarmKit refuses.
 - **Alarm spacing on iPhone:** until `IPHONE_SPACES_ALARMS` is true, the website merges alarms
   within 10 minutes into one before sending the list (foldClusters). A time the person set is
   never merged or moved.
