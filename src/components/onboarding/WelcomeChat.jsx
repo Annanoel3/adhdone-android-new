@@ -28,6 +28,31 @@ const FIRST_WIN_DEMO_KEY = 'first_win_demo_push';
 // linked for pushes (then it books straight away).
 const FIRST_WIN_PLANNED_EVENT = 'adhdone:first-win-planned';
 
+// Skip on "what's one thing…": instead of an empty list, three tap-to-pick
+// things most people need anyway (Anna, Nov 4 2026: "use the lazy path as an
+// opportunity to show personality and relatability"). Each is a real, small
+// task for today, so a pick gets the same "when?" and the same first reminder
+// as a typed one. Three of these show at a time, rotating by the day, under
+// one line; "Really, nothing today" skips for real. Written here, not taken
+// from anyone's tasks.
+const TASK_OFFER_LINE = "No pressure — brains don't take requests. These count too. Tap one and it's on your list:";
+const TASK_OFFERS = [
+  "Drink a glass of water (it's been judging me)",
+  "Answer the text I've opened four times",
+  'Move the laundry before it goes musty',
+  'Eat an actual meal, not just snacks',
+  "Put the 'soaking' dishes in the dishwasher",
+  'Find my keys before I need them',
+  'Take the trash out before it takes itself out',
+  'Reply to the email I keep opening and closing',
+  "Charge the thing that's at 4%",
+];
+const TASK_OFFER_DECLINE = 'Really, nothing today';
+function pickTaskOffers(now = new Date()) {
+  const start = Math.floor(now.getTime() / (24 * 60 * 60 * 1000)) % TASK_OFFERS.length;
+  return [0, 1, 2].map((i) => TASK_OFFERS[(start + i * 3) % TASK_OFFERS.length]);
+}
+
 // "When should it remind you?" — three taps that fit the time of day, plus a
 // looser "sometime today" underneath. (A task that already names its time
 // skips the question entirely; see saysWhen in welcomeScript.) `phrase` is
@@ -231,6 +256,31 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
     answer(value);
   };
 
+  // Skip on the task: the offers come up under their own line (see
+  // TASK_OFFERS). The beat stays the task beat; only what's under it changes.
+  const [taskOffers, setTaskOffers] = useState(null);
+  const skipTask = () => {
+    const offers = pickTaskOffers();
+    setTaskOffers(offers);
+    setHistory((h) => [...h, { from: 'app', text: line }, { from: 'app', text: TASK_OFFER_LINE }]);
+    setDraft('');
+    trackFire('welcome_task_offer', { props: { action: 'shown' } });
+  };
+  const pickTaskOffer = (text) => {
+    trackFire('welcome_task_offer', { props: { action: 'picked', pick: TASK_OFFERS.indexOf(text) } });
+    setTask(text);
+    if (!hasWhenBeat) captureTask(text, '');
+    setHistory((h) => [...h, { from: 'user', text }]);
+    setTaskOffers(null);
+    setIdx((i) => i + 1);
+  };
+  const declineTaskOffers = () => {
+    trackFire('welcome_task_offer', { props: { action: 'declined' } });
+    setHistory((h) => [...h, { from: 'user', text: TASK_OFFER_DECLINE }]);
+    setTaskOffers(null);
+    setIdx((i) => i + 1);
+  };
+
   // The time they tapped is kept until the notifications question is answered;
   // the task goes in right after that (see submitNotify).
   const phraseRef = useRef('');
@@ -311,7 +361,7 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
         </div>
       )}
 
-      {done && beat?.input === 'task' && (
+      {done && beat?.input === 'task' && !taskOffers && (
         <div className="space-y-2">
           <Input
             autoFocus
@@ -322,8 +372,19 @@ export default function WelcomeChat({ onDone, script = SCRIPT, initialName = '' 
           />
           <div className="flex gap-2">
             <Button onClick={submitTask} disabled={!draft.trim()} className="flex-1">Add it</Button>
-            <Button variant="ghost" onClick={() => answer('')}>Skip</Button>
+            <Button variant="ghost" onClick={skipTask}>Skip</Button>
           </div>
+        </div>
+      )}
+
+      {beat?.input === 'task' && taskOffers && (
+        <div className="space-y-2">
+          {taskOffers.map((text) => (
+            <Button key={text} variant="outline" onClick={() => pickTaskOffer(text)} className="w-full h-auto py-2 text-sm leading-tight whitespace-normal">
+              {text}
+            </Button>
+          ))}
+          <Button variant="ghost" onClick={declineTaskOffers} className="w-full text-xs">{TASK_OFFER_DECLINE}</Button>
         </div>
       )}
 
