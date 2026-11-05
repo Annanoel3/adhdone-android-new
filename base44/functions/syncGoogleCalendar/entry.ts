@@ -1172,6 +1172,9 @@ async function syncCalendarAccount(base44, user, accessToken, calendarEmail, hea
         // doctor visit, a flight, the DMV): its reminders ask for prep notes
         // and repeat them (shared/prepNote.ts).
         prep_worthy: ai?.prep_worthy === true,
+        // A calendar event with an address goes somewhere whatever the parser
+        // says; one without is the parser's call (a video call stays home).
+        goes_somewhere: ai?.goes_somewhere === true,
         notification_recipient_email: user.email,
         recurrence_pattern: recurrenceRule ? (recurrenceRule.includes('FREQ=DAILY') ? 'daily' : recurrenceRule.includes('FREQ=WEEKLY') ? 'weekly' : recurrenceRule.includes('FREQ=MONTHLY') ? 'monthly' : recurrenceRule.includes('FREQ=YEARLY') ? 'yearly' : 'none') : 'none'
       };
@@ -1370,3 +1373,5 @@ Deno.serve(async (req) => {
   }
 });
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
+
+// Redeployed Nov 5 2026: the parser judges goes_somewhere (shared/runTaskParse.ts).

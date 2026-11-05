@@ -71,6 +71,12 @@ const TASK_PARSE_SCHEMA = {
     // reminder asks for prep notes and every reminder repeats them (Anna, Nov 4
     // 2026: fed a fasting cat because the vet event carried no note).
     prep_worthy: { type: "boolean" },
+    // Whether doing it means physically going somewhere (an appointment, a
+    // class, a dinner out) rather than a video or phone session at home. The
+    // row's "Add the address and I'll time when to leave" line only shows for
+    // events that do (Anna, Nov 5 2026: "attend video session... 9/10 times
+    // this is going to be virtual. Meaning they dont go anywhere").
+    goes_somewhere: { type: "boolean" },
     life_area: { type: "string", enum: ["work", "personal"] },
     follow_up_title: { type: ["string", "null"] },
     follow_up_minutes: { type: ["integer", "null"] },
@@ -82,7 +88,7 @@ const TASK_PARSE_SCHEMA = {
     "target_date", "target_time", "time_stated", "end_date", "due_date",
     "user_asked_to_repeat_every", "repeat_words", "recurrence_pattern", "deadline_style",
     "day_only_task", "needs_date_pick", "is_flexible", "priority_uninferrable",
-    "takes_time", "worth_breaking_down", "prep_worthy", "life_area", "follow_up_title", "follow_up_minutes", "reminder_wish",
+    "takes_time", "worth_breaking_down", "prep_worthy", "goes_somewhere", "life_area", "follow_up_title", "follow_up_minutes", "reminder_wish",
     "recurrence_days",
   ],
 };

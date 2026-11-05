@@ -287,6 +287,10 @@
       "type": "boolean",
       "description": "Whether this is an appointment with something to get ready BEFORE it (a vet, doctor or dental visit, a lab test or procedure, a flight or trip, the DMV or another official appointment, an interview) rather than something people just show up to (dinner, a hangout, a haircut, a birthday). Set by the task parser at creation (Nov 4 2026). While prep_note is empty the night-before reminder asks for prep notes instead of the plain heads-up and the row shows a 'Prep for this?' line (PrepOffer); never changes how loud a reminder is."
     },
+    "goes_somewhere": {
+      "type": "boolean",
+      "description": "Whether doing this means physically going to a place (an appointment at an office, a class, a dinner out, an errand) rather than something that happens where the person already is (a video session, a phone call, a webinar, a telehealth visit). Set by the task parser at creation (Nov 5 2026; Anna: 'attend video session... 9/10 times this is going to be virtual'). Only an event with this true gets the row's 'Add the address and I'll time when to leave' line (AddAddressOffer); tasks made before this have no value and are treated as before."
+    },
     "prep_note": {
       "type": "string",
       "description": "What to get ready before this event, in the user's own words ('no food after midnight', 'bring the insurance card and the referral'). Typed on the TaskNotification page, the row's PrepOffer line or the open card. Every reminder of the event (night before, morning of, hour before, leave now, at the time, the phone alarm) ends with 'Prep: <note>'; changing it rewords the pending pushes."

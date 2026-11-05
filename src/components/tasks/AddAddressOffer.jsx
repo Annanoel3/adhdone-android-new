@@ -46,6 +46,10 @@ export default function AddAddressOffer({ task, theme, onRefreshTasks }) {
   if (!task || task.classification !== 'event' || task.status !== 'active') return null;
   if (task.silenced || task.parent_task_id || task.day_only_task || task.birthday_person) return null;
   if (String(task.location || '').trim() || task.address_offer_dismissed) return null;
+  // A video session, a phone call, a webinar: nowhere to drive to, so nothing
+  // to time (the parser's goes_somewhere; Anna, Nov 5 2026). Events made
+  // before that field existed have no value and are offered as before.
+  if (task.goes_somewhere === false) return null;
   const startMs = new Date(task.event_time || task.next_reminder || 0).getTime();
   if (!Number.isFinite(startMs) || startMs <= Date.now() + 5 * 60 * 1000) return null;
   if (!hasHome || gone) return null;

@@ -447,6 +447,16 @@ prep_worthy — true for an appointment where there is usually something to get
   at work, a call, a birthday, an errand, a chore, and every task that isn't
   an appointment. Judge by what the appointment is, never by a word in it.
 
+goes_somewhere — true when doing this means physically going to a place: an
+  appointment at an office or clinic, a class, a game, a dinner out, a shift,
+  a meeting at a venue, a flight, an errand. False when it happens where the
+  person already is: a video session or video call, a phone call, a webinar,
+  an online class or online meeting, a livestream, a telehealth visit,
+  anything done at home. Judge by what the event actually involves, not by
+  one word in it: "attend video session" and "virtual visit" are false,
+  "session with the physical therapist" is true. For a plain task that isn't
+  an event, judge the same way (an errand is true, an email is false).
+
 is_flexible — true when the task can be done any day. priority_uninferrable —
   always false. The app never asks the person how urgent something is: make
   your best call in urgency ("medium" when nothing says otherwise) and they
@@ -496,6 +506,7 @@ Return JSON with exactly these keys:
   "takes_time": boolean,
   "worth_breaking_down": boolean,
   "prep_worthy": boolean,
+  "goes_somewhere": boolean,
   "life_area": "work" | "personal",
   "follow_up_title": string | null,
   "follow_up_minutes": integer | null,

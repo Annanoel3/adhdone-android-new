@@ -171,6 +171,15 @@ const PARSER_CHECKS: { text: string; saidAt: number; expect: Record<string, any>
   { text: "Haircut Saturday at 11", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { prep_worthy: false } },
   { text: "Movie night with the kids Friday 8pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { prep_worthy: false } },
   { text: "Vacuum the living room", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { prep_worthy: false } },
+  // goes_somewhere: an event that means leaving (the row offers "Add the
+  // address and I'll time when to leave") vs one that happens where they are
+  // (Anna, Nov 5 2026: "attend video session... 9/10 times this is going to
+  // be virtual. Meaning they dont go anywhere").
+  { text: "Attend video session Thursday at 3pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { classification: "event", goes_somewhere: false } },
+  { text: "Team call on Zoom Monday 10am", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { goes_somewhere: false } },
+  { text: "Telehealth visit with the doctor Tuesday 2pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { goes_somewhere: false } },
+  { text: "Physical therapy session Wednesday 9am", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { goes_somewhere: true } },
+  { text: "Dinner at the new Thai place Friday 7pm", saidAt: said("2026-11-02T10:00:00-06:00"), expect: { goes_somewhere: true } },
 ];
 
 async function runParserSelfTest(base44: any) {

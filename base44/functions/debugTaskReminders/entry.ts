@@ -280,3 +280,5 @@ Deno.serve(async (req) => {
     return Response.json({ ok: false, error: String(e?.message || e) }, { status: 500 });
   }
 });
+
+// Redeployed Nov 5 2026: the parser judges goes_somewhere (shared/runTaskParse.ts).
