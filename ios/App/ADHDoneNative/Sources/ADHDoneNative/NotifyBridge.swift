@@ -3,6 +3,7 @@ import UIKit
 import UserNotifications
 import Capacitor
 import OneSignalFramework
+import ADHDoneShared
 
 /// NotifyBridge — push notifications for the iPhone app, through OneSignal.
 /// Same methods the Android NotifyBridge offers, so OneSignalInit.jsx works unchanged:
@@ -19,6 +20,13 @@ import OneSignalFramework
 ///
 /// OneSignal itself is started in AppDelegate (NotifyBridge.initialize), before the
 /// web app loads, so a tap on a push that cold-starts the app is not lost.
+///
+/// Buttons on a reminder (Done, Snooze 10 min, Later, Write questions; Nov 4
+/// 2026): the notification extension names the category, the app registers the
+/// categories (ReminderActions), and a tap on a button comes back here with its
+/// actionId. Snooze and Later are answered on the phone without opening the app
+/// (`actionHandler`, set by the app); Done and Write questions open the app and
+/// the web layer finishes them (OneSignalInit.jsx reads data.actionId).
 @objc(NotifyBridge)
 public class NotifyBridge: CAPPlugin, CAPBridgedPlugin {
     public let identifier = "NotifyBridge"
@@ -47,6 +55,10 @@ public class NotifyBridge: CAPPlugin, CAPBridgedPlugin {
     private static weak var instance: NotifyBridge?
     private static let clickHandler = ClickHandler()
     private static let subscriptionObserver = SubscriptionObserver()
+
+    /// The app's own answer to a button on a push (ReminderActions.handle). Returns
+    /// true when it took care of it, so nothing is handed to the web layer.
+    public static var actionHandler: ((_ actionId: String, _ data: [String: Any], _ title: String, _ body: String) -> Bool)?
 
     // MARK: - App start
 
@@ -209,9 +221,18 @@ public class NotifyBridge: CAPPlugin, CAPBridgedPlugin {
         return OneSignal.User.pushSubscription.id ?? ""
     }
 
-    fileprivate static func notificationOpened(_ data: [String: Any]) {
+    /// A tap on a push (or on one of the app's own notifications, see
+    /// ReminderActions): kept for getLaunchNotification and announced to the
+    /// web layer when it is listening.
+    public static func notificationOpened(_ data: [String: Any]) {
         lastLaunchData = data
         instance?.notifyListeners("notificationOpened", data: ["data": data])
+    }
+
+    /// Whether the web layer is up and listening (a warm app). False on a cold
+    /// start, when the tap waits for getLaunchNotification instead.
+    public static var webIsListening: Bool {
+        instance?.hasListeners("notificationOpened") ?? false
     }
 
     fileprivate static func subscriptionChanged(id: String?, token: String?, optedIn: Bool) {
@@ -227,7 +248,14 @@ private final class ClickHandler: NSObject, OSNotificationClickListener {
     func onClick(event: OSNotificationClickEvent) {
         var data: [String: Any] = [:]
         if let extra = event.notification.additionalData as? [String: Any] { data = extra }
-        if let actionId = event.result.actionId, !actionId.isEmpty { data["actionId"] = actionId }
+        if let actionId = event.result.actionId, !actionId.isEmpty {
+            data["actionId"] = actionId
+            // Snooze / Later: done right here, the app stays closed.
+            if let handle = NotifyBridge.actionHandler,
+               handle(actionId, data, event.notification.title ?? "", event.notification.body ?? "") {
+                return
+            }
+        }
         NotifyBridge.notificationOpened(data)
     }
 }
