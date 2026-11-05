@@ -69,10 +69,22 @@ profiles made again; keychain groups come with every profile.
 |---|---|---|
 | App | com.mediocreatbest.adhdone | ADHDone App Store (`adhdone_app_store`) |
 | ADHDoneShare (share sheet) | com.mediocreatbest.adhdone.share | ADHDone Share App Store (`adhdone_share_app_store`) |
-| ADHDoneNotify (notification extension) | com.mediocreatbest.adhdone.notify | made by Codemagic's automatic signing on the first build (`ios_signing` fetches, and creates, profiles for every bundle id under the app's) — if it can't, Anna makes the App ID + App Store profile |
-| ADHDoneWidget (widget, controls, alarm Live Activity) | com.mediocreatbest.adhdone.widget | same |
+| ADHDoneNotify (notification extension) | com.mediocreatbest.adhdone.notify | ADHDone Notify App Store (`adhdone_notify_app_store`), made Nov 5 2026 |
+| ADHDoneWidget (widget, controls, alarm Live Activity) | com.mediocreatbest.adhdone.widget | ADHDone Widget App Store (`adhdone_widget_app_store`), made Nov 5 2026 |
 
 All four carry the same MARKETING_VERSION (Apple wants them equal).
+
+Codemagic's `ios_signing` only FETCHES profiles that already exist (it matched the
+share extension's by bundle-id prefix); it never creates App IDs or profiles. Build 6
+(Nov 5 2026) stopped at "Build the IPA" with "requires a provisioning profile" for the
+two new targets. The fix, done in Anna's Chrome with her go-ahead: Apple Developer →
+Identifiers → register the App ID (no capabilities needed beyond the keychain group,
+which comes with every profile) → Profiles → App Store Connect profile with the
+"Anna Baird-Ballew (Distribution)" certificate → Codemagic → Personal account settings
+→ Code signing identities → iOS provisioning profiles → "Fetch profiles" (uses the
+GenCare App Store Connect key) → tick the new ones, give them the reference names
+above → "Download selected". A future new target needs the same before its first build.
+All profiles expire Oct 28 2027 with the certificate.
 
 ## Web app checks for iPhone
 
@@ -183,9 +195,8 @@ Check on a device: keyboard covering inputs (no @capacitor/keyboard yet).
 
 1. Apple Developer: register the identifier `com.mediocreatbest.adhdone` with Push
    Notifications on. (No App Groups needed: the extensions share through the keychain
-   group. If Codemagic's automatic signing can't make the App IDs and profiles for
-   `com.mediocreatbest.adhdone.notify` and `.widget` on the Nov 4 2026 build, Anna
-   registers those two identifiers and makes an App Store profile for each.)
+   group. The App IDs and App Store profiles for `com.mediocreatbest.adhdone.notify`
+   and `.widget` were registered Nov 5 2026 — see "Targets and bundle ids".)
 2. App Store Connect: create the app (name, bundle id above, SKU anything).
 3. OneSignal (ADHDone app): add the Apple iOS platform with the same .p8 push key
    GenCare uses.
