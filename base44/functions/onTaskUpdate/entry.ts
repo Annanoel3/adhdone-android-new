@@ -157,6 +157,10 @@ async function dropPhoneAlarms(base44, task, taskId) {
         include_external_user_ids: [email],
         channel_for_external_user_ids: 'push',
         isAndroid: true,
+        // The iPhone app reads it too since Nov 4 2026 (AppDelegate
+        // .didReceiveRemoteNotification: the task's alarms and its reminders in
+        // Notification Center come off); an older iPhone build ignores it.
+        isIos: true,
         // A data-only push: no title or text, so nothing is shown.
         // The name is only for the OneSignal dashboard (never shown to anyone),
         // where a push with no title is otherwise listed as "Untitled Message".

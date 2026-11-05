@@ -173,8 +173,14 @@ function alertStyleOf(task: any, owner: any): 'alarm' | 'notification' {
 // (User.app_platform, saved by WidgetTaskSync) gets nothing sent as an alarm.
 // Opening the Android app sets it back. (Oct 30 2026, Anna: lots of small
 // Android fixes added up, "make sure that's not the case with iphone".)
+// Since Nov 4 2026 the iPhone app rings too, from the build that has its own
+// AlarmBridge (AlarmKit on iOS 26+, notifications before; ios/App/App/
+// AlarmEngine.swift). The phone lists its plugins on the account
+// (User.phone_plugins, WidgetTaskSync), so an older iPhone build still gets
+// nothing sent as an alarm.
 export function phoneCanRing(owner: any): boolean {
-  return owner?.app_platform !== 'ios';
+  if (owner?.app_platform !== 'ios') return true;
+  return Array.isArray(owner?.phone_plugins) && owner.phone_plugins.includes('AlarmBridge');
 }
 
 export function taskRingsAsAlarm(task: any, owner: any): boolean {
@@ -427,6 +433,9 @@ export async function pushPhoneAlarms(
         include_external_user_ids: [email],
         channel_for_external_user_ids: 'push',
         isAndroid: true,
+        // The iPhone app reads it too (AppDelegate.didReceiveRemoteNotification)
+        // on the builds that ring; an older iPhone build ignores it.
+        isIos: owner.app_platform === 'ios',
         // A data-only push: no title or text, so nothing is shown. The name is
         // only for the OneSignal dashboard.
         name: "Silent: update a task's alarms on the phone",
