@@ -9,14 +9,15 @@ import { resumeScript } from './welcomeScript';
 import CATCH_UP_SCRIPT, { CATCH_UP_ABOUT_ONLY_SCRIPT } from './catchUpScript';
 
 // The very first thing a new user sees — a short back-and-forth that collects a
-// name and a sentence about the user's life. Nothing else in the
-// first-run sequence starts until it's finished.
+// name, a first task and its time, and asks for notifications. Nothing else in
+// the first-run sequence starts until it's finished. (The about-you question
+// is the second open's, CatchUpDialog; Anna, Nov 4 2026.)
 //
 // Whether it has been done belongs to the ACCOUNT, not the phone: the flag is
-// copied down from the profile before this mounts, and an account that reached
-// the last question (it has an about-me) counts as done even if the flag was
-// lost — so a reinstall or a new phone never asks twice. A name alone is NOT
-// done: it is the first answer, and someone who closed the app right after it
+// copied down from the profile before this mounts, and an account that has an
+// about-me (answered in the chat back when it asked, in the catch-up, or in
+// Settings) counts as done even if the flag was lost — so a reinstall or a new
+// phone never asks twice. A name alone is NOT done: it is the first answer, and someone who closed the app right after it
 // (Anna, Nov 4 2026, on the iPhone, closing it for an update halfway through:
 // "if somebody doesn't complete the whole thing, it needs to come back") gets
 // the chat back on the next open at the beat they left (resumeScript).
@@ -61,9 +62,9 @@ export default function WelcomeDialog({ user }) {
   useEffect(() => {
     if (!user) return undefined;
     if (isStepDone(ONBOARDING_STEPS.welcome)) return undefined;
-    // The about-you question is the last one: reaching it is the whole chat.
-    // An account older than a few days with a name is done too, as before
-    // (the about-you catch-up is CatchUpDialog's, once).
+    // An about-me means they got past the chat (it asked that question until
+    // Nov 4 2026, and the catch-up asks it only once the chat is done). An
+    // account older than a few days with a name is done too, as before.
     if (user.about_me || (user.preferred_name && accountIsOld(user))) {
       markStepDone(ONBOARDING_STEPS.welcome);
       return undefined;
@@ -73,7 +74,13 @@ export default function WelcomeDialog({ user }) {
     if (user.preferred_name && !wasReplayedThisSession()) {
       accountHasTasks().then((hasTask) => {
         if (cancelled || isStepDone(ONBOARDING_STEPS.welcome)) return;
-        setResumeOpts({ hasTask, notifyAnswered: isStepDone(ONBOARDING_STEPS.permissions) });
+        const notifyAnswered = isStepDone(ONBOARDING_STEPS.permissions);
+        // Everything the chat asks is already answered (they closed it on its
+        // closing line, or on the about-you beat it had until Nov 4 2026):
+        // nothing to pick up, so it counts as finished without reopening —
+        // a chat that only says "welcome back" and "you're set" is noise.
+        if (hasTask && notifyAnswered) { finishQuietly(); return; }
+        setResumeOpts({ hasTask, notifyAnswered });
         setMode('resume');
       });
       return () => { cancelled = true; };
@@ -109,6 +116,14 @@ export default function WelcomeDialog({ user }) {
     enterOnboardingSurface();
     return exitOnboardingSurface;
   }, [mode]);
+
+  // Done without a chat on screen: the same flags "Let's go" sets, minus the
+  // hold that keeps the name re-ask off this sitting (nothing was shown).
+  const finishQuietly = () => {
+    markStepDone(ONBOARDING_STEPS.welcome);
+    if (!isStepDone(ONBOARDING_STEPS.guideSeen)) markStepDone(ONBOARDING_STEPS.guideNudge);
+    markStepDone(ONBOARDING_STEPS.homeTour);
+  };
 
   const handleClose = () => {
     setMode(null);
