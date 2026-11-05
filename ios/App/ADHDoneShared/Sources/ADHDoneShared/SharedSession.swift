@@ -1,7 +1,9 @@
 import Foundation
 import Security
 
-// Shared by the app and the share extension (both targets compile this file).
+// Shared by the app, the share extension, the notification extension and the
+// widget: all of them link the ADHDoneShared package this file is part of
+// (until Nov 4 2026 the app and the share extension compiled it directly).
 //
 // The share extension runs outside the app, so it can't read the WebView's
 // sign-in. The app copies the sign-in (base44_access_token, base44_app_id,
@@ -14,22 +16,32 @@ import Security
 // and the app sends it the next time it opens, with the same capture_id, so the
 // server never makes it twice.
 
-struct SharedSessionInfo {
-    let token: String
-    let appId: String
-    let serverUrl: String
+public struct SharedSessionInfo {
+    public let token: String
+    public let appId: String
+    public let serverUrl: String
+    public init(token: String, appId: String, serverUrl: String) {
+        self.token = token
+        self.appId = appId
+        self.serverUrl = serverUrl
+    }
 }
 
-struct PendingCapture: Codable {
-    let id: String
-    let text: String
+public struct PendingCapture: Codable {
+    public let id: String
+    public let text: String
     /// When it was shared, in ms since 1970 (captureText's said_at).
-    let saidAt: Double
+    public let saidAt: Double
+    public init(id: String, text: String, saidAt: Double) {
+        self.id = id
+        self.text = text
+        self.saidAt = saidAt
+    }
 }
 
-enum SharedSession {
-    /// Team ID + group name. Both targets list it under keychain-access-groups.
-    static let accessGroup = "C6T8GPVSJ3.com.mediocreatbest.adhdone.shared"
+public enum SharedSession {
+    /// Team ID + group name. Every target lists it under keychain-access-groups.
+    public static let accessGroup = "C6T8GPVSJ3.com.mediocreatbest.adhdone.shared"
     private static let service = "com.mediocreatbest.adhdone.shared"
     private static let sessionAccount = "session"
     private static let pendingAccount = "pending-captures"
@@ -38,7 +50,7 @@ enum SharedSession {
 
     /// Saves the sign-in. Returns true when it changed.
     @discardableResult
-    static func save(_ info: SharedSessionInfo) -> Bool {
+    public static func save(_ info: SharedSessionInfo) -> Bool {
         if let current = load(), current.token == info.token,
            current.appId == info.appId, current.serverUrl == info.serverUrl {
             return false
@@ -48,7 +60,7 @@ enum SharedSession {
         return write(account: sessionAccount, data: data)
     }
 
-    static func load() -> SharedSessionInfo? {
+    public static func load() -> SharedSessionInfo? {
         guard let data = read(account: sessionAccount),
               let body = try? JSONSerialization.jsonObject(with: data) as? [String: String],
               let token = body["token"], !token.isEmpty,
@@ -59,13 +71,13 @@ enum SharedSession {
 
     // MARK: - Shares waiting to be sent
 
-    static func pending() -> [PendingCapture] {
+    public static func pending() -> [PendingCapture] {
         guard let data = read(account: pendingAccount),
               let list = try? JSONDecoder().decode([PendingCapture].self, from: data) else { return [] }
         return list
     }
 
-    static func addPending(_ capture: PendingCapture) {
+    public static func addPending(_ capture: PendingCapture) {
         var list = pending().filter { $0.id != capture.id }
         list.append(capture)
         // A keychain item is meant to stay small; 50 waiting shares is plenty.
@@ -73,7 +85,7 @@ enum SharedSession {
         savePending(list)
     }
 
-    static func removePending(id: String) {
+    public static func removePending(id: String) {
         let list = pending()
         let kept = list.filter { $0.id != id }
         if kept.count != list.count { savePending(kept) }
@@ -131,20 +143,20 @@ enum SharedSession {
 /// The two server calls a share needs, the same ones the Android app makes
 /// (Base44Api.java): readImageCapture turns a picture into a sentence, and
 /// captureText turns a sentence into tasks.
-enum CaptureAPI {
-    struct Result {
+public enum CaptureAPI {
+    public struct Result {
         /// HTTP status; 0 means no answer at all (no signal, timed out).
-        let code: Int
-        let body: [String: Any]?
+        public let code: Int
+        public let body: [String: Any]?
 
-        var isSuccess: Bool { code >= 200 && code < 300 }
-        var isAuthFailure: Bool { code == 401 || code == 403 }
+        public var isSuccess: Bool { code >= 200 && code < 300 }
+        public var isAuthFailure: Bool { code == 401 || code == 403 }
         /// A 2xx where the server says it made nothing (safe to send again).
-        var isReportedFailure: Bool { isSuccess && (body?["success"] as? Bool) == false }
-        var delivered: Bool { isSuccess && !isReportedFailure }
+        public var isReportedFailure: Bool { isSuccess && (body?["success"] as? Bool) == false }
+        public var delivered: Bool { isSuccess && !isReportedFailure }
     }
 
-    static func sendText(_ session: SharedSessionInfo, capture: PendingCapture,
+    public static func sendText(_ session: SharedSessionInfo, capture: PendingCapture,
                          completion: @escaping (Result) -> Void) {
         var body: [String: Any] = [
             "text": capture.text,
@@ -155,14 +167,16 @@ enum CaptureAPI {
         post(session, function: "captureText", body: body, completion: completion)
     }
 
-    static func readImage(_ session: SharedSessionInfo, jpegBase64: String,
+    public static func readImage(_ session: SharedSessionInfo, jpegBase64: String,
                           completion: @escaping (Result) -> Void) {
         post(session, function: "readImageCapture",
              body: ["image_base64": jpegBase64, "mime_type": "image/jpeg"], completion: completion)
     }
 
-    private static func post(_ session: SharedSessionInfo, function: String, body: [String: Any],
-                             completion: @escaping (Result) -> Void) {
+    /// Any server function, with the saved sign-in (the alarm choices, the
+    /// calendar sync and the reminder buttons use this too).
+    public static func post(_ session: SharedSessionInfo, function: String, body: [String: Any],
+                            completion: @escaping (Result) -> Void) {
         let base = session.serverUrl.hasSuffix("/") ? String(session.serverUrl.dropLast()) : session.serverUrl
         guard let url = URL(string: "\(base)/api/apps/\(session.appId)/functions/\(function)"),
               let payload = try? JSONSerialization.data(withJSONObject: body) else {
