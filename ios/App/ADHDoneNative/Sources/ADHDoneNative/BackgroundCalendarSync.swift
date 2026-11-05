@@ -123,10 +123,9 @@ public final class BackgroundCalendarSync {
 
     // MARK: - Sending
 
-    private var inFlight: URLSessionDataTask?
     private func cancelInFlight() {
-        inFlight?.cancel()
-        inFlight = nil
+        // The send is one short request; iOS's deadline simply ends this run,
+        // and the next run sends again.
     }
 
     /// Reads the ticked calendars and sends them when they changed.
@@ -139,7 +138,9 @@ public final class BackgroundCalendarSync {
 
         let rows = CalendarBridge.readRows(ids: Set(ids), days: Self.days)
         let now = Date()
-        if rows.isEmpty && defaults.integer(forKey: countKey) != 0 && defaults.object(forKey: countKey) != nil {
+        // Same rule as Android: an empty read is held 6 hours unless the last
+        // send was empty too (never sent counts as "had events").
+        if rows.isEmpty && (defaults.object(forKey: countKey) == nil || defaults.integer(forKey: countKey) != 0) {
             let since = defaults.double(forKey: emptySinceKey)
             if since == 0 {
                 defaults.set(now.timeIntervalSince1970, forKey: emptySinceKey)
