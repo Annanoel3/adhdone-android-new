@@ -175,33 +175,32 @@ final class SpeechFiles: NSObject {
         if FileManager.default.fileExists(atPath: dest.path) { completion(name); return }
         renderQueue.async { [self] in
             let done = DispatchSemaphore(value: 0)
-            var file: AVAudioFile?
-            var failed = false
-            var finished = false
+            let state = RenderState()
             // Still a .caf name: AVAudioFile picks the file type from the extension.
             let tmp = SoundFiles.folder.appendingPathComponent("tmp_\(name)")
             try? FileManager.default.removeItem(at: tmp)
             DispatchQueue.main.async {
                 self.renderer.write(self.utterance(text)) { buffer in
-                    guard !finished else { return }
-                    guard let pcm = buffer as? AVAudioPCMBuffer else { failed = true; finished = true; done.signal(); return }
+                    guard !state.finished else { return }
+                    guard let pcm = buffer as? AVAudioPCMBuffer else { state.fail(); done.signal(); return }
                     if pcm.frameLength == 0 {
                         // The last, empty buffer: the sentence is done.
-                        finished = true
+                        state.finished = true
                         done.signal()
                         return
                     }
-                    if file == nil {
-                        file = try? AVAudioFile(forWriting: tmp, settings: pcm.format.settings,
-                                                commonFormat: pcm.format.commonFormat, interleaved: pcm.format.isInterleaved)
-                        if file == nil { failed = true; finished = true; done.signal(); return }
+                    if state.file == nil {
+                        state.file = try? AVAudioFile(forWriting: tmp, settings: pcm.format.settings,
+                                                      commonFormat: pcm.format.commonFormat, interleaved: pcm.format.isInterleaved)
+                        if state.file == nil { state.fail(); done.signal(); return }
                     }
-                    do { try file?.write(from: pcm) } catch { failed = true; finished = true; done.signal() }
+                    do { try state.file?.write(from: pcm) } catch { state.fail(); done.signal() }
                 }
             }
             // A sentence takes a few seconds to render; 20 is plenty.
-            if done.wait(timeout: .now() + 20) == .timedOut { failed = true }
-            file = nil
+            if done.wait(timeout: .now() + 20) == .timedOut { state.fail() }
+            let failed = state.failed
+            state.file = nil
             if failed {
                 try? FileManager.default.removeItem(at: tmp)
                 completion(nil)
@@ -213,6 +212,14 @@ final class SpeechFiles: NSObject {
             try? FileManager.default.removeItem(at: tmp)
             completion(ok ? name : nil)
         }
+    }
+
+    /// The render in flight (a class, so the voice's callback can change it).
+    private final class RenderState: @unchecked Sendable {
+        var file: AVAudioFile?
+        var failed = false
+        var finished = false
+        func fail() { failed = true; finished = true }
     }
 
     /// Drops rendered sentences no alarm uses any more.
