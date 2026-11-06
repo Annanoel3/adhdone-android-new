@@ -1672,8 +1672,19 @@ Deno.serve(async (req) => {
       }
       let ghostPushes = 0;
       for (const [taskId, ids] of Object.entries(byTask)) {
-        const fresh = await base44.asServiceRole.entities.Task.get(taskId).catch(() => null);
-        if (fresh && fresh.status === 'active') continue;
+        // A read that fails for any reason but "no such task" is not a verdict:
+        // the task is left alone until the next run.
+        let fresh: any = null;
+        let gone = false;
+        try {
+          fresh = await base44.asServiceRole.entities.Task.get(taskId);
+          gone = !fresh;
+        } catch (e) {
+          const msg = String((e as any)?.message || e);
+          if (!/not found|404|does not exist/i.test(msg)) { console.warn(`[REFILL] could not read task ${taskId} for the finished-task sweep: ${msg}`); continue; }
+          gone = true;
+        }
+        if (!gone && fresh.status === 'active') continue;
         const unique = [...new Set(ids)];
         await cancelJustBooked(base44, unique);
         ghostPushes += unique.length;
