@@ -20,11 +20,15 @@ const priorityRank = (t) => PRIORITY_ORDER[t?.urgency] ?? 2;
 
 // The moment a task is for, the way the card shows it (collapsedDate): a
 // one-time task's own time (next_reminder), else its due date, else its next
-// reminder. NaN when it has none.
+// reminder. NaN when it has none. `timed`: it has a clock time of its own
+// (an event's start, a one-time task's time, a dated deadline) — not an
+// all-day task's day, and not a rhythm's next ping ("every hour": the ping
+// moving past isn't the task being late).
 const momentOf = (t) => {
-  const raw = (t.reminder_interval === 'once' && t.next_reminder) ? t.next_reminder : (t.due_date || t.next_reminder);
+  const own = t.event_time || ((t.reminder_interval === 'once' && t.next_reminder) ? t.next_reminder : null) || t.due_date || null;
+  const raw = own || t.next_reminder;
   const ms = raw ? new Date(raw).getTime() : NaN;
-  return Number.isFinite(ms) ? ms : NaN;
+  return { ms: Number.isFinite(ms) ? ms : NaN, timed: !t.day_only_task && !!own && Number.isFinite(ms) };
 };
 const localDay = (ms) => {
   const d = new Date(ms);
@@ -42,8 +46,7 @@ const localDay = (ms) => {
 // Ties within a group go by priority, then oldest first.
 export function timeOfDayCompare(a, b, nowMs = Date.now()) {
   const place = (t) => {
-    const ms = momentOf(t);
-    const timed = !t.day_only_task && Number.isFinite(ms);
+    const { ms, timed } = momentOf(t);
     if (timed) return ms >= nowMs ? { group: 0, key: ms } : { group: 2, key: ms };
     // No clock time: an all-day task is late once its day is over.
     if (Number.isFinite(ms) && localDay(ms) < localDay(nowMs)) return { group: 2, key: ms };
