@@ -23,6 +23,9 @@ public class MainApplication extends Application {
         // NOTE: Always initialize in Application class, not MainActivity
         OneSignal.initWithContext(this, ONESIGNAL_APP_ID);
 
+        // The 12-hour push sign-up check (PushHealthWorker). KEEP: already set up = no-op.
+        PushHealthWorker.schedulePeriodic(this);
+
         // NOTE: Do NOT call requestPermission() here — it causes a NullPointerException
         // due to missing coroutine context. Call it from the web app via
         // NotifyBridge.requestPermission() instead.
