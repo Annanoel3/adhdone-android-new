@@ -2113,6 +2113,12 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   //    fixed reminder, rhythm — mentioned all day (Anna, Oct 10 2026: "skipped
   //    tasks are worse than too many reminders"). Looks back 19 hours, which
   //    is local midnight at 7 PM.
+  //    A reminder still AHEAD counts as covered (Nov 5 2026: a task added at
+  //    6:56 PM for 10 PM, its push booked at 6:56:48, was reported at 7 PM as
+  //    "no reminder from anything" because only pushes already sent were
+  //    counted). So: a ledger row for the task from local midnight on, sent
+  //    or still queued (a cancelled booking leaves the ledger), or a task
+  //    whose own next_reminder is still to come, is not a miss.
   const unreminded: string[] = [];
   try {
     for (const u of allUsers) {
@@ -2125,10 +2131,14 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
         && t.due_date && localDateKey(new Date(t.due_date), tz) === today);
       if (!dueToday.length) continue;
       const rows = await filterAll(base44.asServiceRole.entities.NotificationLedger, {
-        user_email: u.email, send_at: { $gte: new Date(nowMs - 19 * H_HOUR).toISOString(), $lte: now.toISOString() },
+        user_email: u.email, send_at: { $gte: new Date(nowMs - 19 * H_HOUR).toISOString() },
       });
       const mentioned = new Set(rows.map((r: any) => r.task_id).filter(Boolean));
-      for (const t of dueToday) if (!mentioned.has(t.id)) unreminded.push(`${u.email}: "${String(t.title || '').slice(0, 30)}"`);
+      const stillAhead = (t: any) => {
+        const next = Date.parse(t.next_reminder || '');
+        return Number.isFinite(next) && next > nowMs;
+      };
+      for (const t of dueToday) if (!mentioned.has(t.id) && !stillAhead(t)) unreminded.push(`${u.email}: "${String(t.title || '').slice(0, 30)}"`);
     }
   } catch (e) {
     console.error('[HEALTH] due-today check failed:', e);
