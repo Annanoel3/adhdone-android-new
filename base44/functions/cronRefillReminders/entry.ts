@@ -1984,12 +1984,22 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   // 2. Smart Reminders plans marked out of date for over 90 minutes in the
   //    person's daytime: the planner is failing on them run after run, and
   //    nothing else notices (Anna's own plan sat like this for five hours).
-  // Only people the planner actually visits: a real user with open tasks.
+  // Only people the planner actually visits: a real user with open tasks OF
+  // THE KIND IT PLANS (cronSmartTaskNudge's isSmartNudgeTask: not a birthday,
+  // not an event, not a rhythm the refill sends). The planner loops over
+  // people with such tasks and nobody else, so a flag left on an account
+  // whose only open item is an event is never cleared — and never a failure.
+  // Nov 6 2026, 9:45 AM: Chad's morning medication was checked off at 8:08,
+  // its flag set at 8:01 by the alarm ringing out, and his one other open
+  // item is a December appointment; "the planner is failing on them every
+  // run" went to Anna's phone when the planner had simply never looked.
   // The owner's editor account has sat "out of date" since September with no
   // tasks to plan — the first run alerted on it (Oct 9 2026, 12:21 PM).
   const openTasksOf: Record<string, number> = {};
   for (const t of allTasks) {
     if (t.status !== 'active' || t.parent_task_id || t.silenced) continue;
+    if (t.classification === 'birthday' || t.classification === 'event' || t.birthday_person) continue;
+    if (t.reminder_interval && t.reminder_interval !== 'once' && intervalMsMap[t.reminder_interval as keyof typeof intervalMsMap]) continue;
     const e = t.notification_recipient_email || t.created_by;
     if (e) openTasksOf[e] = (openTasksOf[e] || 0) + 1;
   }
