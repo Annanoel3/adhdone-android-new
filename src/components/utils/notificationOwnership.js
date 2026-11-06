@@ -73,7 +73,7 @@ export async function commitNotificationIds(taskId, ids, extra = {}) {
   }
   const existing = Array.isArray(current?.onesignal_notification_ids) ? current.onesignal_notification_ids : [];
   const gone = !!current && !!current.status && current.status !== 'active';
-  const orphans = gone ? Array.from(new Set([...existing, ...next])) : existing.filter((id) => id && !next.includes(id));
+  const orphans = gone ? Array.from(new Set([...existing, ...next].filter(Boolean))) : existing.filter((id) => id && !next.includes(id));
   if (orphans.length) {
     await Promise.allSettled(
       orphans.map((notificationId) => base44.functions.invoke('cancelScheduled', { notificationId }))
