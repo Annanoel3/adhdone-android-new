@@ -297,7 +297,7 @@ Deno.serve(async (req) => {
                             // hasToken: whether OneSignal still holds a push token for the
                             // phone (never the token itself). An empty one means the phone
                             // itself reported it had none.
-                            subs: subs.map((s: any) => ({ type: s.type, enabled: s.enabled, code: s.notification_types, hasToken: !!(s.token && String(s.token).length), build: s.app_version ?? null, device: s.device_model ?? null, os: s.device_os ?? null, sdk: s.sdk ?? null, sessions: s.session_count ?? null })),
+                            subs: subs.map((s: any) => ({ id: s.id ?? null, type: s.type, enabled: s.enabled, code: s.notification_types, hasToken: !!(s.token && String(s.token).length), build: s.app_version ?? null, device: s.device_model ?? null, os: s.device_os ?? null, sdk: s.sdk ?? null, sessions: s.session_count ?? null })),
                             rows: [],
                         };
                     } catch (e) {
