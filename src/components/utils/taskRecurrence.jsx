@@ -286,14 +286,21 @@ async function findNextCopy(task, nextDate) {
       if (copy?.id) return copy;
     } catch (e) { /* deleted: fall through to the lookup */ }
   }
+  // The same thing under a slightly different name counts too ("Take Morning
+  // Medication" / "take morning medication", added again by hand before the
+  // app's own copy was made): names are compared without case or spacing,
+  // among that person's open repeating tasks. Nov 6 2026 (Anna: "Make sure
+  // whatever sent that isn't going to make a duplicate").
+  const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
   try {
     const rows = await base44.entities.Task.filter(
-      { title: task.title, recurrence_pattern: task.recurrence_pattern },
+      { recurrence_pattern: task.recurrence_pattern, status: 'active' },
       '-created_date',
-      20
+      100
     );
     return (rows || []).find((t) =>
       t.id !== task.id && !t.parent_task_id &&
+      norm(t.title) === norm(task.title) &&
       (t.anchor_time || null) === (task.anchor_time || null) &&
       sameLocalDay((t.classification === 'event' && t.event_time) || (t.day_only_task && t.due_date) || t.next_reminder, nextDate)
     ) || null;
