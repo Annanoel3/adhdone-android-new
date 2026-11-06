@@ -492,6 +492,7 @@ export async function saveTaskTitle(taskIn, newTitle) {
   if (task.reminder_interval && task.reminder_interval !== 'once') return;
   const oldTitle = String(taskIn.title || '').trim();
   if (!oldTitle || oldTitle === title) return;
+  const renameStartedAt = Date.now();
   const soon = Date.now() + 2 * 60 * 1000;
   let email = null;
   try { email = (await base44.auth.me())?.email || null; } catch (e) { email = null; }
@@ -575,6 +576,12 @@ export async function saveTaskTitle(taskIn, newTitle) {
       // books any schedule entry that has none.
       newSchedule.push({ ...entry, notification_id: newId || null, notification_title: words.title, notification_body: words.body });
     }
+    // Finished, deleted or moved to another time while the pushes were being
+    // re-booked (Nov 5 2026: a name corrected in the title, Done tapped two
+    // seconds later — the re-booked 10 PM push landed after the completion
+    // and was written onto the finished task): the new pushes are cancelled
+    // and nothing is written, the same guard a new task's first booking has.
+    if (await dropBookingIfMoved(task.id, addedIds, task.next_reminder || null, renameStartedAt)) return;
     // Anything booked outside the plan (a snooze) is kept.
     const ids = [
       ...(task.onesignal_notification_ids || []).filter((id) => !replacedIds.includes(id)),
