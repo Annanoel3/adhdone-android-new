@@ -165,6 +165,13 @@ export default function Home() {
       console.error("Error loading user:", error);
     }
     await loadTasks();
+    // A repeating task finished lately whose next copy never got made is made
+    // now (taskRecurrence.repairMissingRepeats; once per open, after the
+    // list is up so it never holds Home back). Home reloads when it makes one.
+    import('../components/utils/taskRecurrence')
+      .then((m) => m.repairMissingRepeats())
+      .then((made) => { if (made) loadTasks(); })
+      .catch(() => {});
   };
 
   const checkEndOfDayReview = () => {
