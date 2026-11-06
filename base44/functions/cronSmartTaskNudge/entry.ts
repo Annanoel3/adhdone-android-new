@@ -3289,3 +3289,5 @@ async function sendNudgeNotification(
 // Redeployed Nov 4 2026: shared/reminderTitle.ts lets the iPhone app ring (phoneCanRing).
 
 // Redeployed Nov 5 2026: the parser now judges goes_somewhere (shared/runTaskParse.ts).
+
+// Redeployed Nov 5 2026: shared/reminderTitle.ts tells the reminder-words model the task's corrected name beats the words it was first typed with.
