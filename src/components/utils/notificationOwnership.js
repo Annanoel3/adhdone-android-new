@@ -55,6 +55,13 @@ export async function dropBookingIfMoved(taskId, ids, bookedFor, startedAt) {
 // what's currently on the task, cancels any booking it's about to drop, then
 // writes. The result is that the ids on the task are ALWAYS the complete set of
 // live pushes for it.
+//
+// A task that is no longer active by the time its booking lands (marked done,
+// deleted) gets NO live pushes: the booking is cancelled instead of written.
+// Nov 5 2026: a name in a title was corrected, which re-booked the task's 10 PM
+// reminder, and Done was tapped two seconds later; completion cancelled the
+// old push, the new one landed after it and was written onto the finished
+// task, and it would have rung at 10 PM for a task done at 7:17.
 export async function commitNotificationIds(taskId, ids, extra = {}) {
   const next = Array.isArray(ids) ? ids.filter(Boolean) : [];
 
@@ -65,11 +72,15 @@ export async function commitNotificationIds(taskId, ids, extra = {}) {
     current = null;
   }
   const existing = Array.isArray(current?.onesignal_notification_ids) ? current.onesignal_notification_ids : [];
-  const orphans = existing.filter((id) => id && !next.includes(id));
+  const gone = !!current && !!current.status && current.status !== 'active';
+  const orphans = gone ? Array.from(new Set([...existing, ...next])) : existing.filter((id) => id && !next.includes(id));
   if (orphans.length) {
     await Promise.allSettled(
       orphans.map((notificationId) => base44.functions.invoke('cancelScheduled', { notificationId }))
     );
+  }
+  if (gone) {
+    return base44.entities.Task.update(taskId, { onesignal_notification_ids: [], reminder_scheduling_since: null });
   }
 
   return base44.entities.Task.update(taskId, {
