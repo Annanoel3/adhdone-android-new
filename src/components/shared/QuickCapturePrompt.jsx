@@ -1773,8 +1773,13 @@ const NOTES_BUILD_ON_PLAY = true;
 // with the app closed, links open in the phone's browser, the Yes/No
 // reminders question as an alarm, on-time reminders without exact-alarm
 // access, a tap on the recording notification opens Record Notes.
+// Build 48 (1.3.25) is live on Google Play, released Nov 6 2026 4:06 PM, full
+// release: the phone re-signs itself up for pushes in the background after an
+// update, a restart and every 12 hours (PushHealthWorker). Anna, Nov 6 2026:
+// "Please create the update popup" (46 and 47 had none), so every phone
+// below 48 gets this card again.
 const LATER_BUILD_ON_PLAY = true;
-const NEWEST_BUILD = 45;
+const NEWEST_BUILD = 48;
 const hasQuietHoursBuild = () =>
   typeof window !== 'undefined' &&
   typeof window.Capacitor?.Plugins?.AlarmBridge?.quietFor === 'function';
