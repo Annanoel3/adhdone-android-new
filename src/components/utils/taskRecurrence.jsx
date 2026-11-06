@@ -446,6 +446,42 @@ async function makeNextCopy(task) {
   return { task: newTask, nextDate };
 }
 
+// A repeating task finished in the last few days whose next copy never got
+// made (the app was closed or the request failed before it landed; only the
+// app makes the copy, as the person, and no server job can): made now, once
+// per app open, the same way a completion makes it. createNextRecurrence
+// looks for an existing copy first, so this never doubles one. Nov 6 2026:
+// an 8 AM daily medication checked off from its alarm at 8:08 ended there,
+// and the person only ever opens the app from that alarm.
+let repairedThisOpen = false;
+export async function repairMissingRepeats() {
+  if (repairedThisOpen) return 0;
+  repairedThisOpen = true;
+  let rows = [];
+  try {
+    const since = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+    rows = await base44.entities.Task.filter({ status: 'completed', completed_at: { $gte: since } }, '-completed_at', 50);
+  } catch (e) {
+    return 0;
+  }
+  let made = 0;
+  for (const t of rows || []) {
+    if (!t?.id || t.parent_task_id || !t.recurrence_pattern || t.recurrence_pattern === 'none') continue;
+    if (isBirthday(t) || t.next_occurrence_id) continue;
+    try {
+      const result = await createNextRecurrence(t);
+      if (result?.task?.id) {
+        made++;
+        console.log(`[recurrence] made the missing next copy of "${t.title}"`);
+      }
+    } catch (e) {
+      console.error('[recurrence] could not make the missing next copy:', e);
+    }
+  }
+  if (made) window.dispatchEvent(new CustomEvent('tasks-changed'));
+  return made;
+}
+
 // Taking a completion back (un-checking a repeating task) takes back the copy
 // that completion made — only while that copy is still untouched: active, not
 // snoozed or parked, same title, notes, pictures and time, and no steps.
