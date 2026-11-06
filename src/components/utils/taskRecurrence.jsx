@@ -308,7 +308,10 @@ async function findNextCopy(task, nextDate) {
 // right one is removed.
 const makingCopy = new Map();
 
-export function createNextRecurrence(task) {
+// opts.finishedAt: when the task was really finished, for a copy made later
+// than that (repairMissingRepeats): the next day is counted from then, so a
+// repair the next morning doesn't skip that morning's dose as "finished today".
+export function createNextRecurrence(task, opts = {}) {
   if (!task || !task.recurrence_pattern || task.recurrence_pattern === 'none') return Promise.resolve(null);
   if (!task.id) return isBirthday(task) ? createNextBirthday(task) : Promise.resolve(null);
   if (makingCopy.has(task.id)) return Promise.resolve(null);
@@ -320,18 +323,22 @@ export function createNextRecurrence(task) {
     makingCopy.set(task.id, bjob);
     return bjob;
   }
-  const job = makeNextCopy(task).finally(() => makingCopy.delete(task.id));
+  const job = makeNextCopy(task, opts).finally(() => makingCopy.delete(task.id));
   makingCopy.set(task.id, job);
   return job;
 }
 
-async function makeNextCopy(task) {
+async function makeNextCopy(task, opts = {}) {
   // A step never repeats on its own — its parent does. A copy of one would be
   // a stray top-level task with reminders of its own.
   if (task.parent_task_id) return null;
 
   const now = new Date();
-  const { base, nextDate } = nextOccurrence(task, now);
+  // Counted from the real finish when the copy is made later than that; if
+  // that occurrence has already gone by too, the first one still ahead.
+  const finishedAt = validDate(opts.finishedAt);
+  let { base, nextDate } = nextOccurrence(task, finishedAt && finishedAt < now ? finishedAt : now);
+  if (nextDate <= now) ({ base, nextDate } = nextOccurrence(task, now));
 
   // Never twice: this occurrence's copy may already be there (a second tap,
   // or the task was un-checked and checked again).
@@ -469,7 +476,7 @@ export async function repairMissingRepeats() {
     if (!t?.id || t.parent_task_id || !t.recurrence_pattern || t.recurrence_pattern === 'none') continue;
     if (isBirthday(t) || t.next_occurrence_id) continue;
     try {
-      const result = await createNextRecurrence(t);
+      const result = await createNextRecurrence(t, { finishedAt: t.completed_at });
       if (result?.task?.id) {
         made++;
         console.log(`[recurrence] made the missing next copy of "${t.title}"`);
