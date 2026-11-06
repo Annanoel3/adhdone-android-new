@@ -130,9 +130,15 @@ Deno.serve(async (req) => {
         const stamp = new Date().toISOString();
         const lastMs = Date.parse(u.last_active_at || '') || 0;
         const goneMs = Date.parse(u.push_unreachable_at || '') || 0;
+        // The phone app checked in from the background in the last 36 hours
+        // (PushHealthWorker): still installed, so broken pushes, not an uninstall.
+        const seenMs = Date.parse(u.phone_seen_at || '') || 0;
+        const installed = seenMs > 0 && Date.now() - seenMs < 36 * 60 * 60 * 1000;
         const patch: any = takes
           ? { suspected_uninstall: false }
-          : { suspected_uninstall: true, suspected_uninstall_at: goneMs > lastMs ? (u.push_unreachable_at || stamp) : stamp, ...(goneMs > lastMs ? {} : { push_unreachable_at: stamp }) };
+          : installed
+            ? { suspected_uninstall: false, ...(goneMs > lastMs ? {} : { push_unreachable_at: stamp }) }
+            : { suspected_uninstall: true, suspected_uninstall_at: goneMs > lastMs ? (u.push_unreachable_at || stamp) : stamp, ...(goneMs > lastMs ? {} : { push_unreachable_at: stamp }) };
         await base44.asServiceRole.entities.User.update(u.id, patch);
         out.push({ email, takes_pushes: takes, ...patch });
       }
@@ -2420,7 +2426,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       const yn = (v: any) => (v === true ? 'yes' : v === false ? 'no' : '?');
       if (!alreadyTold && Number.isFinite(goneMs) && nowMs - goneMs < 2 * H_DAY) problems.push(installed ? {
         title: `📵 ADHDone: ${nameOf(u)}'s pushes are broken (app still installed)`,
-        body: `OneSignal said ${theirClock(u, goneMs)} (their time) that their phone no longer takes ADHDone's pushes, but the app on that phone checked in from the background ${theirClock(u, msOf(u.phone_seen_at))}, so it is still installed. The phone's own check (build ${ps.build || '?'}): notifications allowed ${yn(ps.allowed)}, signed up again ${yn(ps.nudged)}, push token ${yn(ps.has_token_after)}, OneSignal after that ${ps.server_code ?? '?'}. Last in the app ${theirClock(u, lastMs)}. ${u.email}`,
+        body: `OneSignal said ${theirClock(u, goneMs)} (their time) that their phone no longer takes ADHDone's pushes, but the app on that phone checked in from the background ${theirClock(u, msOf(u.phone_seen_at))}, so it is still installed. The phone's own check (build ${ps.build || '?'}): notifications allowed ${yn(ps.allowed)}, signed up again ${yn(ps.nudged)}, push token ${yn(ps.has_token_after)}, OneSignal then said ${ps.server_enabled === true ? 'subscribed' : ps.server_enabled === false ? 'not subscribed' : '?'}. Last in the app ${theirClock(u, lastMs)}. ${u.email}`,
         sinceMs: lastMs,
         mark: { key: markKey, value: new Date(lastMs).toISOString() },
       } : {
