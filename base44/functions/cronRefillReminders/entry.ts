@@ -2773,8 +2773,23 @@ function repeatRollPlan(tasks: any[], userMap: Record<string, any>, nowMs: numbe
     const tz = userTimeZone(owner);
     const roll = repeatRollFor(task, tz, nowMs);
     if (!roll) continue;
+    // Same name AND same time of day: "Take heart pill" at 10 AM and at 10 PM
+    // are two tasks, not copies of one (Nov 6 2026: the 10 PM one from Nov 5
+    // was never checked off and sat on Nov 5 all day, because the 10 AM one
+    // already on Nov 6 was taken for its copy; Anna: "shouldnt it have
+    // automatically changed it to today's recurrence"). The app's own copy
+    // check (taskRecurrence.findNextCopy) already compares the time.
+    const timeOfDay = (t: any) => {
+      if (t?.day_only_task) return 'all-day';
+      if (/^\d{1,2}:\d{2}$/.test(String(t?.anchor_time || ''))) return String(t.anchor_time).padStart(5, '0');
+      const ms = trackerMs(String(t?.event_time || t?.next_reminder || t?.due_date || ''));
+      if (!Number.isFinite(ms)) return '';
+      const min = localMinutesOfDay(new Date(ms), tz);
+      return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
+    };
     const twin = tasks.find((o: any) => o && o.id !== task.id && o.status === 'active' && !o.parent_task_id
       && o.created_by === task.created_by && o.title === task.title && o.recurrence_pattern === task.recurrence_pattern
+      && timeOfDay(o) === timeOfDay(task)
       && (repeatDayKey(o, tz) || '') >= roll.toKey);
     if (twin) { twins.push({ task, twin }); continue; }
     rolls.push({ task, owner, tz, roll });
