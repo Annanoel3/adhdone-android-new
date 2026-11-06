@@ -1924,10 +1924,30 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   // can't ring, their plans can't be stuck and their quiet hours don't matter
   // until they're back (Anna, Oct 27 2026: "if we know someone uninstalled, I
   // don't want to keep getting reminders about it").
+  //
+  // The Android app's own background check (PushHealthWorker, builds after 47)
+  // reports in after every Play Store update, every restart and every 12 hours
+  // (User.phone_seen_at, phone_push_state), with the app unopened. So:
+  // - pushFixed: that check signed the phone up again and OneSignal's server
+  //   said "subscribed" after the "not subscribed" answer: not gone any more.
+  // - stillInstalled: a check-in in the last 36 hours, or after OneSignal said
+  //   no, proves the app is still on the phone: its pushes broke, it was not
+  //   uninstalled (Anna, Nov 6 2026: "So how many of these people just have
+  //   broken notifications? Because that in itself is not okay."). Only an
+  //   account with no check-in can be a suspected uninstall.
+  const pushFixed = (u: any) => {
+    const ps = u?.phone_push_state;
+    return ps?.server_enabled === true && msOf(ps?.at) > msOf(u?.push_unreachable_at);
+  };
   const gone = (u: any) => {
     const lastMs = msOf(u?.last_active_at);
     const goneMs = msOf(u?.push_unreachable_at);
-    return Number.isFinite(goneMs) && (!Number.isFinite(lastMs) || goneMs > lastMs);
+    return Number.isFinite(goneMs) && (!Number.isFinite(lastMs) || goneMs > lastMs) && !pushFixed(u);
+  };
+  const stillInstalled = (u: any) => {
+    const seenMs = msOf(u?.phone_seen_at);
+    if (!Number.isFinite(seenMs)) return false;
+    return nowMs - seenMs < 36 * H_HOUR || seenMs > msOf(u?.push_unreachable_at);
   };
   const activeLately = (u: any) => !gone(u) && nowMs - (Date.parse(u?.last_active_at || '') || 0) < 7 * H_DAY;
   const userByEmail: Record<string, any> = {};
@@ -2063,11 +2083,13 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
         if (takes === false) {
           goneNow = true;
           const stamp = new Date(nowMs).toISOString();
+          // A phone that checked in lately is still installed: broken, not gone.
+          const uninstalled = !stillInstalled(u);
           u.push_unreachable_at = stamp;
-          u.suspected_uninstall = true;
-          u.suspected_uninstall_at = stamp;
+          u.suspected_uninstall = uninstalled;
+          if (uninstalled) u.suspected_uninstall_at = stamp;
           try {
-            await base44.asServiceRole.entities.User.update(u.id, { push_unreachable_at: stamp, suspected_uninstall: true, suspected_uninstall_at: stamp });
+            await base44.asServiceRole.entities.User.update(u.id, { push_unreachable_at: stamp, suspected_uninstall: uninstalled, ...(uninstalled ? { suspected_uninstall_at: stamp } : {}) });
           } catch (e) {
             console.error(`[HEALTH] could not mark ${r.user_email} unreachable:`, e);
           }
@@ -2093,7 +2115,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   if (!ctx.dryRun) {
     for (const u of allUsers) {
       if (!u?.id || !u?.email) continue;
-      const should = gone(u);
+      const should = gone(u) && !stillInstalled(u);
       const is = u.suspected_uninstall === true;
       if (should === is) continue;
       try {
