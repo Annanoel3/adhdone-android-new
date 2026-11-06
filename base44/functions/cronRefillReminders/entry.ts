@@ -2494,8 +2494,10 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       const key = `nocopy:${t.id}`;
       if (marks[key]) continue;
       const u = userByEmail[t.created_by] || userByEmail[email];
+      // The person's name in the title: the "told already?" check goes by
+      // title, so one generic title would hide a second person's case.
       problems.push({
-        title: `⚠️ ADHDone: a repeating task has no next copy`,
+        title: `⚠️ ADHDone: ${u ? nameOf(u) : email}'s repeating task has no next copy`,
         body: `${u ? nameOf(u) : email}'s "${String(t.title || '').slice(0, 40)}" (repeats ${String(t.recurrence_pattern).replace(/_/g, ' ')}) was checked off ${u ? theirClock(u, doneMs) + ' (their time)' : new Date(doneMs).toISOString()} and the next one never got made. The app makes it on their next open; until then nothing will ring for it. ${email}`,
         sinceMs: doneMs,
         mark: { key, value: new Date(doneMs).toISOString() },
