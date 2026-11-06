@@ -221,10 +221,15 @@ export default function TaskNotification() {
     (async () => {
       // A repeating task finished from its own reminder screen used to end
       // here for good — only Home and the task list made the next occurrence.
+      // Tried again on a passing failure, like the completion itself: this
+      // is the one request that keeps a daily task alive, and for someone who
+      // only ever meets the app through its alarm there is no next open to
+      // catch it (Nov 6 2026: an 8 AM daily medication checked off from its
+      // alarm at 8:08 got no copy for the next day, and nothing else makes it).
       if (task.recurrence_pattern && task.recurrence_pattern !== 'none') {
         try {
           const { createNextRecurrence } = await import('../components/utils/taskRecurrence');
-          await createNextRecurrence(task);
+          await withRetries(() => createNextRecurrence(task));
           window.dispatchEvent(new CustomEvent('tasks-changed'));
         } catch (e) {
           console.error('Failed to create next recurrence:', e);
