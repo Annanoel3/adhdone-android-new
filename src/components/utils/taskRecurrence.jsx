@@ -289,12 +289,13 @@ async function findNextCopy(task, nextDate) {
   // The same thing under a slightly different name counts too ("Take Morning
   // Medication" / "take morning medication", added again by hand before the
   // app's own copy was made): names are compared without case or spacing,
-  // among that person's open repeating tasks. Nov 6 2026 (Anna: "Make sure
-  // whatever sent that isn't going to make a duplicate").
+  // among that person's repeating tasks with the same rhythm, whatever their
+  // state (a copy already there and already finished still counts). Nov 6
+  // 2026 (Anna: "Make sure whatever sent that isn't going to make a duplicate").
   const norm = (s) => String(s || '').toLowerCase().replace(/\s+/g, ' ').trim();
   try {
     const rows = await base44.entities.Task.filter(
-      { recurrence_pattern: task.recurrence_pattern, status: 'active' },
+      { recurrence_pattern: task.recurrence_pattern },
       '-created_date',
       100
     );
