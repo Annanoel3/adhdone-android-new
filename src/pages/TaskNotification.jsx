@@ -153,15 +153,35 @@ export default function TaskNotification() {
         return;
       }
 
-      setTask(tasks[0]);
-      taskRef.current = tasks[0];
+      let loaded = tasks[0];
+      // A reminder for a repeating task that was finished but never got its
+      // next copy (Nov 6 2026: an 8 AM daily medication checked off from its
+      // alarm got none, and he only opens the app from that alarm). The copy is
+      // made here, as him, counted from the real finish, and this page carries
+      // on with it: Done finishes today's one and makes tomorrow's as usual.
+      if (loaded.status === 'completed' && loaded.recurrence_pattern && loaded.recurrence_pattern !== 'none'
+        && !loaded.parent_task_id && !loaded.next_occurrence_id && !loaded.birthday_person && loaded.classification !== 'birthday') {
+        try {
+          const { createNextRecurrence } = await import('../components/utils/taskRecurrence');
+          const made = await withRetries(() => createNextRecurrence(loaded, { finishedAt: loaded.completed_at }));
+          if (made?.task?.id) {
+            loaded = made.task;
+            window.dispatchEvent(new CustomEvent('tasks-changed'));
+          }
+        } catch (e) {
+          console.error('Could not make the missing next copy:', e);
+        }
+      }
+
+      setTask(loaded);
+      taskRef.current = loaded;
       setIsLoading(false);
 
       // "Done ✓" on the phone's alarm opens this page with done=1: finish the
       // task right away, the same way this page's own Done button does.
       if (urlParams.get('done') === '1' && !autoDoneRef.current) {
         autoDoneRef.current = true;
-        handleComplete(tasks[0]);
+        handleComplete(loaded);
       }
     } catch (error) {
       console.error("Error loading task:", error);
