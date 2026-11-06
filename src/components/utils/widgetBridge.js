@@ -25,10 +25,11 @@ import { sortTasks } from '@/hooks/useTaskSort';
 // 2026: "Why are some of my tasks missing from the widget?"). Now the whole
 // day goes over, in the order of the day (Anna, Nov 6 2026: "Make the widget
 // go in order of time of day. Early tasks go first. Tasks with no time go
-// second. Tasks that are late go last"): tasks with a time still ahead,
-// earliest first; then the ones with no time, by priority; then the late
-// ones. The same order as "By Due Date" in the app (useTaskSort
-// timeOfDayCompare), whatever sort the list in the app uses. From Nov 2 to
+// second. Tasks that are late go last"), by time of day: times before noon
+// first; then the ones with no time, by priority, with noon to 3:59 PM
+// times set in the middle of them; then 4 PM and later. The same order as
+// "By Due Date" in the app (useTaskSort timeOfDayOrder), whatever sort the
+// list in the app uses. From Nov 2 to
 // Nov 6 2026 it went by priority first ("switch it to order of priority");
 // priority now only breaks ties inside a group.
 const MAX_WIDGET_TASKS = 40;
