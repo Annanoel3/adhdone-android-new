@@ -35,52 +35,71 @@ const localDay = (ms) => {
   return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
 };
 
-// "By Due Date" is the order of the day (Anna, Nov 6 2026: "early tasks go
-// first. Tasks with no time go second. Tasks that are late go last"), and the
-// home-screen widget uses the same order:
-//   1. tasks with a clock time still ahead, earliest first;
-//   2. tasks with no clock time (an all-day task on its day, a task with no
-//      date), by day, then priority;
-//   3. late ones last: a clock time already gone by, or an all-day task whose
-//      day has passed, earliest first.
-// Ties within a group go by priority, then oldest first.
-export function timeOfDayCompare(a, b, nowMs = Date.now()) {
-  const place = (t) => {
+// "By Due Date" is the order of the day, and the home-screen widget uses the
+// same order. Anna, Nov 6 2026: early times on top, no time in the middle,
+// late times at the bottom; then, asked where early ends: "anything before 12
+// on top. Anything from 1-3 in the middle. (Aka in the middle of tasks without
+// times). And anything after 4 at the bottom". (The first version, earlier
+// that day, read "late" as "overdue" and put a 9 PM and a 10 PM task on top
+// at 4:39 PM because their times were still ahead.) It goes by time of day,
+// not by whether the time has passed, so the order is the same all day.
+// Day by day (overdue tasks and tasks with no date count as today), each day:
+//   1. clock time before noon, earliest first;
+//   2. no clock time (an all-day task, a dateless task, a rhythm's next
+//      ping), by priority, with the tasks timed noon to 3:59 PM set in the
+//      middle of them, earliest first;
+//   3. clock time 4 PM or later, earliest first.
+// Ties go by priority, then oldest first.
+const EARLY_BEFORE_MIN = 12 * 60;
+const LATE_FROM_MIN = 16 * 60;
+const minutesOfDay = (ms) => {
+  const d = new Date(ms);
+  return d.getHours() * 60 + d.getMinutes();
+};
+const olderFirst = (a, b) => new Date(a.created_date || 0).getTime() - new Date(b.created_date || 0).getTime();
+const byPriority = (a, b) => (priorityRank(a) - priorityRank(b)) || olderFirst(a, b);
+const byClock = (a, b) => (minutesOfDay(momentOf(a).ms) - minutesOfDay(momentOf(b).ms)) || byPriority(a, b);
+
+export function timeOfDayOrder(tasks, nowMs = Date.now()) {
+  const today = localDay(nowMs);
+  const days = new Map();
+  for (const t of tasks) {
     const { ms, timed } = momentOf(t);
-    if (timed) return ms >= nowMs ? { group: 0, key: ms } : { group: 2, key: ms };
-    // No clock time: an all-day task is late once its day is over.
-    if (Number.isFinite(ms) && localDay(ms) < localDay(nowMs)) return { group: 2, key: ms };
-    return { group: 1, key: Number.isFinite(ms) ? ms : Number.MAX_SAFE_INTEGER };
-  };
-  const pa = place(a);
-  const pb = place(b);
-  if (pa.group !== pb.group) return pa.group - pb.group;
-  // Inside the no-time group every task on the same day is equal on time:
-  // priority decides, then the day.
-  if (pa.group === 1) {
-    const da = Number.isFinite(pa.key) && pa.key !== Number.MAX_SAFE_INTEGER ? localDay(pa.key) : Infinity;
-    const db = Number.isFinite(pb.key) && pb.key !== Number.MAX_SAFE_INTEGER ? localDay(pb.key) : Infinity;
-    if (da !== db) return da - db;
-    if (priorityRank(a) !== priorityRank(b)) return priorityRank(a) - priorityRank(b);
-  } else if (pa.key !== pb.key) {
-    return pa.key - pb.key;
-  } else if (priorityRank(a) !== priorityRank(b)) {
-    return priorityRank(a) - priorityRank(b);
+    const day = Number.isFinite(ms) ? Math.max(localDay(ms), today) : today;
+    if (!days.has(day)) days.set(day, { early: [], none: [], midday: [], late: [] });
+    const g = days.get(day);
+    if (!timed) {
+      g.none.push(t);
+    } else {
+      const m = minutesOfDay(ms);
+      (m < EARLY_BEFORE_MIN ? g.early : m < LATE_FROM_MIN ? g.midday : g.late).push(t);
+    }
   }
-  return new Date(a.created_date || 0).getTime() - new Date(b.created_date || 0).getTime();
+  const out = [];
+  for (const day of [...days.keys()].sort((x, y) => x - y)) {
+    const g = days.get(day);
+    g.none.sort(byPriority);
+    const half = Math.ceil(g.none.length / 2);
+    out.push(
+      ...g.early.sort(byClock),
+      ...g.none.slice(0, half),
+      ...g.midday.sort(byClock),
+      ...g.none.slice(half),
+      ...g.late.sort(byClock),
+    );
+  }
+  return out;
 }
 
 // Pure helper so callers can sort without subscribing to state.
 export function sortTasks(tasks, sortBy) {
+  // "By Due Date" places tasks in blocks (see timeOfDayOrder), not pair by pair.
+  if (sortBy === "due_date") return timeOfDayOrder(tasks || [], Date.now());
   const sorted = [...tasks];
-  const nowMs = Date.now();
   sorted.sort((a, b) => {
     switch (sortBy) {
       case "priority": {
         return priorityRank(a) - priorityRank(b);
-      }
-      case "due_date": {
-        return timeOfDayCompare(a, b, nowMs);
       }
       case "energy": {
         const energyOrder = { low: 0, medium: 1, high: 2 };
