@@ -1780,6 +1780,8 @@ const NOTES_BUILD_ON_PLAY = true;
 // below 48 gets this card again.
 const LATER_BUILD_ON_PLAY = true;
 const NEWEST_BUILD = 48;
+// Account ids that never get this card (see the check in AppUpdatePrompt).
+const UPDATE_CARD_NEVER = new Set(['6aee4d3935b1c7e3c2cadb90']);
 const hasQuietHoursBuild = () =>
   typeof window !== 'undefined' &&
   typeof window.Capacitor?.Plugins?.AlarmBridge?.quietFor === 'function';
@@ -1840,6 +1842,11 @@ export function AppUpdatePrompt({ user, theme }) {
     if (!user || checked.current) return;
     if (!NEWEST_BUILD_ON_PLAY) return;
     checked.current = true;
+    // Accounts Anna asked never to be shown this card (by account id, so no
+    // name or email ships in the app). Nov 6 2026: a brand-new account that
+    // joined on build 47 the hour build 48 went out ("dont show the update
+    // popup to that user").
+    if (UPDATE_CARD_NEVER.has(String(user?.id || ''))) return;
     // Not on an account's first day (Anna, Nov 2 2026: "you can hide the
     // update card on the first day"). Jordan's very first open, Nov 1, was an
     // "Update available" card: Google Play had handed him the older build the
