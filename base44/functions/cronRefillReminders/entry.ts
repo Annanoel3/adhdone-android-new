@@ -2470,8 +2470,10 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
   //     2026, 8:08 AM: an 8 AM daily medication checked off from its alarm
   //     got no copy for the next day. The app now tries again and repairs
   //     this on its next open (taskRecurrence.repairMissingRepeats); this
-  //     tells Anna when a person's chain is broken and they haven't been
-  //     back, so she can reach them. Told once per task (mark nocopy:<id>);
+  //     tells Anna when a person's chain is broken, so she knows the app
+  //     missed. Never a reason to contact them (Anna, Nov 6 2026: "we NEVER
+  //     reach out to users to ask them to do something like that. That is a
+  //     breach of privacy"). Told once per task (mark nocopy:<id>);
   //     repeats finished in the last 26 hours; not birthdays.
   try {
     const recentDone = await filterAll(base44.asServiceRole.entities.Task, {
@@ -2498,7 +2500,7 @@ async function ownerHealthCheck(base44: any, ctx: { allUsers: any[]; allTasks: a
       // title, so one generic title would hide a second person's case.
       problems.push({
         title: `⚠️ ADHDone: ${u ? nameOf(u) : email}'s repeating task has no next copy`,
-        body: `${u ? nameOf(u) : email}'s "${String(t.title || '').slice(0, 40)}" (repeats ${String(t.recurrence_pattern).replace(/_/g, ' ')}) was checked off ${u ? theirClock(u, doneMs) + ' (their time)' : new Date(doneMs).toISOString()} and the next one never got made. Nothing will ring for it, and only opening the app brings it back (the app makes the copy on open) — if they only ever open from this alarm, nothing will, so reach out and ask them to open ADHDone once. ${email}`,
+        body: `${u ? nameOf(u) : email}'s "${String(t.title || '').slice(0, 40)}" (repeats ${String(t.recurrence_pattern).replace(/_/g, ' ')}) was checked off ${u ? theirClock(u, doneMs) + ' (their time)' : new Date(doneMs).toISOString()} and the next one never got made. Nothing will ring for it until they next open the app, which makes the copy on its own; nothing on the server can make it for them (RULES §8.5), and we never contact a person about it. ${email}`,
         sinceMs: doneMs,
         mark: { key, value: new Date(doneMs).toISOString() },
       });
