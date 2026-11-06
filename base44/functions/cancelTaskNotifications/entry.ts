@@ -333,6 +333,31 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
   const nowIso = new Date(nowMs).toISOString();
   const timeZone = (typeof body?.timezone === 'string' && body.timezone.trim()) || userTimeZone(owner);
 
+  // The phone's push sign-up check (PushHealthWorker, Android build after 47):
+  // what the phone itself saw, sent from the background with the app unopened,
+  // after a Play Store update or restart and every 12 hours. phone_seen_at is
+  // proof the app is still installed (Nov 6 2026: phones whose pushes went dead
+  // looked exactly like uninstalls from the server). Never the token itself.
+  if (body.mode === 'push_state') {
+    const b = (v: any) => v === true;
+    const state = {
+      at: nowIso,
+      why: String(body?.why || '').slice(0, 20),
+      allowed: b(body?.allowed),
+      opted_in_before: b(body?.opted_in_before),
+      had_token_before: b(body?.had_token_before),
+      opted_in_after: b(body?.opted_in_after),
+      has_token_after: b(body?.has_token_after),
+      nudged: b(body?.nudged),
+      subscription_id: String(body?.subscription_id || '').slice(0, 64),
+      build: Number(body?.build) || null,
+      error: body?.error ? String(body.error).slice(0, 200) : null,
+    };
+    if (owner?.id) await svc.User.update(owner.id, { phone_push_state: state, phone_seen_at: nowIso });
+    console.log(`[phoneReport] push_state ${email}: ${JSON.stringify(state)}`);
+    return Response.json({ success: true });
+  }
+
   if (body.mode === 'woke') {
     const ms = Date.parse(String(body?.woke_at || ''));
     if (!Number.isFinite(ms) || ms > nowMs + 60 * 1000 || ms < nowMs - 24 * 60 * 60 * 1000) {
@@ -482,7 +507,7 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
 Deno.serve(async (req) => {
   try {
     const body = await req.json();
-    if (body?.mode === 'alarm_choice' || body?.mode === 'pair' || body?.mode === 'woke') {
+    if (body?.mode === 'alarm_choice' || body?.mode === 'pair' || body?.mode === 'woke' || body?.mode === 'push_state') {
       return await phoneReport(req, body);
     }
     const { taskId } = body || {};
