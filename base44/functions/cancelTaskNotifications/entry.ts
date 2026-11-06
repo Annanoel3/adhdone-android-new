@@ -352,7 +352,29 @@ async function phoneReport(req: Request, body: any): Promise<Response> {
       subscription_id: String(body?.subscription_id || '').slice(0, 64),
       build: Number(body?.build) || null,
       error: body?.error ? String(body.error).slice(0, 200) : null,
+      // What OneSignal's server says about this phone's push sign-up right after
+      // the phone's check: enabled + its code (1 = subscribed, -10 = not
+      // subscribed). Read, never changed, from here. null = could not ask.
+      server_enabled: null as boolean | null,
+      server_code: null as number | null,
     };
+    try {
+      const appId = String(Deno.env.get('ONESIGNAL_APP_ID') || '').trim();
+      const restKey = String(Deno.env.get('ONESIGNAL_REST_API_KEY') || '').trim();
+      if (appId && restKey && state.subscription_id) {
+        const res = await fetch(`https://api.onesignal.com/apps/${appId}/users/by/external_id/${encodeURIComponent(email)}`, {
+          headers: { Authorization: `Basic ${restKey}` },
+        });
+        const os: any = res.ok ? await res.json().catch(() => null) : null;
+        const sub = (Array.isArray(os?.subscriptions) ? os.subscriptions : []).find((s: any) => s?.id === state.subscription_id);
+        if (sub) {
+          state.server_enabled = sub.enabled === true;
+          state.server_code = Number.isFinite(Number(sub.notification_types)) ? Number(sub.notification_types) : null;
+        }
+      }
+    } catch (e) {
+      console.warn('[phoneReport] push_state OneSignal lookup failed:', (e as any)?.message || e);
+    }
     if (owner?.id) await svc.User.update(owner.id, { phone_push_state: state, phone_seen_at: nowIso });
     console.log(`[phoneReport] push_state ${email}: ${JSON.stringify(state)}`);
     return Response.json({ success: true });
